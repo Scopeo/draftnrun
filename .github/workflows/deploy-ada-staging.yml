@@ -1,0 +1,50 @@
+name: Deploy Ada Staging and restart
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps: 
+      - name: Connexion à EC2 et git pull
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.EC2_HOST_SCOPEO_PREPROD }}
+          username: ec2-user
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          script: |
+            cd /home/ec2-user/agentic_toolbox
+            git remote set-url origin git@github.com:scopeo/agentic_toolbox.git
+            git reset --hard HEAD
+            git pull origin main
+    
+      - name: SSH Remote Commands
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.EC2_HOST_SCOPEO_PREPROD }}
+          username: ec2-user
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          script: |
+            set -e
+            cd /home/ec2-user/agentic_toolbox
+
+            echo "📦 Install dependencies"
+            pip install --upgrade poetry
+            poetry install --no-root --without dev
+
+            echo "🔄 Re-setup the database"
+            cp ada_backend/database/ada_backend.db ada_backend/database/ada_backend_back_up.db
+            make db-upgrade
+            make db-seed
+
+            echo "👁️ Re-setup the traces database"
+            make trace-db-upgrade
+
+            echo "Reload Gunicorn with zero downtime"
+            sudo systemctl restart gunicorn

@@ -1,0 +1,54 @@
+# editor
+.vscode
+.DS_store
+.coverage
+.pytest_cache
+.idea
+
+# virtual-env
+venv
+.venv/
+
+# data
+data
+vectorstore
+azure_files
+docstore
+images/*
+monitoring
+*.db
+pipeline.json
+*.csv
+
+# .env
+credentials.env
+sql_credentials.env
+
+# .env files for ada_ingestion_system
+ada_ingestion_system/.env
+
+# cache
+**__pycache__**
+*checkpoint.ipynb
+
+# logs
+logs
+traces
+
+# notebook
+notebooks/*
+*.ipynb
+
+# config files
+data_ingestion/sql/sql_table_schema.json
+gmail_api_credentials.json
+knowledge_base_config.yaml
+chatbot-config.yaml
+infra
+company_context.yaml
+conversational-interface.yaml
+agent-config.yaml
+observability_config.yaml
+
+# oauth
+ada-ingestion-system/.env

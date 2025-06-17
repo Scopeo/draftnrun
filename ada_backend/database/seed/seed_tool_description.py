@@ -1,0 +1,83 @@
+from uuid import UUID
+
+from sqlalchemy.orm import Session
+
+from ada_backend.database import models as db
+from ada_backend.database.component_definition_seeding import upsert_tool_descriptions
+from ada_backend.database.utils import DEFAULT_TOOL_DESCRIPTION
+from engine.agent.api_tools.tavily_search_tool import TAVILY_TOOL_DESCRIPTION
+from engine.agent.api_tools.api_call_tool import API_CALL_TOOL_DESCRIPTION
+from engine.agent.document_enhanced_llm_call import DEFAULT_DOCUMENT_ENHANCED_LLM_CALL_TOOL_DESCRIPTION
+from engine.agent.inputs_outputs.input import DEFAULT_INPUT_TOOL_DESCRIPTION
+from engine.agent.rag.rag import format_rag_tool_description
+from engine.agent.react_function_calling import get_dummy_ai_agent_description
+from engine.agent.sql.react_sql_tool import DEFAULT_REACT_SQL_TOOL_DESCRIPTION
+from engine.agent.sql.run_sql_query_tool import DEFAULT_RUN_SQL_QUERY_TOOL_DESCRIPTION
+from engine.agent.web_search_tool_openai import DEFAULT_WEB_SEARCH_OPENAI_TOOL_DESCRIPTION
+
+
+TOOL_DESCRIPTION_UUIDS = {
+    "default_ai_agent_description": UUID("1a4d4098-c2b4-4078-96a6-0a8f9c7d018c"),
+    "tavily_tool_description": UUID("768450eb-b07a-4efc-bbb9-48c9b1a9f556"),
+    "default_api_call_tool_description": UUID("030b0418-1d7e-4764-8406-1875aec47c2d"),
+    "default_react_sql_tool_description": UUID("3e2cc209-dc89-45a1-9c90-58a2c35fd574"),
+    "default_rag_tool_description": UUID("e0f7719c-cc5c-4c71-9db0-b161875d1144"),
+    "default_run_sql_query_tool_description": UUID("949c27b4-5403-42b0-bad6-1c71a7a4e5d1"),
+    "default_tool_description": UUID("15e1198f-850a-4f66-91d7-34286de52795"),
+    "default_web_search_openai_tool_description": UUID("b6d6d281-6c75-4d1b-a750-40b53deea3f6"),
+    "default_document_enhanced_llm_agent": UUID("d01978d9-c785-4492-9e71-7af0aa8c05f7"),
+    "default_input_tool_description": UUID("5be22376-7d08-486b-a004-b495bae58f77"),
+}
+
+
+def seed_tool_description(session: Session):
+    default_ai_agent_description = db.ToolDescription(
+        id=TOOL_DESCRIPTION_UUIDS["default_ai_agent_description"], **get_dummy_ai_agent_description().model_dump()
+    )
+    default_tavily_tool_description = db.ToolDescription(
+        id=TOOL_DESCRIPTION_UUIDS["tavily_tool_description"], **TAVILY_TOOL_DESCRIPTION.model_dump()
+    )
+    default_api_call_tool_description = db.ToolDescription(
+        id=TOOL_DESCRIPTION_UUIDS["default_api_call_tool_description"], **API_CALL_TOOL_DESCRIPTION.model_dump()
+    )
+    default_react_sql_tool_description = db.ToolDescription(
+        id=TOOL_DESCRIPTION_UUIDS["default_react_sql_tool_description"],
+        **DEFAULT_REACT_SQL_TOOL_DESCRIPTION.model_dump(),
+    )
+    default_rag_tool_description = db.ToolDescription(
+        id=TOOL_DESCRIPTION_UUIDS["default_rag_tool_description"],
+        **format_rag_tool_description(source="notion").model_dump(),
+    )
+    default_run_sql_query_tool_description = db.ToolDescription(
+        id=TOOL_DESCRIPTION_UUIDS["default_run_sql_query_tool_description"],
+        **DEFAULT_RUN_SQL_QUERY_TOOL_DESCRIPTION.model_dump(),
+    )
+    default_tool_description = db.ToolDescription(
+        id=TOOL_DESCRIPTION_UUIDS["default_tool_description"], **DEFAULT_TOOL_DESCRIPTION.model_dump()
+    )
+    default_web_search_openai_tool_description = db.ToolDescription(
+        id=TOOL_DESCRIPTION_UUIDS["default_web_search_openai_tool_description"],
+        **DEFAULT_WEB_SEARCH_OPENAI_TOOL_DESCRIPTION.model_dump(),
+    )
+    default_document_enhanced_llm_agent = db.ToolDescription(
+        id=TOOL_DESCRIPTION_UUIDS["default_document_enhanced_llm_agent"],
+        **DEFAULT_DOCUMENT_ENHANCED_LLM_CALL_TOOL_DESCRIPTION.model_dump(),
+    )
+    default_input_tool_description = db.ToolDescription(
+        id=TOOL_DESCRIPTION_UUIDS["default_input_tool_description"], **DEFAULT_INPUT_TOOL_DESCRIPTION.model_dump()
+    )
+    upsert_tool_descriptions(
+        session=session,
+        tool_descriptions=[
+            default_ai_agent_description,
+            default_tavily_tool_description,
+            default_api_call_tool_description,
+            default_react_sql_tool_description,
+            default_rag_tool_description,
+            default_run_sql_query_tool_description,
+            default_tool_description,
+            default_web_search_openai_tool_description,
+            default_document_enhanced_llm_agent,
+            default_input_tool_description,
+        ],
+    )

@@ -1,0 +1,30 @@
+version: 1
+disable_existing_loggers: False
+directory: logs
+formatters:
+    simple:
+        format: "%(asctime)s - %(levelname)s - %(name)s: %(message)s"
+        datefmt: "%Y-%m-%d %H:%M:%S"
+handlers:
+    console:
+        class: logging.StreamHandler
+        stream: ext://sys.stdout
+        formatter: simple
+        level: INFO
+    file:
+        class: logging.FileHandler
+        formatter: simple
+        filename: logs/server.log
+        level: INFO
+root:
+    level: DEBUG
+    handlers: [console, file]
+loggers:
+    ada_backend.utils.redis_client:
+        level: DEBUG
+        handlers: [console, file]
+        propagate: no
+    ada_backend.services.ingestion_task_service:
+        level: DEBUG
+        handlers: [console, file]
+        propagate: no
