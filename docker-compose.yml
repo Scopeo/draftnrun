@@ -1,0 +1,29 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: ada_postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ada_password
+      POSTGRES_DB: ada_backend
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./db-init/:/docker-entrypoint-initdb.d/
+
+  # Needed for running tests in local.
+  postgres_test:
+    image: postgres:16
+    container_name: ada_postgres_test
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: scopeo
+      POSTGRES_DB: ada_backend
+    ports:
+      - "5433:5432"
+    volumes:
+      - ./db-init/:/docker-entrypoint-initdb.d/
+
+volumes:
+  postgres_data:

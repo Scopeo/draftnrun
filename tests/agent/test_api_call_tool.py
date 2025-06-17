@@ -1,0 +1,254 @@
+from unittest.mock import MagicMock, patch
+import json
+import pytest
+from requests.exceptions import RequestException
+
+from engine.agent.api_tools.api_call_tool import APICallTool, API_CALL_TOOL_DESCRIPTION
+from engine.agent.agent import AgentPayload, ChatMessage
+from engine.trace.trace_manager import TraceManager
+
+
+@pytest.fixture
+def mock_trace_manager():
+    return MagicMock(spec=TraceManager)
+
+
+@pytest.fixture
+def api_tool(mock_trace_manager):
+    return APICallTool(
+        trace_manager=mock_trace_manager,
+        component_instance_name="test_api_tool",
+        endpoint="https://api.example.com/test",
+        method="GET",
+        headers={"Content-Type": "application/json", "Authorization": "Bearer test_token"},
+        timeout=30,
+        fixed_parameters={"api_version": "v2", "format": "json", "language": "en"},
+    )
+
+
+@pytest.fixture
+def mock_response():
+    mock = MagicMock()
+    mock.status_code = 200
+    mock.json.return_value = {"data": "test_data"}
+    mock.text = '{"data": "test_data"}'
+    mock.headers = {"Content-Type": "application/json"}
+    return mock
+
+
+def test_api_tool_initialization(api_tool):
+    assert api_tool.endpoint == "https://api.example.com/test"
+    assert api_tool.method == "GET"
+    assert api_tool.headers == {"Content-Type": "application/json", "Authorization": "Bearer test_token"}
+    assert api_tool.timeout == 30
+    assert api_tool.fixed_parameters == {"api_version": "v2", "format": "json", "language": "en"}
+    assert api_tool.tool_description == API_CALL_TOOL_DESCRIPTION
+
+
+@patch("requests.request")
+def test_make_api_call_with_fixed_and_dynamic_params(mock_request, api_tool, mock_response):
+    # Dynamic parameters provided by LLM
+    dynamic_params = {"query": "test", "page": 1, "limit": 10, "filter": "active", "sort": "date"}
+    mock_request.return_value = mock_response
+
+    result = api_tool.make_api_call(**dynamic_params)
+
+    # Verify all parameters are included
+    expected_params = {
+        "api_version": "v2",  # Fixed
+        "format": "json",  # Fixed
+        "language": "en",  # Fixed
+        "query": "test",  # Dynamic
+        "page": 1,  # Dynamic
+        "limit": 10,  # Dynamic
+        "filter": "active",  # Dynamic
+        "sort": "date",  # Dynamic
+    }
+
+    mock_request.assert_called_once_with(
+        url="https://api.example.com/test",
+        method="GET",
+        headers={"Content-Type": "application/json", "Authorization": "Bearer test_token"},
+        timeout=30,
+        params=expected_params,
+    )
+
+    assert result["status_code"] == 200
+    assert result["data"] == {"data": "test_data"}
+    assert result["success"] is True
+
+
+@patch("requests.request")
+def test_make_api_call_post_with_fixed_and_dynamic_params(mock_request, api_tool, mock_response):
+    # Change method to POST
+    api_tool.method = "POST"
+
+    # Dynamic parameters provided by LLM
+    dynamic_params = {"data": {"name": "test", "value": 123}}
+    mock_request.return_value = mock_response
+
+    result = api_tool.make_api_call(**dynamic_params)
+
+    # Verify all parameters are included
+    expected_params = {
+        "api_version": "v2",  # Fixed
+        "format": "json",  # Fixed
+        "language": "en",  # Fixed
+        "data": {"name": "test", "value": 123},  # Dynamic
+    }
+
+    mock_request.assert_called_once_with(
+        url="https://api.example.com/test",
+        method="POST",
+        headers={"Content-Type": "application/json", "Authorization": "Bearer test_token"},
+        timeout=30,
+        json=expected_params,
+    )
+
+    assert result["status_code"] == 200
+    assert result["data"] == {"data": "test_data"}
+    assert result["success"] is True
+
+
+@patch("requests.request")
+def test_make_api_call_with_only_fixed_params(mock_request, api_tool, mock_response):
+    # Test with only fixed parameters
+    mock_request.return_value = mock_response
+
+    result = api_tool.make_api_call()
+
+    expected_params = {"api_version": "v2", "format": "json", "language": "en"}
+
+    mock_request.assert_called_once_with(
+        url="https://api.example.com/test",
+        method="GET",
+        headers={"Content-Type": "application/json", "Authorization": "Bearer test_token"},
+        timeout=30,
+        params=expected_params,
+    )
+
+    assert result["status_code"] == 200
+    assert result["data"] == {"data": "test_data"}
+    assert result["success"] is True
+
+
+@patch("requests.request")
+def test_make_api_call_post_with_empty_params(mock_request, mock_trace_manager, mock_response):
+    # Test POST with no parameters (should still send empty JSON)
+    api_tool = APICallTool(
+        trace_manager=mock_trace_manager,
+        component_instance_name="test_api_tool",
+        endpoint="https://api.example.com/test",
+        method="POST",
+        headers={"Content-Type": "application/json"},
+    )
+
+    mock_request.return_value = mock_response
+
+    result = api_tool.make_api_call()
+
+    mock_request.assert_called_once_with(
+        url="https://api.example.com/test",
+        method="POST",
+        headers={"Content-Type": "application/json"},
+        timeout=30,
+        json={},  # Empty JSON should still be sent for POST
+    )
+
+    assert result["status_code"] == 200
+    assert result["success"] is True
+
+
+@patch("requests.request")
+def test_make_api_call_get_with_empty_params(mock_request, mock_trace_manager, mock_response):
+    # Test GET with no parameters (should not send params)
+    api_tool = APICallTool(
+        trace_manager=mock_trace_manager,
+        component_instance_name="test_api_tool",
+        endpoint="https://api.example.com/test",
+        method="GET",
+        headers={"Content-Type": "application/json"},
+    )
+
+    mock_request.return_value = mock_response
+
+    result = api_tool.make_api_call()
+
+    mock_request.assert_called_once_with(
+        url="https://api.example.com/test",
+        method="GET",
+        headers={"Content-Type": "application/json"},
+        timeout=30,
+        # No params should be included for GET with empty parameters
+    )
+
+    assert result["status_code"] == 200
+    assert result["success"] is True
+
+
+@patch("requests.request")
+def test_make_api_call_error_handling(mock_request, api_tool):
+    mock_request.side_effect = RequestException("API Error")
+
+    result = api_tool.make_api_call()
+
+    assert result["success"] is False
+    assert result["error"] == "API Error"
+    assert result["status_code"] is None
+
+
+@patch("requests.request")
+def test_make_api_call_non_json_response(mock_request, api_tool):
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.text = "plain text response"
+    mock_response.json.side_effect = json.JSONDecodeError("Invalid JSON", "", 0)
+    mock_response.headers = {"Content-Type": "text/plain"}
+    mock_request.return_value = mock_response
+
+    result = api_tool.make_api_call()
+
+    assert result["status_code"] == 200
+    assert result["data"] == {"text": "plain text response"}
+    assert result["success"] is True
+
+
+@pytest.mark.skip(reason="Waiting for poetry migration to uv")
+@pytest.mark.anyio
+async def test_run_without_trace_with_dynamic_params(api_tool):
+    agent_input = AgentPayload(messages=[ChatMessage(role="user", content="test")])
+    dynamic_params = {"query": "test", "page": 1, "filter": "active"}
+
+    with patch.object(api_tool, "make_api_call") as mock_make_api_call:
+        mock_make_api_call.return_value = {
+            "status_code": 200,
+            "data": {"result": "success"},
+            "headers": {"Content-Type": "application/json"},
+            "success": True,
+        }
+
+        result = await api_tool._run_without_trace(agent_input, **dynamic_params)
+
+        assert isinstance(result, AgentPayload)
+        assert len(result.messages) == 1
+        assert result.messages[0].role == "assistant"
+        assert "result" in result.messages[0].content
+        assert result.artifacts["api_response"]["success"] is True
+        mock_make_api_call.assert_called_once_with(**dynamic_params)
+
+
+@pytest.mark.skip(reason="Waiting for poetry migration to uv")
+@pytest.mark.anyio
+async def test_run_without_trace_error(api_tool):
+    agent_input = AgentPayload(messages=[ChatMessage(role="user", content="test")])
+
+    with patch.object(api_tool, "make_api_call") as mock_make_api_call:
+        mock_make_api_call.return_value = {"status_code": 500, "error": "Internal Server Error", "success": False}
+
+        result = await api_tool._run_without_trace(agent_input)
+
+        assert isinstance(result, AgentPayload)
+        assert len(result.messages) == 1
+        assert result.messages[0].role == "assistant"
+        assert "API call failed" in result.messages[0].content
+        assert result.artifacts["api_response"]["success"] is False

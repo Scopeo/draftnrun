@@ -1,0 +1,24 @@
+log_level: INFO
+
+service:
+  host: 0.0.0.0
+  port: 6333
+  grpc_port: 6334
+  api_key: secret_api_key  # Optional, enables authentication
+
+storage:
+  storage_path: /qdrant/storage
+  on_disk_payload: true
+  optimizer_config:
+    deleted_threshold: 0.2
+    vacuum_min_vector_number: 1000
+    default_segment_number: 2
+    max_segment_size: 100000
+    memmap_threshold: 50000
+    indexing_threshold: 20000
+
+cluster:
+  enabled: false
+
+telemetry:
+  disabled: true
