@@ -15,6 +15,8 @@ from engine.trace.trace_manager import TraceManager
 from engine.agent.synthesizer import Synthesizer
 from engine.agent.utils import format_qdrant_filter
 from engine.agent.rag.formatter import Formatter
+from engine.agent.rag.vocabulary_search import VocabularySearch
+from engine.agent.build_context import build_context_from_vocabulary_chunks
 
 LOGGER = logging.getLogger(__name__)
 
@@ -33,6 +35,10 @@ class RAG(Agent):
         filtering_condition: str = "OR",
         formatter: Optional[Formatter] = None,
         input_data_field_for_messages_history: str = "messages",
+        vocabulary_context: dict = {},
+        vocabulary_context_prompt_key: str = "vocabulary_context_str",
+        fuzzy_matching_candidates: int = 10,
+        fuzzy_threshold: int = 90,
     ) -> None:
         super().__init__(
             trace_manager=trace_manager,
@@ -47,6 +53,18 @@ class RAG(Agent):
             formatter = Formatter(add_sources=False)
         self._formatter = formatter
         self.input_data_field_for_messages_history = input_data_field_for_messages_history
+        self.vocabulary_context: dict = vocabulary_context
+        self._vocabulary_search = None
+        self._fuzzy_matching_candidates = fuzzy_matching_candidates
+        self._fuzzy_threshold = fuzzy_threshold
+        self._vocabulary_context_prompt_key = vocabulary_context_prompt_key
+        if vocabulary_context:
+            self._vocabulary_search = VocabularySearch(
+                trace_manager=trace_manager,
+                vocabulary_context_data=vocabulary_context,
+                fuzzy_matching_candidates=self._fuzzy_matching_candidates,
+                fuzzy_threshold=self._fuzzy_threshold,
+            )
 
     async def _run_without_trace(
         self,
@@ -68,9 +86,19 @@ class RAG(Agent):
         if self._reranker is not None:
             chunks = self._reranker.rerank(query=content, chunks=chunks)
 
+        vocabulary_context = {}
+        if self._vocabulary_search is not None:
+            vocabulary_chunks = self._vocabulary_search.get_chunks(query_text=content)
+            vocabulary_context = {
+                self._vocabulary_context_prompt_key: build_context_from_vocabulary_chunks(
+                    vocabulary_chunks=vocabulary_chunks
+                )
+            }
+
         sourced_response = self._synthesizer.get_response(
             query_str=content,
             chunks=chunks,
+            optional_contexts=vocabulary_context,
         )
 
         sourced_response = self._formatter.format(sourced_response)

@@ -1,9 +1,9 @@
+import pandas as pd
 from opentelemetry import trace as trace_api
 from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttributes
 
 from engine.agent.agent import TermDefinition
 from engine.trace.trace_manager import TraceManager
-from engine.storage_service.db_service import DBService
 from engine.agent.utils import fuzzy_matching
 
 NUMBER_CHUNKS_TO_DISPLAY_TRACE = 30
@@ -13,9 +13,7 @@ class VocabularySearch:
     def __init__(
         self,
         trace_manager: TraceManager,
-        db_service: DBService,
-        table_name: str,
-        schema_name: str,
+        vocabulary_context_data: dict,
         fuzzy_threshold: int = 90,
         fuzzy_matching_candidates: int = 10,
         component_instance_name: str = "Vocabulary Search",
@@ -24,20 +22,15 @@ class VocabularySearch:
     ):
         self.trace_manager = trace_manager
         self.component_instance_name = component_instance_name
-        self.db_service = db_service
-        self.table_name = table_name
-        self.schema_name = schema_name
         self.term_column = term_column
         self.definition_column = definition_column
         self.fuzzy_threshold = fuzzy_threshold
         self.fuzzy_matching_candidates = fuzzy_matching_candidates
+        self.vocabulary_context_data = vocabulary_context_data
         self.vocabulary_information: dict[str, TermDefinition] = self._init_vocabulary_information()
 
     def _init_vocabulary_information(self):
-        vocabulary_information = self.db_service.get_table_df(
-            table_name=self.table_name,
-            schema_name=self.schema_name,
-        )
+        vocabulary_information = pd.DataFrame(self.vocabulary_context_data)
         map_vocabulary = {
             row[self.term_column].lower(): TermDefinition(
                 term=row[self.term_column], definition=row[self.definition_column]
@@ -66,7 +59,7 @@ class VocabularySearch:
         self,
         query_text: str,
     ) -> list[TermDefinition]:
-        with self.trace_manager.start_span(self.component_instance_name) as span:
+        with self.trace_manager.start_span(self.__class__.__name__) as span:
             chunks = self._get_chunks_without_trace(query_text)
             span.set_attributes(
                 {
@@ -75,13 +68,13 @@ class VocabularySearch:
                 }
             )
 
-            if len(chunks) > NUMBER_CHUNKS_TO_DISPLAY_TRACE:
+            if len(chunks) > 30:
                 for i, chunk in enumerate(chunks):
                     span.add_event(
-                        f"Retrieved Document {i}",
+                        f"Retrieved Vocabulary {i}",
                         {
-                            "term": chunk.term,
-                            "id": chunk.definition,
+                            "content": chunk.definition,
+                            "id": chunk.term,
                         },
                     )
             else:
@@ -89,8 +82,8 @@ class VocabularySearch:
                 for i, chunk in enumerate(chunks):
                     span.set_attributes(
                         {
-                            f"{SpanAttributes.RETRIEVAL_DOCUMENTS}.{i}.document.term": chunk.term,
-                            f"{SpanAttributes.RETRIEVAL_DOCUMENTS}.{i}.document.definition": chunk.definition,
+                            f"{SpanAttributes.RETRIEVAL_DOCUMENTS}.{i}.document.content": chunk.definition,
+                            f"{SpanAttributes.RETRIEVAL_DOCUMENTS}.{i}.document.id": chunk.term,
                         }
                     )
             span.set_status(trace_api.StatusCode.OK)

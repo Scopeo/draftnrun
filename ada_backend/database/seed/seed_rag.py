@@ -1,4 +1,5 @@
 from uuid import UUID
+import json
 
 from sqlalchemy.orm import Session
 
@@ -414,6 +415,62 @@ def seed_rag_components(session: Session):
                 ui_component_properties=UIComponentProperties(
                     label="Messages history key from input",
                     placeholder="Enter the key from your input data to access messages history",
+                ).model_dump(exclude_unset=True, exclude_none=True),
+                is_advanced=True,
+            ),
+            db.ComponentParameterDefinition(
+                id=UUID("64767f4b-41f2-4b56-990e-27699b2019c2"),
+                component_id=rag_agent.id,
+                name="vocabulary_context",
+                type=ParameterType.JSON,
+                nullable=False,
+                default=json.dumps({}),
+                ui_component=UIComponent.TEXTAREA,
+                ui_component_properties=UIComponentProperties(
+                    label="Vocabulary Context that we want to use to enrich the response",
+                    placeholder="""Put a correct formatted
+                    json {'term' : ['term1', 'term2', 'term3'],
+                    'definition' : ['definition1', 'definition2', 'definition3']}""",
+                ).model_dump(exclude_unset=True, exclude_none=True),
+                is_advanced=True,
+            ),
+            db.ComponentParameterDefinition(
+                id=UUID("4d8bbd00-59a5-4803-a776-2ab2a8a97dfa"),
+                component_id=rag_agent.id,
+                name="fuzzy_matching_candidates",
+                type=ParameterType.INTEGER,
+                nullable=False,
+                default=10,
+                ui_component=UIComponent.SLIDER,
+                ui_component_properties=UIComponentProperties(
+                    min=1, max=100, step=1, marks=True, label="Number of vocabulary candidates to consider"
+                ).model_dump(exclude_unset=True, exclude_none=True),
+                is_advanced=True,
+            ),
+            db.ComponentParameterDefinition(
+                id=UUID("f5c192d4-712e-4330-acd5-1606e9a245f4"),
+                component_id=rag_agent.id,
+                name="fuzzy_threshold",
+                type=ParameterType.INTEGER,
+                nullable=False,
+                default=90,
+                ui_component=UIComponent.SLIDER,
+                ui_component_properties=UIComponentProperties(
+                    min=1, max=100, step=1, marks=True, label="Fuzzy Matching Threshold to retrieve vocabulary"
+                ).model_dump(exclude_unset=True, exclude_none=True),
+                is_advanced=True,
+            ),
+            db.ComponentParameterDefinition(
+                id=UUID("b2bf8744-2b6c-4991-9862-df24a64df3fb"),
+                component_id=rag_agent.id,
+                name="vocabulary_context_prompt_key",
+                type=ParameterType.STRING,
+                nullable=False,
+                default="vocabulary_context_str",
+                ui_component=UIComponent.TEXTFIELD,
+                ui_component_properties=UIComponentProperties(
+                    label="Vocabulary Context prompt key",
+                    placeholder="Enter the key to put the Vocabulary context in the synthesizer",
                 ).model_dump(exclude_unset=True, exclude_none=True),
                 is_advanced=True,
             ),
