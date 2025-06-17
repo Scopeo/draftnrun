@@ -1,0 +1,72 @@
+name: Deploy ADA Ingestion Worker to Production
+
+on:
+  workflow_dispatch:
+
+jobs:
+  deploy_to_production:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup, CD to App Directory, and Fetch Latest Code
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST_INGESTION_PROD }}
+          username: ec2-user
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          script: |
+            set -e
+            APP_DIR="/home/ec2-user/ingestion"
+            echo "--- Starting Production Deployment ---"
+            echo "Target Host: ${{ secrets.EC2_HOST_INGESTION_PROD }}"
+            echo "Application Directory: $APP_DIR"
+            cd $APP_DIR
+            echo "Current directory: $(pwd)"
+
+            echo "Fetching latest code from branch ${{ github.ref_name }}..."
+            git remote set-url origin git@github.com:scopeo/agentic_toolbox.git
+            git fetch origin ${{ github.ref_name }}
+            git reset --hard FETCH_HEAD
+            git clean -fd
+            echo "Code updated successfully."
+
+      - name: Restart ada-worker Service
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST_INGESTION_PROD }}
+          username: ec2-user
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          script: |
+            set -e
+            APP_DIR="/home/ec2-user/ingestion" 
+            cd $APP_DIR 
+            echo "Restarting ada-worker service..."
+            sudo systemctl restart ada-worker.service
+            echo "Waiting for service to restart..."
+            sleep 30
+
+      - name: Check ada-worker Service Status
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST_INGESTION_PROD }}
+          username: ec2-user
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          script: |
+            set -e
+            APP_DIR="/home/ec2-user/ingestion" 
+            cd $APP_DIR
+            echo "Checking ada-worker service status..."
+            if sudo systemctl is-active --quiet ada-worker.service; then
+              echo "✅ ada-worker.service is active. Production deployment successful!"
+            else
+              echo "❌ ada-worker.service failed to start or is not active."
+              echo "--- Recent service logs: ---"
+              sudo journalctl -u ada-worker.service -n 50 --no-pager
+              exit 1
+            fi

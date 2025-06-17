@@ -1,0 +1,258 @@
+name: github-ci
+
+on:
+  workflow_dispatch:
+
+  pull_request:
+    branches:
+      - main
+      - Dev
+
+concurrency:
+  group: ec2-runner-tests
+  cancel-in-progress: false
+
+jobs:
+  ci-pipeline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    strategy:
+      matrix:
+        python-version: [3.11]
+
+    env:
+      EC2_USER: ec2-user
+      EC2_PATH_BASE: /home/ec2-user/pr-tests
+      EC2_FOLDER_NAME: pr_
+
+    steps:
+      - name: Generate unique ID
+        run: |
+          RUN_ID=$(uuidgen)
+          echo "RUN_ID=$RUN_ID" >> $GITHUB_ENV
+
+      - name: Checkout repository
+        uses: actions/checkout@v2
+        with:
+          lfs: true
+
+      - name: Set up SSH key
+        uses: webfactory/ssh-agent@v0.5.3
+        with:
+          ssh-private-key: ${{ secrets.DEPLOY_KEY }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install ci dependencies
+        run: |
+          pip install poetry
+          poetry install --no-root --only dev
+
+      - name: Linter
+        run: |
+          poetry run flake8 .
+
+      - name: Copy files to EC2
+        uses: appleboy/scp-action@master
+        with:
+          host: ${{ secrets.EC2_HOST_TEST }}
+          username: ${{ env.EC2_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          source: "."
+          target: "${{ env.EC2_PATH_BASE }}/${{env.EC2_FOLDER_NAME}}${{env.RUN_ID}}"
+
+      - name: Set up dependencies in EC2
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.EC2_HOST_TEST }}
+          username: ${{ env.EC2_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          script: |
+            set -e
+            echo "===> Changing directory to ${{ env.EC2_PATH_BASE }}/${{env.EC2_FOLDER_NAME}}${{ env.RUN_ID }}"
+            cd ${{ env.EC2_PATH_BASE }}/${{env.EC2_FOLDER_NAME}}${{env.RUN_ID}}
+            echo "===> Installing dependencies"
+            pip install poetry
+            poetry install --no-root --with dev
+
+      - name: Create credentials.env file
+        run: |
+          echo "OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}" >> credentials.env
+          echo "MISTRAL_API_KEY=${{ secrets.MISTRAL_API_KEY }}" >> credentials.env
+          echo "OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}" >> credentials.env
+          echo "MISTRAL_API_KEY=${{ secrets.MISTRAL_API_KEY }}" >> credentials.env
+          echo "COHERE_API_KEY=${{ secrets.COHERE_API_KEY }}" >> credentials.env
+          echo "SNOWFLAKE_USER=${{ secrets.SNOWFLAKE_USER }}" >> credentials.env
+          echo "SNOWFLAKE_PASSWORD=${{ secrets.SNOWFLAKE_PASSWORD }}" >> credentials.env
+          echo "SNOWFLAKE_ACCOUNT=${{ secrets.SNOWFLAKE_ACCOUNT }}" >> credentials.env
+          echo "QDRANT_CLUSTER_URL=${{ secrets.QDRANT_CLUSTER_URL }}" >> credentials.env
+          echo "QDRANT_API_KEY=${{ secrets.QDRANT_API_KEY }}" >> credentials.env
+          echo "TAVILY_API_KEY=${{ secrets.TAVILY_API_KEY }}" >> credentials.env
+          echo "FERNET_KEY=${{ secrets.FERNET_KEY }}" >> credentials.env
+          echo "SUPABASE_PROJECT_URL=${{ secrets.SUPABASE_PROJECT_URL }}" >> credentials.env
+          echo "SUPABASE_PROJECT_KEY=${{ secrets.SUPABASE_PROJECT_KEY }}" >> credentials.env
+          echo "SUPABASE_SERVICE_ROLE_SECRET_KEY=${{ secrets.SUPABASE_SERVICE_ROLE_SECRET_KEY }}" >> credentials.env
+          echo "TEST_USER_EMAIL=${{ secrets.TEST_USER_EMAIL }}" >> credentials.env
+          echo "TEST_USER_PASSWORD=${{ secrets.TEST_USER_PASSWORD }}" >> credentials.env
+          echo "BACKEND_SECRET_KEY=${{ secrets.BACKEND_SECRET_KEY }}" >> credentials.env
+          echo "INGESTION_API_KEY=${{ secrets.INGESTION_API_KEY }}" >> credentials.env
+          echo "INGESTION_API_KEY_HASHED=${{ secrets.INGESTION_API_KEY_HASHED }}" >> credentials.env
+          echo "ADA_URL=${{ secrets.ADA_URL }}" >> credentials.env
+          echo "REDIS_HOST=${{ secrets.REDIS_HOST }}" >> credentials.env
+          echo "REDIS_PORT=${{ secrets.REDIS_PORT }}" >> credentials.env
+          echo "REDIS_PASSWORD=${{ secrets.REDIS_PASSWORD }}" >> credentials.env
+          echo "REDIS_QUEUE_NAME=${{ secrets.REDIS_QUEUE_NAME }}" >> credentials.env
+          echo "ADA_DB_DRIVER=postgres" >> credentials.env
+          echo "ADA_DB_URL=postgresql://postgres:ada_password@localhost:5432/ada_backend" >> credentials.env
+          echo "GOOGLE_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai/" >> credentials.env
+          echo "GOOGLE_API_KEY=${{ secrets.GOOGLE_API_KEY }}" >> credentials.env
+
+      - name: Upload credentials.env to EC2
+        uses: appleboy/scp-action@master
+        with:
+          host: ${{ secrets.EC2_HOST_TEST }}
+          username: ${{ env.EC2_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          source: "credentials.env"
+          target: "${{ env.EC2_PATH_BASE }}/${{ env.EC2_FOLDER_NAME }}${{ env.RUN_ID }}"
+
+      - name: Check OS
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.EC2_HOST_TEST }}
+          username: ${{ env.EC2_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          script: |
+            set -e
+            cat /etc/os-release
+
+      - name: Install Docker and Docker Compose
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.EC2_HOST_TEST }}
+          username: ${{ env.EC2_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          script: |
+            set -e
+            echo "===> Installing Docker and Docker Compose on Amazon Linux 2023"
+
+            # Install Docker if not present
+            if ! command -v docker &> /dev/null; then
+              sudo dnf install -y docker
+              sudo systemctl enable --now docker
+            else
+              echo "===> Docker already installed"
+            fi
+
+            # Install Docker Compose v2 if not present
+            if ! docker compose version &> /dev/null; then
+              echo "===> Installing Docker Compose v2"
+              DOCKER_CONFIG=${DOCKER_CONFIG:-$HOME/.docker}
+              mkdir -p $DOCKER_CONFIG/cli-plugins
+              curl -SL https://github.com/docker/compose/releases/download/v2.24.6/docker-compose-linux-x86_64 -o $DOCKER_CONFIG/cli-plugins/docker-compose
+              chmod +x $DOCKER_CONFIG/cli-plugins/docker-compose
+            else
+              echo "===> Docker Compose already installed"
+            fi
+
+      - name: Start PostgreSQL test container
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.EC2_HOST_TEST }}
+          username: ${{ env.EC2_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          script: |
+            set -e
+            echo "===> Changing directory to ${{ env.EC2_PATH_BASE }}/${{env.EC2_FOLDER_NAME}}${{ env.RUN_ID }}"
+            cd ${{ env.EC2_PATH_BASE }}/${{env.EC2_FOLDER_NAME}}${{ env.RUN_ID }}
+
+            echo "===> Removing existing ada_postgres container if it exists"
+            docker rm -f ada_postgres || true
+
+            echo "===> Removing existing ada_postgres container if it exists"
+            docker compose down -v --remove-orphans
+
+            echo "===> Starting postgres container"
+            docker compose up -d postgres
+
+            echo "===> Waiting for PostgreSQL to be ready"
+            timeout 30s bash -c 'until docker compose exec postgres pg_isready; do sleep 1; done'
+
+      - name: Copy staging DB to test DB
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.EC2_HOST_TEST }}
+          username: ${{ env.EC2_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          script: |
+            set -e
+            echo "===> Changing directory to ${{ env.EC2_PATH_BASE }}/${{env.EC2_FOLDER_NAME}}${{ env.RUN_ID }}"
+            cd ${{ env.EC2_PATH_BASE }}/${{env.EC2_FOLDER_NAME}}${{ env.RUN_ID }}
+
+            # Check and install pg_dump 16 if needed
+            if ! command -v /usr/pgsql-16/bin/pg_dump &> /dev/null; then
+              echo "===> Installing PostgreSQL 16 client tools"
+              sudo dnf remove -y postgresql15* || true
+              sudo dnf install -y postgresql16
+            else
+              echo "===> PostgreSQL 16 client tools already installed"
+            fi
+
+            echo "===> Running database migrations"
+            make db-upgrade
+            make db-seed
+            poetry run python -m ada_backend.database.seed_project_db
+            
+            echo "👁️ Re-setup the traces database"
+            make trace-db-upgrade
+
+      - name: Tests and coverage
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.EC2_HOST_TEST }}
+          username: ${{ env.EC2_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          script: |
+            set -e
+            echo "===> Changing directory to ${{ env.EC2_PATH_BASE }}/${{env.EC2_FOLDER_NAME}}${{ env.RUN_ID }}"
+            cd ${{ env.EC2_PATH_BASE }}/${{env.EC2_FOLDER_NAME}}${{env.RUN_ID}}
+            echo "===> Running tests for RUN_ID: ${{ env.RUN_ID }}"
+            poetry run coverage run -m pytest
+            poetry run coverage report -i
+            poetry run coverage html -i
+            poetry run coverage xml -i
+
+      - name: Cleanup EC2 folder and Docker resources
+        if: always()
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.EC2_HOST_TEST }}
+          username: ${{ env.EC2_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          script: |
+            EC2_TEST_DIR="${{ env.EC2_PATH_BASE }}/${{env.EC2_FOLDER_NAME}}${{ env.RUN_ID }}"
+            echo "===> Changing directory to $EC2_TEST_DIR for cleanup"
+            cd "$EC2_TEST_DIR" || { echo "Directory not found, skipping Docker cleanup."; }
+
+            # Ensure that docker-compose.yml exists before running docker compose down
+            if [ -f docker-compose.yml ]; then
+              echo "===> Stopping and removing Docker Compose services and volumes for this run."
+              docker compose down -v --remove-orphans || true
+            else
+              echo "===> docker-compose.yml not found, skipping Docker Compose cleanup."
+            fi
+
+            echo "===> Cleaning up project directory: $EC2_TEST_DIR"
+            rm -rf "$EC2_TEST_DIR"

@@ -1,0 +1,33 @@
+version: '3.8'
+
+services:
+  redis:
+    image: redis:7.0-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes --requirepass nkXi5ozg34DEM4F
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "nkXi5ozg34DEM4F", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  worker:
+    build: .
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=nkXi5ozg34DEM4F
+      - REDIS_QUEUE_NAME=ada_ingestion_queue
+      - MAX_CONCURRENT_INGESTIONS=2
+    depends_on:
+      redis:
+        condition: service_healthy
+    volumes:
+      - .:/app
+    restart: unless-stopped
+
+volumes:
+  redis_data: 

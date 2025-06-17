@@ -1,0 +1,90 @@
+Table components {
+  id uuid [pk, increment]
+  name varchar [unique, not null]
+  description text
+  is_agent boolean [not null, default: false]
+  created_at datetime [default: "now()"]
+  updated_at datetime [default: "now()"]
+}
+
+Table component_parameter_definitions {
+  id uuid [pk, increment]
+  component_id uuid [ref: > components.id, not null]
+  name varchar [not null]
+  type ParameterType [not null]
+  ui_component UIComponent [not null]
+  ui_component_properties json
+  nullable boolean [not null, default: false]
+  default varchar
+  subinput_component_id uuid [ref: > components.id]
+}
+
+Table component_instances {
+  id uuid [pk, increment]
+  component_id uuid [ref: > components.id, not null]
+  ref varchar
+  tool_description_id uuid [ref: > tool_descriptions.id]
+  created_at datetime [default: "now()"]
+}
+
+Table basic_parameters {
+  id uuid [pk, increment]
+  component_instance_id uuid [ref: > component_instances.id, not null]
+  parameter_definition_id uuid [ref: > component_parameter_definitions.id, not null]
+  value varchar
+  project_secret_id uuid [ref: > project_secrets.id]
+  subinput_component_instance_id uuid [ref: > component_instances.id]
+}
+
+Table component_sub_inputs {
+  id uuid [pk, increment]
+  parent_component_instance_id uuid [ref: > component_instances.id, not null]
+  child_component_instance_id uuid [ref: > component_instances.id, not null]
+  parameter_definition_id uuid [ref: > component_parameter_definitions.id, not null]
+}
+
+Table tool_descriptions {
+  id uuid [pk, increment]
+  name varchar [unique, not null]
+  description text [not null]
+  tool_properties json
+  required_properties json
+  created_at datetime [default: "now()"]
+  updated_at datetime [default: "now()"]
+}
+
+Table projects {
+  id uuid [pk, increment]
+  name varchar [unique, not null]
+  description text
+  organization_id uuid [not null]
+  created_at datetime [default: "now()"]
+  updated_at datetime [default: "now()"]
+}
+
+Table project_component_relationships {
+  id uuid [pk, increment]
+  project_id uuid [ref: > projects.id, not null]
+  component_instance_id uuid [ref: > component_instances.id, not null]
+  created_at datetime [default: "now()"]
+}
+
+Table project_secrets {
+  id uuid [pk, increment]
+  project_id uuid [ref: > projects.id, not null]
+  key varchar [not null]
+  encrypted_secret varchar [not null]
+  created_at datetime [default: "now()"]
+  updated_at datetime [default: "now()"]
+}
+
+Table api_keys {
+  id uuid [pk, increment]
+  public_key varchar [unique, not null]
+  name varchar [not null]
+  is_active boolean [not null, default: true]
+  project_id uuid [ref: > projects.id, not null]
+  creator_user_id uuid [not null]
+  revoker_user_id uuid
+  created_at datetime [default: "now()"]
+}
