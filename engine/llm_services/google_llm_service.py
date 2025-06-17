@@ -4,8 +4,10 @@ import io
 
 from openai import OpenAI
 from google import genai
+from pydantic import BaseModel
 from google.genai.types import Content, Part, File, GenerateContentConfig, FileData, UploadFileConfig
 from tenacity import retry, stop_after_attempt, wait_chain, wait_fixed
+from tenacity import retry, wait_random_exponential, stop_after_attempt
 
 from settings import settings
 from engine.llm_services.openai_llm_service import OpenAILLMService
@@ -137,3 +139,26 @@ class GoogleLLMService(OpenAILLMService):
         """
         files = self._google_client.files.list()
         return list(files)  # Convert iterator to list
+
+    def _contrained_call(
+        self,
+        messages: list[dict[str, str]],
+        temperature: float = None,
+        response_format: Optional[BaseModel] = None,
+    ):
+        return self._client.beta.chat.completions.parse(
+            messages=messages,
+            model=self._completion_model,
+            temperature=temperature,
+            response_format=response_format,
+        )
+
+    @retry(wait=wait_random_exponential(multiplier=1, max=40), stop=stop_after_attempt(3))
+    def constrained_complete(
+        self,
+        messages: list[dict[str, str]],
+        temperature: float = None,
+        response_format: Optional[BaseModel] = None,
+    ) -> BaseModel:
+        temperature = temperature or self._default_temperature
+        return self._contrained_call(messages, temperature, response_format).choices[0].message.parsed
