@@ -10,16 +10,13 @@ from engine.agent.static_responder import StaticResponder
 from engine.agent.react_function_calling import ReActAgent
 from engine.agent.synthesizer import Synthesizer
 from engine.agent.hybrid_synthesizer import HybridSynthesizer
-from engine.agent.vocabulary_enhanced_synthesizer import VocabularyEnhancedSynthesizer
 from engine.agent.sequential_pipeline import SequentialPipeline
 from engine.agent.switch_categorical_pipeline import SwitchCategoricalPipeline
 from engine.agent.rag.rag import RAG
 from engine.agent.rag.hybrid_rag import HybridRAG
 from engine.agent.rag.chunk_selection import RelevantChunkSelector
-from engine.agent.rag.vocabulary_enhanced_rag import VocabularyEnhancedRAG
 from engine.agent.rag.formatter import Formatter
 from engine.agent.rag.retriever import Retriever
-from engine.agent.rag.vocabulary_search import VocabularySearch
 from engine.agent.rag.cohere_reranker import CohereReranker
 from engine.agent.api_tools.tavily_search_tool import TavilyApiTool
 from engine.agent.web_search_tool_openai import WebSearchOpenAITool
@@ -52,9 +49,7 @@ class SupportedEntityType(StrEnum):
     # Components
     SYNTHESIZER = "Synthesizer"
     HYBRRID_SYNTHESIZER = "HybridSynthesizer"
-    VOCABULARY_ENHANCED_SYNTHESIZER = "VocabularyEnhancedSynthesizer"
     RETRIEVER = "Retriever"
-    VOCABULARY_SEARCH = "VocabularySearch"
     COHERE_RERANKER = "CohereReranker"
     RAG_ANSWER_FORMATTER = "Formatter"
     SQL_DB_SERVICE = "SQLDBService"
@@ -65,7 +60,6 @@ class SupportedEntityType(StrEnum):
     RAG_AGENT = "RAG"
     HYBRID_RAG_AGENT = "HybridRAGAgent"
     SNOWFLAKE_DB_SERVICE = "SnowflakeDBService"
-    VOCABULARY_ENHANCED_RAG_AGENT = "VocabularyEnhancedRAGAgent"
     TAVILY_AGENT = "Internet Search with Tavily"
     OPENAI_WEB_SEARCH_AGENT = "Internet Search with OpenAI"
     API_CALL_TOOL = "API Call"
@@ -211,16 +205,6 @@ def create_factory_registry() -> FactoryRegistry:
         ),
     )
     registry.register(
-        name=SupportedEntityType.VOCABULARY_ENHANCED_SYNTHESIZER,
-        factory=EntityFactory(
-            entity_class=VocabularyEnhancedSynthesizer,
-            parameter_processors=[
-                llm_service_processor,
-                trace_manager_processor,
-            ],
-        ),
-    ),
-    registry.register(
         name=SupportedEntityType.RETRIEVER,
         factory=EntityFactory(
             entity_class=Retriever,
@@ -228,13 +212,6 @@ def create_factory_registry() -> FactoryRegistry:
                 trace_manager_processor,
                 qdrant_service_processor,
             ],
-        ),
-    )
-    registry.register(
-        name=SupportedEntityType.VOCABULARY_SEARCH,
-        factory=EntityFactory(
-            entity_class=VocabularySearch,
-            parameter_processors=[trace_manager_processor],
         ),
     )
     registry.register(
@@ -300,12 +277,6 @@ def create_factory_registry() -> FactoryRegistry:
         name=SupportedEntityType.HYBRID_RAG_AGENT,
         factory=AgentFactory(
             entity_class=HybridRAG,
-        ),
-    )
-    registry.register(
-        name=SupportedEntityType.VOCABULARY_ENHANCED_RAG_AGENT,
-        factory=AgentFactory(
-            entity_class=VocabularyEnhancedRAG,
         ),
     )
     registry.register(
