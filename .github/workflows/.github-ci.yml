@@ -273,9 +273,11 @@ jobs:
             echo "===> Changing directory to $EC2_TEST_DIR for cleanup"
             cd "$EC2_TEST_DIR" || { echo "Directory not found, skipping Docker cleanup."; }
 
-            # Kill ada_backend server processes
-            echo "===> Stopping ada_backend server"
-            pkill -f "ada_backend.main" && echo "ada_backend stopped cleanly" || echo "No ada_backend process found"
+            # Kill process using specific port
+            echo "===> Stopping ada_backend server on port 8000"
+            lsof -ti:8000 | xargs kill -TERM 2>/dev/null && echo "Server stopped" || echo "No server on port 8000"
+            sleep 1
+            lsof -ti:8000 | xargs kill -9 2>/dev/null || true  # Force kill if still running
 
             # Ensure that docker-compose.yml exists before running docker compose down
             if [ -f docker-compose.yml ]; then
