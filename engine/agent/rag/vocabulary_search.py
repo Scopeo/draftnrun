@@ -7,6 +7,11 @@ from engine.trace.trace_manager import TraceManager
 from engine.agent.utils import fuzzy_matching
 
 NUMBER_CHUNKS_TO_DISPLAY_TRACE = 30
+VOCABULARY_CONTEXT_PROMPT_KEY = "retrieved_definitions"
+TERM_COLUMN_NAME = "term"
+DEFINITION_COLUMN_NAME = "definition"
+FUZZY_THRESHOLD = 90
+FUZZY_MATCHING_CANDIDATES = 10
 
 
 class VocabularySearch:
@@ -14,15 +19,13 @@ class VocabularySearch:
         self,
         trace_manager: TraceManager,
         vocabulary_context_data: dict,
-        fuzzy_threshold: int = 90,
-        fuzzy_matching_candidates: int = 10,
-        vocabulary_context_prompt_key: str = "retrieved_definitions",
-        component_instance_name: str = "Vocabulary Search",
-        term_column: str = "term",
-        definition_column: str = "definition",
+        fuzzy_threshold: int = FUZZY_THRESHOLD,
+        fuzzy_matching_candidates: int = FUZZY_MATCHING_CANDIDATES,
+        vocabulary_context_prompt_key: str = VOCABULARY_CONTEXT_PROMPT_KEY,
+        term_column: str = TERM_COLUMN_NAME,
+        definition_column: str = DEFINITION_COLUMN_NAME,
     ):
         self.trace_manager = trace_manager
-        self.component_instance_name = component_instance_name
         self.term_column = term_column
         self.definition_column = definition_column
         self.fuzzy_threshold = fuzzy_threshold

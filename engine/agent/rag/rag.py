@@ -20,6 +20,9 @@ from engine.agent.build_context import build_context_from_vocabulary_chunks
 
 LOGGER = logging.getLogger(__name__)
 
+# How we combine multiple filters conditions in Qdrant.
+FILTERING_CONDITION_WITH_METADATA_QDRANT = "AND"
+
 
 class RAG(Agent):
     TRACE_SPAN_KIND = OpenInferenceSpanKindValues.CHAIN.value
@@ -32,11 +35,9 @@ class RAG(Agent):
         synthesizer: Synthesizer,
         component_instance_name: str = "RAG",
         reranker: Optional["Reranker"] = None,
-        filtering_condition: str = "AND",
         formatter: Optional[Formatter] = None,
         vocabulary_search: Optional[VocabularySearch] = None,
         input_data_field_for_messages_history: str = "messages",
-        fuzzy_threshold: int = 90,
     ) -> None:
         super().__init__(
             trace_manager=trace_manager,
@@ -46,7 +47,6 @@ class RAG(Agent):
         self._retriever = retriever
         self._synthesizer = synthesizer
         self._reranker = reranker
-        self._filtering_condition = filtering_condition
         if formatter is None:
             formatter = Formatter(add_sources=False)
         self._formatter = formatter
@@ -67,7 +67,7 @@ class RAG(Agent):
         content = query_text or agent_input.last_message.content
         if content is None:
             raise ValueError("No content provided for the RAG tool.")
-        formatted_filters = format_qdrant_filter(filters, self._filtering_condition)
+        formatted_filters = format_qdrant_filter(filters, FILTERING_CONDITION_WITH_METADATA_QDRANT)
         chunks = self._retriever.get_chunks(query_text=content, filters=formatted_filters)
 
         if self._reranker is not None:
