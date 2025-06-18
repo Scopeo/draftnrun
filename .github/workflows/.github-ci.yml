@@ -233,8 +233,14 @@ jobs:
             echo "===> Changing directory to ${{ env.EC2_PATH_BASE }}/${{env.EC2_FOLDER_NAME}}${{ env.RUN_ID }}"
             cd ${{ env.EC2_PATH_BASE }}/${{env.EC2_FOLDER_NAME}}${{env.RUN_ID}}
 
-            echo "===> Starting ada_backend server"
-            uv run python -m ada_backend.main
+            echo "===> Starting ada_backend server in background"
+            nohup uv run python -m ada_backend.main > ada_backend.log 2>&1 &
+            echo "===> Waiting for server to start"
+            timeout 30s bash -c 'until curl -f http://localhost:8000/ >/dev/null 2>&1; do sleep 1; done' || {
+              echo "Server failed to start. Logs:"
+              cat ada_backend.log
+              exit 1
+            }
             echo "===> Server started successfully"
 
       - name: Tests and coverage
@@ -267,12 +273,9 @@ jobs:
             echo "===> Changing directory to $EC2_TEST_DIR for cleanup"
             cd "$EC2_TEST_DIR" || { echo "Directory not found, skipping Docker cleanup."; }
 
-            echo "===> Stopping and removing ada_backend server if running"
-            if pgrep -f "python -m ada_backend.main" > /dev/null; then
-              echo "===> ada_backend server is running, stopping it."
-              pkill -f "python -m ada_backend.main" || true
-            else
-              echo "===> ada_backend server is not running, skipping stop."
+            # Kill ada_backend server processes
+            echo "===> Stopping ada_backend server"
+            pkill -f "ada_backend.main" && echo "ada_backend stopped cleanly" || echo "No ada_backend process found"
 
             # Ensure that docker-compose.yml exists before running docker compose down
             if [ -f docker-compose.yml ]; then
