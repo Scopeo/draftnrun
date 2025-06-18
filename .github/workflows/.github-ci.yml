@@ -289,5 +289,3 @@ jobs:
 
             echo "===> Cleaning up project directory: $EC2_TEST_DIR"
             rm -rf "$EC2_TEST_DIR"
-
-            exit 0
