@@ -35,8 +35,8 @@ jobs:
             cd /home/ec2-user/agentic_toolbox
 
             echo "📦 Install dependencies"
-            pip install --upgrade poetry
-            poetry install --no-root --without dev
+            pip install --upgrade uv
+            uv sync
 
             echo "🔄 Re-setup the database"
             cp ada_backend/database/ada_backend.db ada_backend/database/ada_backend_back_up.db

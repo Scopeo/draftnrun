@@ -47,15 +47,6 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
-      - name: Install ci dependencies
-        run: |
-          pip install poetry
-          poetry install --no-root --only dev
-
-      - name: Linter
-        run: |
-          poetry run flake8 .
-
       - name: Copy files to EC2
         uses: appleboy/scp-action@master
         with:
@@ -66,7 +57,7 @@ jobs:
           source: "."
           target: "${{ env.EC2_PATH_BASE }}/${{env.EC2_FOLDER_NAME}}${{env.RUN_ID}}"
 
-      - name: Set up dependencies in EC2
+      - name: Install ci dependencies
         uses: appleboy/ssh-action@master
         with:
           host: ${{ secrets.EC2_HOST_TEST }}
@@ -77,9 +68,21 @@ jobs:
             set -e
             echo "===> Changing directory to ${{ env.EC2_PATH_BASE }}/${{env.EC2_FOLDER_NAME}}${{ env.RUN_ID }}"
             cd ${{ env.EC2_PATH_BASE }}/${{env.EC2_FOLDER_NAME}}${{env.RUN_ID}}
-            echo "===> Installing dependencies"
-            pip install poetry
-            poetry install --no-root --with dev
+            pip install uv
+            uv sync
+
+      - name: Linter
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.EC2_HOST_TEST }}
+          username: ${{ env.EC2_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          script: |
+            set -e
+            echo "===> Changing directory to ${{ env.EC2_PATH_BASE }}/${{env.EC2_FOLDER_NAME}}${{ env.RUN_ID }}"
+            cd ${{ env.EC2_PATH_BASE }}/${{env.EC2_FOLDER_NAME}}${{env.RUN_ID}}
+            uv run flake8 .
 
       - name: Create credentials.env file
         run: |
@@ -173,7 +176,7 @@ jobs:
           script: |
             set -e
             echo "===> Changing directory to ${{ env.EC2_PATH_BASE }}/${{env.EC2_FOLDER_NAME}}${{ env.RUN_ID }}"
-            cd ${{ env.EC2_PATH_BASE }}/${{env.EC2_FOLDER_NAME}}${{ env.RUN_ID }}
+            cd ${{ env.EC2_PATH_BASE }}/${{env.EC2_FOLDER_NAME}}${{ env.RUN_ID }}/services
 
             echo "===> Removing existing ada_postgres container if it exists"
             docker rm -f ada_postgres || true
@@ -211,8 +214,8 @@ jobs:
             echo "===> Running database migrations"
             make db-upgrade
             make db-seed
-            poetry run python -m ada_backend.database.seed_project_db
-            
+            uv run python -m ada_backend.database.seed_project_db
+
             echo "👁️ Re-setup the traces database"
             make trace-db-upgrade
 
@@ -228,10 +231,10 @@ jobs:
             echo "===> Changing directory to ${{ env.EC2_PATH_BASE }}/${{env.EC2_FOLDER_NAME}}${{ env.RUN_ID }}"
             cd ${{ env.EC2_PATH_BASE }}/${{env.EC2_FOLDER_NAME}}${{env.RUN_ID}}
             echo "===> Running tests for RUN_ID: ${{ env.RUN_ID }}"
-            poetry run coverage run -m pytest
-            poetry run coverage report -i
-            poetry run coverage html -i
-            poetry run coverage xml -i
+            uv run coverage run -m pytest
+            uv run coverage report -i
+            uv run coverage html -i
+            uv run coverage xml -i
 
       - name: Cleanup EC2 folder and Docker resources
         if: always()

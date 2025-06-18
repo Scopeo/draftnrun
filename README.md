@@ -1,6 +1,6 @@
-# DraftNRun
+# [Draft'n run](https://draftnrun.com)
 
-We provide here a guide on how to set up **locally** your DraftNRun backend application.
+We provide here a guide on how to set up **locally** your Draft'n run backend application.
 
 ## Set up the services
 
