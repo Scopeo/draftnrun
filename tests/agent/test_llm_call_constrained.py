@@ -97,7 +97,6 @@ def llm_call_with_output_format():
     return agent
 
 
-@pytest.mark.skip(reason="Waiting for poetry migration to uv")
 @pytest.mark.anyio
 async def test_agent_input_combinations(llm_call_with_output_format, input_payload):
     response = await llm_call_with_output_format._run_without_trace(input_payload)
@@ -113,7 +112,6 @@ async def test_agent_input_combinations(llm_call_with_output_format, input_paylo
     assert isinstance(response_format["strict"], bool) and response_format["strict"] is True
 
 
-@pytest.mark.skip(reason="Waiting for poetry migration to uv")
 @pytest.mark.anyio
 async def test_chat_completion_to_response(llm_call_with_output_format, input_payload_with_file):
     response = await llm_call_with_output_format._run_without_trace(input_payload_with_file)
