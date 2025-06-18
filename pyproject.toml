@@ -55,6 +55,8 @@ dev = [
     "black>=24.8.0,<25",
     "coverage>=7.6.1,<8",
     "pytest-mock>=3.14.0,<4",
+    "trio>=0.30.0",
+    "pytest-trio>=0.8.0",
 ]
 tracing = [
     "wrapt==1.17.2",

@@ -113,6 +113,8 @@ jobs:
           echo "REDIS_QUEUE_NAME=${{ secrets.REDIS_QUEUE_NAME }}" >> credentials.env
           echo "ADA_DB_DRIVER=postgres" >> credentials.env
           echo "ADA_DB_URL=postgresql://postgres:ada_password@localhost:5432/ada_backend" >> credentials.env
+          echo "INGESTION_DB_URL=postgresql://postgres:ada_password@localhost:5432/ada_ingestion" >> credentials.env
+          echo "ADA_URL=http://localhost:8000" >> credentials.env
           echo "GOOGLE_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai/" >> credentials.env
           echo "GOOGLE_API_KEY=${{ secrets.GOOGLE_API_KEY }}" >> credentials.env
 
@@ -219,6 +221,28 @@ jobs:
             echo "👁️ Re-setup the traces database"
             make trace-db-upgrade
 
+      - name: Start ada_backend server
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.EC2_HOST_TEST }}
+          username: ${{ env.EC2_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          script: |
+            set -e
+            echo "===> Changing directory to ${{ env.EC2_PATH_BASE }}/${{env.EC2_FOLDER_NAME}}${{ env.RUN_ID }}"
+            cd ${{ env.EC2_PATH_BASE }}/${{env.EC2_FOLDER_NAME}}${{env.RUN_ID}}
+
+            echo "===> Starting ada_backend server in background"
+            nohup uv run python -m ada_backend.main > ada_backend.log 2>&1 &
+            echo "===> Waiting for server to start"
+            timeout 30s bash -c 'until curl -f http://localhost:8000/ >/dev/null 2>&1; do sleep 1; done' || {
+              echo "Server failed to start. Logs:"
+              cat ada_backend.log
+              exit 1
+            }
+            echo "===> Server started successfully"
+
       - name: Tests and coverage
         uses: appleboy/ssh-action@master
         with:
@@ -248,6 +272,12 @@ jobs:
             EC2_TEST_DIR="${{ env.EC2_PATH_BASE }}/${{env.EC2_FOLDER_NAME}}${{ env.RUN_ID }}"
             echo "===> Changing directory to $EC2_TEST_DIR for cleanup"
             cd "$EC2_TEST_DIR" || { echo "Directory not found, skipping Docker cleanup."; }
+
+            # Kill process using specific port
+            echo "===> Stopping ada_backend server on port 8000"
+            lsof -ti:8000 | xargs kill -TERM 2>/dev/null && echo "Server stopped" || echo "No server on port 8000"
+            sleep 1
+            lsof -ti:8000 | xargs kill -9 2>/dev/null || true  # Force kill if still running
 
             # Ensure that docker-compose.yml exists before running docker compose down
             if [ -f docker-compose.yml ]; then
