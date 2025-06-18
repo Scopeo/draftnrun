@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, timezone
 import requests
 
 import numpy as np
+import pandas as pd
 
 from ada_backend.schemas.chart_schema import Chart, ChartData, ChartType, ChartsResponse, Dataset
 from ada_backend.services.metrics.utils import query_trace_duration
@@ -81,6 +82,32 @@ def get_prometheus_agent_calls_chart(project_id: UUID, duration_days: int) -> Ch
         x_axis_type="datetime",
     )
 
+def get_agent_usage_chart(project_id: UUID, duration_days: int) -> Chart:
+    current_date = datetime.now(tz=timezone.utc)
+    start_date = current_date - timedelta(days=duration_days)
+    all_dates_df = pd.DataFrame(pd.date_range(start=start_date.date(), end=current_date.date(), freq='D'), columns=["date"])
+
+    df = query_trace_duration(project_id, duration_days)
+    df = df[df["parent_id"].isna()].copy()
+    df["date"] = pd.to_datetime(df['start_time']).dt.normalize()
+    agent_usage = df.groupby("date").size().reset_index(name="count")
+    agent_usage = pd.merge(all_dates_df, agent_usage, on="date", how="left").fillna(0)
+    agent_usage["count"] = agent_usage["count"].astype(int)
+    agent_usage["date"] = pd.to_datetime(agent_usage["date"]).dt.date
+    agent_usage = agent_usage.sort_values(by="date", ascending=True)
+    agent_usage["date"] = agent_usage["date"].astype(str) 
+
+    return Chart(
+        id=f"agent_usage_{project_id}",
+        type=ChartType.BAR,
+        title="Agent Usage",
+        data=ChartData(
+            labels=agent_usage["date"].tolist(),
+            datasets=[Dataset(label="Number of calls per day", data=agent_usage["count"].tolist())],
+        ),
+        x_axis_type="datetime",
+    )
+
 
 def get_tokens_chart(project_id: UUID, duration_days: int) -> Chart:
     df = query_trace_duration(project_id, duration_days)
@@ -109,23 +136,9 @@ def get_tokens_chart(project_id: UUID, duration_days: int) -> Chart:
 async def get_charts_by_project(project_id: UUID, duration_days: int) -> ChartsResponse:
     response = ChartsResponse(
         charts=[
-            get_prometheus_agent_calls_chart(project_id, duration_days),
+            get_agent_usage_chart(project_id, duration_days),
+            #get_prometheus_agent_calls_chart(project_id, duration_days),
             get_tokens_chart(project_id, duration_days),
-            Chart(
-                id="resource-distribution",
-                type=ChartType.DOUGHNUT,
-                title="Resource Distribution",
-                data=ChartData(
-                    labels=["1", "2", "3", "4"],
-                    datasets=[
-                        Dataset(
-                            label="Resource Distribution",
-                            data=[45, 25, 20, 10],
-                            backgroundColor=["#FF5733", "#4CAF50", "#2196F3", "#FFC107"],
-                        )
-                    ],
-                ),
-            ),
         ]
     )
     if len(response.charts) == 0:
