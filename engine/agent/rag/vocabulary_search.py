@@ -16,6 +16,7 @@ class VocabularySearch:
         vocabulary_context_data: dict,
         fuzzy_threshold: int = 90,
         fuzzy_matching_candidates: int = 10,
+        vocabulary_context_prompt_key: str = "retrieved_definitions",
         component_instance_name: str = "Vocabulary Search",
         term_column: str = "term",
         definition_column: str = "definition",
@@ -28,6 +29,7 @@ class VocabularySearch:
         self.fuzzy_matching_candidates = fuzzy_matching_candidates
         self.vocabulary_context_data = vocabulary_context_data
         self.vocabulary_information: dict[str, TermDefinition] = self._init_vocabulary_information()
+        self.vocabulary_context_prompt_key = vocabulary_context_prompt_key
 
     def _init_vocabulary_information(self):
         vocabulary_information = pd.DataFrame(self.vocabulary_context_data)
@@ -68,7 +70,7 @@ class VocabularySearch:
                 }
             )
 
-            if len(chunks) > 30:
+            if len(chunks) > NUMBER_CHUNKS_TO_DISPLAY_TRACE:
                 for i, chunk in enumerate(chunks):
                     span.add_event(
                         f"Retrieved Vocabulary {i}",

@@ -5,6 +5,7 @@ from llama_index.llms.openai import OpenAI
 from engine.agent.agent import SourceChunk
 from engine.agent.rag.retriever import Retriever
 from engine.agent.synthesizer import Synthesizer
+from engine.agent.rag.vocabulary_search import VocabularySearch
 from engine.llm_services.llm_service import LLMService
 from engine.agent.agent import AgentPayload, ChatMessage
 from engine.agent.rag.rag import RAG
@@ -22,39 +23,20 @@ class MockQdrantResult:
         self.payload = {"name": name, "content": content}
 
 
-class CaptureLLMService(LLMService):
-    def __init__(self, default_response: str):
-        self.last_prompt = None
-        self.default_response = default_response
+@pytest.fixture
+def make_mock_llm_service():
+    def _make_mock(default_response: str):
+        mock_llm = MagicMock(spec=LLMService)
+        mock_llm.last_prompt = None
 
-    def constrained_complete(self, messages: list[dict], response_format: type):
-        self.last_prompt = messages[0]["content"]
-        return response_format(response=self.default_response, is_successful=True)
+        def constrained_complete(messages, response_format):
+            mock_llm.last_prompt = messages[0]["content"]
+            return response_format(response=default_response, is_successful=True)
 
-    # Stub implementations for abstract methods (no-op or dummy)
-    def complete(self, *args, **kwargs):
-        raise NotImplementedError("Not used in this test")
+        mock_llm.constrained_complete.side_effect = constrained_complete
+        return mock_llm
 
-    def complete_with_files(self, *args, **kwargs):
-        raise NotImplementedError("Not used in this test")
-
-    def embed(self, *args, **kwargs):
-        raise NotImplementedError("Not used in this test")
-
-    def _format_image_content(self, *args, **kwargs):
-        raise NotImplementedError("Not used in this test")
-
-    def _function_call_without_trace(self, *args, **kwargs):
-        raise NotImplementedError("Not used in this test")
-
-    def generate_speech_from_text(self, *args, **kwargs):
-        raise NotImplementedError("Not used in this test")
-
-    def generate_transcript(self, *args, **kwargs):
-        raise NotImplementedError("Not used in this test")
-
-    def get_token_size(self, *args, **kwargs):
-        raise NotImplementedError("Not used in this test")
+    return _make_mock
 
 
 @pytest.fixture
@@ -97,7 +79,6 @@ def message_to_process():
 
 @patch.object(OpenAI, "complete")
 def test_rag_run(mock_complete, mock_trace_manager, mock_retriever, mock_synthesizer, message_to_process):
-
     rag = RAG(
         retriever=mock_retriever,
         trace_manager=mock_trace_manager,
@@ -122,22 +103,26 @@ def test_rag_run(mock_complete, mock_trace_manager, mock_retriever, mock_synthes
     assert output.artifacts["sources"][1].content == results[1].payload["content"]
 
 
-def test_vocabulary_rag_run(mock_trace_manager, mock_retriever):
-    capture_llm_service = CaptureLLMService(
+def test_vocabulary_rag_run(make_mock_llm_service, mock_trace_manager, mock_retriever):
+    mock_llm_service = make_mock_llm_service(
         default_response="Test Response [1][2]\nSources:\n[1] <url1|SourceChunk_1>\n[2] <url2|SourceChunk_2>\n"
     )
     prompt_template = "{context_str} ---\n{vocabulary_context_str}\n---{query_str}"
     vocabulary_context = {"term": ["term1", "term2"], "definition": ["definition1", "definition2"]}
+    vocabulary_search = VocabularySearch(
+        trace_manager=mock_trace_manager,
+        vocabulary_context_data=vocabulary_context,
+        vocabulary_context_prompt_key="vocabulary_context_str",
+        fuzzy_matching_candidates=10,
+    )
     rag = RAG(
         retriever=mock_retriever,
         trace_manager=mock_trace_manager,
         synthesizer=Synthesizer(
-            llm_service=capture_llm_service, prompt_template=prompt_template, trace_manager=mock_trace_manager
+            llm_service=mock_llm_service, prompt_template=prompt_template, trace_manager=mock_trace_manager
         ),
+        vocabulary_search=vocabulary_search,
         tool_description=MagicMock(),
-        vocabulary_context=vocabulary_context,
-        vocabulary_context_prompt_key="vocabulary_context_str",
-        fuzzy_matching_candidates=10,
         fuzzy_threshold=90,
     )
     message_to_process = AgentPayload(
@@ -159,7 +144,7 @@ def test_vocabulary_rag_run(mock_trace_manager, mock_retriever):
     assert output.artifacts["sources"][1].name == results[1].payload["name"]
     assert output.artifacts["sources"][1].content == results[1].payload["content"]
     assert (
-        capture_llm_service.last_prompt == "**Source 1:**\nResult 1\n\n**Source 2:**\nResult 2 ---"
+        mock_llm_service.last_prompt == "**Source 1:**\nResult 1\n\n**Source 2:**\nResult 2 ---"
         "\n**Glossary definition of term1:**\ndefinition1\n\n**Glossary definition of term2:"
         "**\ndefinition2\n---What is the definition of term1 and term2?"
     )

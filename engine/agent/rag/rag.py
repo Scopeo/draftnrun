@@ -32,12 +32,10 @@ class RAG(Agent):
         synthesizer: Synthesizer,
         component_instance_name: str = "RAG",
         reranker: Optional["Reranker"] = None,
-        filtering_condition: str = "OR",
+        filtering_condition: str = "AND",
         formatter: Optional[Formatter] = None,
+        vocabulary_search: Optional[VocabularySearch] = None,
         input_data_field_for_messages_history: str = "messages",
-        vocabulary_context: dict = {},
-        vocabulary_context_prompt_key: str = "vocabulary_context_str",
-        fuzzy_matching_candidates: int = 10,
         fuzzy_threshold: int = 90,
     ) -> None:
         super().__init__(
@@ -52,19 +50,8 @@ class RAG(Agent):
         if formatter is None:
             formatter = Formatter(add_sources=False)
         self._formatter = formatter
+        self._vocabulary_search = vocabulary_search
         self.input_data_field_for_messages_history = input_data_field_for_messages_history
-        self.vocabulary_context: dict = vocabulary_context
-        self._vocabulary_search = None
-        self._fuzzy_matching_candidates = fuzzy_matching_candidates
-        self._fuzzy_threshold = fuzzy_threshold
-        self._vocabulary_context_prompt_key = vocabulary_context_prompt_key
-        if vocabulary_context:
-            self._vocabulary_search = VocabularySearch(
-                trace_manager=trace_manager,
-                vocabulary_context_data=vocabulary_context,
-                fuzzy_matching_candidates=self._fuzzy_matching_candidates,
-                fuzzy_threshold=self._fuzzy_threshold,
-            )
 
     async def _run_without_trace(
         self,
@@ -90,7 +77,7 @@ class RAG(Agent):
         if self._vocabulary_search is not None:
             vocabulary_chunks = self._vocabulary_search.get_chunks(query_text=content)
             vocabulary_context = {
-                self._vocabulary_context_prompt_key: build_context_from_vocabulary_chunks(
+                self._vocabulary_search.vocabulary_context_prompt_key: build_context_from_vocabulary_chunks(
                     vocabulary_chunks=vocabulary_chunks
                 )
             }

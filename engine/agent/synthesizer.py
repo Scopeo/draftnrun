@@ -1,3 +1,5 @@
+from typing import Optional
+
 from pydantic import BaseModel
 
 from opentelemetry import trace as trace_api
@@ -29,7 +31,9 @@ class Synthesizer:
         self.response_format = response_format
         self.trace_manager = trace_manager
 
-    def get_response(self, chunks: list[SourceChunk], query_str: str, optional_contexts: dict = {}) -> SourcedResponse:
+    def get_response(
+        self, chunks: list[SourceChunk], query_str: str, optional_contexts: Optional[dict]
+    ) -> SourcedResponse:
 
         context_str = build_context_from_source_chunks(
             sources=chunks,
@@ -46,7 +50,9 @@ class Synthesizer:
             )
             input_dict = {"context_str": context_str, "query_str": query_str, **optional_contexts}
             input_str = fill_prompt_template_with_dictionary(
-                input_dict, self._prompt_template, component_name=self.__class__.__name__
+                input_dict,
+                self._prompt_template,
+                component_name=self.__class__.__name__
             )
 
             response = self._llm_service.constrained_complete(

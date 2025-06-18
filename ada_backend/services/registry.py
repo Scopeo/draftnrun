@@ -18,6 +18,7 @@ from engine.agent.rag.chunk_selection import RelevantChunkSelector
 from engine.agent.rag.formatter import Formatter
 from engine.agent.rag.retriever import Retriever
 from engine.agent.rag.cohere_reranker import CohereReranker
+from engine.agent.rag.vocabulary_search import VocabularySearch
 from engine.agent.api_tools.tavily_search_tool import TavilyApiTool
 from engine.agent.web_search_tool_openai import WebSearchOpenAITool
 from engine.agent.api_tools.api_call_tool import APICallTool
@@ -52,6 +53,7 @@ class SupportedEntityType(StrEnum):
     RETRIEVER = "Retriever"
     COHERE_RERANKER = "CohereReranker"
     RAG_ANSWER_FORMATTER = "Formatter"
+    VOCABULARY_SEARCH = "VocabularySearch"
     SQL_DB_SERVICE = "SQLDBService"
     CHUNK_SELECTOR = "ChunkSelector"
     DOCUMENT_SEARCH = "Document Search"
@@ -226,6 +228,13 @@ def create_factory_registry() -> FactoryRegistry:
         name=SupportedEntityType.RAG_ANSWER_FORMATTER,
         factory=EntityFactory(
             entity_class=Formatter,
+        ),
+    )
+    registry.register(
+        name=SupportedEntityType.VOCABULARY_SEARCH,
+        factory=EntityFactory(
+            entity_class=VocabularySearch,
+            parameter_processors=[trace_manager_processor],
         ),
     )
     registry.register(
