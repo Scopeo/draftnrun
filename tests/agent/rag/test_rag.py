@@ -123,7 +123,6 @@ def test_vocabulary_rag_run(make_mock_llm_service, mock_trace_manager, mock_retr
         ),
         vocabulary_search=vocabulary_search,
         tool_description=MagicMock(),
-        fuzzy_threshold=90,
     )
     message_to_process = AgentPayload(
         messages=[ChatMessage(role="user", content="What is the definition of term1 and term2?")]
