@@ -345,6 +345,9 @@ class QdrantService:
         """
         schema = self._get_schema(collection_name)
         self.create_index_if_needed(collection_name, index_name=schema.chunk_id_field)
+        if  schema.metadata_fields_to_keep:
+            for metadata_field in schema.metadata_fields_to_keep:
+                self.create_index_if_needed(collection_name, index_name=metadata_field)
         for i in range(0, len(list_chunks), self._max_chunks_to_add):
             current_chunk_batch = list_chunks[i : i + self._max_chunks_to_add]
             list_embeddings = self._build_vectors([chunk[schema.content_field] for chunk in current_chunk_batch])
