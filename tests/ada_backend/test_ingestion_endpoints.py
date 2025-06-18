@@ -1,15 +1,15 @@
-from fastapi.testclient import TestClient
-import uuid
-from unittest.mock import patch
+import requests
 
-from ada_backend.main import app
 from ada_backend.scripts.get_supabase_token import get_user_jwt
-from settings import settings
-from ada_backend.schemas.ingestion_task_schema import IngestionTaskQueue, IngestionTaskUpdate
-from ada_backend.schemas.source_schema import DataSourceSchema, DataSourceUpdateSchema
+from ada_backend.schemas.ingestion_task_schema import IngestionTaskQueue
 from ada_backend.database import models as db
+from ingestion_script.ingest_folder_source import ingest_local_folder_source
+from ingestion_script.utils import get_sanitize_names
+from engine.qdrant_service import QdrantService
+from engine.storage_service.local_service import SQLLocalService
+from settings import settings
 
-client = TestClient(app)
+BASE_URL = "http://localhost:8000"
 ORGANIZATION_ID = "37b7d67f-8f29-4fce-8085-19dea582f605"  # umbrella organization
 JWT_TOKEN = get_user_jwt(settings.TEST_USER_EMAIL, settings.TEST_USER_PASSWORD)
 HEADERS_JWT = {
@@ -22,113 +22,82 @@ HEADERS_API_KEY = {
     "Content-Type": "application/json",
 }
 
-TEST_SOURCE_NAME = "Test Source"
+TEST_SOURCE_NAME = "Test_Ingestion_Local_Folder"
 TEST_SOURCE_TYPE = "local"
-TEST_SOURCE_ATTRIBUTES = {"path": "test_path", "access_token": None}
-DATABASE_SCHEMA = "test_schema"
-DATABASE_TABLE_NAME = "test_table"
-QDRANT_COLLECTION_NAME = "customer_service"
+TEST_SOURCE_ATTRIBUTES = {"path": "tests/resources/documents", "access_token": None}
+DATABASE_SCHEMA, DATABASE_TABLE_NAME, QDRANT_COLLECTION_NAME = get_sanitize_names(
+    source_name=TEST_SOURCE_NAME,
+    organization_id=ORGANIZATION_ID,
+)
+print(f"Database Schema: {DATABASE_SCHEMA}"
+      f"\nDatabase Table Name: {DATABASE_TABLE_NAME}"
+      f"\nQdrant Collection Name: {QDRANT_COLLECTION_NAME}")
 
 
-@patch("ada_backend.services.source_service.QdrantService")
-@patch("ada_backend.services.source_service.SQLLocalService")
-def test_ingestion_endpoints(mock_sql_local_service, mock_qdrant_service):
-    mock_qdrant_instance = mock_qdrant_service.return_value
-    mock_qdrant_instance.delete_collection.return_value = None
+def test_ingest_local_folder_source():
 
-    mock_db_service_instance = mock_sql_local_service.return_value
-    mock_db_service_instance.drop_table.return_value = None
-
-    endpoint = f"/ingestion_task/{ORGANIZATION_ID}"
+    endpoint = f"{BASE_URL}/ingestion_task/{ORGANIZATION_ID}"
     payload = IngestionTaskQueue(
         source_name=TEST_SOURCE_NAME,
         source_type=db.SourceType.LOCAL,
         status=db.TaskStatus.PENDING,
         source_attributes=TEST_SOURCE_ATTRIBUTES,
     )
-    response = client.post(endpoint, headers=HEADERS_JWT, json=payload.model_dump())
+    response = requests.post(endpoint, headers=HEADERS_JWT, json=payload.model_dump())
     task_id = response.json()
 
     assert response.status_code == 201
     assert isinstance(task_id, str)
     assert len(task_id) > 0
 
-    source_payload = DataSourceSchema(
-        name=TEST_SOURCE_NAME,
-        type=db.SourceType.LOCAL,
-        database_schema=DATABASE_SCHEMA,
-        database_table_name=DATABASE_TABLE_NAME,
-        qdrant_collection_name=QDRANT_COLLECTION_NAME,
+    ingest_local_folder_source(
+        path=TEST_SOURCE_ATTRIBUTES["path"],
+        organization_id=ORGANIZATION_ID,
+        source_name=TEST_SOURCE_NAME,
+        task_id=task_id,
+        save_supabase=False,
+        add_doc_description_to_chunks=False,
     )
-    response = client.post(
-        f"/sources/{ORGANIZATION_ID}",
-        headers=HEADERS_API_KEY,
-        json=source_payload.model_dump(mode="json"),
-    )
-    source_id = response.json()
-
-    assert response.status_code == 201
-    assert len(source_id) > 0
-    assert isinstance(source_id, str)
-
-    update_source_payload = DataSourceUpdateSchema(
-        id=source_id,
-        name="Updated Source",
-        type=db.SourceType.LOCAL,
-        database_schema=DATABASE_SCHEMA,
-        database_table_name=DATABASE_TABLE_NAME,
-        qdrant_collection_name=QDRANT_COLLECTION_NAME,
-    )
-    update_source = client.patch(
-        f"/sources/{ORGANIZATION_ID}",
-        headers=HEADERS_JWT,
-        json=update_source_payload.model_dump(mode="json"),
-    )
-    assert update_source.status_code == 200
-    assert update_source.json() is None
-
-    get_source_response = client.get(
-        f"/sources/{ORGANIZATION_ID}",
+    get_source_response = requests.get(
+        f"{BASE_URL}/sources/{ORGANIZATION_ID}",
         headers=HEADERS_JWT,
     )
     assert get_source_response.status_code == 200
     assert isinstance(get_source_response.json(), list)
-    for source in get_source_response.json():
-        if source["id"] == str(uuid.UUID(source_id)):
-            assert source["name"] == "Updated Source"
+    sources = get_source_response.json()
+    source_id = None
+    for source in sources:
+        if source["database_table_name"] == DATABASE_TABLE_NAME:
+            source_id = source["id"]
+            assert source["name"] == TEST_SOURCE_NAME
             assert source["type"] == TEST_SOURCE_TYPE
             assert source["database_schema"] == DATABASE_SCHEMA
             assert source["database_table_name"] == DATABASE_TABLE_NAME
+        else:
+            assert source["name"] != TEST_SOURCE_NAME
 
-    update_payload = IngestionTaskUpdate(
-        id=task_id,
-        source_id=source_id,
-        source_name="Updated Source",
-        source_type=db.SourceType.LOCAL,
-        status=db.TaskStatus.COMPLETED,
+    qdrant_service = QdrantService.from_defaults()
+    assert qdrant_service.collection_exists(QDRANT_COLLECTION_NAME)
+
+    db_service = SQLLocalService(engine_url=settings.INGESTION_DB_URL)
+    chunk_df = db_service.get_table_df(
+        table_name=DATABASE_TABLE_NAME,
+        schema_name=DATABASE_SCHEMA,
     )
-    update_endpoint = f"/ingestion_task/{ORGANIZATION_ID}"
-    update_response = client.patch(
-        update_endpoint, headers=HEADERS_API_KEY, json=update_payload.model_dump(mode="json")
-    )
+    assert not chunk_df.empty
+    assert "content" in chunk_df.columns
+    assert "file_id" in chunk_df.columns
 
-    assert update_response.status_code == 200
-    assert update_response.json() is None
-
-    get_response = client.get(endpoint, headers=HEADERS_JWT)
-    assert get_response.status_code == 200
-    assert isinstance(get_response.json(), list)
-
-    updated_task = next((item for item in get_response.json() if item["id"] == task_id), None)
-    assert updated_task is not None
-    assert updated_task["source_name"] == "Updated Source"
-    assert updated_task["source_type"] == db.SourceType.LOCAL.value
-    assert updated_task["status"] == "completed"
-
-    delete_endpoint = f"/ingestion_task/{ORGANIZATION_ID}/{task_id}"
-    delete_response = client.delete(delete_endpoint, headers=HEADERS_JWT)
+    delete_endpoint = f"{BASE_URL}/ingestion_task/{ORGANIZATION_ID}/{task_id}"
+    delete_response = requests.delete(delete_endpoint, headers=HEADERS_JWT)
     assert delete_response.status_code == 204
 
-    delete_source_endpoint = f"/sources/{ORGANIZATION_ID}/{source_id}"
-    delete_source_response = client.delete(delete_source_endpoint, headers=HEADERS_JWT)
+    delete_source_endpoint = f"{BASE_URL}/sources/{ORGANIZATION_ID}/{source_id}"
+    delete_source_response = requests.delete(delete_source_endpoint, headers=HEADERS_JWT)
     assert delete_source_response.status_code == 204
+
+    assert not qdrant_service.collection_exists(QDRANT_COLLECTION_NAME)
+    assert not db_service.table_exists(
+        table_name=DATABASE_TABLE_NAME,
+        schema_name=DATABASE_SCHEMA,
+    )

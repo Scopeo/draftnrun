@@ -113,6 +113,8 @@ jobs:
           echo "REDIS_QUEUE_NAME=${{ secrets.REDIS_QUEUE_NAME }}" >> credentials.env
           echo "ADA_DB_DRIVER=postgres" >> credentials.env
           echo "ADA_DB_URL=postgresql://postgres:ada_password@localhost:5432/ada_backend" >> credentials.env
+          echo "INGESTION_DB_URL=postgresql://postgres:ada_password@localhost:5432/ada_ingestion" >> credentials.env
+          echo "ADA_URL=http://localhost:8000" >> credentials.env
           echo "GOOGLE_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai/" >> credentials.env
           echo "GOOGLE_API_KEY=${{ secrets.GOOGLE_API_KEY }}" >> credentials.env
 
@@ -219,6 +221,22 @@ jobs:
             echo "👁️ Re-setup the traces database"
             make trace-db-upgrade
 
+      - name: Start ada_backend server
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.EC2_HOST_TEST }}
+          username: ${{ env.EC2_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          script: |
+            set -e
+            echo "===> Changing directory to ${{ env.EC2_PATH_BASE }}/${{env.EC2_FOLDER_NAME}}${{ env.RUN_ID }}"
+            cd ${{ env.EC2_PATH_BASE }}/${{env.EC2_FOLDER_NAME}}${{env.RUN_ID}}
+
+            echo "===> Starting ada_backend server"
+            uv run python -m ada_backend.main
+            echo "===> Server started successfully"
+
       - name: Tests and coverage
         uses: appleboy/ssh-action@master
         with:
@@ -248,6 +266,13 @@ jobs:
             EC2_TEST_DIR="${{ env.EC2_PATH_BASE }}/${{env.EC2_FOLDER_NAME}}${{ env.RUN_ID }}"
             echo "===> Changing directory to $EC2_TEST_DIR for cleanup"
             cd "$EC2_TEST_DIR" || { echo "Directory not found, skipping Docker cleanup."; }
+
+            echo "===> Stopping and removing ada_backend server if running"
+            if pgrep -f "python -m ada_backend.main" > /dev/null; then
+              echo "===> ada_backend server is running, stopping it."
+              pkill -f "python -m ada_backend.main" || true
+            else
+              echo "===> ada_backend server is not running, skipping stop."
 
             # Ensure that docker-compose.yml exists before running docker compose down
             if [ -f docker-compose.yml ]; then
