@@ -29,9 +29,6 @@ DATABASE_SCHEMA, DATABASE_TABLE_NAME, QDRANT_COLLECTION_NAME = get_sanitize_name
     source_name=TEST_SOURCE_NAME,
     organization_id=ORGANIZATION_ID,
 )
-print(f"Database Schema: {DATABASE_SCHEMA}"
-      f"\nDatabase Table Name: {DATABASE_TABLE_NAME}"
-      f"\nQdrant Collection Name: {QDRANT_COLLECTION_NAME}")
 
 
 def test_ingest_local_folder_source():
