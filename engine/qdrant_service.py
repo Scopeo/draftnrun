@@ -345,7 +345,7 @@ class QdrantService:
         """
         schema = self._get_schema(collection_name)
         self.create_index_if_needed(collection_name, index_name=schema.chunk_id_field)
-        if  schema.metadata_fields_to_keep:
+        if schema.metadata_fields_to_keep:
             for metadata_field in schema.metadata_fields_to_keep:
                 self.create_index_if_needed(collection_name, index_name=metadata_field)
         for i in range(0, len(list_chunks), self._max_chunks_to_add):
