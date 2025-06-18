@@ -213,7 +213,6 @@ def test_make_api_call_non_json_response(mock_request, api_tool):
     assert result["success"] is True
 
 
-@pytest.mark.skip(reason="Waiting for poetry migration to uv")
 @pytest.mark.anyio
 async def test_run_without_trace_with_dynamic_params(api_tool):
     agent_input = AgentPayload(messages=[ChatMessage(role="user", content="test")])
@@ -237,7 +236,6 @@ async def test_run_without_trace_with_dynamic_params(api_tool):
         mock_make_api_call.assert_called_once_with(**dynamic_params)
 
 
-@pytest.mark.skip(reason="Waiting for poetry migration to uv")
 @pytest.mark.anyio
 async def test_run_without_trace_error(api_tool):
     agent_input = AgentPayload(messages=[ChatMessage(role="user", content="test")])
