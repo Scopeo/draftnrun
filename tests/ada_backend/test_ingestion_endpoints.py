@@ -24,7 +24,7 @@ HEADERS_API_KEY = {
 
 TEST_SOURCE_NAME = "Test_Ingestion_Local_Folder"
 TEST_SOURCE_TYPE = "local"
-TEST_SOURCE_ATTRIBUTES = {"path": "tests/resources/documents", "access_token": None}
+TEST_SOURCE_ATTRIBUTES = {"path": "tests/resources/documents/sample.pdf", "access_token": None}
 DATABASE_SCHEMA, DATABASE_TABLE_NAME, QDRANT_COLLECTION_NAME = get_sanitize_names(
     source_name=TEST_SOURCE_NAME,
     organization_id=ORGANIZATION_ID,
