@@ -176,7 +176,7 @@ jobs:
           script: |
             set -e
             echo "===> Changing directory to ${{ env.EC2_PATH_BASE }}/${{env.EC2_FOLDER_NAME}}${{ env.RUN_ID }}"
-            cd ${{ env.EC2_PATH_BASE }}/${{env.EC2_FOLDER_NAME}}${{ env.RUN_ID }}
+            cd ${{ env.EC2_PATH_BASE }}/${{env.EC2_FOLDER_NAME}}${{ env.RUN_ID }}/services
 
             echo "===> Removing existing ada_postgres container if it exists"
             docker rm -f ada_postgres || true
