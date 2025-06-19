@@ -10,6 +10,9 @@ from ada_backend.schemas.chart_schema import Chart, ChartData, ChartType, Charts
 from ada_backend.services.metrics.utils import query_trace_duration
 
 
+TOKENS_DISTRIBUTION_BINS = [1000, 2000, 3000, 4000, 5000, 6000, 7000, 8000, 9000, 10000]
+
+
 def calculate_prometheus_step(duration_days: int, target_points: int = 200) -> str:
     duration_seconds = duration_days * 24 * 60 * 60
     raw_step = duration_seconds / target_points
@@ -181,11 +184,13 @@ def get_tokens_distribution_chart(project_id: UUID, duration_days: int) -> Chart
     df = query_trace_duration(project_id, duration_days)
     input_data = df[df["llm_token_count_prompt"].notna()]["llm_token_count_prompt"]
     output_data = df[df["llm_token_count_completion"].notna()]["llm_token_count_completion"]
-    bins_edges = [1000, 2000, 3000, 4000, 5000, 6000, 7000, 8000, 9000, 10000]
 
-    input_token_hist, _ = np.histogram(input_data, bins=bins_edges)
-    output_token_hist, _ = np.histogram(output_data, bins=bins_edges)
-    bin_centers = [(bins_edges[i] + bins_edges[i + 1]) / 2 for i in range(len(bins_edges) - 1)]
+    input_token_hist, _ = np.histogram(input_data, bins=TOKENS_DISTRIBUTION_BINS)
+    output_token_hist, _ = np.histogram(output_data, bins=TOKENS_DISTRIBUTION_BINS)
+    bin_centers = [
+        (TOKENS_DISTRIBUTION_BINS[i] + TOKENS_DISTRIBUTION_BINS[i + 1]) / 2
+        for i in range(len(TOKENS_DISTRIBUTION_BINS) - 1)
+    ]
 
     return Chart(
         id=f"tokens_distribution_{project_id}",
