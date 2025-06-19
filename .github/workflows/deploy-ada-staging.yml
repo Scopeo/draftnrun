@@ -18,8 +18,8 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: 22
           script: |
-            cd /home/ec2-user/agentic_toolbox
-            git remote set-url origin git@github.com:scopeo/agentic_toolbox.git
+            cd /home/ec2-user/draftnrun
+            git remote set-url origin git@github.com:scopeo/draftnrun.git
             git reset --hard HEAD
             git pull origin main
     
@@ -32,7 +32,7 @@ jobs:
           port: 22
           script: |
             set -e
-            cd /home/ec2-user/agentic_toolbox
+            cd /home/ec2-user/draftnrun
 
             echo "📦 Install dependencies"
             pip install --upgrade uv
