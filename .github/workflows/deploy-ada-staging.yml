@@ -39,7 +39,6 @@ jobs:
             uv sync
 
             echo "🔄 Re-setup the database"
-            cp ada_backend/database/ada_backend.db ada_backend/database/ada_backend_back_up.db
             make db-upgrade
             make db-seed
 
