@@ -1,0 +1,36 @@
+from fastapi import APIRouter, Depends, HTTPException
+from uuid import UUID
+from typing import Optional
+
+from sqlalchemy.orm import Session
+from ada_backend.database.setup_db import get_db
+from ada_backend.services.template_service import list_templates_services
+from ada_backend.routers.auth_router import (
+    user_has_access_to_organization_dependency,
+    UserRights,
+)
+from ada_backend.schemas.auth_schema import SupabaseUser
+from ada_backend.schemas.template_schema import Template
+
+
+router = APIRouter(prefix="/templates", tags=["Templates"])
+
+
+@router.get("/{organization_id}", summary="Get Production Templates", tags=["Templates"])
+def get_production_templates(
+    session: Session = Depends(get_db),
+    organization_id: Optional[UUID] = None,
+    user: SupabaseUser = Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.READER.value)),
+) -> list[Template]:
+    """
+    Retrieve production templates for a given organization.
+    """
+    if not user.id:
+        raise HTTPException(status_code=400, detail="User ID not found")
+    try:
+        return list_templates_services(session)
+
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Internal Server Error") from e
