@@ -13,7 +13,7 @@ COMPONENT_UUIDS: dict[str, UUID] = {
     "retriever": UUID("8baf68a9-1671-4ed5-8374-6ec218f5d9a6"),
     "cohere_reranker": UUID("dfdc8b87-610f-4ce0-8cf1-276e80bec32b"),
     "formatter": UUID("079512c6-28e2-455f-af2c-f196015534bd"),
-    "vocabulary_search": UUID("0e19faef-a517-4def-a9ab-b3d72f179a14"),
+    "vocabulary_search": UUID("323cfc43-76d9-4ae1-b950-2791faf798c2"),
     "rag_agent": UUID("fe26eac8-61c6-4158-a571-61fd680676c8"),
     "base_ai_agent": UUID("22292e7f-a3ba-4c63-a4c7-dd5c0c75cdaa"),
     "api_call_tool": UUID("674b8c1d-0cc6-4887-be92-e3a2906830ed"),
