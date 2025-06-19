@@ -10,7 +10,7 @@ from ada_backend.schemas.chart_schema import Chart, ChartData, ChartType, Charts
 from ada_backend.services.metrics.utils import query_trace_duration
 
 
-TOKENS_DISTRIBUTION_BINS = [1000, 2000, 3000, 4000, 5000, 6000, 7000, 8000, 9000, 10000]
+TOKENS_DISTRIBUTION_BINS = [0, 1000, 2000, 3000, 4000, 5000, 6000, 7000, 8000, 9000, 10000]
 
 
 def calculate_prometheus_step(duration_days: int, target_points: int = 200) -> str:
