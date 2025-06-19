@@ -1,4 +1,4 @@
-from typing import List, Union
+from typing import List, Optional, Union
 
 from pydantic import BaseModel
 
@@ -17,11 +17,11 @@ class KPISResponse(BaseModel):
 
 class TraceKPIS(BaseModel):
     tokens_count: Union[int, float]
-    token_comparison_percentage: float
-    average_latency: Union[int, float]
-    latency_comparison_percentage: float
+    token_comparison_percentage: Optional[float] = None
+    average_latency: Optional[Union[int, float]] = None
+    latency_comparison_percentage: Optional[float] = None
     nb_request: int
-    nb_request_comparison_percentage: float
+    nb_request_comparison_percentage: Optional[float] = None
 
 
 class OccurenceQuestion(BaseModel):

@@ -4,7 +4,7 @@ from uuid import UUID
 import numpy as np
 import pandas as pd
 
-from ada_backend.services.charts_service import get_tokens_chart
+from ada_backend.services.charts_service import get_tokens_distribution_chart, TOKENS_DISTRIBUTION_BINS
 from ada_backend.schemas.chart_schema import Chart, ChartType, ChartData, Dataset
 
 
@@ -15,14 +15,14 @@ def test_get_tokens_chart(mock_query_trace_duration):
     mock_df = pd.DataFrame({"llm_token_count_prompt": input_data, "llm_token_count_completion": output_data})
     mock_query_trace_duration.return_value = mock_df
 
-    expected_bins = [200, 500, 1000, 2000, 3000, 5000, 7000, 10000]
+    expected_bins = TOKENS_DISTRIBUTION_BINS
     expected_bin_centers = [(expected_bins[i] + expected_bins[i + 1]) / 2 for i in range(len(expected_bins) - 1)]
     expected_input_n = np.histogram(input_data, bins=expected_bins)[0]
     expected_output_n = np.histogram(output_data, bins=expected_bins)[0]
 
     project_id = UUID("12345678123456781234567812345678")
     duration_days = 7
-    chart = get_tokens_chart(project_id, duration_days)
+    chart = get_tokens_distribution_chart(project_id, duration_days)
 
     assert isinstance(chart, Chart)
     assert chart.id == f"tokens_distribution_{project_id}"

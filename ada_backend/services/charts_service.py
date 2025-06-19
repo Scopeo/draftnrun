@@ -4,9 +4,13 @@ from datetime import datetime, timedelta, timezone
 import requests
 
 import numpy as np
+import pandas as pd
 
 from ada_backend.schemas.chart_schema import Chart, ChartData, ChartType, ChartsResponse, Dataset
 from ada_backend.services.metrics.utils import query_trace_duration
+
+
+TOKENS_DISTRIBUTION_BINS = [0, 1000, 2000, 3000, 4000, 5000, 6000, 7000, 8000, 9000, 10000]
 
 
 def calculate_prometheus_step(duration_days: int, target_points: int = 200) -> str:
@@ -82,15 +86,111 @@ def get_prometheus_agent_calls_chart(project_id: UUID, duration_days: int) -> Ch
     )
 
 
-def get_tokens_chart(project_id: UUID, duration_days: int) -> Chart:
+def get_agent_usage_chart(project_id: UUID, duration_days: int) -> Chart:
+    current_date = datetime.now(tz=timezone.utc)
+    start_date = current_date - timedelta(days=duration_days)
+    all_dates_df = pd.DataFrame(
+        pd.date_range(start=start_date.date(), end=current_date.date(), freq="D"), columns=["date"]
+    )
+
+    df = query_trace_duration(project_id, duration_days)
+    df["date"] = pd.to_datetime(df["start_time"]).dt.normalize()
+    df[["llm_token_count_prompt", "llm_token_count_completion"]] = df[
+        ["llm_token_count_prompt", "llm_token_count_completion"]
+    ].fillna(0)
+    token_usage = (
+        df.groupby("date")[["llm_token_count_prompt", "llm_token_count_completion"]]
+        .sum()
+        .reset_index()
+        .rename(columns={"llm_token_count_prompt": "input_tokens", "llm_token_count_completion": "output_tokens"})
+    )
+    token_usage = pd.merge(all_dates_df, token_usage, on="date", how="left").fillna(0)
+    token_usage[["input_tokens", "output_tokens"]] = token_usage[["input_tokens", "output_tokens"]].astype(int)
+    token_usage["date"] = pd.to_datetime(token_usage["date"]).dt.date
+    token_usage = token_usage.sort_values(by="date", ascending=True)
+    token_usage["date"] = token_usage["date"].astype(str)
+
+    df = df[df["parent_id"].isna()].copy()
+    agent_usage = df.groupby("date").size().reset_index(name="count")
+    agent_usage = pd.merge(all_dates_df, agent_usage, on="date", how="left").fillna(0)
+    agent_usage["count"] = agent_usage["count"].astype(int)
+    agent_usage["date"] = pd.to_datetime(agent_usage["date"]).dt.date
+    agent_usage = agent_usage.sort_values(by="date", ascending=True)
+    agent_usage["date"] = agent_usage["date"].astype(str)
+
+    return [
+        Chart(
+            id=f"agent_usage_{project_id}",
+            type=ChartType.LINE,
+            title="Agent Usage",
+            data=ChartData(
+                labels=agent_usage["date"].tolist(),
+                datasets=[
+                    Dataset(
+                        label="Number of calls per day",
+                        data=agent_usage["count"].tolist(),
+                    )
+                ],
+            ),
+            x_axis_type="datetime",
+        ),
+        Chart(
+            id=f"token_usage_{project_id}",
+            type=ChartType.LINE,
+            title="Token Usage",
+            data=ChartData(
+                labels=agent_usage["date"].tolist(),
+                datasets=[
+                    Dataset(
+                        label="Input tokens per day",
+                        data=token_usage["input_tokens"].tolist(),
+                        borderColor="#FF5733",
+                    ),
+                    Dataset(
+                        label="Output tokens per day",
+                        data=token_usage["output_tokens"].tolist(),
+                        borderColor="#33FF57",
+                    ),
+                ],
+            ),
+            x_axis_type="datetime",
+        ),
+    ]
+
+
+def get_latence_chart(project_id: UUID, duration_days: int) -> Chart:
+    df = query_trace_duration(project_id, duration_days)
+    df = df[df["parent_id"].isna()]
+    df["start_time"] = pd.to_datetime(df["start_time"])
+    df["end_time"] = pd.to_datetime(df["end_time"])
+    df["duration"] = (df["end_time"] - df["start_time"]).dt.total_seconds()
+
+    latency_hist, bins_edges = np.histogram(df["duration"], bins="fd")
+    bin_centers = [np.round((bins_edges[i] + bins_edges[i + 1]) / 2, 1) for i in range(len(bins_edges) - 1)]
+    return Chart(
+        id=f"latency_distribution_{project_id}",
+        type=ChartType.BAR,
+        title="Latency Distribution (seconds)",
+        data=ChartData(
+            labels=bin_centers,
+            datasets=[
+                Dataset(label="Latency Distribution", data=latency_hist.tolist()),
+            ],
+        ),
+    )
+
+
+def get_tokens_distribution_chart(project_id: UUID, duration_days: int) -> Chart:
     df = query_trace_duration(project_id, duration_days)
     input_data = df[df["llm_token_count_prompt"].notna()]["llm_token_count_prompt"]
     output_data = df[df["llm_token_count_completion"].notna()]["llm_token_count_completion"]
-    bins_edges = [200, 500, 1000, 2000, 3000, 5000, 7000, 10000]
 
-    input_token_hist, _ = np.histogram(input_data, bins=bins_edges)
-    output_token_hist, _ = np.histogram(output_data, bins=bins_edges)
-    bin_centers = [(bins_edges[i] + bins_edges[i + 1]) / 2 for i in range(len(bins_edges) - 1)]
+    input_token_hist, _ = np.histogram(input_data, bins=TOKENS_DISTRIBUTION_BINS)
+    output_token_hist, _ = np.histogram(output_data, bins=TOKENS_DISTRIBUTION_BINS)
+    bin_centers = [
+        (TOKENS_DISTRIBUTION_BINS[i] + TOKENS_DISTRIBUTION_BINS[i + 1]) / 2
+        for i in range(len(TOKENS_DISTRIBUTION_BINS) - 1)
+    ]
 
     return Chart(
         id=f"tokens_distribution_{project_id}",
@@ -108,25 +208,14 @@ def get_tokens_chart(project_id: UUID, duration_days: int) -> Chart:
 
 async def get_charts_by_project(project_id: UUID, duration_days: int) -> ChartsResponse:
     response = ChartsResponse(
-        charts=[
-            get_prometheus_agent_calls_chart(project_id, duration_days),
-            get_tokens_chart(project_id, duration_days),
-            Chart(
-                id="resource-distribution",
-                type=ChartType.DOUGHNUT,
-                title="Resource Distribution",
-                data=ChartData(
-                    labels=["1", "2", "3", "4"],
-                    datasets=[
-                        Dataset(
-                            label="Resource Distribution",
-                            data=[45, 25, 20, 10],
-                            backgroundColor=["#FF5733", "#4CAF50", "#2196F3", "#FFC107"],
-                        )
-                    ],
-                ),
-            ),
-        ]
+        charts=(
+            get_agent_usage_chart(project_id, duration_days)
+            + [
+                get_latence_chart(project_id, duration_days),
+                # get_prometheus_agent_calls_chart(project_id, duration_days),
+                get_tokens_distribution_chart(project_id, duration_days),
+            ]
+        )
     )
     if len(response.charts) == 0:
         raise ValueError("No charts found for this project")
