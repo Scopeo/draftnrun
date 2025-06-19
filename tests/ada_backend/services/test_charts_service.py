@@ -4,7 +4,7 @@ from uuid import UUID
 import numpy as np
 import pandas as pd
 
-from ada_backend.services.charts_service import get_tokens_chart
+from ada_backend.services.charts_service import get_tokens_distribution_chart
 from ada_backend.schemas.chart_schema import Chart, ChartType, ChartData, Dataset
 
 
@@ -22,7 +22,7 @@ def test_get_tokens_chart(mock_query_trace_duration):
 
     project_id = UUID("12345678123456781234567812345678")
     duration_days = 7
-    chart = get_tokens_chart(project_id, duration_days)
+    chart = get_tokens_distribution_chart(project_id, duration_days)
 
     assert isinstance(chart, Chart)
     assert chart.id == f"tokens_distribution_{project_id}"
