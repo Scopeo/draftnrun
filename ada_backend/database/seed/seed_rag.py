@@ -63,7 +63,7 @@ def seed_rag_components(session: Session):
     )
     vocabulary_search = db.Component(
         id=COMPONENT_UUIDS["vocabulary_search"],
-        name="VocabularySearch",
+        name="Vocabulary Search",
         description="Enriches RAG with search on user defined vocabulary",
         release_stage=db.ReleaseStage.PUBLIC,
     )

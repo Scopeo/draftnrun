@@ -53,7 +53,7 @@ class SupportedEntityType(StrEnum):
     RETRIEVER = "Retriever"
     COHERE_RERANKER = "CohereReranker"
     RAG_ANSWER_FORMATTER = "Formatter"
-    VOCABULARY_SEARCH = "VocabularySearch"
+    VOCABULARY_SEARCH = "Vocabulary Search"
     SQL_DB_SERVICE = "SQLDBService"
     CHUNK_SELECTOR = "ChunkSelector"
     DOCUMENT_SEARCH = "Document Search"
