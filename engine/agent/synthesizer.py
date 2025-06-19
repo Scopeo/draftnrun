@@ -40,6 +40,13 @@ class Synthesizer:
         )
 
         with self.trace_manager.start_span(self.__class__.__name__) as span:
+            span.set_attributes(
+                {
+                    "project_id": str(self.trace_manager.project_id),
+                    "organization_id": str(self.trace_manager.organization_id),
+                    "organization_llm_providers": self.trace_manager.organization_llm_providers,
+                }
+            )
             input_str = self._prompt_template.format(
                 context_str=context_str,
                 query_str=query_str,

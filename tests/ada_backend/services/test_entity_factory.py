@@ -6,13 +6,13 @@ from pydantic import BaseModel
 from ada_backend.services.entity_factory import (
     EntityFactory,
     AgentFactory,
+    build_trace_manager_processor,
     detect_and_convert_dataclasses,
     pydantic_processor,
-    build_trace_manager_processor,
 )
 from engine.agent.agent import ToolDescription
+from engine.trace.trace_context import get_trace_manager
 from engine.trace.trace_manager import TraceManager
-from tests.mocks.trace_manager import MockTraceManager
 
 
 # --- Test classes ---
@@ -87,10 +87,8 @@ def test_entity_factory_with_processors():
 
 
 def test_agent_factory_instantiation():
-    mock_trace_manager = MockTraceManager(project_name="test_project")
     factory = AgentFactory(
         entity_class=TestAgent,
-        trace_manager=mock_trace_manager,
         parameter_processors=[],
     )
 
@@ -104,14 +102,12 @@ def test_agent_factory_instantiation():
     instance = factory(tool_description=tool_description)
     assert isinstance(instance, TestAgent)
     assert instance.tool_description == tool_description
-    assert instance.trace_manager == mock_trace_manager
+    assert instance.trace_manager == get_trace_manager()
 
 
 def test_agent_factory_missing_tool_description():
-    mock_trace_manager = MockTraceManager(project_name="test_project")
     factory = AgentFactory(
         entity_class=TestAgent,
-        trace_manager=mock_trace_manager,
         parameter_processors=[],
     )
 
@@ -152,11 +148,7 @@ def test_combined_processor_usage():
 
 
 def test_trace_manager_processor():
-    mock_trace_manager = MockTraceManager(project_name="test_project")
-    factory = EntityFactory(
-        TestAgent,
-        parameter_processors=[build_trace_manager_processor(mock_trace_manager)],
-    )
+    factory = EntityFactory(TestAgent, parameter_processors=[build_trace_manager_processor()])
     tool_description = ToolDescription(
         name="tool_name",
         description="A tool description",
@@ -165,15 +157,13 @@ def test_trace_manager_processor():
     )
 
     instance = factory(tool_description=tool_description)
-    assert instance.trace_manager == mock_trace_manager
+    assert instance.trace_manager == get_trace_manager()
     assert instance.tool_description == tool_description
 
 
 def test_agent_factory_invalid_tool_description():
-    mock_trace_manager = MockTraceManager(project_name="test_project")
     factory = AgentFactory(
         entity_class=TestAgent,
-        trace_manager=mock_trace_manager,
         parameter_processors=[],
     )
 
