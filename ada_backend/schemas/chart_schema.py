@@ -27,6 +27,7 @@ class ChartType(Enum):
     AREA = "area"
     CANDLESTICK = "candlestick"
     BOXPLOT = "boxplot"
+    HISTOGRAM = "histogram"
 
 
 class Chart(BaseModel):
