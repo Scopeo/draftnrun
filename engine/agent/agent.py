@@ -167,7 +167,13 @@ class Agent(ABC):
         """
         span_name = self.component_instance_name
         with self.trace_manager.start_span(span_name) as span:
-            span.set_attribute("project_id", str(self.trace_manager.project_id))
+            span.set_attributes(
+                {
+                    "project_id": str(self.trace_manager.project_id),
+                    "organization_id": str(self.trace_manager.organization_id),
+                    "organization_llm_providers": self.trace_manager.organization_llm_providers,
+                }
+            )
             trace_input = convert_data_for_trace_manager_display(inputs[0], AgentPayload)
             span.set_attributes(
                 {
