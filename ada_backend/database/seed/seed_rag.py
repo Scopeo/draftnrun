@@ -136,7 +136,7 @@ def seed_rag_components(session: Session):
         nullable=True,
     )
     rag_vocabulary_search_param = db.ComponentParameterDefinition(
-        id=UUID("9f0c4ab7-621c-46cf-921b-260f5890cc3f"),
+        id=UUID("8e6c5827-667e-4c01-bf8b-e82a65614c5a"),
         component_id=rag_agent.id,
         name="vocabulary_search",
         type=ParameterType.COMPONENT,
@@ -176,7 +176,7 @@ def seed_rag_components(session: Session):
                 child_component_id=rag_formatter.id,
             ),
             db.ComponentParameterChildRelationship(
-                id=UUID("3d2f4a8c-d98e-48d8-b315-6df1762c556f"),
+                id=UUID("004062a7-724a-4f4e-b49d-b56681bd85ab"),
                 component_parameter_definition_id=rag_vocabulary_search_param.id,
                 child_component_id=vocabulary_search.id,
             ),
@@ -426,7 +426,7 @@ def seed_rag_components(session: Session):
             ),
             # Vocabulary Search
             db.ComponentParameterDefinition(
-                id=UUID("64767f4b-41f2-4b56-990e-27699b2019c2"),
+                id=UUID("4f207c2b-4231-4fc0-bf2b-51a39a3ae666"),
                 component_id=vocabulary_search.id,
                 name="vocabulary_context_data",
                 type=ParameterType.JSON,
@@ -442,7 +442,7 @@ def seed_rag_components(session: Session):
                 is_advanced=False,
             ),
             db.ComponentParameterDefinition(
-                id=UUID("4d8bbd00-59a5-4803-a776-2ab2a8a97dfa"),
+                id=UUID("3b7d03ce-3054-4248-8c6f-be76973ce58d"),
                 component_id=vocabulary_search.id,
                 name="fuzzy_matching_candidates",
                 type=ParameterType.INTEGER,
@@ -455,7 +455,7 @@ def seed_rag_components(session: Session):
                 is_advanced=False,
             ),
             db.ComponentParameterDefinition(
-                id=UUID("f5c192d4-712e-4330-acd5-1606e9a245f4"),
+                id=UUID("14b0d5ce-326c-402a-8678-bd21d49abdf3"),
                 component_id=vocabulary_search.id,
                 name="fuzzy_threshold",
                 type=ParameterType.INTEGER,
@@ -479,7 +479,7 @@ def seed_rag_components(session: Session):
                 is_advanced=False,
             ),
             db.ComponentParameterDefinition(
-                id=UUID("b2bf8744-2b6c-4991-9862-df24a64df3fb"),
+                id=UUID("80ae22be-5832-4c7b-a936-6d129caeec80"),
                 component_id=vocabulary_search.id,
                 name="vocabulary_context_prompt_key",
                 type=ParameterType.STRING,
