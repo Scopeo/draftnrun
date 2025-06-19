@@ -434,7 +434,7 @@ def seed_rag_components(session: Session):
                 default=json.dumps({}),
                 ui_component=UIComponent.TEXTAREA,
                 ui_component_properties=UIComponentProperties(
-                    label="Definitions to enrich the RAG agent's context",
+                    label="The Glossary you want to use to enrich the RAG agent's context",
                     placeholder="""Put a correct formatted
                     json {'term' : ['term1', 'term2', 'term3'],
                     'definition' : ['definition1', 'definition2', 'definition3']}""",
@@ -485,14 +485,13 @@ def seed_rag_components(session: Session):
                 type=ParameterType.STRING,
                 nullable=False,
                 default="retrieved_definitions",
-                ui_component=UIComponent.SELECT,
+                ui_component=UIComponent.TEXTFIELD,
                 ui_component_properties=UIComponentProperties(
-                    options=[SelectOption(value="retrieved_definitions", label="retrieved_definitions")],
                     label="Prompt key for vocabulary context injection",
                     description="Put {retrieved_definitions} in the Synthesizer prompt of your RAG to allow the "
-                    "injection of retrieved definitions from your vocabulary into the Synthesizer prompt "
+                    "injection of retrieved definitions from your Glossary into the Synthesizer prompt "
                     "during a RAG call. This will allow the RAG to answer using your collection "
-                    "and vocabulary.",
+                    "and Glossary.",
                 ).model_dump(exclude_unset=True, exclude_none=True),
                 is_advanced=False,
             ),
