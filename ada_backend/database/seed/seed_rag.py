@@ -471,9 +471,9 @@ def seed_rag_components(session: Session):
                     description=(
                         "Fuzzy matching is a technique used to find approximate matches between strings. "
                         "It handles typos, misspellings, and variations in wording. "
-                        "The fuzzy matching here will try to find the vocabulary terms in the query of the user "
+                        "The fuzzy matching here will try to find the vocabulary terms in the query of the user. "
                         "A thresold of 100 mean that the term is exactly the same in the query. "
-                        "When lowering, you allow mistakes (misspelling, plural etc) "
+                        "When lowering, you allow mistakes (misspelling, plural etc). "
                     ),
                 ).model_dump(exclude_unset=True, exclude_none=True),
                 is_advanced=False,
