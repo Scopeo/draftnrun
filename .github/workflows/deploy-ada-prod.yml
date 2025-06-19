@@ -16,8 +16,8 @@ jobs:
         key: ${{ secrets.SSH_PRIVATE_KEY }}
         port: 22
         script: |
-          cd /home/ec2-user/agentic_toolbox
-          git remote set-url origin git@github.com:scopeo/agentic_toolbox.git
+          cd /home/ec2-user/draftnrun
+          git remote set-url origin git@github.com:scopeo/draftnrun.git
           git fetch origin ${{ github.ref_name }}
           git reset --hard FETCH_HEAD
 
@@ -30,14 +30,13 @@ jobs:
         port: 22
         script: |
           set -e
-          cd /home/ec2-user/agentic_toolbox
+          cd /home/ec2-user/draftnrun
 
           echo "📦 Install dependencies"
           pip install --upgrade uv
           uv sync
 
           echo "🔄 Re-setup the database"
-          cp ada_backend/database/ada_backend.db ada_backend/database/ada_backend_back_up.db
           make db-upgrade
           make db-seed
 
