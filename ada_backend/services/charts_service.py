@@ -166,13 +166,12 @@ def get_latence_chart(project_id: UUID, duration_days: int) -> Chart:
     df["duration"] = (df["end_time"] - df["start_time"]).dt.total_seconds()
 
     latency_hist, bins_edges = np.histogram(df["duration"], bins="fd")
-    bin_centers = [np.round((bins_edges[i] + bins_edges[i + 1]) / 2, 1) for i in range(len(bins_edges) - 1)]
     return Chart(
         id=f"latency_distribution_{project_id}",
-        type=ChartType.BAR,
+        type=ChartType.HISTOGRAM,
         title="Latency Distribution (seconds)",
         data=ChartData(
-            labels=bin_centers,
+            labels=bins_edges,
             datasets=[
                 Dataset(label="Latency Distribution", data=latency_hist.tolist()),
             ],
@@ -187,17 +186,13 @@ def get_tokens_distribution_chart(project_id: UUID, duration_days: int) -> Chart
 
     input_token_hist, _ = np.histogram(input_data, bins=TOKENS_DISTRIBUTION_BINS)
     output_token_hist, _ = np.histogram(output_data, bins=TOKENS_DISTRIBUTION_BINS)
-    bin_centers = [
-        (TOKENS_DISTRIBUTION_BINS[i] + TOKENS_DISTRIBUTION_BINS[i + 1]) / 2
-        for i in range(len(TOKENS_DISTRIBUTION_BINS) - 1)
-    ]
 
     return Chart(
         id=f"tokens_distribution_{project_id}",
-        type=ChartType.BAR,
+        type=ChartType.HISTOGRAM,
         title="Tokens Distribution",
         data=ChartData(
-            labels=bin_centers,
+            labels=TOKENS_DISTRIBUTION_BINS,
             datasets=[
                 Dataset(label="Input Tokens Distribution", data=input_token_hist.tolist()),
                 Dataset(label="Output Tokens Distribution", data=output_token_hist.tolist()),
