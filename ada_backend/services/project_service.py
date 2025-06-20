@@ -28,7 +28,7 @@ from ada_backend.schemas.project_schema import (
     ProjectUpdateSchema,
     ProjectWithGraphRunnersSchema,
 )
-from ada_backend.schemas.template_schema import Template
+from ada_backend.schemas.template_schema import InputTemplate
 from ada_backend.services.graph.delete_graph_service import delete_graph_runner_service
 
 
@@ -70,21 +70,22 @@ def create_project(
     session: Session,
     organization_id: UUID,
     project_schema: ProjectSchema,
-    template: Optional[Template] = None,
+    template: Optional[InputTemplate] = None,
 ) -> ProjectWithGraphRunnersSchema:
     graph_runner_id = None
     if template:
         graph_runner_id = clone_graph_runner(
             session,
             template.template_graph_runner_id,
-            template.project_id,
+            template.template_project_id,
         )
     else:
-        graph_runner_id = insert_graph_runner(
+        graph_runner = insert_graph_runner(
             session=session,
             graph_id=uuid.uuid4(),
             add_input=True,
-        ).id
+        )
+        graph_runner_id = graph_runner.id
     project = insert_project(
         session=session,
         project_id=project_schema.project_id,

@@ -1,9 +1,13 @@
 from uuid import UUID
 from pydantic import BaseModel
+from typing import Optional
 
 
-class Template(BaseModel):
+class InputTemplate(BaseModel):
     template_graph_runner_id: UUID
-    project_id: UUID
-    name: str
-    description: str
+    template_project_id: UUID
+
+
+class TemplateResponse(InputTemplate):
+    name: Optional[str] = None
+    description: Optional[str] = None

@@ -1,6 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
 from uuid import UUID
-from typing import Optional
 
 from sqlalchemy.orm import Session
 from ada_backend.database.setup_db import get_db
@@ -10,7 +9,7 @@ from ada_backend.routers.auth_router import (
     UserRights,
 )
 from ada_backend.schemas.auth_schema import SupabaseUser
-from ada_backend.schemas.template_schema import Template
+from ada_backend.schemas.template_schema import TemplateResponse
 
 
 router = APIRouter(prefix="/templates", tags=["Templates"])
@@ -18,10 +17,10 @@ router = APIRouter(prefix="/templates", tags=["Templates"])
 
 @router.get("/{organization_id}", summary="Get Production Templates", tags=["Templates"])
 def get_production_templates(
+    organization_id: UUID,
     session: Session = Depends(get_db),
-    organization_id: Optional[UUID] = None,
     user: SupabaseUser = Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.READER.value)),
-) -> list[Template]:
+) -> list[TemplateResponse]:
     """
     Retrieve production templates for a given organization.
     """
