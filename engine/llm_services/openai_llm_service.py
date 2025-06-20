@@ -48,12 +48,6 @@ class OpenAILLMService(LLMService):
         self,
         input_text: str | list[str],
     ) -> list[Embedding]:
-        print(
-            self._client.embeddings.create(
-                input=input_text,
-                model=self._embedding_model,
-            )
-        )
         return self._client.embeddings.create(
             input=input_text,
             model=self._embedding_model,
