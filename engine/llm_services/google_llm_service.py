@@ -32,6 +32,7 @@ class GoogleLLMService(OpenAILLMService):
     def __init__(
         self,
         trace_manager: TraceManager,
+        provider: str = "google",
         model_name: str = "gemini-2.0-flash-exp",
         embedding_model: str = "gemini-embedding-exp-03-07",
         api_key: Optional[str] = settings.GOOGLE_API_KEY,
@@ -45,6 +46,7 @@ class GoogleLLMService(OpenAILLMService):
             default_temperature=default_temperature,
             base_url=base_url,
             api_key=api_key,
+            provider=provider,
         )
         super().__init__(trace_manager)
         self._completion_model = model_name

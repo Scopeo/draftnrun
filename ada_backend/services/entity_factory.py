@@ -6,8 +6,6 @@ from uuid import UUID
 from dataclasses import is_dataclass
 from pydantic import BaseModel
 
-from ada_backend.services.trace_service import TOKEN_LIMIT, get_token_usage
-from ada_backend.utils.error import LLMKeyLimitExceededError
 from engine.agent.agent import ToolDescription
 from engine.trace.trace_context import get_trace_manager
 from engine.llm_services.llm_service import LLMService
@@ -319,6 +317,7 @@ def build_llm_service_processor(
         llm_service_input_params = {
             "trace_manager": trace_manager,
             "model_name": model_name,
+            "provider": provider,
         }
         if temperature is not None:
             llm_service_input_params["default_temperature"] = temperature
@@ -328,17 +327,6 @@ def build_llm_service_processor(
             llm_service_input_params["api_key"] = api_key
 
         llm_service: Optional[LLMService] = None
-        if provider not in trace_manager.organization_llm_providers:
-            LOGGER.info(
-                f"LLM provider '{provider}' is not configured for the organization. "
-                "Checking organization token usage."
-            )
-            token_usage = get_token_usage(organization_id=trace_manager.organization_id)
-            if token_usage.total_tokens > TOKEN_LIMIT:
-                raise LLMKeyLimitExceededError(
-                    "You are currently using Draft'n run's default LLM key, which has exceeded its token limit. "
-                    "Please provide your own key."
-                )
 
         if provider == "openai":
             llm_service = OpenAILLMService(**llm_service_input_params)

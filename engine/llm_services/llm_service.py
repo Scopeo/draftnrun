@@ -1,26 +1,44 @@
 import abc
 import json
 from typing import Optional
+from functools import wraps
 
 from pydantic import BaseModel
 from openai.types.chat import ChatCompletion
 from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttributes
 
+from engine.llm_services.utils import check_usage
 from engine.trace.trace_manager import TraceManager
 from engine.agent.agent import ToolDescription
+
+
+def with_usage_check(func):
+    @wraps(func)
+    def wrapper(self, *args, **kwargs):
+        provider = getattr(self, "provider", None)
+        if provider is None:
+            raise ValueError("Instance must have a 'provider' attribute to perform usage check.")
+
+        check_usage(provider)
+        return func(self, *args, **kwargs)
+
+    return wrapper
 
 
 class LLMService(abc.ABC):
     def __init__(
         self,
         trace_manager: TraceManager,
+        provider: str,
     ):
         self.trace_manager = trace_manager
         self._completion_model: str = None
         self._embedding_model: str = None
         self._default_temperature: float = None
+        self.provider = provider
 
     @abc.abstractmethod
+    @with_usage_check
     def embed(
         self,
         input_text: str | list[str],
@@ -28,6 +46,7 @@ class LLMService(abc.ABC):
         pass
 
     @abc.abstractmethod
+    @with_usage_check
     def complete(
         self,
         messages: list[dict],
@@ -45,6 +64,7 @@ class LLMService(abc.ABC):
     ) -> ChatCompletion:
         pass
 
+    @with_usage_check
     def function_call(
         self,
         messages: list[dict],
@@ -74,7 +94,8 @@ class LLMService(abc.ABC):
                     span.set_attributes(
                         {
                             f"llm.input_messages.{i}.message.content": msg["content"],
-                        })
+                        }
+                    )
                 if "role" in msg:
                     span.set_attributes(
                         {
@@ -107,6 +128,7 @@ class LLMService(abc.ABC):
         return response
 
     @abc.abstractmethod
+    @with_usage_check
     def constrained_complete(
         self,
         messages: list[dict[str, str]],
@@ -116,14 +138,17 @@ class LLMService(abc.ABC):
         pass
 
     @abc.abstractmethod
+    @with_usage_check
     def generate_transcript(self, audio_path: str, language: str) -> str:
         pass
 
     @abc.abstractmethod
+    @with_usage_check
     def generate_speech_from_text(self, transcription: str, speech_audio_path: str) -> str:
         pass
 
     @abc.abstractmethod
+    @with_usage_check
     def _format_image_content(self, image_content_list: list[bytes]) -> list[dict[str, str]]:
         pass
 
@@ -155,6 +180,7 @@ class LLMService(abc.ABC):
         return chat_response
 
     @abc.abstractmethod
+    @with_usage_check
     def complete_with_files(
         self,
         messages: list[dict],

@@ -18,12 +18,13 @@ class MistralLLMService(LLMService):
     def __init__(
         self,
         trace_manager: TraceManager,
+        provider: str = "mistral",
         model_name: str = "pixtral-12b-2409",
         embedding_model: str = "mistral-embed",
         default_temperature: float = 0.7,
         api_key: Optional[str] = None,
     ):
-        super().__init__(trace_manager)
+        super().__init__(trace_manager, provider=provider)
         if api_key is None:
             api_key = settings.MISTRAL_API_KEY
         self._completion_model: str = model_name

@@ -23,6 +23,7 @@ class OpenAILLMService(LLMService):
     def __init__(
         self,
         trace_manager: TraceManager,
+        provider: str = "openai",
         model_name: str = "gpt-4o-mini",
         embedding_model_name: str = "text-embedding-3-large",
         default_temperature: float = 0.3,
@@ -31,7 +32,7 @@ class OpenAILLMService(LLMService):
         base_url: Optional[str] = None,
         api_key: Optional[str] = None,
     ):
-        super().__init__(trace_manager=trace_manager)
+        super().__init__(trace_manager=trace_manager, provider=provider)
         if model_config_text_to_speech is None:
             self._model_config_text_to_speech = {"model": "tts-1", "speaker_type": "nova"}
         if api_key is None:
