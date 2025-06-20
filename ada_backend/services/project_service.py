@@ -74,12 +74,16 @@ def create_project(
 ) -> ProjectWithGraphRunnersSchema:
     graph_runner_id = None
     if template:
+        LOGGER.info(
+            f"Creating project from template {template.template_project_id} with graph runner {template.template_graph_runner_id}"
+        )
         graph_runner_id = clone_graph_runner(
             session,
             template.template_graph_runner_id,
             template.template_project_id,
         )
     else:
+        LOGGER.info("Creating a new graph runner for the project")
         graph_runner = insert_graph_runner(
             session=session,
             graph_id=uuid.uuid4(),
