@@ -1,11 +1,10 @@
 import logging
 from uuid import UUID
 
-from ada_backend.database.models import OrgSecretType, SourceType
-from ada_backend.database.setup_db import SessionLocal, get_db
-from ada_backend.repositories.organization_repository import get_organization_secrets
+from ada_backend.database.models import SourceType
+from ada_backend.database.setup_db import SessionLocal
 from ada_backend.schemas.ingestion_task_schema import IngestionTaskUpdate
-from ada_backend.services.organization_service import get_organization_llm_providers
+from ada_backend.services.agent_runner_service import get_organization_llm_providers
 from engine.trace.trace_context import get_trace_manager, set_trace_manager
 from engine.trace.trace_manager import TraceManager
 from ingestion_script.ingest_folder_source import ingest_google_drive_source, ingest_local_folder_source

@@ -7,7 +7,6 @@ from ada_backend.database.models import EnvType, OrgSecretType
 from ada_backend.repositories.edge_repository import get_edges
 from ada_backend.schemas.project_schema import ChatResponse
 from ada_backend.services.agent_builder_service import get_default_values_for_sandbox, instantiate_component
-from ada_backend.services.organization_service import get_organization_llm_providers
 from engine.graph_runner.graph_runner import GraphRunner
 from ada_backend.repositories.graph_runner_repository import (
     get_component_nodes,
@@ -21,6 +20,22 @@ from ada_backend.repositories.project_repository import get_project, get_project
 from ada_backend.repositories.organization_repository import get_organization_secrets
 from engine.graph_runner.runnable import Runnable
 from engine.trace.trace_context import get_trace_manager
+
+
+def get_organization_llm_providers(session: Session, organization_id: UUID) -> list[str]:
+    organization_secrets = get_organization_secrets(
+        session,
+        organization_id=organization_id,
+    )
+    return (
+        [
+            organization_secret.key.split("_")[0]
+            for organization_secret in organization_secrets
+            if organization_secret.secret_type == OrgSecretType.LLM_API_KEY
+        ]
+        if organization_secrets
+        else []
+    )
 
 
 async def build_graph_runner(
@@ -96,10 +111,6 @@ async def run_agent(
     project_details = get_project_with_details(session, project_id=project_id)
     trace_manager.project_id = project_id
     trace_manager.organization_id = project_details.organization_id
-    organization_secrets = get_organization_secrets(
-        session,
-        organization_id=project_details.organization_id,
-    )
     trace_manager.organization_llm_providers = str(
         get_organization_llm_providers(session, project_details.organization_id)
     )

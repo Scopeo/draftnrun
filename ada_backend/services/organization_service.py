@@ -3,7 +3,6 @@ import logging
 
 from sqlalchemy.orm import Session
 
-from ada_backend.database.models import OrgSecretType
 from ada_backend.repositories.graph_runner_repository import get_graph_runners_by_project
 from ada_backend.repositories.organization_repository import (
     delete_organization_secret,
@@ -80,20 +79,4 @@ def delete_secret_to_org_service(
     return OrganizationSecretResponse(
         organization=deleted_organization_secret.organization_id,
         secret_key=deleted_organization_secret.key,
-    )
-
-
-def get_organization_llm_providers(session: Session, organization_id: UUID) -> list[str]:
-    organization_secrets = get_organization_secrets(
-        session,
-        organization_id=organization_id,
-    )
-    return (
-        [
-            organization_secret.key.split("_")[0]
-            for organization_secret in organization_secrets
-            if organization_secret.secret_type == OrgSecretType.LLM_API_KEY
-        ]
-        if organization_secrets
-        else []
     )
