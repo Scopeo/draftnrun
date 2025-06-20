@@ -20,7 +20,7 @@ from ada_backend.repositories.project_repository import get_project, get_project
 from ada_backend.repositories.organization_repository import get_organization_secrets
 from ada_backend.services.trace_service import get_token_usage
 from engine.graph_runner.runnable import Runnable
-from engine.trace.trace_context import get_trace_manager
+from engine.trace.trace_manager import TraceManager
 
 TOKEN_LIMIT = 2000000
 
@@ -30,7 +30,7 @@ async def build_graph_runner(
     graph_runner_id: UUID,
     project_id: UUID,
 ) -> GraphRunner:
-    trace_manager = get_trace_manager()
+    trace_manager = TraceManager(project_name="ada_backend")
     # TODO: Add the get_graph_runner_nodes function when we will handle nested graphs
     component_nodes = get_component_nodes(session, graph_runner_id)
     edges = get_edges(session, graph_runner_id)
