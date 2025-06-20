@@ -15,7 +15,7 @@ from ada_backend.repositories.component_repository import (
     delete_component_instance_parameters,
 )
 from ada_backend.services.entity_factory import get_llm_provider_and_model
-from ada_backend.services.registry import PARAM_MODEL_NAME_IN_DB
+from ada_backend.services.registry import COMPLETION_MODEL_IN_DB
 
 LOGGER = getLogger(__name__)
 
@@ -72,7 +72,7 @@ def create_or_update_component_instance(
                 )
                 continue
 
-            model_name_param = next((p for p in instance_data.parameters if p.name == PARAM_MODEL_NAME_IN_DB), None)
+            model_name_param = next((p for p in instance_data.parameters if p.name == COMPLETION_MODEL_IN_DB), None)
             if model_name_param is None:
                 raise ValueError(
                     f"LLM Model name parameter not found in component definitions for component {component_name}"

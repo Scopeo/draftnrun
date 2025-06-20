@@ -39,11 +39,13 @@ class ParameterLLMConfig(BaseModel):
     param_name: str
     param_id: UUID
 
+
 def build_completion_service_config_definitions(
     component_id: UUID,
     params_to_seed: list[ParameterLLMConfig],
+    definitions: list[db.ComponentParameterDefinition] = [],
 ) -> list[db.ComponentParameterDefinition]:
-        """
+    """
     Simple helper function to avoid code duplication.
     params_to_seed is a list of parameters to seed for the given component.
     options: [
@@ -52,7 +54,6 @@ def build_completion_service_config_definitions(
         "api_key",
     ]
     """
-    definitions: list[db.ComponentParameterDefinition] = []
     for param in params_to_seed:
         if param.param_name == COMPLETION_MODEL_IN_DB:
             definitions.append(

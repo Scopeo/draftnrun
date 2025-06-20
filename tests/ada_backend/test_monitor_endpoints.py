@@ -25,6 +25,8 @@ def test_monitor_endpoint():
     }
     data = {"messages": [{"role": "user", "content": "Hello, how are you?"}]}
     response = client.post(endpoint, json=data, headers=headers)
+    print("herreee")
+    print(response.json())
     output = ChatResponse.model_validate(response.json())
     assert isinstance(output.message, str)
     assert output.error is None or isinstance(output.error, str)
