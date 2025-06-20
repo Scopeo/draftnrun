@@ -16,8 +16,12 @@ from ada_backend.database.component_definition_seeding import (
     upsert_components_parameter_definitions,
 )
 from ada_backend.database.seed.seed_tool_description import TOOL_DESCRIPTION_UUIDS
-from ada_backend.database.seed.utils import COMPONENT_UUIDS, ParameterLLMConfig, build_llm_config_definitions
-from ada_backend.services.registry import PARAM_MODEL_NAME_IN_DB
+from ada_backend.database.seed.utils import (
+    COMPONENT_UUIDS,
+    ParameterLLMConfig,
+    build_completion_service_config_definitions,
+)
+from ada_backend.services.registry import COMPLETION_MODEL_IN_DB
 from engine.agent.synthesizer_prompts import (
     get_base_synthetizer_prompt_template,
     get_hybrid_synthetizer_prompt_template,
@@ -567,11 +571,11 @@ def seed_rag_components(session: Session):
                 ).model_dump(exclude_unset=True, exclude_none=True),
                 is_advanced=False,
             ),
-            *build_llm_config_definitions(
+            *build_completion_service_config_definitions(
                 component_id=synthesizer.id,
                 params_to_seed=[
                     ParameterLLMConfig(
-                        param_name=PARAM_MODEL_NAME_IN_DB,
+                        param_name=COMPLETION_MODEL_IN_DB,
                         param_id=UUID("8d4a2304-55f9-4b94-9206-67f56a6ac750"),
                     ),
                     ParameterLLMConfig(
@@ -602,11 +606,11 @@ def seed_rag_components(session: Session):
                 ).model_dump(exclude_unset=True, exclude_none=True),
                 is_advanced=False,
             ),
-            *build_llm_config_definitions(
+            *build_completion_service_config_definitions(
                 component_id=hybrid_synthesizer.id,
                 params_to_seed=[
                     ParameterLLMConfig(
-                        param_name=PARAM_MODEL_NAME_IN_DB,
+                        param_name=COMPLETION_MODEL_IN_DB,
                         param_id=UUID("7c5d0eae-d865-430e-a6d0-b8f4060a6b23"),
                     ),
                     ParameterLLMConfig(
@@ -633,11 +637,11 @@ def seed_rag_components(session: Session):
                 ).model_dump(exclude_unset=True, exclude_none=True),
                 is_advanced=False,
             ),
-            *build_llm_config_definitions(
+            *build_completion_service_config_definitions(
                 component_id=chunk_selector.id,
                 params_to_seed=[
                     ParameterLLMConfig(
-                        param_name=PARAM_MODEL_NAME_IN_DB,
+                        param_name=COMPLETION_MODEL_IN_DB,
                         param_id=UUID("3be1a99a-29c4-4ff1-bef0-63122f786c61"),
                     ),
                     ParameterLLMConfig(

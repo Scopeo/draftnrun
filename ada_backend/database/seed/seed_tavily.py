@@ -13,9 +13,9 @@ from ada_backend.database.seed.seed_tool_description import TOOL_DESCRIPTION_UUI
 from ada_backend.database.seed.utils import (
     COMPONENT_UUIDS,
     ParameterLLMConfig,
-    build_llm_config_definitions,
+    build_completion_service_config_definitions,
 )
-from ada_backend.services.registry import PARAM_MODEL_NAME_IN_DB
+from ada_backend.services.registry import COMPLETION_MODEL_IN_DB
 
 
 def seed_tavily_components(session: Session):
@@ -61,11 +61,11 @@ def seed_tavily_components(session: Session):
         session=session,
         component_parameter_definitions=[
             # Tavily Agent
-            *build_llm_config_definitions(
+            *build_completion_service_config_definitions(
                 component_id=tavily_agent.id,
                 params_to_seed=[
                     ParameterLLMConfig(
-                        param_name=PARAM_MODEL_NAME_IN_DB,
+                        param_name=COMPLETION_MODEL_IN_DB,
                         param_id=UUID("2a2780b2-f361-4e78-a370-02eb08b4b68e"),
                     ),
                     ParameterLLMConfig(
