@@ -1,168 +1,150 @@
-import abc
-import json
+import os
 from typing import Optional
-
+from abc import ABC
 from pydantic import BaseModel
-from openai.types.chat import ChatCompletion
-from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttributes
 
 from engine.trace.trace_manager import TraceManager
 from engine.agent.agent import ToolDescription
+from engine.agent.utils import load_str_to_json
+from engine.llm_services.constrained_output_models import OutputFormatModel
 
 
-class LLMService(abc.ABC):
+class LLMService(ABC):
     def __init__(
         self,
         trace_manager: TraceManager,
+        provider: str,
+        model_name: str,
+        api_key: Optional[str] = None,
     ):
-        self.trace_manager = trace_manager
-        self._completion_model: str = None
-        self._embedding_model: str = None
-        self._default_temperature: float = None
+        self._trace_manager = trace_manager
+        self._provider = provider
+        self._model_name = model_name
+        self._api_key = api_key
 
-    @abc.abstractmethod
-    def embed(
-        self,
-        input_text: str | list[str],
-    ) -> str:
-        pass
 
-    @abc.abstractmethod
-    def complete(
+class EmbeddingService(LLMService):
+    def __init__(
         self,
-        messages: list[dict],
-        temperature: float = None,
-    ) -> str:
-        pass
+        trace_manager: TraceManager,
+        provider: str = "openai",
+        model_name: str = "text-embedding-3-large",
+        api_key: Optional[str] = None,
+    ):
+        super().__init__(trace_manager, provider, model_name, api_key)
 
-    @abc.abstractmethod
-    def _function_call_without_trace(
+    def embed_text(self, text: str) -> list[float]:
+        match self._provider:
+            case "openai":
+                import openai
+
+                client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+                response = client.embeddings.create(
+                    model=self._model_name,
+                    input=text,
+                )
+                return response.data
+            case _:
+                raise ValueError(f"Invalid provider: {self._provider}")
+
+
+class CompletionService(LLMService):
+    def __init__(
         self,
-        messages: list[dict],
-        temperature: Optional[float] = None,
-        tools: Optional[list[ToolDescription]] = None,
-        tool_choice: str = "auto",
-    ) -> ChatCompletion:
-        pass
+        trace_manager: TraceManager,
+        provider: str = "openai",
+        model_name: str = "gpt-4.1-mini",
+        api_key: Optional[str] = None,
+        temperature: float = 0.5,
+    ):
+        super().__init__(trace_manager, provider, model_name, api_key)
+        self._temperature = temperature
+
+    def complete(self, prompt: str, temperature: float = 0.5, stream: bool = False) -> str:
+        match self._provider:
+            case "openai":
+                import openai
+
+                client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+                response = client.responses.create(
+                    model=self._model_name,
+                    input=prompt,
+                    temperature=temperature,
+                    stream=stream,
+                )
+                return response.output_text
+            case _:
+                raise ValueError(f"Invalid provider: {self._provider}")
+
+    def constrained_complete(
+        self, prompt: str, response_format: BaseModel | str, temperature: float = 0.5, stream: bool = False
+    ) -> BaseModel:
+        kwargs = {
+            "input": prompt,
+            "model": self._model_name,
+            "temperature": temperature,
+            "stream": stream,
+        }
+        if isinstance(response_format, str):
+            response_format = load_str_to_json(response_format)
+            # validate with the basemodel OutputFormatModel
+            response_format["strict"] = True
+            response_format["type"] = "json_schema"
+            response_format = OutputFormatModel(**response_format).model_dump(exclude_none=True, exclude_unset=True)
+            kwargs["text"] = {"format": response_format}
+        elif issubclass(response_format, BaseModel):
+            kwargs["text_format"] = response_format
+        else:
+            raise ValueError("response_format must be a string or a BaseModel subclass.")
+
+        match self._provider:
+            case "openai":
+                import openai
+
+                client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+                response = client.responses.parse(**kwargs)
+                return response.output_text
+            case _:
+                raise ValueError(f"Invalid provider: {self._provider}")
 
     def function_call(
         self,
-        messages: list[dict],
-        temperature: Optional[float] = None,
-        tools: Optional[list[ToolDescription]] = None,
+        prompt: str,
+        temperature: float = 0.5,
+        stream: bool = False,
+        tools: list[ToolDescription] = None,
         tool_choice: str = "auto",
-    ) -> ChatCompletion:
+    ) -> str:
         if tools is None:
             tools = []
-        temperature = temperature or self._default_temperature
-        span_name = "FunctionCall"
-        with self.trace_manager.start_span(span_name) as span:
-            response = self._function_call_without_trace(
-                messages=messages,
-                temperature=temperature,
-                tools=tools,
-                tool_choice=tool_choice,
-            )
+        match self._provider:
+            case "openai":
+                import openai
 
-            span.set_attributes(
-                {
-                    SpanAttributes.OPENINFERENCE_SPAN_KIND: OpenInferenceSpanKindValues.LLM.value,
-                }
-            )
-            for i, msg in enumerate(messages):
-                if "content" in msg:
-                    span.set_attributes(
-                        {
-                            f"llm.input_messages.{i}.message.content": msg["content"],
-                        })
-                if "role" in msg:
-                    span.set_attributes(
-                        {
-                            f"llm.input_messages.{i}.message.role": msg["role"],
-                        }
-                    )
+                client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+                response = client.responses.create(
+                    model=self._model_name,
+                    input=prompt,
+                    tools=tools,
+                    temperature=temperature,
+                    stream=stream,
+                    tool_choice=tool_choice,
+                )
+                return response.output_text
+            case _:
+                raise ValueError(f"Invalid provider: {self._provider}")
 
-            # TODO: Find more elegant presentation on observability
-            input_tools = {
-                "available_tools": [tool.openai_format for tool in tools],
-            }
-            tool_calls = response.choices[0].message.tool_calls or []
-            output_tools = {
-                "output_tools": {
-                    f"{tool_call.function.name}": {
-                        "tool_call_id": tool_call.id,
-                        "tool_call_arguments_json": tool_call.function.arguments,
-                    }
-                    for tool_call in tool_calls
-                },
-            }
+    def web_search(self, query: str) -> str:
+        match self._provider:
+            case "openai":
+                import openai
 
-            span.set_attributes(
-                {
-                    SpanAttributes.INPUT_VALUE: json.dumps(input_tools, indent=2),
-                    SpanAttributes.OUTPUT_VALUE: json.dumps(output_tools, indent=2),
-                }
-            )
-
-        return response
-
-    @abc.abstractmethod
-    def constrained_complete(
-        self,
-        messages: list[dict[str, str]],
-        temperature: float = None,
-        response_format: BaseModel = None,
-    ) -> BaseModel:
-        pass
-
-    @abc.abstractmethod
-    def generate_transcript(self, audio_path: str, language: str) -> str:
-        pass
-
-    @abc.abstractmethod
-    def generate_speech_from_text(self, transcription: str, speech_audio_path: str) -> str:
-        pass
-
-    @abc.abstractmethod
-    def _format_image_content(self, image_content_list: list[bytes]) -> list[dict[str, str]]:
-        pass
-
-    def get_image_description(
-        self,
-        image_content_list: list[bytes],
-        text_prompt: str,
-        response_format: BaseModel = None,
-    ) -> str | BaseModel:
-        content = [{"type": "text", "text": text_prompt}]
-        content.extend(self._format_image_content(image_content_list))
-        messages = [
-            {
-                "role": "user",
-                "content": content,
-            }
-        ]
-        if response_format is not None:
-            chat_response = self.constrained_complete(
-                messages=messages,
-                response_format=response_format,
-            )
-
-        else:
-            chat_response = self.complete(
-                messages=messages,
-            )
-
-        return chat_response
-
-    @abc.abstractmethod
-    def complete_with_files(
-        self,
-        messages: list[dict],
-        files: list[bytes],
-        temperature: float = None,
-    ) -> str:
-        pass
-
-    @abc.abstractmethod
-    def get_token_size(self, content: str) -> int:
-        pass
+                client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+                response = client.responses.create(
+                    model=self._model_name,
+                    input=query,
+                    tools=[{"type": "web_search_preview"}],
+                )
+                return response.output_text
+            case _:
+                raise ValueError(f"Invalid provider: {self._provider}")

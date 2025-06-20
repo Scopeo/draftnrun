@@ -2,7 +2,7 @@ from typing import Optional
 
 from engine.agent.agent import Agent, AgentPayload, ChatMessage, ToolDescription
 from engine.agent.utils import extract_vars_in_text_template, parse_openai_message_format
-from engine.llm_services.llm_service import LLMService
+from engine.llm_services.llm_service import CompletionService
 from engine.trace.trace_manager import TraceManager
 
 
@@ -10,7 +10,7 @@ class LLMCallAgent(Agent):
     def __init__(
         self,
         trace_manager: TraceManager,
-        llm_service: LLMService,
+        completion_service: CompletionService,
         tool_description: ToolDescription,
         component_instance_name: str,
         prompt_template: str,
@@ -22,7 +22,7 @@ class LLMCallAgent(Agent):
             tool_description=tool_description,
             component_instance_name=component_instance_name,
         )
-        self._llm_service = llm_service
+        self._completion_service = completion_service
         self._prompt_template = prompt_template
         self._file_content = file_content
         self.output_format = output_format
@@ -84,12 +84,12 @@ class LLMCallAgent(Agent):
         else:
             content = text_content
         if self.output_format:
-            response = self._llm_service.constrained_complete(
+            response = self._completion_service.constrained_complete(
                 messages=[{"role": "user", "content": content}],
                 response_format=self.output_format,
             )
         else:
-            response = self._llm_service.complete(
+            response = self._completion_service.complete(
                 messages=[{"role": "user", "content": content}],
             )
         return AgentPayload(

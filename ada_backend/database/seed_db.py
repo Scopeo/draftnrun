@@ -14,7 +14,6 @@ from ada_backend.database import models as db
 from ada_backend.database.seed.seed_ai_agent import seed_ai_agent_components
 from ada_backend.database.seed.seed_db_service import seed_db_service_components
 from ada_backend.database.seed.seed_input import seed_input_components
-from ada_backend.database.seed.seed_legacy import seed_legacy_components
 from ada_backend.database.seed.seed_llm_call import seed_llm_call_components
 from ada_backend.database.seed.seed_rag import seed_rag_components
 from ada_backend.database.seed.seed_react_sql import seed_react_sql_components
@@ -47,7 +46,6 @@ def seed_db(session: Session):
         seed_smart_rag_components(session)
         seed_web_search_components(session)
         seed_input_components(session)
-        seed_legacy_components(session)
 
         # Verify components exist
         for name, uuid_value in COMPONENT_UUIDS.items():

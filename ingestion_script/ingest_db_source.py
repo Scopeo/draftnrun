@@ -5,7 +5,6 @@ from typing import Optional
 import pandas as pd
 from sqlalchemy import UUID
 
-from engine.llm_services.openai_llm_service import OpenAILLMService
 from engine.qdrant_service import QdrantCollectionSchema, QdrantService
 from engine.storage_service.db_service import DBService
 from engine.storage_service.db_utils import (
@@ -15,14 +14,11 @@ from engine.storage_service.db_utils import (
     convert_to_correct_pandas_type,
 )
 from engine.storage_service.local_service import SQLLocalService
-from engine.trace.trace_manager import TraceManager
 from ingestion_script.ingest_folder_source import sync_chunks_to_qdrant
 from ada_backend.database import models as db
 from ingestion_script.utils import upload_source
 
 LOGGER = logging.getLogger(__name__)
-
-LLM_OPENAI = OpenAILLMService(trace_manager=TraceManager(project_name="ingestion"))
 
 
 def get_db_source_definition(

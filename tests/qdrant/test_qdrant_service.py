@@ -3,7 +3,7 @@ import pytest
 from typing import Union
 
 from engine.qdrant_service import QdrantCollectionSchema, QdrantService
-from engine.llm_services.openai_llm_service import OpenAILLMService
+from engine.llm_services.llm_service import EmbeddingService
 from engine.agent.agent import SourceChunk
 from engine.agent.utils import format_qdrant_filter
 from tests.mocks.trace_manager import MockTraceManager
@@ -13,9 +13,10 @@ TEST_COLLECTION_NAME = "test_agentic_ci_collection"
 
 def test_qdrant_service():
     mock_trace_manager = MockTraceManager(project_name="test")
-    llm_service = OpenAILLMService(
+    embedding_service = EmbeddingService(
         trace_manager=mock_trace_manager,
-        default_temperature=0.0,
+        provider="openai",
+        model_name="text-embedding-3-large",
     )
 
     qdrant_schema = QdrantCollectionSchema(
@@ -42,7 +43,7 @@ def test_qdrant_service():
         },
     ]
     qdrant_agentic_service = QdrantService.from_defaults(
-        llm_service=llm_service,
+        embedding_service=embedding_service,
         default_collection_schema=qdrant_schema,
     )
 
@@ -155,9 +156,10 @@ def test_qdrant_filtering(
         expected_chunk (str): The expected chunk name to be retrieved.
     """
     mock_trace_manager = MockTraceManager(project_name="test")
-    llm_service = OpenAILLMService(
+    embedding_service = EmbeddingService(
         trace_manager=mock_trace_manager,
-        default_temperature=0.0,
+        provider="openai",
+        model_name="text-embedding-3-large",
     )
     # Define the Qdrant schema
     qdrant_schema = QdrantCollectionSchema(
@@ -193,7 +195,7 @@ def test_qdrant_filtering(
 
     # Initialize Qdrant service
     qdrant_agentic_service = QdrantService.from_defaults(
-        llm_service=llm_service,
+        embedding_service=embedding_service,
         default_collection_schema=qdrant_schema,
     )
 

@@ -1,8 +1,7 @@
 import logging
-from typing import Callable
 
 from data_ingestion.document.folder_management.folder_management import FileDocumentType, FileChunk
-from engine.llm_services.google_llm_service import GoogleLLMService, TypeFileToUpload
+from engine.llm_services.llm_service import CompletionService
 
 LOGGER = logging.getLogger(__name__)
 
@@ -34,26 +33,19 @@ def add_summary_in_chunks(
     return chunks
 
 
-def get_summary_from_document(document, get_file_content_func: Callable, llm_google_service: GoogleLLMService):
+def get_summary_from_document(document, llm_google_service: CompletionService):
     if document.type == FileDocumentType.PDF:
-        content = get_file_content_func(document.id)
-        return get_summary_from_file(content, llm_google_service, TypeFileToUpload.PDF)
+        return get_summary_from_file(llm_google_service)
     LOGGER.warning(f"Document type {document.type} not supported for summary extraction." " Returning empty string.")
     return ""
 
 
 def get_summary_from_file(
-    file: str | bytes,
-    llm_google_service: GoogleLLMService,
-    type_file_to_upload: TypeFileToUpload,
+    llm_google_service: CompletionService,
     prompt_template: str = DEFAULT_PROMPT_TEMPLATE_SUMMARY,
 ) -> str:
     try:
-        file_infos = llm_google_service.upload_file(file, type_file_to_upload)
-        summary = llm_google_service.complete_with_files(
-            messages=[{"role": "user", "content": prompt_template}], files=[file_infos]
-        )
-        llm_google_service.delete_file(file_infos)
+        summary = llm_google_service.complete(prompt=prompt_template)
         return summary
     except Exception as e:
         LOGGER.error(f"Error getting summary from document: {e}")

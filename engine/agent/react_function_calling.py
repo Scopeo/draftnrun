@@ -14,7 +14,7 @@ from engine.agent.agent import (
 from engine.graph_runner.runnable import Runnable
 from engine.agent.history_message_handling import HistoryMessageHandler
 from engine.trace.trace_manager import TraceManager
-from engine.llm_services.llm_service import LLMService
+from engine.llm_services.llm_service import CompletionService
 from engine.agent.utils_prompt import fill_prompt_template_with_dictionary
 
 LOGGER = logging.getLogger(__name__)
@@ -29,7 +29,7 @@ DEFAULT_FALLBACK_REACT_ANSWER = "I'm sorry, I couldn't find a solution to your p
 class ReActAgent(Agent):
     def __init__(
         self,
-        llm_service: LLMService,
+        completion_service: CompletionService,
         trace_manager: TraceManager,
         tool_description: ToolDescription,
         component_instance_name: str,
@@ -63,7 +63,7 @@ class ReActAgent(Agent):
         self._max_iterations = max_iterations
         self._max_tools_per_iteration = max_tools_per_iteration
         self._current_iteration = 0
-        self._llm_service = llm_service
+        self._completion_service = completion_service
         self.input_data_field_for_messages_history = input_data_field_for_messages_history
         self._allow_tool_shortcuts = allow_tool_shortcuts
 
@@ -148,7 +148,7 @@ class ReActAgent(Agent):
         agent_input = original_agent_input.model_copy(deep=True)
         history_messages_handled = self._memory_handling.get_truncated_messages_history(agent_input.messages)
         tool_choice = "auto" if self._current_iteration < self._max_iterations else "none"
-        chat_response = self._llm_service.function_call(
+        chat_response = self._completion_service.function_call(
             messages=[msg.model_dump() for msg in history_messages_handled],
             temperature=0.2,
             tools=[agent.tool_description for agent in self.agent_tools],
