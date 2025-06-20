@@ -1,8 +1,13 @@
 import logging
 from uuid import UUID
 
-from ada_backend.database.models import SourceType
+from ada_backend.database.models import OrgSecretType, SourceType
+from ada_backend.database.setup_db import SessionLocal, get_db
+from ada_backend.repositories.organization_repository import get_organization_secrets
 from ada_backend.schemas.ingestion_task_schema import IngestionTaskUpdate
+from ada_backend.services.organization_service import get_organization_llm_providers
+from engine.trace.trace_context import get_trace_manager, set_trace_manager
+from engine.trace.trace_manager import TraceManager
 from ingestion_script.ingest_folder_source import ingest_google_drive_source, ingest_local_folder_source
 from ingestion_script.utils import update_ingestion_task
 from ada_backend.database import models as db
@@ -29,6 +34,13 @@ def check_missing_params(
 def ingestion_main(
     source_name: str, organization_id: UUID, task_id: UUID, source_type: SourceType, source_attributes: dict
 ):
+    set_trace_manager(TraceManager(project_name="Ingestion"))
+    trace_manager = get_trace_manager()
+    trace_manager.organization_id = organization_id
+    trace_manager.organization_llm_providers = str(
+        get_organization_llm_providers(session=SessionLocal(), organization_id=organization_id)
+    )
+
     failed_ingestion_task = IngestionTaskUpdate(
         id=task_id,
         source_name=source_name,
