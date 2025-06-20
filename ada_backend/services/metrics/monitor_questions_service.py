@@ -6,7 +6,7 @@ import pandas as pd
 
 from ada_backend.schemas.monitor_schema import OccurenceQuestionsList
 from engine.agent.agent import AgentPayload
-from engine.llm_services.openai_llm_service import OpenAILLMService
+from engine.llm_services.llm_service import CompletionService
 from engine.storage_service.db_service import DBService
 from engine.storage_service.db_utils import DBDefinition, DBColumn
 from engine.trace.trace_manager import TraceManager
@@ -51,15 +51,18 @@ async def monitor_questions(db_service: DBService, project_id: UUID, agent_input
         LOGGER.error(f"Failed to parse agent input {agent_input}: error {e}")
         return
     trace_manager = TraceManager(project_name="ada_backend")
-    llm_service = OpenAILLMService(trace_manager=trace_manager)
+    llm_service = CompletionService(
+        provider="openai",
+        model_name="gpt-4.1-mini",
+        trace_manager=trace_manager,
+        temperature=0.5,
+    )
     table_name = "questions_occurences"
 
     previous_questions = await get_previous_questions(db_service, project_id, table_name)
     query = PROMPT.format(questions_list=previous_questions, question=agent_input.last_message.content)
 
-    answer = llm_service.constrained_complete(
-        messages=[{"role": "user", "content": query}], response_format=OccurenceQuestionsList
-    )
+    answer = llm_service.constrained_complete(prompt=query, response_format=OccurenceQuestionsList)
 
     new_questions_list = json.dumps(answer.model_dump())
     df = pd.DataFrame(data=[{"project_id": str(project_id)}])

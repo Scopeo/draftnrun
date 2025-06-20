@@ -8,10 +8,7 @@ from pydantic import BaseModel
 
 from engine.agent.agent import ToolDescription
 from engine.trace.trace_context import get_trace_manager
-from engine.llm_services.llm_service import LLMService
-from engine.llm_services.openai_llm_service import OpenAILLMService
-from engine.llm_services.mistral_llm_service import MistralLLMService
-from engine.llm_services.google_llm_service import GoogleLLMService
+from engine.llm_services.llm_service import EmbeddingService, CompletionService
 from engine.qdrant_service import QdrantService, QdrantCollectionSchema
 
 from ada_backend.database.setup_db import get_db_session
@@ -282,60 +279,77 @@ def get_llm_provider_and_model(llm_model: str) -> tuple[str, str]:
     return provider, model
 
 
-# TODO: Move to dedicated module
-def build_llm_service_processor(
-    target_name: str = "llm_service",
+def build_embedding_service_processor(
+    target_name: str = "embedding_service",
 ) -> ParameterProcessor:
     """
     Returns a processor function to inject an LLM service into the parameters.
 
     This processor consumes and removes the following parameters from the input:
-    - llm_model: Required. String in "provider:model_name" format (e.g., "openai:gpt-4").
-                 Defaults to "openai:gpt-4o-mini" if not provided.
-    - llm_temperature: Optional. Float value for sampling temperature.
-    - embedding_model_name: Optional. String identifying the embedding model to use.
+    - embedding_model: Required. String in "provider:model_name" format (e.g., "openai:gpt-4").
     - llm_api_key: Optional. API key for the LLM provider.
 
     The processor creates an appropriate LLMService instance based on the provider
     and injects it into the params dictionary under the key specified by target_name.
 
     Args:
-        trace_manager (TraceManager): The trace manager to inject into the LLM service.
         target_name (str): The parameter name to use for the created LLM service.
-                          Defaults to "llm_service".
+                          Defaults to "embedding_service".
 
     Returns:
         ParameterProcessor: A function that processes parameters to inject an LLM service.
     """
 
     def processor(params: dict, constructor_params: dict[str, Any]) -> dict:
-        provider, model_name = get_llm_provider_and_model(llm_model=params.pop("llm_model", "openai:gpt-4o-mini"))
-        temperature: float | None = params.pop("llm_temperature", None)
-        embedding_model_name: str | None = params.pop("embedding_model_name", None)
-        api_key: str | None = params.pop("llm_api_key", None)
+        provider, model_name = get_llm_provider_and_model(llm_model=params.pop("embedding_model"))
 
-        llm_service_input_params = {
-            "trace_manager": get_trace_manager(),
-            "model_name": model_name,
-        }
-        if temperature is not None:
-            llm_service_input_params["default_temperature"] = temperature
-        if embedding_model_name is not None:
-            llm_service_input_params["embedding_model_name"] = embedding_model_name
-        if api_key is not None:
-            llm_service_input_params["api_key"] = api_key
+        embedding_service = EmbeddingService(
+            provider=provider,
+            model_name=model_name,
+            trace_manager=get_trace_manager(),
+            api_key=params.pop("llm_api_key", None),
+        )
 
-        llm_service: Optional[LLMService] = None
-        if provider == "openai":
-            llm_service = OpenAILLMService(**llm_service_input_params)
-        elif provider == "mistral":
-            llm_service = MistralLLMService(**llm_service_input_params)
-        elif provider == "google":
-            llm_service = GoogleLLMService(**llm_service_input_params)
-        else:
-            raise ValueError(f"Unsupported LLM provider: {provider}")
+        params[target_name] = embedding_service
+        return params
 
-        params[target_name] = llm_service
+    return processor
+
+
+def build_completion_service_processor(
+    target_name: str = "completion_service",
+) -> ParameterProcessor:
+    """
+    Returns a processor function to inject an LLM service into the parameters.
+
+    This processor consumes and removes the following parameters from the input:
+    - completion_model: Required. String in "provider:model_name" format (e.g., "openai:gpt-4").
+    - temperature: Optional. Float value for sampling temperature.
+    - llm_api_key: Optional. API key for the LLM provider.
+
+    The processor creates an appropriate LLMService instance based on the provider
+    and injects it into the params dictionary under the key specified by target_name.
+
+    Args:
+        target_name (str): The parameter name to use for the created LLM service.
+                          Defaults to "embedding_service".
+
+    Returns:
+        ParameterProcessor: A function that processes parameters to inject an LLM service.
+    """
+
+    def processor(params: dict, constructor_params: dict[str, Any]) -> dict:
+        provider, model_name = get_llm_provider_and_model(llm_model=params.pop("completion_model"))
+
+        completion_service = CompletionService(
+            provider=provider,
+            model_name=model_name,
+            trace_manager=get_trace_manager(),
+            temperature=params.pop("temperature", 0.5),
+            api_key=params.pop("llm_api_key", None),
+        )
+
+        params[target_name] = completion_service
         return params
 
     return processor
@@ -366,16 +380,15 @@ def build_qdrant_service_processor(target_name: str = "qdrant_service") -> Param
             if source is None:
                 raise ValueError(f"Source with id {source_id} not found")
 
-            embedding_model_name = source.embedding_model_name
+            embedding_service = EmbeddingService(
+                trace_manager=get_trace_manager(),
+                api_key=source.llm_api_key,
+            )
             qdrant_schema = QdrantCollectionSchema(**source.qdrant_schema)
             collection_name = source.qdrant_collection_name
 
-        llm_service = OpenAILLMService(
-            trace_manager=get_trace_manager(),
-            embedding_model_name=embedding_model_name,
-        )
         qdrant_service = QdrantService.from_defaults(
-            llm_service=llm_service,
+            embedding_service=embedding_service,
             default_collection_schema=qdrant_schema,
         )
 

@@ -4,7 +4,7 @@ from pydantic import BaseModel
 
 from ada_backend.database.models import ParameterType, SelectOption, UIComponent, UIComponentProperties
 from ada_backend.database import models as db
-from ada_backend.services.registry import PARAM_MODEL_NAME_IN_DB
+from ada_backend.services.registry import COMPLETION_MODEL_IN_DB, EMBEDDING_MODEL_IN_DB
 
 
 # Define UUIDs for components and instances
@@ -19,9 +19,6 @@ COMPONENT_UUIDS: dict[str, UUID] = {
     "api_call_tool": UUID("674b8c1d-0cc6-4887-be92-e3a2906830ed"),
     "tavily_agent": UUID("449f8f59-7aff-4b2d-b244-d2fcc09f6651"),
     "web_search_openai_agent": UUID("d6020df0-a7e0-4d82-b731-0a653beef2e6"),
-    "switch_categorical_pipeline": UUID("064df1da-2151-4bce-adab-0ab6d06cf6cb"),
-    "sequential_pipeline": UUID("d2991b15-bd9f-4939-a0e9-7fc434f20b3d"),
-    "static_responder": UUID("94d56d5a-baf3-4f60-864d-fb062ba00357"),
     "sql_tool": UUID("f7ddbfcb-6843-4ae9-a15b-40aa565b955b"),
     "sql_db_service": UUID("4014e6bd-9d2d-4142-8bdc-6dd7d9068011"),
     "llm_call": UUID("7a039611-49b3-4bfd-b09b-c0f93edf3b79"),
@@ -42,31 +39,27 @@ class ParameterLLMConfig(BaseModel):
     param_name: str
     param_id: UUID
 
-
-def build_llm_config_definitions(
+def build_completion_service_config_definitions(
     component_id: UUID,
     params_to_seed: list[ParameterLLMConfig],
 ) -> list[db.ComponentParameterDefinition]:
-    """
+        """
     Simple helper function to avoid code duplication.
     params_to_seed is a list of parameters to seed for the given component.
     options: [
-        "model_name",
-        "embedding_model_name",
-        "default_temperature",
-        "model_speech_to_text",
-        "model_config_text_to_speech",
+        "completion_model",
+        "temperature",
         "api_key",
     ]
     """
     definitions: list[db.ComponentParameterDefinition] = []
     for param in params_to_seed:
-        if param.param_name == PARAM_MODEL_NAME_IN_DB:
+        if param.param_name == COMPLETION_MODEL_IN_DB:
             definitions.append(
                 db.ComponentParameterDefinition(
                     id=param.param_id,
                     component_id=component_id,
-                    name=PARAM_MODEL_NAME_IN_DB,
+                    name=COMPLETION_MODEL_IN_DB,
                     type=ParameterType.STRING,
                     nullable=False,
                     default="openai:gpt-4.1-mini",
@@ -99,107 +92,15 @@ def build_llm_config_definitions(
                     ).model_dump(exclude_unset=True, exclude_none=True),
                 )
             )
-        if param.param_name == "web_search_model_name":
+        if param.param_name == "temperature":
             definitions.append(
                 db.ComponentParameterDefinition(
                     id=param.param_id,
                     component_id=component_id,
-                    name=PARAM_MODEL_NAME_IN_DB,
-                    type=ParameterType.STRING,
-                    nullable=False,
-                    default="openai:gpt-4.1-mini",
-                    ui_component=UIComponent.SELECT,
-                    ui_component_properties=UIComponentProperties(
-                        options=[
-                            # OpenAI
-                            SelectOption(value="openai:gpt-4.1", label="GPT-4.1"),
-                            SelectOption(value="openai:gpt-4.1-mini", label="GPT-4.1 Mini"),
-                            SelectOption(value="openai:gpt-4o", label="GPT-4o"),
-                            SelectOption(value="openai:gpt-4o-mini", label="GPT-4o Mini"),
-                            SelectOption(value="openai:o4-mini-2025-04-16", label="GPT-4o4-mini"),
-                            SelectOption(value="openai:o3-2025-04-16", label="GPT-4o3"),
-                        ],
-                        label="Web Search Model Name",
-                    ).model_dump(exclude_unset=True, exclude_none=True),
-                )
-            )
-        if param.param_name == "embedding_model_name":
-            definitions.append(
-                db.ComponentParameterDefinition(
-                    id=param.param_id,
-                    component_id=component_id,
-                    name="embedding_model_name",
-                    type=ParameterType.STRING,
-                    nullable=False,
-                    default="openai:text-embedding-3-large",
-                    ui_component=UIComponent.SELECT,
-                    ui_component_properties=UIComponentProperties(
-                        options=[
-                            # OpenAI
-                            SelectOption(value="openai:text-embedding-3-large", label="Text Embedding 3 Large"),
-                            # Google (Gemini)
-                            SelectOption(
-                                value="google:gemini-embedding-exp-03-07", label="Gemini Embedding exp-03-07"
-                            ),
-                            # Mistral
-                            SelectOption(value="mistral:mistral-embed", label="Mistral Embed"),
-                        ],
-                        label="Embedding Model Name",
-                    ).model_dump(exclude_unset=True, exclude_none=True),
-                )
-            )
-        if param.param_name == "default_temperature":
-            definitions.append(
-                db.ComponentParameterDefinition(
-                    id=param.param_id,
-                    component_id=component_id,
-                    name="default_temperature",
+                    name="temperature",
                     type=ParameterType.FLOAT,
                     nullable=False,
-                    default="0.3",
-                )
-            )
-        if param.param_name == "model_speech_to_text":
-            definitions.append(
-                db.ComponentParameterDefinition(
-                    id=param.param_id,
-                    component_id=component_id,
-                    name="model_speech_to_text",
-                    type=ParameterType.STRING,
-                    nullable=False,
-                    default="openai:gpt-4o-mini-transcribe",
-                    ui_component=UIComponent.SELECT,
-                    ui_component_properties=UIComponentProperties(
-                        options=[
-                            # OpenAI
-                            SelectOption(value="openai:gpt-4o-transcribe", label="GPT-4o Transcribe"),
-                            SelectOption(value="openai:gpt-4o-mini-transcribe", label="GPT-4o Mini Transcribe"),
-                        ],
-                        label="Model Speech To Text",
-                    ).model_dump(exclude_unset=True, exclude_none=True),
-                )
-            )
-        # TODO: Add ui_component_properties
-        if param.param_name == "model_config_text_to_speech":
-            definitions.append(
-                db.ComponentParameterDefinition(
-                    id=param.param_id,
-                    component_id=component_id,
-                    name="model_config_text_to_speech",
-                    type=ParameterType.JSON,
-                    nullable=False,
-                    default="openai:gpt-4o-mini-tts",
-                    ui_component=UIComponent.SELECT,
-                    ui_component_properties=UIComponentProperties(
-                        options=[
-                            # OpenAI
-                            SelectOption(value="openai:gpt-4o-mini-tts", label="GPT-4o Mini TTS"),
-                            SelectOption(value="openai:gpt-4o-tts", label="GPT-4o TTS"),
-                            # Google
-                            SelectOption(value="google:chirp-3-hd", label="Chirp 3 HD"),
-                        ],
-                        label="Model Text To Speech",
-                    ),
+                    default="0.5",
                 )
             )
         if param.param_name == "api_key":
@@ -210,6 +111,53 @@ def build_llm_config_definitions(
                     name="api_key",
                     type=ParameterType.LLM_API_KEY,
                     nullable=True,
+                )
+            )
+    return definitions
+
+
+def build_embedding_service_config_definitions(
+    component_id: UUID,
+    params_to_seed: list[ParameterLLMConfig],
+) -> list[db.ComponentParameterDefinition]:
+    """
+    Simple helper function to avoid code duplication.
+    params_to_seed is a list of parameters to seed for the given component.
+    options: [
+        "embedding_model",
+        "api_key",
+    ]
+    """
+    definitions: list[db.ComponentParameterDefinition] = []
+    for param in params_to_seed:
+        if param.param_name == EMBEDDING_MODEL_IN_DB:
+            definitions.append(
+                db.ComponentParameterDefinition(
+                    id=param.param_id,
+                    component_id=component_id,
+                    name=EMBEDDING_MODEL_IN_DB,
+                    type=ParameterType.STRING,
+                    nullable=False,
+                    default="openai:text-embedding-3-large",
+                    ui_component=UIComponent.SELECT,
+                    ui_component_properties=UIComponentProperties(
+                        options=[
+                            # OpenAI
+                            SelectOption(value="openai:text-embedding-3-large", label="Text Embedding 3 Large"),
+                        ],
+                        label="Embedding Model Name",
+                    ).model_dump(exclude_unset=True, exclude_none=True),
+                )
+            )
+        if param.param_name == "api_key":
+            definitions.append(
+                db.ComponentParameterDefinition(
+                    id=param.param_id,
+                    component_id=component_id,
+                    name="api_key",
+                    type=ParameterType.STRING,
+                    nullable=False,
+                    default="",
                 )
             )
     return definitions
