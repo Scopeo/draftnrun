@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 
 from ada_backend.database import models as db
 
-TEMPLATE_ORGANIZATION_ID = "edb9fe43-7000-48c0-aa52-0f6dacf20454" # This is the organization ID for templates
+TEMPLATE_ORGANIZATION_ID = "edb9fe43-7000-48c0-aa52-0f6dacf20454"  # This is the organization ID for templates
 
 
 def retrieve_production_templates(

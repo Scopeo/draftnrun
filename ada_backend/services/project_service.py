@@ -75,7 +75,8 @@ def create_project(
     graph_runner_id = None
     if template:
         LOGGER.info(
-            f"Creating project from template {template.template_project_id} with graph runner {template.template_graph_runner_id}"
+            f"Creating project from template {template.template_project_id}"
+            f"with graph runner {template.template_graph_runner_id}"
         )
         graph_runner_id = clone_graph_runner(
             session,
