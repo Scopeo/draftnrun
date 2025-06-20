@@ -1,4 +1,5 @@
 from uuid import UUID
+import json
 
 from sqlalchemy.orm import Session
 
@@ -60,6 +61,12 @@ def seed_rag_components(session: Session):
         description="Rag formatter. Design to customize how to display sources on answer",
         release_stage=db.ReleaseStage.PUBLIC,
     )
+    vocabulary_search = db.Component(
+        id=COMPONENT_UUIDS["vocabulary_search"],
+        name="Vocabulary Search",
+        description="Enriches RAG with search on user defined vocabulary",
+        release_stage=db.ReleaseStage.PUBLIC,
+    )
     upsert_components(
         session=session,
         components=[
@@ -69,6 +76,7 @@ def seed_rag_components(session: Session):
             retriever,
             cohere_reranker,
             rag_formatter,
+            vocabulary_search,
         ],
     )
 
@@ -127,6 +135,13 @@ def seed_rag_components(session: Session):
         type=ParameterType.COMPONENT,
         nullable=True,
     )
+    rag_vocabulary_search_param = db.ComponentParameterDefinition(
+        id=UUID("8e6c5827-667e-4c01-bf8b-e82a65614c5a"),
+        component_id=rag_agent.id,
+        name="vocabulary_search",
+        type=ParameterType.COMPONENT,
+        nullable=True,
+    )
     upsert_components_parameter_definitions(
         session=session,
         component_parameter_definitions=[
@@ -134,6 +149,7 @@ def seed_rag_components(session: Session):
             rag_reranker_param,
             rag_synthesizer_param,
             rag_formatter_param,
+            rag_vocabulary_search_param,
         ],
     )
     upsert_components_parameter_child_relationships(
@@ -158,6 +174,11 @@ def seed_rag_components(session: Session):
                 id=UUID("8a38709b-3a3a-4ae3-b1d5-0dc244a3280c"),
                 component_parameter_definition_id=rag_formatter_param.id,
                 child_component_id=rag_formatter.id,
+            ),
+            db.ComponentParameterChildRelationship(
+                id=UUID("004062a7-724a-4f4e-b49d-b56681bd85ab"),
+                component_parameter_definition_id=rag_vocabulary_search_param.id,
+                child_component_id=vocabulary_search.id,
             ),
         ],
     )
@@ -390,20 +411,6 @@ def seed_rag_components(session: Session):
         component_parameter_definitions=[
             # RAG Agent
             db.ComponentParameterDefinition(
-                id=UUID("3cf2a47c-dae5-4b29-b44c-c5a4bc8133a5"),
-                component_id=rag_agent.id,
-                name="filtering_condition",
-                type=ParameterType.STRING,
-                nullable=True,
-                default="OR",
-                ui_component=UIComponent.SELECT,
-                ui_component_properties=UIComponentProperties(
-                    options=[SelectOption(value="OR", label="OR"), SelectOption(value="AND", label="AND")],
-                    label="Filtering Condition",
-                ).model_dump(exclude_unset=True, exclude_none=True),
-                is_advanced=True,
-            ),
-            db.ComponentParameterDefinition(
                 id=UUID("c5c813b4-884c-42af-9303-d56189e57f48"),
                 component_id=rag_agent.id,
                 name="input_data_field_for_messages_history",
@@ -416,6 +423,77 @@ def seed_rag_components(session: Session):
                     placeholder="Enter the key from your input data to access messages history",
                 ).model_dump(exclude_unset=True, exclude_none=True),
                 is_advanced=True,
+            ),
+            # Vocabulary Search
+            db.ComponentParameterDefinition(
+                id=UUID("4f207c2b-4231-4fc0-bf2b-51a39a3ae666"),
+                component_id=vocabulary_search.id,
+                name="vocabulary_context_data",
+                type=ParameterType.JSON,
+                nullable=False,
+                default=json.dumps({}),
+                ui_component=UIComponent.TEXTAREA,
+                ui_component_properties=UIComponentProperties(
+                    label="The Glossary you want to use to enrich the RAG agent's context",
+                    placeholder="""Put a correct formatted
+                    json {'term' : ['term1', 'term2', 'term3'],
+                    'definition' : ['definition1', 'definition2', 'definition3']}""",
+                ).model_dump(exclude_unset=True, exclude_none=True),
+                is_advanced=False,
+            ),
+            db.ComponentParameterDefinition(
+                id=UUID("3b7d03ce-3054-4248-8c6f-be76973ce58d"),
+                component_id=vocabulary_search.id,
+                name="fuzzy_matching_candidates",
+                type=ParameterType.INTEGER,
+                nullable=False,
+                default=10,
+                ui_component=UIComponent.SLIDER,
+                ui_component_properties=UIComponentProperties(
+                    min=1, max=100, step=1, marks=True, label="Number of definitions to retrieve"
+                ).model_dump(exclude_unset=True, exclude_none=True),
+                is_advanced=False,
+            ),
+            db.ComponentParameterDefinition(
+                id=UUID("14b0d5ce-326c-402a-8678-bd21d49abdf3"),
+                component_id=vocabulary_search.id,
+                name="fuzzy_threshold",
+                type=ParameterType.INTEGER,
+                nullable=False,
+                default=90,
+                ui_component=UIComponent.SLIDER,
+                ui_component_properties=UIComponentProperties(
+                    min=1,
+                    max=100,
+                    step=1,
+                    marks=True,
+                    label="Fuzzy Matching Threshold to retrieve vocabulary",
+                    description=(
+                        "Fuzzy matching is a technique used to find approximate matches between strings. "
+                        "It handles typos, misspellings, and variations in wording. "
+                        "The fuzzy matching here will try to find the vocabulary terms in the query of the user. "
+                        "A thresold of 100 mean that the term is exactly the same in the query. "
+                        "When lowering, you allow mistakes (misspelling, plural etc). "
+                    ),
+                ).model_dump(exclude_unset=True, exclude_none=True),
+                is_advanced=False,
+            ),
+            db.ComponentParameterDefinition(
+                id=UUID("80ae22be-5832-4c7b-a936-6d129caeec80"),
+                component_id=vocabulary_search.id,
+                name="vocabulary_context_prompt_key",
+                type=ParameterType.STRING,
+                nullable=False,
+                default="retrieved_definitions",
+                ui_component=UIComponent.TEXTFIELD,
+                ui_component_properties=UIComponentProperties(
+                    label="Prompt key for vocabulary context injection",
+                    description="Put {retrieved_definitions} in the Synthesizer prompt of your RAG to allow the "
+                    "injection of retrieved definitions from your Glossary into the Synthesizer prompt "
+                    "during a RAG call. This will allow the RAG to answer using your collection "
+                    "and Glossary.",
+                ).model_dump(exclude_unset=True, exclude_none=True),
+                is_advanced=False,
             ),
             # RAG Formatter
             db.ComponentParameterDefinition(

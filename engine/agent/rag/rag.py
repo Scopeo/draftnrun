@@ -15,8 +15,13 @@ from engine.trace.trace_manager import TraceManager
 from engine.agent.synthesizer import Synthesizer
 from engine.agent.utils import format_qdrant_filter
 from engine.agent.rag.formatter import Formatter
+from engine.agent.rag.vocabulary_search import VocabularySearch
+from engine.agent.build_context import build_context_from_vocabulary_chunks
 
 LOGGER = logging.getLogger(__name__)
+
+# How we combine multiple filters conditions in Qdrant.
+FILTERING_CONDITION_WITH_METADATA_QDRANT = "AND"
 
 
 class RAG(Agent):
@@ -30,8 +35,8 @@ class RAG(Agent):
         synthesizer: Synthesizer,
         component_instance_name: str = "RAG",
         reranker: Optional["Reranker"] = None,
-        filtering_condition: str = "OR",
         formatter: Optional[Formatter] = None,
+        vocabulary_search: Optional[VocabularySearch] = None,
         input_data_field_for_messages_history: str = "messages",
     ) -> None:
         super().__init__(
@@ -42,10 +47,10 @@ class RAG(Agent):
         self._retriever = retriever
         self._synthesizer = synthesizer
         self._reranker = reranker
-        self._filtering_condition = filtering_condition
         if formatter is None:
             formatter = Formatter(add_sources=False)
         self._formatter = formatter
+        self._vocabulary_search = vocabulary_search
         self.input_data_field_for_messages_history = input_data_field_for_messages_history
 
     async def _run_without_trace(
@@ -62,15 +67,25 @@ class RAG(Agent):
         content = query_text or agent_input.last_message.content
         if content is None:
             raise ValueError("No content provided for the RAG tool.")
-        formatted_filters = format_qdrant_filter(filters, self._filtering_condition)
+        formatted_filters = format_qdrant_filter(filters, FILTERING_CONDITION_WITH_METADATA_QDRANT)
         chunks = self._retriever.get_chunks(query_text=content, filters=formatted_filters)
 
         if self._reranker is not None:
             chunks = self._reranker.rerank(query=content, chunks=chunks)
 
+        vocabulary_context = {}
+        if self._vocabulary_search is not None:
+            vocabulary_chunks = self._vocabulary_search.get_chunks(query_text=content)
+            vocabulary_context = {
+                self._vocabulary_search.vocabulary_context_prompt_key: build_context_from_vocabulary_chunks(
+                    vocabulary_chunks=vocabulary_chunks
+                )
+            }
+
         sourced_response = self._synthesizer.get_response(
             query_str=content,
             chunks=chunks,
+            optional_contexts=vocabulary_context,
         )
 
         sourced_response = self._formatter.format(sourced_response)

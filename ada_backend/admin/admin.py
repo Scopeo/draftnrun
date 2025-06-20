@@ -301,6 +301,9 @@ class SourceAdmin(EnhancedModelView, model=db.DataSource):
     column_filters = ["id", "database_schema"]
 
     form_columns = [
+        "name",
+        "type",
+        "organization_id",
         "database_schema",
         "database_table_name",
         "qdrant_collection_name",
