@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from prometheus_client import start_http_server
 
@@ -11,8 +11,6 @@ from ada_backend.routers.components_router import router as components_router
 from ada_backend.routers.graph_router import router as graph_router
 from ada_backend.graphql.schema import graphql_router
 from ada_backend.routers.organization_router import router as org_router
-from engine.trace.trace_context import set_trace_manager
-from engine.trace.trace_manager import TraceManager
 from settings import settings
 from logger import setup_logging
 
@@ -90,16 +88,6 @@ app.add_middleware(
 @app.get("/")
 def read_root():
     return {"message": "Welcome to the LLM Agent Admin Interface!"}
-
-
-@app.middleware("http")
-async def trace_manager_middleware(request: Request, call_next):
-    trace_manager = TraceManager(project_name="ada-backend")
-
-    set_trace_manager(trace_manager)
-
-    response = await call_next(request)
-    return response
 
 
 if __name__ == "__main__":

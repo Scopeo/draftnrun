@@ -6,9 +6,15 @@ class MockTraceManager:
         self,
         project_name: str,
     ):
-        self.project_id = "mock_project_id"
-        self.organization_id = "mock_organization_id"
-        self.organization_llm_providers = "mock_llm_providers"
+        self._project_id = "mock_project_id"
+
+    @property
+    def projet_id(self) -> str:
+        return self._project_id
+
+    @projet_id.setter
+    def project_id(self, project_id: str):
+        self._project_id = project_id
 
     def start_span(self, *args, **kwargs):
         # Return a context manager that does nothing

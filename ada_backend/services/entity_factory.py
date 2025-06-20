@@ -7,7 +7,7 @@ from dataclasses import is_dataclass
 from pydantic import BaseModel
 
 from engine.agent.agent import ToolDescription
-from engine.trace.trace_context import get_trace_manager
+from engine.trace.trace_manager import TraceManager
 from engine.llm_services.llm_service import LLMService
 from engine.llm_services.openai_llm_service import OpenAILLMService
 from engine.llm_services.mistral_llm_service import MistralLLMService
@@ -122,6 +122,7 @@ class AgentFactory(EntityFactory):
     def __init__(
         self,
         entity_class: Type[Any],
+        trace_manager: TraceManager,
         parameter_processors: Optional[list[ParameterProcessor]] = None,
         constructor_method: str = "__init__",
     ):
@@ -130,18 +131,19 @@ class AgentFactory(EntityFactory):
 
         Args:
             entity_class (Type[Any]): The class or callable to use for creating agents.
+            trace_manager (TraceManager): The trace manager instance to inject into agents.
             parameter_processors (Optional[list[ParameterProcessor]]): A list of
                 parameter processors.
         """
         processors = parameter_processors or []
-        processors.append(build_trace_manager_processor())
+        processors.append(build_trace_manager_processor(trace_manager))
 
         super().__init__(
             entity_class=entity_class,
             parameter_processors=processors,
             constructor_method=constructor_method,
         )
-        self.trace_manager = get_trace_manager()
+        self.trace_manager = trace_manager
 
     def _process_parameters(self, *args, **kwargs) -> tuple[tuple, dict]:
         args, kwargs = super()._process_parameters(*args, **kwargs)
@@ -214,7 +216,7 @@ def pydantic_processor(params: dict, constructor_params: dict[str, Any]) -> dict
 
 
 # # TODO: Replace by getting singleton instance when TraceManager supports it
-def build_trace_manager_processor() -> ParameterProcessor:
+def build_trace_manager_processor(trace_manager: TraceManager) -> ParameterProcessor:
     """
     Returns a processor function to inject a trace manager if required.
 
@@ -228,7 +230,6 @@ def build_trace_manager_processor() -> ParameterProcessor:
 
     def processor(params: dict, constructor_params: dict[str, Any]) -> dict:
         if "trace_manager" in constructor_params:
-            trace_manager = get_trace_manager()
             params.setdefault("trace_manager", trace_manager)
         return params
 
@@ -284,6 +285,7 @@ def get_llm_provider_and_model(llm_model: str) -> tuple[str, str]:
 
 # TODO: Move to dedicated module
 def build_llm_service_processor(
+    trace_manager: TraceManager,
     target_name: str = "llm_service",
 ) -> ParameterProcessor:
     """
@@ -315,7 +317,7 @@ def build_llm_service_processor(
         api_key: str | None = params.pop("llm_api_key", None)
 
         llm_service_input_params = {
-            "trace_manager": get_trace_manager(),
+            "trace_manager": trace_manager,
             "model_name": model_name,
         }
         if temperature is not None:
@@ -341,7 +343,9 @@ def build_llm_service_processor(
     return processor
 
 
-def build_qdrant_service_processor(target_name: str = "qdrant_service") -> ParameterProcessor:
+def build_qdrant_service_processor(
+    trace_manager: TraceManager, target_name: str = "qdrant_service"
+) -> ParameterProcessor:
     """
     Creates a processor that builds a QdrantService from a source ID.
 
@@ -371,7 +375,7 @@ def build_qdrant_service_processor(target_name: str = "qdrant_service") -> Param
             collection_name = source.qdrant_collection_name
 
         llm_service = OpenAILLMService(
-            trace_manager=get_trace_manager(),
+            trace_manager=trace_manager,
             embedding_model_name=embedding_model_name,
         )
         qdrant_service = QdrantService.from_defaults(
