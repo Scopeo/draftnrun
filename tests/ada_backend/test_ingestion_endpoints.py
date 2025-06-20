@@ -4,6 +4,7 @@ from ada_backend.scripts.get_supabase_token import get_user_jwt
 from ada_backend.schemas.ingestion_task_schema import IngestionTaskQueue
 from ada_backend.database import models as db
 from ingestion_script.ingest_folder_source import ingest_local_folder_source
+from ingestion_script.main import ingestion_main
 from ingestion_script.utils import get_sanitize_names
 from engine.qdrant_service import QdrantService
 from engine.storage_service.local_service import SQLLocalService
@@ -46,14 +47,12 @@ def test_ingest_local_folder_source():
     assert response.status_code == 201
     assert isinstance(task_id, str)
     assert len(task_id) > 0
-
-    ingest_local_folder_source(
-        path=TEST_SOURCE_ATTRIBUTES["path"],
-        organization_id=ORGANIZATION_ID,
+    ingestion_main(
         source_name=TEST_SOURCE_NAME,
+        organization_id=ORGANIZATION_ID,
         task_id=task_id,
-        save_supabase=False,
-        add_doc_description_to_chunks=False,
+        source_attributes=TEST_SOURCE_ATTRIBUTES,
+        source_type=db.SourceType.LOCAL,
     )
     get_source_response = requests.get(
         f"{BASE_URL}/sources/{ORGANIZATION_ID}",
