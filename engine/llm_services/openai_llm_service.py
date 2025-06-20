@@ -12,7 +12,7 @@ from tenacity import retry, wait_random_exponential, stop_after_attempt
 
 from engine.trace.trace_manager import TraceManager
 from engine.agent.agent import ToolDescription
-from engine.llm_services.llm_service import LLMService
+from engine.llm_services.llm_service import LLMService, with_usage_check
 from engine.llm_services.utils import chat_completion_to_response
 from engine.agent.utils import load_str_to_json
 from engine.llm_services.constrained_output_models import OutputFormatModel
@@ -23,6 +23,7 @@ class OpenAILLMService(LLMService):
     def __init__(
         self,
         trace_manager: TraceManager,
+        provider: str = "openai",
         model_name: str = "gpt-4o-mini",
         embedding_model_name: str = "text-embedding-3-large",
         default_temperature: float = 0.3,
@@ -31,7 +32,7 @@ class OpenAILLMService(LLMService):
         base_url: Optional[str] = None,
         api_key: Optional[str] = None,
     ):
-        super().__init__(trace_manager=trace_manager)
+        super().__init__(trace_manager=trace_manager, provider=provider)
         if model_config_text_to_speech is None:
             self._model_config_text_to_speech = {"model": "tts-1", "speaker_type": "nova"}
         if api_key is None:
@@ -53,6 +54,7 @@ class OpenAILLMService(LLMService):
         ).data
 
     @retry(wait=wait_random_exponential(multiplier=1, max=60), stop=stop_after_attempt(5))
+    @with_usage_check
     def complete(
         self,
         messages: list[dict],
@@ -70,6 +72,7 @@ class OpenAILLMService(LLMService):
         )
 
     @retry(wait=wait_random_exponential(multiplier=1, max=60), stop=stop_after_attempt(5))
+    @with_usage_check
     def web_search(
         self,
         query: str,
@@ -101,6 +104,7 @@ class OpenAILLMService(LLMService):
         return response
 
     @retry(wait=wait_random_exponential(multiplier=1, max=40), stop=stop_after_attempt(3))
+    @with_usage_check
     def constrained_complete(
         self,
         messages: list[dict],
@@ -130,6 +134,7 @@ class OpenAILLMService(LLMService):
             raise ValueError("response_format must be a string or a BaseModel subclass.")
 
     @retry(wait=wait_random_exponential(multiplier=1, max=40), stop=stop_after_attempt(3))
+    @with_usage_check
     def generate_transcript(self, audio_path: str, language: str) -> str:
         span_name = "SpeechToText"
         with self.trace_manager.start_span(span_name) as span:
@@ -155,6 +160,7 @@ class OpenAILLMService(LLMService):
         return transcription
 
     @retry(wait=wait_random_exponential(multiplier=1, max=40), stop=stop_after_attempt(3))
+    @with_usage_check
     def generate_speech_from_text(self, transcription: str, speech_audio_path: str) -> str:
         span_name = "TextToSpeech"
         with self.trace_manager.start_span(span_name) as span:

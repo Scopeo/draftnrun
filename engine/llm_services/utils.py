@@ -1,5 +1,8 @@
 import logging
 
+from ada_backend.services.trace_service import TOKEN_LIMIT, get_token_usage
+from engine.trace.trace_context import get_trace_manager
+
 
 LOGGER = logging.getLogger(__name__)
 
@@ -31,3 +34,23 @@ def chat_completion_to_response(
                 )
             )
     return response_messages
+
+
+class LLMKeyLimitExceededError(Exception):
+    pass
+
+
+def check_usage(provider: str) -> None:
+    trace_manager = get_trace_manager()
+    if provider not in trace_manager.organization_llm_providers:
+        LOGGER.info(
+            f"LLM provider '{provider}' is not configured for the organization. " "Checking organization token usage."
+        )
+        token_usage = get_token_usage(organization_id=trace_manager.organization_id)
+        if token_usage.total_tokens > TOKEN_LIMIT:
+            raise LLMKeyLimitExceededError(
+                f"You are currently using Draft'n run's default {provider} LLM key, "
+                "which has exceeded its token limit. "
+                "Please provide your own key."
+            )
+    return None

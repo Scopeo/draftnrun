@@ -8,6 +8,7 @@ from pydantic import BaseModel
 from google.genai.types import Content, Part, File, GenerateContentConfig, FileData, UploadFileConfig
 from tenacity import retry, stop_after_attempt, wait_chain, wait_fixed, wait_random_exponential
 
+from engine.llm_services.llm_service import with_usage_check
 from settings import settings
 from engine.llm_services.openai_llm_service import OpenAILLMService
 from engine.trace.trace_manager import TraceManager
@@ -32,6 +33,7 @@ class GoogleLLMService(OpenAILLMService):
     def __init__(
         self,
         trace_manager: TraceManager,
+        provider: str = "google",
         model_name: str = "gemini-2.0-flash-exp",
         embedding_model: str = "gemini-embedding-exp-03-07",
         api_key: Optional[str] = settings.GOOGLE_API_KEY,
@@ -45,6 +47,7 @@ class GoogleLLMService(OpenAILLMService):
             default_temperature=default_temperature,
             base_url=base_url,
             api_key=api_key,
+            provider=provider,
         )
         super().__init__(trace_manager)
         self._completion_model = model_name
@@ -89,6 +92,7 @@ class GoogleLLMService(OpenAILLMService):
         raise ValueError("File must be a string path or bytes")
 
     @retry(wait=wait_chain(wait_fixed(5), wait_fixed(20), wait_fixed(40), wait_fixed(60)), stop=stop_after_attempt(5))
+    @with_usage_check
     def complete_with_files(
         self,
         messages: list[dict],
@@ -153,6 +157,7 @@ class GoogleLLMService(OpenAILLMService):
         )
 
     @retry(wait=wait_random_exponential(multiplier=1, max=40), stop=stop_after_attempt(3))
+    @with_usage_check
     def constrained_complete(
         self,
         messages: list[dict[str, str]],

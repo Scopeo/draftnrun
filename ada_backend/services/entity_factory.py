@@ -315,10 +315,11 @@ def build_llm_service_processor(
         temperature: float | None = params.pop("llm_temperature", None)
         embedding_model_name: str | None = params.pop("embedding_model_name", None)
         api_key: str | None = params.pop("llm_api_key", None)
-
+        trace_manager = get_trace_manager()
         llm_service_input_params = {
             "trace_manager": trace_manager,
             "model_name": model_name,
+            "provider": provider,
         }
         if temperature is not None:
             llm_service_input_params["default_temperature"] = temperature
@@ -328,6 +329,7 @@ def build_llm_service_processor(
             llm_service_input_params["api_key"] = api_key
 
         llm_service: Optional[LLMService] = None
+
         if provider == "openai":
             llm_service = OpenAILLMService(**llm_service_input_params)
         elif provider == "mistral":
