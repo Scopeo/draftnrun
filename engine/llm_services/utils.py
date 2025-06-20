@@ -1,7 +1,20 @@
 import logging
-
+from tenacity import AsyncRetrying, retry_if_exception_type, wait_random_exponential, stop_after_attempt
 
 LOGGER = logging.getLogger(__name__)
+
+
+# Retry decorator for async methods
+def async_retry(*, wait=None, stop=None, retry=retry_if_exception_type(Exception)):
+    def decorator(func):
+        async def wrapper(*args, **kwargs):
+            async for attempt in AsyncRetrying(wait=wait, stop=stop, retry=retry, reraise=True):
+                with attempt:
+                    return await func(*args, **kwargs)
+
+        return wrapper
+
+    return decorator
 
 
 def chat_completion_to_response(
