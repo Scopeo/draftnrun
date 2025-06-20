@@ -1,4 +1,4 @@
-from typing import Annotated, List
+from typing import Annotated, List, Optional
 from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Body
 from sqlalchemy.orm import Session
@@ -37,6 +37,7 @@ from ada_backend.services.project_service import (
     update_project_service,
 )
 from ada_backend.services.trace_service import get_trace_by_project
+from ada_backend.schemas.template_schema import Template
 
 
 LOGGER = logging.getLogger(__name__)
@@ -135,11 +136,12 @@ def create_project_endpoint(
         Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.ADMIN.value)),
     ],
     session: Session = Depends(get_db),
+    template: Optional[Template] = None,
 ) -> ProjectWithGraphRunnersSchema:
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
     try:
-        return create_project(session, organization_id, project)
+        return create_project(session, organization_id, project, template)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:

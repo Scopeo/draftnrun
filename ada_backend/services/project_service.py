@@ -1,4 +1,5 @@
 from uuid import UUID
+from typing import Optional
 from logging import getLogger
 import uuid
 
@@ -11,6 +12,7 @@ from ada_backend.repositories.graph_runner_repository import (
     graph_runner_exists,
     insert_graph_runner,
 )
+from ada_backend.services.graph.deploy_graph_service import clone_graph_runner
 from ada_backend.repositories.project_repository import (
     get_project_with_details,
     get_projects_by_organization_service,
@@ -26,7 +28,7 @@ from ada_backend.schemas.project_schema import (
     ProjectUpdateSchema,
     ProjectWithGraphRunnersSchema,
 )
-
+from ada_backend.schemas.template_schema import Template
 from ada_backend.services.graph.delete_graph_service import delete_graph_runner_service
 
 
@@ -65,8 +67,24 @@ def delete_project_service(session: Session, project_id: UUID) -> ProjectDeleteR
 
 
 def create_project(
-    session: Session, organization_id: UUID, project_schema: ProjectSchema
+    session: Session,
+    organization_id: UUID,
+    project_schema: ProjectSchema,
+    template: Optional[Template] = None,
 ) -> ProjectWithGraphRunnersSchema:
+    graph_runner_id = None
+    if template:
+        graph_runner_id = clone_graph_runner(
+            session,
+            template.template_graph_runner_id,
+            template.project_id,
+        )
+    else:
+        graph_runner_id = insert_graph_runner(
+            session=session,
+            graph_id=uuid.uuid4(),
+            add_input=True,
+        ).id
     project = insert_project(
         session=session,
         project_id=project_schema.project_id,
@@ -75,18 +93,14 @@ def create_project(
         description=project_schema.description,
         companion_image_url=project_schema.companion_image_url,
     )
-    graph_runner = insert_graph_runner(
-        session=session,
-        graph_id=uuid.uuid4(),
-        add_input=True,
-    )
+
     bind_graph_runner_to_project(
         session=session,
-        graph_runner_id=graph_runner.id,
+        graph_runner_id=graph_runner_id,
         project_id=project.id,
         env=EnvType.DRAFT,
     )
-    LOGGER.info(f"Created draft graph runner with ID {graph_runner.id} for project {project.id}")
+    LOGGER.info(f"Created draft graph runner with ID {graph_runner_id} for project {project.id}")
     return ProjectWithGraphRunnersSchema(
         project_id=project.id,
         project_name=project.name,
@@ -97,7 +111,7 @@ def create_project(
         updated_at=str(project.updated_at),
         graph_runners=[
             GraphRunnerEnvDTO(
-                graph_runner_id=graph_runner.id,
+                graph_runner_id=graph_runner_id,
                 env=EnvType.DRAFT,
             )
         ],
