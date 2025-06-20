@@ -6,6 +6,8 @@ from uuid import UUID
 from dataclasses import is_dataclass
 from pydantic import BaseModel
 
+from ada_backend.services.trace_service import TOKEN_LIMIT, get_token_usage
+from ada_backend.utils.error import LLMKeyLimitExceededError
 from engine.agent.agent import ToolDescription
 from engine.trace.trace_context import get_trace_manager
 from engine.llm_services.llm_service import EmbeddingService, CompletionService, WebSearchService
@@ -318,6 +320,7 @@ def build_web_service_processor(
     """
     Returns a processor function to inject an LLM service into the parameters.
     """
+
     def processor(params: dict, constructor_params: dict[str, Any]) -> dict:
         provider, model_name = get_llm_provider_and_model(llm_model=params.pop("completion_model"))
 
@@ -335,7 +338,6 @@ def build_web_service_processor(
 
 
 def build_qdrant_service_processor(target_name: str = "qdrant_service") -> ParameterProcessor:
-
     """
     Creates a processor that builds a QdrantService from a source ID.
 

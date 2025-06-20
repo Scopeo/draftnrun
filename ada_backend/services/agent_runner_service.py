@@ -18,7 +18,6 @@ from ada_backend.repositories.graph_runner_repository import (
 from engine.agent.agent import Agent
 from ada_backend.repositories.project_repository import get_project, get_project_with_details
 from ada_backend.repositories.organization_repository import get_organization_secrets
-from ada_backend.services.trace_service import get_token_usage
 from engine.graph_runner.runnable import Runnable
 from engine.trace.trace_context import get_trace_manager
 from engine.trace.span_context import set_tracing_span
@@ -95,11 +94,7 @@ async def run_agent(
     graph_runner_id: UUID,
     input_data: dict,
 ) -> ChatResponse:
-    agent = await get_agent_for_project(
-        session,
-        project_id=project_id,
-        graph_runner_id=graph_runner_id,
-    )
+    trace_manager = get_trace_manager()
     project_details = get_project_with_details(session, project_id=project_id)
     trace_manager_project_id = str(project_id)
     trace_manager_organization_id = str(project_details.organization_id)
@@ -121,13 +116,11 @@ async def run_agent(
         organization_id=trace_manager_organization_id,
         organization_llm_providers=trace_manager_organization_llm_providers,
     )
-    token_usage = get_token_usage(organization_id=project_details.organization_id)
-    # TODO: Fix when token limit is reached and user try to use their own key
-    if token_usage.total_tokens > TOKEN_LIMIT:
-        raise ValueError(
-            "You are currently using Draft'n run's default LLM key, which has exceeded its token limit. "
-            "Please provide your own key."
-        )
+    agent = await get_agent_for_project(
+        session,
+        project_id=project_id,
+        graph_runner_id=graph_runner_id,
+    )
 
     # TODO : Add again the monitoring for frequently asked questions after parallelization of agent run
     # db_service = SQLLocalService(engine_url="sqlite:///ada_backend/database/monitor.db", dialect="sqlite")
