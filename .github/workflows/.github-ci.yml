@@ -213,13 +213,13 @@ jobs:
               echo "===> PostgreSQL 16 client tools already installed"
             fi
 
+            echo "👁️ Re-setup the traces database"
+            make trace-db-upgrade
+
             echo "===> Running database migrations"
             make db-upgrade
             make db-seed
             uv run python -m ada_backend.database.seed_project_db
-
-            echo "👁️ Re-setup the traces database"
-            make trace-db-upgrade
 
       - name: Start ada_backend server
         uses: appleboy/ssh-action@master
