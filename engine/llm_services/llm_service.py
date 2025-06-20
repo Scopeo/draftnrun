@@ -38,7 +38,6 @@ class LLMService(abc.ABC):
         self.provider = provider
 
     @abc.abstractmethod
-    @with_usage_check
     def embed(
         self,
         input_text: str | list[str],
