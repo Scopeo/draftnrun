@@ -9,7 +9,7 @@ from mistralai import Mistral
 from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttributes
 
 from engine.agent.agent import ToolDescription
-from engine.llm_services.llm_service import LLMService
+from engine.llm_services.llm_service import LLMService, with_usage_check
 from engine.trace.trace_manager import TraceManager
 from settings import settings
 
@@ -41,6 +41,7 @@ class MistralLLMService(LLMService):
             inputs=input_text,
         ).data
 
+    @with_usage_check
     def complete(
         self,
         messages: list[dict],
@@ -116,6 +117,7 @@ class MistralLLMService(LLMService):
     ) -> ChatCompletion:
         raise NotImplementedError
 
+    @with_usage_check
     def constrained_complete(
         self,
         messages: list[dict[str, str]],
