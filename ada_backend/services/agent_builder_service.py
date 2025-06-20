@@ -7,7 +7,6 @@ from sqlalchemy.orm import Session
 
 from ada_backend.database.seed.seed_input import INPUT_PAYLOAD_PARAMETER_NAME
 from ada_backend.repositories.organization_repository import get_organization_secrets_from_project_id
-from ada_backend.utils.error import LLMKeyLimitExceededError
 from engine.agent.agent import ToolDescription
 from ada_backend.database.models import ComponentInstance
 from ada_backend.repositories.component_repository import (
@@ -135,8 +134,6 @@ def instantiate_component(
             if param_name not in grouped_sub_components:
                 grouped_sub_components[param_name] = []
             grouped_sub_components[param_name].append((sub_component.order, instantiated_sub_component))
-        except LLMKeyLimitExceededError as e:
-            raise e
         except Exception as e:
             raise ValueError(
                 f"Failed to instantiate sub-component '{param_name}' "
@@ -175,8 +172,6 @@ def instantiate_component(
             entity_name=component_name,
             **input_params,
         )
-    except LLMKeyLimitExceededError as e:
-        raise e
     except Exception as e:
         raise ValueError(
             f"Failed to instantiate component '{component_name}' "

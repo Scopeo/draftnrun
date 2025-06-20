@@ -2,6 +2,7 @@ from typing import Optional
 from abc import ABC
 from pydantic import BaseModel
 
+from engine.llm_services.utils import check_usage
 from engine.trace.trace_manager import TraceManager
 from engine.agent.agent import ToolDescription
 from engine.agent.utils import load_str_to_json
@@ -26,6 +27,22 @@ class LLMService(ABC):
 
 
 class EmbeddingService(LLMService):
+
+
+def with_usage_check(func):
+    @wraps(func)
+    def wrapper(self, *args, **kwargs):
+        provider = getattr(self, "provider", None)
+        if provider is None:
+            raise ValueError("Instance must have a 'provider' attribute to perform usage check.")
+
+        check_usage(provider)
+        return func(self, *args, **kwargs)
+
+    return wrapper
+
+
+class LLMService(abc.ABC):
     def __init__(
         self,
         trace_manager: TraceManager,

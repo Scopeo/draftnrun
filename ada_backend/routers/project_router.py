@@ -38,7 +38,6 @@ from ada_backend.services.project_service import (
     update_project_service,
 )
 from ada_backend.services.trace_service import get_trace_by_project
-from ada_backend.utils.error import LLMKeyLimitExceededError
 
 
 LOGGER = logging.getLogger(__name__)
@@ -225,8 +224,6 @@ async def get_project_monitoring_kpi(
     try:
         response = get_monitoring_kpis_by_project(project_id, duration)
         return response
-    except LLMKeyLimitExceededError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
@@ -264,8 +261,6 @@ async def chat(
             graph_runner_id=graph_runner_id,
             input_data=input_data,
         )
-    except LLMKeyLimitExceededError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
@@ -304,8 +299,6 @@ async def chat_env(
             input_data=input_data,
             env=env,
         )
-    except LLMKeyLimitExceededError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:

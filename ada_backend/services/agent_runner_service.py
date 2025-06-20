@@ -65,25 +65,6 @@ async def get_agent_for_project(
         raise ValueError(f"Project {project_id} not found.")
 
     if graph_runner_exists(session, graph_id=graph_runner_id):
-        trace_manager = get_trace_manager()
-        project_details = get_project_with_details(session, project_id=project_id)
-        trace_manager.project_id = project_id
-        trace_manager.organization_id = project_details.organization_id
-        organization_secrets = get_organization_secrets(
-            session,
-            organization_id=project_details.organization_id,
-        )
-        trace_manager.organization_llm_providers = str(
-            (
-                [
-                    organization_secret.key.split("_")[0]
-                    for organization_secret in organization_secrets
-                    if organization_secret.secret_type == OrgSecretType.LLM_API_KEY
-                ]
-                if organization_secrets
-                else []
-            )
-        )
         return await build_graph_runner(
             session,
             graph_runner_id,

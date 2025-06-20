@@ -228,11 +228,5 @@ if __name__ == "__main__":
 
     logging.basicConfig(level=logging.INFO)
 
-    set_trace_manager(TraceManager(project_name="ada_backend"))
-    trace_manager = get_trace_manager()
-    trace_manager.organization_id = DEFAULT_ORGANIZATION_ID
-    trace_manager.project_id = PROJECT_UUIDS["project_1"]
-    trace_manager.organization_llm_providers = ["openai", "anthropic", "cohere"]
-
     print("Seeding projects in database...")
     seed_projects_db(next(get_db()))
