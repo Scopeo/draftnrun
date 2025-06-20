@@ -9,8 +9,6 @@ from ada_backend.database.demo.demo_graph_test import build_graph_test_chatbot, 
 from ada_backend.database.demo.demo_react_sql_tool import build_react_sql_agent_chatbot
 from ada_backend.services.graph.update_graph_service import update_graph_service
 from ada_backend.database.seed_db import COMPONENT_UUIDS
-from engine.trace.trace_context import get_trace_manager, set_trace_manager
-from engine.trace.trace_manager import TraceManager
 
 LOGGER = logging.getLogger(__name__)
 

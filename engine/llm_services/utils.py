@@ -54,7 +54,8 @@ def check_usage(provider: str) -> None:
         token_usage = get_token_usage(organization_id=trace_manager.organization_id)
         if token_usage.total_tokens > TOKEN_LIMIT:
             raise LLMKeyLimitExceededError(
-                f"You are currently using Draft'n run's default {provider} LLM key, which has exceeded its token limit. "
+                f"You are currently using Draft'n run's default {provider} LLM key, "
+                "which has exceeded its token limit. "
                 "Please provide your own key."
             )
     return None
