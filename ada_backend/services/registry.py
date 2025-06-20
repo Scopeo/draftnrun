@@ -6,12 +6,9 @@ from engine.agent.llm_call_agent import LLMCallAgent
 from engine.agent.sql.react_sql_tool import ReactSQLAgent
 from engine.agent.sql.run_sql_query_tool import RunSQLQueryTool
 from engine.agent.sql.sql_tool import SQLTool
-from engine.agent.static_responder import StaticResponder
 from engine.agent.react_function_calling import ReActAgent
 from engine.agent.synthesizer import Synthesizer
 from engine.agent.hybrid_synthesizer import HybridSynthesizer
-from engine.agent.sequential_pipeline import SequentialPipeline
-from engine.agent.switch_categorical_pipeline import SwitchCategoricalPipeline
 from engine.agent.rag.rag import RAG
 from engine.agent.rag.hybrid_rag import HybridRAG
 from engine.agent.rag.chunk_selection import RelevantChunkSelector
@@ -32,13 +29,15 @@ from ada_backend.services.entity_factory import (
     AgentFactory,
     detect_and_convert_dataclasses,
     build_trace_manager_processor,
-    build_llm_service_processor,
+    build_completion_service_processor,
     build_param_name_translator,
     build_qdrant_service_processor,
     compose_processors,
+    build_web_service_processor,
 )
 
-PARAM_MODEL_NAME_IN_DB = "model_name"
+COMPLETION_MODEL_IN_DB = "completion_model"
+EMBEDDING_MODEL_IN_DB = "embedding_model"
 
 
 class SupportedEntityType(StrEnum):
@@ -65,9 +64,6 @@ class SupportedEntityType(StrEnum):
     TAVILY_AGENT = "Internet Search with Tavily"
     OPENAI_WEB_SEARCH_AGENT = "Internet Search with OpenAI"
     API_CALL_TOOL = "API Call"
-    SEQUENTIAL_PIPELINE = "SequentialPipeline"
-    SWITCH_CATEGORICAL_PIPELINE = "SwitchCategoricalPipeline"
-    STATIC_RESPONDER = "StaticResponder"
     SQL_TOOL = "SQLTool"
     LLM_CALL_AGENT = "LLM Call"
     REACT_SQL_AGENT = "Database Query Agent"
@@ -150,28 +146,41 @@ def create_factory_registry() -> FactoryRegistry:
         FactoryRegistry: The entity registry with default entities.
     """
     registry = FactoryRegistry()
+
     trace_manager_processor = build_trace_manager_processor()
-    llm_service_processor = compose_processors(
+
+    completion_service_processor = compose_processors(
+
         build_param_name_translator(
             {
                 # Name from DB -> Name in processor
-                PARAM_MODEL_NAME_IN_DB: "llm_model",
-                "web_search_model_name": "llm_model",
-                "default_temperature": "llm_temperature",
-                "embedding_model_name": "embedding_model_name",
+                COMPLETION_MODEL_IN_DB: "completion_model",
+                "default_temperature": "temperature",
+                "embedding_model_name": "embedding_model",
                 "api_key": "llm_api_key",
             }
         ),
-        build_llm_service_processor(),
+
+        build_completion_service_processor(),
     )
     qdrant_service_processor = compose_processors(
         build_param_name_translator(
             {
                 "qdrant_collection_schema": "default_collection_schema",
-                "embedding_model_name": "embedding_model_name",
+                EMBEDDING_MODEL_IN_DB: "embedding_model",
+                "api_key": "llm_api_key",
             }
         ),
         build_qdrant_service_processor(),
+    )
+    web_service_processor = compose_processors(
+        build_param_name_translator(
+            {
+                COMPLETION_MODEL_IN_DB: "completion_model",
+                "api_key": "llm_api_key",
+            }
+        ),
+        build_web_service_processor(),
     )
     # Register components
     registry.register(
@@ -179,7 +188,7 @@ def create_factory_registry() -> FactoryRegistry:
         factory=EntityFactory(
             entity_class=Synthesizer,
             parameter_processors=[
-                llm_service_processor,
+                completion_service_processor,
                 detect_and_convert_dataclasses,
                 trace_manager_processor,
             ],
@@ -190,7 +199,7 @@ def create_factory_registry() -> FactoryRegistry:
         factory=EntityFactory(
             entity_class=HybridSynthesizer,
             parameter_processors=[
-                llm_service_processor,
+                completion_service_processor,
                 detect_and_convert_dataclasses,
                 trace_manager_processor,
             ],
@@ -201,7 +210,7 @@ def create_factory_registry() -> FactoryRegistry:
         factory=EntityFactory(
             entity_class=RelevantChunkSelector,
             parameter_processors=[
-                llm_service_processor,
+                completion_service_processor,
                 detect_and_convert_dataclasses,
             ],
         ),
@@ -263,7 +272,7 @@ def create_factory_registry() -> FactoryRegistry:
         factory=AgentFactory(
             entity_class=ReActAgent,
             parameter_processors=[
-                llm_service_processor,
+                completion_service_processor,
             ],
         ),
     )
@@ -272,7 +281,7 @@ def create_factory_registry() -> FactoryRegistry:
         factory=AgentFactory(
             entity_class=LLMCallAgent,
             parameter_processors=[
-                llm_service_processor,
+                completion_service_processor,
             ],
         ),
     )
@@ -293,7 +302,7 @@ def create_factory_registry() -> FactoryRegistry:
         factory=AgentFactory(
             entity_class=TavilyApiTool,
             parameter_processors=[
-                llm_service_processor,
+                completion_service_processor,
             ],
         ),
     )
@@ -302,7 +311,7 @@ def create_factory_registry() -> FactoryRegistry:
         factory=AgentFactory(
             entity_class=WebSearchOpenAITool,
             parameter_processors=[
-                llm_service_processor,
+                web_service_processor,
             ],
         ),
     )
@@ -313,32 +322,11 @@ def create_factory_registry() -> FactoryRegistry:
         ),
     )
     registry.register(
-        name=SupportedEntityType.SEQUENTIAL_PIPELINE,
-        factory=AgentFactory(
-            entity_class=SequentialPipeline,
-        ),
-    )
-    registry.register(
-        name=SupportedEntityType.SWITCH_CATEGORICAL_PIPELINE,
-        factory=AgentFactory(
-            entity_class=SwitchCategoricalPipeline,
-            parameter_processors=[
-                llm_service_processor,
-            ],
-        ),
-    )
-    registry.register(
-        name=SupportedEntityType.STATIC_RESPONDER,
-        factory=AgentFactory(
-            entity_class=StaticResponder,
-        ),
-    ),
-    registry.register(
         name=SupportedEntityType.SQL_TOOL,
         factory=AgentFactory(
             entity_class=SQLTool,
             parameter_processors=[
-                llm_service_processor,
+                completion_service_processor,
             ],
         ),
     )
@@ -347,7 +335,7 @@ def create_factory_registry() -> FactoryRegistry:
         factory=AgentFactory(
             entity_class=ReactSQLAgent,
             parameter_processors=[
-                llm_service_processor,
+                completion_service_processor,
             ],
         ),
     )
@@ -368,7 +356,7 @@ def create_factory_registry() -> FactoryRegistry:
         factory=AgentFactory(
             entity_class=DocumentReactLoaderAgent,
             parameter_processors=[
-                llm_service_processor,
+                completion_service_processor,
             ],
         ),
     )

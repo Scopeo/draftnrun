@@ -6,7 +6,7 @@ from engine.agent.agent import SourceChunk
 from engine.agent.rag.retriever import Retriever
 from engine.agent.synthesizer import Synthesizer
 from engine.agent.rag.vocabulary_search import VocabularySearch
-from engine.llm_services.llm_service import LLMService
+from engine.llm_services.llm_service import CompletionService
 from engine.agent.agent import AgentPayload, ChatMessage
 from engine.agent.rag.rag import RAG
 from tests.mocks.trace_manager import MockTraceManager
@@ -26,11 +26,11 @@ class MockQdrantResult:
 @pytest.fixture
 def make_mock_llm_service():
     def _make_mock(default_response: str):
-        mock_llm = MagicMock(spec=LLMService)
+        mock_llm = MagicMock(spec=CompletionService)
         mock_llm.last_prompt = None
 
-        def constrained_complete(messages, response_format):
-            mock_llm.last_prompt = messages[0]["content"]
+        def constrained_complete(prompt, response_format):
+            mock_llm.last_prompt = prompt
             return response_format(response=default_response, is_successful=True)
 
         mock_llm.constrained_complete.side_effect = constrained_complete
@@ -139,7 +139,7 @@ def test_vocabulary_rag_run(
         retriever=mock_retriever,
         trace_manager=mock_trace_manager,
         synthesizer=Synthesizer(
-            llm_service=mock_llm_service, prompt_template=prompt_template, trace_manager=mock_trace_manager
+            completion_service=mock_llm_service, prompt_template=prompt_template, trace_manager=mock_trace_manager
         ),
         vocabulary_search=vocabulary_search,
         tool_description=MagicMock(),
