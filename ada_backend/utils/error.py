@@ -1,0 +1,2 @@
+class LLMKeyLimitExceededError(Exception):
+    pass
