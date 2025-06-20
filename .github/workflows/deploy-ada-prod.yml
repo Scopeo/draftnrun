@@ -43,6 +43,5 @@ jobs:
           make db-upgrade
           make db-seed
 
-
           echo "Reload Gunicorn with zero downtime"
           sudo systemctl restart gunicorn
