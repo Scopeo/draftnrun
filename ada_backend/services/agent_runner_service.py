@@ -7,7 +7,6 @@ from ada_backend.database.models import EnvType, OrgSecretType
 from ada_backend.repositories.edge_repository import get_edges
 from ada_backend.schemas.project_schema import ChatResponse
 from ada_backend.services.agent_builder_service import get_default_values_for_sandbox, instantiate_component
-from ada_backend.services.organization_service import get_organization_llm_providers
 from engine.graph_runner.graph_runner import GraphRunner
 from ada_backend.repositories.graph_runner_repository import (
     get_component_nodes,
