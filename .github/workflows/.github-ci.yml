@@ -259,6 +259,10 @@ jobs:
             uv run coverage report -i
             uv run coverage html -i
             uv run coverage xml -i
+      
+      - name: Run Locust stress test (headless mode)
+        run: |
+          locust -f locustfile.py --headless -u 10 -r 2 --run-time 15s --host http://localhost:8000
 
       - name: Cleanup EC2 folder and Docker resources
         if: always()
