@@ -1,3 +1,5 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from prometheus_client import start_http_server
@@ -20,10 +22,19 @@ from logger import setup_logging
 setup_logging()
 
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # NOTE: instantiate trace manager only once
+    trace_manager = TraceManager(project_name="ada-backend")
+    set_trace_manager(trace_manager)
+    yield
+
+
 app = FastAPI(
     title="Ada Backend",
     description="API for managing and running LLM agents",
     version="0.1.0",
+    lifespan=lifespan,
     openapi_tags=[
         {
             "name": "Auth",
