@@ -103,16 +103,6 @@ def read_root():
     return {"message": "Welcome to the LLM Agent Admin Interface!"}
 
 
-@app.middleware("http")
-async def trace_manager_middleware(request: Request, call_next):
-    trace_manager = TraceManager(project_name="ada-backend")
-
-    set_trace_manager(trace_manager)
-
-    response = await call_next(request)
-    return response
-
-
 if __name__ == "__main__":
     import uvicorn
 
