@@ -10,6 +10,7 @@ from opentelemetry import trace as trace_api
 from engine.agent.agent import AgentPayload, ChatMessage
 from engine.agent.utils import convert_data_for_trace_manager_display
 from engine.graph_runner.runnable import Runnable
+from engine.trace.var_context import get_organization_id, get_organization_llm_providers, get_project_id
 from engine.trace.trace_manager import TraceManager
 
 LOGGER = logging.getLogger(__name__)
@@ -115,9 +116,6 @@ class GraphRunner:
         """Run the graph."""
         input_data = inputs[0]
         with self.trace_manager.start_span(self.__class__.__name__) as span:
-            span.set_attribute("project_id", str(self.trace_manager.project_id))
-            span.set_attribute("organization_id", str(self.trace_manager.organization_id))
-            span.set_attribute("organization_llm_providers", self.trace_manager.organization_llm_providers)
             trace_input = convert_data_for_trace_manager_display(input_data, AgentPayload)
             span.set_attributes(
                 {

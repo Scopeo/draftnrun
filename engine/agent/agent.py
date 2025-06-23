@@ -171,10 +171,7 @@ class Agent(ABC):
             AgentOutput: The output of the agent. Only one output it's allowed.
         """
         span_name = self.component_instance_name
-        with self.trace_manager.start_span(
-            span_name,
-            **(tracing_attributes or {}),
-        ) as span:
+        with self.trace_manager.start_span(span_name) as span:
             trace_input = convert_data_for_trace_manager_display(inputs[0], AgentPayload)
             span.set_attributes(
                 {

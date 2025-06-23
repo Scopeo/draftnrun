@@ -21,20 +21,14 @@ from logger import setup_logging
 
 setup_logging()
 
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    # NOTE: instantiate trace manager only once
-    trace_manager = TraceManager(project_name="ada-backend")
-    set_trace_manager(trace_manager)
-    yield
+trace_manager = TraceManager(project_name="ada-backend")
+set_trace_manager(trace_manager)
 
 
 app = FastAPI(
     title="Ada Backend",
     description="API for managing and running LLM agents",
     version="0.1.0",
-    lifespan=lifespan,
     openapi_tags=[
         {
             "name": "Auth",

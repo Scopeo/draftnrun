@@ -21,6 +21,7 @@ from ada_backend.repositories.organization_repository import get_organization_se
 from ada_backend.services.trace_service import get_token_usage
 from engine.graph_runner.runnable import Runnable
 from engine.trace.trace_context import get_trace_manager
+from engine.trace.var_context import set_project_id, set_organization_id, set_organization_llm_providers
 
 TOKEN_LIMIT = 2000000
 
@@ -117,6 +118,9 @@ async def run_agent(
             else []
         )
     )
+    set_project_id(trace_manager_project_id)
+    set_organization_id(trace_manager_organization_id)
+    set_organization_llm_providers(trace_manager_organization_llm_providers)
     token_usage = get_token_usage(organization_id=project_details.organization_id)
     # TODO: Fix when token limit is reached and user try to use their own key
     if token_usage.total_tokens > TOKEN_LIMIT:
@@ -134,11 +138,6 @@ async def run_agent(
     try:
         agent_output = await agent.run(
             input_data,
-            tracing_attributes={
-                "project_id": trace_manager_project_id,
-                "organization_id": trace_manager_organization_id,
-                "organization_llm_providers": trace_manager_organization_llm_providers,
-            },
         )
     except Exception as e:
         raise ValueError(f"Error running agent: {str(e)}") from e
