@@ -1,4 +1,4 @@
-from typing import Annotated, List, Optional
+from typing import Annotated, List
 from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Body
 from sqlalchemy.orm import Session
@@ -37,7 +37,6 @@ from ada_backend.services.project_service import (
     update_project_service,
 )
 from ada_backend.services.trace_service import get_trace_by_project
-from ada_backend.schemas.template_schema import InputTemplate
 
 
 LOGGER = logging.getLogger(__name__)

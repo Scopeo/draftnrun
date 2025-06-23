@@ -6,7 +6,6 @@ from ada_backend.database.models import EnvType
 from ada_backend.schemas.template_schema import InputTemplate
 
 
-
 class ProjectSchema(BaseModel):
     project_id: UUID
     project_name: str

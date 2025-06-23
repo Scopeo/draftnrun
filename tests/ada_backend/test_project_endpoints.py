@@ -24,9 +24,9 @@ TEST_PROJECT_ID = str(uuid4())
 def test_create_project():
     endpoint = f"/projects/{ORGANIZATION_ID}"
     payload = {
-            "project_id": TEST_PROJECT_ID,
-            "project_name": f"test project {TEST_PROJECT_ID}",
-            "description": "test project description",
+        "project_id": TEST_PROJECT_ID,
+        "project_name": f"test project {TEST_PROJECT_ID}",
+        "description": "test project description",
     }
     response = client.post(endpoint, headers=HEADERS_JWT, json=payload)
     project = response.json()
