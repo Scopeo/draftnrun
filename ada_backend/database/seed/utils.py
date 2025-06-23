@@ -35,6 +35,7 @@ COMPONENT_UUIDS: dict[str, UUID] = {
     "document_enhanced_llm_call_agent": UUID("6460b304-640c-4468-abd3-67bbff6902d4"),
     "document_react_loader_agent": UUID("1c2fdf5b-4a8d-4788-acb6-86b00124c7ce"),
     "input": UUID("01357c0b-bc99-44ce-a435-995acc5e2544"),
+    "e2b_python_sandbox": UUID("e2b00000-0000-1111-2222-333333333333"),
 }
 
 
