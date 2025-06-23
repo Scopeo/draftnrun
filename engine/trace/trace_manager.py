@@ -1,4 +1,5 @@
 import logging
+from typing import Optional
 
 from openinference.semconv.resource import ResourceAttributes
 from openinference.instrumentation.openai import OpenAIInstrumentor
@@ -73,9 +74,30 @@ class TraceManager:
         """Set the organization ID."""
         self._organization_id = organization_id
 
-    def start_span(self, *args, **kwargs):
-        """Context manager to start a span."""
-        return self.tracer.start_as_current_span(*args, **kwargs)
+    def start_span(
+        self,
+        name: str,
+        project_id: Optional[str] = None,
+        organization_id: Optional[str] = None,
+        organization_llm_providers: Optional[str] = None,
+        **kwargs,
+    ):
+        """
+        Context manager to start a span.
+        Accepts project_id, organization_id, and organization_llm_providers directly
+        as arguments to add them as span attributes.
+        """
+        attributes: Attributes = kwargs.pop("attributes", {})
+
+        if project_id:
+            attributes["project_id"] = project_id
+        if organization_id:
+            attributes["organization_id"] = organization_id
+        if organization_llm_providers:
+            attributes["organization_llm_providers"] = organization_llm_providers
+
+        kwargs["attributes"] = attributes
+        return self.tracer.start_as_current_span(name, **kwargs)
 
     @property
     def organization_llm_providers(self) -> list:
