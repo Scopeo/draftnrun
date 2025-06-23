@@ -87,7 +87,7 @@ class TraceManager:
         Accepts project_id, organization_id, and organization_llm_providers directly
         as arguments to add them as span attributes.
         """
-        attributes: Attributes = kwargs.pop("attributes", {})
+        attributes = kwargs.pop("attributes", {})
 
         if project_id:
             attributes["project_id"] = project_id

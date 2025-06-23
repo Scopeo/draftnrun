@@ -153,7 +153,12 @@ class Agent(ABC):
     # - Allow for multiple named inputs and outputs
     # - Keep message history
     @track_calls
-    async def run(self, *inputs: AgentPayload | dict, **kwargs) -> AgentPayload:
+    async def run(
+        self,
+        *inputs: AgentPayload | dict,
+        tracing_attributes: Optional[dict[str, Any]] = None,
+        **kwargs,
+    ) -> AgentPayload:
         """
         Run the agent with the given inputs and kwargs.
 
@@ -166,14 +171,10 @@ class Agent(ABC):
             AgentOutput: The output of the agent. Only one output it's allowed.
         """
         span_name = self.component_instance_name
-        with self.trace_manager.start_span(span_name) as span:
-            span.set_attributes(
-                {
-                    "project_id": str(self.trace_manager.project_id),
-                    "organization_id": str(self.trace_manager.organization_id),
-                    "organization_llm_providers": self.trace_manager.organization_llm_providers,
-                }
-            )
+        with self.trace_manager.start_span(
+            span_name,
+            **(tracing_attributes or {}),
+        ) as span:
             trace_input = convert_data_for_trace_manager_display(inputs[0], AgentPayload)
             span.set_attributes(
                 {

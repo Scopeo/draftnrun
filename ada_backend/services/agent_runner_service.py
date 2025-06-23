@@ -100,13 +100,13 @@ async def run_agent(
         graph_runner_id=graph_runner_id,
     )
     project_details = get_project_with_details(session, project_id=project_id)
-    agent.trace_manager.project_id = project_id
-    agent.trace_manager.organization_id = project_details.organization_id
+    trace_manager_project_id = str(project_id)
+    trace_manager_organization_id = str(project_details.organization_id)
     organization_secrets = get_organization_secrets(
         session,
         organization_id=project_details.organization_id,
     )
-    agent.trace_manager.organization_llm_providers = str(
+    trace_manager_organization_llm_providers = str(
         (
             [
                 organization_secret.key.split("_")[0]
@@ -132,9 +132,16 @@ async def run_agent(
     if input_component:
         input_data = get_default_values_for_sandbox(session, input_component.id, project_id, input_data)
     try:
-        agent_output = await agent.run(input_data)
+        agent_output = await agent.run(
+            input_data,
+            tracing_attributes={
+                "project_id": trace_manager_project_id,
+                "organization_id": trace_manager_organization_id,
+                "organization_llm_providers": trace_manager_organization_llm_providers,
+            },
+        )
     except Exception as e:
-        raise ValueError(f"Error running agent: {str(e)}")
+        raise ValueError(f"Error running agent: {str(e)}") from e
     return ChatResponse(
         message=agent_output.last_message.content, artifacts=agent_output.artifacts, error=agent_output.error
     )
