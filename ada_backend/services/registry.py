@@ -22,6 +22,7 @@ from engine.agent.rag.vocabulary_search import VocabularySearch
 from engine.agent.api_tools.tavily_search_tool import TavilyApiTool
 from engine.agent.web_search_tool_openai import WebSearchOpenAITool
 from engine.agent.api_tools.api_call_tool import APICallTool
+from engine.agent.api_tools.e2b_sandbox_tool import E2BSandboxTool
 from engine.agent.document_enhanced_llm_call import DocumentEnhancedLLMCallAgent
 from engine.agent.document_react_loader import DocumentReactLoaderAgent
 from engine.agent.rag.document_search import DocumentSearch
@@ -66,6 +67,7 @@ class SupportedEntityType(StrEnum):
     TAVILY_AGENT = "Internet Search with Tavily"
     OPENAI_WEB_SEARCH_AGENT = "Internet Search with OpenAI"
     API_CALL_TOOL = "API Call"
+    E2B_SANDBOX_TOOL = "E2B Python Sandbox"
     SEQUENTIAL_PIPELINE = "SequentialPipeline"
     SWITCH_CATEGORICAL_PIPELINE = "SwitchCategoricalPipeline"
     STATIC_RESPONDER = "StaticResponder"
@@ -314,6 +316,13 @@ def create_factory_registry() -> FactoryRegistry:
         name=SupportedEntityType.API_CALL_TOOL,
         factory=AgentFactory(
             entity_class=APICallTool,
+            trace_manager=trace_manager,
+        ),
+    )
+    registry.register(
+        name=SupportedEntityType.E2B_SANDBOX_TOOL,
+        factory=AgentFactory(
+            entity_class=E2BSandboxTool,
             trace_manager=trace_manager,
         ),
     )
