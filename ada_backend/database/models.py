@@ -19,7 +19,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import relationship, declarative_base, mapped_column
 from cryptography.fernet import Fernet
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from ada_backend.database.utils import camel_to_snake
 from settings import settings
@@ -128,6 +128,12 @@ class SelectOption(BaseModel):
 class UIComponentProperties(BaseModel):
     """Properties for different UI components"""
 
+    model_config = ConfigDict(
+        extra="allow",  # Allows additional properties not explicitly defined
+        exclude_unset=True,  # Excludes fields that weren't explicitly set
+        exclude_none=True,  # Excludes fields with None values
+    )
+
     # Common properties
     label: Optional[str] = None
     placeholder: Optional[str] = None
@@ -144,11 +150,6 @@ class UIComponentProperties(BaseModel):
 
     # Password field property
     type: Optional[str] = Field(None, description="Set to 'password' for password fields")
-
-    class Config:
-        extra = "allow"  # Allows additional properties not explicitly defined
-        exclude_unset = True  # Excludes fields that weren't explicitly set
-        exclude_none = True  # Excludes fields with None values
 
 
 # --- Models ---
