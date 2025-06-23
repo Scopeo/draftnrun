@@ -28,7 +28,7 @@ jobs:
             echo "Current directory: $(pwd)"
 
             echo "Fetching latest code from branch ${{ github.ref_name }}..."
-            git remote set-url origin git@github.com:scopeo/agentic_toolbox.git
+            git remote set-url origin git@github.com:scopeo/draftnrun.git
             git fetch origin ${{ github.ref_name }}
             git reset --hard FETCH_HEAD
             git clean -fd
