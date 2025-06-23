@@ -1,7 +1,7 @@
 from typing import Optional
 from uuid import UUID
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from ada_backend.schemas.parameter_schema import PipelineParameterSchema
 from engine.agent.agent import ToolDescription
@@ -10,6 +10,8 @@ from engine.agent.agent import ToolDescription
 class ComponentInstanceSchema(BaseModel):
     """Represents a component instance in the pipeline input"""
 
+    model_config = ConfigDict(extra="ignore")
+
     id: Optional[UUID] = None  # Optional - if present, update existing instance
     name: Optional[str] = None
     ref: Optional[str] = None
@@ -17,9 +19,6 @@ class ComponentInstanceSchema(BaseModel):
     component_id: UUID
     parameters: list[PipelineParameterSchema]
     tool_description: Optional[ToolDescription] = None
-
-    class Config:
-        extra = "ignore"
 
 
 class ComponentRelationshipSchema(BaseModel):

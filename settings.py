@@ -50,6 +50,7 @@ class BaseConfig(BaseSettings):
     QDRANT_API_KEY: Optional[str] = None
 
     TAVILY_API_KEY: Optional[str] = None
+    E2B_API_KEY: Optional[str] = None
 
     LLM_API_KEY: Optional[str] = None
     LLM_BASE_URL: Optional[str] = None

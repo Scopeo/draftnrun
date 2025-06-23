@@ -3,7 +3,7 @@ import json
 import pytest
 from requests.exceptions import RequestException
 
-from engine.agent.api_tools.api_call_tool import APICallTool, API_CALL_TOOL_DESCRIPTION
+from engine.agent.tools.api_call_tool import APICallTool, API_CALL_TOOL_DESCRIPTION
 from engine.agent.agent import AgentPayload, ChatMessage
 from engine.trace.trace_manager import TraceManager
 
