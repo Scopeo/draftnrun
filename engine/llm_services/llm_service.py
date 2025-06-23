@@ -7,6 +7,7 @@ from engine.trace.trace_manager import TraceManager
 from engine.agent.agent import ToolDescription
 from engine.agent.utils import load_str_to_json
 from engine.llm_services.constrained_output_models import OutputFormatModel
+from settings import settings
 
 
 class LLMService(ABC):
@@ -38,7 +39,7 @@ class EmbeddingService(LLMService):
             case "openai":
                 import openai
 
-                client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+                client = openai.OpenAI(api_key=settings.OPENAI_API_KEY)
                 response = client.embeddings.create(
                     model=self._model_name,
                     input=text,
@@ -70,7 +71,7 @@ class CompletionService(LLMService):
             case "openai":
                 import openai
 
-                client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+                client = openai.OpenAI(api_key=settings.OPENAI_API_KEY)
                 response = client.responses.create(
                     model=self._model_name,
                     input=messages,
@@ -112,7 +113,7 @@ class CompletionService(LLMService):
             case "openai":
                 import openai
 
-                client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+                client = openai.OpenAI(api_key=settings.OPENAI_API_KEY)
                 response = client.responses.parse(**kwargs)
                 return response.output_text
             case _:
@@ -132,7 +133,7 @@ class CompletionService(LLMService):
             case "openai":
                 import openai
 
-                client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+                client = openai.OpenAI(api_key=settings.OPENAI_API_KEY)
                 response = client.responses.create(
                     model=self._model_name,
                     input=messages,
