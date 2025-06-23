@@ -69,7 +69,6 @@ class TraceManager:
         if project_id:
             attributes["project_id"] = project_id
         if organization_id:
-
             attributes["organization_id"] = organization_id
         if organization_llm_providers:
             attributes["organization_llm_providers"] = organization_llm_providers

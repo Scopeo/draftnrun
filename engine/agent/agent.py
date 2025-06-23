@@ -156,7 +156,6 @@ class Agent(ABC):
     async def run(
         self,
         *inputs: AgentPayload | dict,
-        tracing_attributes: Optional[dict[str, Any]] = None,
         **kwargs,
     ) -> AgentPayload:
         """
