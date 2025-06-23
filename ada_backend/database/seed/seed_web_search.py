@@ -13,6 +13,7 @@ from ada_backend.database.seed.utils import (
     ParameterLLMConfig,
     build_completion_service_config_definitions,
 )
+from ada_backend.services.registry import COMPLETION_MODEL_IN_DB
 
 
 def seed_web_search_components(session: Session):
@@ -39,7 +40,7 @@ def seed_web_search_components(session: Session):
                 component_id=web_search_openai_agent.id,
                 params_to_seed=[
                     ParameterLLMConfig(
-                        param_name="web_search_model_name",
+                        param_name=COMPLETION_MODEL_IN_DB,
                         param_id=UUID("329f22ec-0382-4fcf-963f-3281e68e6223"),
                     ),
                     ParameterLLMConfig(

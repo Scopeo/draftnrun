@@ -1,7 +1,7 @@
 from typing import Optional
 
 from engine.agent.agent import Agent, AgentPayload, ChatMessage, ToolDescription
-from engine.llm_services.llm_service import LLMService
+from engine.llm_services.llm_service import CompletionService
 from engine.trace.trace_manager import TraceManager
 
 
@@ -21,7 +21,7 @@ DEFAULT_WEB_SEARCH_OPENAI_TOOL_DESCRIPTION = ToolDescription(
 class WebSearchOpenAITool(Agent):
     def __init__(
         self,
-        llm_service: LLMService,
+        completion_service: CompletionService,
         trace_manager: TraceManager,
         component_instance_name: str,
         tool_description: ToolDescription = DEFAULT_WEB_SEARCH_OPENAI_TOOL_DESCRIPTION,
@@ -31,7 +31,7 @@ class WebSearchOpenAITool(Agent):
             tool_description=tool_description,
             component_instance_name=component_instance_name,
         )
-        self._llm_service = llm_service
+        self._completion_service = completion_service
 
     async def _run_without_trace(
         self,

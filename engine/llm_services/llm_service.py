@@ -60,7 +60,12 @@ class CompletionService(LLMService):
         super().__init__(trace_manager, provider, model_name, api_key)
         self._temperature = temperature
 
-    def complete(self, prompt: str, temperature: float = 0.5, stream: bool = False) -> str:
+    def complete(
+        self,
+        messages: list[dict] | str,
+        temperature: float = 0.5,
+        stream: bool = False,
+    ) -> str:
         match self._provider:
             case "openai":
                 import openai
@@ -68,7 +73,7 @@ class CompletionService(LLMService):
                 client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
                 response = client.responses.create(
                     model=self._model_name,
-                    input=prompt,
+                    input=messages,
                     temperature=temperature,
                     stream=stream,
                 )
@@ -77,10 +82,16 @@ class CompletionService(LLMService):
                 raise ValueError(f"Invalid provider: {self._provider}")
 
     def constrained_complete(
-        self, prompt: str, response_format: BaseModel | str, temperature: float = 0.5, stream: bool = False
+        self,
+        messages: list[dict] | str,
+        response_format: BaseModel | str,
+        temperature: float = 0.5,
+        stream: bool = False,
+        tools: list[ToolDescription] = None,
+        tool_choice: str = "auto",
     ) -> BaseModel:
         kwargs = {
-            "input": prompt,
+            "input": messages,
             "model": self._model_name,
             "temperature": temperature,
             "stream": stream,
@@ -109,7 +120,7 @@ class CompletionService(LLMService):
 
     def function_call(
         self,
-        prompt: str,
+        messages: list[dict] | str,
         temperature: float = 0.5,
         stream: bool = False,
         tools: list[ToolDescription] = None,
@@ -124,7 +135,7 @@ class CompletionService(LLMService):
                 client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
                 response = client.responses.create(
                     model=self._model_name,
-                    input=prompt,
+                    input=messages,
                     tools=tools,
                     temperature=temperature,
                     stream=stream,
