@@ -2,7 +2,7 @@ from functools import wraps
 
 from prometheus_client import Counter
 
-from engine.trace.var_context import get_project_id
+from engine.trace.var_context import get_tracing_span
 
 agent_calls = Counter(
     "agent_calls_total",
@@ -15,7 +15,8 @@ def track_calls(func):
     @wraps(func)
     def wrapper(self, *args, **kwargs):
         class_name = self.__class__.__name__
-        agent_calls.labels(class_name=class_name, project_id=str(get_project_id())).inc()
+        params = get_tracing_span()
+        agent_calls.labels(class_name=class_name, project_id=str(params.project_id)).inc()
         return func(self, *args, **kwargs)
 
     return wrapper

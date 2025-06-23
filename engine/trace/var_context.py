@@ -1,32 +1,24 @@
-import contextvars
+from contextvars import ContextVar
+from dataclasses import dataclass
 from typing import Optional
 
-project_id_var: contextvars.ContextVar[Optional[str]] = contextvars.ContextVar("project_id", default=None)
-organization_id_var: contextvars.ContextVar[Optional[str]] = contextvars.ContextVar("organization_id", default=None)
-organization_llm_providers_var: contextvars.ContextVar[Optional[str]] = contextvars.ContextVar(
-    "organization_llm_providers", default=None
-)
+
+@dataclass
+class TracingSpanParams:
+    project_id: str
+    org_id: str
+    llm_providers: list[str]
 
 
-def set_project_id(project_id: str):
-    project_id_var.set(project_id)
+_tracing_context: ContextVar[Optional[TracingSpanParams]] = ContextVar("_tracing_context", default=None)
 
 
-def get_project_id() -> Optional[str]:
-    return project_id_var.get()
+def set_tracing_span(project_id: str, org_id: str, llm_providers: list[str]) -> None:
+    """Set current tracing context with project/org/llm info."""
+    params = TracingSpanParams(project_id, org_id, llm_providers)
+    _tracing_context.set(params)
 
 
-def set_organization_id(organization_id: str):
-    organization_id_var.set(organization_id)
-
-
-def get_organization_id() -> Optional[str]:
-    return organization_id_var.get()
-
-
-def set_organization_llm_providers(organization_llm_providers: list[str]):
-    organization_llm_providers_var.set(organization_llm_providers)
-
-
-def get_organization_llm_providers() -> Optional[list[str]]:
-    return organization_llm_providers_var.get()
+def get_tracing_span() -> Optional[TracingSpanParams]:
+    """Retrieve the current tracing context, if any."""
+    return _tracing_context.get()

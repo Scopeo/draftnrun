@@ -8,7 +8,7 @@ from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from opentelemetry.sdk import trace as trace_sdk
 
 from engine.trace.sql_exporter import SQLSpanExporter
-from engine.trace.var_context import get_organization_id, get_organization_llm_providers, get_project_id
+from engine.trace.var_context import get_tracing_span
 
 
 LOGGER = logging.getLogger(__name__)
@@ -62,16 +62,12 @@ class TraceManager:
         Context manager to start a span.
         """
         attributes = kwargs.pop("attributes", {})
-        project_id = get_project_id()
-        organization_id = get_organization_id()
-        organization_llm_providers = str(get_organization_llm_providers())
+        params = get_tracing_span()
 
-        if project_id:
-            attributes["project_id"] = project_id
-        if organization_id:
-            attributes["organization_id"] = organization_id
-        if organization_llm_providers:
-            attributes["organization_llm_providers"] = organization_llm_providers
+        if params:
+            attributes["project_id"] = params.project_id
+            attributes["organization_id"] = params.organization_id
+            attributes["organization_llm_providers"] = params.organization_llm_providers
 
         return self.tracer.start_as_current_span(
             name=name,
