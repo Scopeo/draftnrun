@@ -41,6 +41,13 @@ class Synthesizer:
         )
 
         with self.trace_manager.start_span(self.__class__.__name__) as span:
+            span.set_attributes(
+                {
+                    "project_id": str(self.trace_manager.project_id),
+                    "organization_id": str(self.trace_manager.organization_id),
+                    "organization_llm_providers": self.trace_manager.organization_llm_providers,
+                }
+            )
             input_dict = {"context_str": context_str, "query_str": query_str, **optional_contexts}
             input_str = fill_prompt_template_with_dictionary(
                 input_dict, self._prompt_template, component_name=self.__class__.__name__
