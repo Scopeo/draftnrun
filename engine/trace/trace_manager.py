@@ -96,8 +96,11 @@ class TraceManager:
         if organization_llm_providers:
             attributes["organization_llm_providers"] = organization_llm_providers
 
-        kwargs["attributes"] = attributes
-        return self.tracer.start_as_current_span(name, **kwargs)
+        return self.tracer.start_as_current_span(
+            name=name,
+            attributes=attributes,
+            **kwargs,
+        )
 
     @property
     def organization_llm_providers(self) -> list:
