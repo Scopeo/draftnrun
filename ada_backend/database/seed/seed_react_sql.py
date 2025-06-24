@@ -118,10 +118,6 @@ def seed_react_sql_components(session: Session):
                         param_id=UUID("3d858a3a-1730-414f-9a57-45f72cbd3cfd"),
                     ),
                     ParameterLLMConfig(
-                        param_name="default_temperature",
-                        param_id=UUID("374924b3-fd84-4f1c-9bd3-c8445fc535e3"),
-                    ),
-                    ParameterLLMConfig(
                         param_name="api_key",
                         param_id=UUID("260e7556-824b-4798-9bf1-436bb6eeb7ec"),
                     ),

@@ -129,10 +129,6 @@ def seed_llm_call_components(session: Session):
                         param_id=UUID("1233f6b4-cfab-44f6-bf62-f6e0a1b95db1"),
                     ),
                     ParameterLLMConfig(
-                        param_name="default_temperature",
-                        param_id=UUID("7645d690-45c1-4b3e-bcdc-babf0808f97d"),
-                    ),
-                    ParameterLLMConfig(
                         param_name="api_key",
                         param_id=UUID("a9acc79a-bd8c-4406-89ef-9d3d88f50138"),
                     ),

@@ -579,10 +579,6 @@ def seed_rag_components(session: Session):
                         param_id=UUID("8d4a2304-55f9-4b94-9206-67f56a6ac750"),
                     ),
                     ParameterLLMConfig(
-                        param_name="default_temperature",
-                        param_id=UUID("dcae1b6d-f02b-49ee-b71c-efadccf5aa3b"),
-                    ),
-                    ParameterLLMConfig(
                         param_name="api_key",
                         param_id=UUID("989b3cec-7f01-4098-847b-a6ad7c07af24"),
                     ),
@@ -612,10 +608,6 @@ def seed_rag_components(session: Session):
                     ParameterLLMConfig(
                         param_name=COMPLETION_MODEL_IN_DB,
                         param_id=UUID("7c5d0eae-d865-430e-a6d0-b8f4060a6b23"),
-                    ),
-                    ParameterLLMConfig(
-                        param_name="default_temperature",
-                        param_id=UUID("6eaeaf02-96d0-4a98-9a60-cbbf84f5c75f"),
                     ),
                     ParameterLLMConfig(
                         param_name="api_key",
