@@ -44,7 +44,6 @@ data_ingestion/sql/sql_table_schema.json
 gmail_api_credentials.json
 knowledge_base_config.yaml
 chatbot-config.yaml
-infra
 company_context.yaml
 conversational-interface.yaml
 agent-config.yaml

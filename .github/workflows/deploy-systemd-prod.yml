@@ -1,0 +1,66 @@
+name: Deploy systemd service
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'infra/systemd/**'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repo
+      uses: actions/checkout@v3
+
+    - name: Install envsubst (gettext)
+      run: sudo apt-get update && sudo apt-get install -y gettext
+
+    - name: Export secrets as env vars
+      run: |
+        echo "APP_DIR=${{ secrets.APP_DIR }}" >> $GITHUB_ENV
+        echo "WORKERS=${{ vars.WORKERS }}" >> $GITHUB_ENV
+        echo "LOG_LEVEL=${{ vars.LOG_LEVEL }}" >> $GITHUB_ENV
+        echo "ACCESS_LOGFILE=${{ vars.ACCESS_LOGFILE }}" >> $GITHUB_ENV
+        echo "ERROR_LOGFILE=${{ vars.ERROR_LOGFILE }}" >> $GITHUB_ENV
+        echo "TIMEOUT=${{ vars.TIMEOUT }}" >> $GITHUB_ENV
+        echo "LOGFOLDER=${{ vars.LOGFOLDER }}" >> $GITHUB_ENV
+        
+
+    - name: Fill in gunicorn.service template
+      run: |
+        envsubst < infra/systemd/gunicorn.service > filled-gunicorn.service
+        cat filled-gunicorn.service
+
+    - name: Upload service to EC2
+      uses: appleboy/scp-action@master
+      with:
+        host: ${{ secrets.EC2_HOST_SCOPEO }}
+        username: ec2-user
+        key: ${{ secrets.SSH_PRIVATE_KEY }}
+        source: "filled-gunicorn.service"
+        target: "/etc/systemd/system/"
+    
+    - name: Deploy systemd service
+      uses: appleboy/ssh-action@master
+      with:
+        host: ${{ secrets.EC2_HOST_SCOPEO }}
+        username: ec2-user
+        key: ${{ secrets.SSH_PRIVATE_KEY }}
+        port: 22
+        script: |
+          sudo mv /tmp/gunicorn.service /etc/systemd/system/
+          sudo systemctl daemon-reexec
+          sudo systemctl daemon-reload
+          sudo systemctl restart gunicorn.service
+    
+    - name: Healthcheck - Verify Gunicorn is up
+      run: |
+        echo "Waiting 5s before checking the app..."
+        sleep 5
+        curl --fail --retry 3 --retry-delay 3 http://${{ secrets.EC2_HOST_SCOPEO }}:${{ secrets.HEALTHCHECK_PORT }}/health || {
+          echo "❌ Healthcheck failed. Gunicorn may not be running correctly."
+          exit 1
+        }
