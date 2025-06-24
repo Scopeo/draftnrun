@@ -121,7 +121,6 @@ def test_initial_prompt_insertion(agent_calls_mock, get_span_mock, mock_function
     assert agent_input.messages[0].content == INITIAL_PROMPT
 
 
-
 @patch.object(CompletionService, "function_call")
 @patch("engine.prometheus_metric.get_tracing_span")
 @patch("engine.prometheus_metric.agent_calls")
