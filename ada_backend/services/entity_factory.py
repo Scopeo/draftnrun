@@ -316,6 +316,12 @@ def build_llm_service_processor(
         embedding_model_name: str | None = params.pop("embedding_model_name", None)
         api_key: str | None = params.pop("llm_api_key", None)
 
+        # Set default temperature for specific models that require temperature = 1.0
+        if temperature is None:
+            if model_name in ["o4-mini-2025-04-16", "o3-2025-04-16"]:
+                temperature = 1.0
+                LOGGER.info(f"Setting default temperature to 1.0 for model {model_name}")
+
         llm_service_input_params = {
             "trace_manager": trace_manager,
             "model_name": model_name,
