@@ -22,9 +22,9 @@ LOGGER = logging.getLogger(__name__)
 
 
 def get_db_source_definition(
-    chunk_id_column_name: str = "chunk_id",
-    chunk_column_name: str = "content",
-    file_id_column_name: str = "source_identifier",
+    chunk_id_column_name: str,
+    chunk_column_name: str,
+    file_id_column_name: str,
     timestamp_column_name: Optional[str] = None,
     url_column_name: Optional[str] = None,
     metadata_column_names: Optional[list] = None,
@@ -53,15 +53,15 @@ def get_db_source(
     table_name: str,
     id_column_name: str,
     text_column_names: list[str],
+    chunk_id_column_name: str,
+    chunk_column_name: str,
+    file_id_column_name: str,
     source_schema_name: Optional[str] = None,
     metadata_column_names: Optional[list[str]] = None,
     timestamp_column_name: Optional[str] = None,
     url_column_name: Optional[str] = None,
     chunk_size: int = 1024,
     chunk_overlap: int = 0,
-    chunk_id_column_name: str = "chunk_id",
-    chunk_column_name: str = "content",
-    file_id_column_name: str = "source_identifier",
 ) -> pd.DataFrame:
     sql_local_service = SQLLocalService(engine_url=db_url)
     df = sql_local_service.get_table_df(table_name=table_name, schema_name=source_schema_name)
@@ -114,6 +114,9 @@ def upload_db_source(
     source_table_name: str,
     id_column_name: str,
     text_column_names: list[str],
+    chunk_id_column_name: str,
+    chunk_column_name: str,
+    file_id_column_name: str,
     source_schema_name: Optional[str] = None,
     metadata_column_names: Optional[list[str]] = None,
     timestamp_column_name: Optional[str] = None,
@@ -121,24 +124,21 @@ def upload_db_source(
     chunk_size: int = 1024,
     chunk_overlap: int = 0,
     replace_existing: bool = False,
-    chunk_id_column_name="chunk_id",
-    chunk_column_name="content",
-    file_id_column_name="source_identifier",
 ):
     df = get_db_source(
         db_url=source_db_url,
         table_name=source_table_name,
         id_column_name=id_column_name,
         text_column_names=text_column_names,
+        chunk_id_column_name=chunk_id_column_name,
+        chunk_column_name=chunk_column_name,
+        file_id_column_name=file_id_column_name,
         source_schema_name=source_schema_name,
         metadata_column_names=metadata_column_names,
         timestamp_column_name=timestamp_column_name,
         url_column_name=url_column_name,
         chunk_size=chunk_size,
         chunk_overlap=chunk_overlap,
-        chunk_id_column_name=chunk_id_column_name,
-        chunk_column_name=chunk_column_name,
-        file_id_column_name=file_id_column_name,
     )
 
     db_service.update_table(
@@ -187,7 +187,6 @@ def ingestion_database(
         last_edited_ts_field=timestamp_column_name,
         metadata_fields_to_keep=set(metadata_column_names) if metadata_column_names else None,
     )
-    print("qdrant_schema", qdrant_schema)
     db_definition = get_db_source_definition(
         chunk_id_column_name=chunk_id_column_name,
         chunk_column_name=chunk_column_name,
@@ -196,7 +195,6 @@ def ingestion_database(
         url_column_name=url_column_name,
         metadata_column_names=metadata_column_names,
     )
-    print("db_definition", db_definition)
     source_type = db.SourceType.DATABASE
     LOGGER.info("Start ingestion data from the database source...")
     upload_source(
@@ -214,13 +212,13 @@ def ingestion_database(
             source_table_name=source_table_name,
             id_column_name=id_column_name,
             text_column_names=text_column_names,
+            chunk_id_column_name=chunk_id_column_name,
+            chunk_column_name=chunk_column_name,
+            file_id_column_name=file_id_column_name,
             metadata_column_names=metadata_column_names,
             timestamp_column_name=timestamp_column_name,
             url_column_name=url_column_name,
             chunk_size=chunk_size,
             chunk_overlap=chunk_overlap,
-            chunk_id_column_name=chunk_id_column_name,
-            chunk_column_name=chunk_column_name,
-            file_id_column_name=file_id_column_name,
         ),
     )
