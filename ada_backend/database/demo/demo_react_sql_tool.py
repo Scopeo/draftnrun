@@ -6,6 +6,7 @@ from ada_backend.schemas.pipeline.base import (
     PipelineParameterSchema,
 )
 from ada_backend.schemas.pipeline.graph_schema import GraphUpdateSchema
+from ada_backend.services.registry import COMPLETION_MODEL_IN_DB
 
 ADDITIONAL_DB_DESCRIPTION = (
     "Pour les tables, voici une explication des données: \n"
@@ -60,7 +61,7 @@ def build_react_sql_agent_chatbot(components: dict[str, UUID], graph_runner_id: 
             component_id=components["react_sql_agent"],
             is_start_node=True,
             parameters=[
-                PipelineParameterSchema(name="model_name", value="openai:gpt-4o-mini"),
+                PipelineParameterSchema(name=COMPLETION_MODEL_IN_DB, value="openai:gpt-4o-mini"),
                 PipelineParameterSchema(
                     name="db_schema_name",
                     value="DATA_GOUV",

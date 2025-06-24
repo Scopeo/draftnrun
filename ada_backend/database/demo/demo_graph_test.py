@@ -10,6 +10,7 @@ from ada_backend.schemas.pipeline.base import (
 from ada_backend.schemas.pipeline.graph_schema import EdgeSchema, GraphUpdateSchema
 from engine.agent.agent import ToolDescription
 from engine.agent.rag.rag import format_rag_tool_description
+from ada_backend.services.registry import COMPLETION_MODEL_IN_DB
 
 
 GRAPH_TEST_TOOL_DESCRIPTION = ToolDescription(
@@ -66,7 +67,7 @@ def build_graph_test_chatbot(
                     name="prompt_template",
                     value="Reformulate the question as a customer service query :\n{input}",
                 ),
-                PipelineParameterSchema(name="completion_model", value="openai:gpt-4o-mini"),
+                PipelineParameterSchema(name=COMPLETION_MODEL_IN_DB, value="openai:gpt-4o-mini"),
             ],
             tool_description=GRAPH_TEST_TOOL_DESCRIPTION,
         ),
@@ -84,7 +85,7 @@ def build_graph_test_chatbot(
             name="Synthesizer",
             ref=f"{agent_name}_synthesizer_instance",
             parameters=[
-                PipelineParameterSchema(name="completion_model", value="openai:gpt-4o-mini"),
+                PipelineParameterSchema(name=COMPLETION_MODEL_IN_DB, value="openai:gpt-4o-mini"),
             ],
         ),
         # Retriever
@@ -110,7 +111,7 @@ def build_graph_test_chatbot(
                     name="prompt_template",
                     value="Evaluate the pertinence of the answer. \n Question: {input} \n Answer: {answer} \n",
                 ),
-                PipelineParameterSchema(name="completion_model", value="openai:gpt-4o-mini"),
+                PipelineParameterSchema(name=COMPLETION_MODEL_IN_DB, value="openai:gpt-4o-mini"),
             ],
             tool_description=GRAPH_TEST_TOOL_DESCRIPTION,
         ),
