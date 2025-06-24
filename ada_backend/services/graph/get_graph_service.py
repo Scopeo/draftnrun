@@ -1,7 +1,7 @@
 from uuid import UUID
 import logging
 
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from ada_backend.repositories.edge_repository import get_edges
 from ada_backend.repositories.env_repository import get_env_relationship_by_graph_runner_id
@@ -15,15 +15,18 @@ from ada_backend.services.pipeline.get_pipeline_service import get_component_ins
 LOGGER = logging.getLogger(__name__)
 
 
-def get_graph_service(
-    session: Session,
+async def get_graph_service(
+    session: AsyncSession,
     project_id: UUID,
     graph_runner_id: UUID,
 ) -> GraphGetResponse:
-    if not graph_runner_exists(session, graph_runner_id):
+    """
+    Asynchronously retrieves a graph, including its component instances, relationships, and edges.
+    """
+    if not await graph_runner_exists(session, graph_runner_id):
         raise ValueError(f"Graph with ID {graph_runner_id} not found.")
 
-    env_relationship = get_env_relationship_by_graph_runner_id(session, graph_runner_id)
+    env_relationship = await get_env_relationship_by_graph_runner_id(session, graph_runner_id)
     if not env_relationship:
         raise ValueError(f"Graph with ID {graph_runner_id} is not bound to any project.")
     if env_relationship.project_id != project_id:
@@ -32,7 +35,7 @@ def get_graph_service(
         )
 
     # TODO: Add the get_graph_runner_nodes function when we will handle nested graphs
-    component_nodes = get_component_nodes(session, graph_runner_id)
+    component_nodes = await get_component_nodes(session, graph_runner_id)
 
     component_instances_with_definitions = []
     relationships = []
@@ -40,7 +43,7 @@ def get_graph_service(
 
     for component_node in component_nodes:
         component_instances_with_definitions.append(
-            get_component_instance(
+            await get_component_instance(
                 session,
                 component_node.id,
                 is_start_node=component_node.is_start_node,
@@ -48,13 +51,13 @@ def get_graph_service(
         )
         relationships += [
             rel
-            for rel in get_relationships(
+            for rel in await get_relationships(
                 session,
                 component_node.id,
             )
         ]
 
-    graph_runner_edges = get_edges(session, graph_runner_id)
+    graph_runner_edges = await get_edges(session, graph_runner_id)
     for edge in graph_runner_edges:
         edges.append(
             EdgeSchema(

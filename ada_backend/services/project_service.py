@@ -2,7 +2,7 @@ from uuid import UUID
 from logging import getLogger
 import uuid
 
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from ada_backend.database.models import EnvType
 from ada_backend.repositories.env_repository import bind_graph_runner_to_project
@@ -30,17 +30,16 @@ from ada_backend.schemas.project_schema import (
 )
 from ada_backend.services.graph.delete_graph_service import delete_graph_runner_service
 
-
 LOGGER = getLogger(__name__)
 
 
-def get_project_service(session: Session, project_id: UUID) -> ProjectWithGraphRunnersSchema:
-    project_with_detail = get_project_with_details(session, project_id=project_id)
+async def get_project_service(session: AsyncSession, project_id: UUID) -> ProjectWithGraphRunnersSchema:
+    project_with_detail = await get_project_with_details(session, project_id=project_id)
     return project_with_detail
 
 
-def get_projects_by_organization(session: Session, organization_id: UUID) -> list[ProjectResponse]:
-    projects = get_projects_by_organization_service(session, organization_id)
+async def get_projects_by_organization(session: AsyncSession, organization_id: UUID) -> list[ProjectResponse]:
+    projects = await get_projects_by_organization_service(session, organization_id)
     return [
         ProjectResponse(
             project_id=project.id,
@@ -54,19 +53,20 @@ def get_projects_by_organization(session: Session, organization_id: UUID) -> lis
     ]
 
 
-def delete_project_service(session: Session, project_id: UUID) -> ProjectDeleteResponse:
-    graph_runners = get_graph_runners_by_project(session, project_id)
+async def delete_project_service(session: AsyncSession, project_id: UUID) -> ProjectDeleteResponse:
+    graph_runners = await get_graph_runners_by_project(session, project_id)
     for graph_runner in graph_runners:
-        if graph_runner_exists(session, graph_runner.id):
-            delete_graph_runner_service(session, graph_runner.id)
-    delete_project(session, project_id)
+        is_graph_runner_existing = await graph_runner_exists(session, graph_runner.id)
+        if is_graph_runner_existing:
+            await delete_graph_runner_service(session, graph_runner.id)
+    await delete_project(session, project_id)
     return ProjectDeleteResponse(
         project_id=project_id, graph_runner_ids=[graph_runner.id for graph_runner in graph_runners]
     )
 
 
 def create_project(
-    session: Session,
+    session: AsyncSession,
     organization_id: UUID,
     project_schema: ProjectCreateSchema,
 ) -> ProjectWithGraphRunnersSchema:
@@ -76,20 +76,20 @@ def create_project(
             f"Creating project from template {project_schema.template.template_project_id}"
             f"with graph runner {project_schema.template.template_graph_runner_id}"
         )
-        graph_runner_id = clone_graph_runner(
+        graph_runner_id = await clone_graph_runner(
             session,
             project_schema.template.template_graph_runner_id,
             project_schema.template.template_project_id,
         )
     else:
         LOGGER.info("Creating a new graph runner for the project")
-        graph_runner = insert_graph_runner(
+        graph_runner = await insert_graph_runner(
             session=session,
             graph_id=uuid.uuid4(),
             add_input=True,
         )
         graph_runner_id = graph_runner.id
-    project = insert_project(
+    project = await insert_project(
         session=session,
         project_id=project_schema.project_id,
         organization_id=organization_id,
@@ -98,7 +98,7 @@ def create_project(
         companion_image_url=project_schema.companion_image_url,
     )
 
-    bind_graph_runner_to_project(
+    await bind_graph_runner_to_project(
         session=session,
         graph_runner_id=graph_runner_id,
         project_id=project.id,
@@ -122,8 +122,9 @@ def create_project(
     )
 
 
-def update_project_service(session: Session, project_id: UUID, project_schema: ProjectUpdateSchema) -> ProjectSchema:
-    update_project(
+async def update_project_service(session: AsyncSession, project_id: UUID,
+                                 project_schema: ProjectUpdateSchema) -> ProjectSchema:
+    await update_project(
         session=session,
         project_id=project_id,
         project_name=project_schema.project_name,

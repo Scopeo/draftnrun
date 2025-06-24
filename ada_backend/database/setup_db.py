@@ -1,22 +1,24 @@
-from contextlib import contextmanager
+from contextlib import asynccontextmanager
+import asyncio
 
-from sqlalchemy import create_engine, event
-from sqlalchemy.orm import sessionmaker
+from typing import AsyncGenerator
+from sqlalchemy.ext.asyncio import (
+    create_async_engine, async_sessionmaker, AsyncSession, AsyncEngine
+)
+from sqlalchemy import event
 from ada_backend.database.models import Base
 from settings import settings
 
 
 def get_db_url() -> str:
     if not settings.ADA_DB_URL:
-        raise ValueError("Database URL is not configured. Check your settings.")
+        raise ValueError("Database URL is not configured.")
     return settings.ADA_DB_URL
 
 
-engine = create_engine(get_db_url(), echo=False)
+engine: AsyncEngine = create_async_engine(get_db_url(), echo=False)
 
-
-# Enable SQLite foreign key support
-@event.listens_for(engine, "connect")
+@event.listens_for(engine.sync_engine, "connect")
 def set_sqlite_pragma(dbapi_connection, connection_record):
     if engine.dialect.name == "sqlite":
         cursor = dbapi_connection.cursor()
@@ -24,36 +26,36 @@ def set_sqlite_pragma(dbapi_connection, connection_record):
         cursor.close()
 
 
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+AsyncSessionLocal = async_sessionmaker(bind=engine, class_=AsyncSession, expire_on_commit=False)
 
 
-def init_db():
-    """Initialize the database by creating tables."""
-    Base.metadata.create_all(bind=engine)
+async def get_async_session() -> AsyncGenerator[AsyncSession, None]:
+    async with AsyncSessionLocal() as session:
+        yield session
 
 
-def get_db():
-    """Provide a scoped session for FastAPI dependency injection."""
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+async def init_db():
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
 
-
-@contextmanager
-def get_db_session():
-    """Context manager for database sessions."""
-    session = SessionLocal()
+async def get_db() -> AsyncGenerator[AsyncSession, None]:
+    session = AsyncSessionLocal()
     try:
         yield session
-        session.commit()
-    except Exception:
-        session.rollback()
-        raise
     finally:
-        session.close()
+        await session.close()
 
+@asynccontextmanager
+async def get_async_db_session() -> AsyncGenerator[AsyncSession, None]:
+    async with AsyncSessionLocal() as session:
+        try:
+            yield session
+            await session.commit()
+        except Exception:
+            await session.rollback()
+            raise
+        finally:
+            await session.close()
 
 if __name__ == "__main__":
-    init_db()
+    asyncio.run(init_db())

@@ -1,6 +1,6 @@
 from uuid import UUID
 from logging import getLogger
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from ada_backend.schemas.components_schema import SubComponentParamSchema
 from ada_backend.schemas.parameter_schema import PipelineParameterReadSchema
@@ -19,28 +19,28 @@ from ada_backend.schemas.pipeline.get_pipeline_schema import ComponentInstanceRe
 LOGGER = getLogger(__name__)
 
 
-def get_component_instance(
-    session: Session,
+async def get_component_instance(
+    session: AsyncSession,
     component_instance_id: UUID,
     is_start_node: bool = False,
 ) -> ComponentInstanceReadSchema:
-    """Get a component instance by ID"""
-    component_instance = get_component_instance_by_id(session, component_instance_id)
+    """Get a component instance by ID asynchronously"""
+    component_instance = await get_component_instance_by_id(session, component_instance_id)
     if component_instance is None:
         raise ValueError(f"Component instance {component_instance_id} not found")
 
-    tool_description = _get_tool_description(session, component_instance)
+    tool_description = await _get_tool_description(session, component_instance)
 
-    parameters = get_instance_parameters_with_definition(
+    parameters = await get_instance_parameters_with_definition(
         session,
         component_instance_id,
     )
 
-    component = get_component_by_id(session, component_id=component_instance.component_id)
+    component = await get_component_by_id(session, component_id=component_instance.component_id)
     if component is None:
         raise ValueError(f"Component {component_instance.component_id} not found")
-    subcomponent_params = get_subcomponent_param_def_by_component_id(session, component_instance.component_id)
-    tool_parameter = get_tool_parameter_by_component_id(session, component_instance.component_id)
+    subcomponent_params = await get_subcomponent_param_def_by_component_id(session, component_instance.component_id)
+    tool_parameter = await get_tool_parameter_by_component_id(session, component_instance.component_id)
 
     return ComponentInstanceReadSchema(
         id=component_instance_id,
@@ -80,12 +80,12 @@ def get_component_instance(
     )
 
 
-def get_relationships(
-    session: Session,
+async def get_relationships(
+    session: AsyncSession,
     component_instance_id: UUID,
 ) -> list[ComponentRelationshipSchema]:
-    """Get all relationships for a component instance, excluding pipelines"""
-    subinputs = get_component_sub_components(session, component_instance_id)
+    """Get all relationships for a component instance, excluding pipelines asynchronously"""
+    subinputs = await get_component_sub_components(session, component_instance_id)
     return [
         ComponentRelationshipSchema(
             parent_component_instance_id=subinput.parent_component_instance_id,

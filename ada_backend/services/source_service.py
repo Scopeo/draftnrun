@@ -2,7 +2,7 @@ import logging
 from typing import List
 from uuid import UUID
 
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from ada_backend.repositories.source_repository import (
     create_source,
@@ -23,22 +23,22 @@ from settings import settings
 LOGGER = logging.getLogger(__name__)
 
 
-def get_sources_by_organization(
-    session: Session,
+async def get_sources_by_organization(
+    session: AsyncSession,
     organization_id: UUID,
 ) -> List[DataSourceSchemaResponse]:
     """
-    Get all sources for an organization through the service layer.
+    Get all sources for an organization through the service layer asynchronously.
 
     Args:
-        session (Session): SQLAlchemy session
+        session (AsyncSession): SQLAlchemy asynchronous session
         organization_id (UUID): ID of the organization to get sources for
 
     Returns:
         List[GetDataSourceSchema]: List of sources belonging to the organization
     """
     try:
-        sources = get_sources(session, organization_id)
+        sources = await get_sources(session, organization_id)
         return [
             DataSourceSchemaResponse(
                 id=source.id,
@@ -61,22 +61,22 @@ def get_sources_by_organization(
         raise ValueError(f"Failed to get sources: {str(e)}") from e
 
 
-def create_source_by_organization(
-    session: Session,
+async def create_source_by_organization(
+    session: AsyncSession,
     organization_id: UUID,
     source_data: DataSourceSchema,
 ) -> UUID:
     """
-    Create a new source for an organization.
+    Create a new source for an organization asynchronously.
     Args:
-        session (Session): SQLAlchemy session
+        session (AsyncSession): SQLAlchemy asynchronous session
         organization_id (UUID): ID of the organization
         source_data (DataSourceSchema): Source data to create
     Returns:
         None
     """
     try:
-        source_id = create_source(
+        source_id = await create_source(
             session,
             organization_id,
             source_data.name,
@@ -96,16 +96,16 @@ def create_source_by_organization(
         raise ValueError(f"Failed to create source: {str(e)}") from e
 
 
-def upsert_source_by_organization(
-    session: Session,
+async def upsert_source_by_organization(
+    session: AsyncSession,
     organization_id: UUID,
     source_data: DataSourceUpdateSchema,
 ) -> None:
     """
-    Create a new source for an organization.
+    Create a new source for an organization asynchronously.
 
     Args:
-        session (Session): SQLAlchemy session
+        session (AsyncSession): SQLAlchemy asynchronous session
         organization_id (UUID): ID of the organization
         source_data (DataSourceSchema): Source data to create
 
@@ -113,7 +113,7 @@ def upsert_source_by_organization(
         None
     """
     try:
-        return upsert_source(
+        return await upsert_source(
             session,
             organization_id,
             source_data.id,
@@ -130,15 +130,15 @@ def upsert_source_by_organization(
         raise ValueError(f"Failed to upsert source: {str(e)}") from e
 
 
-def delete_source_service(
-    session: Session,
+async def delete_source_service(
+    session: AsyncSession,
     organization_id: UUID,
     source_id: UUID,
 ) -> None:
-    """Delete sources with matching name in the organization."""
+    """Delete sources with matching name in the organization asynchronously."""
     try:
 
-        source = get_data_source_by_org_id(session, organization_id, source_id)
+        source = await get_data_source_by_org_id(session, organization_id, source_id)
         if not source:
             raise ValueError(f"Source {source_id} not found")
 
@@ -150,19 +150,20 @@ def delete_source_service(
                 default_collection_schema=QdrantCollectionSchema(**source.qdrant_schema),
             )
 
-            qdrant_service.delete_collection(
+            await qdrant_service.adelete_collection(
                 collection_name=source.qdrant_collection_name,
             )
             LOGGER.info(f"Qdrant collection {source.qdrant_collection_name} deleted")
         if source.database_table_name:
             LOGGER.info(f"Deleting table {source.database_table_name}")
+            # TODO: put in async the SQLLocalService
             db_service = SQLLocalService(engine_url=settings.INGESTION_DB_URL)
             db_service.drop_table(
                 table_name=source.database_table_name,
                 schema_name=source.database_schema,
             )
             LOGGER.info(f"Table {source.database_table_name} deleted")
-            delete_source(session, organization_id, source_id)
+            await delete_source(session, organization_id, source_id) # Await the repository call
     except Exception as e:
         LOGGER.error(f"Error in delete_source_by_id: {str(e)}")
         raise ValueError(f"Failed to delete source: {str(e)}") from e
