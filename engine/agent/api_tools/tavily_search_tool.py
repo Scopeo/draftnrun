@@ -15,7 +15,7 @@ from engine.agent.agent import (
 )
 from engine.agent.synthesizer import Synthesizer
 from engine.trace.trace_manager import TraceManager
-from engine.llm_services.llm_service import LLMService
+from engine.llm_services.llm_service import CompletionService
 from engine.agent.rag.formatter import Formatter
 from settings import settings
 
@@ -60,7 +60,7 @@ class TavilyApiTool(Agent):
 
     def __init__(
         self,
-        llm_service: LLMService,
+        completion_service: CompletionService,
         trace_manager: TraceManager,
         component_instance_name: str,
         tool_description: ToolDescription = TAVILY_TOOL_DESCRIPTION,
@@ -75,7 +75,7 @@ class TavilyApiTool(Agent):
         self.trace_manager = trace_manager
         self.tavily_client = TavilyClient(api_key=tavily_api_key)
         if synthesizer is None:
-            synthesizer = Synthesizer(llm_service=llm_service, trace_manager=trace_manager)
+            synthesizer = Synthesizer(completion_service=completion_service, trace_manager=trace_manager)
         self._synthesizer = synthesizer
 
     def search_results(
