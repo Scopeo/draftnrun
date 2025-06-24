@@ -49,7 +49,7 @@ def get_sources_by_organization(
                 database_table_name=source.database_table_name,
                 qdrant_collection_name=source.qdrant_collection_name,
                 qdrant_schema=source.qdrant_schema,
-                embedding_model_name=source.embedding_model_name,
+                embedding_model_name=source.embedding_model_referance,
                 created_at=str(source.created_at),
                 updated_at=str(source.updated_at),
                 last_ingestion_time=str(source.last_ingestion_time) if source.last_ingestion_time else None,

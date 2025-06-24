@@ -335,7 +335,8 @@ def build_qdrant_service_processor(target_name: str = "qdrant_service") -> Param
             source = get_data_source_by_id(session, source_id)
             if source is None:
                 raise ValueError(f"Source with id {source_id} not found")
-            provider, model_name = get_llm_provider_and_model(llm_model=params.pop("embedding_model"))
+
+            provider, model_name = get_llm_provider_and_model(llm_model=source.embedding_model_referance)
 
             embedding_service = EmbeddingService(
                 trace_manager=get_trace_manager(),

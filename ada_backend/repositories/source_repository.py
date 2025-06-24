@@ -104,7 +104,7 @@ def upsert_source(
         if source_type:
             existing_source.type = source_type
         if embedding_model_name:
-            existing_source.embedding_model_name = embedding_model_name
+            existing_source.embedding_model_referance = embedding_model_name
         existing_source.database_schema = database_schema
         existing_source.database_table_name = database_table_name
         existing_source.qdrant_collection_name = qdrant_collection_name
