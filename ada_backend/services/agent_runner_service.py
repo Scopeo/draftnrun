@@ -118,8 +118,8 @@ async def run_agent(
     )
     set_tracing_span(
         project_id=trace_manager_project_id,
-        org_id=trace_manager_organization_id,
-        llm_providers=trace_manager_organization_llm_providers,
+        organization_id=trace_manager_organization_id,
+        organization_llm_providers=trace_manager_organization_llm_providers,
     )
     token_usage = get_token_usage(organization_id=project_details.organization_id)
     # TODO: Fix when token limit is reached and user try to use their own key

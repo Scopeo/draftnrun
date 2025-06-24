@@ -78,7 +78,20 @@ def message_to_process():
 
 
 @patch.object(OpenAI, "complete")
-def test_rag_run(mock_complete, mock_trace_manager, mock_retriever, mock_synthesizer, message_to_process):
+@patch("engine.prometheus_metric.get_tracing_span")
+@patch("engine.prometheus_metric.agent_calls")
+def test_rag_run(
+    agent_calls_mock,
+    get_span_mock,
+    mock_complete,
+    mock_trace_manager,
+    mock_retriever,
+    mock_synthesizer,
+    message_to_process,
+):
+    get_span_mock.return_value.project_id = "1234"
+    counter_mock = MagicMock()
+    agent_calls_mock.labels.return_value = counter_mock
     rag = RAG(
         retriever=mock_retriever,
         trace_manager=mock_trace_manager,
@@ -103,7 +116,14 @@ def test_rag_run(mock_complete, mock_trace_manager, mock_retriever, mock_synthes
     assert output.artifacts["sources"][1].content == results[1].payload["content"]
 
 
-def test_vocabulary_rag_run(make_mock_llm_service, mock_trace_manager, mock_retriever):
+@patch("engine.prometheus_metric.get_tracing_span")
+@patch("engine.prometheus_metric.agent_calls")
+def test_vocabulary_rag_run(
+    agent_calls_mock, get_span_mock, make_mock_llm_service, mock_trace_manager, mock_retriever
+):
+    get_span_mock.return_value.project_id = "1234"
+    counter_mock = MagicMock()
+    agent_calls_mock.labels.return_value = counter_mock
     mock_llm_service = make_mock_llm_service(
         default_response="Test Response [1][2]\nSources:\n[1] <url1|SourceChunk_1>\n[2] <url2|SourceChunk_2>\n"
     )
