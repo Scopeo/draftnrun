@@ -18,12 +18,12 @@ class Reranker(ABC):
         self._model = model
 
     @abstractmethod
-    def _rerank_without_trace(self, query, chunks: list[SourceChunk]) -> list[SourceChunk]:
+    async def _rerank_without_trace(self, query, chunks: list[SourceChunk]) -> list[SourceChunk]:
         pass
 
-    def rerank(self, query, chunks: list[SourceChunk]):
+    async def rerank(self, query, chunks: list[SourceChunk]):
         with self.trace_manager.start_span(self.__class__.__name__) as span:
-            reranker_chunks = self._rerank_without_trace(query, chunks)
+            reranker_chunks = await self._rerank_without_trace(query, chunks)
             span.set_attributes(
                 {
                     SpanAttributes.OPENINFERENCE_SPAN_KIND: OpenInferenceSpanKindValues.RERANKER.value,

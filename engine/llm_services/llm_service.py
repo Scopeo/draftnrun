@@ -197,7 +197,6 @@ class LLMService(abc.ABC):
     ) -> ChatCompletion:
         pass
 
-    @abc.abstractmethod
     async def afunction_call(
         self,
         messages: list[dict],
@@ -209,7 +208,7 @@ class LLMService(abc.ABC):
             tools = []
         temperature = temperature or self._default_temperature
         span_name = "FunctionCall"
-        async with self.trace_manager.start_span(span_name) as span:
+        with self.trace_manager.start_span(span_name) as span:
             response = await self.afunction_call_without_trace(
                 messages=messages,
                 temperature=temperature,

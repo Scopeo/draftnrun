@@ -33,12 +33,12 @@ class Retriever:
         self.metadata_date_key = metadata_date_key
         self.max_retrieved_chunks_after_penalty = max_retrieved_chunks_after_penalty
 
-    def _get_chunks_without_trace(
+    async def _get_chunks_without_trace(
         self,
         query_text: str,
         filters: Optional[dict] = None,
     ) -> list[SourceChunk]:
-        chunks = self._vectorestore_service.retrieve_similar_chunks(
+        chunks = await self._vectorestore_service.aretrieve_similar_chunks(
             query_text=query_text,
             collection_name=self.collection_name,
             limit=self._max_retrieved_chunks,
@@ -83,13 +83,13 @@ class Retriever:
 
         return sorted_chunks[: self.max_retrieved_chunks_after_penalty]
 
-    def get_chunks(
+    async def get_chunks(
         self,
         query_text: str,
         filters: Optional[dict] = None,
     ) -> list[SourceChunk]:
         with self.trace_manager.start_span(self.__class__.__name__) as span:
-            chunks = self._get_chunks_without_trace(
+            chunks = await self._get_chunks_without_trace(
                 query_text,
                 filters,
             )

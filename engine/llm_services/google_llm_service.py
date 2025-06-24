@@ -2,14 +2,17 @@ from typing import Optional
 from enum import Enum
 import io
 
-from openai import OpenAI, AsyncOpenAI
+from openai import OpenAI
 from google import genai
+from pydantic import BaseModel
 from google.genai.types import Content, Part, File, GenerateContentConfig, FileData, UploadFileConfig
-from tenacity import retry, stop_after_attempt, wait_chain, wait_fixed
+from tenacity import retry, stop_after_attempt, wait_chain, wait_fixed, wait_random_exponential
+from openai.types.chat import ChatCompletion
 
 from settings import settings
 from engine.llm_services.openai_llm_service import OpenAILLMService
 from engine.trace.trace_manager import TraceManager
+from engine.agent.agent import ToolDescription
 
 # Google LLM roles are user and assistant, not system
 CONVERSION_ROLES = {
@@ -49,7 +52,6 @@ class GoogleLLMService(OpenAILLMService):
         self._completion_model = model_name
         self._embedding_model = embedding_model
         self._client = OpenAI(api_key=api_key, base_url=base_url)
-        self._async_client = AsyncOpenAI(api_key=api_key, base_url=base_url)
         self._google_client = genai.Client(api_key=api_key)
 
     def upload_file(self, file: str | bytes, type_of_file: TypeFileToUpload) -> File:
@@ -122,42 +124,6 @@ class GoogleLLMService(OpenAILLMService):
 
         return response.text
 
-    @retry(wait=wait_chain(wait_fixed(5), wait_fixed(20), wait_fixed(40), wait_fixed(60)), stop=stop_after_attempt(5))
-    async def async_complete_with_files(
-        self,
-        messages: list[dict],
-        files: list[File],
-        temperature: float = 0.0,
-    ) -> str:
-        contents = [
-            Content(
-                role="user",
-                parts=[
-                    Part(
-                        file_data=FileData(
-                            file_uri=file.uri,
-                            mime_type=file.mime_type,
-                        )
-                    )
-                    for file in files
-                ],
-            )
-        ]
-        contents.extend(
-            [
-                Content(role=CONVERSION_ROLES[message["role"]], parts=[Part(text=message["content"])])
-                for message in messages
-            ]
-        )
-
-        response = await self._google_client.aio.models.generate_content(
-            model=self._completion_model,
-            contents=contents,
-            config=GenerateContentConfig(temperature=temperature)
-        )
-
-        return response.text
-
     def delete_file(self, file: File) -> None:
         """Delete a previously uploaded file.
 
@@ -174,3 +140,35 @@ class GoogleLLMService(OpenAILLMService):
         """
         files = self._google_client.files.list()
         return list(files)  # Convert iterator to list
+
+    def _contrained_call(
+        self,
+        messages: list[dict[str, str]],
+        temperature: float = None,
+        response_format: Optional[BaseModel] = None,
+    ):
+        return self._client.beta.chat.completions.parse(
+            messages=messages,
+            model=self._completion_model,
+            temperature=temperature,
+            response_format=response_format,
+        )
+
+    @retry(wait=wait_random_exponential(multiplier=1, max=40), stop=stop_after_attempt(3))
+    def constrained_complete(
+        self,
+        messages: list[dict[str, str]],
+        temperature: float = None,
+        response_format: Optional[BaseModel] = None,
+    ) -> BaseModel:
+        temperature = temperature or self._default_temperature
+        return self._contrained_call(messages, temperature, response_format).choices[0].message.parsed
+
+    async def afunction_call_without_trace(
+        self,
+        messages: list[dict],
+        temperature: Optional[float] = None,
+        tools: Optional[list[ToolDescription]] = None,
+        tool_choice: str = "auto",
+    ) -> ChatCompletion:
+        pass

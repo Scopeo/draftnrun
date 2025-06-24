@@ -1,11 +1,8 @@
 from typing import Optional
 import json
 import base64
-<<<<<<< Updated upstream
-import aiofiles
-=======
 
->>>>>>> Stashed changes
+import aiofiles
 import tiktoken
 from pydantic import BaseModel
 from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttributes
@@ -51,11 +48,13 @@ class OpenAILLMService(LLMService):
         self._default_temperature = default_temperature
         self._model_speech_to_text = model_speech_to_text
 
-    @retry(wait=wait_random_exponential(multiplier=1, max=40), stop=stop_after_attempt(3))
+    @retry(wait=wait_random_exponential(multiplier=1, max=40), stop=stop_after_attempt(3),
+           reraise=True)
     def embed(self, input_text: str | list[str]) -> list[Embedding]:
         return self._client.embeddings.create(input=input_text, model=self._embedding_model).data
 
-    @retry(wait=wait_random_exponential(multiplier=1, max=60), stop=stop_after_attempt(5))
+    @retry(wait=wait_random_exponential(multiplier=1, max=60), stop=stop_after_attempt(5),
+           reraise=True)
     def complete(self, messages: list[dict], temperature: float = None) -> str:
         temperature = temperature or self._default_temperature
         return self._client.chat.completions.create(
@@ -64,7 +63,8 @@ class OpenAILLMService(LLMService):
             temperature=temperature,
         ).choices[0].message.content
 
-    @retry(wait=wait_random_exponential(multiplier=1, max=60), stop=stop_after_attempt(5))
+    @retry(wait=wait_random_exponential(multiplier=1, max=60), stop=stop_after_attempt(5),
+           reraise=True)
     def web_search(self, query: str) -> str:
         return self._client.responses.create(
             input=query,
@@ -72,7 +72,8 @@ class OpenAILLMService(LLMService):
             model=self._completion_model,
         ).output_text
 
-    @retry(wait=wait_random_exponential(multiplier=1, max=40), stop=stop_after_attempt(3))
+    @retry(wait=wait_random_exponential(multiplier=1, max=40), stop=stop_after_attempt(3),
+           reraise=True)
     def _function_call_without_trace(
         self,
         messages: list[dict],
@@ -90,7 +91,8 @@ class OpenAILLMService(LLMService):
             tool_choice=tool_choice,
         )
 
-    @retry(wait=wait_random_exponential(multiplier=1, max=40), stop=stop_after_attempt(3))
+    @retry(wait=wait_random_exponential(multiplier=1, max=40), stop=stop_after_attempt(3),
+           reraise=True)
     def constrained_complete(
         self,
         messages: list[dict],
@@ -118,7 +120,8 @@ class OpenAILLMService(LLMService):
 
         raise ValueError("response_format must be a string or a BaseModel subclass.")
 
-    @retry(wait=wait_random_exponential(multiplier=1, max=40), stop=stop_after_attempt(3))
+    @retry(wait=wait_random_exponential(multiplier=1, max=40), stop=stop_after_attempt(3),
+           reraise=True)
     def generate_transcript(self, audio_path: str, language: str) -> str:
         with self.trace_manager.start_span("SpeechToText") as span:
             if audio_path is None:
@@ -138,7 +141,8 @@ class OpenAILLMService(LLMService):
             })
         return transcription
 
-    @retry(wait=wait_random_exponential(multiplier=1, max=40), stop=stop_after_attempt(3))
+    @retry(wait=wait_random_exponential(multiplier=1, max=40), stop=stop_after_attempt(3),
+           reraise=True)
     def generate_speech_from_text(self, transcription: str, speech_audio_path: str) -> str:
         with self.trace_manager.start_span("TextToSpeech") as span:
             response = self._client.audio.speech.create(
@@ -178,7 +182,7 @@ class OpenAILLMService(LLMService):
         )
         return response.data
 
-    @async_retry(wait=wait_random_exponential(multiplier=1, max=40), stop=stop_after_attempt(3))
+    @async_retry(wait=wait_random_exponential(multiplier=1, max=60), stop=stop_after_attempt(5))
     async def acomplete(self, messages: list[dict], temperature: float = None) -> str:
         temperature = temperature or self._default_temperature
         response = await self._async_client.chat.completions.create(
@@ -188,7 +192,7 @@ class OpenAILLMService(LLMService):
         )
         return response.choices[0].message.content
 
-    @async_retry(wait=wait_random_exponential(multiplier=1, max=40), stop=stop_after_attempt(3))
+    @async_retry(wait=wait_random_exponential(multiplier=1, max=60), stop=stop_after_attempt(5))
     async def aweb_search(self, query: str) -> str:
         response = await self._async_client.responses.create(
             input=query,
@@ -197,7 +201,7 @@ class OpenAILLMService(LLMService):
         )
         return response.output_text
 
-    @async_retry(wait=wait_random_exponential(multiplier=1, max=40), stop=stop_after_attempt(3))
+    @async_retry(wait=wait_random_exponential(multiplier=1, max=60), stop=stop_after_attempt(5))
     async def afunction_call_without_trace(
         self,
         messages: list[dict],
@@ -217,7 +221,7 @@ class OpenAILLMService(LLMService):
         )
         return response
 
-    @async_retry(wait=wait_random_exponential(multiplier=1, max=40), stop=stop_after_attempt(3))
+    @async_retry(wait=wait_random_exponential(multiplier=1, max=60), stop=stop_after_attempt(5))
     async def aconstrained_complete(
         self,
         messages: list[dict],
@@ -245,10 +249,9 @@ class OpenAILLMService(LLMService):
         else:
             raise ValueError("response_format must be a string or a BaseModel subclass.")
 
-
-    @async_retry(wait=wait_random_exponential(multiplier=1, max=40), stop=stop_after_attempt(3))
+    @async_retry(wait=wait_random_exponential(multiplier=1, max=60), stop=stop_after_attempt(5))
     async def agenerate_transcript(self, audio_path: str, language: str) -> str:
-        async with self.trace_manager.start_span("SpeechToText") as span:
+        with self.trace_manager.start_span("SpeechToText") as span:
             if audio_path is None:
                 transcription = ""
             else:
@@ -266,9 +269,9 @@ class OpenAILLMService(LLMService):
             })
         return transcription
 
-    @async_retry(wait=wait_random_exponential(multiplier=1, max=40), stop=stop_after_attempt(3))
+    @async_retry(wait=wait_random_exponential(multiplier=1, max=60), stop=stop_after_attempt(5))
     async def agenerate_speech_from_text(self, transcription: str, speech_audio_path: str) -> str:
-        async with self.trace_manager.start_span("TextToSpeech") as span:
+        with self.trace_manager.start_span("TextToSpeech") as span:
             response = await self._async_client.audio.speech.create(
                 model=self._model_config_text_to_speech["model"],
                 voice=self._model_config_text_to_speech["speaker_type"],
@@ -285,7 +288,7 @@ class OpenAILLMService(LLMService):
             })
         return speech_audio_path
 
-    @async_retry(wait=wait_random_exponential(multiplier=1, max=40), stop=stop_after_attempt(3))
+    @async_retry(wait=wait_random_exponential(multiplier=1, max=60), stop=stop_after_attempt(5))
     async def acomplete_with_files(
         self,
         messages: list[dict],

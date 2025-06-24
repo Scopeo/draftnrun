@@ -46,7 +46,7 @@ class Synthesizer:
                 context_str=context_str,
                 query_str=query_str,
             )
-            response = await self._llm_service.async_constrained_complete(
+            response = await self._llm_service.aconstrained_complete(
                 messages=[
                     {
                         "role": "system",

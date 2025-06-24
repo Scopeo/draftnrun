@@ -59,7 +59,7 @@ class SwitchCategoricalPipeline(Agent):
         )
 
     async def select_category(self, agent_input: AgentPayload) -> SelectedCategory:
-        response = await self.llm_service.async_constrained_complete(
+        response = await self.llm_service.aconstrained_complete(
             messages=[
                 {
                     "role": "system",

@@ -7,10 +7,12 @@ from openai.types.chat import ChatCompletion
 from openai.types import Embedding
 from mistralai import Mistral
 from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttributes
+from tenacity import retry, wait_random_exponential, stop_after_attempt
 
 from engine.agent.agent import ToolDescription
 from engine.llm_services.llm_service import LLMService
 from engine.trace.trace_manager import TraceManager
+from engine.llm_services.utils import async_retry
 from settings import settings
 
 
@@ -40,6 +42,7 @@ class MistralLLMService(LLMService):
     async def __aexit__(self, *args):
         await self._async_client.__aexit__(*args)
 
+    @retry(wait=wait_random_exponential(multiplier=1, max=40), stop=stop_after_attempt(3))
     def embed(
         self,
         input_text: str | list[str],
@@ -49,6 +52,7 @@ class MistralLLMService(LLMService):
             inputs=input_text,
         ).data
 
+    @retry(wait=wait_random_exponential(multiplier=1, max=60), stop=stop_after_attempt(5))
     def complete(
         self,
         messages: list[dict],
@@ -96,6 +100,7 @@ class MistralLLMService(LLMService):
 
         return response
 
+    @retry(wait=wait_random_exponential(multiplier=1, max=60), stop=stop_after_attempt(5))
     def _function_call_without_trace(
         self,
         messages: list[dict],
@@ -105,6 +110,7 @@ class MistralLLMService(LLMService):
     ) -> ChatCompletion:
         raise NotImplementedError
 
+    @retry(wait=wait_random_exponential(multiplier=1, max=60), stop=stop_after_attempt(5))
     def constrained_complete(
         self,
         messages: list[dict[str, str]],
@@ -129,11 +135,14 @@ class MistralLLMService(LLMService):
         structured_output = response_format(**processed_data)
         return structured_output
 
+    @retry(wait=wait_random_exponential(multiplier=1, max=60), stop=stop_after_attempt(5))
     def generate_transcript(self, audio_path: str, language: str) -> str:
         raise NotImplementedError
 
+    @retry(wait=wait_random_exponential(multiplier=1, max=60), stop=stop_after_attempt(5))
     def generate_speech_from_text(self, transcription: str, speech_audio_path: str) -> str:
         raise NotImplementedError
+
 
     def _format_image_content(self, image_content_list: list[bytes]) -> list[dict[str, str]]:
         return [
@@ -146,14 +155,16 @@ class MistralLLMService(LLMService):
 
     # ========== ASYNC METHODS ==========
 
-    async def async_embed(self, input_text: str | list[str]) -> list[Embedding]:
+    @async_retry(wait=wait_random_exponential(multiplier=1, max=60), stop=stop_after_attempt(5))
+    async def aembed(self, input_text: str | list[str]) -> list[Embedding]:
         response = await self._async_client.embeddings.create(
             model=self._embedding_model,
             inputs=input_text,
         )
         return response.data
 
-    async def async_complete(self, messages: list[dict], temperature: float = None) -> str:
+    @async_retry(wait=wait_random_exponential(multiplier=1, max=60), stop=stop_after_attempt(5))
+    async def acomplete(self, messages: list[dict], temperature: float = None) -> str:
         temperature = temperature or self._default_temperature
         response = await self._async_client.chat.complete_async(
             model=self._completion_model,
@@ -162,7 +173,8 @@ class MistralLLMService(LLMService):
         )
         return response.choices[0].message.content
 
-    async def async_constrained_complete(
+    @async_retry(wait=wait_random_exponential(multiplier=1, max=60), stop=stop_after_attempt(5))
+    async def aconstrained_complete(
         self,
         messages: list[dict[str, str]],
         temperature: float = None,
@@ -185,7 +197,8 @@ class MistralLLMService(LLMService):
         processed_data = json.loads(response.choices[0].message.content)
         return response_format(**processed_data)
 
-    async def async_function_call_without_trace(
+    @async_retry(wait=wait_random_exponential(multiplier=1, max=60), stop=stop_after_attempt(5))
+    async def afunction_call_without_trace(
         self,
         messages: list[dict],
         temperature: Optional[float] = None,
@@ -194,13 +207,16 @@ class MistralLLMService(LLMService):
     ) -> ChatCompletion:
         raise NotImplementedError
 
-    async def async_generate_transcript(self, audio_path: str, language: str) -> str:
+    @async_retry(wait=wait_random_exponential(multiplier=1, max=60), stop=stop_after_attempt(5))
+    async def agenerate_transcript(self, audio_path: str, language: str) -> str:
         raise NotImplementedError
 
-    async def async_generate_speech_from_text(self, transcription: str, speech_audio_path: str) -> str:
+    @async_retry(wait=wait_random_exponential(multiplier=1, max=60), stop=stop_after_attempt(5))
+    async def agenerate_speech_from_text(self, transcription: str, speech_audio_path: str) -> str:
         raise NotImplementedError
 
-    async def async_complete_with_files(
+    @async_retry(wait=wait_random_exponential(multiplier=1, max=60), stop=stop_after_attempt(5))
+    async def acomplete_with_files(
         self,
         messages: list[dict],
         files: list[bytes],

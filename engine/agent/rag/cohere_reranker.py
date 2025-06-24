@@ -23,15 +23,15 @@ class CohereReranker(Reranker):
         super().__init__(trace_manager, model=cohere_model)
         if cohere_api_key is None:
             cohere_api_key = settings.COHERE_API_KEY
-        self._cohere_client = cohere.ClientV2(cohere_api_key)
+        self._async_cohere_client = cohere.AsyncClientV2(cohere_api_key)
         self._num_doc_reranked = num_doc_reranked
         self._score_threshold = score_threshold
 
-    def _rerank_without_trace(self, query, chunks: list[SourceChunk]) -> list[SourceChunk]:
+    async def _rerank_without_trace(self, query, chunks: list[SourceChunk]) -> list[SourceChunk]:
         if not chunks:
             LOGGER.warning("No documents to rerank. The chunks list is empty.")
             return []
-        response = self._cohere_client.rerank(
+        response = await self._async_cohere_client.rerank(
             model=self._model,
             query=query,
             documents=[chunk.content for chunk in chunks],

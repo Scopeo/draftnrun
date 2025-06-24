@@ -40,5 +40,5 @@ class WebSearchOpenAITool(Agent):
     ) -> AgentPayload:
         agent_input = inputs[0]
         query_str = query or agent_input.last_message.content
-        output = await self._llm_service.async_web_search(query_str)
+        output = await self._llm_service.aweb_search(query_str)
         return AgentPayload(messages=[ChatMessage(role="assistant", content=output)])
