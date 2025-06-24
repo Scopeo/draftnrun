@@ -29,8 +29,8 @@ def make_mock_llm_service():
         mock_llm = MagicMock(spec=CompletionService)
         mock_llm.last_prompt = None
 
-        def constrained_complete(prompt, response_format):
-            mock_llm.last_prompt = prompt
+        def constrained_complete(messages, response_format):
+            mock_llm.last_prompt = messages
             return response_format(response=default_response, is_successful=True)
 
         mock_llm.constrained_complete.side_effect = constrained_complete
