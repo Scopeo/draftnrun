@@ -156,7 +156,6 @@ def create_factory_registry() -> FactoryRegistry:
                 # Name from DB -> Name in processor
                 COMPLETION_MODEL_IN_DB: "completion_model",
                 "default_temperature": "temperature",
-                "embedding_model_name": "embedding_model",
                 "api_key": "llm_api_key",
             }
         ),
