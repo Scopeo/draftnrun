@@ -117,7 +117,7 @@ class FactoryRegistry:
             raise ValueError(f"Entity '{entity_name}' is not registered.")
         return self._registry[entity_name]
 
-    def create(self, entity_name: str, *args, **kwargs) -> Any:
+    async def create(self, entity_name: str, *args, **kwargs) -> Any:
         """
         Create an instance of a registered entity using its factory.
 
@@ -130,7 +130,7 @@ class FactoryRegistry:
             Any: The instantiated entity.
         """
         factory = self.get(entity_name)
-        return factory(*args, **kwargs)
+        return await factory(*args, **kwargs)
 
     def list_supported(self) -> list[str]:
         """

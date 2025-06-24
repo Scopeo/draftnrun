@@ -1,5 +1,6 @@
 import logging
 import json
+import inspect
 from inspect import signature
 from typing import Optional, Any, Type, Callable, get_type_hints, get_origin, get_args, Union
 from uuid import UUID
@@ -10,59 +11,33 @@ from engine.agent.agent import ToolDescription
 from engine.trace.trace_context import get_trace_manager
 from engine.llm_services.llm_service import EmbeddingService, CompletionService, WebSearchService
 from engine.qdrant_service import QdrantService, QdrantCollectionSchema
-from ada_backend.database.setup_db import get_db_session
+
+from ada_backend.database.setup_db import get_async_db_session
 from ada_backend.repositories.source_repository import get_data_source_by_id
 
 LOGGER = logging.getLogger(__name__)
 
-ParameterProcessor = Callable[[dict, dict[str, Any]], dict]
+ParameterProcessor = Callable[[dict, dict[str, Any]], Any]
 
 
 class EntityFactory:
-    """
-    Base class for creating instances of entities (agents, components, etc.).
-    Provides a flexible interface for instantiation using configuration data.
-    """
-
     def __init__(
         self,
         entity_class: Type[Any],
         parameter_processors: Optional[list[ParameterProcessor]] = None,
         constructor_method: str = "__init__",
     ):
-        """
-        Initialize the factory with the class or callable used for instantiation.
-
-        Args:
-            entity_class (Type[Any]): The class or callable to use for creating entities.
-            parameter_processors (Optional[list[ParameterProcessor]], optional):
-                A list of functions to preprocess the entity constructor parameters.
-            constructor_method (str, optional): The method to use for instantiation.
-                Defaults to "__init__".
-        """
         self.entity_class = entity_class
         self.constructor_method = constructor_method
         self.parameter_processors = parameter_processors or []
         self.constructor_params = self._get_constructor_params()
 
     def _get_constructor_params(self) -> dict[str, Any]:
-        """
-        Retrieve the parameters for the specified constructor method of the entity class.
-
-        Returns:
-            dict[str, Any]: A mapping of parameter names to their types.
-        """
         if not hasattr(self.entity_class, self.constructor_method):
-            raise ValueError(
-                f"{self.entity_class.__name__} does not have a method named '{self.constructor_method}'.",
-            )
-
+            raise ValueError(f"{self.entity_class.__name__} does not have a method named '{self.constructor_method}'.")
         method = getattr(self.entity_class, self.constructor_method)
         if not callable(method):
-            raise ValueError(
-                f"'{self.constructor_method}' is not callable on {self.entity_class.__name__}.",
-            )
-
+            raise ValueError(f"'{self.constructor_method}' is not callable on {self.entity_class.__name__}.")
         hints = get_type_hints(method)
         params = signature(method).parameters
         return {
@@ -71,50 +46,25 @@ class EntityFactory:
             if param.annotation is not param.empty
         }
 
-    def _process_parameters(self, *args, **kwargs) -> tuple[tuple, dict]:
-        """
-        Preprocess the arguments before instantiation.
-
-        Args:
-            *args: Positional arguments for the entity constructor.
-            **kwargs: Keyword arguments for the entity constructor.
-
-        Returns:
-            tuple[tuple, dict]: Processed positional and keyword arguments.
-        """
+    async def _process_parameters(self, *args, **kwargs) -> tuple[tuple, dict]:
         for processor in self.parameter_processors:
-            kwargs = processor(kwargs, self.constructor_params)
+            if inspect.iscoroutinefunction(processor):
+                kwargs = await processor(kwargs, self.constructor_params)
+            else:
+                kwargs = processor(kwargs, self.constructor_params)
         return args, kwargs
 
-    def __call__(self, *args, **kwargs) -> Any:
-        """
-        Create an instance of the entity using the provided arguments.
-
-        Args:
-            *args: Positional arguments for the entity constructor.
-            **kwargs: Keyword arguments for the entity constructor.
-
-        Returns:
-            Any: The instantiated entity.
-        """
-        args, kwargs = self._process_parameters(*args, **kwargs)
+    async def __call__(self, *args, **kwargs) -> Any:
+        args, kwargs = await self._process_parameters(*args, **kwargs)
         if self.constructor_method == "__init__":
-            # Call the constructor directly
             return self.entity_class(*args, **kwargs)
-
         constructor_method = getattr(self.entity_class, self.constructor_method, None)
         if not callable(constructor_method):
-            raise ValueError(
-                f"Method '{self.constructor_method}' is not callable on {self.entity_class.__name__}.",
-            )
+            raise ValueError(f"Method '{self.constructor_method}' is not callable on {self.entity_class.__name__}.")
         return constructor_method(*args, **kwargs)
 
 
 class AgentFactory(EntityFactory):
-    """
-    Factory class for creating Agent instances.
-    """
-
     def __init__(
         self,
         entity_class: Type[Any],
@@ -139,39 +89,23 @@ class AgentFactory(EntityFactory):
         )
         self.trace_manager = get_trace_manager()
 
-    def _process_parameters(self, *args, **kwargs) -> tuple[tuple, dict]:
-        args, kwargs = super()._process_parameters(*args, **kwargs)
-
+    async def _process_parameters(self, *args, **kwargs) -> tuple[tuple, dict]:
+        args, kwargs = await super()._process_parameters(*args, **kwargs)
         tool_description = kwargs.get("tool_description")
         if not isinstance(tool_description, ToolDescription):
             raise ValueError("Tool description must be a ToolDescription object.")
-
         return args, kwargs
 
 
+# These functions remain sync as they do not perform I/O
+
 def build_dataclass_processor(dataclass_type: Type[Any], param_name: str) -> ParameterProcessor:
-    """
-    Creates a processor for converting a specific parameter to a specific dataclass type.
-
-    This is an atomic processor that handles one parameter-to-dataclass conversion.
-
-    Args:
-        dataclass_type: The dataclass type to convert to
-        param_name: The name of the parameter to process
-
-    Returns:
-        ParameterProcessor: A processor that converts the specified parameter to the dataclass
-    """
-
     def processor(params: dict, constructor_params: dict[str, Any]) -> dict:
         if param_name in params and not isinstance(params[param_name], dataclass_type):
             try:
                 data = params[param_name]
                 if isinstance(data, str):
-                    try:
-                        data = json.loads(data)
-                    except json.JSONDecodeError:
-                        raise ValueError(f"Invalid JSON for {param_name}: {data}")
+                    data = json.loads(data)
                 LOGGER.debug(f"Converting {param_name} with data: {data}")
                 params[param_name] = dataclass_type(**data)
             except Exception as e:
@@ -182,19 +116,10 @@ def build_dataclass_processor(dataclass_type: Type[Any], param_name: str) -> Par
     return processor
 
 
-def detect_and_convert_dataclasses(
-    params: dict,
-    constructor_params: dict[str, Any],
-) -> dict:
-    """
-    Automatically detects and converts parameters to dataclasses based on constructor parameter types.
-    """
+def detect_and_convert_dataclasses(params: dict, constructor_params: dict[str, Any]) -> dict:
     for param_name, param_type in constructor_params.items():
-        # Handle Optional types by extracting the dataclass type if present
         if get_origin(param_type) is Union:
             param_type = next((arg for arg in get_args(param_type) if is_dataclass(arg)), None)
-
-        # Convert JSON data to a dataclass instance if applicable
         if param_name in params and param_type and is_dataclass(param_type):
             processor = build_dataclass_processor(param_type, param_name)
             params = processor(params, constructor_params)
@@ -202,7 +127,6 @@ def detect_and_convert_dataclasses(
 
 
 def pydantic_processor(params: dict, constructor_params: dict[str, Any]) -> dict:
-    """Returns a processor function to handle Pydantic model parameters."""
     for param_name, param_type in constructor_params.items():
         if param_name in params and issubclass(param_type, BaseModel):
             params[param_name] = param_type(**params[param_name])
@@ -227,20 +151,6 @@ def build_trace_manager_processor() -> ParameterProcessor:
 
 
 def build_param_name_translator(mapping: dict[str, str]) -> ParameterProcessor:
-    """
-    Returns a processor function to translate parameter names according to the provided mapping.
-
-    This processor allows factories to accept parameters with different names than
-    what their constructors expect, making the interface more flexible.
-
-    Args:
-        mapping (dict[str, str]): Dictionary mapping from external parameter names
-                                  to internal parameter names.
-
-    Returns:
-        ParameterProcessor: A function to process entity constructor parameters.
-    """
-
     def translator(params: dict, constructor_params: dict[str, Any]) -> dict:
         for external_name, internal_name in mapping.items():
             if external_name in params and internal_name not in params:
@@ -251,18 +161,6 @@ def build_param_name_translator(mapping: dict[str, str]) -> ParameterProcessor:
 
 
 def get_llm_provider_and_model(llm_model: str) -> tuple[str, str]:
-    """
-    Extracts the LLM provider and model name from a string in the format "provider:model_name".
-
-    Args:
-        llm_model (str): The LLM model string in "provider:model_name" format.
-
-    Returns:
-        tuple[str, str]: A tuple containing the provider and model name.
-
-    Raises:
-        ValueError: If the input string is not in the expected format.
-    """
     if ":" not in llm_model:
         raise ValueError(f"Invalid LLM model format: {llm_model}. Expected 'provider:model_name'.")
     parts = llm_model.split(":")
@@ -354,8 +252,8 @@ def build_qdrant_service_processor(target_name: str = "qdrant_service") -> Param
         source_id = UUID(source_id_str)
 
         # TODO: Temporary solution - needs proper session injection in future refactor.
-        with get_db_session() as session:
-            source = get_data_source_by_id(session, source_id)
+        async with get_async_db_session() as session:
+            source = await get_data_source_by_id(session, source_id)
             if source is None:
                 raise ValueError(f"Source with id {source_id} not found")
 

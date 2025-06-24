@@ -2,7 +2,7 @@ from uuid import UUID
 from typing import List
 import logging
 
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from ada_backend.repositories.ingestion_task_repository import (
     get_ingestion_task,
@@ -20,13 +20,13 @@ from ada_backend.utils.redis_client import push_ingestion_task
 LOGGER = logging.getLogger(__name__)
 
 
-def get_ingestion_task_by_organization_id(
-    session: Session,
+async def get_ingestion_task_by_organization_id(
+    session: AsyncSession,
     organization_id: UUID,
 ) -> List[IngestionTaskResponse]:
-    """Get all tasks for an organization through the service layer."""
+    """Get all tasks for an organization through the service layer asynchronously."""
     try:
-        tasks = get_ingestion_task(session, organization_id)
+        tasks = await get_ingestion_task(session, organization_id)
         return [
             IngestionTaskResponse(
                 id=task.id,
@@ -44,14 +44,14 @@ def get_ingestion_task_by_organization_id(
         raise ValueError(f"Failed to get tasks: {str(e)}")
 
 
-def create_ingestion_task_by_organization(
-    session: Session,
+async def create_ingestion_task_by_organization(
+    session: AsyncSession,
     organization_id: UUID,
     ingestion_task_data: IngestionTaskQueue,
 ) -> UUID:
-    """Create a new source for an organization."""
+    """Create a new source for an organization asynchronously."""
     try:
-        task_id = create_ingestion_task(
+        task_id = await create_ingestion_task(
             session,
             organization_id,
             ingestion_task_data.source_name,
@@ -64,6 +64,7 @@ def create_ingestion_task_by_organization(
         ingestion_id = f"ing-{str(task_id)[:8]}"
         LOGGER.info(f"Sending task to Redis with ingestion_id: {ingestion_id}")
 
+        # TODO: put in async the redis push
         redis_result = push_ingestion_task(
             ingestion_id=ingestion_id,
             source_name=ingestion_task_data.source_name,
@@ -75,15 +76,13 @@ def create_ingestion_task_by_organization(
 
         if not redis_result:
             LOGGER.warning(f"Task {task_id} created in database but failed to push to Redis queue")
-            # Update task status to failed since Redis push failed
             from ada_backend.database import models as db
             from ada_backend.repositories.ingestion_task_repository import update_ingestion_task, get_ingestion_task
 
-            # Get the task we just created to preserve its source_id
-            tasks = get_ingestion_task(session, organization_id, task_id=task_id)
+            tasks = await get_ingestion_task(session, organization_id, task_id=task_id)
             source_id = tasks[0].source_id if tasks else None
 
-            update_ingestion_task(
+            await update_ingestion_task(
                 session,
                 organization_id,
                 source_id,
@@ -102,14 +101,14 @@ def create_ingestion_task_by_organization(
         raise ValueError(f"Failed to create task: {str(e)}")
 
 
-def upsert_ingestion_task_by_organization_id(
-    session: Session,
+async def upsert_ingestion_task_by_organization_id(
+    session: AsyncSession,
     organization_id: UUID,
     ingestion_task_data: IngestionTaskUpdate,
 ) -> None:
-    """Create a new source for an organization."""
+    """Create a new source for an organization asynchronously."""
     try:
-        return update_ingestion_task(
+        return await update_ingestion_task(
             session,
             organization_id,
             ingestion_task_data.source_id,
@@ -123,14 +122,14 @@ def upsert_ingestion_task_by_organization_id(
         raise ValueError(f"Failed to upsert task: {str(e)}")
 
 
-def delete_ingestion_task_by_id(
-    session: Session,
+async def delete_ingestion_task_by_id(
+    session: AsyncSession,
     organization_id: UUID,
     id: UUID,
 ) -> None:
-    """Delete sources with matching name in the organization."""
+    """Delete sources with matching name in the organization asynchronously."""
     try:
-        delete_ingestion_task(session, organization_id, id)
+        await delete_ingestion_task(session, organization_id, id)
     except Exception as e:
         LOGGER.error(f"Error in delete_ingestion_task_by_id: {str(e)}")
         raise ValueError(f"Failed to delete task: {str(e)}")

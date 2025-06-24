@@ -141,7 +141,7 @@ class DocumentEnhancedLLMCallAgent(Agent):
             raise ValueError("No document names provided for the DocumentEnhancedLLMcall tool.")
         documents_chunks = self._document_search.get_documents(documents_name=document_names)
 
-        response = self._synthesizer.get_response(
+        response = await self._synthesizer.get_response(
             chunks=documents_chunks,
             query_str=content,
         )

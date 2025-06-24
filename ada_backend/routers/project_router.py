@@ -1,7 +1,8 @@
 from typing import Annotated, List
 from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Body
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+
 import logging
 
 from ada_backend.database.models import EnvType
@@ -47,7 +48,7 @@ router = APIRouter(prefix="/projects")
 
 
 @router.get("/org/{organization_id}", response_model=List[ProjectResponse], tags=["Projects"])
-def get_projects_by_organization_endpoint(
+async def get_projects_by_organization_endpoint(
     organization_id: UUID,
     user: Annotated[
         SupabaseUser,
@@ -57,12 +58,13 @@ def get_projects_by_organization_endpoint(
             )
         ),
     ],
-    session: Session = Depends(get_db),
+    session: AsyncSession = Depends(get_db),
 ):
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
     try:
-        return get_projects_by_organization(session, organization_id)
+        projects = await get_projects_by_organization(session, organization_id)
+        return projects
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
@@ -70,18 +72,18 @@ def get_projects_by_organization_endpoint(
 
 
 @router.get("/{project_id}", response_model=ProjectWithGraphRunnersSchema, tags=["Projects"])
-def get_project_endpoint(
+async def get_project_endpoint(
     project_id: UUID,
     user: Annotated[
         SupabaseUser,
         Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.USER.value)),
     ],
-    session: Session = Depends(get_db),
+    session: AsyncSession = Depends(get_db),
 ):
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
     try:
-        return get_project_service(session, project_id)
+        return await get_project_service(session, project_id)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
@@ -89,18 +91,18 @@ def get_project_endpoint(
 
 
 @router.delete("/{project_id}", response_model=ProjectDeleteResponse, tags=["Projects"])
-def delete_project_endpoint(
+async def delete_project_endpoint(
     project_id: UUID,
     user: Annotated[
         SupabaseUser,
         Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.ADMIN.value)),
     ],
-    session: Session = Depends(get_db),
+    session: AsyncSession = Depends(get_db),
 ) -> ProjectDeleteResponse:
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
     try:
-        return delete_project_service(session, project_id)
+        return await delete_project_service(session, project_id)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
@@ -108,19 +110,19 @@ def delete_project_endpoint(
 
 
 @router.patch("/{project_id}", response_model=ProjectSchema, tags=["Projects"])
-def update_project_endpoint(
+async def update_project_endpoint(
     project_id: UUID,
     project: ProjectUpdateSchema,
     user: Annotated[
         SupabaseUser,
         Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.ADMIN.value)),
     ],
-    session: Session = Depends(get_db),
+    session: AsyncSession = Depends(get_db),
 ) -> ProjectSchema:
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
     try:
-        return update_project_service(session, project_id, project)
+        return await update_project_service(session, project_id, project)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
@@ -128,19 +130,19 @@ def update_project_endpoint(
 
 
 @router.post("/{organization_id}", response_model=ProjectWithGraphRunnersSchema, tags=["Projects"])
-def create_project_endpoint(
+async def create_project_endpoint(
     organization_id: UUID,
     project: ProjectCreateSchema,
     user: Annotated[
         SupabaseUser,
         Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.ADMIN.value)),
     ],
-    session: Session = Depends(get_db),
+    session: AsyncSession = Depends(get_db),
 ) -> ProjectWithGraphRunnersSchema:
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
     try:
-        return create_project(session, organization_id, project)
+        return await create_project(session, organization_id, project)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
@@ -159,7 +161,7 @@ async def run_env_agent_endpoint(
             ]
         },
     ),
-    sqlaclhemy_db_session: Session = Depends(get_db),
+    sqlaclhemy_db_session: AsyncSession = Depends(get_db),
     verified_api_key: VerifiedApiKey = Depends(verify_api_key_dependency),
 ) -> ChatResponse:
     if verified_api_key.project_id != project_id:
@@ -184,15 +186,16 @@ async def get_project_charts(
     duration: int,
     user: Annotated[SupabaseUser, Depends(get_user_from_supabase_token)],
 ):
+    print("ERROR CHARS")
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
     try:
-        response = await get_charts_by_project(project_id, duration)
+        response = get_charts_by_project(project_id, duration)
         return response
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
-        raise HTTPException(status_code=500, detail="Internal Server Error") from e
+        raise HTTPException(status_code=500, detail=f"Internal Server Error {e}") from e
 
 
 # TODO: filter trace by graph_runner_id
@@ -202,6 +205,7 @@ async def get_project_trace(
     duration: int,
     user: Annotated[SupabaseUser, Depends(get_user_from_supabase_token)],
 ):
+    print("TRACE")
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
     try:
@@ -210,7 +214,7 @@ async def get_project_trace(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
-        raise HTTPException(status_code=500, detail="Internal Server Error") from e
+        raise HTTPException(status_code=500, detail=f"Internal Server Error {e}") from e
 
 
 @router.get("/{project_id}/kpis", response_model=KPISResponse, tags=["Metrics"])
@@ -219,6 +223,7 @@ async def get_project_monitoring_kpi(
     duration: int,
     user: Annotated[SupabaseUser, Depends(get_user_from_supabase_token)],
 ):
+    print("KPIs")
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
     try:
@@ -227,7 +232,7 @@ async def get_project_monitoring_kpi(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
-        raise HTTPException(status_code=500, detail="Internal Server Error") from e
+        raise HTTPException(status_code=500, detail=f"Internal Server Error {e}") from e
 
 
 @router.post("/{project_id}/graphs/{graph_runner_id}/chat", response_model=ChatResponse, tags=["Projects"])
@@ -250,7 +255,7 @@ async def chat(
             ]
         },
     ),
-    session: Session = Depends(get_db),
+    session: AsyncSession = Depends(get_db),
 ) -> ChatResponse:
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
@@ -288,7 +293,7 @@ async def chat_env(
             ]
         },
     ),
-    session: Session = Depends(get_db),
+    session: AsyncSession = Depends(get_db),
 ) -> ChatResponse:
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")

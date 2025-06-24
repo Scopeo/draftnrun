@@ -90,7 +90,7 @@ class HybridRAG(RAG):
             useful_answers_images=responses_hybrid_synthesizer,
         )
 
-        synthesized_response = self._synthesizer.get_response(
+        synthesized_response = await self._synthesizer.get_response(
             chunks=text_image_sources_for_synthesizer,
             query_str=content,
         )

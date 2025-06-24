@@ -3,7 +3,9 @@ from uuid import UUID
 import logging
 from dataclasses import dataclass
 
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+from sqlalchemy.orm import selectinload, joinedload
 
 from ada_backend.database import models as db
 from ada_backend.database.models import ParameterType, UIComponent
@@ -27,123 +29,114 @@ class InstanceParameterWithDefinition:
 
 
 # --- READ operations ---
-def get_component_by_id(
-    session: Session,
+async def get_component_by_id(
+    session: AsyncSession,
     component_id: UUID,
 ) -> Optional[db.Component]:
     """
-    Retrieves a specific component by its ID.
+    Retrieves a specific component by its ID asynchronously.
     """
-    return (
-        session.query(db.Component)
-        .filter(
-            db.Component.id == component_id,
-        )
-        .first()
-    )
+    stmt = select(db.Component).where(db.Component.id == component_id)
+    result = await session.execute(stmt)
+    return result.scalar_one_or_none()
 
 
-def get_component_by_name(
-    session: Session,
+async def get_component_by_name(
+    session: AsyncSession,
     name: str,
 ) -> Optional[db.Component]:
     """
-    Retrieves a specific component by its name.
+    Retrieves a specific component by its name asynchronously.
     """
-    return (
-        session.query(db.Component)
-        .filter(
-            db.Component.name == name,
-        )
-        .first()
-    )
+    stmt = select(db.Component).where(db.Component.name == name)
+    result = await session.execute(stmt)
+    return result.scalar_one_or_none()
 
 
-def get_component_parameter_definition_by_component_id(
-    session: Session,
+async def get_component_parameter_definition_by_component_id(
+    session: AsyncSession,
     component_id: UUID,
 ) -> list[db.ComponentParameterDefinition]:
     """
-    Retrieves all parameter definitions for a given component.
+    Retrieves all parameter definitions for a given component asynchronously.
     """
-    return (
-        session.query(db.ComponentParameterDefinition)
-        .filter(
-            db.ComponentParameterDefinition.component_id == component_id,
-        )
-        .all()
+    stmt = select(db.ComponentParameterDefinition).where(
+        db.ComponentParameterDefinition.component_id == component_id
     )
+    result = await session.execute(stmt)
+    return result.scalars().all()
 
 
-def get_subcomponent_param_def_by_component_id(
-    session: Session,
+async def get_subcomponent_param_def_by_component_id(
+    session: AsyncSession,
     component_id: UUID,
 ) -> list[tuple[db.ComponentParameterDefinition, db.ComponentParameterChildRelationship]]:
-    return (
-        session.query(db.ComponentParameterDefinition, db.ComponentParameterChildRelationship)
+    """
+    Retrieves subcomponent parameter definitions for a given component asynchronously.
+    """
+    stmt = (
+        select(db.ComponentParameterDefinition, db.ComponentParameterChildRelationship)
         .join(
             db.ComponentParameterChildRelationship,
             db.ComponentParameterChildRelationship.component_parameter_definition_id
             == db.ComponentParameterDefinition.id,
         )
-        .filter(
+        .where(
             db.ComponentParameterDefinition.component_id == component_id,
             db.ComponentParameterDefinition.type == ParameterType.COMPONENT,
         )
-        .all()
     )
+    result = await session.execute(stmt)
+    return result.all()
 
 
-def get_component_instance_by_id(
-    session: Session,
-    component_instance_id: UUID,
-) -> Optional[db.ComponentInstance]:
-    """
-    Retrieves a specific component instance by its ID.
-    """
-    return (
-        session.query(db.ComponentInstance)
-        .filter(
-            db.ComponentInstance.id == component_instance_id,
-        )
-        .first()
+async def get_component_instance_by_id(session: AsyncSession, instance_id: UUID) -> Optional[db.ComponentInstance]:
+    stmt = (
+        select(db.ComponentInstance)
+        .options(selectinload(db.ComponentInstance.component))
+        .where(db.ComponentInstance.id == instance_id)
     )
+    result = await session.execute(stmt)
+    return result.scalar_one_or_none()
 
 
-def get_component_basic_parameters(
-    session: Session,
+async def get_component_basic_parameters(
+    session: AsyncSession,
     component_instance_id: UUID,
 ) -> list[db.BasicParameter]:
     """
-    Retrieves all basic parameters for a given component instance.
+    Retrieves all basic parameters for a given component instance asynchronously,
+    eagerly loading related ParameterDefinition and OrganizationSecret models.
     """
-    return (
-        session.query(db.BasicParameter)
-        .filter(
-            db.BasicParameter.component_instance_id == component_instance_id,
-        )
-        .all()
+    stmt = (
+        select(db.BasicParameter)
+        .where(db.BasicParameter.component_instance_id == component_instance_id)
+        .options(selectinload(db.BasicParameter.parameter_definition))
+        .options(selectinload(db.BasicParameter.organization_secret))
     )
+    result = await session.execute(stmt)
+    return list(result.scalars().all())
 
 
-def get_instance_parameters_with_definition(
-    session: Session,
+async def get_instance_parameters_with_definition(
+    session: AsyncSession,
     component_instance_id: UUID,
 ) -> list[InstanceParameterWithDefinition]:
     """
-    Retrieves all parameters for a given component instance with their definitions.
+    Retrieves all parameters for a given component instance with their definitions asynchronously.
     """
-    results = (
-        session.query(db.BasicParameter, db.ComponentParameterDefinition)
+    stmt = (
+        select(db.BasicParameter, db.ComponentParameterDefinition)
         .join(
             db.ComponentParameterDefinition,
             db.BasicParameter.parameter_definition_id == db.ComponentParameterDefinition.id,
         )
-        .filter(
+        .where(
             db.BasicParameter.component_instance_id == component_instance_id,
         )
-        .all()
     )
+    result = await session.execute(stmt)
+    results = result.all()
 
     return [
         InstanceParameterWithDefinition(
@@ -160,103 +153,108 @@ def get_instance_parameters_with_definition(
     ]
 
 
-def get_component_sub_components(
-    session: Session,
+async def get_component_sub_components(
+    session: AsyncSession,
     component_instance_id: UUID,
 ) -> list[db.ComponentSubInput]:
     """
     Retrieves the child component instances and their parameter definitions
-    for a given parent component instance.
+    for a given parent component instance asynchronously.
     """
-    return (
-        session.query(db.ComponentSubInput)
-        .filter(
-            db.ComponentSubInput.parent_component_instance_id == component_instance_id,
+    stmt = (
+        select(db.ComponentSubInput)
+        .where(db.ComponentSubInput.parent_component_instance_id == component_instance_id)
+        .options(
+            joinedload(db.ComponentSubInput.parameter_definition),  # Eager load parameter_definition
+            joinedload(db.ComponentSubInput.child_component_instance)
         )
-        .all()
     )
+    result = await session.execute(stmt)
+    return result.scalars().all()
 
 
-def get_tool_description(
-    session: Session,
+async def get_tool_description(
+    session: AsyncSession,
     component_instance_id: UUID,
 ) -> Optional[db.ToolDescription]:
     """
-    Retrieves the tool description associated with a specific component instance.
+    Retrieves the tool description associated with a specific component instance asynchronously.
     """
-    return (
-        session.query(db.ToolDescription)
+    stmt = (
+        select(db.ToolDescription)
         .join(
             db.ComponentInstance,
             db.ComponentInstance.tool_description_id == db.ToolDescription.id,
         )
-        .filter(db.ComponentInstance.id == component_instance_id)
-        .first()
+        .where(db.ComponentInstance.id == component_instance_id)
     )
+    result = await session.execute(stmt)
+    return result.scalar_one_or_none()
 
 
-def get_tool_description_component(
-    session: Session,
+async def get_tool_description_component(
+    session: AsyncSession,
     component_id: UUID,
 ) -> Optional[db.ToolDescription]:
     """
-    Retrieves the tool description associated with a specific component.
+    Retrieves the tool description associated with a specific component asynchronously.
     """
-    return (
-        session.query(db.ToolDescription)
+    stmt = (
+        select(db.ToolDescription)
         .join(
             db.Component,
             db.Component.default_tool_description_id == db.ToolDescription.id,
         )
-        .filter(db.Component.id == component_id)
-        .first()
+        .where(db.Component.id == component_id)
     )
+    result = await session.execute(stmt)
+    return result.scalar_one_or_none()
 
 
-def get_tool_parameter_by_component_id(
-    session: Session,
+async def get_tool_parameter_by_component_id(
+    session: AsyncSession,
     component_id: UUID,
-) -> Optional[db.Component]:
+) -> Optional[db.ComponentParameterDefinition]:
     """
-    Retrieves the tool component associated with a specific component instance.
+    Retrieves the tool component associated with a specific component instance asynchronously.
     """
-    return (
-        session.query(db.ComponentParameterDefinition)
-        .filter(
-            db.ComponentParameterDefinition.component_id == component_id,
-            db.ComponentParameterDefinition.type == ParameterType.TOOL,
-        )
-        .first()
+    stmt = select(db.ComponentParameterDefinition).where(
+        db.ComponentParameterDefinition.component_id == component_id,
+        db.ComponentParameterDefinition.type == ParameterType.TOOL,
     )
+    result = await session.execute(stmt)
+    return result.scalar_one_or_none()
 
 
-def get_all_components_with_parameters(
-    session: Session,
+async def get_all_components_with_parameters(
+    session: AsyncSession,
 ) -> List[ComponentWithParametersDTO]:
     """
-    Retrieves all components and their parameter definitions from the database.
+    Retrieves all components and their parameter definitions from the database asynchronously.
     Component type parameters are moved to the tools list, while other parameters
     remain in the parameters list.
 
     Args:
-        session (Session): SQLAlchemy session.
+        session (AsyncSession): SQLAlchemy asynchronous session.
 
     Returns:
         List[ComponentWithParametersDTO]: A list of DTOs containing components,
         their tools (component parameters) and other parameter definitions.
     """
     # Get all components
-    components = session.query(db.Component).all()
+    stmt_components = select(db.Component)
+    result_components = await session.execute(stmt_components)
+    components = result_components.scalars().all()
 
     # For each component, get its parameter definitions and build result
     result = []
     for component in components:
-        parameters = get_component_parameter_definition_by_component_id(
+        parameters = await get_component_parameter_definition_by_component_id(
             session,
             component.id,
         )
 
-        subcomponent_params = get_subcomponent_param_def_by_component_id(
+        subcomponent_params = await get_subcomponent_param_def_by_component_id(
             session,
             component.id,
         )
@@ -288,7 +286,7 @@ def get_all_components_with_parameters(
                     )
                 )
 
-        default_tool_description_db = get_tool_description_component(session=session, component_id=component.id)
+        default_tool_description_db = await get_tool_description_component(session=session, component_id=component.id)
         tool_description = (
             ToolDescription(
                 name=default_tool_description_db.name,
@@ -326,8 +324,8 @@ def get_all_components_with_parameters(
     return result
 
 
-def insert_component_parameter_definition(
-    session: Session,
+async def insert_component_parameter_definition(
+    session: AsyncSession,
     component_id: UUID,
     name: str,
     param_type: ParameterType,
@@ -338,7 +336,7 @@ def insert_component_parameter_definition(
     ui_component_properties: Optional[dict] = None,
 ) -> db.ComponentParameterDefinition:
     """
-    Inserts a new component parameter definition into the database.
+    Inserts a new component parameter definition into the database asynchronously.
     """
     component_parameter_definition = db.ComponentParameterDefinition(
         component_id=component_id,
@@ -351,13 +349,13 @@ def insert_component_parameter_definition(
         ui_component_properties=ui_component_properties,
     )
     session.add(component_parameter_definition)
-    session.commit()
-    session.refresh(component_parameter_definition)
+    await session.commit()
+    await session.refresh(component_parameter_definition)
     return component_parameter_definition
 
 
-def upsert_component_instance(
-    session: Session,
+async def upsert_component_instance(
+    session: AsyncSession,
     component_id: UUID,
     name: Optional[str] = None,
     ref: Optional[str] = None,
@@ -369,31 +367,58 @@ def upsert_component_instance(
     If id_ is provided, performs an upsert operation.
     If id_ is not provided, creates a new instance.
     """
+    LOGGER.info(f"[UPSERT] Starting for ID: {id_}")
+
     if not component_id:
         raise ValueError(
             "Impossible to create a component instance without a component",
         )
 
-    component_instance = db.ComponentInstance(
-        component_id=component_id,
-        name=name,
-        ref=ref,
-        tool_description_id=tool_description_id,
-        id=id_,
-    )
-
     if id_ is None:
-        session.add(component_instance)
+        LOGGER.info("ID IS NONE - Creating new ComponentInstance.")
+        new_component_instance = db.ComponentInstance(
+            component_id=component_id,
+            name=name,
+            ref=ref,
+            tool_description_id=tool_description_id,
+        )
+        session.add(new_component_instance)
+        await session.commit()
+        await session.refresh(new_component_instance)
+        final_persistent_instance = new_component_instance
+        LOGGER.info(f"[UPSERT] Created ComponentInstance ID: {final_persistent_instance.id}")
+
     else:
-        component_instance = session.merge(component_instance)
+        LOGGER.info(f"MERGE BECAUSE ID {id_} - Attempting to update existing ComponentInstance.")
+        transient_instance_for_merge = db.ComponentInstance(
+            id=id_,
+            component_id=component_id,
+            name=name,
+            ref=ref,
+            tool_description_id=tool_description_id,
+        )
+        final_persistent_instance = await session.merge(transient_instance_for_merge)
+        await session.commit()
+        LOGGER.info(f"[UPSERT] Merged ComponentInstance ID: {final_persistent_instance.id}")
 
-    session.commit()
-    session.refresh(component_instance)
-    return component_instance
+    stmt = (
+        select(db.ComponentInstance)
+        .options(selectinload(db.ComponentInstance.component))
+        .where(db.ComponentInstance.id == final_persistent_instance.id)
+    )
+    result = await session.execute(stmt)
+    instance = result.scalar_one_or_none()
+
+    if not instance:
+        LOGGER.error(f"[UPSERT] Instance with ID {final_persistent_instance.id} could not be reloaded after upsert operation.")
+        raise RuntimeError(f"ComponentInstance with ID {final_persistent_instance.id} not found after upsert.")
+
+    LOGGER.info(f"[UPSERT] Successfully returned ComponentInstance with ID: {instance.id}")
+    return instance
 
 
-def upsert_basic_parameter(
-    session: Session,
+async def upsert_basic_parameter(
+    session: AsyncSession,
     component_instance_id: UUID,
     parameter_definition_id: UUID,
     value: Optional[str] = None,
@@ -401,7 +426,7 @@ def upsert_basic_parameter(
     org_secret_id: Optional[UUID] = None,
 ) -> db.BasicParameter:
     """
-    Inserts or updates a basic parameter. If a parameter with the same
+    Inserts or updates a basic parameter asynchronously. If a parameter with the same
     component_instance_id and parameter_definition_id exists, updates it.
     """
     if value is None and org_secret_id is None:
@@ -414,15 +439,12 @@ def upsert_basic_parameter(
             "Cannot set both value and org_secret_id for a basic parameter. " "Use one or the other.",
         )
 
-    parameter = (
-        session.query(db.BasicParameter)
-        .filter(
-            db.BasicParameter.component_instance_id == component_instance_id,
-            db.BasicParameter.parameter_definition_id == parameter_definition_id,
-            db.BasicParameter.order == order,
-        )
-        .first()
+    stmt = select(db.BasicParameter).where(
+        db.BasicParameter.component_instance_id == component_instance_id,
+        db.BasicParameter.parameter_definition_id == parameter_definition_id,
+        db.BasicParameter.order == order,
     )
+    parameter = (await session.execute(stmt)).scalar_one_or_none()
 
     if org_secret_id:
         if parameter:
@@ -447,25 +469,25 @@ def upsert_basic_parameter(
                 order=order,
             )
             session.add(parameter)
-    session.commit()
-    session.refresh(parameter)
+    await session.commit()
+    await session.refresh(parameter)
     return parameter
 
 
-def upsert_sub_component_input(
-    session: Session,
+async def upsert_sub_component_input(
+    session: AsyncSession,
     parent_component_instance_id: UUID,
     child_component_instance_id: UUID,
     parameter_definition_id: UUID,
     order: Optional[int] = None,
 ) -> db.ComponentSubInput:
     """
-    Upserts a sub-component input relationship into the database.
+    Upserts a sub-component input relationship into the database asynchronously.
     If a relationship with the same parent, child, and parameter definition exists,
     it will be updated (PUT behavior).
 
     Args:
-        session (Session): SQLAlchemy session.
+        session (AsyncSession): SQLAlchemy asynchronous session.
         parent_component_instance_id (UUID): ID of the parent component instance.
         child_component_instance_id (UUID): ID of the child component instance.
         parameter_definition_id (UUID): ID of the parameter definition.
@@ -474,15 +496,12 @@ def upsert_sub_component_input(
     Returns:
         db.ComponentSubInput: The created or updated relationship object.
     """
-    sub_input = (
-        session.query(db.ComponentSubInput)
-        .filter(
-            db.ComponentSubInput.parent_component_instance_id == parent_component_instance_id,
-            db.ComponentSubInput.child_component_instance_id == child_component_instance_id,
-            db.ComponentSubInput.parameter_definition_id == parameter_definition_id,
-        )
-        .first()
+    stmt = select(db.ComponentSubInput).where(
+        db.ComponentSubInput.parent_component_instance_id == parent_component_instance_id,
+        db.ComponentSubInput.child_component_instance_id == child_component_instance_id,
+        db.ComponentSubInput.parameter_definition_id == parameter_definition_id,
     )
+    sub_input = (await session.execute(stmt)).scalar_one_or_none()
 
     if sub_input:
         # Update existing relationship
@@ -497,33 +516,28 @@ def upsert_sub_component_input(
         )
         session.add(sub_input)
 
-    session.commit()
-    session.refresh(sub_input)
+    await session.commit()
+    await session.refresh(sub_input)
     return sub_input
 
 
-def upsert_tool_description(
-    session: Session,
+async def upsert_tool_description(
+    session: AsyncSession,
     name: str,
     description: str,
     tool_properties: dict,
     required_tool_properties: list[str],
 ) -> db.ToolDescription:
     """
-    Inserts or updates a tool description in the database.
+    Inserts or updates a tool description in the database asynchronously.
     Uses name as unique identifier for upsert operation.
     Follows PUT semantics - completely replaces existing tool description.
 
     Returns:
         db.ToolDescription: The created or updated tool description object.
     """
-    tool_description = (
-        session.query(db.ToolDescription)
-        .filter(
-            db.ToolDescription.name == name,
-        )
-        .first()
-    )
+    stmt = select(db.ToolDescription).where(db.ToolDescription.name == name)
+    tool_description = (await session.execute(stmt)).scalar_one_or_none()
 
     if tool_description:
         # Update existing tool description (PUT behavior)
@@ -540,45 +554,47 @@ def upsert_tool_description(
         )
         session.add(tool_description)
 
-    session.commit()
-    session.refresh(tool_description)
+    await session.commit()
+    await session.refresh(tool_description)
     return tool_description
 
 
 # --- DELETE operations ---
-def delete_component_instances(
-    session: Session,
+async def delete_component_instances(
+    session: AsyncSession,
     component_instance_ids: list[UUID],
 ) -> None:
     """
-    Deletes all component instances for a given component.
+    Deletes all component instances for a given component asynchronously.
     Ensures cascading deletes on related entities.
     """
 
-    query = session.query(db.ComponentInstance)
-    if len(component_instance_ids) == 0:
+    if not component_instance_ids:
         LOGGER.warning("No component instances to delete.")
         return
-    if component_instance_ids:
-        LOGGER.info(f"Deleting component instances with IDs: {component_instance_ids}")
-        query = query.filter(db.ComponentInstance.id.in_(component_instance_ids))
 
-    instances = query.all()
+    LOGGER.info(f"Deleting component instances with IDs: {component_instance_ids}")
+    stmt = select(db.ComponentInstance).where(db.ComponentInstance.id.in_(component_instance_ids))
+    result = await session.execute(stmt)
+    instances = result.scalars().all()
+
     for instance in instances:
-        session.delete(instance)  # Triggers ORM cascade
+        await session.delete(instance)  # Triggers ORM cascade
 
-    session.commit()
+    await session.commit()
 
 
-def delete_component_instance_parameters(
-    session: Session,
+async def delete_component_instance_parameters(
+    session: AsyncSession,
     component_instance_id: UUID,
 ) -> None:
     """
-    Deletes all parameters for a given component instance.
+    Deletes all parameters for a given component instance asynchronously.
     """
     LOGGER.info(f"Deleting parameters for component instance {component_instance_id}")
-    session.query(db.BasicParameter).filter(
-        db.BasicParameter.component_instance_id == component_instance_id,
-    ).delete()
-    session.commit()
+    stmt = select(db.BasicParameter).where(db.BasicParameter.component_instance_id == component_instance_id)
+    result = await session.execute(stmt)
+    parameters = result.scalars().all()
+    for param in parameters:
+        await session.delete(param)
+    await session.commit()
