@@ -122,7 +122,10 @@ def ingestion_main(
                 source_schema_name=source_attributes.get("source_schema_name"),
                 metadata_column_names=source_attributes.get("metadata_column_names"),
                 timestamp_column_name=source_attributes.get("timestamp_column_name"),
-                is_sync_enabled=source_attributes.get("is_sync_enabled", False),
+                url_column_name=source_attributes.get("url_column_name"),
+                chunk_size=source_attributes.get("chunk_size", 1024),
+                chunk_overlap=source_attributes.get("chunk_overlap", 0),
+                replace_existing=source_attributes.get("replace_existing", False),
             )
         except Exception as e:
             LOGGER.error(f"Error during database ingestion: {str(e)}")
