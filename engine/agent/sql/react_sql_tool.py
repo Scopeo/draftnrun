@@ -3,7 +3,7 @@ from typing import Optional
 from engine.agent.agent import ToolDescription
 from engine.agent.react_function_calling import ReActAgent
 from engine.agent.sql.run_sql_query_tool import RunSQLQueryTool
-from engine.llm_services.llm_service import LLMService
+from engine.llm_services.llm_service import CompletionService
 from engine.storage_service.db_service import DBService
 from engine.trace.trace_manager import TraceManager
 from engine.storage_service.snowflake_service.snowflake_service import SnowflakeService
@@ -54,7 +54,7 @@ class ReactSQLAgent(ReActAgent):
     def __init__(
         self,
         trace_manager: TraceManager,
-        llm_service: LLMService,
+        completion_service: CompletionService,
         component_instance_name: str,
         db_service: DBService,
         tool_description: ToolDescription = DEFAULT_REACT_SQL_TOOL_DESCRIPTION,
@@ -80,7 +80,7 @@ class ReactSQLAgent(ReActAgent):
             trace_manager=trace_manager,
             tool_description=tool_description,
             component_instance_name=component_instance_name,
-            llm_service=llm_service,
+            completion_service=completion_service,
             initial_prompt=initial_prompt,
             agent_tools=[RunSQLQueryTool(trace_manager, db_service, component_instance_name="Run SQL Query Tool")],
         )
