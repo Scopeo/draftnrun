@@ -29,7 +29,7 @@ def test_completion_service_constrained_complete():
     completion_service = CompletionService(trace_manager=MagicMock(), provider="openai", model_name="gpt-4.1-mini")
     text = "Hello, world!"
 
-    response = completion_service.constrained_complete(text, ResponseFormat)
+    response = completion_service.constrained_complete_with_pydantic(text, ResponseFormat)
     assert response is not None
     assert isinstance(response, ResponseFormat)
     assert len(response.response) > 0
@@ -45,7 +45,9 @@ def test_completion_service_constrained_complete():
         },
     }
     assert OutputFormatModel.model_validate(response_json) is not None
-    response = completion_service.constrained_complete(text, json.dumps(response_json))
+    response = completion_service.constrained_complete_with_json_schema(text, json.dumps(response_json))
+    print("herre")
+    print(response)
     assert response is not None
     assert isinstance(response, str)
     assert len(response) > 0

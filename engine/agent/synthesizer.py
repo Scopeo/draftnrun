@@ -46,7 +46,7 @@ class Synthesizer:
                 input_dict, self._prompt_template, component_name=self.__class__.__name__
             )
 
-            response = self._completion_service.constrained_complete(
+            response = self._completion_service.constrained_complete_with_pydantic(
                 messages=input_str,
                 response_format=self.response_format,
             )

@@ -29,11 +29,11 @@ def make_mock_llm_service():
         mock_llm = MagicMock(spec=CompletionService)
         mock_llm.last_prompt = None
 
-        def constrained_complete(messages, response_format):
+        def constrained_complete_with_pydantic(messages, response_format):
             mock_llm.last_prompt = messages
             return response_format(response=default_response, is_successful=True)
 
-        mock_llm.constrained_complete.side_effect = constrained_complete
+        mock_llm.constrained_complete_with_pydantic.side_effect = constrained_complete_with_pydantic
         return mock_llm
 
     return _make_mock

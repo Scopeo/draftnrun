@@ -84,7 +84,7 @@ class LLMCallAgent(Agent):
         else:
             content = text_content
         if self.output_format:
-            response = self._completion_service.constrained_complete(
+            response = self._completion_service.constrained_complete_with_json_schema(
                 messages=[{"role": "user", "content": content}],
                 response_format=self.output_format,
             )

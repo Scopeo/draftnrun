@@ -1,5 +1,3 @@
-import os
-import json
 from typing import Optional
 from abc import ABC
 from pydantic import BaseModel
@@ -83,15 +81,46 @@ class CompletionService(LLMService):
             case _:
                 raise ValueError(f"Invalid provider: {self._provider}")
 
-    def constrained_complete(
+    def constrained_complete_with_pydantic(
         self,
         messages: list[dict] | str,
-        response_format: BaseModel | str,
+        response_format: BaseModel,
         temperature: float = 0.5,
         stream: bool = False,
         tools: list[ToolDescription] = None,
         tool_choice: str = "auto",
     ) -> BaseModel:
+        kwargs = {
+            "input": messages,
+            "model": self._model_name,
+            "temperature": temperature,
+            "stream": stream,
+        }
+
+        if issubclass(response_format, BaseModel):
+            kwargs["text_format"] = response_format
+        else:
+            raise ValueError("response_format must be a string or a BaseModel subclass.")
+
+        match self._provider:
+            case "openai":
+                import openai
+
+                client = openai.OpenAI(api_key=settings.OPENAI_API_KEY)
+                response = client.responses.parse(**kwargs)
+                return response.output_parsed
+            case _:
+                raise ValueError(f"Invalid provider: {self._provider}")
+
+    def constrained_complete_with_json_schema(
+        self,
+        messages: list[dict] | str,
+        response_format: str,
+        temperature: float = 0.5,
+        stream: bool = False,
+        tools: list[ToolDescription] = None,
+        tool_choice: str = "auto",
+    ) -> str:
         kwargs = {
             "input": messages,
             "model": self._model_name,
@@ -105,8 +134,6 @@ class CompletionService(LLMService):
             response_format["type"] = "json_schema"
             response_format = OutputFormatModel(**response_format).model_dump(exclude_none=True, exclude_unset=True)
             kwargs["text"] = {"format": response_format}
-        elif issubclass(response_format, BaseModel):
-            kwargs["text_format"] = response_format
         else:
             raise ValueError("response_format must be a string or a BaseModel subclass.")
 
@@ -116,10 +143,7 @@ class CompletionService(LLMService):
 
                 client = openai.OpenAI(api_key=settings.OPENAI_API_KEY)
                 response = client.responses.parse(**kwargs)
-                if isinstance(response_format, type) and issubclass(response_format, BaseModel):
-                    return response_format(**json.loads(response.output_text))
-                else:
-                    return response.output_text
+                return response.output_text
             case _:
                 raise ValueError(f"Invalid provider: {self._provider}")
 
@@ -168,7 +192,7 @@ class WebService(LLMService):
             case "openai":
                 import openai
 
-                client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+                client = openai.OpenAI(api_key=settings.OPENAI_API_KEY)
                 response = client.responses.create(
                     model=self._model_name,
                     input=query,
