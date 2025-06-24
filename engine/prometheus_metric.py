@@ -2,7 +2,7 @@ from functools import wraps
 
 from prometheus_client import Counter
 
-from engine.trace.var_context import get_tracing_span
+from engine.trace.span_context import get_tracing_span
 
 agent_calls = Counter(
     "agent_calls_total",

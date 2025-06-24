@@ -8,7 +8,7 @@ from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from opentelemetry.sdk import trace as trace_sdk
 
 from engine.trace.sql_exporter import SQLSpanExporter
-from engine.trace.var_context import get_tracing_span
+from engine.trace.span_context import get_tracing_span
 
 
 LOGGER = logging.getLogger(__name__)

@@ -19,8 +19,7 @@ from logger import setup_logging
 
 setup_logging()
 
-trace_manager = TraceManager(project_name="ada-backend")
-set_trace_manager(trace_manager)
+set_trace_manager(tm=TraceManager(project_name="ada-backend"))
 
 
 app = FastAPI(

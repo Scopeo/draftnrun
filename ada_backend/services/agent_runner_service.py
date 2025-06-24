@@ -21,7 +21,7 @@ from ada_backend.repositories.organization_repository import get_organization_se
 from ada_backend.services.trace_service import get_token_usage
 from engine.graph_runner.runnable import Runnable
 from engine.trace.trace_context import get_trace_manager
-from engine.trace.var_context import set_tracing_span
+from engine.trace.span_context import set_tracing_span
 
 TOKEN_LIMIT = 2000000
 

@@ -213,14 +213,9 @@ def pydantic_processor(params: dict, constructor_params: dict[str, Any]) -> dict
     return params
 
 
-# # TODO: Replace by getting singleton instance when TraceManager supports it
 def build_trace_manager_processor() -> ParameterProcessor:
     """
     Returns a processor function to inject a trace manager if required.
-
-    Args:
-        constructor_params (dict): The constructor parameters of the entity.
-        trace_manager (TraceManager): The trace manager to inject.
 
     Returns:
         ParameterProcessor: A function to process the entity constructor parameters.
@@ -300,7 +295,6 @@ def build_llm_service_processor(
     and injects it into the params dictionary under the key specified by target_name.
 
     Args:
-        trace_manager (TraceManager): The trace manager to inject into the LLM service.
         target_name (str): The parameter name to use for the created LLM service.
                           Defaults to "llm_service".
 
@@ -346,7 +340,6 @@ def build_qdrant_service_processor(target_name: str = "qdrant_service") -> Param
     Creates a processor that builds a QdrantService from a source ID.
 
     Args:
-        trace_manager (TraceManager): Trace manager for the LLM service.
         target_name (str): Parameter name for the created QdrantService.
 
     Returns:
