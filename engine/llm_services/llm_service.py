@@ -7,6 +7,7 @@ from engine.agent.agent import ToolDescription
 from engine.agent.utils import load_str_to_json
 from engine.llm_services.constrained_output_models import OutputFormatModel
 from settings import settings
+from engine.llm_services.utils import chat_completion_to_response
 
 
 class LLMService(ABC):
@@ -69,7 +70,7 @@ class CompletionService(LLMService):
         match self._provider:
             case "openai":
                 import openai
-
+                messages = chat_completion_to_response(messages)
                 client = openai.OpenAI(api_key=settings.OPENAI_API_KEY)
                 response = client.responses.create(
                     model=self._model_name,
@@ -90,6 +91,7 @@ class CompletionService(LLMService):
         tools: list[ToolDescription] = None,
         tool_choice: str = "auto",
     ) -> BaseModel:
+        messages = chat_completion_to_response(messages)
         kwargs = {
             "input": messages,
             "model": self._model_name,
@@ -97,10 +99,7 @@ class CompletionService(LLMService):
             "stream": stream,
         }
 
-        if issubclass(response_format, BaseModel):
-            kwargs["text_format"] = response_format
-        else:
-            raise ValueError("response_format must be a string or a BaseModel subclass.")
+        kwargs["text_format"] = response_format
 
         match self._provider:
             case "openai":
@@ -127,15 +126,13 @@ class CompletionService(LLMService):
             "temperature": temperature,
             "stream": stream,
         }
-        if isinstance(response_format, str):
-            response_format = load_str_to_json(response_format)
-            # validate with the basemodel OutputFormatModel
-            response_format["strict"] = True
-            response_format["type"] = "json_schema"
-            response_format = OutputFormatModel(**response_format).model_dump(exclude_none=True, exclude_unset=True)
-            kwargs["text"] = {"format": response_format}
-        else:
-            raise ValueError("response_format must be a string or a BaseModel subclass.")
+        messages = chat_completion_to_response(messages)
+        response_format = load_str_to_json(response_format)
+        # validate with the basemodel OutputFormatModel
+        response_format["strict"] = True
+        response_format["type"] = "json_schema"
+        response_format = OutputFormatModel(**response_format).model_dump(exclude_none=True, exclude_unset=True)
+        kwargs["text"] = {"format": response_format}
 
         match self._provider:
             case "openai":
@@ -191,7 +188,6 @@ class WebService(LLMService):
         match self._provider:
             case "openai":
                 import openai
-
                 client = openai.OpenAI(api_key=settings.OPENAI_API_KEY)
                 response = client.responses.create(
                     model=self._model_name,
