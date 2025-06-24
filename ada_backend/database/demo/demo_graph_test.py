@@ -84,7 +84,7 @@ def build_graph_test_chatbot(
             name="Synthesizer",
             ref=f"{agent_name}_synthesizer_instance",
             parameters=[
-                PipelineParameterSchema(name="model_name", value="openai:gpt-4o-mini"),
+                PipelineParameterSchema(name="completion_model", value="openai:gpt-4o-mini"),
             ],
         ),
         # Retriever
@@ -110,7 +110,7 @@ def build_graph_test_chatbot(
                     name="prompt_template",
                     value="Evaluate the pertinence of the answer. \n Question: {input} \n Answer: {answer} \n",
                 ),
-                PipelineParameterSchema(name="model_name", value="openai:gpt-4o-mini"),
+                PipelineParameterSchema(name="completion_model", value="openai:gpt-4o-mini"),
             ],
             tool_description=GRAPH_TEST_TOOL_DESCRIPTION,
         ),
