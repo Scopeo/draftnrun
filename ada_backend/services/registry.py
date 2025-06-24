@@ -27,7 +27,6 @@ from engine.agent.document_react_loader import DocumentReactLoaderAgent
 from engine.agent.rag.document_search import DocumentSearch
 from engine.storage_service.local_service import SQLLocalService
 from engine.storage_service.snowflake_service.snowflake_service import SnowflakeService
-from engine.trace.trace_manager import TraceManager
 from ada_backend.services.entity_factory import (
     EntityFactory,
     AgentFactory,
@@ -150,11 +149,8 @@ def create_factory_registry() -> FactoryRegistry:
     Returns:
         FactoryRegistry: The entity registry with default entities.
     """
-    # TODO: Remove from here when Trace Manager is implemented as thread-safe singleton
-    trace_manager = TraceManager(project_name="ada_backend")
-
     registry = FactoryRegistry()
-    trace_manager_processor = build_trace_manager_processor(trace_manager)
+    trace_manager_processor = build_trace_manager_processor()
     llm_service_processor = compose_processors(
         build_param_name_translator(
             {
@@ -166,7 +162,7 @@ def create_factory_registry() -> FactoryRegistry:
                 "api_key": "llm_api_key",
             }
         ),
-        build_llm_service_processor(trace_manager),
+        build_llm_service_processor(),
     )
     qdrant_service_processor = compose_processors(
         build_param_name_translator(
@@ -175,7 +171,7 @@ def create_factory_registry() -> FactoryRegistry:
                 "embedding_model_name": "embedding_model_name",
             }
         ),
-        build_qdrant_service_processor(trace_manager),
+        build_qdrant_service_processor(),
     )
     # Register components
     registry.register(
@@ -266,7 +262,6 @@ def create_factory_registry() -> FactoryRegistry:
         name=SupportedEntityType.REACT_AGENT,
         factory=AgentFactory(
             entity_class=ReActAgent,
-            trace_manager=trace_manager,
             parameter_processors=[
                 llm_service_processor,
             ],
@@ -276,7 +271,6 @@ def create_factory_registry() -> FactoryRegistry:
         name=SupportedEntityType.LLM_CALL_AGENT,
         factory=AgentFactory(
             entity_class=LLMCallAgent,
-            trace_manager=trace_manager,
             parameter_processors=[
                 llm_service_processor,
             ],
@@ -284,17 +278,20 @@ def create_factory_registry() -> FactoryRegistry:
     )
     registry.register(
         name=SupportedEntityType.RAG_AGENT,
-        factory=AgentFactory(entity_class=RAG, trace_manager=trace_manager),
+        factory=AgentFactory(
+            entity_class=RAG,
+        ),
     )
     registry.register(
         name=SupportedEntityType.HYBRID_RAG_AGENT,
-        factory=AgentFactory(entity_class=HybridRAG, trace_manager=trace_manager),
+        factory=AgentFactory(
+            entity_class=HybridRAG,
+        ),
     )
     registry.register(
         name=SupportedEntityType.TAVILY_AGENT,
         factory=AgentFactory(
             entity_class=TavilyApiTool,
-            trace_manager=trace_manager,
             parameter_processors=[
                 llm_service_processor,
             ],
@@ -304,7 +301,6 @@ def create_factory_registry() -> FactoryRegistry:
         name=SupportedEntityType.OPENAI_WEB_SEARCH_AGENT,
         factory=AgentFactory(
             entity_class=WebSearchOpenAITool,
-            trace_manager=trace_manager,
             parameter_processors=[
                 llm_service_processor,
             ],
@@ -314,21 +310,18 @@ def create_factory_registry() -> FactoryRegistry:
         name=SupportedEntityType.API_CALL_TOOL,
         factory=AgentFactory(
             entity_class=APICallTool,
-            trace_manager=trace_manager,
         ),
     )
     registry.register(
         name=SupportedEntityType.SEQUENTIAL_PIPELINE,
         factory=AgentFactory(
             entity_class=SequentialPipeline,
-            trace_manager=trace_manager,
         ),
     )
     registry.register(
         name=SupportedEntityType.SWITCH_CATEGORICAL_PIPELINE,
         factory=AgentFactory(
             entity_class=SwitchCategoricalPipeline,
-            trace_manager=trace_manager,
             parameter_processors=[
                 llm_service_processor,
             ],
@@ -338,14 +331,12 @@ def create_factory_registry() -> FactoryRegistry:
         name=SupportedEntityType.STATIC_RESPONDER,
         factory=AgentFactory(
             entity_class=StaticResponder,
-            trace_manager=trace_manager,
         ),
     ),
     registry.register(
         name=SupportedEntityType.SQL_TOOL,
         factory=AgentFactory(
             entity_class=SQLTool,
-            trace_manager=trace_manager,
             parameter_processors=[
                 llm_service_processor,
             ],
@@ -355,7 +346,6 @@ def create_factory_registry() -> FactoryRegistry:
         name=SupportedEntityType.REACT_SQL_AGENT,
         factory=AgentFactory(
             entity_class=ReactSQLAgent,
-            trace_manager=trace_manager,
             parameter_processors=[
                 llm_service_processor,
             ],
@@ -365,21 +355,18 @@ def create_factory_registry() -> FactoryRegistry:
         name=SupportedEntityType.RUN_SQL_QUERY_TOOL,
         factory=AgentFactory(
             entity_class=RunSQLQueryTool,
-            trace_manager=trace_manager,
         ),
     )
     registry.register(
         name=SupportedEntityType.DOCUMENT_ENHANCED_LLM_CALL,
         factory=AgentFactory(
             entity_class=DocumentEnhancedLLMCallAgent,
-            trace_manager=trace_manager,
         ),
     )
     registry.register(
         name=SupportedEntityType.DOCUMENT_REACT_LOADER_AGENT,
         factory=AgentFactory(
             entity_class=DocumentReactLoaderAgent,
-            trace_manager=trace_manager,
             parameter_processors=[
                 llm_service_processor,
             ],
@@ -390,7 +377,6 @@ def create_factory_registry() -> FactoryRegistry:
         name=SupportedEntityType.INPUT,
         factory=AgentFactory(
             entity_class=Input,
-            trace_manager=trace_manager,
         ),
     )
 

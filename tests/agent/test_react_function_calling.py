@@ -62,7 +62,12 @@ def react_agent(mock_agent, mock_trace_manager, mock_tool_description, mock_llm_
     )
 
 
-def test_run_no_tool_calls(react_agent, agent_input, mock_llm_service):
+@patch("engine.prometheus_metric.get_tracing_span")
+@patch("engine.prometheus_metric.agent_calls")
+def test_run_no_tool_calls(agent_calls_mock, get_span_mock, react_agent, agent_input, mock_llm_service):
+    get_span_mock.return_value.project_id = "1234"
+    counter_mock = MagicMock()
+    agent_calls_mock.labels.return_value = counter_mock
     mock_llm_service.function_call.return_value = MagicMock(
         choices=[MagicMock(message=MagicMock(content="Test response", tool_calls=[]))]
     )
@@ -73,7 +78,12 @@ def test_run_no_tool_calls(react_agent, agent_input, mock_llm_service):
     assert output.is_final
 
 
-def test_run_with_tool_calls(react_agent, agent_input, mock_agent, mock_llm_service):
+@patch("engine.prometheus_metric.get_tracing_span")
+@patch("engine.prometheus_metric.agent_calls")
+def test_run_with_tool_calls(agent_calls_mock, get_span_mock, react_agent, agent_input, mock_agent, mock_llm_service):
+    get_span_mock.return_value.project_id = "1234"
+    counter_mock = MagicMock()
+    agent_calls_mock.labels.return_value = counter_mock
     mock_tool_call = MagicMock()
     mock_tool_call.id = "1"
     mock_tool_call_function = MagicMock()
@@ -97,7 +107,12 @@ def test_run_with_tool_calls(react_agent, agent_input, mock_agent, mock_llm_serv
 
 
 @patch.object(LLMService, "function_call")
-def test_initial_prompt_insertion(mock_function_call, react_agent, agent_input):
+@patch("engine.prometheus_metric.get_tracing_span")
+@patch("engine.prometheus_metric.agent_calls")
+def test_initial_prompt_insertion(agent_calls_mock, get_span_mock, mock_function_call, react_agent, agent_input):
+    get_span_mock.return_value.project_id = "1234"
+    counter_mock = MagicMock()
+    agent_calls_mock.labels.return_value = counter_mock
     mock_function_call.return_value = MagicMock(
         choices=[MagicMock(message=MagicMock(content="Test response", tool_calls=[]))]
     )
@@ -107,7 +122,13 @@ def test_initial_prompt_insertion(mock_function_call, react_agent, agent_input):
 
 
 @patch.object(LLMService, "function_call")
-def test_max_iterations(mock_function_call, react_agent, agent_input, mock_agent):
+@patch("engine.prometheus_metric.get_tracing_span")
+@patch("engine.prometheus_metric.agent_calls")
+def test_max_iterations(agent_calls_mock, get_span_mock, mock_function_call, react_agent, agent_input, mock_agent):
+    get_span_mock.return_value.project_id = "1234"
+    counter_mock = MagicMock()
+    agent_calls_mock.labels.return_value = counter_mock
+
     mock_tool_call = MagicMock(spec=ChatCompletionMessageToolCall)
     mock_tool_call.id = "1"
     mock_tool_call_function = MagicMock()

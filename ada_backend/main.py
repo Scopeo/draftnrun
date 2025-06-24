@@ -12,11 +12,15 @@ from ada_backend.routers.components_router import router as components_router
 from ada_backend.routers.graph_router import router as graph_router
 from ada_backend.graphql.schema import graphql_router
 from ada_backend.routers.organization_router import router as org_router
+from engine.trace.trace_context import set_trace_manager
+from engine.trace.trace_manager import TraceManager
 from settings import settings
 from logger import setup_logging
 
 
 setup_logging()
+
+set_trace_manager(tm=TraceManager(project_name="ada-backend"))
 
 
 app = FastAPI(

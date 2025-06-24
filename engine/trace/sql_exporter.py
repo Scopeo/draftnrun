@@ -39,6 +39,8 @@ def event_to_dict(event: Event) -> dict:
 
 
 def convert_to_list(obj: Any) -> list[str] | None:
+    if isinstance(obj, list):
+        return obj
     if obj is None:
         return None
     if isinstance(obj, str):

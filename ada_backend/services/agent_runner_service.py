@@ -20,7 +20,8 @@ from ada_backend.repositories.project_repository import get_project, get_project
 from ada_backend.repositories.organization_repository import get_organization_secrets
 from ada_backend.services.trace_service import get_token_usage
 from engine.graph_runner.runnable import Runnable
-from engine.trace.trace_manager import TraceManager
+from engine.trace.trace_context import get_trace_manager
+from engine.trace.span_context import set_tracing_span
 
 TOKEN_LIMIT = 2000000
 
@@ -30,7 +31,7 @@ async def build_graph_runner(
     graph_runner_id: UUID,
     project_id: UUID,
 ) -> GraphRunner:
-    trace_manager = TraceManager(project_name="ada_backend")
+    trace_manager = get_trace_manager()
     # TODO: Add the get_graph_runner_nodes function when we will handle nested graphs
     component_nodes = get_component_nodes(session, graph_runner_id)
     edges = get_edges(session, graph_runner_id)
@@ -100,22 +101,25 @@ async def run_agent(
         graph_runner_id=graph_runner_id,
     )
     project_details = get_project_with_details(session, project_id=project_id)
-    agent.trace_manager.project_id = project_id
-    agent.trace_manager.organization_id = project_details.organization_id
+    trace_manager_project_id = str(project_id)
+    trace_manager_organization_id = str(project_details.organization_id)
     organization_secrets = get_organization_secrets(
         session,
         organization_id=project_details.organization_id,
     )
-    agent.trace_manager.organization_llm_providers = str(
-        (
-            [
-                organization_secret.key.split("_")[0]
-                for organization_secret in organization_secrets
-                if organization_secret.secret_type == OrgSecretType.LLM_API_KEY
-            ]
-            if organization_secrets
-            else []
-        )
+    trace_manager_organization_llm_providers = (
+        [
+            organization_secret.key.split("_")[0]
+            for organization_secret in organization_secrets
+            if organization_secret.secret_type == OrgSecretType.LLM_API_KEY
+        ]
+        if organization_secrets
+        else []
+    )
+    set_tracing_span(
+        project_id=trace_manager_project_id,
+        organization_id=trace_manager_organization_id,
+        organization_llm_providers=trace_manager_organization_llm_providers,
     )
     token_usage = get_token_usage(organization_id=project_details.organization_id)
     # TODO: Fix when token limit is reached and user try to use their own key
@@ -132,9 +136,11 @@ async def run_agent(
     if input_component:
         input_data = get_default_values_for_sandbox(session, input_component.id, project_id, input_data)
     try:
-        agent_output = await agent.run(input_data)
+        agent_output = await agent.run(
+            input_data,
+        )
     except Exception as e:
-        raise ValueError(f"Error running agent: {str(e)}")
+        raise ValueError(f"Error running agent: {str(e)}") from e
     return ChatResponse(
         message=agent_output.last_message.content, artifacts=agent_output.artifacts, error=agent_output.error
     )

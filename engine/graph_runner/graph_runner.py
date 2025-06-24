@@ -115,9 +115,6 @@ class GraphRunner:
         """Run the graph."""
         input_data = inputs[0]
         with self.trace_manager.start_span(self.__class__.__name__) as span:
-            span.set_attribute("project_id", str(self.trace_manager.project_id))
-            span.set_attribute("organization_id", str(self.trace_manager.organization_id))
-            span.set_attribute("organization_llm_providers", self.trace_manager.organization_llm_providers)
             trace_input = convert_data_for_trace_manager_display(input_data, AgentPayload)
             span.set_attributes(
                 {
