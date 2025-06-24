@@ -162,3 +162,55 @@ def build_embedding_service_config_definitions(
                 )
             )
     return definitions
+
+
+def build_web_service_config_definitions(
+    component_id: UUID,
+    params_to_seed: list[ParameterLLMConfig],
+) -> list[db.ComponentParameterDefinition]:
+    """
+    Simple helper function to avoid code duplication.
+    params_to_seed is a list of parameters to seed for the given component.
+    options: [
+        "completion_model",
+        "api_key",
+    ]
+    """
+    definitions: list[db.ComponentParameterDefinition] = []
+    for param in params_to_seed:
+        if param.param_name == COMPLETION_MODEL_IN_DB:
+            definitions.append(
+                db.ComponentParameterDefinition(
+                    id=param.param_id,
+                    component_id=component_id,
+                    name=COMPLETION_MODEL_IN_DB,
+                    type=ParameterType.STRING,
+                    nullable=False,
+                    default="openai:gpt-4.1-mini",
+                    ui_component=UIComponent.SELECT,
+                    ui_component_properties=UIComponentProperties(
+                        options=[
+                            # OpenAI
+                            SelectOption(value="openai:gpt-4.1", label="GPT-4.1"),
+                            SelectOption(value="openai:gpt-4.1-mini", label="GPT-4.1 Mini"),
+                            SelectOption(value="openai:gpt-4.1-nano", label="GPT-4.1 Nano"),
+                            SelectOption(value="openai:gpt-4o", label="GPT-4o"),
+                            SelectOption(value="openai:gpt-4o-mini", label="GPT-4o Mini"),
+                            SelectOption(value="openai:o4-mini-2025-04-16", label="GPT-4o4 Mini"),
+                            SelectOption(value="openai:o3-2025-04-16", label="GPT-4o3"),
+                        ],
+                        label="Model Name",
+                    ).model_dump(exclude_unset=True, exclude_none=True),
+                )
+            )
+        if param.param_name == "api_key":
+            definitions.append(
+                db.ComponentParameterDefinition(
+                    id=param.param_id,
+                    component_id=component_id,
+                    name="api_key",
+                    type=ParameterType.LLM_API_KEY,
+                    nullable=True,
+                )
+            )
+    return definitions

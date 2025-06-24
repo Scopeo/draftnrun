@@ -138,10 +138,11 @@ class CompletionService(LLMService):
                 import openai
 
                 client = openai.OpenAI(api_key=settings.OPENAI_API_KEY)
+                openai_tools = [tool.openai_format for tool in tools]
                 response = client.chat.completions.create(
                     model=self._model_name,
                     messages=messages,
-                    tools=tools,
+                    tools=openai_tools,
                     temperature=temperature,
                     stream=stream,
                     tool_choice=tool_choice,
@@ -149,6 +150,18 @@ class CompletionService(LLMService):
                 return response
             case _:
                 raise ValueError(f"Invalid provider: {self._provider}")
+
+
+class WebService(LLMService):
+    def __init__(
+        self,
+        trace_manager: TraceManager,
+        provider: str = "openai",
+        model_name: str = "gpt-4.1-mini",
+        api_key: Optional[str] = None,
+        temperature: float = 0.5,
+    ):
+        super().__init__(trace_manager, provider, model_name, api_key)
 
     def web_search(self, query: str) -> str:
         match self._provider:

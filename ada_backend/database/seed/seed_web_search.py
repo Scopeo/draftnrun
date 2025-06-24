@@ -11,7 +11,7 @@ from ada_backend.database.seed.seed_tool_description import TOOL_DESCRIPTION_UUI
 from ada_backend.database.seed.utils import (
     COMPONENT_UUIDS,
     ParameterLLMConfig,
-    build_completion_service_config_definitions,
+    build_web_service_config_definitions,
 )
 from ada_backend.services.registry import COMPLETION_MODEL_IN_DB
 
@@ -36,7 +36,7 @@ def seed_web_search_components(session: Session):
         session=session,
         component_parameter_definitions=[
             # Web Search OpenAI Agent
-            *build_completion_service_config_definitions(
+            *build_web_service_config_definitions(
                 component_id=web_search_openai_agent.id,
                 params_to_seed=[
                     ParameterLLMConfig(

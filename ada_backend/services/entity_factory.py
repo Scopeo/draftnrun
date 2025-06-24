@@ -8,7 +8,7 @@ from pydantic import BaseModel
 
 from engine.agent.agent import ToolDescription
 from engine.trace.trace_context import get_trace_manager
-from engine.llm_services.llm_service import EmbeddingService, CompletionService
+from engine.llm_services.llm_service import EmbeddingService, CompletionService, WebService
 from engine.qdrant_service import QdrantService, QdrantCollectionSchema
 from ada_backend.database.setup_db import get_db_session
 from ada_backend.repositories.source_repository import get_data_source_by_id
@@ -312,7 +312,31 @@ def build_completion_service_processor(
     return processor
 
 
+def build_web_service_processor(
+    trace_manager: TraceManager,
+    target_name: str = "web_service",
+) -> ParameterProcessor:
+    """
+    Returns a processor function to inject an LLM service into the parameters.
+    """
+    def processor(params: dict, constructor_params: dict[str, Any]) -> dict:
+        provider, model_name = get_llm_provider_and_model(llm_model=params.pop("completion_model"))
+
+        web_service = WebService(
+            trace_manager=trace_manager,
+            provider=provider,
+            model_name=model_name,
+            api_key=params.pop("llm_api_key", None),
+        )
+
+        params[target_name] = web_service
+        return params
+
+    return processor
+
+
 def build_qdrant_service_processor(target_name: str = "qdrant_service") -> ParameterProcessor:
+
     """
     Creates a processor that builds a QdrantService from a source ID.
 
@@ -373,24 +397,3 @@ def compose_processors(*processors: ParameterProcessor) -> ParameterProcessor:
         return result
 
     return composed_processor
-
-def build_web_service_processor(
-    target_name: str = "web_service",
-) -> ParameterProcessor:
-    """
-    Returns a processor function to inject an LLM service into the parameters.
-    """
-    def processor(params: dict, constructor_params: dict[str, Any]) -> dict:
-        provider, model_name = get_llm_provider_and_model(llm_model=params.pop("completion_model"))
-
-        web_service = WebService(
-            trace_manager=get_trace_manager(),
-            provider=provider,
-            model_name=model_name,
-            api_key=params.pop("llm_api_key", None),
-        )
-
-        params[target_name] = web_service
-        return params
-
-    return processor

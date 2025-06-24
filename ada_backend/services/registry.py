@@ -38,6 +38,7 @@ from ada_backend.services.entity_factory import (
 
 COMPLETION_MODEL_IN_DB = "completion_model"
 EMBEDDING_MODEL_IN_DB = "embedding_model"
+WEB_SERVICE_IN_DB = "web_service"
 
 
 class SupportedEntityType(StrEnum):
@@ -181,6 +182,16 @@ def create_factory_registry() -> FactoryRegistry:
         ),
         build_web_service_processor(),
     )
+    web_service_processor = compose_processors(
+        build_param_name_translator(
+            {
+                COMPLETION_MODEL_IN_DB: "completion_model",
+                "api_key": "llm_api_key",
+            }
+        ),
+        build_web_service_processor(trace_manager),
+    )
+
     # Register components
     registry.register(
         name=SupportedEntityType.SYNTHESIZER,
