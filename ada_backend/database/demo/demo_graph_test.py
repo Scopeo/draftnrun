@@ -66,7 +66,7 @@ def build_graph_test_chatbot(
                     name="prompt_template",
                     value="Reformulate the question as a customer service query :\n{input}",
                 ),
-                PipelineParameterSchema(name="model_name", value="openai:gpt-4o-mini"),
+                PipelineParameterSchema(name="completion_model", value="openai:gpt-4o-mini"),
             ],
             tool_description=GRAPH_TEST_TOOL_DESCRIPTION,
         ),
