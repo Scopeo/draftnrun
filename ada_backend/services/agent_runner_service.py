@@ -94,7 +94,6 @@ async def run_agent(
     graph_runner_id: UUID,
     input_data: dict,
 ) -> ChatResponse:
-    trace_manager = get_trace_manager()
     project_details = get_project_with_details(session, project_id=project_id)
     trace_manager_project_id = str(project_id)
     trace_manager_organization_id = str(project_details.organization_id)
