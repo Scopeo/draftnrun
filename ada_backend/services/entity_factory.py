@@ -313,7 +313,6 @@ def build_completion_service_processor(
 
 
 def build_web_service_processor(
-    trace_manager: TraceManager,
     target_name: str = "web_service",
 ) -> ParameterProcessor:
     """
@@ -323,7 +322,7 @@ def build_web_service_processor(
         provider, model_name = get_llm_provider_and_model(llm_model=params.pop("completion_model"))
 
         web_service = WebService(
-            trace_manager=trace_manager,
+            trace_manager=get_trace_manager(),
             provider=provider,
             model_name=model_name,
             api_key=params.pop("llm_api_key", None),

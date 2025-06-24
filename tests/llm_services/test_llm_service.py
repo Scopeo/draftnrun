@@ -46,8 +46,6 @@ def test_completion_service_constrained_complete():
     }
     assert OutputFormatModel.model_validate(response_json) is not None
     response = completion_service.constrained_complete_with_json_schema(text, json.dumps(response_json))
-    print("herre")
-    print(response)
     assert response is not None
     assert isinstance(response, str)
     assert len(response) > 0
