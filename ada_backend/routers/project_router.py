@@ -16,6 +16,7 @@ from ada_backend.schemas.project_schema import (
     ProjectSchema,
     ProjectWithGraphRunnersSchema,
     ProjectUpdateSchema,
+    ProjectCreateSchema,
 )
 from ada_backend.schemas.trace_schema import TraceSpan
 from ada_backend.services.agent_runner_service import run_agent, run_env_agent
@@ -129,7 +130,7 @@ def update_project_endpoint(
 @router.post("/{organization_id}", response_model=ProjectWithGraphRunnersSchema, tags=["Projects"])
 def create_project_endpoint(
     organization_id: UUID,
-    project: ProjectSchema,
+    project: ProjectCreateSchema,
     user: Annotated[
         SupabaseUser,
         Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.ADMIN.value)),

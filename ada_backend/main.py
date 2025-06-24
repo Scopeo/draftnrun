@@ -4,6 +4,7 @@ from prometheus_client import start_http_server
 
 from ada_backend.admin.admin import setup_admin
 from ada_backend.routers.project_router import router as project_router
+from ada_backend.routers.template_router import router as template_router
 from ada_backend.routers.auth_router import router as auth_router
 from ada_backend.routers.source_router import router as source_router
 from ada_backend.routers.ingestion_task_router import router as ingestion_task_router
@@ -42,6 +43,11 @@ app = FastAPI(
             "deletion, and management of project settings",
         },
         {
+            "name": "Templates",
+            "description": "Endpoints for managing templates, including "
+            "retrieving production templates and creating new templates",
+        },
+        {
             "name": "Graph",
             "description": "Operations with graph runner within projects, "
             "including updating and retrieving graph runner configurations",
@@ -70,6 +76,7 @@ setup_admin(app)
 app.include_router(auth_router)
 app.include_router(org_router)
 app.include_router(project_router)
+app.include_router(template_router)
 app.include_router(source_router)
 app.include_router(ingestion_task_router)
 app.include_router(components_router)

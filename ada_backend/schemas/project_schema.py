@@ -3,6 +3,7 @@ from uuid import UUID
 from pydantic import BaseModel, Field
 
 from ada_backend.database.models import EnvType
+from ada_backend.schemas.template_schema import InputTemplate
 
 
 class ProjectSchema(BaseModel):
@@ -10,6 +11,10 @@ class ProjectSchema(BaseModel):
     project_name: str
     description: Optional[str] = None
     companion_image_url: Optional[str] = None
+
+
+class ProjectCreateSchema(ProjectSchema):
+    template: Optional[InputTemplate] = None
 
 
 class ProjectUpdateSchema(BaseModel):
