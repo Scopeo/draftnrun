@@ -97,6 +97,7 @@ class SourceType(StrEnum):
 
     GOOGLE_DRIVE = "google_drive"
     LOCAL = "local"
+    REMOTE_LOCAL = "remote_local"
     DATABASE = "database"
 
 

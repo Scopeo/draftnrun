@@ -8,7 +8,11 @@ from ada_backend.services.agent_runner_service import get_organization_llm_provi
 from engine.trace.span_context import set_tracing_span
 from engine.trace.trace_context import set_trace_manager
 from engine.trace.trace_manager import TraceManager
-from ingestion_script.ingest_folder_source import ingest_google_drive_source, ingest_local_folder_source
+from ingestion_script.ingest_folder_source import (
+    ingest_google_drive_source,
+    ingest_local_folder_source,
+    ingest_remote_local_folder_source,
+)
 from ingestion_script.utils import update_ingestion_task
 from ada_backend.database import models as db
 
@@ -102,6 +106,34 @@ def ingestion_main(
             )
         except Exception as e:
             LOGGER.error(f"Error during local ingestion: {str(e)}")
+            update_ingestion_task(
+                organization_id=organization_id,
+                ingestion_task=failed_ingestion_task,
+            )
+            return
+
+    elif source_type == SourceType.REMOTE_LOCAL:
+        if check_missing_params(
+            source_attributes=source_attributes,
+            required_params=["description_remote_folder"],
+            organization_id=organization_id,
+            ingestion_task=failed_ingestion_task,
+        ):
+            return
+
+        try:
+            ingest_remote_local_folder_source(
+                description_local_folder=source_attributes["description_remote_folder"],
+                organization_id=organization_id,
+                source_name=source_name,
+                task_id=task_id,
+                save_supabase=True,
+                add_doc_description_to_chunks=False,
+            )
+        except Exception as e:
+            print("ERROR REMOTE")
+            print(str(e))
+            LOGGER.error(f"Error during remote local ingestion: {str(e)}")
             update_ingestion_task(
                 organization_id=organization_id,
                 ingestion_task=failed_ingestion_task,

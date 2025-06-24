@@ -12,9 +12,18 @@ class IngestionTask(BaseModel):
     status: db.TaskStatus
 
 
+class RemoteFile(BaseModel):
+    path: str
+    name: str
+    content: str
+    last_edited_ts: str
+    metadata: dict = {}
+
+
 class SourceAttributes(BaseModel):
     access_token: Optional[str] = None
     path: Optional[str] = None
+    description_remote_folder: Optional[list[RemoteFile]] = None
     folder_id: Optional[str] = None
     source_db_url: Optional[str] = None
     source_table_name: Optional[str] = None
