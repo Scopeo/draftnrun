@@ -62,7 +62,7 @@ async def monitor_questions(db_service: DBService, project_id: UUID, agent_input
     previous_questions = await get_previous_questions(db_service, project_id, table_name)
     query = PROMPT.format(questions_list=previous_questions, question=agent_input.last_message.content)
 
-    answer = llm_service.constrained_complete(prompt=query, response_format=OccurenceQuestionsList)
+    answer = llm_service.constrained_complete(messages=query, response_format=OccurenceQuestionsList)
 
     new_questions_list = json.dumps(answer.model_dump())
     df = pd.DataFrame(data=[{"project_id": str(project_id)}])

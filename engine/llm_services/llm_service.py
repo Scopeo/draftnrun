@@ -1,4 +1,5 @@
 import os
+import json
 from typing import Optional
 from abc import ABC
 from pydantic import BaseModel
@@ -115,7 +116,10 @@ class CompletionService(LLMService):
 
                 client = openai.OpenAI(api_key=settings.OPENAI_API_KEY)
                 response = client.responses.parse(**kwargs)
-                return response.output_text
+                if isinstance(response_format, type) and issubclass(response_format, BaseModel):
+                    return response_format(**json.loads(response.output_text))
+                else:
+                    return response.output_text
             case _:
                 raise ValueError(f"Invalid provider: {self._provider}")
 
@@ -134,15 +138,15 @@ class CompletionService(LLMService):
                 import openai
 
                 client = openai.OpenAI(api_key=settings.OPENAI_API_KEY)
-                response = client.responses.create(
+                response = client.chat.completions.create(
                     model=self._model_name,
-                    input=messages,
+                    messages=messages,
                     tools=tools,
                     temperature=temperature,
                     stream=stream,
                     tool_choice=tool_choice,
                 )
-                return response.output_text
+                return response
             case _:
                 raise ValueError(f"Invalid provider: {self._provider}")
 

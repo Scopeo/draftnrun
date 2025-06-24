@@ -47,7 +47,7 @@ class Synthesizer:
             )
 
             response = self._completion_service.constrained_complete(
-                prompt=input_str,
+                messages=input_str,
                 response_format=self.response_format,
             )
             span.set_attributes(
