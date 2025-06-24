@@ -84,7 +84,7 @@ class LLMCallAgent(Agent):
         else:
             content = text_content
         if self.output_format:
-            response = self._llm_service.constrained_complete(
+            response = await self._llm_service.async_constrained_complete(
                 messages=[{"role": "user", "content": content}],
                 response_format=self.output_format,
             )

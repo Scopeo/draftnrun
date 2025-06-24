@@ -1,3 +1,5 @@
+import asyncio
+
 from pydantic import BaseModel
 
 from engine.agent.synthesizer_prompts import get_hybrid_synthetizer_prompt_template
@@ -36,7 +38,7 @@ class HybridSynthesizer(Synthesizer):
         self._prompt_template = prompt_template
         self.response_format = response_format
 
-    def get_response(
+    async def get_response(
         self,
         image_id: str,
         chunks: list[SourceChunk],
@@ -49,7 +51,7 @@ class HybridSynthesizer(Synthesizer):
         with open(image_id, "rb") as image_file:
             encoded_image = image_file.read()
 
-        response_using_image = self._llm_service.get_image_description(
+        response_using_image = await self._llm_service.async_get_image_description(
             image_content_list=[encoded_image],
             text_prompt=self._prompt_template.format(
                 image_id=image_id,
@@ -64,3 +66,15 @@ class HybridSynthesizer(Synthesizer):
             image_id=image_id,
             sources=chunks,
         )
+
+    def get_response_sync(
+        self,
+        image_id: str,
+        chunks: list[SourceChunk],
+        query_str: str,
+    ) -> HybridSynthesizerResponse:
+        return asyncio.run(self.get_response(
+            image_id=image_id,
+            chunks=chunks,
+            query_str=query_str,
+        ))

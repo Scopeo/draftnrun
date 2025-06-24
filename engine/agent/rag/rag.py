@@ -68,7 +68,7 @@ class RAG(Agent):
         if self._reranker is not None:
             chunks = self._reranker.rerank(query=content, chunks=chunks)
 
-        sourced_response = self._synthesizer.get_response(
+        sourced_response = await self._synthesizer.get_response(
             query_str=content,
             chunks=chunks,
         )

@@ -58,8 +58,8 @@ class SwitchCategoricalPipeline(Agent):
             component_instance_name,
         )
 
-    def select_category(self, agent_input: AgentPayload) -> SelectedCategory:
-        response = self.llm_service.constrained_complete(
+    async def select_category(self, agent_input: AgentPayload) -> SelectedCategory:
+        response = await self.llm_service.async_constrained_complete(
             messages=[
                 {
                     "role": "system",
@@ -80,6 +80,6 @@ class SwitchCategoricalPipeline(Agent):
 
     async def _run_without_trace(self, *inputs: AgentPayload, **kwargs) -> AgentPayload:
         agent_input = inputs[0]
-        category = self.select_category(agent_input)
+        category = await self.select_category(agent_input)
         agent = self.select_agent(category)
         return await agent.run(*inputs, **kwargs)

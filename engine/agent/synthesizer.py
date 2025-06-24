@@ -1,3 +1,5 @@
+import asyncio
+
 from pydantic import BaseModel
 
 from opentelemetry import trace as trace_api
@@ -28,7 +30,7 @@ class Synthesizer:
         self.response_format = response_format
         self.trace_manager = trace_manager
 
-    def get_response(
+    async def get_response(
         self,
         chunks: list[SourceChunk],
         query_str: str,
@@ -44,7 +46,7 @@ class Synthesizer:
                 context_str=context_str,
                 query_str=query_str,
             )
-            response = self._llm_service.constrained_complete(
+            response = await self._llm_service.async_constrained_complete(
                 messages=[
                     {
                         "role": "system",
@@ -67,3 +69,10 @@ class Synthesizer:
                 is_successful=response.is_successful,
             )
             return response
+
+    def get_response_sync(
+        self,
+        chunks: list[SourceChunk],
+        query_str: str,
+    ) -> SourcedResponse:
+        return asyncio.run(self.get_response(chunks, query_str))

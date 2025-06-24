@@ -148,7 +148,7 @@ class ReActAgent(Agent):
         agent_input = original_agent_input.model_copy(deep=True)
         history_messages_handled = self._memory_handling.get_truncated_messages_history(agent_input.messages)
         tool_choice = "auto" if self._current_iteration < self._max_iterations else "none"
-        chat_response = self._llm_service.function_call(
+        chat_response = await self._llm_service.async_function_call(
             messages=[msg.model_dump() for msg in history_messages_handled],
             temperature=0.2,
             tools=[agent.tool_description for agent in self.agent_tools],

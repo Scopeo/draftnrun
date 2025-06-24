@@ -11,28 +11,22 @@ from engine.agent.agent import ToolDescription
 
 
 class LLMService(abc.ABC):
-    def __init__(
-        self,
-        trace_manager: TraceManager,
-    ):
+    def __init__(self, trace_manager: TraceManager):
         self.trace_manager = trace_manager
         self._completion_model: str = None
         self._embedding_model: str = None
         self._default_temperature: float = None
 
     @abc.abstractmethod
-    def embed(
-        self,
-        input_text: str | list[str],
-    ) -> str:
+    def embed(self, input_text: str | list[str]) -> str:
         pass
 
     @abc.abstractmethod
-    def complete(
-        self,
-        messages: list[dict],
-        temperature: float = None,
-    ) -> str:
+    def complete(self, messages: list[dict], temperature: float = None) -> str:
+        pass
+
+    @abc.abstractmethod
+    def complete_with_files(self, messages: list[dict], files: list[bytes], temperature: float = None) -> str:
         pass
 
     @abc.abstractmethod
@@ -156,15 +150,6 @@ class LLMService(abc.ABC):
         return chat_response
 
     @abc.abstractmethod
-    def complete_with_files(
-        self,
-        messages: list[dict],
-        files: list[bytes],
-        temperature: float = None,
-    ) -> str:
-        pass
-
-    @abc.abstractmethod
     def get_token_size(self, content: str) -> int:
         pass
 
@@ -174,16 +159,6 @@ class LLMService(abc.ABC):
 
     @abc.abstractmethod
     async def acomplete(self, messages: list[dict], temperature: float = None) -> str:
-        pass
-
-    @abc.abstractmethod
-    async def afunction_call_without_trace(
-        self,
-        messages: list[dict],
-        temperature: Optional[float] = None,
-        tools: Optional[list[ToolDescription]] = None,
-        tool_choice: str = "auto",
-    ) -> ChatCompletion:
         pass
 
     @abc.abstractmethod
@@ -203,6 +178,26 @@ class LLMService(abc.ABC):
     async def agenerate_speech_from_text(self, transcription: str, speech_audio_path: str) -> str:
         pass
 
+    @abc.abstractmethod
+    async def acomplete_with_files(
+        self,
+        messages: list[dict],
+        files: list[bytes],
+        temperature: float = None,
+    ) -> str:
+        pass
+
+    @abc.abstractmethod
+    async def afunction_call_without_trace(
+        self,
+        messages: list[dict],
+        temperature: Optional[float] = None,
+        tools: Optional[list[ToolDescription]] = None,
+        tool_choice: str = "auto",
+    ) -> ChatCompletion:
+        pass
+
+    @abc.abstractmethod
     async def afunction_call(
         self,
         messages: list[dict],
@@ -214,7 +209,7 @@ class LLMService(abc.ABC):
             tools = []
         temperature = temperature or self._default_temperature
         span_name = "FunctionCall"
-        with self.trace_manager.start_span(span_name) as span:
+        async with self.trace_manager.start_span(span_name) as span:
             response = await self.afunction_call_without_trace(
                 messages=messages,
                 temperature=temperature,
@@ -222,10 +217,7 @@ class LLMService(abc.ABC):
                 tool_choice=tool_choice,
             )
 
-            span.set_attributes({
-                SpanAttributes.OPENINFERENCE_SPAN_KIND: OpenInferenceSpanKindValues.LLM.value,
-            })
-
+            span.set_attributes({SpanAttributes.OPENINFERENCE_SPAN_KIND: OpenInferenceSpanKindValues.LLM.value})
             for i, msg in enumerate(messages):
                 if "content" in msg:
                     span.set_attributes({f"llm.input_messages.{i}.message.content": msg["content"]})
@@ -241,7 +233,7 @@ class LLMService(abc.ABC):
                         "tool_call_arguments_json": tool_call.function.arguments,
                     }
                     for tool_call in tool_calls
-                },
+                }
             }
 
             span.set_attributes({
@@ -260,20 +252,6 @@ class LLMService(abc.ABC):
         content = [{"type": "text", "text": text_prompt}]
         content.extend(self._format_image_content(image_content_list))
         messages = [{"role": "user", "content": content}]
-
         if response_format is not None:
             return await self.aconstrained_complete(messages=messages, response_format=response_format)
         return await self.acomplete(messages=messages)
-
-    @abc.abstractmethod
-    async def acomplete_with_files(
-        self,
-        messages: list[dict],
-        files: list[bytes],
-        temperature: float = None,
-    ) -> str:
-        pass
-
-    @abc.abstractmethod
-    async def aget_token_size(self, content: str) -> int:
-        pass

@@ -106,7 +106,8 @@ def get_tokens_chart(project_id: UUID, duration_days: int) -> Chart:
     )
 
 
-async def get_charts_by_project(project_id: UUID, duration_days: int) -> ChartsResponse:
+def get_charts_by_project(project_id: UUID, duration_days: int) -> ChartsResponse:
+    print("GET CHARTS BY PROJECT", project_id, duration_days)
     response = ChartsResponse(
         charts=[
             get_prometheus_agent_calls_chart(project_id, duration_days),
