@@ -16,6 +16,7 @@ from ada_backend.schemas.project_schema import (
     ProjectSchema,
     ProjectWithGraphRunnersSchema,
     ProjectUpdateSchema,
+    ProjectCreateSchema,
 )
 from ada_backend.schemas.trace_schema import TraceSpan
 from ada_backend.services.agent_runner_service import run_agent, run_env_agent
@@ -129,7 +130,7 @@ def update_project_endpoint(
 @router.post("/{organization_id}", response_model=ProjectWithGraphRunnersSchema, tags=["Projects"])
 def create_project_endpoint(
     organization_id: UUID,
-    project: ProjectSchema,
+    project: ProjectCreateSchema,
     user: Annotated[
         SupabaseUser,
         Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.ADMIN.value)),
@@ -139,7 +140,7 @@ def create_project_endpoint(
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
     try:
-        return create_project(session, organization_id, project, project.template)
+        return create_project(session, organization_id, project)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:

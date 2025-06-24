@@ -1,5 +1,4 @@
 from uuid import UUID
-from typing import Optional
 from logging import getLogger
 import uuid
 
@@ -27,8 +26,8 @@ from ada_backend.schemas.project_schema import (
     ProjectSchema,
     ProjectUpdateSchema,
     ProjectWithGraphRunnersSchema,
+    ProjectCreateSchema,
 )
-from ada_backend.schemas.template_schema import InputTemplate
 from ada_backend.services.graph.delete_graph_service import delete_graph_runner_service
 
 
@@ -69,19 +68,18 @@ def delete_project_service(session: Session, project_id: UUID) -> ProjectDeleteR
 def create_project(
     session: Session,
     organization_id: UUID,
-    project_schema: ProjectSchema,
-    template: Optional[InputTemplate] = None,
+    project_schema: ProjectCreateSchema,
 ) -> ProjectWithGraphRunnersSchema:
     graph_runner_id = None
-    if template:
+    if project_schema.template is not None:
         LOGGER.info(
-            f"Creating project from template {template.template_project_id}"
-            f"with graph runner {template.template_graph_runner_id}"
+            f"Creating project from template {project_schema.template.template_project_id}"
+            f"with graph runner {project_schema.template.template_graph_runner_id}"
         )
         graph_runner_id = clone_graph_runner(
             session,
-            template.template_graph_runner_id,
-            template.template_project_id,
+            project_schema.template.template_graph_runner_id,
+            project_schema.template.template_project_id,
         )
     else:
         LOGGER.info("Creating a new graph runner for the project")

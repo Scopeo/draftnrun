@@ -11,6 +11,9 @@ class ProjectSchema(BaseModel):
     project_name: str
     description: Optional[str] = None
     companion_image_url: Optional[str] = None
+
+
+class ProjectCreateSchema(ProjectSchema):
     template: Optional[InputTemplate] = None
 
 
