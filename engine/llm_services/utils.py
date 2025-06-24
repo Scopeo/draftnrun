@@ -3,7 +3,6 @@ from typing import Any
 
 from ada_backend.services.trace_service import TOKEN_LIMIT, get_token_usage
 from engine.trace.span_context import get_tracing_span
-from engine.trace.trace_context import get_trace_manager
 
 
 LOGGER = logging.getLogger(__name__)
