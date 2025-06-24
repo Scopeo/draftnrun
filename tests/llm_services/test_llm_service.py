@@ -31,11 +31,9 @@ def test_completion_service_constrained_complete():
 
     response = completion_service.constrained_complete(text, ResponseFormat)
     assert response is not None
-    assert isinstance(response, str)
-    assert len(response) > 0
-    # Parse the JSON string before validating with Pydantic
-    response_dict = json.loads(response)
-    assert ResponseFormat.model_validate(response_dict) is not None
+    assert isinstance(response, ResponseFormat)
+    assert len(response.response) > 0
+    assert response.is_successful
     response_json = {
         "name": "test_response",
         "type": "json_schema",
