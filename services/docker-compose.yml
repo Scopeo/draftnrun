@@ -68,6 +68,8 @@ services:
     volumes:
       - ./../config/tempo.yaml:/etc/tempo.yaml
       - tempo_data:/tmp/tempo
+    networks:
+      - localprom
     ports:
       - "3200:3200" # Tempo
       - "4318:4318" # OTLP HTTP
@@ -82,6 +84,8 @@ services:
       - GF_AUTH_ANONYMOUS_ENABLED=true
       - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
       - GF_AUTH_DISABLE_LOGIN_FORM=true
+    networks:
+      - localprom
     ports:
       - "3000:3000"
 
