@@ -73,7 +73,7 @@ def build_completion_service_config_definitions(
                             SelectOption(value="openai:gpt-4.1-nano", label="GPT-4.1 Nano"),
                             SelectOption(value="openai:gpt-4o", label="GPT-4o"),
                             SelectOption(value="openai:gpt-4o-mini", label="GPT-4o Mini"),
-                            #TODO add new llm service for resoning models
+                            # TODO add new llm service for resoning models
                             # SelectOption(value="openai:o4-mini-2025-04-16", label="GPT-4o4 Mini"),
                             # SelectOption(value="openai:o3-2025-04-16", label="GPT-4o3"),
                             # TODO: Add models once they work using llm_service
@@ -197,8 +197,6 @@ def build_web_service_config_definitions(
                             SelectOption(value="openai:gpt-4.1-nano", label="GPT-4.1 Nano"),
                             SelectOption(value="openai:gpt-4o", label="GPT-4o"),
                             SelectOption(value="openai:gpt-4o-mini", label="GPT-4o Mini"),
-                            # SelectOption(value="openai:o4-mini-2025-04-16", label="GPT-4o4 Mini"),
-                            # SelectOption(value="openai:o3-2025-04-16", label="GPT-4o3"),
                         ],
                         label="Model Name",
                     ).model_dump(exclude_unset=True, exclude_none=True),

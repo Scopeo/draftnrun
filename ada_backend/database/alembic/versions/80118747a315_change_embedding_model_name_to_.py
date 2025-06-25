@@ -7,7 +7,6 @@ Create Date: 2025-06-24 12:35:43.167536
 
 from typing import Sequence, Union
 from alembic import op
-import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
@@ -45,13 +44,6 @@ def downgrade() -> None:
         UPDATE data_sources
         SET embedding_model_reference = 'text-embedding-3-large'
         WHERE embedding_model_reference = 'openai:text-embedding-3-large'
-        """
-    )
-    op.execute(
-        """
-        UPDATE basic_parameters
-        SET value = 'openai:o4-mini-2025-04-16'
-        WHERE value = 'openai:gpt-4.1-mini'
         """
     )
 
