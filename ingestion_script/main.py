@@ -5,6 +5,7 @@ from ada_backend.database.models import SourceType
 from ada_backend.database.setup_db import SessionLocal
 from ada_backend.schemas.ingestion_task_schema import IngestionTaskUpdate
 from ada_backend.services.agent_runner_service import get_organization_llm_providers
+from engine.trace.span_context import set_tracing_span
 from engine.trace.trace_context import get_trace_manager, set_trace_manager
 from engine.trace.trace_manager import TraceManager
 from ingestion_script.ingest_folder_source import ingest_google_drive_source, ingest_local_folder_source
@@ -34,10 +35,12 @@ def ingestion_main(
     source_name: str, organization_id: UUID, task_id: UUID, source_type: SourceType, source_attributes: dict
 ):
     set_trace_manager(TraceManager(project_name="Ingestion"))
-    trace_manager = get_trace_manager()
-    trace_manager.organization_id = organization_id
-    trace_manager.organization_llm_providers = str(
-        get_organization_llm_providers(session=SessionLocal(), organization_id=organization_id)
+    set_tracing_span(
+        project_id="None",
+        organization_id=organization_id,
+        organization_llm_providers=get_organization_llm_providers(
+            session=SessionLocal(), organization_id=organization_id
+        ),
     )
 
     failed_ingestion_task = IngestionTaskUpdate(
