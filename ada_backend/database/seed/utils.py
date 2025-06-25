@@ -101,7 +101,7 @@ def build_completion_service_config_definitions(
                     name="temperature",
                     type=ParameterType.FLOAT,
                     nullable=False,
-                    default="0.5",
+                    default="1.0",
                 )
             )
         if param.param_name == "api_key":

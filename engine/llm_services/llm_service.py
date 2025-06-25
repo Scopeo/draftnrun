@@ -8,6 +8,7 @@ from engine.agent.utils import load_str_to_json
 from engine.llm_services.constrained_output_models import OutputFormatModel
 from settings import settings
 from engine.llm_services.utils import chat_completion_to_response
+from openai.types.chat import ChatCompletion
 
 
 class LLMService(ABC):
@@ -64,7 +65,6 @@ class CompletionService(LLMService):
     def complete(
         self,
         messages: list[dict] | str,
-        temperature: float = 0.5,
         stream: bool = False,
     ) -> str:
         match self._provider:
@@ -76,7 +76,7 @@ class CompletionService(LLMService):
                 response = client.responses.create(
                     model=self._model_name,
                     input=messages,
-                    temperature=temperature,
+                    temperature=self._temperature,
                     stream=stream,
                 )
                 return response.output_text
@@ -87,7 +87,6 @@ class CompletionService(LLMService):
         self,
         messages: list[dict] | str,
         response_format: BaseModel,
-        temperature: float = 0.5,
         stream: bool = False,
         tools: list[ToolDescription] = None,
         tool_choice: str = "auto",
@@ -96,7 +95,7 @@ class CompletionService(LLMService):
         kwargs = {
             "input": messages,
             "model": self._model_name,
-            "temperature": temperature,
+            "temperature": self._temperature,
             "stream": stream,
         }
 
@@ -116,7 +115,6 @@ class CompletionService(LLMService):
         self,
         messages: list[dict] | str,
         response_format: str,
-        temperature: float = 0.5,
         stream: bool = False,
         tools: list[ToolDescription] = None,
         tool_choice: str = "auto",
@@ -124,7 +122,7 @@ class CompletionService(LLMService):
         kwargs = {
             "input": messages,
             "model": self._model_name,
-            "temperature": temperature,
+            "temperature": self._temperature,
             "stream": stream,
         }
         messages = chat_completion_to_response(messages)
@@ -148,11 +146,10 @@ class CompletionService(LLMService):
     def function_call(
         self,
         messages: list[dict] | str,
-        temperature: float = 0.5,
         stream: bool = False,
-        tools: list[ToolDescription] = None,
+        tools: Optional[list[ToolDescription]] = None,
         tool_choice: str = "auto",
-    ) -> str:
+    ) -> ChatCompletion:
         if tools is None:
             tools = []
         match self._provider:
@@ -165,7 +162,7 @@ class CompletionService(LLMService):
                     model=self._model_name,
                     messages=messages,
                     tools=openai_tools,
-                    temperature=temperature,
+                    temperature=self._temperature,
                     stream=stream,
                     tool_choice=tool_choice,
                 )
@@ -181,7 +178,6 @@ class WebSearchService(LLMService):
         provider: str = "openai",
         model_name: str = "gpt-4.1-mini",
         api_key: Optional[str] = None,
-        temperature: float = 0.5,
     ):
         super().__init__(trace_manager, provider, model_name, api_key)
 
@@ -208,8 +204,10 @@ class VisionService(LLMService):
         provider: str = "openai",
         model_name: str = "gpt-4.1-mini",
         api_key: Optional[str] = None,
+        temperature: float = 1.0,
     ):
         super().__init__(trace_manager, provider, model_name, api_key)
+        self._temperature = temperature
 
     def _format_image_content(self, image_content_list: list[bytes]) -> list[dict[str, str]]:
         match self._provider:
@@ -233,7 +231,6 @@ class VisionService(LLMService):
         image_content_list: list[bytes],
         text_prompt: str,
         response_format: Optional[BaseModel] = None,
-        temperature: float = 1.0,
     ) -> str | BaseModel:
         client = None
         match self._provider:
@@ -258,7 +255,7 @@ class VisionService(LLMService):
             chat_response = client.beta.chat.completions.parse(
                 messages=messages,
                 model=self._model_name,
-                temperature=temperature,
+                temperature=self._temperature,
                 response_format=response_format,
             )
             return chat_response.choices[0].message.parsed
@@ -266,6 +263,6 @@ class VisionService(LLMService):
             chat_response = client.chat.completions.create(
                 messages=messages,
                 model=self._model_name,
-                temperature=temperature,
+                temperature=self._temperature,
             )
             return chat_response.choices[0].message.content
