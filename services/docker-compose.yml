@@ -63,6 +63,7 @@ services:
 
   tempo:
     image: grafana/tempo:latest
+    user: "root"
     command: ["-config.file=/etc/tempo.yaml"]
     volumes:
       - ./../config/tempo.yaml:/etc/tempo.yaml
