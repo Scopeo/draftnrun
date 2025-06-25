@@ -29,7 +29,8 @@ services:
       - "6379:6379"
     volumes:
       - redis_data:/data
-    command: ["redis-server", "--appendonly", "yes", "--requirepass", "redis_password"]
+    command:
+      ["redis-server", "--appendonly", "yes", "--requirepass", "redis_password"]
     healthcheck:
       test: ["CMD", "redis-cli", "-a", "redis_password", "ping"]
       interval: 10s
@@ -60,12 +61,35 @@ services:
     ports:
       - 9090:9090
 
+  tempo:
+    image: grafana/tempo:latest
+    command: ["-config.file=/etc/tempo.yaml"]
+    volumes:
+      - ./../config/tempo.yaml:/etc/tempo.yaml
+      - tempo_data:/tmp/tempo
+    ports:
+      - "3200:3200" # Tempo
+      - "4318:4318" # OTLP HTTP
+
+  grafana:
+    image: grafana/grafana:latest
+    volumes:
+      - ./../config/grafana/provisioning:/etc/grafana/provisioning
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
+      - GF_AUTH_DISABLE_LOGIN_FORM=true
+    ports:
+      - "3000:3000"
 
 volumes:
   postgres_data:
   redis_data:
   qdrant_data:
   prometheus_data:
+  tempo_data:
 
 networks:
   localprom:
