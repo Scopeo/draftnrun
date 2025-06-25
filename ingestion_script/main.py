@@ -6,7 +6,7 @@ from ada_backend.database.setup_db import SessionLocal
 from ada_backend.schemas.ingestion_task_schema import IngestionTaskUpdate
 from ada_backend.services.agent_runner_service import get_organization_llm_providers
 from engine.trace.span_context import set_tracing_span
-from engine.trace.trace_context import get_trace_manager, set_trace_manager
+from engine.trace.trace_context import set_trace_manager
 from engine.trace.trace_manager import TraceManager
 from ingestion_script.ingest_folder_source import ingest_google_drive_source, ingest_local_folder_source
 from ingestion_script.utils import update_ingestion_task
