@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from prometheus_client import start_http_server
 
 from ada_backend.admin.admin import setup_admin
 from ada_backend.instrumentation import setup_performance_instrumentation
@@ -104,6 +105,10 @@ def read_root():
 
 if __name__ == "__main__":
     import uvicorn
+
+    # Prometheus metrics endpoint for Observability Feature
+    # TODO: Harmonize with instrumentation.py: use only one endpoint for metrics
+    start_http_server(port=9100, addr="localhost")
 
     uvicorn.run(
         "ada_backend.main:app",
