@@ -5,12 +5,10 @@ scrape_configs:
   # Prometheus scrapes its own metrics for internal monitoring
   - job_name: prometheus
     static_configs:
-      - targets:
-          - prometheus:9090
+      - targets: ['prometheus:9090']
 
-  # Scrapes performance metrics from FastAPI app via OpenTelemetry
-  # Connects to: ada_backend/instrumentation.py -> start_http_server(port=9464)
+  # Ada-backend metrics: HTTP performance + feature metrics
   - job_name: 'ada-backend'
-    scrape_interval: 5s
+    scrape_interval: 10s
     static_configs:
-      - targets: ['host.docker.internal:9464']  # Performance metrics endpoint
+      - targets: ['host.docker.internal:9100']
