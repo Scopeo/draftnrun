@@ -96,7 +96,7 @@ def populate_ada_backend_db_with_mock_data(session: Session):
     )
     component_6 = db.Component(
         id=MOCK_UUIDS["component_6"],
-        name="EmbeddingService  ",
+        name="EmbeddingService",
         description="Embedding Service.",
     )
     session.add_all([component_1, component_2, component_3, component_4, component_5, component_6])

@@ -8,7 +8,7 @@ from pydantic import BaseModel
 
 from engine.agent.agent import ToolDescription
 from engine.trace.trace_context import get_trace_manager
-from engine.llm_services.llm_service import EmbeddingService, CompletionService, WebService
+from engine.llm_services.llm_service import EmbeddingService, CompletionService, WebSearchService
 from engine.qdrant_service import QdrantService, QdrantCollectionSchema
 from ada_backend.database.setup_db import get_db_session
 from ada_backend.repositories.source_repository import get_data_source_by_id
@@ -321,7 +321,7 @@ def build_web_service_processor(
     def processor(params: dict, constructor_params: dict[str, Any]) -> dict:
         provider, model_name = get_llm_provider_and_model(llm_model=params.pop("completion_model"))
 
-        web_service = WebService(
+        web_service = WebSearchService(
             trace_manager=get_trace_manager(),
             provider=provider,
             model_name=model_name,
@@ -359,7 +359,7 @@ def build_qdrant_service_processor(target_name: str = "qdrant_service") -> Param
             if source is None:
                 raise ValueError(f"Source with id {source_id} not found")
 
-            provider, model_name = get_llm_provider_and_model(llm_model=source.embedding_model_referance)
+            provider, model_name = get_llm_provider_and_model(llm_model=source.embedding_model_reference)
 
             embedding_service = EmbeddingService(
                 trace_manager=get_trace_manager(),

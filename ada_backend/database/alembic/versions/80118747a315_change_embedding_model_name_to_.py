@@ -1,4 +1,4 @@
-"""change embedding_model_name to embedding_model_referance
+"""change embedding_model_name to embedding_model_reference
 
 Revision ID: 80118747a315
 Revises: 2301736f9201
@@ -18,9 +18,9 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     # Rename column without losing data
-    op.alter_column('data_sources', 'embedding_model_name', new_column_name='embedding_model_referance')
+    op.alter_column('data_sources', 'embedding_model_name', new_column_name='embedding_model_reference')
 
 
 def downgrade() -> None:
     # Revert to original column name
-    op.alter_column('data_sources', 'embedding_model_referance', new_column_name='embedding_model_name')
+    op.alter_column('data_sources', 'embedding_model_reference', new_column_name='embedding_model_name')

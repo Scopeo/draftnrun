@@ -7,22 +7,21 @@ import pandas as pd
 
 from data_ingestion.document.docx_ingestion import get_chunks_from_docx
 from data_ingestion.document.markdown_ingestion import get_chunks_from_markdown
-from data_ingestion.document.summary_from_document import get_formatted_summary_to_add_to_chunks
 from data_ingestion.document.pdf_vision_ingestion import create_chunks_from_document
 from data_ingestion.document.folder_management.folder_management import (
     FileChunk,
     FileDocument,
     FileDocumentType,
 )
-from engine.llm_services.llm_service import LLMService
+from engine.llm_services.llm_service import CompletionService, VisionService
 
 LOGGER = logging.getLogger(__name__)
 FileProcessor = Callable[[FileDocument], list[FileChunk]]
 
 
 def document_chunking_mapping(
-    vision_ingestion_service: Optional[LLMService] = None,
-    llm_service: Optional[LLMService] = None,
+    vision_ingestion_service: Optional[VisionService] = None,
+    llm_service: Optional[CompletionService] = None,
     get_file_content_func: Optional[Callable[[FileDocument], str]] = None,
     docx_overlapping_size: int = 50,
 ) -> dict[FileDocumentType, FileProcessor]:
@@ -51,7 +50,7 @@ def document_chunking_mapping(
 def get_chunks_dataframe_from_doc(
     document: FileDocument,
     document_chunk_mapping: dict[FileDocumentType, FileProcessor],
-    llm_service: LLMService,
+    llm_service: CompletionService,
     json_type_fields: list[str] = ["bounding_boxes", "metadata"],
     add_doc_description_to_chunks: bool = False,
     documents_summary_func: Optional[Callable] = None,
@@ -60,28 +59,29 @@ def get_chunks_dataframe_from_doc(
 ) -> pd.DataFrame:
     all_chunks = []
     LOGGER.info(f"Processing document {document.file_name} of type {document.type}")
-    description_doc = None
-    if add_doc_description_to_chunks:
-        if documents_summary_func is None or add_summary_in_chunks_func is None:
-            raise ValueError("No summary function / put summary function provided for documents")
-        description_doc = documents_summary_func(document)
+    # TODO: add summary to chunks when we will have a gemini functional service
+    # description_doc = None
+    # if add_doc_description_to_chunks:
+    #     if documents_summary_func is None or add_summary_in_chunks_func is None:
+    #         raise ValueError("No summary function / put summary function provided for documents")
+    #     description_doc = documents_summary_func(document)
 
     chunk_size_doc = default_chunk_size
-    if description_doc is not None:
-        summary_token_size = llm_service.get_token_size(
-            get_formatted_summary_to_add_to_chunks(summary=description_doc, chunk="")
-        )
-        chunk_size_doc -= summary_token_size
-    if chunk_size_doc <= 0:
-        LOGGER.warning(f"Summary token size is too big for document {document.id}")
-        description_doc = ""
-        chunk_size_doc = default_chunk_size
+    # if description_doc is not None:
+    #     summary_token_size = llm_service.get_token_size(
+    #         get_formatted_summary_to_add_to_chunks(summary=description_doc, chunk="")
+    #     )
+    #     chunk_size_doc -= summary_token_size
+    # if chunk_size_doc <= 0:
+    #     LOGGER.warning(f"Summary token size is too big for document {document.id}")
+    #     description_doc = ""
+    #     chunk_size_doc = default_chunk_size
     chunks = document_chunk_mapping[document.type.value](document, chunk_size=chunk_size_doc)
-    if description_doc is not None:
-        chunks = add_summary_in_chunks_func(
-            summary=description_doc,
-            chunks=chunks,
-        )
+    # if description_doc is not None:
+    #     chunks = add_summary_in_chunks_func(
+    #         summary=description_doc,
+    #         chunks=chunks,
+    #     )
     all_chunks.extend(chunks)
     chunks_df = pd.DataFrame([chunk.model_dump() for chunk in all_chunks])
     chunks_df.columns = [col.lower() for col in chunks_df.columns]

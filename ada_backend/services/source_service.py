@@ -49,7 +49,7 @@ def get_sources_by_organization(
                 database_table_name=source.database_table_name,
                 qdrant_collection_name=source.qdrant_collection_name,
                 qdrant_schema=source.qdrant_schema,
-                embedding_model_name=source.embedding_model_referance,
+                embedding_model_reference=source.embedding_model_reference,
                 created_at=str(source.created_at),
                 updated_at=str(source.updated_at),
                 last_ingestion_time=str(source.last_ingestion_time) if source.last_ingestion_time else None,
@@ -85,7 +85,7 @@ def create_source_by_organization(
             source_data.database_schema,
             source_data.qdrant_collection_name,
             source_data.qdrant_schema,
-            source_data.embedding_model_name,
+            source_data.embedding_model_reference,
         )
 
         LOGGER.info(f"Source {source_data.name} created for organization {organization_id}")
@@ -123,7 +123,7 @@ def upsert_source_by_organization(
             source_data.database_schema,
             source_data.qdrant_collection_name,
             source_data.qdrant_schema,
-            source_data.embedding_model_name,
+            source_data.embedding_model_reference,
         )
     except Exception as e:
         LOGGER.error(f"Error in upsert_source_by_organization: {str(e)}")

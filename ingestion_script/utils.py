@@ -177,7 +177,7 @@ def upload_source(
         database_table_name=table_name,
         qdrant_collection_name=qdrant_collection_name,
         qdrant_schema=qdrant_schema.to_dict(),
-        embedding_model_name=embedding_service._model_name,
+        embedding_model_reference=f"{embedding_service._provider}:{embedding_service._model_name}",
     )
     LOGGER.info(f"Creating source {source_name} for organization {organization_id} in database")
     source_id = create_source(

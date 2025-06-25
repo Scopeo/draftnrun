@@ -1,5 +1,4 @@
 import logging
-from functools import partial
 from uuid import UUID
 
 from ada_backend.database import models as db
@@ -13,8 +12,7 @@ from data_ingestion.document.folder_management.folder_management import FolderMa
 from data_ingestion.document.folder_management.google_drive_folder_management import GoogleDriveFolderManager
 from data_ingestion.document.folder_management.local_folder_management import LocalFolderManager
 from data_ingestion.document.supabase_file_uploader import sync_files_to_supabase
-from data_ingestion.document.summary_from_document import add_summary_in_chunks, get_summary_from_document
-from engine.llm_services.llm_service import CompletionService, EmbeddingService
+from engine.llm_services.llm_service import EmbeddingService, VisionService
 from engine.qdrant_service import QdrantCollectionSchema, QdrantService
 from engine.storage_service.db_service import DBService
 from engine.storage_service.db_utils import PROCESSED_DATETIME_FIELD, DBColumn, DBDefinition, create_db_if_not_exists
@@ -24,12 +22,12 @@ from ingestion_script.utils import create_source, get_sanitize_names, update_ing
 from settings import settings
 
 LOGGER = logging.getLogger(__name__)
-GOOGLE_COMPLETION_SERVICE = CompletionService(
+GOOGLE_COMPLETION_SERVICE = VisionService(
     provider="google",
     model_name="gemini-2.0-flash-exp",
     trace_manager=TraceManager(project_name="ingestion"),
 )
-OPENAI_COMPLETION_SERVICE = CompletionService(
+OPENAI_COMPLETION_SERVICE = VisionService(
     provider="openai",
     model_name="gpt-4.1-mini",
     trace_manager=TraceManager(project_name="ingestion"),
@@ -207,13 +205,14 @@ def _ingest_folder_source(
 
     document_summary_func = None
     add_summary_in_chunks_func = None
-    if add_doc_description_to_chunks:
-        document_summary_func = partial(
-            get_summary_from_document,
-            llm_google_service=GOOGLE_COMPLETION_SERVICE,
-            get_file_content_func=folder_manager.get_file_content,
-        )
-        add_summary_in_chunks_func = add_summary_in_chunks
+    # TODO: add summary in chunks when we have a full functinality of gemini
+    # if add_doc_description_to_chunks:
+    #     document_summary_func = partial(
+    #         get_summary_from_document,
+    #         llm_google_service=GOOGLE_COMPLETION_SERVICE,
+    #         get_file_content_func=folder_manager.get_file_content,
+    #     )
+    #     add_summary_in_chunks_func = add_summary_in_chunks
     db_service.create_schema(db_table_schema)
     try:
         for document in files_info:
@@ -251,7 +250,7 @@ def _ingest_folder_source(
         database_table_name=db_table_name,
         qdrant_collection_name=qdrant_collection_name,
         qdrant_schema=QDRANT_SCHEMA.to_dict(),
-        embedding_model_name=EMBEDDING_SERVICE._model_name,
+        embedding_model_reference=f"{EMBEDDING_SERVICE._provider}:{EMBEDDING_SERVICE._model_name}",
     )
     LOGGER.info(f"Creating source {source_name} for organization {organization_id} in database")
     source_id = create_source(

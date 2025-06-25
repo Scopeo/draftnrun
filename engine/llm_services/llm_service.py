@@ -70,6 +70,7 @@ class CompletionService(LLMService):
         match self._provider:
             case "openai":
                 import openai
+
                 messages = chat_completion_to_response(messages)
                 client = openai.OpenAI(api_key=settings.OPENAI_API_KEY)
                 response = client.responses.create(
@@ -173,7 +174,7 @@ class CompletionService(LLMService):
                 raise ValueError(f"Invalid provider: {self._provider}")
 
 
-class WebService(LLMService):
+class WebSearchService(LLMService):
     def __init__(
         self,
         trace_manager: TraceManager,
@@ -188,6 +189,7 @@ class WebService(LLMService):
         match self._provider:
             case "openai":
                 import openai
+
                 client = openai.OpenAI(api_key=settings.OPENAI_API_KEY)
                 response = client.responses.create(
                     model=self._model_name,
@@ -197,3 +199,73 @@ class WebService(LLMService):
                 return response.output_text
             case _:
                 raise ValueError(f"Invalid provider: {self._provider}")
+
+
+class VisionService(LLMService):
+    def __init__(
+        self,
+        trace_manager: TraceManager,
+        provider: str = "openai",
+        model_name: str = "gpt-4.1-mini",
+        api_key: Optional[str] = None,
+    ):
+        super().__init__(trace_manager, provider, model_name, api_key)
+
+    def _format_image_content(self, image_content_list: list[bytes]) -> list[dict[str, str]]:
+        match self._provider:
+            case "openai" | "google":
+                import base64
+
+                return [
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": f"data:image/jpeg;base64,{base64.b64encode(image_content).decode('utf-8')}"
+                        },
+                    }
+                    for image_content in image_content_list
+                ]
+            case _:
+                raise ValueError(f"Invalid provider: {self._provider}")
+
+    def get_image_description(
+        self,
+        image_content_list: list[bytes],
+        text_prompt: str,
+        response_format: Optional[BaseModel] = None,
+        temperature: float = 1.0,
+    ) -> str | BaseModel:
+        client = None
+        match self._provider:
+            case "openai":
+                import openai
+
+                client = openai.OpenAI(api_key=settings.OPENAI_API_KEY)
+            case "google":
+                import openai
+
+                client = openai.OpenAI(api_key=settings.GOOGLE_API_KEY, base_url=settings.GOOGLE_API_KEY)
+        content = [{"type": "text", "text": text_prompt}]
+        content.extend(self._format_image_content(image_content_list))
+        messages = [
+            {
+                "role": "user",
+                "content": content,
+            }
+        ]
+        if response_format is not None:
+
+            chat_response = client.beta.chat.completions.parse(
+                messages=messages,
+                model=self._model_name,
+                temperature=temperature,
+                response_format=response_format,
+            )
+            return chat_response.choices[0].message.parsed
+        else:
+            chat_response = client.chat.completions.create(
+                messages=messages,
+                model=self._model_name,
+                temperature=temperature,
+            )
+            return chat_response.choices[0].message.content

@@ -5,7 +5,7 @@ from typing import Callable, List, Any, Dict, Optional
 from enum import Enum
 from pydantic import BaseModel
 
-from engine.llm_services.llm_service import CompletionService
+from engine.llm_services.llm_service import VisionService
 from data_ingestion.document.folder_management.folder_management import FileDocument, FileChunk
 from data_ingestion.document.prompts_vision_ingestion import (
     PPTX_CONTENT_EXTRACTION_PROMPT,
@@ -90,8 +90,8 @@ def _pdf_to_images(pdf_content, zoom: float = 3.0):
 
 def _extract_text_from_pages_as_images(
     prompt: str,
-    google_llm_service: CompletionService,
-    openai_llm_service: CompletionService,
+    google_llm_service: VisionService,
+    openai_llm_service: VisionService,
     response_format: BaseModel = None,
     image_content_list: List[bytes] = None,
 ) -> Any:
@@ -171,8 +171,8 @@ def _build_section_hierarchy(sections, level=1, ancestors=None) -> List[Sections
 
 def _get_markdown_from_sections(
     sections_tree: List[SectionsTree],
-    google_llm_service: CompletionService,
-    openai_llm_service: CompletionService,
+    google_llm_service: VisionService,
+    openai_llm_service: VisionService,
     images_content_list: List[bytes],
 ) -> str:
     markdown_output = ""
@@ -227,8 +227,8 @@ def _create_chunks_from_markdown(
 def create_chunks_from_document(
     document: FileDocument,
     get_file_content: Callable[[FileDocument], str],
-    google_llm_service: CompletionService,
-    openai_llm_service: CompletionService,
+    google_llm_service: VisionService,
+    openai_llm_service: VisionService,
     zoom: float = 3.0,
     **kwargs,
 ) -> list[FileChunk]:

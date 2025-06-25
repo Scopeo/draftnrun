@@ -291,7 +291,7 @@ class SourceAdmin(EnhancedModelView, model=db.DataSource):
         "database_table_name",
         "qdrant_collection_name",
         "qdrant_schema",
-        "embedding_model_name",
+        "embedding_model_reference",
         "created_at",
         "updated_at",
         "last_ingestion_time",
@@ -308,7 +308,7 @@ class SourceAdmin(EnhancedModelView, model=db.DataSource):
         "database_table_name",
         "qdrant_collection_name",
         "qdrant_schema",
-        "embedding_model_name",
+        "embedding_model_reference",
     ]
 
 
