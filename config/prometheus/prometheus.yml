@@ -7,8 +7,15 @@ scrape_configs:
     static_configs:
       - targets: ['prometheus:9090']
 
-  # Ada-backend metrics: HTTP performance + feature metrics
-  - job_name: 'ada-backend'
+  # Agent metrics: agent_calls_total, meant for user-facing metrics
+  - job_name: 'ada-backend-agents'
     scrape_interval: 10s
     static_configs:
       - targets: ['host.docker.internal:9100']
+
+  # HTTP performance metrics: http_requests_total, http_request_duration_seconds  
+  - job_name: 'ada-backend-http'
+    scrape_interval: 10s
+    static_configs:
+      - targets: ['host.docker.internal:8000']
+    metrics_path: /metrics
