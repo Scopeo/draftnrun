@@ -150,7 +150,6 @@ class ReActAgent(Agent):
         tool_choice = "auto" if self._current_iteration < self._max_iterations else "none"
         chat_response = self._completion_service.function_call(
             messages=[msg.model_dump() for msg in history_messages_handled],
-            temperature=0.2,
             tools=[agent.tool_description for agent in self.agent_tools],
             tool_choice=tool_choice,
         )
