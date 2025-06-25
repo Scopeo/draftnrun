@@ -1,22 +1,26 @@
 server:
-  http_listen_port: 3200
+  http_listen_port: 3200  # Query API port - Grafana connects here
 
 distributor:
   receivers:
     otlp:
       protocols:
+        grpc:
+          endpoint: 0.0.0.0:4317  # OTLP gRPC receiver (not used currently)
         http:
-          http_listen_port: 4318
+          endpoint: 0.0.0.0:4318  # OTLP HTTP receiver - FastAPI traces sent here
+
+ingester:
+  max_block_duration: 5m
+
+compactor:
+  compaction:
+    block_retention: 1h
 
 storage:
   trace:
     backend: local
     local:
-      path: /tmp/tempo/blocks
-
-ingester:
-  lifecycler:
-    ring:
-      replication_factor: 1
-      kvstore:
-        store: inmemory 
+      path: /tmp/tempo/traces  # Local storage for trace data
+    wal:
+      path: /tmp/tempo/wal     # Write-ahead log for durability 
