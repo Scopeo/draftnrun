@@ -36,7 +36,7 @@ class RelevantChunkSelector:
             sources=chunks,
             llm_metadata_keys=chunks[0].metadata.keys() if chunks else [],
         )
-        response = self._llm_service.constrained_complete(
+        response = self._llm_service.constrained_complete_with_pydantic(
             messages=[
                 {
                     "role": "system",

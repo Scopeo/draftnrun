@@ -7,7 +7,7 @@ import tempfile
 import pypandoc
 
 from data_ingestion.document.folder_management.folder_management import FileChunk, FileDocument
-from engine.llm_services.llm_service import LLMService
+from engine.llm_services.llm_service import VisionService
 from data_ingestion.document.markdown_ingestion import CHUNK_SIZE, CHUNK_OVERLAP, chunk_markdown
 from data_ingestion.utils import get_image_description_prompt
 
@@ -91,7 +91,7 @@ def parse_docx_to_md(
     docx_to_process: FileDocument,
     get_file_content_func: Callable[[FileDocument], str],
     include_images_descriptions: bool = False,
-    llm_service_images: LLMService = None,
+    llm_service_images: Optional[VisionService] = None,
 ) -> str:
     try:
         docx_content = _docx_to_md(
@@ -136,7 +136,7 @@ def get_chunks_from_docx(
     docx_to_process: FileDocument,
     get_file_content_func: Callable[[FileDocument], str],
     include_images_descriptions: bool = False,
-    llm_service_images: LLMService = None,
+    llm_service_images: Optional[VisionService] = None,
     chunk_size: int = CHUNK_SIZE,
     chunk_overlap: int = CHUNK_OVERLAP,
 ) -> list[FileChunk]:

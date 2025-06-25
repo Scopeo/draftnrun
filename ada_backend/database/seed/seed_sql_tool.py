@@ -13,9 +13,9 @@ from ada_backend.database.seed.seed_tool_description import TOOL_DESCRIPTION_UUI
 from ada_backend.database.seed.utils import (
     COMPONENT_UUIDS,
     ParameterLLMConfig,
-    build_llm_config_definitions,
+    build_completion_service_config_definitions,
 )
-from ada_backend.services.registry import PARAM_MODEL_NAME_IN_DB
+from ada_backend.services.registry import COMPLETION_MODEL_IN_DB
 
 
 def seed_sql_tool_components(session: Session):
@@ -99,11 +99,11 @@ def seed_sql_tool_components(session: Session):
                 type=ParameterType.BOOLEAN,
                 default="False",
             ),
-            *build_llm_config_definitions(
+            *build_completion_service_config_definitions(
                 component_id=sql_tool.id,
                 params_to_seed=[
                     ParameterLLMConfig(
-                        param_name=PARAM_MODEL_NAME_IN_DB,
+                        param_name=COMPLETION_MODEL_IN_DB,
                         param_id=UUID("978afae2-4a79-4f26-a3a1-0a64cbd75b82"),
                     ),
                     ParameterLLMConfig(

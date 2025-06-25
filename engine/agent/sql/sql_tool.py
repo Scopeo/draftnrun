@@ -3,7 +3,7 @@ import logging
 from typing import Optional
 
 from engine.agent.agent import Agent, ChatMessage, AgentPayload, ToolDescription
-from engine.llm_services.llm_service import LLMService
+from engine.llm_services.llm_service import CompletionService
 from engine.storage_service.db_service import DBService
 from engine.trace.trace_manager import TraceManager
 
@@ -74,7 +74,7 @@ class SQLTool(Agent):
     def __init__(
         self,
         trace_manager: TraceManager,
-        llm_service: LLMService,
+        completion_service: CompletionService,
         db_service: DBService,
         component_instance_name: str = "SQL Tool",
         include_tables: Optional[list[str]] = None,
@@ -92,7 +92,7 @@ class SQLTool(Agent):
         self._db_service = db_service
         self._include_tables = include_tables
         self._additional_db_description = additional_db_description
-        self._llm_service = llm_service
+        self._completion_service = completion_service
         self._text_to_sql_prompt = text_to_sql_prompt
         self._synthesize = synthesize
         self._dialect = db_service.engine.dialect.name
@@ -106,8 +106,8 @@ class SQLTool(Agent):
         schema = self._db_service.get_db_description(self._include_tables)
         if self._additional_db_description:
             schema += self._additional_db_description
-        intput_prompt = self._text_to_sql_prompt.format(query_str=query_str, schema=schema, dialect=self._dialect)
-        generate_sql_query = self._llm_service.complete(messages=[{"role": "user", "content": intput_prompt}])
+        input_prompt = self._text_to_sql_prompt.format(query_str=query_str, schema=schema, dialect=self._dialect)
+        generate_sql_query = self._completion_service.complete(messages=[{"role": "user", "content": input_prompt}])
 
         sql_query = generate_sql_query
         sql_output = self._db_service.run_query(sql_query).to_markdown(index=False)
@@ -117,7 +117,7 @@ class SQLTool(Agent):
             synthetize_prompt = self.synthesize_sql_prompt.format(
                 query_str=query_str, sql_query=sql_query, sql_answer=sql_output
             )
-            synthetize_answer = self._llm_service.complete(
+            synthetize_answer = self._completion_service.complete(
                 messages=[{"role": "assistant", "content": synthetize_prompt}]
             )
             output_message = synthetize_answer

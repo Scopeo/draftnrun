@@ -1,15 +1,20 @@
 import logging
+from typing import Any
 
 
 LOGGER = logging.getLogger(__name__)
 
 
 def chat_completion_to_response(
-    chat_completion_messages: list[dict[str]],
-) -> list[dict[str]]:
+    chat_completion_messages: list[dict[str, Any]] | str,
+) -> list[dict[str, Any]] | str:
     """
     Converts a chat completion API input to response API input (Openai standards).
     """
+
+    if isinstance(chat_completion_messages, str):
+        return chat_completion_messages
+
     response_messages = chat_completion_messages.copy()
     for message in response_messages:
         if "content" in message and isinstance(message["content"], list) and "role" in message:

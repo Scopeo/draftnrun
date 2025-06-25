@@ -59,11 +59,11 @@ The schema below shows the database structure, with tables for managing clients,
 
 **Table Descriptions**:
 
-- **Components**: Defines reusable components like agents or services. (e.g., RAGAgent, OpenAILLMService).
+- **Components**: Defines reusable components like agents or services. (e.g., RAGAgent, EmbeddingService, CompletionService...).
 - **ComponentInstances**: Parameterized instances of components. Represents a component that can be instantiated.
 - **BasicParameters**: Key-value pairs of primitive parameters for `ComponentInstances`. (e.g., model_name: "gpt4-turbo").
 - **ToolDescriptions**: Metadata for tools used by OpenAI function calls.
-- **ComponentSubInputs**: Relationships between components instances. Represents a sub-input of a component. (e.g., A Syntherizer instance uses an OpenAILLMService instance as a sub-input).
+- **ComponentSubInputs**: Relationships between components instances. Represents a sub-input of a component. (e.g., A Syntherizer instance uses an CompletionService instance as a sub-input).
 - **Projects**: Groups `ComponentInstances` together.
 - **ProjectComponentRelationships**: Links `Projects` with `ComponentInstances`.
 - **OrganizationSecrets**: Secrets key-value pairs for organization, such as API keys. These are stored encrypted in the database.
@@ -161,7 +161,7 @@ The creation form offers dropdowns for selecting the component type and tool des
 
 ![Admin Interface Preview](docs/admin_new_instance.png)
 
-Then, we can create it's basic parameters, as well as any sub-inputs (if the component has any) in their respective tabs. For example, here we set an OpenAILLMService instance as the input of a Syntherizer instance. In other words, we are stating that the Syntherizer has an OpenAILLMService as a sub-input with name "llm_service".
+Then, we can create it's basic parameters, as well as any sub-inputs (if the component has any) in their respective tabs. For example, here we set an CompletionService instance as the input of a Syntherizer instance. In other words, we are stating that the Syntherizer has an CompletionService as a sub-input with name "completion_service".
 
 ![Admin Interface Preview](docs/admin_new_subinput.png)
 

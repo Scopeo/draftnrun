@@ -7,7 +7,7 @@ from ada_backend.schemas.ingestion_task_schema import IngestionTaskUpdate
 from ada_backend.database import models as db
 from ada_backend.schemas.source_schema import DataSourceSchema
 from data_ingestion.utils import sanitize_filename
-from engine.llm_services.openai_llm_service import OpenAILLMService
+from engine.llm_services.llm_service import EmbeddingService
 from engine.qdrant_service import QdrantCollectionSchema, QdrantService
 from engine.storage_service.local_service import SQLLocalService
 from engine.trace.trace_manager import TraceManager
@@ -121,9 +121,13 @@ def upload_source(
         source_type=source_type,
         status=db.TaskStatus.FAILED,
     )
-    llm_service = OpenAILLMService(trace_manager=TraceManager(project_name="ingestion"))
+    embedding_service = EmbeddingService(
+        provider="openai",
+        model_name="text-embedding-3-large",
+        trace_manager=TraceManager(project_name="ingestion"),
+    )
     qdrant_service = QdrantService.from_defaults(
-        llm_service=llm_service,
+        embedding_service=embedding_service,
         default_collection_schema=qdrant_schema,
     )
 
@@ -173,7 +177,7 @@ def upload_source(
         database_table_name=table_name,
         qdrant_collection_name=qdrant_collection_name,
         qdrant_schema=qdrant_schema.to_dict(),
-        embedding_model_name=llm_service._embedding_model,
+        embedding_model_reference=f"{embedding_service._provider}:{embedding_service._model_name}",
     )
     LOGGER.info(f"Creating source {source_name} for organization {organization_id} in database")
     source_id = create_source(

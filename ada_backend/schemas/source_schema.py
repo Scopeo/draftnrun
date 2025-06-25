@@ -12,7 +12,7 @@ class DataSourceSchema(BaseModel):
     database_table_name: str
     qdrant_collection_name: Optional[str] = None
     qdrant_schema: Optional[dict] = None
-    embedding_model_name: Optional[str] = None
+    embedding_model_reference: Optional[str] = None
 
     model_config = ConfigDict(
         from_attributes=True, json_encoders={datetime: lambda dt: dt.isoformat() if dt else None}

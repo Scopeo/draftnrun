@@ -2,7 +2,7 @@ from pydantic import BaseModel
 
 from engine.agent.synthesizer_prompts import get_hybrid_synthetizer_prompt_template
 from engine.agent.synthesizer import Synthesizer
-from engine.llm_services.llm_service import LLMService
+from engine.llm_services.llm_service import CompletionService
 from engine.trace.trace_manager import TraceManager
 from engine.agent.build_context import build_context_from_source_chunks
 from engine.agent.agent import SourceChunk, SourcedResponse
@@ -27,12 +27,12 @@ class HybridSynthesizer(Synthesizer):
 
     def __init__(
         self,
-        llm_service: LLMService,
+        completion_service: CompletionService,
         trace_manager: TraceManager,
         prompt_template: str = get_hybrid_synthetizer_prompt_template(),
         response_format: BaseModel = ResponseLLM,
     ):
-        super().__init__(llm_service, trace_manager)
+        super().__init__(completion_service, trace_manager)
         self._prompt_template = prompt_template
         self.response_format = response_format
 
@@ -49,7 +49,7 @@ class HybridSynthesizer(Synthesizer):
         with open(image_id, "rb") as image_file:
             encoded_image = image_file.read()
 
-        response_using_image = self._llm_service.get_image_description(
+        response_using_image = self._completion_service.get_image_description(
             image_content_list=[encoded_image],
             text_prompt=self._prompt_template.format(
                 image_id=image_id,

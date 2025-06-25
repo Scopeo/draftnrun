@@ -659,7 +659,7 @@ class DataSource(Base):
     database_table_name = mapped_column(String, nullable=True)
     qdrant_collection_name = mapped_column(String, nullable=True)
     qdrant_schema = mapped_column(JSON, nullable=True)
-    embedding_model_name = mapped_column(String, nullable=False, default="text-embedding-3-large")
+    embedding_model_reference = mapped_column(String, nullable=False, default="openai:text-embedding-3-large")
     created_at = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     last_ingestion_time = mapped_column(DateTime(timezone=True), nullable=True)

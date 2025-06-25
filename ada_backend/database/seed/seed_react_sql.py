@@ -14,8 +14,12 @@ from ada_backend.database.component_definition_seeding import (
     upsert_components_parameter_definitions,
 )
 from ada_backend.database.seed.seed_tool_description import TOOL_DESCRIPTION_UUIDS
-from ada_backend.database.seed.utils import COMPONENT_UUIDS, ParameterLLMConfig, build_llm_config_definitions
-from ada_backend.services.registry import PARAM_MODEL_NAME_IN_DB
+from ada_backend.database.seed.utils import (
+    COMPONENT_UUIDS,
+    ParameterLLMConfig,
+    build_completion_service_config_definitions,
+)
+from ada_backend.services.registry import COMPLETION_MODEL_IN_DB
 from engine.agent.sql.react_sql_tool import DEFAULT_REACT_SQL_TOOL_PROMPT
 
 
@@ -106,16 +110,12 @@ def seed_react_sql_components(session: Session):
                 ).model_dump(exclude_unset=True, exclude_none=True),
                 is_advanced=True,
             ),
-            *build_llm_config_definitions(
+            *build_completion_service_config_definitions(
                 component_id=react_sql_agent.id,
                 params_to_seed=[
                     ParameterLLMConfig(
-                        param_name=PARAM_MODEL_NAME_IN_DB,
+                        param_name=COMPLETION_MODEL_IN_DB,
                         param_id=UUID("3d858a3a-1730-414f-9a57-45f72cbd3cfd"),
-                    ),
-                    ParameterLLMConfig(
-                        param_name="default_temperature",
-                        param_id=UUID("374924b3-fd84-4f1c-9bd3-c8445fc535e3"),
                     ),
                     ParameterLLMConfig(
                         param_name="api_key",

@@ -8,7 +8,7 @@ from engine.qdrant_service import QdrantService, QdrantCollectionSchema
 from engine.trace.trace_manager import TraceManager
 from engine.agent.synthesizer import Synthesizer
 from engine.agent.synthesizer_prompts import get_synthetizer_prompt_template_slack
-from engine.llm_services.llm_service import LLMService
+from engine.llm_services.llm_service import CompletionService
 
 LOGGER = logging.getLogger(__name__)
 
@@ -16,7 +16,7 @@ DEFAULT_MAX_RETRIEVED_CHUNKS = 10
 
 
 def build_default_rag_agent(
-    llm_service: LLMService,
+    completion_service: CompletionService,
     trace_manager: TraceManager,
     source_name: str,
     collection_schema: Optional[QdrantCollectionSchema] = None,
@@ -35,7 +35,7 @@ def build_default_rag_agent(
     if synthetizer_prompt is None:
         synthetizer_prompt = get_synthetizer_prompt_template_slack()
     qdrant_service = QdrantService.from_defaults(
-        llm_service=llm_service,
+        completion_service=completion_service,
         default_collection_schema=collection_schema,
     )
     retriever = Retriever(
@@ -45,7 +45,7 @@ def build_default_rag_agent(
         max_retrieved_chunks=max_retrieved_chunks,
     )
     synthesizer = Synthesizer(
-        llm_service=llm_service,
+        completion_service=completion_service,
         trace_manager=trace_manager,
         prompt_template=synthetizer_prompt,
     )
@@ -58,7 +58,7 @@ def build_default_rag_agent(
 
 
 def build_slack_rag_agent(
-    llm_service: LLMService,
+    completion_service: CompletionService,
     trace_manager: TraceManager,
     source_name: str = "slack",
     max_retrieved_chunks: int = DEFAULT_MAX_RETRIEVED_CHUNKS,
@@ -69,7 +69,7 @@ def build_slack_rag_agent(
         file_id_field="CHANNELS",
     )
     return build_default_rag_agent(
-        llm_service=llm_service,
+        completion_service=completion_service,
         trace_manager=trace_manager,
         source_name=source_name,
         collection_schema=collection_schema,
@@ -78,7 +78,7 @@ def build_slack_rag_agent(
 
 
 def build_notion_rag_agent(
-    llm_service: LLMService,
+    completion_service: CompletionService,
     trace_manager: TraceManager,
     source_name: str = "notion",
     max_retrieved_chunks: int = DEFAULT_MAX_RETRIEVED_CHUNKS,
@@ -89,7 +89,7 @@ def build_notion_rag_agent(
         file_id_field="URL",
     )
     return build_default_rag_agent(
-        llm_service=llm_service,
+        completion_service=completion_service,
         trace_manager=trace_manager,
         source_name=source_name,
         collection_schema=collection_schema,
@@ -98,7 +98,7 @@ def build_notion_rag_agent(
 
 
 def build_s3_rag_agent(
-    llm_service: LLMService,
+    completion_service: CompletionService,
     trace_manager: TraceManager,
     source_name: str = "s3",
     max_retrieved_chunks: int = DEFAULT_MAX_RETRIEVED_CHUNKS,
@@ -114,7 +114,7 @@ def build_s3_rag_agent(
         },
     )
     qdrant_service = QdrantService.from_defaults(
-        llm_service=llm_service,
+        completion_service=completion_service,
         default_collection_schema=collection_schema,
     )
     retriever = Retriever(
@@ -123,7 +123,7 @@ def build_s3_rag_agent(
         qdrant_service=qdrant_service,
         max_retrieved_chunks=max_retrieved_chunks,
     )
-    synthesizer = Synthesizer(llm_service=llm_service, trace_manager=trace_manager)
+    synthesizer = Synthesizer(completion_service=completion_service, trace_manager=trace_manager)
     return RAG(
         trace_manager=trace_manager,
         tool_description=tool_description,
@@ -132,7 +132,7 @@ def build_s3_rag_agent(
     )
 
 
-def build_personal_doc_rag_agent(llm_service: LLMService, trace_manager: TraceManager) -> RAG:
+def build_personal_doc_rag_agent(completion_service: CompletionService, trace_manager: TraceManager) -> RAG:
     tool_description = ToolDescription(
         name="search_all_documents",
         description=(
@@ -156,7 +156,7 @@ def build_personal_doc_rag_agent(llm_service: LLMService, trace_manager: TraceMa
         required_tool_properties=[],
     )
     retriever = DummyRetriever(trace_manager=trace_manager, whole_knowledge_base=[])
-    synthesizer = Synthesizer(llm_service=llm_service, trace_manager=trace_manager)
+    synthesizer = Synthesizer(completion_service=completion_service, trace_manager=trace_manager)
     return RAG(
         trace_manager=trace_manager,
         tool_description=tool_description,

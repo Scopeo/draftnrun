@@ -102,7 +102,7 @@ def test_update_graph_runner():
                     },
                     {
                         "value": "openai:gpt-4o-mini",
-                        "name": "model_name",
+                        "name": "completion_model",
                         "order": None,
                         "type": "string",
                         "nullable": False,
@@ -166,7 +166,7 @@ def test_update_graph_runner():
                     },
                     {
                         "value": "openai:gpt-4o-mini",
-                        "name": "model_name",
+                        "name": "completion_model",
                         "order": None,
                         "type": "string",
                         "nullable": False,

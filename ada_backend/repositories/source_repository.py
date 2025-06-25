@@ -60,7 +60,7 @@ def create_source(
     database_schema: Optional[str] = None,
     qdrant_collection_name: Optional[str] = None,
     qdrant_schema: Optional[dict] = None,
-    embedding_model_name: Optional[str] = None,
+    embedding_model_reference: Optional[str] = None,
 ) -> UUID:
     source_data_create = db.DataSource(
         name=source_name,
@@ -70,7 +70,7 @@ def create_source(
         database_table_name=database_table_name,
         qdrant_collection_name=qdrant_collection_name,
         qdrant_schema=qdrant_schema,
-        embedding_model_name=embedding_model_name,
+        embedding_model_reference=embedding_model_reference,
     )
     session.add(source_data_create)
     session.commit()
@@ -87,7 +87,7 @@ def upsert_source(
     database_schema: Optional[str] = None,
     qdrant_collection_name: Optional[str] = None,
     qdrant_schema: Optional[dict] = None,
-    embedding_model_name: Optional[str] = None,
+    embedding_model_reference: Optional[str] = None,
 ) -> None:
     """"""
     existing_source = (
@@ -103,8 +103,8 @@ def upsert_source(
             existing_source.name = source_name
         if source_type:
             existing_source.type = source_type
-        if embedding_model_name:
-            existing_source.embedding_model_name = embedding_model_name
+        if embedding_model_reference:
+            existing_source.embedding_model_reference = embedding_model_reference
         existing_source.database_schema = database_schema
         existing_source.database_table_name = database_table_name
         existing_source.qdrant_collection_name = qdrant_collection_name

@@ -69,8 +69,8 @@ def populate_ada_backend_db_with_mock_data(session: Session):
     # --- Components ---
     component_1 = db.Component(
         id=MOCK_UUIDS["component_1"],
-        name="LLMService",
-        description="Language Model Service.",
+        name="CompletionService",
+        description="Completion Service.",
     )
     component_2 = db.Component(
         id=MOCK_UUIDS["component_2"],
@@ -94,7 +94,12 @@ def populate_ada_backend_db_with_mock_data(session: Session):
         description="Retrieve and Generate Agent.",
         is_agent=True,
     )
-    session.add_all([component_1, component_2, component_3, component_4, component_5])
+    component_6 = db.Component(
+        id=MOCK_UUIDS["component_6"],
+        name="EmbeddingService",
+        description="Embedding Service.",
+    )
+    session.add_all([component_1, component_2, component_3, component_4, component_5, component_6])
     session.commit()
 
     # --- Tool Descriptions ---
@@ -119,7 +124,7 @@ def populate_ada_backend_db_with_mock_data(session: Session):
     component_instance_1 = db.ComponentInstance(
         id=MOCK_UUIDS["component_instance_1"],
         component_id=component_1.id,
-        ref="llm_service_a",
+        ref="completion_service_a",
     )
     component_instance_2 = db.ComponentInstance(
         id=MOCK_UUIDS["component_instance_2"],
@@ -143,6 +148,11 @@ def populate_ada_backend_db_with_mock_data(session: Session):
         ref="rag_agent_b",
         tool_description_id=tool_description_2.id,
     )
+    component_instance_6 = db.ComponentInstance(
+        id=MOCK_UUIDS["component_instance_6"],
+        component_id=component_6.id,
+        ref="embedding_service_a",
+    )
     session.add_all(
         [
             component_instance_1,
@@ -150,6 +160,7 @@ def populate_ada_backend_db_with_mock_data(session: Session):
             component_instance_3,
             component_instance_4,
             component_instance_5,
+            component_instance_6,
         ]
     )
     session.commit()

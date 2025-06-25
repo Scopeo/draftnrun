@@ -7,7 +7,7 @@ from openai.types.chat import ChatCompletionMessageToolCall
 from engine.agent.react_function_calling import ReActAgent, INITIAL_PROMPT
 from engine.agent.agent import AgentPayload, ToolDescription, ChatMessage
 from engine.trace.trace_manager import TraceManager
-from engine.llm_services.llm_service import LLMService
+from engine.llm_services.llm_service import CompletionService
 
 
 @pytest.fixture
@@ -43,7 +43,7 @@ def mock_tool_description():
 
 @pytest.fixture
 def mock_llm_service():
-    return MagicMock(spec=LLMService)
+    return MagicMock(spec=CompletionService)
 
 
 @pytest.fixture
@@ -54,7 +54,7 @@ def agent_input():
 @pytest.fixture
 def react_agent(mock_agent, mock_trace_manager, mock_tool_description, mock_llm_service):
     return ReActAgent(
-        llm_service=mock_llm_service,
+        completion_service=mock_llm_service,
         component_instance_name="Test React Agent",
         agent_tools=[mock_agent],
         trace_manager=mock_trace_manager,
@@ -106,7 +106,7 @@ def test_run_with_tool_calls(agent_calls_mock, get_span_mock, react_agent, agent
     assert output.is_final
 
 
-@patch.object(LLMService, "function_call")
+@patch.object(CompletionService, "function_call")
 @patch("engine.prometheus_metric.get_tracing_span")
 @patch("engine.prometheus_metric.agent_calls")
 def test_initial_prompt_insertion(agent_calls_mock, get_span_mock, mock_function_call, react_agent, agent_input):
@@ -121,14 +121,13 @@ def test_initial_prompt_insertion(agent_calls_mock, get_span_mock, mock_function
     assert agent_input.messages[0].content == INITIAL_PROMPT
 
 
-@patch.object(LLMService, "function_call")
+@patch.object(CompletionService, "function_call")
 @patch("engine.prometheus_metric.get_tracing_span")
 @patch("engine.prometheus_metric.agent_calls")
 def test_max_iterations(agent_calls_mock, get_span_mock, mock_function_call, react_agent, agent_input, mock_agent):
     get_span_mock.return_value.project_id = "1234"
     counter_mock = MagicMock()
     agent_calls_mock.labels.return_value = counter_mock
-
     mock_tool_call = MagicMock(spec=ChatCompletionMessageToolCall)
     mock_tool_call.id = "1"
     mock_tool_call_function = MagicMock()
@@ -153,7 +152,7 @@ def test_max_iterations(agent_calls_mock, get_span_mock, mock_function_call, rea
 def test_react_agent_without_tools(mock_trace_manager, mock_tool_description, mock_llm_service):
     """Test that ReActAgent can be instantiated without tools."""
     react_agent = ReActAgent(
-        llm_service=mock_llm_service,
+        completion_service=mock_llm_service,
         component_instance_name="Test React Agent Without Tools",
         trace_manager=mock_trace_manager,
         tool_description=mock_tool_description,

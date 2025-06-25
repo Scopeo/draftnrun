@@ -14,8 +14,12 @@ from ada_backend.database.component_definition_seeding import (
     upsert_components_parameter_definitions,
 )
 from ada_backend.database.seed.seed_tool_description import TOOL_DESCRIPTION_UUIDS
-from ada_backend.database.seed.utils import COMPONENT_UUIDS, ParameterLLMConfig, build_llm_config_definitions
-from ada_backend.services.registry import PARAM_MODEL_NAME_IN_DB
+from ada_backend.database.seed.utils import (
+    COMPONENT_UUIDS,
+    ParameterLLMConfig,
+    build_completion_service_config_definitions,
+)
+from ada_backend.services.registry import COMPLETION_MODEL_IN_DB
 from engine.agent.document_react_loader import INITIAL_PROMPT as DEFAULT_DOCUMENT_REACT_LOADER_PROMPT
 
 
@@ -140,11 +144,11 @@ def seed_smart_rag_components(session: Session):
                 ).model_dump(exclude_unset=True, exclude_none=True),
                 is_advanced=False,
             ),
-            *build_llm_config_definitions(
+            *build_completion_service_config_definitions(
                 component_id=document_react_loader_agent.id,
                 params_to_seed=[
                     ParameterLLMConfig(
-                        param_name=PARAM_MODEL_NAME_IN_DB,
+                        param_name=COMPLETION_MODEL_IN_DB,
                         param_id=UUID("69ae956a-31f0-4349-8d87-115fd42c3356"),
                     ),
                     ParameterLLMConfig(

@@ -7,7 +7,7 @@ import requests
 import pandas as pd
 
 from engine.agent.agent import SourceChunk
-from engine.llm_services.llm_service import LLMService
+from engine.llm_services.llm_service import EmbeddingService
 from settings import settings
 
 LOGGER = logging.getLogger(__name__)
@@ -83,7 +83,7 @@ class QdrantService:
         qdrant_api_key: str,
         qdrant_cluster_url: str,
         default_schema: QdrantCollectionSchema,
-        llm_service: Optional[LLMService] = None,
+        embedding_service: Optional[EmbeddingService] = None,
         max_chunks_to_add: int = MAX_BATCH_SIZE_FOR_CHUNK_UPLOAD,
     ):
         """
@@ -98,7 +98,7 @@ class QdrantService:
 
         self._headers = {"api-key": qdrant_api_key, "Content-Type": "application/json"}
         self._base_url = qdrant_cluster_url
-        self._llm_service = llm_service
+        self._embedding_service = embedding_service
         self._max_chunks_to_add = max_chunks_to_add
 
         self.default_schema = default_schema
@@ -126,7 +126,7 @@ class QdrantService:
     @classmethod
     def from_defaults(
         cls,
-        llm_service: Optional[LLMService] = None,
+        embedding_service: Optional[EmbeddingService] = None,
         default_collection_schema: Optional[QdrantCollectionSchema] = None,
     ) -> "QdrantService":
         """
@@ -148,7 +148,7 @@ class QdrantService:
             qdrant_api_key=settings.QDRANT_API_KEY,
             qdrant_cluster_url=settings.QDRANT_CLUSTER_URL,
             default_schema=default_collection_schema,
-            llm_service=llm_service,
+            embedding_service=embedding_service,
         )
 
     def _send_request(
@@ -256,7 +256,7 @@ class QdrantService:
         input_embeddings = input_text
         if isinstance(input_text, str):
             input_embeddings = [input_text]
-        return [data.embedding for data in self._llm_service.embed(input_embeddings)]
+        return [data.embedding for data in self._embedding_service.embed_text(input_embeddings)]
 
     def retrieve_similar_chunks(
         self,

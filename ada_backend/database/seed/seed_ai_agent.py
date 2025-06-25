@@ -13,8 +13,12 @@ from ada_backend.database.component_definition_seeding import (
     upsert_components_parameter_definitions,
 )
 from ada_backend.database.seed.seed_tool_description import TOOL_DESCRIPTION_UUIDS
-from ada_backend.database.seed.utils import COMPONENT_UUIDS, ParameterLLMConfig, build_llm_config_definitions
-from ada_backend.services.registry import PARAM_MODEL_NAME_IN_DB
+from ada_backend.database.seed.utils import (
+    COMPONENT_UUIDS,
+    ParameterLLMConfig,
+    build_completion_service_config_definitions,
+)
+from ada_backend.services.registry import COMPLETION_MODEL_IN_DB
 
 
 def seed_ai_agent_components(session: Session):
@@ -163,11 +167,11 @@ def seed_ai_agent_components(session: Session):
                 ).model_dump(exclude_unset=True, exclude_none=True),
                 is_advanced=True,
             ),
-            *build_llm_config_definitions(
+            *build_completion_service_config_definitions(
                 component_id=base_ai_agent.id,
                 params_to_seed=[
                     ParameterLLMConfig(
-                        param_name=PARAM_MODEL_NAME_IN_DB,
+                        param_name=COMPLETION_MODEL_IN_DB,
                         param_id=UUID("e2d157b4-f26d-41b4-9e47-62b5b041a9ff"),
                     ),
                     ParameterLLMConfig(
