@@ -2,8 +2,10 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from prometheus_client import start_http_server
+from prometheus_fastapi_instrumentator import Instrumentator
 
 from ada_backend.admin.admin import setup_admin
+from ada_backend.instrumentation import setup_performance_instrumentation
 from ada_backend.routers.project_router import router as project_router
 from ada_backend.routers.template_router import router as template_router
 from ada_backend.routers.auth_router import router as auth_router
@@ -77,6 +79,9 @@ app = FastAPI(
     ],
 )
 
+# Setup HTTP metrics and traces instrumentation
+Instrumentator().instrument(app).expose(app, endpoint="/metrics")
+setup_performance_instrumentation(app)
 setup_admin(app)
 
 app.include_router(auth_router)
@@ -112,8 +117,8 @@ def health_check():
 if __name__ == "__main__":
     import uvicorn
 
-    # Start the prometheus server
-    start_http_server(port=9100, addr="localhost")
+    # Feature metrics endpoint (prometheus_metric.py)
+    start_http_server(port=9100, addr="0.0.0.0")
 
     uvicorn.run(
         "ada_backend.main:app",
