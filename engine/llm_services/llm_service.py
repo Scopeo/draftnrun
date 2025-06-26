@@ -1,7 +1,9 @@
+from functools import wraps
 from typing import Optional
 from abc import ABC
 from pydantic import BaseModel
 
+from engine.llm_services.utils import check_usage
 from engine.trace.trace_manager import TraceManager
 from engine.agent.agent import ToolDescription
 from engine.agent.utils import load_str_to_json
@@ -9,6 +11,19 @@ from engine.llm_services.constrained_output_models import OutputFormatModel
 from settings import settings
 from engine.llm_services.utils import chat_completion_to_response
 from openai.types.chat import ChatCompletion
+
+
+def with_usage_check(func):
+    @wraps(func)
+    def wrapper(self, *args, **kwargs):
+        provider = getattr(self, "_provider", None)
+        if provider is None:
+            raise ValueError("Instance must have a 'provider' attribute to perform usage check.")
+
+        check_usage(provider)
+        return func(self, *args, **kwargs)
+
+    return wrapper
 
 
 class LLMService(ABC):
@@ -62,6 +77,7 @@ class CompletionService(LLMService):
         super().__init__(trace_manager, provider, model_name, api_key)
         self._temperature = temperature
 
+    @with_usage_check
     def complete(
         self,
         messages: list[dict] | str,
@@ -83,6 +99,7 @@ class CompletionService(LLMService):
             case _:
                 raise ValueError(f"Invalid provider: {self._provider}")
 
+    @with_usage_check
     def constrained_complete_with_pydantic(
         self,
         messages: list[dict] | str,
@@ -111,6 +128,7 @@ class CompletionService(LLMService):
             case _:
                 raise ValueError(f"Invalid provider: {self._provider}")
 
+    @with_usage_check
     def constrained_complete_with_json_schema(
         self,
         messages: list[dict] | str,
@@ -143,6 +161,7 @@ class CompletionService(LLMService):
             case _:
                 raise ValueError(f"Invalid provider: {self._provider}")
 
+    @with_usage_check
     def function_call(
         self,
         messages: list[dict] | str,
@@ -181,6 +200,7 @@ class WebSearchService(LLMService):
     ):
         super().__init__(trace_manager, provider, model_name, api_key)
 
+    @with_usage_check
     def web_search(self, query: str) -> str:
         match self._provider:
             case "openai":
@@ -226,6 +246,7 @@ class VisionService(LLMService):
             case _:
                 raise ValueError(f"Invalid provider: {self._provider}")
 
+    @with_usage_check
     def get_image_description(
         self,
         image_content_list: list[bytes],

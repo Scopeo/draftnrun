@@ -1,11 +1,13 @@
 from engine.agent.synthesizer import Synthesizer
 from engine.llm_services.llm_service import CompletionService
 from ada_backend.services.registry import FACTORY_REGISTRY, SupportedEntityType
+from engine.trace.trace_context import set_trace_manager
 from tests.mocks.trace_manager import MockTraceManager
 
 
 def test_synthesizer_registration():
     # Register a new entity class with the registry
+    set_trace_manager(MockTraceManager(project_name="test_project"))
     factory = FACTORY_REGISTRY.get(entity_name=SupportedEntityType.SYNTHESIZER)
     assert factory is not None
 

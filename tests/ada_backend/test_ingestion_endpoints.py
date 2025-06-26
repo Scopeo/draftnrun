@@ -1,8 +1,13 @@
 import requests
 
+from ada_backend.database.setup_db import SessionLocal
 from ada_backend.scripts.get_supabase_token import get_user_jwt
 from ada_backend.schemas.ingestion_task_schema import IngestionTaskQueue
 from ada_backend.database import models as db
+from ada_backend.services.agent_runner_service import get_organization_llm_providers
+from engine.trace.span_context import set_tracing_span
+from engine.trace.trace_context import set_trace_manager
+from engine.trace.trace_manager import TraceManager
 from ingestion_script.ingest_folder_source import ingest_local_folder_source
 from ingestion_script.utils import get_sanitize_names
 from engine.qdrant_service import QdrantService
@@ -46,7 +51,14 @@ def test_ingest_local_folder_source():
     assert response.status_code == 201
     assert isinstance(task_id, str)
     assert len(task_id) > 0
-
+    set_trace_manager(TraceManager(project_name="Test Ingestion"))
+    set_tracing_span(
+        project_id="None",
+        organization_id=ORGANIZATION_ID,
+        organization_llm_providers=get_organization_llm_providers(
+            session=SessionLocal(), organization_id=ORGANIZATION_ID
+        ),
+    )
     ingest_local_folder_source(
         path=TEST_SOURCE_ATTRIBUTES["path"],
         organization_id=ORGANIZATION_ID,
