@@ -1,0 +1,21 @@
+[Unit]
+Description=Gunicorn instance to serve Ada
+After=network.target
+
+[Service]
+User=${SERVICE_USER}
+Group=${SERVICE_USER}
+WorkingDirectory=${APP_DIR}
+ExecStart=${APP_DIR}/.venv/bin/gunicorn -w ${WORKERS} -k uvicorn.workers.UvicornWorker ada_backend.main:app --log-level debug --access-logfile ${ACCESS_LOGFILE} --error-logfile ${ERROR_LOGFILE} --timeout ${TIMEOUT}
+ExecReload=/bin/kill -USR2 $MAINPID
+Restart=always
+Type=simple
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+StandardOutput=append:${LOGFOLDER}/stdout.log
+StandardError=append:${LOGFOLDER}/stderr.log
+
+[Install]
+WantedBy=multi-user.target
