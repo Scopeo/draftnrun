@@ -191,7 +191,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum(rate(http_request_duration_highr_seconds_bucket[5m])) by (le))",
+          "expr": "histogram_quantile(0.99, sum(http_request_duration_highr_seconds_bucket) by (le))",
           "instant": true,
           "legendFormat": "",
           "refId": "A"
@@ -422,7 +422,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_highr_seconds_bucket[5m])) by (le))",
+          "expr": "histogram_quantile(0.95, sum(http_request_duration_highr_seconds_bucket) by (le))",
           "legendFormat": "95th percentile",
           "range": true,
           "refId": "A"
@@ -433,7 +433,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum(rate(http_request_duration_highr_seconds_bucket[5m])) by (le))",
+          "expr": "histogram_quantile(0.50, sum(http_request_duration_highr_seconds_bucket) by (le))",
           "legendFormat": "50th percentile (median)",
           "range": true,
           "refId": "B"
