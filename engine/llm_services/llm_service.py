@@ -35,17 +35,34 @@ class EmbeddingService(LLMService):
     ):
         super().__init__(trace_manager, provider, model_name, api_key)
 
+    def _embed_text_openai(
+        self,
+        client,
+        text: str,
+    ) -> list[float]:
+
+        response = client.embeddings.create(
+            model=self._model_name,
+            input=text,
+        )
+        return response.data
+
     def embed_text(self, text: str) -> list[float]:
         match self._provider:
             case "openai":
                 import openai
 
                 client = openai.OpenAI(api_key=settings.OPENAI_API_KEY)
-                response = client.embeddings.create(
-                    model=self._model_name,
-                    input=text,
-                )
-                return response.data
+                response = self._embed_text_openai(client, text)
+                return response
+
+            case "local":
+                import openai
+
+                client = openai.OpenAI(api_key=settings.LLM_API_KEY, base_url=settings.LLM_BASE_URL)
+                response = self._embed_text_openai(client, text)
+                return response
+
             case _:
                 raise ValueError(f"Invalid provider: {self._provider}")
 
@@ -80,6 +97,17 @@ class CompletionService(LLMService):
                     stream=stream,
                 )
                 return response.output_text
+            case "local":
+                import openai
+
+                client = openai.OpenAI(api_key=settings.LLM_API_KEY, base_url=settings.LLM_BASE_URL)
+                response = client.chat.completions.create(
+                    model=self._model_name,
+                    messages=messages,
+                    temperature=self._temperature,
+                    stop=["basemodel"],
+                )
+                return response.choices[0].message.content
             case _:
                 raise ValueError(f"Invalid provider: {self._provider}")
 
@@ -88,7 +116,7 @@ class CompletionService(LLMService):
         messages: list[dict] | str,
         response_format: BaseModel,
         stream: bool = False,
-        tools: list[ToolDescription] = None,
+        tools: Optional[list[ToolDescription]] = None,
         tool_choice: str = "auto",
     ) -> BaseModel:
         messages = chat_completion_to_response(messages)
@@ -116,7 +144,7 @@ class CompletionService(LLMService):
         messages: list[dict] | str,
         response_format: str,
         stream: bool = False,
-        tools: list[ToolDescription] = None,
+        tools: Optional[list[ToolDescription]] = None,
         tool_choice: str = "auto",
     ) -> str:
         kwargs = {
@@ -143,6 +171,24 @@ class CompletionService(LLMService):
             case _:
                 raise ValueError(f"Invalid provider: {self._provider}")
 
+    def _run_openai_function_call(
+        self,
+        client,
+        messages: list[dict],
+        stream: bool = False,
+        tools: Optional[list[dict]] = None,
+        tool_choice: str = "auto",
+    ):
+        response = client.chat.completions.create(
+            model=self._model_name,
+            messages=messages,
+            tools=tools,
+            temperature=self._temperature,
+            stream=stream,
+            tool_choice=tool_choice,
+        )
+        return response
+
     def function_call(
         self,
         messages: list[dict] | str,
@@ -152,17 +198,30 @@ class CompletionService(LLMService):
     ) -> ChatCompletion:
         if tools is None:
             tools = []
+
+        openai_tools = [tool.openai_format for tool in tools]
+
         match self._provider:
             case "openai":
                 import openai
 
                 client = openai.OpenAI(api_key=settings.OPENAI_API_KEY)
-                openai_tools = [tool.openai_format for tool in tools]
-                response = client.chat.completions.create(
-                    model=self._model_name,
+                response = self._run_openai_function_call(
+                    client=client,
                     messages=messages,
                     tools=openai_tools,
-                    temperature=self._temperature,
+                    stream=stream,
+                    tool_choice=tool_choice,
+                )
+                return response
+            case "local":
+                import openai
+
+                client = openai.OpenAI(api_key=settings.LLM_API_KEY, base_url=settings.LLM_BASE_URL)
+                response = self._run_openai_function_call(
+                    client=client,
+                    messages=messages,
+                    tools=openai_tools,
                     stream=stream,
                     tool_choice=tool_choice,
                 )
