@@ -16,7 +16,7 @@ from openai.types.chat import ChatCompletion
 def with_usage_check(func):
     @wraps(func)
     def wrapper(self, *args, **kwargs):
-        provider = getattr(self, "provider", None)
+        provider = getattr(self, "_provider", None)
         if provider is None:
             raise ValueError("Instance must have a 'provider' attribute to perform usage check.")
 
