@@ -21,9 +21,12 @@ class SourceAttributes(BaseModel):
     id_column_name: Optional[str] = None
     text_column_names: Optional[list[str]] = None
     source_schema_name: Optional[str] = None
+    chunk_size: Optional[int] = None
+    chunk_overlap: Optional[int] = None
     metadata_column_names: Optional[list[str]] = None
     timestamp_column_name: Optional[str] = None
-    is_sync_enabled: Optional[bool] = False
+    url_column_name: Optional[str] = None
+    replace_existing: Optional[bool] = False
 
 
 class IngestionTaskUpdate(IngestionTask):
