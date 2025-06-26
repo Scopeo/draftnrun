@@ -27,6 +27,7 @@ jobs:
         echo "ERROR_LOGFILE=${{ vars.ERROR_LOGFILE }}" >> $GITHUB_ENV
         echo "TIMEOUT=${{ vars.TIMEOUT }}" >> $GITHUB_ENV
         echo "LOGFOLDER=${{ vars.LOGFOLDER }}" >> $GITHUB_ENV
+        echo "SERVICE_USER=${{ vars.SERVICE_USER }}" >> $GITHUB_ENV
         
 
     - name: Fill in gunicorn.service template
