@@ -1,177 +1,110 @@
-# 🔥 FastAPI Load Testing with Locust
+# FastAPI Load Testing
 
-Complete load testing system for FastAPI backend with real-time monitoring using Grafana.
+Simple load testing setup for FastAPI applications using Locust. Perfect for demonstrating system performance and monitoring with Grafana dashboards.
 
-## 📋 What's included?
+## 🚀 Quick Start
 
-- **3 Testing Scenarios**: Basic, Authenticated, and Heavy Load
-- **Real-time Monitoring**: Grafana dashboard integration
-- **Realistic Data**: Data generators based on OpenAPI schemas
-- **Automatic Authentication**: JWT tokens and API keys handling
-- **Convenient Scripts**: Run tests with a single command
+### Prerequisites
 
-## 🏗️ Structure
+1. **Install dependencies:**
 
-```
-scripts/load_testing/
-├── locustfile.py              # Test scenarios definition
-├── run_load_test.py           # Main script to run tests
-├── README.md                  # This documentation
-└── utils/
-    ├── __init__.py
-    ├── auth_helpers.py         # Authentication helpers
-    └── data_generators.py      # Test data generators
-```
+   ```bash
+   uv sync --group load_testing
+   ```
 
-## 🚀 Setup
+2. **Start your FastAPI server:**
 
-### 1. Install load testing dependencies
+   ```bash
+   # Make sure your FastAPI app is running on http://localhost:8000
+   cd ada_backend
+   python main.py
+   ```
 
-```bash
-uv sync --group load_testing
-```
+3. **Run a basic load test:**
+   ```bash
+   uv run python -m scripts.load_testing --users 10 --duration 30
+   ```
 
-### 2. Verify FastAPI is running
+## 📊 Usage Examples
+
+### Basic Demo (Recommended for first-time use)
 
 ```bash
-curl http://localhost:8000/
+# 10 users, 2/sec spawn rate, 60 seconds
+uv run python -m scripts.load_testing --users 10 --spawn-rate 2 --duration 60
 ```
 
-### 3. Verify Grafana is working
+### High Load Testing
 
 ```bash
-curl http://localhost:3000/
-```
-
-## 📊 Testing Scenarios
-
-### 🟢 Basic Scenario (No Auth)
-
-**Perfect for initial demo**
-
-- Endpoints: `/`, `/docs`, `/openapi.json`, `/metrics`
-- No authentication required
-- Ideal for showing metrics in Grafana
-
-```bash
-uv run python -m scripts.load_testing --scenario basic --users 10 --duration 60
-```
-
-### 🟡 Authenticated Scenario
-
-**More realistic testing with API endpoints**
-
-- Endpoints: projects, components, sources, metrics
-- Requires valid JWT token
-- Simulates real application usage
-
-```bash
-uv run python -m scripts.load_testing.run_load_test --scenario auth --users 5 --duration 120
-```
-
-### 🔴 Heavy Load Scenario
-
-**Endpoints that could "kill" the backend**
-
-- Endpoints: LLM chat, resource creation
-- Use with caution
-- Perfect for finding system limits
-
-```bash
-uv run python -m scripts.load_testing.run_load_test --scenario heavy --users 2 --duration 30
-```
-
-### 🔀 Mixed Load
-
-**Combination of all scenarios**
-
-```bash
-uv run python -m scripts.load_testing.run_load_test --scenario all --users 15 --duration 180
-```
-
-## 🎯 Example Commands
-
-### Quick Demo (60 seconds)
-
-```bash
-uv run python -m scripts.load_testing.run_load_test --scenario basic --users 10 --spawn-rate 2 --duration 60
-```
-
-### Stress Testing (5 minutes)
-
-```bash
-uv run python -m scripts.load_testing.run_load_test --scenario auth --users 20 --spawn-rate 1 --duration 300
+# 25 users, 5/sec spawn rate, 30 seconds
+uv run python -m scripts.load_testing --users 25 --spawn-rate 5 --duration 30
 ```
 
 ### Interactive Mode (Web UI)
 
 ```bash
-uv run python -m scripts.load_testing.run_load_test --scenario basic --interactive
-# Then open http://localhost:8089
+# Opens Locust web interface at http://localhost:8089
+uv run python -m scripts.load_testing --users 10 --interactive
 ```
 
-### Manual Testing with Locust
+### Custom Host
 
 ```bash
-cd scripts/load_testing
-uv run locust -f locustfile.py BasicEndpointsUser --host=http://localhost:8000
+# Test against different host
+uv run python -m scripts.load_testing --host http://staging.example.com --users 5
 ```
+
+## 🎯 What Gets Tested
+
+The load tests target these FastAPI endpoints:
+
+- **`GET /`** - Welcome message (50% of requests)
+- **`GET /docs`** - Swagger documentation (30% of requests)
+- **`GET /openapi.json`** - OpenAPI specification (20% of requests)
+- **`GET /metrics`** - Prometheus metrics (10% of requests)
 
 ## 📈 Monitoring Results
 
-### 1. **Grafana Dashboard** (Recommended)
+### Grafana Dashboard (Recommended)
 
 - URL: http://localhost:3000
-- Dashboard: "FastAPI Performance Dashboard"
 - Real-time metrics: latency, throughput, errors
+- Best way to visualize load test impact
 
-### 2. **Locust Web UI** (Interactive Mode)
+### Locust Web UI (Interactive Mode)
 
-- URL: http://localhost:8089
+- URL: http://localhost:8089 (when using `--interactive`)
 - Detailed statistics per endpoint
-- Performance charts
+- Performance charts and real-time monitoring
 
-### 3. **Terminal Output** (Headless Mode)
+### Terminal Output (Headless Mode)
 
 - Statistics summary at the end
 - Real-time errors and warnings
+- Quick performance overview
 
-## 🔧 Advanced Configuration
+## 🔧 Command Line Options
 
-### Required Environment Variables
+```bash
+uv run python -m scripts.load_testing [OPTIONS]
 
-For authenticated scenarios, you need in your `credentials.env`:
-
-```env
-TEST_USER_EMAIL=your_email@example.com
-TEST_USER_PASSWORD=your_password
-INGESTION_API_KEY=your_api_key
+Options:
+  --users INTEGER          Number of concurrent users (default: 10)
+  --spawn-rate INTEGER     User spawn rate per second (default: 2)
+  --duration INTEGER       Test duration in seconds (default: 60)
+  --host TEXT             Target host URL (default: http://localhost:8000)
+  --interactive           Run in interactive mode (opens web UI)
+  --skip-validation       Skip prerequisite validation
+  --help                  Show this message and exit
 ```
-
-### Customize Testing IDs
-
-Edit `utils/auth_helpers.py` to change:
-
-```python
-def get_test_organization_id():
-    return "your-org-id-here"
-
-def get_test_project_id():
-    return "your-project-id-here"
-```
-
-### Add New Endpoints
-
-1. Edit `locustfile.py`
-2. Add new `@task` methods
-3. Use `utils/data_generators.py` for test data
 
 ## 🐛 Troubleshooting
 
 ### "Locust not found"
 
 ```bash
-pip install locust
+uv sync --group load_testing
 ```
 
 ### "FastAPI server not accessible"
@@ -185,25 +118,33 @@ cd ada_backend
 python main.py
 ```
 
-### "Authentication setup failed"
-
-- Check `credentials.env`
-- Ensure `TEST_USER_EMAIL` and `TEST_USER_PASSWORD` are configured
-- Verify the user exists in Supabase
-
 ### "No data in Grafana"
 
 - Wait 30-60 seconds for metrics to appear
 - Refresh the dashboard
 - Check that Prometheus is scraping: http://localhost:9090/targets
 
-### 422 errors on authenticated endpoints
+## 📚 Manual Testing with Locust
 
-- Normal for some test data
-- Endpoints validate schemas strictly
-- 422 errors are marked as "success" in testing
+For advanced users who want to run Locust directly:
 
-## 📚 Additional Resources
+```bash
+cd scripts/load_testing
+locust -f locustfile.py BasicEndpointsUser --host=http://localhost:8000
+```
+
+## 🎉 Integration with Observability Stack
+
+This load testing system is designed to work seamlessly with the existing observability infrastructure:
+
+- **OpenTelemetry** → Captures request traces and metrics
+- **Prometheus** → Scrapes and stores performance metrics
+- **Tempo** → Distributed tracing storage
+- **Grafana** → Real-time dashboard visualization
+
+Run load tests and immediately see the impact on your Grafana dashboards!
+
+## 📚 Resources
 
 - [Locust Documentation](https://locust.io/)
 - [Grafana Dashboards](http://localhost:3000)
