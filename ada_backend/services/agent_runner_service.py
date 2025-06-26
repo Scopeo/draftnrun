@@ -25,6 +25,22 @@ from engine.trace.span_context import set_tracing_span
 TOKEN_LIMIT = 2000000
 
 
+def get_organization_llm_providers(session: Session, organization_id: UUID) -> list[str]:
+    organization_secrets = get_organization_secrets(
+        session,
+        organization_id=organization_id,
+    )
+    return (
+        [
+            organization_secret.key.split("_")[0]
+            for organization_secret in organization_secrets
+            if organization_secret.secret_type == OrgSecretType.LLM_API_KEY
+        ]
+        if organization_secrets
+        else []
+    )
+
+
 async def build_graph_runner(
     session: Session,
     graph_runner_id: UUID,
@@ -95,25 +111,10 @@ async def run_agent(
     input_data: dict,
 ) -> ChatResponse:
     project_details = get_project_with_details(session, project_id=project_id)
-    trace_manager_project_id = str(project_id)
-    trace_manager_organization_id = str(project_details.organization_id)
-    organization_secrets = get_organization_secrets(
-        session,
-        organization_id=project_details.organization_id,
-    )
-    trace_manager_organization_llm_providers = (
-        [
-            organization_secret.key.split("_")[0]
-            for organization_secret in organization_secrets
-            if organization_secret.secret_type == OrgSecretType.LLM_API_KEY
-        ]
-        if organization_secrets
-        else []
-    )
     set_tracing_span(
-        project_id=trace_manager_project_id,
-        organization_id=trace_manager_organization_id,
-        organization_llm_providers=trace_manager_organization_llm_providers,
+        project_id=str(project_id),
+        organization_id=str(project_details.organization_id),
+        organization_llm_providers=get_organization_llm_providers(session, project_details.organization_id),
     )
     agent = await get_agent_for_project(
         session,
