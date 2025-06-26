@@ -117,6 +117,13 @@ class BaseConfig(BaseSettings):
     S3_BUCKET_NAME: Optional[str] = None
     S3_REGION_NAME: Optional[str] = None
 
+    # Observability stack endpoints
+    TEMPO_ENDPOINT: str = "http://localhost:4318/v1/traces"
+    PROMETHEUS_URL: str = "http://localhost:9090"
+    GRAFANA_URL: str = "http://localhost:3000"
+    GF_SECURITY_ADMIN_USER: Optional[str] = None
+    GF_SECURITY_ADMIN_PASSWORD: Optional[str] = None
+
     @model_validator(mode="after")
     @classmethod
     def sync_db_settings(cls, values):

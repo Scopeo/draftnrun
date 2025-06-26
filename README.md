@@ -17,10 +17,10 @@ You will need to install the following packages:
 
 To use the backend of the app, you will need to run a Docker Compose file that launches the following services:
 
-- postgres (with 3 databases: ada_backend, ada_ingestion, ada_traces)
-- redis  
-- qdrant  
-- prometheus  
+- postgres
+- redis
+- qdrant
+- prometheus
 - seaweedFS
 
 #### Credentials for the services
@@ -73,7 +73,7 @@ Here are the env variables with the default values that work for Docker Compose:
   # QDRANT
   QDRANT_CLUSTER_URL=http://localhost:6333
   QDRANT_API_KEY=secret_api_key
-  
+
   # SeaweedFS
   # S3 CREDENTIALS FOR INGESTION
   S3_ENDPOINT_URL=http://localhost:8333
@@ -82,16 +82,18 @@ Here are the env variables with the default values that work for Docker Compose:
   S3_BUCKET_NAME=s3-backend
   S3_REGION_NAME=us-east-1
   ```
-You will need to put in the `S3_ACCESS_KEY_ID` and the `S3_SECRET_ACCESS_KEY` the same values as in the `s3_config.json` file you created earlier.
-The `S3_BUCKET_NAME` is the name of the bucket created by the docker compose file, which is `s3-backend` by default.
-If you need to use seaweedfs on another machine, you can change the S3_ENDPOINT_URL accordingly.
-If you need to run the s3 service with amazon s3 or another s3-like service, you need to change those 5 variables.
-Be careful, when using amazon s3, put the `S3_ENDPOINT_URL` to None, meaning:
+
+  You will need to put in the `S3_ACCESS_KEY_ID` and the `S3_SECRET_ACCESS_KEY` the same values as in the `s3_config.json` file you created earlier.
+  The `S3_BUCKET_NAME` is the name of the bucket created by the docker compose file, which is `s3-backend` by default.
+  If you need to use seaweedfs on another machine, you can change the S3_ENDPOINT_URL accordingly.
+  If you need to run the s3 service with amazon s3 or another s3-like service, you need to change those 5 variables.
+  Be careful, when using amazon s3, put the `S3_ENDPOINT_URL` to None, meaning:
+
 ```env
 S3_ENDPOINT_URL=
 ```
-By default, boto3 will use the amazon s3 endpoint.
 
+By default, boto3 will use the amazon s3 endpoint.
 
 In general, if you want to modify the credentials for any of those services,
 update the Docker Compose file accordingly.
@@ -136,12 +138,14 @@ supabase status
 ```
 
 ##### Put Supabase values in credentials.env file
+
 Here are two important variables that you get in the terminal when running supabase:
 
 - **anon key**: `ey_...`
 - **service_role key**: `eyJ...`
 
 You need to use them to to fill those environnement variables:
+
 ```env
 SUPABASE_PROJECT_KEY=*anon-key*
 SUPABASE_SERVICE_ROLE_SECRET_KEY=*service_role key*
@@ -174,6 +178,7 @@ Then:
 - Use the **Table Editor** to add your user to one of the existing organizations.
 
 #### Video tutorial
+
 [Here](https://youtu.be/m9WCJ5mMD6w) is a quick video tutorial on how to set up those three things
 
 #### Create a bucket in Supabase
@@ -208,7 +213,7 @@ Use the **organization_members** table.
 
 - `user_id` = your user’s ID from `auth_user_emails`
 - `org_id` = the ID of the desired organization (e.g., `DraftNRun-test-organization` or `test2-organization`)
-- `role` = your role in the organization (put admin to have all the rights) 
+- `role` = your role in the organization (put admin to have all the rights)
 
 #### Reset or stop Supabase
 
@@ -242,7 +247,6 @@ SUPABASE_PASSWORD=xxx
 SUPABASE_BUCKET_NAME=ada-backend
 ```
 
-
 ## Set up and run the backend
 
 ### Install Python packages
@@ -255,29 +259,33 @@ Use **UV**
 ```bash
 uv venv
 ```
+
 3. Activate it
 
 ```bash
 source .venv/bin/activate
 ```
+
 4. Install the packages
 
 ```bash
 uv sync
 ```
 
-
 ### Credentials
 
 Create the `credentials.env` file (copy from `credentials.env.example`).
 
 Generate the secret keys for:
+
 - `BACKEND_SECRET_KEY`
 
 ```bash
 uv run python -c "import secrets; print(secrets.token_hex(32))"
 ```
+
 - `FERNET_KEY`
+
 ```bash
 uv run python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
 ```
@@ -294,6 +302,7 @@ SUPABASE_BUCKET_NAME=ada-backend
 ```
 
 Finally, generate with this script the INGESTION_API_KEY and the INGESTION_API_KEY_HASHED and put it in the credentials.env file:
+
 ```
 uv run python -c "from ada_backend.services.api_key_service import _generate_api_key, _hash_key; key = _generate_api_key(); print('INGESTION_API_KEY =', key); print('INGESTION_API_KEY_HASHED =', _hash_key(key))"
 ```
@@ -305,11 +314,14 @@ INGESTION_API_KEY_HASHED=xxxx
 
 #### Custom LLM Configuration
 
+You can configure Draft'n run to use your own custom Large Language Model (LLM) service by adding the following variables to your `credentials.env` file:
+
 You can configure Draft'n run to use your own custom Large Language Model (LLM) service by copying the `custom_models_example.json` one a `custom_models.json` file in the root directory.
 
 **Configuration options:**
 
 - **`completion_models`**: List of available completion models
+
   - `model_name`: The name of your model
   - `function_calling`: Whether the model supports function calling
   - `multimodal`: Whether the model supports multimodal inputs (images, etc.)
@@ -317,6 +329,7 @@ You can configure Draft'n run to use your own custom Large Language Model (LLM) 
   - `constrained_completion_with_json_schema`: Whether the model supports JSON schema-constrained outputs
 
 - **`embedding_models`**: List of available embedding models
+
   - `model_name`: The name of your embedding model
   - `embedding_size`: The dimension of the embeddings
 
@@ -331,11 +344,14 @@ Once configured, your custom models will appear in the model selection dropdowns
 
 **Note:** The `custom_models.json` file is automatically loaded by the application. No additional environment variables are required.
 
-When you have done all configuration for local models you need to run seed again 
+When you have done all configuration for local models you need to run seed again
 
 ```bash
 make db-seed
 ```
+
+**How it works:**  
+If you set these variables, your custom model will appear as an option in the model selection dropdown after reseeding. When this model is selected, the backend will route requests to your custom LLM service instead of sending them to OpenAI or other providers.
 
 #### Non-local version
 
@@ -367,7 +383,7 @@ INGESTION_DB_URL=postgresql://postgres:ada_password@localhost:5432/ada_ingestion
 # Backend DB
 ADA_DB_URL=postgresql://postgres:ada_password@localhost:5432/ada_backend
 
-# URL to run the backend app 
+# URL to run the backend app
 ADA_URL=http://localhost:8000
 ```
 
@@ -399,11 +415,14 @@ ADMIN_PASSWORD=your-admin-password
 ```
 
 Relaunch the backend run and then go to the following url:
+
 ```
 ADA_URL/docs (documentation swagger)
 ADA_URL/admin (admin console)
 ```
-If you run locally, `ADA_URL` in your credentials.env should be 
+
+If you run locally, `ADA_URL` in your credentials.env should be
+
 ```
 ADA_URL=http://localhost:8000
 ```
@@ -416,6 +435,134 @@ Run the worker:
 
 ```bash
 uv run python -m ada_ingestion_system.worker.main
+```
+
+## Backend Observability Stack
+
+Draft'n run includes a comprehensive observability stack for monitoring, tracing, and performance analysis. The stack uses industry-standard open-source tools that provide production-ready monitoring capabilities.
+
+### Observability Technologies
+
+Our observability stack consists of:
+
+- **🔥 Prometheus** - Metrics collection and storage for performance monitoring
+- **📊 Grafana** - Visualization dashboards with real-time charts and alerts
+- **🔍 Tempo** - Distributed tracing for request flow analysis
+- **📈 FastAPI Metrics** - HTTP performance metrics (latency, throughput, errors)
+- **🤖 Agent Metrics** - User-facing feature metrics for AI agent usage
+- **🔄 Load Testing** - Locust-based performance testing with immediate dashboard feedback
+
+This setup provides both **operational monitoring** (for DevOps) and **user-facing analytics** (for business insights).
+
+### Quick Start - Observability Only
+
+If you only need the observability stack (without databases), run:
+
+```bash
+cd services
+docker compose up -d prometheus tempo grafana
+```
+
+### Deployment Options
+
+#### 1. **Local Development** (Default)
+
+Perfect for development and testing:
+
+```bash
+cd services
+docker compose up -d prometheus tempo grafana
+```
+
+Access points:
+
+- **Grafana Dashboard**: http://localhost:3000
+- **Prometheus Metrics**: http://localhost:9090
+- **FastAPI Metrics**: http://localhost:8000/metrics
+
+#### 2. **Same-Machine Production** (Recommended for quick deployment)
+
+Deploy observability stack on the same server as your backend:
+
+**Security Setup** (Important!):
+
+```env
+# In credentials.env - CHANGE THESE VALUES!
+GRAFANA_ADMIN_USER=your-username
+GRAFANA_ADMIN_PASSWORD=your-secure-password
+
+# Keep localhost URLs for same-machine deployment
+TEMPO_ENDPOINT=http://localhost:4318/v1/traces
+PROMETHEUS_URL=http://localhost:9090
+GRAFANA_URL=http://localhost:3000
+```
+
+```bash
+cd services
+ln -s ../credentials.env .env
+docker compose up -d prometheus tempo grafana
+```
+
+**⚠️ Important:** The symlink `services/.env` → `credentials.env` is needed to correctly setup values from `credentials.env` for variable interpolation in `docker-compose.yml`.
+
+**🔒 Security Note**: Grafana is now secured with login authentication. Set strong credentials in `credentials.env`.
+
+#### 3. **Separate Infrastructure** (Enterprise setup)
+
+Deploy observability on dedicated servers/cluster:
+
+```env
+# In credentials.env - Point to your monitoring infrastructure
+TEMPO_ENDPOINT=https://tempo.your-domain.com/v1/traces
+PROMETHEUS_URL=https://prometheus.your-domain.com
+GRAFANA_URL=https://grafana.your-domain.com
+GRAFANA_ADMIN_USER=admin
+GRAFANA_ADMIN_PASSWORD=secure-password
+```
+
+No code changes needed - just update environment variables!
+
+### Testing Your Setup
+
+1. **Health Check**: Run the observability test script
+
+   ```bash
+   ./scripts/test_observability_stack.sh
+   ```
+
+2. **Load Testing**: Generate metrics with realistic traffic
+
+   ```bash
+   uv run python -m scripts.load_testing --users 10 --duration 60
+   ```
+
+3. **Dashboard Access**:
+   - Login to Grafana at your configured URL
+   - View "FastAPI Performance Dashboard"
+   - Monitor real-time metrics during load tests
+
+### Health Check Script
+
+Use the observability health check script to verify all components are connected and working:
+
+```bash
+./scripts/test_observability_stack.sh
+```
+
+This script automatically tests:
+
+- ✅ **FastAPI**: Backend connectivity and metrics generation
+- ✅ **Prometheus**: Server health and target scraping status
+- ✅ **Tempo**: Tracing backend and trace collection
+- ✅ **Grafana**: Dashboard health and API connectivity
+- ✅ **Metrics Integration**: End-to-end data flow verification
+
+**For production environments**, set environment variables to test remote infrastructure:
+
+```bash
+PROMETHEUS_HOST=prometheus.your-domain.com \
+GRAFANA_HOST=grafana.your-domain.com \
+./scripts/test_observability_stack.sh
 ```
 
 ## Developer Guide
@@ -450,17 +597,17 @@ def some_function():
 For more details, see the [tracing documentation](engine/trace/README.md).
 
 ## AI Models
-AI models are the primary agents that you can run
 
+AI models are the primary agents that you can run
 
 - **AI Agent**: Agent that handle conversation with tools access capacity
 - **RAG** : Agent that retrieves information from documents to answer
 - **LLM Call**: Templated LLM Call
-- **Database Query Agent**: Agent able to interrogate a SQL database 
+- **Database Query Agent**: Agent able to interrogate a SQL database
 
 ## Input
-The input block is at the begining of each flow. It allows the user to determine what information the AI agent can use during the flow.
 
+The input block is at the begining of each flow. It allows the user to determine what information the AI agent can use during the flow.
 
 ## Tools
 
@@ -472,4 +619,3 @@ Tools are available for the AI Agent. Note that the AI Agent can also have other
 - **Internet Search with OpenAI**: Answer a question using web search.
 - **SQL tool**: Builds SQL queries from natural language
 - **RunSQLquery tool**: Builds and executes SQL queries
-
