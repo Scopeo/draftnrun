@@ -86,6 +86,7 @@ postgres = ["psycopg2-binary==2.9.9"]
 hubspot = ["fuzzywuzzy>=0.18.0,<0.19"]
 cohere = ["cohere>=5.11.2,<6"]
 mistralai = ["mistralai>=1.2.2,<2"]
+load_testing = ["locust>=2.32.2,<3"]
 
 [tool.uv]
 default-groups = [
