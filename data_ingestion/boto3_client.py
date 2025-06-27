@@ -133,7 +133,7 @@ def file_exists_in_bucket(s3_client, bucket_name: str, key: str) -> bool:
         s3_client.head_object(Bucket=bucket_name, Key=key)
         return True
     except ClientError as e:
-        if e.response['Error']['Code'] == '404':
+        if e.response["Error"]["Code"] == "404":
             LOGGER.debug(f"File does not exist in bucket {bucket_name}: {key}")
             return False
         LOGGER.error(f"Error checking if file {key} exists in bucket {bucket_name}: {e}")
