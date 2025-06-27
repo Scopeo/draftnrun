@@ -19,7 +19,7 @@ def get_s3_boto3_client(
     endpoint_url: str = settings.S3_ENDPOINT_URL,
     aws_access_key_id: str = settings.S3_ACCESS_KEY_ID,
     aws_secret_access_key: str = settings.S3_SECRET_ACCESS_KEY,
-    region_name: str = "us-east-1",
+    region_name: str = settings.S3_REGION_NAME,
     config_signature_version: Optional[str] = None,
     config_s3: Optional[dict] = None,
 ) -> boto3.client:
@@ -126,6 +126,17 @@ def sanitize_s3_key(local_path: str) -> str:
 
 def is_valid_bucket_name(name: str) -> bool:
     return bool(re.fullmatch(r"^[a-z0-9]([a-z0-9-]{1,61}[a-z0-9])?$", name))
+
+
+def file_exists_in_bucket(s3_client, bucket_name: str, key: str) -> bool:
+    try:
+        s3_client.head_object(Bucket=bucket_name, Key=key)
+        return True
+    except ClientError as e:
+        if e.response['Error']['Code'] == '404':
+            LOGGER.debug(f"File does not exist in bucket {bucket_name}: {key}")
+            return False
+        LOGGER.error(f"Error checking if file {key} exists in bucket {bucket_name}: {e}")
 
 
 def get_content_from_file(s3_client, bucket_name: str, key: str) -> Optional[bytes]:
