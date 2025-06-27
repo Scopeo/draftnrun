@@ -11,6 +11,7 @@ from data_ingestion.document.document_chunking import (
 from data_ingestion.document.folder_management.folder_management import FolderManager
 from data_ingestion.document.folder_management.google_drive_folder_management import GoogleDriveFolderManager
 from data_ingestion.document.folder_management.local_folder_management import LocalFolderManager
+from data_ingestion.document.folder_management.remote_local_management import RemoteFolderManager
 from data_ingestion.document.supabase_file_uploader import sync_files_to_supabase
 from engine.llm_services.llm_service import EmbeddingService, VisionService
 from engine.qdrant_service import QdrantCollectionSchema, QdrantService
@@ -126,6 +127,28 @@ def ingest_local_folder_source(
         save_supabase=save_supabase,
         add_doc_description_to_chunks=add_doc_description_to_chunks,
     )
+
+
+def ingest_remote_local_folder_source(
+    description_local_folder: list[dict],
+    organization_id: str,
+    source_name: str,
+    task_id: UUID,
+    save_supabase: bool = True,
+    add_doc_description_to_chunks: bool = False,
+) -> None:
+    folder_manager = RemoteFolderManager(folder_payload=description_local_folder)
+    source_type = db.SourceType.REMOTE_LOCAL
+    _ingest_folder_source(
+        folder_manager=folder_manager,
+        organization_id=organization_id,
+        source_name=source_name,
+        source_type=source_type,
+        task_id=task_id,
+        save_supabase=save_supabase,
+        add_doc_description_to_chunks=add_doc_description_to_chunks,
+    )
+    folder_manager.clean_bucket()
 
 
 def _ingest_folder_source(
