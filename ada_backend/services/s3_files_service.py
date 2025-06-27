@@ -8,12 +8,17 @@ from data_ingestion.boto3_client import (
     upload_file_to_bucket,
     sanitize_s3_key,
     delete_file_from_bucket,
+    is_bucket_existing,
+    create_bucket,
 )
 from settings import settings
 
 LOGGER = logging.getLogger(__name__)
 
 S3_CLIENT = get_s3_boto3_client()
+if not is_bucket_existing(s3_client=S3_CLIENT, bucket_name=settings.S3_BUCKET_NAME):
+    LOGGER.warning(f"Bucket {settings.S3_BUCKET_NAME} does not exist.Creating it.")
+    create_bucket(s3_client=S3_CLIENT, bucket_name=settings.S3_BUCKET_NAME)
 
 
 def upload_file_to_s3(
