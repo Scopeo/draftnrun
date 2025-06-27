@@ -172,10 +172,10 @@ def test_ingest_remote_local_folder_source():
         description_local_folder=test_source_attributes["description_remote_folder"],
         organization_id=ORGANIZATION_ID,
         source_name=test_source_name,
-        task_id =task_id,
-        save_supabase = False,
-        add_doc_description_to_chunks = False,
-        )
+        task_id=task_id,
+        save_supabase=False,
+        add_doc_description_to_chunks=False,
+    )
 
     get_source_response = requests.get(
         f"{BASE_URL}/sources/{ORGANIZATION_ID}",
