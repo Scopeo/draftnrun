@@ -56,7 +56,7 @@ def get_s3_boto3_client(
         raise ValueError(f"Failed to create S3 client: {str(e)}")
 
 
-def is_bucket_exists(s3_client, bucket_name: str) -> bool:
+def is_bucket_existing(s3_client, bucket_name: str) -> bool:
     try:
         s3_client.head_bucket(Bucket=bucket_name)
         LOGGER.info(f"Bucket {bucket_name} already exists.")
@@ -91,7 +91,7 @@ def upload_file_to_bucket(s3_client, bucket_name: str, key: str, byte_content: b
         LOGGER.info(f"Successfully Uploaded to s3 '{key}' on the  bucket '{bucket_name}'.")
     except Exception as e:
         LOGGER.error(f"Unexpected error while uploading '{key}' to bucket '{bucket_name}': {e}")
-        return None
+        raise ValueError(f"Failed to upload file '{key}' to bucket '{bucket_name}': {e}")
 
 
 def delete_file_from_bucket(s3_client, bucket_name: str, key: str) -> None:
@@ -101,7 +101,7 @@ def delete_file_from_bucket(s3_client, bucket_name: str, key: str) -> None:
         LOGGER.info(f"Successfully deleted '{key}' from bucket '{bucket_name}'.")
     except Exception as e:
         LOGGER.error(f"Unexpected error deleting '{key}' from bucket '{bucket_name}': {e}")
-        return None
+        raise ValueError(f"Failed to upload file '{key}' to bucket '{bucket_name}': {e}")
 
 
 def sanitize_s3_key(local_path: str) -> str:

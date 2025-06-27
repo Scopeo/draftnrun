@@ -76,18 +76,26 @@ services:
 
   seaweedfs-volume:
     image: chrislusf/seaweedfs:latest
-    command: "volume -mserver=seaweedfs-master:9333 -ip.bind=0.0.0.0 -max=0 -dir=/data -metricsPort=9325"
+    entrypoint: /bin/sh
+    command: >
+      -c '
+        weed volume -mserver=seaweedfs-master:9333 -ip.bind=0.0.0.0 -max=0 -dir=/data -metricsPort=9325 &
+        sleep 5 &&
+        echo "volume.create -collection s3-backend -replication 000" | weed shell -master=seaweedfs-master:9333 &&
+        wait
+      '
     ports:
       - "8080:8080"
       - "18080:18080"
       - "9325:9325"
     volumes:
-      - ../config/seaweedfs/volume_data:/data
+      - seaweed_volume_data:/data
     networks:
       - localprom
     depends_on:
       - seaweedfs-master
     container_name: seaweedfs-volume
+
 
   seaweedfs-filer:
     image: chrislusf/seaweedfs:latest
@@ -105,6 +113,8 @@ services:
       - seaweedfs-master
       - redis
     container_name: seaweedfs-filer
+
+
 
   seaweedfs-s3:
     image: chrislusf/seaweedfs:latest
