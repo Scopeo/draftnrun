@@ -148,6 +148,7 @@ def ingest_remote_local_folder_source(
         save_supabase=save_supabase,
         add_doc_description_to_chunks=add_doc_description_to_chunks,
     )
+    folder_manager.clean_bucket()
 
 
 def _ingest_folder_source(
