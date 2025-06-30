@@ -51,10 +51,12 @@ class BaseConfig(BaseSettings):
 
     TAVILY_API_KEY: Optional[str] = None
 
-    LLM_API_KEY: Optional[str] = None
-    LLM_BASE_URL: Optional[str] = None
-    LLM_MODEL_NAME: Optional[str] = None
-    EMBEDDING_MODEL_NAME: Optional[str] = None
+    CUSTOM_LLM_API_KEY: Optional[str] = None
+    CUSTOM_LLM_BASE_URL: Optional[str] = None
+    CUSTOM_LLM_MODEL_NAME: Optional[str] = None
+    CUSTOM_EMBEDDING_MODEL_NAME: Optional[str] = None
+    CUSTOM_EMBEDDING_MODEL_BASE_URL: Optional[str] = None
+    CUSTOM_EMBEDDING_MODEL_API_KEY: Optional[str] = None
 
     FERNET_KEY: Optional[str] = None
     BACKEND_SECRET_KEY: Optional[str] = None

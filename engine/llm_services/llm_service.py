@@ -56,10 +56,13 @@ class EmbeddingService(LLMService):
                 response = self._embed_text_openai(client, text)
                 return response
 
-            case "local":
+            case "custom_llm":
                 import openai
 
-                client = openai.OpenAI(api_key=settings.LLM_API_KEY, base_url=settings.LLM_BASE_URL)
+                client = openai.OpenAI(
+                    api_key=settings.CUSTOM_EMBEDDING_MODEL_API_KEY,
+                    base_url=settings.CUSTOM_EMBEDDING_MODEL_BASE_URL,
+                )
                 response = self._embed_text_openai(client, text)
                 return response
 
@@ -97,15 +100,17 @@ class CompletionService(LLMService):
                     stream=stream,
                 )
                 return response.output_text
-            case "local":
+            case "custom_llm":
                 import openai
 
-                client = openai.OpenAI(api_key=settings.LLM_API_KEY, base_url=settings.LLM_BASE_URL)
+                client = openai.OpenAI(api_key=settings.CUSTOM_LLM_API_KEY, base_url=settings.CUSTOM_LLM_BASE_URL)
+                print("herreeee")
+                print(settings.CUSTOM_LLM_API_KEY)
+                print(settings.CUSTOM_LLM_BASE_URL)
                 response = client.chat.completions.create(
                     model=self._model_name,
                     messages=messages,
                     temperature=self._temperature,
-                    stop=["basemodel"],
                 )
                 return response.choices[0].message.content
             case _:
@@ -214,10 +219,10 @@ class CompletionService(LLMService):
                     tool_choice=tool_choice,
                 )
                 return response
-            case "local":
+            case "custom_llm":
                 import openai
 
-                client = openai.OpenAI(api_key=settings.LLM_API_KEY, base_url=settings.LLM_BASE_URL)
+                client = openai.OpenAI(api_key=settings.CUSTOM_LLM_API_KEY, base_url=settings.CUSTOM_LLM_BASE_URL)
                 response = self._run_openai_function_call(
                     client=client,
                     messages=messages,
