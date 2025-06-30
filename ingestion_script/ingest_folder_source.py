@@ -10,7 +10,6 @@ from data_ingestion.document.document_chunking import (
 )
 from data_ingestion.document.folder_management.folder_management import FolderManager
 from data_ingestion.document.folder_management.google_drive_folder_management import GoogleDriveFolderManager
-from data_ingestion.document.folder_management.dev_local_folder_management import DevLocalFolderManager
 from data_ingestion.document.folder_management.s3_folder_management import S3FolderManager
 from data_ingestion.document.supabase_file_uploader import sync_files_to_supabase
 from engine.llm_services.llm_service import EmbeddingService, VisionService
@@ -97,27 +96,6 @@ def ingest_google_drive_source(
     path = "https://drive.google.com/drive/folders/" + folder_id
     folder_manager = GoogleDriveFolderManager(path=path, access_token=access_token)
     source_type = db.SourceType.GOOGLE_DRIVE
-    _ingest_folder_source(
-        folder_manager=folder_manager,
-        organization_id=organization_id,
-        source_name=source_name,
-        source_type=source_type,
-        task_id=task_id,
-        save_supabase=save_supabase,
-        add_doc_description_to_chunks=add_doc_description_to_chunks,
-    )
-
-
-def ingest_dev_local_folder_source(
-    path: str,
-    organization_id: str,
-    source_name: str,
-    task_id: UUID,
-    save_supabase: bool = True,
-    add_doc_description_to_chunks: bool = False,
-) -> None:
-    folder_manager = DevLocalFolderManager(path=path)
-    source_type = db.SourceType.DEV_LOCAL
     _ingest_folder_source(
         folder_manager=folder_manager,
         organization_id=organization_id,
