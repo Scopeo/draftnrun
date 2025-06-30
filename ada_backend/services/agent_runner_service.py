@@ -22,8 +22,6 @@ from engine.graph_runner.runnable import Runnable
 from engine.trace.trace_context import get_trace_manager
 from engine.trace.span_context import set_tracing_span
 
-TOKEN_LIMIT = 2000000
-
 
 def get_organization_llm_providers(session: Session, organization_id: UUID) -> list[str]:
     organization_secrets = get_organization_secrets(
