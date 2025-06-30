@@ -6,7 +6,7 @@ from data_ingestion.document.folder_management.folder_management import FileDocu
 from data_ingestion.utils import get_last_modification_time_from_local_file
 
 
-class LocalFolderManager(FolderManager):
+class DevLocalFolderManager(FolderManager):
     def __init__(self, path: str) -> None:
         super().__init__(path)
 

@@ -19,7 +19,7 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     # Add the new value to the enum
-    op.execute("ALTER TYPE source_type ADD VALUE IF NOT EXISTS 'remote_local'")
+    op.execute("ALTER TYPE source_type ADD VALUE IF NOT EXISTS 'dev_local'")
 
 
 def downgrade() -> None:
@@ -28,13 +28,13 @@ def downgrade() -> None:
         DELETE FROM ingestion_tasks
         WHERE source_id IN (
             SELECT id FROM data_sources
-            WHERE type = 'remote_local'
+            WHERE type = 'dev_local'
         )
     """
     )
     op.execute(
         """
         DELETE FROM data_sources
-        WHERE type = 'remote_local'
+        WHERE type = 'dev_local'
     """
     )

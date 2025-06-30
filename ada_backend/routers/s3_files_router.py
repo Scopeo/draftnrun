@@ -38,13 +38,13 @@ async def delete_files(
     user: Annotated[
         SupabaseUser, Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.WRITER.value))
     ],
-    files: list[S3UploadedInformation],
+    file_ids: list[str],
 ):
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
 
     try:
-        for file_info in files:
-            delete_file_from_s3(key=file_info.s3_sanitized_name)
+        for file_id in file_ids:
+            delete_file_from_s3(key=file_id)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Internal Server Error: {e}")

@@ -21,6 +21,7 @@ To use the backend of the app, you will need to run a Docker Compose file that l
 - redis  
 - qdrant  
 - prometheus  
+- seaweedFS
 
 #### Credentials for the services
 
@@ -29,7 +30,12 @@ You will need to create two env files related to those services:
 - `.env` file in the `ada_ingestion_system` folder (you can copy the `.env.example` file)
 - `credentials.env` at the root of the repository (you can copy the `credentials.env.example` file)
 
-By default, the credentials to run those services on Docker Compose are the same as in the `credentials.env.example` and `.env` files.
+By default, the credentials to run those services on Docker Compose are the same as in the `credentials.env.example` and `.env.example` files, except
+for the seaweedFS service.
+
+For the seaweedFS service, you need to go to the config/seaweedfs folder and create a `s3_config.json` file
+based on the same model as the `s3_config.json.example` file.
+The credentials that you will put will give you access to the s3 service of seaweedFS.
 
 Here are the env variables with the default values that work for Docker Compose:
 
@@ -64,9 +70,28 @@ Here are the env variables with the default values that work for Docker Compose:
   # QDRANT
   QDRANT_CLUSTER_URL=http://localhost:6333
   QDRANT_API_KEY=secret_api_key
+  
+  # SeaweedFS
+  # S3 CREDENTIALS FOR INGESTION
+  S3_ENDPOINT_URL=http://localhost:8333
+  S3_ACCESS_KEY_ID=your_s3_access_key_id
+  S3_SECRET_ACCESS_KEY=your_s3_secret_access_key
+  S3_BUCKET_NAME=s3-backend
+  S3_REGION_NAME=us-east-1
   ```
+You will need to put in the `S3_ACCESS_KEY_ID` and the `S3_SECRET_ACCESS_KEY` the same values as in the `s3_config.json` file you created earlier.
+The `S3_BUCKET_NAME` is the name of the bucket created by the docker compose file, which is `s3-backend` by default.
+If you need to use seaweedfs on another machine, you can change the S3_ENDPOINT_URL accordingly.
+If you need to run the s3 service with amazon s3 or another s3-like service, you need to change those 5 variables.
+Be careful, when using amazon s3, put the `S3_ENDPOINT_URL` to None, meaning:
+```env
+S3_ENDPOINT_URL=
+```
+By default, boto3 will use the amazon s3 endpoint.
 
-If you want to modify these credentials, update the Docker Compose file accordingly.
+
+In general, if you want to modify the credentials for any of those services,
+update the Docker Compose file accordingly.
 
 To launch the services, navigate to the `services` folder and run:
 

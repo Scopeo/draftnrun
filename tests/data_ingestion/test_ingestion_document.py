@@ -1,10 +1,10 @@
 from data_ingestion.document.folder_management.folder_management import FileDocumentType
-from data_ingestion.document.folder_management.local_folder_management import LocalFolderManager
+from data_ingestion.document.folder_management.dev_local_folder_management import DevLocalFolderManager
 
 
 def test_list_folder_documents():
     path = "tests/resources/documents"
-    folder_manager = LocalFolderManager(path)
+    folder_manager = DevLocalFolderManager(path)
     documents = folder_manager.list_all_files_info()
     assert documents is not None
     assert len(documents) == 4

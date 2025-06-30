@@ -1,7 +1,7 @@
 import pytest
 from data_ingestion.document.folder_management.folder_management import FileDocumentType, FileDocument
 
-from data_ingestion.document.folder_management.local_folder_management import LocalFolderManager
+from data_ingestion.document.folder_management.dev_local_folder_management import DevLocalFolderManager
 from data_ingestion.document.markdown_ingestion import (
     get_chunks_from_markdown,
 )
@@ -20,7 +20,7 @@ def mock_file_document():
 
 
 def test_get_chunks_from_md(mock_file_document):
-    local_folder_manager = LocalFolderManager("/path/to/mock")
+    local_folder_manager = DevLocalFolderManager("/path/to/mock")
     get_file_content_func = local_folder_manager.get_file_content
     chunks = get_chunks_from_markdown(
         md_doc_to_process=mock_file_document, get_file_content_func=get_file_content_func

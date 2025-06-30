@@ -33,7 +33,7 @@ def upload_file_to_s3(
             s3_client=S3_CLIENT, bucket_name=bucket_name, key=sanitized_key, byte_content=byte_content
         )
         LOGGER.info(f"Successfully uploaded file to S3 with {sanitized_key} key.")
-        return S3UploadedInformation(s3_sanitized_name=sanitized_key)
+        return S3UploadedInformation(s3_path_file=sanitized_key)
     except Exception as e:
         LOGGER.error(f"Error uploading file to S3: {str(e)}")
         raise ValueError(f"Failed to upload file to S3: {str(e)}")

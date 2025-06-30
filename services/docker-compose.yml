@@ -61,6 +61,19 @@ services:
     ports:
       - 9090:9090
 
+  init_folders:
+    image: busybox
+    entrypoint: [ "sh", "-c" ]
+    command: >
+      "mkdir -p /mnt/config/seaweedfs/master_data &&
+       mkdir -p /mnt/config/seaweedfs/filer_data &&
+       mkdir -p /mnt/config/seaweedfs/volume_data"
+    volumes:
+      - ../config:/mnt/config
+    # Ensures this runs once and exits
+    restart: "no"
+
+
   seaweedfs-master:
     image: chrislusf/seaweedfs:latest
     command: "master -ip=seaweedfs-master -ip.bind=0.0.0.0 -mdir=/data -defaultReplication=000 -metricsPort=9324"
@@ -73,6 +86,9 @@ services:
     networks:
       - localprom
     container_name: seaweedfs-master
+
+    depends_on:
+      - init_folders
 
   seaweedfs-volume:
     image: chrislusf/seaweedfs:latest
@@ -93,8 +109,10 @@ services:
     networks:
       - localprom
     depends_on:
+      - init_folders
       - seaweedfs-master
     container_name: seaweedfs-volume
+
 
 
   seaweedfs-filer:
@@ -110,6 +128,7 @@ services:
     networks:
       - localprom
     depends_on:
+      - init_folders
       - seaweedfs-master
       - redis
     container_name: seaweedfs-filer

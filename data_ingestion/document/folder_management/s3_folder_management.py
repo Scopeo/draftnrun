@@ -6,7 +6,7 @@ from data_ingestion.boto3_client import get_s3_boto3_client, get_content_from_fi
 from settings import settings
 
 
-class RemoteFolderManager(FolderManager):
+class S3FolderManager(FolderManager):
     def __init__(
         self,
         folder_payload: list[dict],

@@ -7,11 +7,3 @@ defaultStore = "redis"
 enabled = true
 address = "redis:6379"
 password = "redis_password"
-
-# Authentication for both S3 and Filer
-[security]
-jwt.signing.key = "f552639b40bf65c921cb62b6a966c58417c3d1282a719fc641854d9a3ffd7942"
-
-[security.users]
-admin = "adminpassword"
-minio = "minio123"

@@ -9,7 +9,7 @@ from engine.trace.span_context import set_tracing_span
 from engine.trace.trace_context import set_trace_manager
 from engine.trace.trace_manager import TraceManager
 from data_ingestion.boto3_client import get_s3_boto3_client, file_exists_in_bucket
-from ingestion_script.ingest_folder_source import ingest_local_folder_source, ingest_remote_local_folder_source
+from ingestion_script.ingest_folder_source import ingest_dev_local_folder_source, ingest_local_folder_source
 from ingestion_script.utils import get_sanitize_names
 from engine.qdrant_service import QdrantService
 from engine.storage_service.local_service import SQLLocalService
@@ -42,7 +42,7 @@ def test_ingest_local_folder_source():
     endpoint = f"{BASE_URL}/ingestion_task/{ORGANIZATION_ID}"
     payload = IngestionTaskQueue(
         source_name=test_source_name,
-        source_type=db.SourceType.LOCAL,
+        source_type=db.SourceType.DEV_LOCAL,
         status=db.TaskStatus.PENDING,
         source_attributes=test_source_attributes,
     )
@@ -60,7 +60,7 @@ def test_ingest_local_folder_source():
             session=SessionLocal(), organization_id=ORGANIZATION_ID
         ),
     )
-    ingest_local_folder_source(
+    ingest_dev_local_folder_source(
         path=test_source_attributes["path"],
         organization_id=ORGANIZATION_ID,
         source_name=test_source_name,
@@ -157,7 +157,7 @@ def test_ingest_remote_local_folder_source():
     endpoint = f"{BASE_URL}/ingestion_task/{ORGANIZATION_ID}"
     payload = IngestionTaskQueue(
         source_name=test_source_name,
-        source_type=db.SourceType.REMOTE_LOCAL,
+        source_type=db.SourceType.LOCAL,
         status=db.TaskStatus.PENDING,
         source_attributes=test_source_attributes,
     )
@@ -168,7 +168,7 @@ def test_ingest_remote_local_folder_source():
     assert isinstance(task_id, str)
     assert len(task_id) > 0
 
-    ingest_remote_local_folder_source(
+    ingest_local_folder_source(
         description_local_folder=test_source_attributes["description_remote_folder"],
         organization_id=ORGANIZATION_ID,
         source_name=test_source_name,
