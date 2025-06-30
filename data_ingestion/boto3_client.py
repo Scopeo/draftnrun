@@ -1,6 +1,5 @@
 import logging
 from typing import Optional
-from pathlib import Path
 import re
 
 import boto3
@@ -102,26 +101,6 @@ def delete_file_from_bucket(s3_client, bucket_name: str, key: str) -> None:
     except Exception as e:
         LOGGER.error(f"Unexpected error deleting '{key}' from bucket '{bucket_name}': {e}")
         raise ValueError(f"Failed to upload file '{key}' to bucket '{bucket_name}': {e}")
-
-
-def sanitize_s3_key(local_path: str) -> str:
-    """"""
-    path = (
-        Path(local_path).resolve().relative_to(Path("/").resolve())
-        if Path(local_path).is_absolute()
-        else Path(local_path)
-    )
-
-    # Convert to POSIX style (forward slashes)
-    key = path.as_posix()
-
-    # Remove leading slashes
-    key = key.lstrip("/")
-
-    # Remove anything that is not a letter, digit, -, ., or /
-    key = re.sub(r"[^\w\-./]", "_", key)
-
-    return key
 
 
 def is_valid_bucket_name(name: str) -> bool:

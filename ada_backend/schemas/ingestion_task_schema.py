@@ -23,7 +23,7 @@ class RemoteFile(BaseModel):
 class SourceAttributes(BaseModel):
     access_token: Optional[str] = None
     path: Optional[str] = None
-    description_user_local_folder: Optional[list[RemoteFile]] = None
+    list_of_files_from_local_folder: Optional[list[RemoteFile]] = None
     folder_id: Optional[str] = None
     source_db_url: Optional[str] = None
     source_table_name: Optional[str] = None

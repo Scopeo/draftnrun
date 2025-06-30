@@ -85,7 +85,7 @@ def ingestion_main(
     elif source_type == SourceType.LOCAL:
         if check_missing_params(
             source_attributes=source_attributes,
-            required_params=["description_user_local_folder"],
+            required_params=["list_of_files_from_local_folder"],
             organization_id=organization_id,
             ingestion_task=failed_ingestion_task,
         ):
@@ -93,7 +93,7 @@ def ingestion_main(
 
         try:
             ingest_local_folder_source(
-                description_local_folder=source_attributes["description_user_local_folder"],
+                list_of_files_to_ingest=source_attributes["list_of_files_from_local_folder"],
                 organization_id=organization_id,
                 source_name=source_name,
                 task_id=task_id,

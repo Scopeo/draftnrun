@@ -6,11 +6,11 @@ from ada_backend.schemas.ingestion_task_schema import (
 from data_ingestion.boto3_client import (
     get_s3_boto3_client,
     upload_file_to_bucket,
-    sanitize_s3_key,
     delete_file_from_bucket,
     is_bucket_existing,
     create_bucket,
 )
+from data_ingestion.utils import sanitize_filename
 from settings import settings
 
 LOGGER = logging.getLogger(__name__)
@@ -27,7 +27,7 @@ def upload_file_to_s3(
     bucket_name: str = settings.S3_BUCKET_NAME,
 ) -> S3UploadedInformation:
     """Upload a file to an S3 bucket."""
-    sanitized_key = sanitize_s3_key(file_name)
+    sanitized_key = sanitize_filename(file_name)
     try:
         upload_file_to_bucket(
             s3_client=S3_CLIENT, bucket_name=bucket_name, key=sanitized_key, byte_content=byte_content

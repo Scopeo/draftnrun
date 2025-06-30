@@ -108,14 +108,14 @@ def ingest_google_drive_source(
 
 
 def ingest_local_folder_source(
-    description_local_folder: list[dict],
+    list_of_files_to_ingest: list[dict],
     organization_id: str,
     source_name: str,
     task_id: UUID,
     save_supabase: bool = True,
     add_doc_description_to_chunks: bool = False,
 ) -> None:
-    folder_manager = S3FolderManager(folder_payload=description_local_folder)
+    folder_manager = S3FolderManager(folder_payload=list_of_files_to_ingest)
     source_type = db.SourceType.LOCAL
     _ingest_folder_source(
         folder_manager=folder_manager,

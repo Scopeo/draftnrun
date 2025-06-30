@@ -36,7 +36,7 @@ def test_ingest_local_folder_source():
     test_source_attributes = {
         "access_token": None,
         "path": "/user/files/",
-        "description_remote_folder": [
+        "list_of_files_from_local_folder": [
             {
                 "path": "tests/resources/documents/sample.pdf",
                 "name": "sample.pdf",
@@ -69,7 +69,7 @@ def test_ingest_local_folder_source():
     sanitized_file_name = list_uploaded_files[0]["s3_path_file"]
 
     assert file_exists_in_bucket(s3_client=S3_CLIENT, bucket_name=settings.S3_BUCKET_NAME, key=sanitized_file_name)
-    test_source_attributes["description_remote_folder"][0]["s3_path"] = sanitized_file_name
+    test_source_attributes["list_of_files_from_local_folder"][0]["s3_path"] = sanitized_file_name
 
     endpoint = f"{BASE_URL}/ingestion_task/{ORGANIZATION_ID}"
     payload = IngestionTaskQueue(
@@ -94,7 +94,7 @@ def test_ingest_local_folder_source():
     )
 
     ingest_local_folder_source(
-        description_local_folder=test_source_attributes["description_remote_folder"],
+        list_of_files_to_ingest=test_source_attributes["list_of_files_from_local_folder"],
         organization_id=ORGANIZATION_ID,
         source_name=test_source_name,
         task_id=task_id,
