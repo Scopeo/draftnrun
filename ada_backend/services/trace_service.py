@@ -14,6 +14,9 @@ from engine.trace.sql_exporter import get_session_trace
 LOGGER = logging.getLogger(__name__)
 
 
+TOKEN_LIMIT = 2000000
+
+
 def build_span_trees(df: pd.DataFrame) -> List[TraceSpan]:
     """Convert a Pandas DataFrame containing multiple OpenTelemetry spans into a list of hierarchical JSON trees."""
     traces = defaultdict(dict)  # {trace_id: {span_id: span}}
