@@ -275,6 +275,21 @@ INGESTION_API_KEY=xxxx
 INGESTION_API_KEY_HASHED=xxxx
 ```
 
+#### Custom LLM Configuration
+You can configure Draft'n run to use your own custom Large Language Model (LLM) service by adding the following variables to your `credentials.env` file:
+
+```env
+# Custom LLM configuration
+CUSTOM_LLM_MODEL_NAME=your-model-name
+CUSTOM_LLM_BASE_URL=https://your-custom-llm-url.com/v1/
+CUSTOM_LLM_API_KEY=your-custom-llm-api-key
+CUSTOM_EMBEDDING_MODEL_NAME=your-custom-embedding-model-name
+CUSTOM_EMBEDDING_MODEL_BASE_URL=https://your-custom-embedding-llm-url.com/v1/
+CUSTOM_EMBEDDING_MODEL_API_KEY=your-custom-embedding-model-api-key
+```
+**How it works:**  
+If you set these variables, your custom model will appear as an option in the model selection dropdown. The backend will route requests to your custom LLM service when this model is selected, instead of sending them to OpenAI or other providers.
+
 #### Non-local version
 
 Update these if using remote services:
