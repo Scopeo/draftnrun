@@ -59,17 +59,28 @@ OPTIONS_COMPLETION_MODELS = [
     # SelectOption(value="anthropic:claude-3.5-sonnet", label="Claude 3.5 Sonnet"),
     # SelectOption(value="anthropic:claude-3.5-haiku", label="Claude 3.5 Haiku"),
 ]
-if settings.CUSTOM_LLM_MODEL_NAME:
-    custom_llm_model_name = str(settings.CUSTOM_LLM_MODEL_NAME)
-    custom_llm_reference = f"custom_llm:{custom_llm_model_name}"
 
-    OPTIONS_COMPLETION_MODELS.extend(
-        [
-            SelectOption(
-                value=custom_llm_reference,
-                label=custom_llm_model_name,
-            )
-        ]
+OPTIONS_EMBEDDING_MODELS = [
+    # OpenAI
+    SelectOption(value="openai:text-embedding-3-large", label="Text Embedding 3 Large"),
+]
+
+for custom_llm_model_name, base_url in settings.custom_llm_models.items():
+    custom_llm_reference = f"custom_llm:{custom_llm_model_name}"
+    OPTIONS_COMPLETION_MODELS.append(
+        SelectOption(
+            value=custom_llm_reference,
+            label=custom_llm_model_name,
+        )
+    )
+
+for custom_embedding_model_name, base_url in settings.custom_embedding_models.items():
+    custom_embedding_reference = f"custom_llm:{custom_embedding_model_name}"
+    OPTIONS_EMBEDDING_MODELS.append(
+        SelectOption(
+            value=custom_embedding_reference,
+            label=custom_embedding_model_name,
+        )
     )
 
 
@@ -158,10 +169,7 @@ def build_embedding_service_config_definitions(
                     default="openai:text-embedding-3-large",
                     ui_component=UIComponent.SELECT,
                     ui_component_properties=UIComponentProperties(
-                        options=[
-                            # OpenAI
-                            SelectOption(value="openai:text-embedding-3-large", label="Text Embedding 3 Large"),
-                        ],
+                        options=OPTIONS_EMBEDDING_MODELS,
                         label="Embedding Model Name",
                     ).model_dump(exclude_unset=True, exclude_none=True),
                 )

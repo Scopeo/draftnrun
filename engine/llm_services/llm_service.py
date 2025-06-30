@@ -76,7 +76,7 @@ class EmbeddingService(LLMService):
 
                 client = openai.OpenAI(
                     api_key=settings.CUSTOM_EMBEDDING_MODEL_API_KEY,
-                    base_url=settings.CUSTOM_EMBEDDING_MODEL_BASE_URL,
+                    base_url=settings.custom_embedding_models.get(self._model_name),
                 )
                 response = self._embed_text_openai(client, text)
                 return response
@@ -119,10 +119,10 @@ class CompletionService(LLMService):
             case "custom_llm":
                 import openai
 
-                client = openai.OpenAI(api_key=settings.CUSTOM_LLM_API_KEY, base_url=settings.CUSTOM_LLM_BASE_URL)
-                print("herreeee")
-                print(settings.CUSTOM_LLM_API_KEY)
-                print(settings.CUSTOM_LLM_BASE_URL)
+                client = openai.OpenAI(
+                    api_key=settings.CUSTOM_LLM_API_KEY,
+                    base_url=settings.custom_llm_models.get(self._model_name),
+                )
                 response = client.chat.completions.create(
                     model=self._model_name,
                     messages=messages,
@@ -241,7 +241,10 @@ class CompletionService(LLMService):
             case "custom_llm":
                 import openai
 
-                client = openai.OpenAI(api_key=settings.CUSTOM_LLM_API_KEY, base_url=settings.CUSTOM_LLM_BASE_URL)
+                client = openai.OpenAI(
+                    api_key=settings.CUSTOM_LLM_API_KEY,
+                    base_url=settings.custom_llm_models.get(self._model_name),
+                )
                 response = self._run_openai_function_call(
                     client=client,
                     messages=messages,
