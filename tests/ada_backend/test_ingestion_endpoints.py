@@ -32,7 +32,7 @@ S3_CLIENT = get_s3_boto3_client()
 
 def test_ingest_local_folder_source():
     test_source_name = "Test_Ingestion_Local_Folder"
-    test_source_type = "local"
+    test_source_type = "dev_local"
     test_source_attributes = {"path": "tests/resources/documents/sample.pdf", "access_token": None}
     database_schema, database_table_name, qdrant_collection_name = get_sanitize_names(
         source_name=test_source_name,
@@ -115,7 +115,7 @@ def test_ingest_local_folder_source():
 
 def test_ingest_remote_local_folder_source():
     test_source_name = "Test_Ingestion_Remote_Folder"
-    test_source_type = "remote_local"
+    test_source_type = "local"
     test_source_attributes = {
         "access_token": None,
         "path": "/user/files/",
@@ -149,7 +149,7 @@ def test_ingest_remote_local_folder_source():
         assert response.status_code == 200
     list_uploaded_files = response.json()
     assert len(list_uploaded_files) == 1
-    sanitized_file_name = list_uploaded_files[0]["s3_sanitized_name"]
+    sanitized_file_name = list_uploaded_files[0]["s3_path_file"]
 
     assert file_exists_in_bucket(s3_client=S3_CLIENT, bucket_name=settings.S3_BUCKET_NAME, key=sanitized_file_name)
     test_source_attributes["description_remote_folder"][0]["s3_path"] = sanitized_file_name
@@ -167,6 +167,14 @@ def test_ingest_remote_local_folder_source():
     assert response.status_code == 201
     assert isinstance(task_id, str)
     assert len(task_id) > 0
+    set_trace_manager(TraceManager(project_name="Test Ingestion"))
+    set_tracing_span(
+        project_id="None",
+        organization_id=ORGANIZATION_ID,
+        organization_llm_providers=get_organization_llm_providers(
+            session=SessionLocal(), organization_id=ORGANIZATION_ID
+        ),
+    )
 
     ingest_local_folder_source(
         description_local_folder=test_source_attributes["description_remote_folder"],
