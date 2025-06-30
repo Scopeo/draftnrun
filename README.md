@@ -281,12 +281,12 @@ You can configure Draft'n run to use your own custom Large Language Model (LLM) 
 ```env
 # Custom LLM configuration
 # Custom LLM models: model name as key, base URL as value (JSON format)
-CUSTOM_LLM_MODELS={"my-llm-1": "https://llm1.example.com/v1/", "my-llm-2": "https://llm2.example.com/v1/"}
-CUSTOM_LLM_API_KEY=your-custom-llm-api-key
+CUSTOM_LLM_MODELS={"my-llm-1-model-name": "https://llm1.example.com/v1/", "my-llm-2-model-name": "https://llm2.example.com/v1/"}
+CUSTOM_LLM_API_KEYS={"your-llm-1-model-name": "your-custom-llm-api-key"}
 
 # Custom embedding models: model name as key, base URL as value (JSON format)
-CUSTOM_EMBEDDING_MODELS={"my-embed-1": "https://embed1.example.com/v1/", "my-embed-2": "https://embed2.example.com/v1/"}
-CUSTOM_EMBEDDING_MODEL_API_KEY=your-custom-embedding-model-api-key
+CUSTOM_EMBEDDING_MODELS={"my-embed-1-model-name": "https://embed1.example.com/v1/", "my-embed-2-model-name": "https://embed2.example.com/v1/"}
+CUSTOM_EMBEDDING_MODEL_API_KEYS={"my-embed-1-model-name"":"your-custom-embedding-model-api-key"}
 ```
 **How it works:**  
 If you set these variables, your custom model will appear as an option in the model selection dropdown. The backend will route requests to your custom LLM service when this model is selected, instead of sending them to OpenAI or other providers.

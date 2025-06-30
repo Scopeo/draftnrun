@@ -75,8 +75,8 @@ class EmbeddingService(LLMService):
                 import openai
 
                 client = openai.OpenAI(
-                    api_key=settings.CUSTOM_EMBEDDING_MODEL_API_KEY,
-                    base_url=settings.custom_embedding_models.get(self._model_name),
+                    api_key=settings.custom_embedding_models_with_api_keys.get(self._model_name),
+                    base_url=settings.custom_embedding_models_with_urls.get(self._model_name),
                 )
                 response = self._embed_text_openai(client, text)
                 return response
@@ -120,8 +120,8 @@ class CompletionService(LLMService):
                 import openai
 
                 client = openai.OpenAI(
-                    api_key=settings.CUSTOM_LLM_API_KEY,
-                    base_url=settings.custom_llm_models.get(self._model_name),
+                    api_key=settings.custom_llm_models_with_api_keys.get(self._model_name),
+                    base_url=settings.custom_llm_models_with_urls.get(self._model_name),
                 )
                 response = client.chat.completions.create(
                     model=self._model_name,
@@ -242,8 +242,8 @@ class CompletionService(LLMService):
                 import openai
 
                 client = openai.OpenAI(
-                    api_key=settings.CUSTOM_LLM_API_KEY,
-                    base_url=settings.custom_llm_models.get(self._model_name),
+                    api_key=settings.custom_llm_models_with_api_keys.get(self._model_name),
+                    base_url=settings.custom_llm_models_with_urls.get(self._model_name),
                 )
                 response = self._run_openai_function_call(
                     client=client,

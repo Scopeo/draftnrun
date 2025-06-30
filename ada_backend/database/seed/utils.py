@@ -65,23 +65,20 @@ OPTIONS_EMBEDDING_MODELS = [
     SelectOption(value="openai:text-embedding-3-large", label="Text Embedding 3 Large"),
 ]
 
-for custom_llm_model_name, base_url in settings.custom_llm_models.items():
-    custom_llm_reference = f"custom_llm:{custom_llm_model_name}"
-    OPTIONS_COMPLETION_MODELS.append(
-        SelectOption(
-            value=custom_llm_reference,
-            label=custom_llm_model_name,
-        )
-    )
 
-for custom_embedding_model_name, base_url in settings.custom_embedding_models.items():
-    custom_embedding_reference = f"custom_llm:{custom_embedding_model_name}"
-    OPTIONS_EMBEDDING_MODELS.append(
-        SelectOption(
-            value=custom_embedding_reference,
-            label=custom_embedding_model_name,
+def add_custom_llm_model(list_model_options: list[SelectOption], custom_llm_models_with_urls: dict[str, str]):
+    for model_name, base_url in custom_llm_models_with_urls.items():
+        custom_llm_reference = f"custom_llm:{model_name}"
+        list_model_options.append(
+            SelectOption(
+                value=custom_llm_reference,
+                label=model_name,
+            )
         )
-    )
+
+
+add_custom_llm_model(OPTIONS_COMPLETION_MODELS, settings.custom_llm_models_with_urls)
+add_custom_llm_model(OPTIONS_EMBEDDING_MODELS, settings.custom_embedding_models_with_urls)
 
 
 class ParameterLLMConfig(BaseModel):
