@@ -194,7 +194,6 @@ class CompletionService(LLMService):
             case _:
                 raise ValueError(f"Invalid provider: {self._provider}")
 
-
     def _run_openai_function_call(
         self,
         client,
@@ -212,8 +211,7 @@ class CompletionService(LLMService):
             tool_choice=tool_choice,
         )
         return response
-      
- 
+
     @with_usage_check
     def function_call(
         self,
