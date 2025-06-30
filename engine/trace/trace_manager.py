@@ -33,7 +33,7 @@ def setup_tracer(
 
     tracer = trace_api.get_tracer(__name__)
 
-    OpenAIInstrumentor().instrument()
+    # OpenAIInstrumentor().instrument()
 
     LOGGER.info(f"Tracer setup for project: {project_name}")
     return tracer

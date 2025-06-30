@@ -96,6 +96,7 @@ class Retriever:
             span.set_attributes(
                 {
                     SpanAttributes.OPENINFERENCE_SPAN_KIND: OpenInferenceSpanKindValues.RETRIEVER.value,
+                    SpanAttributes.EMBEDDING_MODEL_NAME: self._vectorestore_service._embedding_service._model_name,
                     SpanAttributes.INPUT_VALUE: query_text,
                 }
             )

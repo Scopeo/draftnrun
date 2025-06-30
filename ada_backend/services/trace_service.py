@@ -17,6 +17,22 @@ LOGGER = logging.getLogger(__name__)
 TOKEN_LIMIT = 2000000
 
 
+def parse_str_or_dict(input_str: str) -> str | dict | list:
+    if isinstance(input_str, list):
+        return input_str
+    if isinstance(input_str, dict):
+        return input_str
+    try:
+        result = json.loads(input_str)
+        if isinstance(result, dict):
+            return result
+        else:
+            return input_str  # It's valid JSON, but not a dict
+    except json.JSONDecodeError:
+        # Not a JSON string, return as-is
+        return input_str
+
+
 def build_span_trees(df: pd.DataFrame) -> List[TraceSpan]:
     """Convert a Pandas DataFrame containing multiple OpenTelemetry spans into a list of hierarchical JSON trees."""
     traces = defaultdict(dict)  # {trace_id: {span_id: span}}
@@ -40,17 +56,24 @@ def build_span_trees(df: pd.DataFrame) -> List[TraceSpan]:
             elif span_kind == "LLM":
                 if "llm" in row["attributes"]:
                     model_name = row["attributes"]["llm"].get("model_name", "")
-                    input = row["attributes"]["llm"]["input_messages"]
+                    if "input_messages" in row["attributes"]["llm"]:
+                        input = row["attributes"]["llm"]["input_messages"]
                     if "output_messages" in row["attributes"]["llm"]:
                         output = row["attributes"]["llm"]["output_messages"]
                     elif "output" in row["attributes"]:
                         if isinstance(row["attributes"]["output"]["value"], str):
                             row["attributes"]["output"]["value"] = json.loads(row["attributes"]["output"]["value"])
                         output = [row["attributes"]["output"]["value"]]
-                else:
-                    input = [row["attributes"]["input"].get("value", "")]
+
+                if input is None or len(input) == 0:
+                    if "input" in row["attributes"]:
+                        input = parse_str_or_dict(row["attributes"]["input"].get("value", []))
+                    if not isinstance(input, list):
+                        input = [input]
                     if "output" in row["attributes"]:
-                        output = [row["attributes"]["output"].get("value", "")]
+                        output = parse_str_or_dict(row["attributes"]["output"].get("value", []))
+                    if not isinstance(output, list):
+                        output = [output]
             elif span_kind == "RETRIEVER":
                 events = json.loads(row["events"])
                 if "input" in row["attributes"]:

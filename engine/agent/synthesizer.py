@@ -45,6 +45,13 @@ class Synthesizer:
             input_str = fill_prompt_template_with_dictionary(
                 input_dict, self._prompt_template, component_name=self.__class__.__name__
             )
+            span.set_attributes(
+                {
+                    SpanAttributes.OPENINFERENCE_SPAN_KIND: OpenInferenceSpanKindValues.LLM.value,
+                    SpanAttributes.INPUT_VALUE: input_str,
+                    SpanAttributes.LLM_MODEL_NAME: self._completion_service._model_name,
+                }
+            )
 
             response = self._completion_service.constrained_complete_with_pydantic(
                 messages=input_str,
@@ -52,8 +59,6 @@ class Synthesizer:
             )
             span.set_attributes(
                 {
-                    SpanAttributes.OPENINFERENCE_SPAN_KIND: OpenInferenceSpanKindValues.LLM.value,
-                    SpanAttributes.INPUT_VALUE: input_str,
                     SpanAttributes.OUTPUT_VALUE: response.response,
                 }
             )
