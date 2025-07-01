@@ -1,5 +1,7 @@
 from typing import Optional
 
+from openinference.semconv.trace import SpanAttributes
+
 from engine.agent.agent import Agent, AgentPayload, ChatMessage, ToolDescription
 from engine.llm_services.llm_service import WebSearchService
 from engine.trace.trace_manager import TraceManager
@@ -40,5 +42,12 @@ class WebSearchOpenAITool(Agent):
     ) -> AgentPayload:
         agent_input = inputs[0]
         query_str = query or agent_input.last_message.content
+        span = self.trace_manager.get_current_span()
+        span.set_attributes(
+            {
+                SpanAttributes.INPUT_VALUE: query_str,
+                SpanAttributes.LLM_MODEL_NAME: self._web_service._model_name,
+            }
+        )
         output = self._web_service.web_search(query_str)
         return AgentPayload(messages=[ChatMessage(role="assistant", content=output)])

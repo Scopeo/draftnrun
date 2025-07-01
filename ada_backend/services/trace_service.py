@@ -53,6 +53,8 @@ def build_span_trees(df: pd.DataFrame) -> List[TraceSpan]:
                 input = [row["attributes"]["input"].get("value", "")]
                 if "output" in row["attributes"]:
                     output = [row["attributes"]["output"].get("value", "")]
+                if "llm" in row["attributes"]:
+                    model_name = row["attributes"]["llm"].get("model_name", "")
             elif span_kind == "LLM":
                 if "llm" in row["attributes"]:
                     model_name = row["attributes"]["llm"].get("model_name", "")
