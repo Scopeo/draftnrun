@@ -22,9 +22,7 @@ def parse_str_or_dict(input_str: str) -> str | dict | list:
         return input_str
     try:
         result = json.loads(input_str)
-        if isinstance(result, dict):
-            return result
-        elif isinstance(result, list):
+        if isinstance(result, dict) or isinstance(result, list):
             return result
         else:
             return input_str  # It's valid JSON, but not a dict
