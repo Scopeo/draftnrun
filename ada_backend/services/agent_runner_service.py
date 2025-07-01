@@ -37,6 +37,7 @@ def get_organization_llm_providers(session: Session, organization_id: UUID) -> l
         if organization_secrets
         else []
     )
+    # TODO: Remove when add from front side
     organization_secrets.append("custom_llm")
 
     return organization_secrets

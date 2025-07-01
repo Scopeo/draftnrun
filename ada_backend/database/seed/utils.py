@@ -66,9 +66,21 @@ OPTIONS_EMBEDDING_MODELS = [
 ]
 
 
-def add_custom_llm_model(list_model_options: list[SelectOption], custom_llm_models_with_urls: dict[str, str]):
-    for model_name, base_url in custom_llm_models_with_urls.items():
-        custom_llm_reference = f"custom_llm:{model_name}"
+# def add_custom_llm_model(list_model_options: list[SelectOption], custom_llm_models_with_urls: dict[str, str]):
+#     for model_name, base_url in custom_llm_models_with_urls.items():
+#         custom_llm_reference = f"custom_llm:{model_name}"
+#         list_model_options.append(
+#             SelectOption(
+#                 value=custom_llm_reference,
+#                 label=model_name,
+#             )
+#         )
+
+
+def add_custom_llm_model(list_model_options: list[SelectOption], custom_llm_models: dict[str, dict[str, str]]):
+    for provider, model_info in custom_llm_models.items():
+        model_name = model_info.get("model_name")
+        custom_llm_reference = f"{provider}:{model_name}"
         list_model_options.append(
             SelectOption(
                 value=custom_llm_reference,
@@ -77,8 +89,8 @@ def add_custom_llm_model(list_model_options: list[SelectOption], custom_llm_mode
         )
 
 
-add_custom_llm_model(OPTIONS_COMPLETION_MODELS, settings.custom_llm_models_with_urls)
-add_custom_llm_model(OPTIONS_EMBEDDING_MODELS, settings.custom_embedding_models_with_urls)
+add_custom_llm_model(OPTIONS_COMPLETION_MODELS, settings.custom_llm_models)
+add_custom_llm_model(OPTIONS_EMBEDDING_MODELS, settings.custom_embedding_models)
 
 
 class ParameterLLMConfig(BaseModel):

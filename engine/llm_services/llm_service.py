@@ -26,6 +26,17 @@ def with_usage_check(func):
     return wrapper
 
 
+def get_api_key_and_base_url(model_name: str) -> tuple[str, str]:
+    try:
+        for provider in settings.custom_llm_models:
+            if settings.custom_llm_models[provider].get("model_name") == model_name:
+                return settings.custom_llm_models[provider].get("api_key"), settings.custom_llm_models[provider].get(
+                    "base_url"
+                )
+    except Exception as e:
+        raise ValueError(f"No api_key and base_url found for model name: {model_name}") from e
+
+
 class LLMService(ABC):
     def __init__(
         self,
@@ -71,27 +82,18 @@ class EmbeddingService(LLMService):
                 response = self._embed_text_openai(client, text)
                 return response
 
-            case "custom_llm":
+            case _:
                 import openai
 
-                base_url = settings.custom_embedding_models_with_urls.get(self._model_name)
-                api_key = settings.custom_embedding_models_with_api_keys.get(base_url)
-
-                if api_key is None:
-                    raise ValueError(f"No api_key found for model name: {self._model_name}")
-
-                if base_url is None:
-                    raise ValueError(f"No base_url found for model name: {self._model_name}")
-
-                client = openai.OpenAI(
-                    api_key=api_key,
-                    base_url=base_url,
-                )
-                response = self._embed_text_openai(client, text)
-                return response
-
-            case _:
-                raise ValueError(f"Invalid provider: {self._provider}")
+                api_key, base_url = get_api_key_and_base_url(self._model_name)
+                try:
+                    client = openai.OpenAI(
+                        api_key=api_key,
+                        base_url=base_url,
+                    )
+                    response = self._embed_text_openai(client, text)
+                except Exception as e:
+                    raise ValueError(f"Error embedding text: {e}")
 
 
 class CompletionService(LLMService):
@@ -125,30 +127,25 @@ class CompletionService(LLMService):
                     stream=stream,
                 )
                 return response.output_text
-            case "custom_llm":
+
+            case _:
                 import openai
 
-                base_url = settings.custom_llm_models_with_urls.get(self._model_name)
-                api_key = settings.custom_llm_models_with_api_keys.get(base_url)
+                api_key, base_url = get_api_key_and_base_url(self._model_name)
+                try:
+                    client = openai.OpenAI(
+                        api_key=api_key,
+                        base_url=base_url,
+                    )
+                    response = client.chat.completions.create(
+                        model=self._model_name,
+                        messages=messages,
+                        temperature=self._temperature,
+                    )
+                    return response.choices[0].message.content
 
-                if api_key is None:
-                    raise ValueError(f"No api_key found for model name: {self._model_name}")
-
-                if base_url is None:
-                    raise ValueError(f"No base_url found for model name: {self._model_name}")
-
-                client = openai.OpenAI(
-                    api_key=api_key,
-                    base_url=base_url,
-                )
-                response = client.chat.completions.create(
-                    model=self._model_name,
-                    messages=messages,
-                    temperature=self._temperature,
-                )
-                return response.choices[0].message.content
-            case _:
-                raise ValueError(f"Invalid provider: {self._provider}")
+                except Exception as e:
+                    raise ValueError(f"Error completing: {e}")
 
     @with_usage_check
     def constrained_complete_with_pydantic(
@@ -212,24 +209,6 @@ class CompletionService(LLMService):
             case _:
                 raise ValueError(f"Invalid provider: {self._provider}")
 
-    def _run_openai_function_call(
-        self,
-        client,
-        messages: list[dict],
-        stream: bool = False,
-        tools: Optional[list[dict]] = None,
-        tool_choice: str = "auto",
-    ):
-        response = client.chat.completions.create(
-            model=self._model_name,
-            messages=messages,
-            tools=tools,
-            temperature=self._temperature,
-            stream=stream,
-            tool_choice=tool_choice,
-        )
-        return response
-
     @with_usage_check
     def function_call(
         self,
@@ -248,40 +227,35 @@ class CompletionService(LLMService):
                 import openai
 
                 client = openai.OpenAI(api_key=settings.OPENAI_API_KEY)
-                response = self._run_openai_function_call(
-                    client=client,
+                response = client.chat.completions.create(
+                    model=self._model_name,
                     messages=messages,
                     tools=openai_tools,
-                    stream=stream,
-                    tool_choice=tool_choice,
-                )
-                return response
-            case "custom_llm":
-                import openai
-
-                base_url = settings.custom_llm_models_with_urls.get(self._model_name)
-                api_key = settings.custom_llm_models_with_api_keys.get(base_url)
-
-                if api_key is None:
-                    raise ValueError(f"No api_key found for model name: {self._model_name}")
-
-                if base_url is None:
-                    raise ValueError(f"No base_url found for model name: {self._model_name}")
-
-                client = openai.OpenAI(
-                    api_key=api_key,
-                    base_url=base_url,
-                )
-                response = self._run_openai_function_call(
-                    client=client,
-                    messages=messages,
-                    tools=openai_tools,
+                    temperature=self._temperature,
                     stream=stream,
                     tool_choice=tool_choice,
                 )
                 return response
             case _:
-                raise ValueError(f"Invalid provider: {self._provider}")
+                api_key, base_url = get_api_key_and_base_url(self._model_name)
+                import openai
+
+                try:
+                    client = openai.OpenAI(
+                        api_key=api_key,
+                        base_url=base_url,
+                    )
+                    response = client.chat.completions.create(
+                        model=self._model_name,
+                        messages=messages,
+                        tools=openai_tools,
+                        temperature=self._temperature,
+                        stream=stream,
+                        tool_choice=tool_choice,
+                    )
+                    return response
+                except Exception as e:
+                    raise ValueError(f"Error calling function: {e}")
 
 
 class WebSearchService(LLMService):
