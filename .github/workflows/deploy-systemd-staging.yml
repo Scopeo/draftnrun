@@ -42,7 +42,7 @@ jobs:
         username: ec2-user
         key: ${{ secrets.SSH_PRIVATE_KEY }}
         source: "filled-gunicorn.service"
-        target: "/etc/systemd/system/"
+        target: "/tmp/"
     
     - name: Deploy systemd service
       uses: appleboy/ssh-action@master
@@ -52,7 +52,8 @@ jobs:
         key: ${{ secrets.SSH_PRIVATE_KEY }}
         port: 22
         script: |
-          sudo mv /tmp/gunicorn.service /etc/systemd/system/
+          sudo mv /tmp/filled-gunicorn.service /etc/systemd/system/gunicorn.service
+          sudo chmod 644 /etc/systemd/system/gunicorn.service
           sudo systemctl daemon-reexec
           sudo systemctl daemon-reload
           sudo systemctl restart gunicorn.service
