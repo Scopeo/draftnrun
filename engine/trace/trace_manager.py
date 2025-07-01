@@ -1,7 +1,6 @@
 import logging
 
 from openinference.semconv.resource import ResourceAttributes
-from openinference.instrumentation.openai import OpenAIInstrumentor
 from opentelemetry import trace as trace_api
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
@@ -32,8 +31,6 @@ def setup_tracer(
     trace_api.set_tracer_provider(tracer_provider=tracer_provider)
 
     tracer = trace_api.get_tracer(__name__)
-
-    # OpenAIInstrumentor().instrument()
 
     LOGGER.info(f"Tracer setup for project: {project_name}")
     return tracer
