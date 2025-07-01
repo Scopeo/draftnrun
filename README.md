@@ -280,10 +280,10 @@ You can configure Draft'n run to use your own custom Large Language Model (LLM) 
 
 ```env
 # Custom LLM configuration
-# Custom LLM models: model name as key, base URL as value (JSON format)
+
 CUSTOM_LLM_MODELS={"provider_name": {"model_name":"my-llm-1-model-name", "base_url": "https://llm1.example.com/v1/", "api_key": "my_api_key}}
 
-# Custom embedding models: model name as key, base URL as value (JSON format)
+
 CUSTOM_EMBEDDING_MODELS={"provider_name": {"model_name":"my-embed-1-model-name", "base_url": "https://embed1.example.com/v1/", "api_key": "my_api_key}}
 
 ```
