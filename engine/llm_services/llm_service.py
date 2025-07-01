@@ -28,11 +28,10 @@ def with_usage_check(func):
 
 def get_api_key_and_base_url(model_name: str) -> tuple[str, str]:
     try:
-        for provider in settings.custom_llm_models:
-            if settings.custom_llm_models[provider].get("model_name") == model_name:
-                return settings.custom_llm_models[provider].get("api_key"), settings.custom_llm_models[provider].get(
-                    "base_url"
-                )
+        for provider, model_info in settings.custom_llm_models.items():
+            model_names = model_info.get("model_name")
+            if model_name in model_names:
+                return model_info.get("api_key"), model_info.get("base_url")
     except Exception as e:
         raise ValueError(f"No api_key and base_url found for model name: {model_name}") from e
 
@@ -61,26 +60,17 @@ class EmbeddingService(LLMService):
     ):
         super().__init__(trace_manager, provider, model_name, api_key)
 
-    def _embed_text_openai(
-        self,
-        client,
-        text: str,
-    ) -> list[float]:
-
-        response = client.embeddings.create(
-            model=self._model_name,
-            input=text,
-        )
-        return response.data
-
     def embed_text(self, text: str) -> list[float]:
         match self._provider:
             case "openai":
                 import openai
 
                 client = openai.OpenAI(api_key=settings.OPENAI_API_KEY)
-                response = self._embed_text_openai(client, text)
-                return response
+                response = client.embeddings.create(
+                    model=self._model_name,
+                    input=text,
+                )
+                return response.data
 
             case _:
                 import openai
@@ -91,7 +81,11 @@ class EmbeddingService(LLMService):
                         api_key=api_key,
                         base_url=base_url,
                     )
-                    response = self._embed_text_openai(client, text)
+                    response = client.embeddings.create(
+                        model=self._model_name,
+                        input=text,
+                    )
+                    return response.data
                 except Exception as e:
                     raise ValueError(f"Error embedding text: {e}")
 
@@ -114,6 +108,8 @@ class CompletionService(LLMService):
         messages: list[dict] | str,
         stream: bool = False,
     ) -> str:
+        print(self._model_name)
+        print(self._provider)
         match self._provider:
             case "openai":
                 import openai
