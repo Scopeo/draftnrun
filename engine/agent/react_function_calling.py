@@ -5,6 +5,7 @@ from typing import Optional
 
 from opentelemetry import trace as trace_api
 from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttributes
+from openai.types.chat import ChatCompletionMessageToolCall
 
 from engine.agent.agent import (
     Agent,
