@@ -1,4 +1,4 @@
-name: Deploy systemd service
+name: Deploy systemd service Staging
 
 on:
   workflow_dispatch:
