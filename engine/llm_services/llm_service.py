@@ -74,9 +74,18 @@ class EmbeddingService(LLMService):
             case "custom_llm":
                 import openai
 
+                base_url = settings.custom_embedding_models_with_urls.get(self._model_name)
+                api_key = settings.custom_embedding_models_with_api_keys.get(base_url)
+
+                if api_key is None:
+                    raise ValueError(f"No api_key found for model name: {self._model_name}")
+
+                if base_url is None:
+                    raise ValueError(f"No base_url found for model name: {self._model_name}")
+
                 client = openai.OpenAI(
-                    api_key=settings.custom_embedding_models_with_api_keys.get(self._model_name),
-                    base_url=settings.custom_embedding_models_with_urls.get(self._model_name),
+                    api_key=api_key,
+                    base_url=base_url,
                 )
                 response = self._embed_text_openai(client, text)
                 return response
@@ -119,9 +128,18 @@ class CompletionService(LLMService):
             case "custom_llm":
                 import openai
 
+                base_url = settings.custom_llm_models_with_urls.get(self._model_name)
+                api_key = settings.custom_llm_models_with_api_keys.get(base_url)
+
+                if api_key is None:
+                    raise ValueError(f"No api_key found for model name: {self._model_name}")
+
+                if base_url is None:
+                    raise ValueError(f"No base_url found for model name: {self._model_name}")
+
                 client = openai.OpenAI(
-                    api_key=settings.custom_llm_models_with_api_keys.get(self._model_name),
-                    base_url=settings.custom_llm_models_with_urls.get(self._model_name),
+                    api_key=api_key,
+                    base_url=base_url,
                 )
                 response = client.chat.completions.create(
                     model=self._model_name,
@@ -241,9 +259,18 @@ class CompletionService(LLMService):
             case "custom_llm":
                 import openai
 
+                base_url = settings.custom_llm_models_with_urls.get(self._model_name)
+                api_key = settings.custom_llm_models_with_api_keys.get(base_url)
+
+                if api_key is None:
+                    raise ValueError(f"No api_key found for model name: {self._model_name}")
+
+                if base_url is None:
+                    raise ValueError(f"No base_url found for model name: {self._model_name}")
+
                 client = openai.OpenAI(
-                    api_key=settings.custom_llm_models_with_api_keys.get(self._model_name),
-                    base_url=settings.custom_llm_models_with_urls.get(self._model_name),
+                    api_key=api_key,
+                    base_url=base_url,
                 )
                 response = self._run_openai_function_call(
                     client=client,

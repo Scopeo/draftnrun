@@ -28,7 +28,7 @@ def get_organization_llm_providers(session: Session, organization_id: UUID) -> l
         session,
         organization_id=organization_id,
     )
-    return (
+    organization_secrets = (
         [
             organization_secret.key.split("_")[0]
             for organization_secret in organization_secrets
@@ -37,6 +37,9 @@ def get_organization_llm_providers(session: Session, organization_id: UUID) -> l
         if organization_secrets
         else []
     )
+    organization_secrets.append("custom_llm")
+
+    return organization_secrets
 
 
 async def build_graph_runner(
