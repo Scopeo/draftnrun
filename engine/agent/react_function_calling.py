@@ -3,7 +3,8 @@ import json
 import asyncio
 from typing import Optional
 
-from openinference.semconv.trace import SpanAttributes
+from opentelemetry import trace as trace_api
+from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttributes
 
 from engine.agent.agent import (
     Agent,
@@ -148,21 +149,36 @@ class ReActAgent(Agent):
         agent_input = original_agent_input.model_copy(deep=True)
         history_messages_handled = self._memory_handling.get_truncated_messages_history(agent_input.messages)
         tool_choice = "auto" if self._current_iteration < self._max_iterations else "none"
-        chat_response = self._completion_service.function_call(
-            messages=[msg.model_dump() for msg in history_messages_handled],
-            tools=[agent.tool_description for agent in self.agent_tools],
-            tool_choice=tool_choice,
-        )
+        with self.trace_manager.start_span("Agentic reflexion") as span:
+            llm_input_messages = [msg.model_dump() for msg in history_messages_handled]
 
-        # Get all tool calls from the response
-        all_tool_calls = chat_response.choices[0].message.tool_calls
-
-        if not all_tool_calls:
-            self.log_trace_event("No tool calls found in the response. Returning the chat response.")
-            return AgentPayload(
-                messages=[ChatMessage(role="assistant", content=chat_response.choices[0].message.content)],
-                is_final=True,
+            span.set_attributes(
+                {
+                    SpanAttributes.OPENINFERENCE_SPAN_KIND: OpenInferenceSpanKindValues.LLM.value,
+                    SpanAttributes.LLM_INPUT_MESSAGES: json.dumps(llm_input_messages),
+                    SpanAttributes.LLM_MODEL_NAME: self._completion_service._model_name,
+                }
             )
+            chat_response = self._completion_service.function_call(
+                messages=llm_input_messages,
+                tools=[agent.tool_description for agent in self.agent_tools],
+                tool_choice=tool_choice,
+            )
+            span.set_attributes(
+                {
+                    SpanAttributes.LLM_OUTPUT_MESSAGES: json.dumps(chat_response.choices[0].message.model_dump()),
+                }
+            )
+            span.set_status(trace_api.StatusCode.OK)
+
+            all_tool_calls = chat_response.choices[0].message.tool_calls
+
+            if not all_tool_calls:
+                self.log_trace_event("No tool calls found in the response. Returning the chat response.")
+                return AgentPayload(
+                    messages=[ChatMessage(role="assistant", content=chat_response.choices[0].message.content)],
+                    is_final=True,
+                )
 
         span_name = "ToolsCalledInReactAgent"
         with self.trace_manager.start_span(span_name) as span:

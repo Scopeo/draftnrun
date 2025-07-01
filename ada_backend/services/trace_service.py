@@ -20,11 +20,11 @@ TOKEN_LIMIT = 2000000
 def parse_str_or_dict(input_str: str) -> str | dict | list:
     if isinstance(input_str, list):
         return input_str
-    if isinstance(input_str, dict):
-        return input_str
     try:
         result = json.loads(input_str)
         if isinstance(result, dict):
+            return result
+        elif isinstance(result, list):
             return result
         else:
             return input_str  # It's valid JSON, but not a dict
@@ -57,19 +57,18 @@ def build_span_trees(df: pd.DataFrame) -> List[TraceSpan]:
                 if "llm" in row["attributes"]:
                     model_name = row["attributes"]["llm"].get("model_name", "")
                     if "input_messages" in row["attributes"]["llm"]:
-                        input = row["attributes"]["llm"]["input_messages"]
+                        input = parse_str_or_dict(row["attributes"]["llm"]["input_messages"])
+                        input = input if isinstance(input, list) else [input]
                     if "output_messages" in row["attributes"]["llm"]:
-                        output = row["attributes"]["llm"]["output_messages"]
-                    elif "output" in row["attributes"]:
-                        if isinstance(row["attributes"]["output"]["value"], str):
-                            row["attributes"]["output"]["value"] = json.loads(row["attributes"]["output"]["value"])
-                        output = [row["attributes"]["output"]["value"]]
+                        output = parse_str_or_dict(row["attributes"]["llm"]["output_messages"])
+                        output = output if isinstance(output, list) else [output]
 
                 if input is None or len(input) == 0:
                     if "input" in row["attributes"]:
                         input = parse_str_or_dict(row["attributes"]["input"].get("value", []))
                     if not isinstance(input, list):
                         input = [input]
+                if output is None or len(output) == 0:
                     if "output" in row["attributes"]:
                         output = parse_str_or_dict(row["attributes"]["output"].get("value", []))
                     if not isinstance(output, list):
