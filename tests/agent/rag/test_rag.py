@@ -28,6 +28,7 @@ def make_mock_llm_service():
     def _make_mock(default_response: str):
         mock_llm = MagicMock(spec=CompletionService)
         mock_llm.last_prompt = None
+        mock_llm._model_name = "mock_model"
 
         def constrained_complete_with_pydantic(messages, response_format):
             mock_llm.last_prompt = messages

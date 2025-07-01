@@ -69,7 +69,9 @@ class ReActAgent(Agent):
         self.input_data_field_for_messages_history = input_data_field_for_messages_history
         self._allow_tool_shortcuts = allow_tool_shortcuts
 
-    async def _run_tool_call(self, *original_agent_inputs: AgentPayload, tool_call: dict) -> tuple[str, AgentPayload]:
+    async def _run_tool_call(
+        self, *original_agent_inputs: AgentPayload, tool_call: ChatCompletionMessageToolCall
+    ) -> tuple[str, AgentPayload]:
         tool_call_id = tool_call.id
         tool_function_name = tool_call.function.name
         tool_arguments = json.loads(tool_call.function.arguments)

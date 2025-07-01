@@ -4,6 +4,7 @@ import pytest
 
 from engine.agent.agent import SourceChunk
 from engine.agent.rag.retriever import Retriever
+from engine.llm_services.llm_service import EmbeddingService
 from engine.qdrant_service import QdrantService
 from tests.mocks.trace_manager import MockTraceManager
 
@@ -17,7 +18,11 @@ def mock_trace_manager():
 
 @pytest.fixture
 def mock_qdrant_service():
-    return Mock(spec=QdrantService)
+    mock_qdrant_service = Mock(spec=QdrantService)
+    mock_embedding_service = Mock(spec=EmbeddingService)
+    mock_embedding_service._model_name = "test_model"
+    mock_qdrant_service._embedding_service = mock_embedding_service
+    return mock_qdrant_service
 
 
 @pytest.fixture
