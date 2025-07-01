@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from prometheus_client import start_http_server
 
 from ada_backend.admin.admin import setup_admin
@@ -99,6 +100,11 @@ app.add_middleware(
 @app.get("/")
 def read_root():
     return {"message": "Welcome to the LLM Agent Admin Interface!"}
+
+
+@app.get("/health")
+def health_check():
+    return JSONResponse(content={"status": "ok"}, status_code=200)
 
 
 if __name__ == "__main__":
