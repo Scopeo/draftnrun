@@ -87,7 +87,7 @@ class EmbeddingService(LLMService):
                     )
                     return response.data
                 except Exception as e:
-                    raise ValueError(f"Error embedding text: {e}")
+                    raise e
 
 
 class CompletionService(LLMService):
@@ -139,7 +139,7 @@ class CompletionService(LLMService):
                     return response.choices[0].message.content
 
                 except Exception as e:
-                    raise ValueError(f"Error completing: {e}")
+                    raise e
 
     @with_usage_check
     def constrained_complete_with_pydantic(
@@ -249,7 +249,7 @@ class CompletionService(LLMService):
                     )
                     return response
                 except Exception as e:
-                    raise ValueError(f"Error calling function: {e}")
+                    raise e
 
 
 class WebSearchService(LLMService):
