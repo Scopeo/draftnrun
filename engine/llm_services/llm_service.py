@@ -62,10 +62,16 @@ class EmbeddingService(LLMService):
         trace_manager: TraceManager,
         provider: str = "openai",
         model_name: str = "text-embedding-3-large",
+        embedding_size: int = 3072,
         api_key: Optional[str] = None,
         base_url: Optional[str] = None,
     ):
         super().__init__(trace_manager, provider, model_name, api_key, base_url)
+        self._embedding_size = embedding_size
+
+    def get_embedding_size(self) -> int:
+        """Return the size of the embeddings for the model."""
+        return self._embedding_size
 
     def embed_text(self, text: str) -> list[float]:
         span = get_current_span()

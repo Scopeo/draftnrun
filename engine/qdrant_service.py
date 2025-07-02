@@ -497,6 +497,13 @@ class QdrantService:
         if self.collection_exists(collection_name):
             LOGGER.error(f"Collection {collection_name} already exists.")
             return False
+        if self._embedding_service is not None:
+            LOGGER.info(
+                "Using embedding service to create collection with vector size "
+                f"{self._embedding_service.get_embedding_size()}"
+            )
+            vector_size = self._embedding_service.get_embedding_size()
+
         payload = {"vectors": {"size": vector_size, "distance": distance}}
         response = self._send_request(
             method="PUT", endpoint=f"collections/{collection_name}?wait=true", payload=payload
