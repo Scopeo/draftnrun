@@ -60,7 +60,12 @@ class S3FolderManager(FolderManager):
         return path
 
     def _walk_through_folder(self, path: str) -> List[str]:
-        return [p for p in self._files if self._has_valid_extension(p)]
+        valid_files = []
+        for p in self._files:
+            if not self._has_valid_extension(p):
+                raise ValueError(f"Invalid file extension for file: {p}")
+            valid_files.append(p)
+        return valid_files
 
     def get_file_content(self, file_path: str) -> bytes:
         s3_path_to_file = self._files[file_path]["s3_path"]

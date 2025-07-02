@@ -57,7 +57,7 @@ def read_chunk_table(table_name: str, db_service: DBService) -> dict:
     return df.to_dict(orient="records")
 
 
-def sanitize_filename(filename):
+def sanitize_filename(filename, remove_extension_dot=True):
     # Convert accented characters to non-accented equivalents
     filename = unicodedata.normalize("NFKD", filename).encode("ASCII", "ignore").decode("ASCII")
     # Replace '&' with 'and'
@@ -67,7 +67,8 @@ def sanitize_filename(filename):
     # Replace "-" with "_"
     filename = filename.replace("-", "_")
     # Replace "." with "_"
-    filename = filename.replace(".", "_")
+    if remove_extension_dot:
+        filename = filename.replace(".", "_")
     # Remove any other special characters
     filename = re.sub(r"[^a-zA-Z0-9_]", "", filename)
     # Make lowercase

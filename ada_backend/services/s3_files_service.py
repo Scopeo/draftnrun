@@ -27,7 +27,7 @@ def upload_file_to_s3(
     bucket_name: str = settings.S3_BUCKET_NAME,
 ) -> S3UploadedInformation:
     """Upload a file to an S3 bucket."""
-    sanitized_key = sanitize_filename(file_name)
+    sanitized_key = sanitize_filename(file_name, remove_extension_dot=False)
     try:
         upload_file_to_bucket(
             s3_client=S3_CLIENT, bucket_name=bucket_name, key=sanitized_key, byte_content=byte_content

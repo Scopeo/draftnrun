@@ -215,7 +215,10 @@ def _ingest_folder_source(
     #     )
     #     add_summary_in_chunks_func = add_summary_in_chunks
     db_service.create_schema(db_table_schema)
+    LOGGER.info(f"Found {len(files_info)} files to ingest")
     try:
+        if len(files_info) == 0:
+            raise Exception("No files found to ingest")
         for document in files_info:
             chunks_df = get_chunks_dataframe_from_doc(
                 document,
