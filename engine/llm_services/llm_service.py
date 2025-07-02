@@ -76,18 +76,15 @@ class EmbeddingService(LLMService):
                 import openai
 
                 api_key, base_url = get_api_key_and_base_url(self._model_name)
-                try:
-                    client = openai.OpenAI(
-                        api_key=api_key,
-                        base_url=base_url,
-                    )
-                    response = client.embeddings.create(
-                        model=self._model_name,
-                        input=text,
-                    )
-                    return response.data
-                except Exception as e:
-                    raise e
+                client = openai.OpenAI(
+                    api_key=api_key,
+                    base_url=base_url,
+                )
+                response = client.embeddings.create(
+                    model=self._model_name,
+                    input=text,
+                )
+                return response.data
 
 
 class CompletionService(LLMService):
@@ -126,20 +123,16 @@ class CompletionService(LLMService):
                 import openai
 
                 api_key, base_url = get_api_key_and_base_url(self._model_name)
-                try:
-                    client = openai.OpenAI(
-                        api_key=api_key,
-                        base_url=base_url,
-                    )
-                    response = client.chat.completions.create(
-                        model=self._model_name,
-                        messages=messages,
-                        temperature=self._temperature,
-                    )
-                    return response.choices[0].message.content
-
-                except Exception as e:
-                    raise e
+                client = openai.OpenAI(
+                    api_key=api_key,
+                    base_url=base_url,
+                )
+                response = client.chat.completions.create(
+                    model=self._model_name,
+                    messages=messages,
+                    temperature=self._temperature,
+                )
+                return response.choices[0].message.content
 
     @with_usage_check
     def constrained_complete_with_pydantic(
@@ -231,25 +224,22 @@ class CompletionService(LLMService):
                 )
                 return response
             case _:
-                api_key, base_url = get_api_key_and_base_url(self._model_name)
                 import openai
 
-                try:
-                    client = openai.OpenAI(
-                        api_key=api_key,
-                        base_url=base_url,
-                    )
-                    response = client.chat.completions.create(
-                        model=self._model_name,
-                        messages=messages,
-                        tools=openai_tools,
-                        temperature=self._temperature,
-                        stream=stream,
-                        tool_choice=tool_choice,
-                    )
-                    return response
-                except Exception as e:
-                    raise e
+                api_key, base_url = get_api_key_and_base_url(self._model_name)
+                client = openai.OpenAI(
+                    api_key=api_key,
+                    base_url=base_url,
+                )
+                response = client.chat.completions.create(
+                    model=self._model_name,
+                    messages=messages,
+                    tools=openai_tools,
+                    temperature=self._temperature,
+                    stream=stream,
+                    tool_choice=tool_choice,
+                )
+                return response
 
 
 class WebSearchService(LLMService):
