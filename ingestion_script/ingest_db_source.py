@@ -4,6 +4,7 @@ from typing import Optional
 
 import pandas as pd
 from sqlalchemy import UUID
+from llama_index.core.node_parser import SentenceSplitter
 
 from engine.qdrant_service import QdrantCollectionSchema, QdrantService
 from engine.storage_service.db_service import DBService
@@ -11,7 +12,6 @@ from engine.storage_service.db_utils import (
     PROCESSED_DATETIME_FIELD,
     DBColumn,
     DBDefinition,
-    convert_to_correct_pandas_type,
 )
 from engine.storage_service.local_service import SQLLocalService
 from ingestion_script.ingest_folder_source import sync_chunks_to_qdrant
@@ -22,16 +22,24 @@ LOGGER = logging.getLogger(__name__)
 
 
 def get_db_source_definition(
-    id_column_name: str, timestamp_column_name: Optional[str] = None, metadata_column_names: Optional[list] = None
+    chunk_id_column_name: str,
+    chunk_column_name: str,
+    file_id_column_name: str,
+    timestamp_column_name: Optional[str] = None,
+    url_column_name: Optional[str] = None,
+    metadata_column_names: Optional[list] = None,
 ) -> DBDefinition:
     columns = [
         DBColumn(name=PROCESSED_DATETIME_FIELD, type="DATETIME", default="CURRENT_TIMESTAMP"),
-        DBColumn(name=id_column_name, type="VARCHAR", is_primary_key=True),
-        DBColumn(name="table_name", type="VARCHAR"),
-        DBColumn(name="content", type="VARCHAR"),
+        DBColumn(name=chunk_id_column_name, type="VARCHAR", is_primary_key=True),
+        DBColumn(name=file_id_column_name, type="VARCHAR"),
+        DBColumn(name=chunk_column_name, type="VARCHAR"),
     ]
     if timestamp_column_name:
         columns.append(DBColumn(name=timestamp_column_name, type="VARCHAR"))
+
+    if url_column_name:
+        columns.append(DBColumn(name=url_column_name, type="VARCHAR"))
 
     if metadata_column_names:
         columns.extend(DBColumn(name=col, type="VARCHAR") for col in metadata_column_names)
@@ -43,12 +51,17 @@ def get_db_source_definition(
 def get_db_source(
     db_url: str,
     table_name: str,
-    db_definition: DBDefinition,
     id_column_name: str,
     text_column_names: list[str],
+    chunk_id_column_name: str,
+    chunk_column_name: str,
+    file_id_column_name: str,
     source_schema_name: Optional[str] = None,
     metadata_column_names: Optional[list[str]] = None,
     timestamp_column_name: Optional[str] = None,
+    url_column_name: Optional[str] = None,
+    chunk_size: int = 1024,
+    chunk_overlap: int = 0,
 ) -> pd.DataFrame:
     sql_local_service = SQLLocalService(engine_url=db_url)
     df = sql_local_service.get_table_df(table_name=table_name, schema_name=source_schema_name)
@@ -61,19 +74,36 @@ def get_db_source(
         raise ValueError(f"Text columns {text_column_names} not found in the columns: {df.columns.tolist()}")
     if metadata_column_names is not None and not set(metadata_column_names).issubset(df.columns):
         raise ValueError(f"Metadata columns {metadata_column_names} not found in the columns: {df.columns.tolist()}")
+    if timestamp_column_name and timestamp_column_name not in df.columns:
+        raise ValueError(f"Timestamp column '{timestamp_column_name}' not found in the columns: {df.columns.tolist()}")
+    if url_column_name and url_column_name not in df.columns:
+        raise ValueError(f"URL column '{url_column_name}' not found in the columns: {df.columns.tolist()}")
 
-    df["content"] = df[text_column_names].apply(lambda x: " ".join(x.astype(str)), axis=1)
-    df["table_name"] = table_name
-    columns = [id_column_name, "content", "table_name"]
+    df["text"] = df[text_column_names].apply(lambda x: " ".join(x.astype(str)), axis=1)
+    LOGGER.info(f"Retrieved {len(df)} rows from the source table '{table_name}'.")
+
+    splitter = SentenceSplitter(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
+    df["chunks"] = df["text"].apply(lambda x: splitter.split_text(x))
+    df_chunks = df.explode("chunks", ignore_index=True).rename(columns={"chunks": chunk_column_name})
+    df_chunks["chunk_index"] = df_chunks.groupby("id").cumcount() + 1
+    df_chunks[chunk_id_column_name] = (
+        df_chunks[id_column_name].astype(str) + "_" + df_chunks["chunk_index"].astype(str)
+    )
+    df_chunks[file_id_column_name] = table_name + "_" + df_chunks[id_column_name].astype(str)
+
+    columns = [chunk_id_column_name, chunk_column_name, file_id_column_name]
     LOGGER.debug(f"Columns to keep: {columns}")
     if timestamp_column_name:
         columns.append(timestamp_column_name)
+    if url_column_name:
+        columns.append(url_column_name)
     if metadata_column_names:
         columns += metadata_column_names
 
-    df = convert_to_correct_pandas_type(df, id_column_name, db_definition)
+    for col in df_chunks[columns].select_dtypes(include=["datetime64[ns]"]):
+        df_chunks[col] = df_chunks[col].astype(object).where(df[col].notna(), None)
 
-    return df[columns].copy()
+    return df_chunks[columns].copy()
 
 
 def upload_db_source(
@@ -87,29 +117,40 @@ def upload_db_source(
     source_table_name: str,
     id_column_name: str,
     text_column_names: list[str],
+    chunk_id_column_name: str,
+    chunk_column_name: str,
+    file_id_column_name: str,
     source_schema_name: Optional[str] = None,
     metadata_column_names: Optional[list[str]] = None,
     timestamp_column_name: Optional[str] = None,
-    is_sync_enabled: bool = False,
+    url_column_name: Optional[str] = None,
+    chunk_size: int = 1024,
+    chunk_overlap: int = 0,
+    replace_existing: bool = False,
 ):
     df = get_db_source(
         db_url=source_db_url,
         table_name=source_table_name,
-        db_definition=db_definition,
         id_column_name=id_column_name,
         text_column_names=text_column_names,
+        chunk_id_column_name=chunk_id_column_name,
+        chunk_column_name=chunk_column_name,
+        file_id_column_name=file_id_column_name,
         source_schema_name=source_schema_name,
         metadata_column_names=metadata_column_names,
         timestamp_column_name=timestamp_column_name,
+        url_column_name=url_column_name,
+        chunk_size=chunk_size,
+        chunk_overlap=chunk_overlap,
     )
-    LOGGER.info(f"Retrieved {len(df)} rows from the source table '{source_table_name}'.")
+
     db_service.update_table(
         new_df=df,
         table_name=storage_table_name,
         table_definition=db_definition,
-        id_column_name=id_column_name,
+        id_column_name=chunk_id_column_name,
         timestamp_column_name=timestamp_column_name,
-        append_mode=not is_sync_enabled,
+        append_mode=not replace_existing,
         schema_name=storage_schema_name,
     )
     LOGGER.info(f"Updated table '{storage_table_name}' in schema '{storage_schema_name}' with {len(df)} rows.")
@@ -133,18 +174,28 @@ def ingestion_database(
     source_schema_name: Optional[str] = None,
     metadata_column_names: Optional[list[str]] = None,
     timestamp_column_name: Optional[str] = None,
-    is_sync_enabled: bool = False,
+    url_column_name: Optional[str] = None,
+    chunk_size: int = 1024,
+    chunk_overlap: int = 0,
+    replace_existing: bool = False,
 ) -> None:
+    chunk_id_column_name = "chunk_id"
+    chunk_column_name = "content"
+    file_id_column_name = "source_identifier"
     qdrant_schema = QdrantCollectionSchema(
-        chunk_id_field=id_column_name,
-        content_field="content",
-        file_id_field="table_name",
+        chunk_id_field=chunk_id_column_name,
+        content_field=chunk_column_name,
+        file_id_field=file_id_column_name,
+        url_id_field=url_column_name,
         last_edited_ts_field=timestamp_column_name,
         metadata_fields_to_keep=set(metadata_column_names) if metadata_column_names else None,
     )
     db_definition = get_db_source_definition(
-        id_column_name=id_column_name,
+        chunk_id_column_name=chunk_id_column_name,
+        chunk_column_name=chunk_column_name,
+        file_id_column_name=file_id_column_name,
         timestamp_column_name=timestamp_column_name,
+        url_column_name=url_column_name,
         metadata_column_names=metadata_column_names,
     )
     source_type = db.SourceType.DATABASE
@@ -155,7 +206,7 @@ def ingestion_database(
         task_id,
         source_type,
         qdrant_schema,
-        is_sync_enabled=is_sync_enabled,
+        replace_existing=replace_existing,
         ingestion_function=partial(
             upload_db_source,
             db_definition=db_definition,
@@ -164,7 +215,13 @@ def ingestion_database(
             source_table_name=source_table_name,
             id_column_name=id_column_name,
             text_column_names=text_column_names,
+            chunk_id_column_name=chunk_id_column_name,
+            chunk_column_name=chunk_column_name,
+            file_id_column_name=file_id_column_name,
             metadata_column_names=metadata_column_names,
             timestamp_column_name=timestamp_column_name,
+            url_column_name=url_column_name,
+            chunk_size=chunk_size,
+            chunk_overlap=chunk_overlap,
         ),
     )
