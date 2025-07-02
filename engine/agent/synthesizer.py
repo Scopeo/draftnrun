@@ -8,7 +8,7 @@ from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttribu
 from engine.agent.synthesizer_prompts import get_base_synthetizer_prompt_template
 from engine.llm_services.llm_service import CompletionService
 from engine.agent.build_context import build_context_from_source_chunks
-from engine.agent.agent import SourceChunk, SourcedResponse
+from engine.agent.agent import SourceChunk, SourcedResponse, ChatMessage
 from engine.trace.trace_manager import TraceManager
 from engine.agent.utils_prompt import fill_prompt_template_with_dictionary
 
@@ -52,11 +52,20 @@ class Synthesizer:
                     SpanAttributes.LLM_MODEL_NAME: self._completion_service._model_name,
                 }
             )
+            if self._completion_service._provider != "openai":
+                response = self._completion_service.complete(
+                    messages=[ChatMessage(role="user", content=input_str).model_dump()],
+                )
 
-            response = self._completion_service.constrained_complete_with_pydantic(
-                messages=input_str,
-                response_format=self.response_format,
-            )
+                response = SynthesizerResponse(
+                    response=response,
+                    is_successful=False,
+                )
+            else:
+                response = self._completion_service.constrained_complete_with_pydantic(
+                    messages=input_str,
+                    response_format=self.response_format,
+                )
             span.set_attributes(
                 {
                     SpanAttributes.OUTPUT_VALUE: response.response,
