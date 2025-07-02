@@ -19,6 +19,7 @@ from ada_backend.repositories.source_repository import get_data_source_by_id
 from ada_backend.repositories.project_repository import get_project
 from ada_backend.context import get_request_context
 from ada_backend.services.user_roles_service import get_user_access_to_organization
+from settings import settings
 
 LOGGER = logging.getLogger(__name__)
 
@@ -417,12 +418,31 @@ def build_qdrant_service_processor(target_name: str = "qdrant_service") -> Param
 
             provider, model_name = get_llm_provider_and_model(llm_model=source.embedding_model_reference)
 
-            embedding_service = EmbeddingService(
-                trace_manager=get_trace_manager(),
-                api_key=params.pop("llm_api_key", None),
-                provider=provider,
-                model_name=model_name,
-            )
+            # TODO: Handle custom models with front end developments to allow user to put his data on the backend
+            custom_embedding_models = settings.custom_embedding_models
+            if provider in custom_embedding_models:
+                if model_name in custom_embedding_models[provider]["model_name"]:
+                    embedding_base_url = settings.custom_embedding_models[provider]["base_url"]
+                    embedding_api_key = settings.custom_embedding_models[provider]["api_key"]
+                    embedding_model_embedding_size = settings.custom_embedding_models[provider]["embedding_size"][
+                        model_name
+                    ]
+                    embedding_service = EmbeddingService(
+                        trace_manager=get_trace_manager(),
+                        api_key=embedding_api_key,
+                        provider=provider,
+                        model_name=model_name,
+                        base_url=embedding_base_url,
+                        embedding_size=embedding_model_embedding_size,
+                    )
+
+            else:
+                embedding_service = EmbeddingService(
+                    trace_manager=get_trace_manager(),
+                    api_key=params.pop("llm_api_key", None),
+                    provider=provider,
+                    model_name=model_name,
+                )
             qdrant_schema = QdrantCollectionSchema(**source.qdrant_schema)
             collection_name = source.qdrant_collection_name
 
