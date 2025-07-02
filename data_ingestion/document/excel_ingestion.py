@@ -24,12 +24,12 @@ def ingest_excel_file(
         markdown_content = df.to_markdown(index=False)
         result_chunks.append(
             FileChunk(
-                chunk_id=f"{document.file_name}_{sheet_name}",
-                file_id=document.file_name,
+                chunk_id=f"{document.id}_{sheet_name}",
+                file_id=document.id,
                 content=markdown_content,
                 last_edited_ts=document.last_edited_ts,
                 document_title=document.file_name,
-                bounding_boxes=[],
+                bounding_boxes=None,
                 url=document.url,
                 metadata=document.metadata,
             )

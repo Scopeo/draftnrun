@@ -32,7 +32,7 @@ class FileDocumentType(Enum):
 
 class FileChunk(Chunk):
     document_title: str
-    bounding_boxes: list[dict]
+    bounding_boxes: Optional[list[dict]] = None
     url: Optional[str] = None
 
 
