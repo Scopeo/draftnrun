@@ -3,8 +3,6 @@ from sqlalchemy.orm import declarative_base
 from opentelemetry.trace import SpanKind
 from opentelemetry.trace.status import StatusCode
 
-TRACES_DB_URL = "sqlite:///engine/trace/traces.db"
-
 Base = declarative_base()
 
 

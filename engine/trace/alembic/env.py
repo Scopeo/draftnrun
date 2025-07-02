@@ -6,13 +6,17 @@ from alembic import context
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
-from engine.trace.models import TRACES_DB_URL
 from engine.trace.models import Base
+from settings import settings
+
+if not settings.TRACES_DB_URL:
+    raise ValueError("TRACES_DB_URL is not set")
+
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
 config = context.config
-config.set_main_option("sqlalchemy.url", TRACES_DB_URL)
+config.set_main_option("sqlalchemy.url", settings.TRACES_DB_URL)
 is_sqlite = True
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.
