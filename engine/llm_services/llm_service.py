@@ -1,3 +1,4 @@
+import json
 from functools import wraps
 from typing import Optional
 from abc import ABC
@@ -122,6 +123,7 @@ class CompletionService(LLMService):
         stream: bool = False,
     ) -> str:
         span = get_current_span()
+        span.set_attributes({SpanAttributes.LLM_INVOCATION_PARAMETERS: json.dumps({"temperature": self._temperature})})
         match self._provider:
             case "openai":
                 import openai
@@ -185,7 +187,7 @@ class CompletionService(LLMService):
         kwargs["text_format"] = response_format
 
         span = get_current_span()
-
+        span.set_attributes({SpanAttributes.LLM_INVOCATION_PARAMETERS: json.dumps({"temperature": self._temperature})})
         match self._provider:
             case "openai":
                 import openai
@@ -228,7 +230,7 @@ class CompletionService(LLMService):
         kwargs["text"] = {"format": response_format}
 
         span = get_current_span()
-
+        span.set_attributes({SpanAttributes.LLM_INVOCATION_PARAMETERS: json.dumps({"temperature": self._temperature})})
         match self._provider:
             case "openai":
                 import openai
@@ -260,7 +262,7 @@ class CompletionService(LLMService):
         openai_tools = [tool.openai_format for tool in tools]
 
         span = get_current_span()
-
+        span.set_attributes({SpanAttributes.LLM_INVOCATION_PARAMETERS: json.dumps({"temperature": self._temperature})})
         match self._provider:
             case "openai":
                 import openai
@@ -381,6 +383,7 @@ class VisionService(LLMService):
     ) -> str | BaseModel:
         client = None
         span = get_current_span()
+        span.set_attributes({SpanAttributes.LLM_INVOCATION_PARAMETERS: json.dumps({"temperature": self._temperature})})
         match self._provider:
             case "openai":
                 import openai
