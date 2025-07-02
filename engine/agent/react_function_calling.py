@@ -17,6 +17,7 @@ from engine.trace.trace_manager import TraceManager
 from engine.llm_services.llm_service import CompletionService
 from engine.agent.utils_prompt import fill_prompt_template_with_dictionary
 
+
 LOGGER = logging.getLogger(__name__)
 
 INITIAL_PROMPT = (
@@ -159,14 +160,11 @@ class ReActAgent(Agent):
 
         if not all_tool_calls:
             self.log_trace_event("No tool calls found in the response. Returning the chat response.")
+            imgs = get_images_from_message(history_messages_handled)
             artifacts = {}
-            try:
-                json_end = history_messages_handled[-1].content.rfind("}") + 1
-                imgs = [
-                    result["png"] for result in json.loads(history_messages_handled[-1].content[:json_end])["results"]
-                ]
+            if imgs:
                 artifacts["images"] = imgs
-            except (json.JSONDecodeError, TypeError):
+            else:
                 LOGGER.debug("No images found in the response.")
             return AgentPayload(
                 messages=[ChatMessage(role="assistant", content=chat_response.choices[0].message.content)],
@@ -249,3 +247,19 @@ def get_dummy_ai_agent_description() -> ToolDescription:
         tool_properties={},
         required_tool_properties=[],
     )
+
+
+# TODO: handle other formats than png
+def get_images_from_message(messages: list[ChatMessage]) -> list[str]:
+    if messages:
+        message = messages[-1]
+        if message.content and "}" in message.content:
+            json_end = message.content.rfind("}") + 1
+            try:
+                json_content = json.loads(message.content[:json_end])
+                imgs = [result["png"] for result in json_content["results"] if "png" in result]
+            except (json.JSONDecodeError, TypeError):
+                LOGGER.debug("Parsing the image response from JSON failed")
+                imgs = []
+            return imgs
+    return []
