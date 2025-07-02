@@ -34,6 +34,9 @@ jobs:
             git clean -fd
             echo "Code updated successfully."
 
+            echo "👁️ Re-setup the traces database"
+            make trace-db-upgrade
+
       - name: Restart ada-worker Service
         uses: appleboy/ssh-action@v1.0.3
         with:
