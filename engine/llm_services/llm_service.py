@@ -47,11 +47,13 @@ class LLMService(ABC):
         provider: str,
         model_name: str,
         api_key: Optional[str] = None,
+        base_url: Optional[str] = None,
     ):
         self._trace_manager = trace_manager
         self._provider = provider
         self._model_name = model_name
         self._api_key = api_key
+        self._base_url = base_url
 
 
 class EmbeddingService(LLMService):
@@ -61,8 +63,9 @@ class EmbeddingService(LLMService):
         provider: str = "openai",
         model_name: str = "text-embedding-3-large",
         api_key: Optional[str] = None,
+        base_url: Optional[str] = None,
     ):
-        super().__init__(trace_manager, provider, model_name, api_key)
+        super().__init__(trace_manager, provider, model_name, api_key, base_url)
 
     def embed_text(self, text: str) -> list[float]:
         span = get_current_span()
@@ -70,7 +73,10 @@ class EmbeddingService(LLMService):
             case "openai":
                 import openai
 
-                client = openai.OpenAI(api_key=settings.OPENAI_API_KEY)
+                if self._api_key is None:
+                    self._api_key = settings.OPENAI_API_KEY
+
+                client = openai.OpenAI(api_key=self._api_key)
                 response = client.embeddings.create(
                     model=self._model_name,
                     input=text,
@@ -86,10 +92,12 @@ class EmbeddingService(LLMService):
             case _:
                 import openai
 
-                api_key, base_url = get_api_key_and_base_url(self._model_name)
+                if self._api_key is None or self._base_url is None:
+                    self._api_key, self._base_url = get_api_key_and_base_url(self._model_name)
+
                 client = openai.OpenAI(
-                    api_key=api_key,
-                    base_url=base_url,
+                    api_key=self._api_key,
+                    base_url=self._base_url,
                 )
                 response = client.embeddings.create(
                     model=self._model_name,
@@ -111,9 +119,10 @@ class CompletionService(LLMService):
         provider: str = "openai",
         model_name: str = "gpt-4.1-mini",
         api_key: Optional[str] = None,
+        base_url: Optional[str] = None,
         temperature: float = 0.5,
     ):
-        super().__init__(trace_manager, provider, model_name, api_key)
+        super().__init__(trace_manager, provider, model_name, api_key, base_url)
         self._temperature = temperature
 
     @with_usage_check
@@ -128,8 +137,10 @@ class CompletionService(LLMService):
             case "openai":
                 import openai
 
+                if self._api_key is None:
+                    self._api_key = settings.OPENAI_API_KEY
                 messages = chat_completion_to_response(messages)
-                client = openai.OpenAI(api_key=settings.OPENAI_API_KEY)
+                client = openai.OpenAI(api_key=self._api_key)
                 response = client.responses.create(
                     model=self._model_name,
                     input=messages,
@@ -148,10 +159,12 @@ class CompletionService(LLMService):
             case _:
                 import openai
 
-                api_key, base_url = get_api_key_and_base_url(self._model_name)
+                if self._api_key is None or self._base_url is None:
+                    self._api_key, self._base_url = get_api_key_and_base_url(self._model_name)
+
                 client = openai.OpenAI(
-                    api_key=api_key,
-                    base_url=base_url,
+                    api_key=self._api_key,
+                    base_url=self._base_url,
                 )
                 response = client.chat.completions.create(
                     model=self._model_name,
@@ -192,7 +205,9 @@ class CompletionService(LLMService):
             case "openai":
                 import openai
 
-                client = openai.OpenAI(api_key=settings.OPENAI_API_KEY)
+                if self._api_key is None:
+                    self._api_key = settings.OPENAI_API_KEY
+                client = openai.OpenAI(api_key=self._api_key)
                 response = client.responses.parse(**kwargs)
                 span.set_attributes(
                     {
@@ -235,7 +250,9 @@ class CompletionService(LLMService):
             case "openai":
                 import openai
 
-                client = openai.OpenAI(api_key=settings.OPENAI_API_KEY)
+                if self._api_key is None:
+                    self._api_key = settings.OPENAI_API_KEY
+                client = openai.OpenAI(api_key=self._api_key)
                 response = client.responses.parse(**kwargs)
                 span.set_attributes(
                     {
@@ -267,7 +284,9 @@ class CompletionService(LLMService):
             case "openai":
                 import openai
 
-                client = openai.OpenAI(api_key=settings.OPENAI_API_KEY)
+                if self._api_key is None:
+                    self._api_key = settings.OPENAI_API_KEY
+                client = openai.OpenAI(api_key=self._api_key)
                 response = client.chat.completions.create(
                     model=self._model_name,
                     messages=messages,
@@ -287,10 +306,12 @@ class CompletionService(LLMService):
             case _:
                 import openai
 
-                api_key, base_url = get_api_key_and_base_url(self._model_name)
+                if self._api_key is None or self._base_url is None:
+                    self._api_key, self._base_url = get_api_key_and_base_url(self._model_name)
+
                 client = openai.OpenAI(
-                    api_key=api_key,
-                    base_url=base_url,
+                    api_key=self._api_key,
+                    base_url=self._base_url,
                 )
                 response = client.chat.completions.create(
                     model=self._model_name,
@@ -317,8 +338,9 @@ class WebSearchService(LLMService):
         provider: str = "openai",
         model_name: str = "gpt-4.1-mini",
         api_key: Optional[str] = None,
+        base_url: Optional[str] = None,
     ):
-        super().__init__(trace_manager, provider, model_name, api_key)
+        super().__init__(trace_manager, provider, model_name, api_key, base_url)
 
     @with_usage_check
     def web_search(self, query: str) -> str:
@@ -327,7 +349,9 @@ class WebSearchService(LLMService):
             case "openai":
                 import openai
 
-                client = openai.OpenAI(api_key=settings.OPENAI_API_KEY)
+                if self._api_key is None:
+                    self._api_key = settings.OPENAI_API_KEY
+                client = openai.OpenAI(api_key=self._api_key)
                 response = client.responses.create(
                     model=self._model_name,
                     input=query,
@@ -352,9 +376,10 @@ class VisionService(LLMService):
         provider: str = "openai",
         model_name: str = "gpt-4.1-mini",
         api_key: Optional[str] = None,
+        base_url: Optional[str] = None,
         temperature: float = 1.0,
     ):
-        super().__init__(trace_manager, provider, model_name, api_key)
+        super().__init__(trace_manager, provider, model_name, api_key, base_url)
         self._temperature = temperature
 
     def _format_image_content(self, image_content_list: list[bytes]) -> list[dict[str, str]]:
@@ -388,11 +413,16 @@ class VisionService(LLMService):
             case "openai":
                 import openai
 
-                client = openai.OpenAI(api_key=settings.OPENAI_API_KEY)
+                if self._api_key is None:
+                    self._api_key = settings.OPENAI_API_KEY
+                client = openai.OpenAI(api_key=self._api_key)
             case "google":
                 import openai
 
-                client = openai.OpenAI(api_key=settings.GOOGLE_API_KEY, base_url=settings.GOOGLE_API_KEY)
+                if self._api_key is None:
+                    self._api_key = settings.GOOGLE_API_KEY
+
+                client = openai.OpenAI(api_key=self._api_key, base_url=settings.GOOGLE_BASE_URL)
         content = [{"type": "text", "text": text_prompt}]
         content.extend(self._format_image_content(image_content_list))
         messages = [

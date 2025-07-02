@@ -14,6 +14,8 @@ class FileDocumentType(Enum):
     PDF = ".pdf"
     DOCX = ".docx"
     MARKDOWN = ".md"
+    EXCEL = ".xlsx"
+    CSV = ".csv"
 
     @classmethod
     def from_mime_type(cls, mime_type: str):
@@ -22,13 +24,15 @@ class FileDocumentType(Enum):
             "application/pdf": cls.PDF,
             "application/vnd.openxmlformats-officedocument.wordprocessingml.document": cls.DOCX,
             "text/markdown": cls.MARKDOWN,
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": cls.EXCEL,
+            "text/csv": cls.CSV,
         }
         return mime_map.get(mime_type, None)
 
 
 class FileChunk(Chunk):
     document_title: str
-    bounding_boxes: list[dict]
+    bounding_boxes: Optional[list[dict]] = None
     url: Optional[str] = None
 
 
