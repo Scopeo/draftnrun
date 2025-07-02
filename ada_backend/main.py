@@ -80,8 +80,10 @@ app = FastAPI(
 )
 
 # Setup HTTP metrics and traces instrumentation
-Instrumentator().instrument(app).expose(app, endpoint="/metrics")
-setup_performance_instrumentation(app)
+if settings.ENABLE_OBSERVABILITY_STACK:
+    Instrumentator().instrument(app).expose(app, endpoint="/metrics")
+    setup_performance_instrumentation(app)
+
 setup_admin(app)
 
 app.include_router(auth_router)

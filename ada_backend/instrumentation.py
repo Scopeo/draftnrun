@@ -10,12 +10,6 @@ from settings import settings
 
 def setup_performance_instrumentation(app: FastAPI):
     """Sets up OpenTelemetry traces export to Tempo for performance monitoring."""
-    # TODO: Remove this test detection once we have proper test environment configuration
-    # Skip performance instrumentation during tests to avoid TracerProvider conflicts
-    import sys
-
-    if "pytest" in sys.modules:
-        return
 
     resource = Resource(attributes={"service.name": "ada-backend"})
 
