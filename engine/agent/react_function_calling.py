@@ -166,7 +166,8 @@ class ReActAgent(Agent):
                 messages=llm_input_messages,
                 tools=[agent.tool_description for agent in self.agent_tools],
                 tool_choice=tool_choice,
-           
+            )
+
             span.set_attributes(
                 {
                     SpanAttributes.LLM_OUTPUT_MESSAGES: json.dumps(chat_response.choices[0].message.model_dump()),
@@ -177,17 +178,17 @@ class ReActAgent(Agent):
             all_tool_calls = chat_response.choices[0].message.tool_calls
 
             if not all_tool_calls:
-            self.log_trace_event("No tool calls found in the response. Returning the chat response.")
-            imgs = get_images_from_message(history_messages_handled)
-            artifacts = {}
-            if imgs:
-                artifacts["images"] = imgs
-            else:
-                LOGGER.debug("No images found in the response.")
-            return AgentPayload(
-                messages=[ChatMessage(role="assistant", content=chat_response.choices[0].message.content)],
-                is_final=True,
-                artifacts=artifacts,
+                self.log_trace_event("No tool calls found in the response. Returning the chat response.")
+                imgs = get_images_from_message(history_messages_handled)
+                artifacts = {}
+                if imgs:
+                    artifacts["images"] = imgs
+                else:
+                    LOGGER.debug("No images found in the response.")
+                return AgentPayload(
+                    messages=[ChatMessage(role="assistant", content=chat_response.choices[0].message.content)],
+                    is_final=True,
+                    artifacts=artifacts,
                 )
 
         span_name = "ToolsCalledInReactAgent"
