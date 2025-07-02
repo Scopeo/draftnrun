@@ -16,6 +16,15 @@ from settings import settings
 LOGGER = logging.getLogger(__name__)
 
 
+def shorten_source_name(source_name: str, max_length: int = 30) -> str:
+    """
+    Shortens the source name to a maximum length
+    """
+    if len(source_name) > max_length:
+        return f"{source_name[:max_length]}"
+    return source_name
+
+
 def get_sanitize_names(source_name: str, organization_id: str) -> tuple[str, str, str]:
     sanitize_source_name = sanitize_filename(source_name)
     sanitize_organization_id = sanitize_filename(organization_id)
