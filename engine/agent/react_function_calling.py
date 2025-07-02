@@ -257,8 +257,14 @@ def get_images_from_message(messages: list[ChatMessage]) -> list[str]:
             json_end = message.content.rfind("}") + 1
             try:
                 json_content = json.loads(message.content[:json_end])
-                imgs = [result["png"] for result in json_content["results"] if "png" in result]
-            except (json.JSONDecodeError, TypeError):
+                if "results" in json_content:
+                    imgs = [result["png"] for result in json_content["results"] if "png" in result]
+                else:
+                    imgs = []
+            except (
+                json.JSONDecodeError,
+                TypeError,
+            ):
                 LOGGER.debug("Parsing the image response from JSON failed")
                 imgs = []
             return imgs
