@@ -100,6 +100,9 @@ def get_db_source(
     if metadata_column_names:
         columns += metadata_column_names
 
+    for col in df_chunks[columns].select_dtypes(include=["datetime64[ns]"]):
+        df_chunks[col] = df_chunks[col].astype(object).where(df[col].notna(), None)
+
     return df_chunks[columns].copy()
 
 
