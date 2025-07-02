@@ -43,6 +43,8 @@ dependencies = [
     "mysql-connector-python==9.3.0",
     "uvicorn>=0.34.3,<0.35",
     "strawberry-graphql[fastapi]>=0.266.0,<0.267",
+    "e2b-code-interpreter>=1.5.1,<1.6",
+    "python-levenshtein>=0.27.1",
 ]
 
 [dependency-groups]

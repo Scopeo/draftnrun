@@ -113,7 +113,6 @@ class APICallTool(Agent):
         *inputs: AgentPayload,
         **kwargs: Any,
     ) -> AgentPayload:
-
         # Make the API call
         api_response = self.make_api_call(**kwargs)
 
