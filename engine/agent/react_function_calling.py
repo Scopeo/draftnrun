@@ -165,21 +165,6 @@ class ReActAgent(Agent):
                 messages=llm_input_messages,
                 tools=[agent.tool_description for agent in self.agent_tools],
                 tool_choice=tool_choice,
-        if not all_tool_calls:
-            self.log_trace_event("No tool calls found in the response. Returning the chat response.")
-            artifacts = {}
-            try:
-                json_end = history_messages_handled[-1].content.rfind("}") + 1
-                imgs = [
-                    result["png"] for result in json.loads(history_messages_handled[-1].content[:json_end])["results"]
-                ]
-                artifacts["images"] = imgs
-            except (json.JSONDecodeError, TypeError):
-                LOGGER.debug("No images found in the response.")
-            return AgentPayload(
-                messages=[ChatMessage(role="assistant", content=chat_response.choices[0].message.content)],
-                is_final=True,
-                artifacts=artifacts,
             )
             span.set_attributes(
                 {
@@ -192,9 +177,20 @@ class ReActAgent(Agent):
 
             if not all_tool_calls:
                 self.log_trace_event("No tool calls found in the response. Returning the chat response.")
+                artifacts = {}
+                try:
+                    json_end = history_messages_handled[-1].content.rfind("}") + 1
+                    imgs = [
+                        result["png"]
+                        for result in json.loads(history_messages_handled[-1].content[:json_end])["results"]
+                    ]
+                    artifacts["images"] = imgs
+                except (json.JSONDecodeError, TypeError):
+                    LOGGER.debug("No images found in the response.")
                 return AgentPayload(
                     messages=[ChatMessage(role="assistant", content=chat_response.choices[0].message.content)],
                     is_final=True,
+                    artifacts=artifacts,
                 )
 
         span_name = "ToolsCalledInReactAgent"
