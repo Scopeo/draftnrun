@@ -108,8 +108,6 @@ class CompletionService(LLMService):
         messages: list[dict] | str,
         stream: bool = False,
     ) -> str:
-        print(self._model_name)
-        print(self._provider)
         match self._provider:
             case "openai":
                 import openai

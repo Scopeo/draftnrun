@@ -287,7 +287,7 @@ CUSTOM_EMBEDDING_MODELS={"provider_name": {"model_name":["my-embed-1-model-name"
 
 ```
 **How it works:**  
-If you set these variables, your custom model will appear as an option in the model selection dropdown. The backend will route requests to your custom LLM service when this model is selected, instead of sending them to OpenAI or other providers.
+If you set these variables, your custom model will appear as an option in the model selection dropdown after reseeding. When this model is selected, the backend will route requests to your custom LLM service instead of sending them to OpenAI or other providers.
 
 #### Non-local version
 
