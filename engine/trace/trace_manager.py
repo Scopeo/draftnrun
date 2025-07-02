@@ -72,12 +72,6 @@ class TraceManager:
             **kwargs,
         )
 
-    def get_current_span(self) -> trace_api.Span:
-        """
-        Get the current span.
-        """
-        return trace_api.get_current_span()
-
     @classmethod
     def from_config(cls, config: dict):
         """Create a TraceManager from a configuration dictionary."""

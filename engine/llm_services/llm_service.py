@@ -3,6 +3,9 @@ from typing import Optional
 from abc import ABC
 from pydantic import BaseModel
 
+from opentelemetry.trace import get_current_span
+from openinference.semconv.trace import SpanAttributes
+
 from engine.llm_services.utils import check_usage
 from engine.trace.trace_manager import TraceManager
 from engine.agent.agent import ToolDescription
@@ -61,6 +64,7 @@ class EmbeddingService(LLMService):
         super().__init__(trace_manager, provider, model_name, api_key)
 
     def embed_text(self, text: str) -> list[float]:
+        span = get_current_span()
         match self._provider:
             case "openai":
                 import openai
@@ -69,6 +73,12 @@ class EmbeddingService(LLMService):
                 response = client.embeddings.create(
                     model=self._model_name,
                     input=text,
+                )
+                span.set_attributes(
+                    {
+                        SpanAttributes.LLM_TOKEN_COUNT_PROMPT: response.usage.prompt_tokens,
+                        SpanAttributes.LLM_TOKEN_COUNT_TOTAL: response.usage.total_tokens,
+                    }
                 )
                 return response.data
 
@@ -83,6 +93,12 @@ class EmbeddingService(LLMService):
                 response = client.embeddings.create(
                     model=self._model_name,
                     input=text,
+                )
+                span.set_attributes(
+                    {
+                        SpanAttributes.LLM_TOKEN_COUNT_PROMPT: response.usage.prompt_tokens,
+                        SpanAttributes.LLM_TOKEN_COUNT_TOTAL: response.usage.total_tokens,
+                    }
                 )
                 return response.data
 
@@ -105,6 +121,7 @@ class CompletionService(LLMService):
         messages: list[dict] | str,
         stream: bool = False,
     ) -> str:
+        span = get_current_span()
         match self._provider:
             case "openai":
                 import openai
@@ -116,6 +133,13 @@ class CompletionService(LLMService):
                     input=messages,
                     temperature=self._temperature,
                     stream=stream,
+                )
+                span.set_attributes(
+                    {
+                        SpanAttributes.LLM_TOKEN_COUNT_COMPLETION: response.usage.output_tokens,
+                        SpanAttributes.LLM_TOKEN_COUNT_PROMPT: response.usage.input_tokens,
+                        SpanAttributes.LLM_TOKEN_COUNT_TOTAL: response.usage.total_tokens,
+                    }
                 )
                 return response.output_text
 
@@ -131,6 +155,13 @@ class CompletionService(LLMService):
                     model=self._model_name,
                     messages=messages,
                     temperature=self._temperature,
+                )
+                span.set_attributes(
+                    {
+                        SpanAttributes.LLM_TOKEN_COUNT_COMPLETION: response.usage.completion_tokens,
+                        SpanAttributes.LLM_TOKEN_COUNT_PROMPT: response.usage.prompt_tokens,
+                        SpanAttributes.LLM_TOKEN_COUNT_TOTAL: response.usage.total_tokens,
+                    }
                 )
                 return response.choices[0].message.content
 
@@ -153,13 +184,23 @@ class CompletionService(LLMService):
 
         kwargs["text_format"] = response_format
 
+        span = get_current_span()
+
         match self._provider:
             case "openai":
                 import openai
 
                 client = openai.OpenAI(api_key=settings.OPENAI_API_KEY)
                 response = client.responses.parse(**kwargs)
+                span.set_attributes(
+                    {
+                        SpanAttributes.LLM_TOKEN_COUNT_COMPLETION: response.usage.output_tokens,
+                        SpanAttributes.LLM_TOKEN_COUNT_PROMPT: response.usage.input_tokens,
+                        SpanAttributes.LLM_TOKEN_COUNT_TOTAL: response.usage.total_tokens,
+                    }
+                )
                 return response.output_parsed
+
             case _:
                 raise ValueError(f"Invalid provider: {self._provider}")
 
@@ -186,12 +227,21 @@ class CompletionService(LLMService):
         response_format = OutputFormatModel(**response_format).model_dump(exclude_none=True, exclude_unset=True)
         kwargs["text"] = {"format": response_format}
 
+        span = get_current_span()
+
         match self._provider:
             case "openai":
                 import openai
 
                 client = openai.OpenAI(api_key=settings.OPENAI_API_KEY)
                 response = client.responses.parse(**kwargs)
+                span.set_attributes(
+                    {
+                        SpanAttributes.LLM_TOKEN_COUNT_COMPLETION: response.usage.output_tokens,
+                        SpanAttributes.LLM_TOKEN_COUNT_PROMPT: response.usage.input_tokens,
+                        SpanAttributes.LLM_TOKEN_COUNT_TOTAL: response.usage.total_tokens,
+                    }
+                )
                 return response.output_text
             case _:
                 raise ValueError(f"Invalid provider: {self._provider}")
@@ -209,6 +259,8 @@ class CompletionService(LLMService):
 
         openai_tools = [tool.openai_format for tool in tools]
 
+        span = get_current_span()
+
         match self._provider:
             case "openai":
                 import openai
@@ -221,6 +273,13 @@ class CompletionService(LLMService):
                     temperature=self._temperature,
                     stream=stream,
                     tool_choice=tool_choice,
+                )
+                span.set_attributes(
+                    {
+                        SpanAttributes.LLM_TOKEN_COUNT_COMPLETION: response.usage.completion_tokens,
+                        SpanAttributes.LLM_TOKEN_COUNT_PROMPT: response.usage.prompt_tokens,
+                        SpanAttributes.LLM_TOKEN_COUNT_TOTAL: response.usage.total_tokens,
+                    }
                 )
                 return response
             case _:
@@ -239,6 +298,13 @@ class CompletionService(LLMService):
                     stream=stream,
                     tool_choice=tool_choice,
                 )
+                span.set_attributes(
+                    {
+                        SpanAttributes.LLM_TOKEN_COUNT_COMPLETION: response.usage.completion_tokens,
+                        SpanAttributes.LLM_TOKEN_COUNT_PROMPT: response.usage.prompt_tokens,
+                        SpanAttributes.LLM_TOKEN_COUNT_TOTAL: response.usage.total_tokens,
+                    }
+                )
                 return response
 
 
@@ -254,6 +320,7 @@ class WebSearchService(LLMService):
 
     @with_usage_check
     def web_search(self, query: str) -> str:
+        span = get_current_span()
         match self._provider:
             case "openai":
                 import openai
@@ -263,6 +330,13 @@ class WebSearchService(LLMService):
                     model=self._model_name,
                     input=query,
                     tools=[{"type": "web_search_preview"}],
+                )
+                span.set_attributes(
+                    {
+                        SpanAttributes.LLM_TOKEN_COUNT_COMPLETION: response.usage.output_tokens,
+                        SpanAttributes.LLM_TOKEN_COUNT_PROMPT: response.usage.input_tokens,
+                        SpanAttributes.LLM_TOKEN_COUNT_TOTAL: response.usage.total_tokens,
+                    }
                 )
                 return response.output_text
             case _:
@@ -306,6 +380,7 @@ class VisionService(LLMService):
         response_format: Optional[BaseModel] = None,
     ) -> str | BaseModel:
         client = None
+        span = get_current_span()
         match self._provider:
             case "openai":
                 import openai
@@ -331,11 +406,25 @@ class VisionService(LLMService):
                 temperature=self._temperature,
                 response_format=response_format,
             )
+            span.set_attributes(
+                {
+                    SpanAttributes.LLM_TOKEN_COUNT_COMPLETION: chat_response.usage.completion_tokens,
+                    SpanAttributes.LLM_TOKEN_COUNT_PROMPT: chat_response.usage.prompt_tokens,
+                    SpanAttributes.LLM_TOKEN_COUNT_TOTAL: chat_response.usage.total_tokens,
+                }
+            )
             return chat_response.choices[0].message.parsed
         else:
             chat_response = client.chat.completions.create(
                 messages=messages,
                 model=self._model_name,
                 temperature=self._temperature,
+            )
+            span.set_attributes(
+                {
+                    SpanAttributes.LLM_TOKEN_COUNT_COMPLETION: chat_response.usage.completion_tokens,
+                    SpanAttributes.LLM_TOKEN_COUNT_PROMPT: chat_response.usage.prompt_tokens,
+                    SpanAttributes.LLM_TOKEN_COUNT_TOTAL: chat_response.usage.total_tokens,
+                }
             )
             return chat_response.choices[0].message.content

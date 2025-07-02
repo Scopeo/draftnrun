@@ -1,6 +1,7 @@
 from typing import Optional
 
 from openinference.semconv.trace import SpanAttributes
+from opentelemetry.trace import get_current_span
 
 from engine.agent.agent import Agent, AgentPayload, ChatMessage, ToolDescription
 from engine.llm_services.llm_service import WebSearchService
@@ -42,7 +43,7 @@ class WebSearchOpenAITool(Agent):
     ) -> AgentPayload:
         agent_input = inputs[0]
         query_str = query or agent_input.last_message.content
-        span = self.trace_manager.get_current_span()
+        span = get_current_span()
         span.set_attributes(
             {
                 SpanAttributes.INPUT_VALUE: query_str,
