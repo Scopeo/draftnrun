@@ -5,6 +5,7 @@ import logging
 
 from fuzzywuzzy import fuzz, process
 
+
 LOGGER = logging.getLogger(__name__)
 
 
