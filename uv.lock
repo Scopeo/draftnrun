@@ -24,7 +24,6 @@ dependencies = [
     { name = "mysql-connector-python" },
     { name = "numpy" },
     { name = "openai" },
-    { name = "openpyxl" },
     { name = "opentelemetry-exporter-otlp-proto-http" },
     { name = "opentelemetry-exporter-prometheus" },
     { name = "opentelemetry-instrumentation-fastapi" },
@@ -45,7 +44,6 @@ dependencies = [
     { name = "strawberry-graphql", extra = ["fastapi"] },
     { name = "structlog" },
     { name = "supabase" },
-    { name = "tabulate" },
     { name = "tavily-python" },
     { name = "uvicorn" },
 ]
@@ -119,7 +117,6 @@ requires-dist = [
     { name = "mysql-connector-python", specifier = "==9.3.0" },
     { name = "numpy", specifier = "==1.26.2" },
     { name = "openai", specifier = "==1.76.0" },
-    { name = "openpyxl", specifier = "==3.1.5" },
     { name = "opentelemetry-exporter-otlp-proto-http", specifier = ">=1.34.1" },
     { name = "opentelemetry-exporter-prometheus", specifier = ">=0.55b1" },
     { name = "opentelemetry-instrumentation-fastapi", specifier = ">=0.55b1" },
@@ -140,7 +137,6 @@ requires-dist = [
     { name = "strawberry-graphql", extras = ["fastapi"], specifier = ">=0.266.0,<0.267" },
     { name = "structlog", specifier = ">=25.3.0,<26" },
     { name = "supabase", specifier = ">=2.13.0,<3" },
-    { name = "tabulate", specifier = "==0.9.0" },
     { name = "tavily-python", specifier = ">=0.5.0,<0.6" },
     { name = "uvicorn", specifier = ">=0.34.3,<0.35" },
 ]
@@ -817,7 +813,7 @@ wheels = [
 
 [[package]]
 name = "e2b"
-version = "1.5.3"
+version = "1.5.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "attrs" },
@@ -828,9 +824,9 @@ dependencies = [
     { name = "python-dateutil" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/ac/5e/c86b8130e275723066c982e81b564042bfb3c5c852b1e92165287e98f4d4/e2b-1.5.3.tar.gz", hash = "sha256:bc059dd5c82b2df54dcb17eb3f95c3524c128d7f35740d0ff4ee00600b906cba", size = 55859 }
+sdist = { url = "https://files.pythonhosted.org/packages/6b/b3/e5f89ea7adab8651d3258e5ddd0f0cbcddf441ab5a8f3c108e7e2faef1a3/e2b-1.5.2.tar.gz", hash = "sha256:29ed891ae04ffafff1744c57eff55901200f15030d34ac3fe76d6672e2bf7845", size = 55815 }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/0d/39/94f7c6bf52e869c0e3d8e23eb570f88c59774ebd970a4a3d2dd5a775bc8b/e2b-1.5.3-py3-none-any.whl", hash = "sha256:c6fff77c63d371bdc3c76eaf3ead22ea0507db4690a8d0d05aeb4debc349da89", size = 104087 },
+    { url = "https://files.pythonhosted.org/packages/38/a9/48feaa1c41af3d480d97ecfab3d32228692dae8c3e6bd49ac36fd80010d3/e2b-1.5.2-py3-none-any.whl", hash = "sha256:8cf755f2ff04098daa7ac778f768eee1df730a6181637fe124210345999890b3", size = 104069 },
 ]
 
 [[package]]
@@ -857,15 +853,6 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/c0/1f/924e3caae75f471eae4b26bd13b698f6af2c44279f67af317439c2f4c46a/ecdsa-0.19.1.tar.gz", hash = "sha256:478cba7b62555866fcb3bb3fe985e06decbdb68ef55713c4e5ab98c57d508e61", size = 201793 }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/cb/a3/460c57f094a4a165c84a1341c373b0a4f5ec6ac244b998d5021aade89b77/ecdsa-0.19.1-py2.py3-none-any.whl", hash = "sha256:30638e27cf77b7e15c4c4cc1973720149e1033827cfd00661ca5c8cc0cdb24c3", size = 150607 },
-]
-
-[[package]]
-name = "et-xmlfile"
-version = "2.0.0"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/d3/38/af70d7ab1ae9d4da450eeec1fa3918940a5fafb9055e934af8d6eb0c2313/et_xmlfile-2.0.0.tar.gz", hash = "sha256:dab3f4764309081ce75662649be815c4c9081e88f0837825f90fd28317d4da54", size = 17234 }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/c1/8b/5fe2cc11fee489817272089c4203e679c63b570a5aaeb18d852ae3cbba6a/et_xmlfile-2.0.0-py3-none-any.whl", hash = "sha256:7a91720bc756843502c3b7504c77b8fe44217c85c537d85037f0f536151b2caa", size = 18059 },
 ]
 
 [[package]]
@@ -2233,18 +2220,6 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/75/0f/b794eb009846d4b10af50e205a323ca359f284563ef4d1778f35a80522ac/openinference_semantic_conventions-0.1.21.tar.gz", hash = "sha256:328405b9f79ff72a659c7712b8429c0d7ea68c6a4a1679e3eb44372aa228119b", size = 12534 }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/6e/4d/092766f8e610f2c513e483c4adc892eea1634945022a73371fe01f621165/openinference_semantic_conventions-0.1.21-py3-none-any.whl", hash = "sha256:acde8282c20da1de900cdc0d6258a793ec3eb8031bfc496bd823dae17d32e326", size = 10167 },
-]
-
-[[package]]
-name = "openpyxl"
-version = "3.1.5"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "et-xmlfile" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/3d/f9/88d94a75de065ea32619465d2f77b29a0469500e99012523b91cc4141cd1/openpyxl-3.1.5.tar.gz", hash = "sha256:cf0e3cf56142039133628b5acffe8ef0c12bc902d2aadd3e0fe5878dc08d1050", size = 186464 }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/c0/da/977ded879c29cbd04de313843e76868e6e13408a94ed6b987245dc7c8506/openpyxl-3.1.5-py2.py3-none-any.whl", hash = "sha256:5282c12b107bffeef825f4617dc029afaf41d0ea60823bbb665ef3079dc79de2", size = 250910 },
 ]
 
 [[package]]
@@ -3652,15 +3627,6 @@ wheels = [
 ]
 
 [[package]]
-name = "tabulate"
-version = "0.9.0"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/ec/fe/802052aecb21e3797b8f7902564ab6ea0d60ff8ca23952079064155d1ae1/tabulate-0.9.0.tar.gz", hash = "sha256:0095b12bf5966de529c0feb1fa08671671b3368eec77d7ef7ab114be2c068b3c", size = 81090 }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/40/44/4a5f08c96eb108af5cb50b41f76142f0afa346dfa99d5296fe7202a11854/tabulate-0.9.0-py3-none-any.whl", hash = "sha256:024ca478df22e9340661486f85298cff5f6dcdba14f3813e8830015b9ed1948f", size = 35252 },
-]
-
-[[package]]
 name = "tavily-python"
 version = "0.5.4"
 source = { registry = "https://pypi.org/simple" }
@@ -4049,14 +4015,14 @@ wheels = [
 
 [[package]]
 name = "zope-event"
-version = "5.0"
+version = "5.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "setuptools" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/46/c2/427f1867bb96555d1d34342f1dd97f8c420966ab564d58d18469a1db8736/zope.event-5.0.tar.gz", hash = "sha256:bac440d8d9891b4068e2b5a2c5e2c9765a9df762944bda6955f96bb9b91e67cd", size = 17350 }
+sdist = { url = "https://files.pythonhosted.org/packages/8b/c7/31e6f40282a2c548602c177826df281177caf79efaa101dd14314fb4ee73/zope_event-5.1.tar.gz", hash = "sha256:a153660e0c228124655748e990396b9d8295d6e4f546fa1b34f3319e1c666e7f", size = 18632 }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/fe/42/f8dbc2b9ad59e927940325a22d6d3931d630c3644dae7e2369ef5d9ba230/zope.event-5.0-py3-none-any.whl", hash = "sha256:2832e95014f4db26c47a13fdaef84cef2f4df37e66b59d8f1f4a8f319a632c26", size = 6824 },
+    { url = "https://files.pythonhosted.org/packages/00/ed/d8c3f56c1edb0ee9b51461dd08580382e9589850f769b69f0dedccff5215/zope_event-5.1-py3-none-any.whl", hash = "sha256:53de8f0e9f61dc0598141ac591f49b042b6d74784dab49971b9cc91d0f73a7df", size = 6905 },
 ]
 
 [[package]]
