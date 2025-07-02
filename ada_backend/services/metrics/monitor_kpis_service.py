@@ -1,5 +1,4 @@
 from datetime import datetime, timedelta
-import sqlite3
 import logging
 from uuid import UUID
 import json
@@ -7,7 +6,7 @@ import json
 import pandas as pd
 
 from ada_backend.schemas.monitor_schema import KPI, KPISResponse, TraceKPIS
-from ada_backend.services.metrics.utils import get_trace_db_path
+from engine.trace.sql_exporter import get_session_trace
 
 
 LOGGER = logging.getLogger(__name__)
@@ -20,10 +19,9 @@ def get_trace_metrics(project_id: UUID, duration_days: int) -> TraceKPIS:
         "cumulative_llm_token_count_prompt FROM spans "
         f"WHERE start_time >= '{start_time_offset_days}' AND parent_id IS NULL"
     )
-    db_path = get_trace_db_path()
-    conn = sqlite3.connect(db_path)
-    df = pd.read_sql_query(query, conn)
-    conn.close()
+    session = get_session_trace()
+    df = pd.read_sql_query(query, session.bind)
+    session.close()
     df["attributes"] = df["attributes"].apply(lambda x: json.loads(x) if isinstance(x, str) else x)
     df_expanded = df.join(pd.json_normalize(df["attributes"]))
     df = df_expanded[df_expanded["project_id"] == str(project_id)].copy()

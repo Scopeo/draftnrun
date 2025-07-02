@@ -114,6 +114,7 @@ jobs:
           echo "ADA_DB_DRIVER=postgres" >> credentials.env
           echo "ADA_DB_URL=postgresql://postgres:ada_password@localhost:5432/ada_backend" >> credentials.env
           echo "INGESTION_DB_URL=postgresql://postgres:ada_password@localhost:5432/ada_ingestion" >> credentials.env
+          echo "TRACES_DB_URL=postgresql://postgres:ada_password@localhost:5432/ada_traces" >> credentials.env
           echo "ADA_URL=http://localhost:8000" >> credentials.env
           echo "GOOGLE_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai/" >> credentials.env
           echo "GOOGLE_API_KEY=${{ secrets.GOOGLE_API_KEY }}" >> credentials.env
