@@ -17,10 +17,10 @@ You will need to install the following packages:
 
 To use the backend of the app, you will need to run a Docker Compose file that launches the following services:
 
-- postgres  
-- redis  
-- qdrant  
-- prometheus  
+- postgres (with 3 databases: ada_backend, ada_ingestion, ada_traces)
+- redis
+- qdrant
+- prometheus
 
 #### Credentials for the services
 
@@ -51,6 +51,9 @@ Here are the env variables with the default values that work for Docker Compose:
   ```env
   # For Ingestion, set INGESTION_DB_URL (required):
   INGESTION_DB_URL=postgresql://postgres:ada_password@localhost:5432/ada_ingestion
+
+  # For Traces, set TRACES_DB_URL (required):
+  TRACES_DB_URL=postgresql://postgres:ada_password@localhost:5432/ada_traces
 
   # FOR INGESTION QUEUE
   REDIS_HOST=localhost

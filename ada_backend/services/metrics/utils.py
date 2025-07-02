@@ -2,16 +2,20 @@ from datetime import timedelta, datetime
 import json
 from uuid import UUID
 from pathlib import Path
+import sqlite3
 
 import numpy as np
 import pandas as pd
-import sqlite3
 
-from engine.trace.models import TRACES_DB_URL
+from settings import settings
+
+if not settings.TRACES_DB_URL:
+    raise ValueError("TRACES_DB_URL is not set")
 
 
 def get_trace_db_path() -> Path:
-    path_name = TRACES_DB_URL.split("///")[1]
+    # TODO: This will fail for postgres.
+    path_name = settings.TRACES_DB_URL.split("///")[1]
     db_path = Path(path_name).expanduser()
     if db_path.exists():
         return db_path
