@@ -71,7 +71,7 @@ class EmbeddingService(LLMService):
                 if self._api_key is None:
                     self._api_key = settings.OPENAI_API_KEY
 
-                client = openai.OpenAI(api_key=self._api_key, base_url=self._base_url)
+                client = openai.OpenAI(api_key=self._api_key)
                 response = client.embeddings.create(
                     model=self._model_name,
                     input=text,
@@ -121,7 +121,7 @@ class CompletionService(LLMService):
                 if self._api_key is None:
                     self._api_key = settings.OPENAI_API_KEY
                 messages = chat_completion_to_response(messages)
-                client = openai.OpenAI(api_key=self._api_key, base_url=self._base_url)
+                client = openai.OpenAI(api_key=self._api_key)
                 response = client.responses.create(
                     model=self._model_name,
                     input=messages,
@@ -172,7 +172,7 @@ class CompletionService(LLMService):
 
                 if self._api_key is None:
                     self._api_key = settings.OPENAI_API_KEY
-                client = openai.OpenAI(api_key=self._api_key, base_url=self._base_url)
+                client = openai.OpenAI(api_key=self._api_key)
                 response = client.responses.parse(**kwargs)
                 return response.output_parsed
             case _:
@@ -207,7 +207,7 @@ class CompletionService(LLMService):
 
                 if self._api_key is None:
                     self._api_key = settings.OPENAI_API_KEY
-                client = openai.OpenAI(api_key=self._api_key, base_url=self._base_url)
+                client = openai.OpenAI(api_key=self._api_key)
                 response = client.responses.parse(**kwargs)
                 return response.output_text
             case _:
@@ -232,7 +232,7 @@ class CompletionService(LLMService):
 
                 if self._api_key is None:
                     self._api_key = settings.OPENAI_API_KEY
-                client = openai.OpenAI(api_key=self._api_key, base_url=self._base_url)
+                client = openai.OpenAI(api_key=self._api_key)
                 response = client.chat.completions.create(
                     model=self._model_name,
                     messages=messages,
@@ -282,7 +282,7 @@ class WebSearchService(LLMService):
 
                 if self._api_key is None:
                     self._api_key = settings.OPENAI_API_KEY
-                client = openai.OpenAI(api_key=self._api_key, base_url=self._base_url)
+                client = openai.OpenAI(api_key=self._api_key)
                 response = client.responses.create(
                     model=self._model_name,
                     input=query,
@@ -337,14 +337,14 @@ class VisionService(LLMService):
 
                 if self._api_key is None:
                     self._api_key = settings.OPENAI_API_KEY
-                client = openai.OpenAI(api_key=self._api_key, base_url=self._base_url)
+                client = openai.OpenAI(api_key=self._api_key)
             case "google":
                 import openai
 
                 if self._api_key is None:
                     self._api_key = settings.GOOGLE_API_KEY
 
-                client = openai.OpenAI(api_key=self._api_key, base_url=settings.GOOGLE_API_KEY)
+                client = openai.OpenAI(api_key=self._api_key, base_url=settings.GOOGLE_BASE_URL)
         content = [{"type": "text", "text": text_prompt}]
         content.extend(self._format_image_content(image_content_list))
         messages = [
