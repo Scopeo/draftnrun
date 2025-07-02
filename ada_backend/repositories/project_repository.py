@@ -17,14 +17,10 @@ async def get_project(
     project_name: Optional[str] = None,
 ) -> Optional[db.Project]:
     if project_id is not None:
-        result = await session.execute(
-            select(db.Project).where(db.Project.id == project_id)
-        )
+        result = await session.execute(select(db.Project).where(db.Project.id == project_id))
         return result.scalar_one_or_none()
     if project_name is not None:
-        result = await session.execute(
-            select(db.Project).where(db.Project.name == project_name)
-        )
+        result = await session.execute(select(db.Project).where(db.Project.name == project_name))
         return result.scalar_one_or_none()
     raise ValueError("Either project_id or project_name must be provided")
 
@@ -63,9 +59,7 @@ async def get_projects_by_organization_service(
     session: AsyncSession,
     organization_id: UUID,
 ) -> list[db.Project]:
-    result = await session.execute(
-        select(db.Project).where(db.Project.organization_id == organization_id)
-    )
+    result = await session.execute(select(db.Project).where(db.Project.organization_id == organization_id))
     return result.scalars().all()
 
 

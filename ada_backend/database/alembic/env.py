@@ -8,12 +8,12 @@ from sqlalchemy.dialects import postgresql
 
 from settings import settings
 from ada_backend.database.models import Base
-from ada_backend.database.setup_db import get_db_url
+from ada_backend.database.setup_db import get_sync_db_url
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
 config = context.config
-config.set_main_option("sqlalchemy.url", get_db_url())
+config.set_main_option("sqlalchemy.url", get_sync_db_url())
 is_sqlite = settings.ADA_DB_DRIVER == "sqlite"
 
 # Interpret the config file for Python logging.

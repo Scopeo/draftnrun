@@ -10,9 +10,7 @@ async def get_env_relationship_by_graph_runner_id(
     session: AsyncSession, graph_runner_id: UUID
 ) -> db.ProjectEnvironmentBinding:
     result = await session.execute(
-        select(db.ProjectEnvironmentBinding).where(
-            db.ProjectEnvironmentBinding.graph_runner_id == graph_runner_id
-        )
+        select(db.ProjectEnvironmentBinding).where(db.ProjectEnvironmentBinding.graph_runner_id == graph_runner_id)
     )
     env_relationship = result.scalar_one_or_none()
     if not env_relationship:
@@ -20,13 +18,9 @@ async def get_env_relationship_by_graph_runner_id(
     return env_relationship
 
 
-async def update_graph_runner_env(
-    session: AsyncSession, graph_runner_id: UUID, env: EnvType
-) -> None:
+async def update_graph_runner_env(session: AsyncSession, graph_runner_id: UUID, env: EnvType) -> None:
     result = await session.execute(
-        select(db.ProjectEnvironmentBinding).where(
-            db.ProjectEnvironmentBinding.graph_runner_id == graph_runner_id
-        )
+        select(db.ProjectEnvironmentBinding).where(db.ProjectEnvironmentBinding.graph_runner_id == graph_runner_id)
     )
     env_relationship = result.scalar_one_or_none()
     if not env_relationship:

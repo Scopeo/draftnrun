@@ -51,7 +51,9 @@ async def get_component_params(
                 raise ValueError(
                     f"Cannot resolve organization secret for parameter '{param_name}' without organization ID.",
                 )
-            secrets = await get_organization_secrets_from_project_id(session, project_id, key=param.organization_secret.key)
+            secrets = await get_organization_secrets_from_project_id(
+                session, project_id, key=param.organization_secret.key
+            )
             if not secrets:
                 raise ValueError(f"No organization secret found for key '{param.organization_secret.key}'.")
             if len(secrets) > 1:
@@ -198,7 +200,9 @@ async def _get_tool_description(
     )
 
 
-async def get_default_values_for_sandbox(session: AsyncSession, input_component_instance: UUID, project_id: UUID, input_data: dict):
+async def get_default_values_for_sandbox(
+    session: AsyncSession, input_component_instance: UUID, project_id: UUID, input_data: dict
+):
     """
     Asynchronously retrieves default values for a sandbox input component instance
     and merges them into the provided input data.

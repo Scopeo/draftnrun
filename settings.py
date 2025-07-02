@@ -83,6 +83,7 @@ class BaseConfig(BaseSettings):
     ADA_DB_PASSWORD: Optional[str] = None
     ADA_DB_NAME: Optional[str] = None
     ADA_DB_URL: Optional[str] = None
+    ADA_SYNC_DB_URL: Optional[str] = None
 
     # Ingestion database settings
     INGESTION_DB_URL: Optional[str] = None

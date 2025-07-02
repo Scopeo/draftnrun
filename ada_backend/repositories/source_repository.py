@@ -93,7 +93,7 @@ async def upsert_source(
         db.DataSource.organization_id == organization_id,
         db.DataSource.id == source_id,
     )
-    existing_source = (await session_sql_alchemy.execute(stmt)).scalar_one_or_none() # Await the execution
+    existing_source = (await session_sql_alchemy.execute(stmt)).scalar_one_or_none()
     if existing_source:
         if source_name:
             existing_source.name = source_name
@@ -115,9 +115,7 @@ async def delete_source(
 ) -> None:
     """Asynchronously deletes a data source."""
     LOGGER.info(f"Deleting source with id {source_id} for organization {organization_id}")
-    stmt = select(db.DataSource).where(
-        db.DataSource.organization_id == organization_id, db.DataSource.id == source_id
-    )
+    stmt = select(db.DataSource).where(db.DataSource.organization_id == organization_id, db.DataSource.id == source_id)
     source_to_delete = (await session_sql_alchemy.execute(stmt)).scalar_one_or_none()
     if source_to_delete:
         await session_sql_alchemy.delete(source_to_delete)

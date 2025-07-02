@@ -85,7 +85,7 @@ async def delete_secret_from_organization(
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
     try:
-        return await delete_secret_to_org_service(sqlaclhemy_db_session, organization_id, secret_key) # Await the service call
+        return await delete_secret_to_org_service(sqlaclhemy_db_session, organization_id, secret_key)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:

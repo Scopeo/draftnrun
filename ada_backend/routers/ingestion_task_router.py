@@ -51,7 +51,7 @@ async def create_organization_task(
         raise HTTPException(status_code=400, detail="User ID not found")
     try:
         # Create the ingestion task
-        task_id = await create_ingestion_task_by_organization(session, organization_id, ingestion_task_data) # Await
+        task_id = await create_ingestion_task_by_organization(session, organization_id, ingestion_task_data) 
         return task_id
     except Exception as e:
         raise HTTPException(status_code=500, detail="Internal Server Error") from e
@@ -65,7 +65,7 @@ async def update_organization_task(
     session: AsyncSession = Depends(get_db),
 ):
     try:
-        await upsert_ingestion_task_by_organization_id(session, organization_id, ingestion_task_data) # Await
+        await upsert_ingestion_task_by_organization_id(session, organization_id, ingestion_task_data)
         return None
     except Exception as e:
         raise HTTPException(status_code=500, detail="Internal Server Error") from e

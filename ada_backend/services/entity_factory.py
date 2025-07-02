@@ -99,6 +99,7 @@ class AgentFactory(EntityFactory):
 
 # These functions remain sync as they do not perform I/O
 
+
 def build_dataclass_processor(dataclass_type: Type[Any], param_name: str) -> ParameterProcessor:
     def processor(params: dict, constructor_params: dict[str, Any]) -> dict:
         if param_name in params and not isinstance(params[param_name], dataclass_type):
@@ -245,7 +246,7 @@ def build_qdrant_service_processor(target_name: str = "qdrant_service") -> Param
         and injects the collection name into the params dictionary.
     """
 
-    def processor(params: dict, constructor_params: dict[str, Any]) -> dict:
+    async def processor(params: dict, constructor_params: dict[str, Any]) -> dict:
         source_id_str: str = params.pop("data_source")["id"]
         if not source_id_str:
             raise ValueError("data_source_id is required")
@@ -287,10 +288,14 @@ def compose_processors(*processors: ParameterProcessor) -> ParameterProcessor:
     Applies processors in order from left to right.
     """
 
-    def composed_processor(params: dict, constructor_params: dict[str, Any]) -> dict:
+    async def composed_processor(params: dict, constructor_params: dict[str, Any]) -> dict:
         result = params
         for processor in processors:
-            result = processor(result, constructor_params)
+            if inspect.iscoroutinefunction(processor):
+                result = await processor(result, constructor_params)
+            else:
+                maybe = processor(result, constructor_params)
+                result = await maybe if inspect.isawaitable(maybe) else maybe
         return result
 
     return composed_processor

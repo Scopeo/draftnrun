@@ -60,9 +60,9 @@ def seed_db(session: Session):
 
 if __name__ == "__main__":
     import logging
-    from ada_backend.database.setup_db import get_db
+    from ada_backend.database.setup_db import get_sync_db
 
     logging.basicConfig(level=logging.INFO)
 
     print("Seeding database...")
-    seed_db(next(get_db()))
+    seed_db(next(get_sync_db()))

@@ -28,7 +28,9 @@ async def update_api_key_in_organization(session: AsyncSession, organization_id:
         graph_runners = await get_graph_runners_by_project(session, project.id)
         for graph_runner in graph_runners:
             try:
-                graph_project = await get_graph_service(session, project_id=project.id, graph_runner_id=graph_runner.id)
+                graph_project = await get_graph_service(
+                    session, project_id=project.id, graph_runner_id=graph_runner.id
+                )
                 await update_graph_service(session, graph_runner.id, project.id, graph_project)
             except Exception as e:
                 LOGGER.error(
@@ -55,10 +57,7 @@ async def get_secret_keys_service(
 
 
 async def upsert_secret_to_org_service(
-    sqlaclhemy_db_session: AsyncSession,
-    organization_id: UUID,
-    secret_key: str,
-    secret: str
+    sqlaclhemy_db_session: AsyncSession, organization_id: UUID, secret_key: str, secret: str
 ):
     """
     Asynchronously inserts or updates an organization secret and then triggers an API key update
@@ -83,9 +82,7 @@ async def upsert_secret_to_org_service(
 
 
 async def delete_secret_to_org_service(
-    sqlaclhemy_db_session: AsyncSession,
-    organization_id: UUID,
-    secret_key: str
+    sqlaclhemy_db_session: AsyncSession, organization_id: UUID, secret_key: str
 ) -> OrganizationSecretResponse:
     """
     Asynchronously deletes an organization secret.

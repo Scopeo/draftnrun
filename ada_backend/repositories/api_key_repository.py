@@ -28,9 +28,7 @@ async def create_api_key(
 
 async def get_api_key_by_hashed_key(session: AsyncSession, hashed_key: str) -> Optional[db.ApiKey]:
     """Retrieves an API key by its public key."""
-    result = await session.execute(
-        select(db.ApiKey).filter(db.ApiKey.public_key == hashed_key)
-    )
+    result = await session.execute(select(db.ApiKey).filter(db.ApiKey.public_key == hashed_key))
     return result.scalar_one_or_none()
 
 
@@ -47,9 +45,7 @@ async def get_api_keys_by_project_id(session: AsyncSession, project_id: UUID) ->
 
 async def deactivate_api_key(session: AsyncSession, key_id: UUID, revoker_user_id: UUID) -> UUID:
     """Deactivates an API key by setting is_active to False, returns the key id."""
-    result = await session.execute(
-        select(db.ApiKey).filter(db.ApiKey.id == key_id)
-    )
+    result = await session.execute(select(db.ApiKey).filter(db.ApiKey.id == key_id))
     api_key_entry = result.scalar_one_or_none()
     if api_key_entry:
         api_key_entry.is_active = False

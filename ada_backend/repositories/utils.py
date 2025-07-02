@@ -16,18 +16,14 @@ async def create_input_component(session: AsyncSession, name: str = "Input") -> 
     """Creates a new input component instance asynchronously."""
 
     # Fetch the input component
-    result = await session.execute(
-        select(Component).filter(Component.id == COMPONENT_UUIDS["input"])
-    )
+    result = await session.execute(select(Component).filter(Component.id == COMPONENT_UUIDS["input"]))
     input_component = result.scalar_one_or_none()
     if input_component is None:
         raise ValueError("Input component not found in DB")
 
     # Fetch parameter definitions
     result = await session.execute(
-        select(ComponentParameterDefinition).filter(
-            ComponentParameterDefinition.component_id == input_component.id
-        )
+        select(ComponentParameterDefinition).filter(ComponentParameterDefinition.component_id == input_component.id)
     )
     parameter_definitions = result.scalars().all()
 

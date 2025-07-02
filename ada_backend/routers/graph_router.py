@@ -39,7 +39,7 @@ async def get_project_graph(
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
     try:
-        return await get_graph_service(sqlaclhemy_db_session, project_id, graph_runner_id) # Await the service call
+        return await get_graph_service(sqlaclhemy_db_session, project_id, graph_runner_id)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
@@ -56,7 +56,7 @@ async def update_project_pipeline(
     user: Annotated[
         SupabaseUser, Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.WRITER.value))
     ],
-    session: AsyncSession = Depends(get_db), # Changed from Session
+    session: AsyncSession = Depends(get_db),  # Changed from Session
 ) -> GraphUpdateResponse:
     """
     Replace an entire pipeline for a project.
