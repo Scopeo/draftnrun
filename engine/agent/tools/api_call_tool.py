@@ -1,5 +1,6 @@
 import logging
 import json
+import string
 from typing import Optional, Dict, Any
 
 import requests
@@ -64,24 +65,34 @@ class APICallTool(Agent):
         # Prepare headers
         request_headers = self.headers.copy()
 
-        # Prepare request parameters
+        all_parameters = self.fixed_parameters.copy()
+        all_parameters.update(kwargs)
+
+        # Format the endpoint with the parameters that are to be injected
+        endpoint = self.endpoint.format(**all_parameters)
+        formatter = string.Formatter()
+        used_keys = {field_name for _, field_name, _, _ in formatter.parse(self.endpoint) if field_name}
+        filtered_parameters = {key: value for key, value in all_parameters.items() if key not in used_keys}
+
         request_kwargs = {
-            "url": self.endpoint,
+            "url": endpoint,
             "method": self.method,
             "headers": request_headers,
             "timeout": self.timeout,
         }
-
-        # Combine fixed parameters with dynamic parameters
-        all_parameters = self.fixed_parameters.copy()
-        all_parameters.update(kwargs)
-
         # Handle parameters based on HTTP method
-        if self.method in ["GET", "DELETE"]:
-            if all_parameters:
-                request_kwargs["params"] = all_parameters
-        elif self.method in ["POST", "PUT", "PATCH"]:
-            request_kwargs["json"] = all_parameters
+        if self.method in [
+            "GET",
+            "DELETE",
+        ]:
+            if filtered_parameters:
+                request_kwargs["params"] = filtered_parameters
+        elif self.method in [
+            "POST",
+            "PUT",
+            "PATCH",
+        ]:
+            request_kwargs["json"] = filtered_parameters
 
         try:
             response = requests.request(**request_kwargs)
