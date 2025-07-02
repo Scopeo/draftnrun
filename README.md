@@ -454,6 +454,17 @@ Our observability stack consists of:
 
 This setup provides both **operational monitoring** (for DevOps) and **user-facing analytics** (for business insights).
 
+### Enabling/Disabling Observability
+
+Control the observability stack with a single environment variable:
+
+```env
+ENABLE_OBSERVABILITY_STACK=true   # Enable (requires observability stack running)
+ENABLE_OBSERVABILITY_STACK=false  # Disable (backend runs standalone)
+```
+
+When disabled, the backend runs without external observability dependencies. User-facing analytics still work normally.
+
 ### Quick Start - Observability Only
 
 If you only need the observability stack (without databases), run:

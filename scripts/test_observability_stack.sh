@@ -170,7 +170,6 @@ test_feature_metrics() {
     fi
 }
 
-# Main execution
 main() {
     print_header "${ROCKET} OBSERVABILITY STACK HEALTH CHECK"
 

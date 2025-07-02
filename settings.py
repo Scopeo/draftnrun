@@ -124,6 +124,9 @@ class BaseConfig(BaseSettings):
     GF_SECURITY_ADMIN_USER: Optional[str] = None
     GF_SECURITY_ADMIN_PASSWORD: Optional[str] = None
 
+    # Observability stack feature flag
+    ENABLE_OBSERVABILITY_STACK: bool = False
+
     @model_validator(mode="after")
     @classmethod
     def sync_db_settings(cls, values):
