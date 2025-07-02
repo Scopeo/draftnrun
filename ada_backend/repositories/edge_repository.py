@@ -41,9 +41,7 @@ async def upsert_edge(
     If the edge exists, updates its source and target (graph_runner_id remains unchanged).
     If not, creates a new edge with the given source, target, and required graph_runner_id.
     """
-    result = await session.execute(
-        select(db.GraphRunnerEdge).filter(db.GraphRunnerEdge.id == id)
-    )
+    result = await session.execute(select(db.GraphRunnerEdge).filter(db.GraphRunnerEdge.id == id))
     edge = result.scalar_one_or_none()
 
     if edge:
@@ -66,9 +64,7 @@ async def upsert_edge(
 
 
 async def delete_edge(session: AsyncSession, id: UUID) -> None:
-    result = await session.execute(
-        select(db.GraphRunnerEdge).filter(db.GraphRunnerEdge.id == id)
-    )
+    result = await session.execute(select(db.GraphRunnerEdge).filter(db.GraphRunnerEdge.id == id))
     edge = result.scalar_one_or_none()
 
     if edge:

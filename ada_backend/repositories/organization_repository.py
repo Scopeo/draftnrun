@@ -58,7 +58,7 @@ async def get_organization_secrets(
 
 
 async def get_organization_secrets_from_project_id(
-    session: AsyncSession, # Renamed 'sessin' to 'session' for consistency
+    session: AsyncSession,
     project_id: UUID,
     key: Optional[str] = None,
 ) -> list[OrganizationSecretDTO]:

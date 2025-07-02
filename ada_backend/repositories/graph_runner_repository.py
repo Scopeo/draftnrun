@@ -23,7 +23,9 @@ async def get_graph_runners_by_project(session: AsyncSession, project_id: UUID) 
     return result.scalars().all()
 
 
-async def get_graph_runner_for_env(session: AsyncSession, project_id: UUID, env: db.EnvType) -> Optional[db.GraphRunner]:
+async def get_graph_runner_for_env(
+    session: AsyncSession, project_id: UUID, env: db.EnvType
+) -> Optional[db.GraphRunner]:
     result = await session.execute(
         select(db.GraphRunner)
         .join(db.ProjectEnvironmentBinding, db.GraphRunner.id == db.ProjectEnvironmentBinding.graph_runner_id)
@@ -144,9 +146,7 @@ async def get_input_component(session: AsyncSession, graph_runner_id: UUID) -> O
 
 
 async def delete_node(session: AsyncSession, node_id: UUID):
-    result = await session.execute(
-        select(db.GraphRunnerNode).where(db.GraphRunnerNode.node_id == node_id)
-    )
+    result = await session.execute(select(db.GraphRunnerNode).where(db.GraphRunnerNode.node_id == node_id))
     node = result.scalar_one_or_none()
     if node:
         LOGGER.info(f"Deleting node with id {node_id}")
@@ -158,9 +158,7 @@ async def delete_node(session: AsyncSession, node_id: UUID):
 
 async def delete_graph_runner(session: AsyncSession, graph_id: UUID) -> None:
     LOGGER.info(f"Deleting graph runner with id {graph_id}")
-    await session.execute(
-        sql_delete(db.GraphRunner).where(db.GraphRunner.id == graph_id)
-    )
+    await session.execute(sql_delete(db.GraphRunner).where(db.GraphRunner.id == graph_id))
     await session.commit()
 
 

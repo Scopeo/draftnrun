@@ -85,7 +85,6 @@ async def clone_graph_runner(
         )
         ids_map[component_node.component_instance_id] = new_instance_id
 
-
         await upsert_component_node(
             session,
             graph_runner_id=new_graph_runner_id,
@@ -116,11 +115,11 @@ async def clone_graph_runner(
         ):
             raise ValueError("Invalid relationship: component instance not found")
 
-        parent = await get_component_instance_by_id(session, ids_map[relation.parent_component_instance_id]) # Await
+        parent = await get_component_instance_by_id(session, ids_map[relation.parent_component_instance_id])
         if not parent:
             raise ValueError("Invalid relationship: parent component instance not found")
         # TODO: Refactor to repository function that takes name and component_id or with dictionary for faster lookup
-        param_defs = await get_component_parameter_definition_by_component_id(session, parent.component_id) # Await
+        param_defs = await get_component_parameter_definition_by_component_id(session, parent.component_id)
         param_def = next((p for p in param_defs if p.name == relation.parameter_name), None)
         if not param_def:
             raise ValueError(
@@ -180,7 +179,7 @@ async def deploy_graph_service(session: AsyncSession, graph_runner_id: UUID, pro
         session, graph_runner_id=new_graph_runner_id, project_id=project_id, env=EnvType.DRAFT
     )
 
-    await update_graph_runner_env(session, graph_runner_id, env=EnvType.PRODUCTION) # Await
+    await update_graph_runner_env(session, graph_runner_id, env=EnvType.PRODUCTION)  # Await
     LOGGER.info(f"Updated graph runner {graph_runner_id} to production")
 
     return GraphDeployResponse(

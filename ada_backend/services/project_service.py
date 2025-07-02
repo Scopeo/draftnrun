@@ -65,7 +65,7 @@ async def delete_project_service(session: AsyncSession, project_id: UUID) -> Pro
     )
 
 
-def create_project(
+async def create_project(
     session: AsyncSession,
     organization_id: UUID,
     project_schema: ProjectCreateSchema,
@@ -122,8 +122,9 @@ def create_project(
     )
 
 
-async def update_project_service(session: AsyncSession, project_id: UUID,
-                                 project_schema: ProjectUpdateSchema) -> ProjectSchema:
+async def update_project_service(
+    session: AsyncSession, project_id: UUID, project_schema: ProjectUpdateSchema
+) -> ProjectSchema:
     await update_project(
         session=session,
         project_id=project_id,

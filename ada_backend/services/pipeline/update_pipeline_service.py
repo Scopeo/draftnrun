@@ -57,7 +57,9 @@ async def create_or_update_component_instance(
     await delete_component_instance_parameters(session, instance_id)
 
     # Get parameter definitions for validation
-    LOGGER.info(f"Fetching parameter definitions for component '{component_name}' with ID {instance_data.component_id}")
+    LOGGER.info(
+        f"Fetching parameter definitions for component '{component_name}' with ID {instance_data.component_id}"
+    )
     param_definitions: dict[str, db.ComponentParameterDefinition] = {
         p.name: p
         for p in await get_component_parameter_definition_by_component_id(

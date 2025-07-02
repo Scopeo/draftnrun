@@ -49,9 +49,9 @@ async def update_graph_service(
     print("Creating or updating component instances")
     instance_ids = set()
     for instance in graph_project.component_instances:
-        instance_id = await create_or_update_component_instance(session=session,
-                                                                instance_data=instance,
-                                                                project_id=project_id)
+        instance_id = await create_or_update_component_instance(
+            session=session, instance_data=instance, project_id=project_id
+        )
         await upsert_component_node(
             session,
             graph_runner_id=graph_runner_id,
@@ -69,7 +69,7 @@ async def update_graph_service(
             raise ValueError("Invalid relationship: component instance not found")
 
         # Get parameter definition ID from name
-        parent = await get_component_instance_by_id(session, relation.parent_component_instance_id) # Await
+        parent = await get_component_instance_by_id(session, relation.parent_component_instance_id)  # Await
         if not parent:
             raise ValueError("Invalid relationship: parent component instance not found")
         # TODO: Refactor to repository function that takes name and component_id or with dictionary for faster lookup
@@ -90,7 +90,9 @@ async def update_graph_service(
             order=relation.order,
         )
     for edge in graph_project.edges:
-        if await graph_runner_exists(session, edge.destination) or await graph_runner_exists(session, edge.origin): # Await
+        if await graph_runner_exists(session, edge.destination) or await graph_runner_exists(
+            session, edge.origin
+        ):  # Await
             raise ValueError("Nested graphs are not supported")
 
         await upsert_edge(

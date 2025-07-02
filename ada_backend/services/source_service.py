@@ -150,7 +150,7 @@ async def delete_source_service(
                 default_collection_schema=QdrantCollectionSchema(**source.qdrant_schema),
             )
 
-            await qdrant_service.adelete_collection(
+            qdrant_service.delete_collection(
                 collection_name=source.qdrant_collection_name,
             )
             LOGGER.info(f"Qdrant collection {source.qdrant_collection_name} deleted")
@@ -163,7 +163,7 @@ async def delete_source_service(
                 schema_name=source.database_schema,
             )
             LOGGER.info(f"Table {source.database_table_name} deleted")
-            await delete_source(session, organization_id, source_id) # Await the repository call
+            await delete_source(session, organization_id, source_id)  # Await the repository call
     except Exception as e:
         LOGGER.error(f"Error in delete_source_by_id: {str(e)}")
         raise ValueError(f"Failed to delete source: {str(e)}") from e

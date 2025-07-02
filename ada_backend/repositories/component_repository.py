@@ -60,9 +60,7 @@ async def get_component_parameter_definition_by_component_id(
     """
     Retrieves all parameter definitions for a given component asynchronously.
     """
-    stmt = select(db.ComponentParameterDefinition).where(
-        db.ComponentParameterDefinition.component_id == component_id
-    )
+    stmt = select(db.ComponentParameterDefinition).where(db.ComponentParameterDefinition.component_id == component_id)
     result = await session.execute(stmt)
     return result.scalars().all()
 
@@ -166,7 +164,7 @@ async def get_component_sub_components(
         .where(db.ComponentSubInput.parent_component_instance_id == component_instance_id)
         .options(
             joinedload(db.ComponentSubInput.parameter_definition),  # Eager load parameter_definition
-            joinedload(db.ComponentSubInput.child_component_instance)
+            joinedload(db.ComponentSubInput.child_component_instance),
         )
     )
     result = await session.execute(stmt)
@@ -410,7 +408,9 @@ async def upsert_component_instance(
     instance = result.scalar_one_or_none()
 
     if not instance:
-        LOGGER.error(f"[UPSERT] Instance with ID {final_persistent_instance.id} could not be reloaded after upsert operation.")
+        LOGGER.error(
+            f"[UPSERT] Instance with ID {final_persistent_instance.id} could not be reloaded after upsert operation."
+        )
         raise RuntimeError(f"ComponentInstance with ID {final_persistent_instance.id} not found after upsert.")
 
     LOGGER.info(f"[UPSERT] Successfully returned ComponentInstance with ID: {instance.id}")
