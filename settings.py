@@ -1,5 +1,6 @@
 import os
 import re
+import json
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -52,10 +53,20 @@ class BaseConfig(BaseSettings):
     TAVILY_API_KEY: Optional[str] = None
     E2B_API_KEY: Optional[str] = None
 
-    LLM_API_KEY: Optional[str] = None
-    LLM_BASE_URL: Optional[str] = None
-    LLM_MODEL_NAME: Optional[str] = None
-    EMBEDDING_MODEL_NAME: Optional[str] = None
+    CUSTOM_LLM_MODELS: Optional[str] = None
+    CUSTOM_EMBEDDING_MODELS: Optional[str] = None
+
+    @property
+    def custom_llm_models(self) -> dict[str, str]:
+        if self.CUSTOM_LLM_MODELS is None:
+            return {}
+        return json.loads(self.CUSTOM_LLM_MODELS)
+
+    @property
+    def custom_embedding_models(self) -> dict[str, str]:
+        if self.CUSTOM_EMBEDDING_MODELS is None:
+            return {}
+        return json.loads(self.CUSTOM_EMBEDDING_MODELS)
 
     FERNET_KEY: Optional[str] = None
     BACKEND_SECRET_KEY: Optional[str] = None

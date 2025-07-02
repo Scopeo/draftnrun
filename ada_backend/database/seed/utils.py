@@ -5,6 +5,7 @@ from pydantic import BaseModel
 from ada_backend.database.models import ParameterType, SelectOption, UIComponent, UIComponentProperties
 from ada_backend.database import models as db
 from ada_backend.services.registry import COMPLETION_MODEL_IN_DB, EMBEDDING_MODEL_IN_DB
+from settings import settings
 
 
 # Define UUIDs for components and instances
@@ -34,6 +35,53 @@ COMPONENT_UUIDS: dict[str, UUID] = {
     "input": UUID("01357c0b-bc99-44ce-a435-995acc5e2544"),
     "python_code_interpreter_e2b": UUID("e2b00000-0000-1111-2222-333333333333"),
 }
+
+OPTIONS_COMPLETION_MODELS = [
+    # OpenAI
+    SelectOption(value="openai:gpt-4.1", label="GPT-4.1"),
+    SelectOption(value="openai:gpt-4.1-mini", label="GPT-4.1 Mini"),
+    SelectOption(value="openai:gpt-4.1-nano", label="GPT-4.1 Nano"),
+    SelectOption(value="openai:gpt-4o", label="GPT-4o"),
+    SelectOption(value="openai:gpt-4o-mini", label="GPT-4o Mini"),
+    # TODO add new llm service for resoning models
+    # SelectOption(value="openai:o4-mini-2025-04-16", label="GPT-4o4 Mini"),
+    # SelectOption(value="openai:o3-2025-04-16", label="GPT-4o3"),
+    # TODO: Add models once they work using llm_service
+    # Google (Gemini)
+    # SelectOption(value="google:gemini-2.5-pro-preview-06-05", label="Gemini 2.5 Pro"),
+    # SelectOption(value="google:gemini-2.5-flash-preview-05-20", label="Gemini 2.5 Flash"),
+    # SelectOption(value="google:gemini-2.0-flash", label="Gemini 2.0 Flash"),
+    # SelectOption(value="google:gemini-2.0-flash-lite", label="Gemini 2.0 Flash lite"),
+    # Mistral
+    # SelectOption(value="mistral:mistral-large", label="Mistral Large"),
+    # SelectOption(value="mistral:mistral-small-3", label="Mistral Small 3"),
+    # # Anthropic (Claude) TODO: Add Anthropic (Claude)
+    # SelectOption(value="anthropic:claude-3.7-sonnet", label="Claude 3.7 Sonnet"),
+    # SelectOption(value="anthropic:claude-3.5-sonnet", label="Claude 3.5 Sonnet"),
+    # SelectOption(value="anthropic:claude-3.5-haiku", label="Claude 3.5 Haiku"),
+]
+
+OPTIONS_EMBEDDING_MODELS = [
+    # OpenAI
+    SelectOption(value="openai:text-embedding-3-large", label="Text Embedding 3 Large"),
+]
+
+
+def add_custom_llm_model(list_model_options: list[SelectOption], custom_llm_models: dict[str, dict[str, str]]):
+    for provider, model_info in custom_llm_models.items():
+        model_names = model_info.get("model_name")
+        for model_name in model_names:
+            custom_llm_reference = f"{provider}:{model_name}"
+            list_model_options.append(
+                SelectOption(
+                    value=custom_llm_reference,
+                    label=model_name,
+                )
+            )
+
+
+add_custom_llm_model(OPTIONS_COMPLETION_MODELS, settings.custom_llm_models)
+add_custom_llm_model(OPTIONS_EMBEDDING_MODELS, settings.custom_embedding_models)
 
 
 class ParameterLLMConfig(BaseModel):
@@ -67,30 +115,7 @@ def build_completion_service_config_definitions(
                     default="openai:gpt-4.1-mini",
                     ui_component=UIComponent.SELECT,
                     ui_component_properties=UIComponentProperties(
-                        options=[
-                            # OpenAI
-                            SelectOption(value="openai:gpt-4.1", label="GPT-4.1"),
-                            SelectOption(value="openai:gpt-4.1-mini", label="GPT-4.1 Mini"),
-                            SelectOption(value="openai:gpt-4.1-nano", label="GPT-4.1 Nano"),
-                            SelectOption(value="openai:gpt-4o", label="GPT-4o"),
-                            SelectOption(value="openai:gpt-4o-mini", label="GPT-4o Mini"),
-                            # TODO add new llm service for resoning models
-                            # SelectOption(value="openai:o4-mini-2025-04-16", label="GPT-4o4 Mini"),
-                            # SelectOption(value="openai:o3-2025-04-16", label="GPT-4o3"),
-                            # TODO: Add models once they work using llm_service
-                            # Google (Gemini)
-                            # SelectOption(value="google:gemini-2.5-pro-preview-06-05", label="Gemini 2.5 Pro"),
-                            # SelectOption(value="google:gemini-2.5-flash-preview-05-20", label="Gemini 2.5 Flash"),
-                            # SelectOption(value="google:gemini-2.0-flash", label="Gemini 2.0 Flash"),
-                            # SelectOption(value="google:gemini-2.0-flash-lite", label="Gemini 2.0 Flash lite"),
-                            # Mistral
-                            # SelectOption(value="mistral:mistral-large", label="Mistral Large"),
-                            # SelectOption(value="mistral:mistral-small-3", label="Mistral Small 3"),
-                            # # Anthropic (Claude) TODO: Add Anthropic (Claude)
-                            # SelectOption(value="anthropic:claude-3.7-sonnet", label="Claude 3.7 Sonnet"),
-                            # SelectOption(value="anthropic:claude-3.5-sonnet", label="Claude 3.5 Sonnet"),
-                            # SelectOption(value="anthropic:claude-3.5-haiku", label="Claude 3.5 Haiku"),
-                        ],
+                        options=OPTIONS_COMPLETION_MODELS,
                         label="Model Name",
                     ).model_dump(exclude_unset=True, exclude_none=True),
                 )
@@ -144,10 +169,7 @@ def build_embedding_service_config_definitions(
                     default="openai:text-embedding-3-large",
                     ui_component=UIComponent.SELECT,
                     ui_component_properties=UIComponentProperties(
-                        options=[
-                            # OpenAI
-                            SelectOption(value="openai:text-embedding-3-large", label="Text Embedding 3 Large"),
-                        ],
+                        options=OPTIONS_EMBEDDING_MODELS,
                         label="Embedding Model Name",
                     ).model_dump(exclude_unset=True, exclude_none=True),
                 )

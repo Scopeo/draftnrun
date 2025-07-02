@@ -26,6 +26,16 @@ def with_usage_check(func):
     return wrapper
 
 
+def get_api_key_and_base_url(model_name: str) -> tuple[str, str]:
+    try:
+        for provider, model_info in settings.custom_llm_models.items():
+            model_names = model_info.get("model_name")
+            if model_name in model_names:
+                return model_info.get("api_key"), model_info.get("base_url")
+    except Exception as e:
+        raise ValueError(f"No api_key and base_url found for model name: {model_name}") from e
+
+
 class LLMService(ABC):
     def __init__(
         self,
@@ -61,8 +71,20 @@ class EmbeddingService(LLMService):
                     input=text,
                 )
                 return response.data
+
             case _:
-                raise ValueError(f"Invalid provider: {self._provider}")
+                import openai
+
+                api_key, base_url = get_api_key_and_base_url(self._model_name)
+                client = openai.OpenAI(
+                    api_key=api_key,
+                    base_url=base_url,
+                )
+                response = client.embeddings.create(
+                    model=self._model_name,
+                    input=text,
+                )
+                return response.data
 
 
 class CompletionService(LLMService):
@@ -96,8 +118,21 @@ class CompletionService(LLMService):
                     stream=stream,
                 )
                 return response.output_text
+
             case _:
-                raise ValueError(f"Invalid provider: {self._provider}")
+                import openai
+
+                api_key, base_url = get_api_key_and_base_url(self._model_name)
+                client = openai.OpenAI(
+                    api_key=api_key,
+                    base_url=base_url,
+                )
+                response = client.chat.completions.create(
+                    model=self._model_name,
+                    messages=messages,
+                    temperature=self._temperature,
+                )
+                return response.choices[0].message.content
 
     @with_usage_check
     def constrained_complete_with_pydantic(
@@ -105,7 +140,7 @@ class CompletionService(LLMService):
         messages: list[dict] | str,
         response_format: BaseModel,
         stream: bool = False,
-        tools: list[ToolDescription] = None,
+        tools: Optional[list[ToolDescription]] = None,
         tool_choice: str = "auto",
     ) -> BaseModel:
         messages = chat_completion_to_response(messages)
@@ -134,7 +169,7 @@ class CompletionService(LLMService):
         messages: list[dict] | str,
         response_format: str,
         stream: bool = False,
-        tools: list[ToolDescription] = None,
+        tools: Optional[list[ToolDescription]] = None,
         tool_choice: str = "auto",
     ) -> str:
         kwargs = {
@@ -171,12 +206,14 @@ class CompletionService(LLMService):
     ) -> ChatCompletion:
         if tools is None:
             tools = []
+
+        openai_tools = [tool.openai_format for tool in tools]
+
         match self._provider:
             case "openai":
                 import openai
 
                 client = openai.OpenAI(api_key=settings.OPENAI_API_KEY)
-                openai_tools = [tool.openai_format for tool in tools]
                 response = client.chat.completions.create(
                     model=self._model_name,
                     messages=messages,
@@ -187,7 +224,22 @@ class CompletionService(LLMService):
                 )
                 return response
             case _:
-                raise ValueError(f"Invalid provider: {self._provider}")
+                import openai
+
+                api_key, base_url = get_api_key_and_base_url(self._model_name)
+                client = openai.OpenAI(
+                    api_key=api_key,
+                    base_url=base_url,
+                )
+                response = client.chat.completions.create(
+                    model=self._model_name,
+                    messages=messages,
+                    tools=openai_tools,
+                    temperature=self._temperature,
+                    stream=stream,
+                    tool_choice=tool_choice,
+                )
+                return response
 
 
 class WebSearchService(LLMService):

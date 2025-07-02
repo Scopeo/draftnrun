@@ -175,7 +175,7 @@ async def run_env_agent_endpoint(
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
         LOGGER.error(f"Error running agent: {e}")
-        raise HTTPException(status_code=500, detail="Internal Server Error") from e
+        raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}") from e
 
 
 @router.get("/{project_id}/charts", response_model=ChartsResponse, tags=["Metrics"])
@@ -265,7 +265,7 @@ async def chat(
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
         LOGGER.error(f"Error running agent: {e}")
-        raise HTTPException(status_code=500, detail="Internal Server Error") from e
+        raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}") from e
 
 
 @router.post("/{project_id}/{env}/chat", response_model=ChatResponse, tags=["Projects"])
@@ -303,4 +303,4 @@ async def chat_env(
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
         LOGGER.error(f"Error running agent: {e}")
-        raise HTTPException(status_code=500, detail="Internal Server Error") from e
+        raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}") from e
