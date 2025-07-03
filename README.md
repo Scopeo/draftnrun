@@ -352,6 +352,8 @@ make db-seed
 
 **How it works:**  
 If you set these variables, your custom model will appear as an option in the model selection dropdown after reseeding. When this model is selected, the backend will route requests to your custom LLM service instead of sending them to OpenAI or other providers.
+Be careful. For now, when you have a local config, the first vision model and embedding model in your configuration will be used by default
+for the ingestion
 
 #### Non-local version
 
