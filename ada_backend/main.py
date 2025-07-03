@@ -11,6 +11,7 @@ from ada_backend.routers.source_router import router as source_router
 from ada_backend.routers.ingestion_task_router import router as ingestion_task_router
 from ada_backend.routers.components_router import router as components_router
 from ada_backend.routers.graph_router import router as graph_router
+from ada_backend.routers.s3_files_router import router as s3_files_router
 from ada_backend.graphql.schema import graphql_router
 from ada_backend.routers.organization_router import router as org_router
 from engine.trace.trace_context import set_trace_manager
@@ -84,6 +85,7 @@ app.include_router(project_router)
 app.include_router(template_router)
 app.include_router(source_router)
 app.include_router(ingestion_task_router)
+app.include_router(s3_files_router)
 app.include_router(components_router)
 app.include_router(graph_router)
 app.include_router(graphql_router, prefix="/graphql")

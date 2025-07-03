@@ -19,7 +19,10 @@ monitoring
 *.db
 pipeline.json
 *.csv
-
+config/seaweedfs/master_data
+config/seaweedfs/volume_data
+config/seaweedfs/filer_data
+config/seaweedfs/s3_config.json
 # .env
 credentials.env
 sql_credentials.env
