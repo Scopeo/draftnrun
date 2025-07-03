@@ -65,7 +65,7 @@ class TraceManager:
             attributes["project_id"] = params.project_id
             attributes["organization_id"] = params.organization_id
             attributes["organization_llm_providers"] = params.organization_llm_providers
-
+            attributes["conversation_id"] = params.conversation_id
         return self.tracer.start_as_current_span(
             name=name,
             attributes=attributes,

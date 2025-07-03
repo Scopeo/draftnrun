@@ -113,12 +113,6 @@ async def run_agent(
     input_data: dict,
 ) -> ChatResponse:
     project_details = get_project_with_details(session, project_id=project_id)
-    set_tracing_span(
-        project_id=str(project_id),
-        organization_id=str(project_details.organization_id),
-        organization_llm_providers=get_organization_llm_providers(session, project_details.organization_id),
-        conversation_id=input_data.get("conversation_id"),
-    )
     agent = await get_agent_for_project(
         session,
         project_id=project_id,
@@ -131,6 +125,12 @@ async def run_agent(
     input_component = get_input_component(session, graph_runner_id=graph_runner_id)
     if input_component:
         input_data = get_default_values_for_sandbox(session, input_component.id, project_id, input_data)
+    set_tracing_span(
+        project_id=str(project_id),
+        organization_id=str(project_details.organization_id),
+        organization_llm_providers=get_organization_llm_providers(session, project_details.organization_id),
+        conversation_id=input_data.get("conversation_id"),
+    )
     try:
         agent_output = await agent.run(
             input_data,
