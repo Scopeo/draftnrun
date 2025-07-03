@@ -32,23 +32,29 @@ OPENAI_COMPLETION_SERVICE = VisionService(
     model_name="gpt-4.1-mini",
     trace_manager=TraceManager(project_name="ingestion"),
 )
+EMBEDDING_SERVICE = EmbeddingService(
+        provider="openai",
+        model_name="text-embedding-3-large",
+        trace_manager=TraceManager(project_name="ingestion"),
+    )
 if settings.custom_embedding_models is not None:
     # TODO: add the selection at the user level
-    embedding_model_provider = list(settings.custom_embedding_models.keys())[0]
-    embedding_base_url = settings.custom_embedding_models[embedding_model_provider]["base_url"]
-    embedding_api_key = settings.custom_embedding_models[embedding_model_provider]["api_key"]
-    embedding_model_name = settings.custom_embedding_models[embedding_model_provider]["model_name"][0]
-    embedding_model_embedding_size = settings.custom_embedding_models[embedding_model_provider]["embedding_size"][
-        embedding_model_name
-    ]
-    EMBEDDING_SERVICE = EmbeddingService(
-        provider=embedding_model_provider,
-        model_name=embedding_model_name,
-        trace_manager=TraceManager(project_name="ingestion"),
-        api_key=embedding_api_key,
-        base_url=embedding_base_url,
-        embedding_size=embedding_model_embedding_size,
-    )
+    if len(settings.custom_embedding_models) > 0:
+        embedding_model_provider = list(settings.custom_embedding_models.keys())[0]
+        embedding_base_url = settings.custom_embedding_models[embedding_model_provider]["base_url"]
+        embedding_api_key = settings.custom_embedding_models[embedding_model_provider]["api_key"]
+        embedding_model_name = settings.custom_embedding_models[embedding_model_provider]["model_name"][0]
+        embedding_model_embedding_size = settings.custom_embedding_models[embedding_model_provider]["embedding_size"][
+            embedding_model_name
+        ]
+        EMBEDDING_SERVICE = EmbeddingService(
+            provider=embedding_model_provider,
+            model_name=embedding_model_name,
+            trace_manager=TraceManager(project_name="ingestion"),
+            api_key=embedding_api_key,
+            base_url=embedding_base_url,
+            embedding_size=embedding_model_embedding_size,
+        )
 
 ID_COLUMN_NAME = "chunk_id"
 TIMESTAMP_COLUMN_NAME = "last_edited_ts"
