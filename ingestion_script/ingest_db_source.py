@@ -85,7 +85,7 @@ def get_db_source(
     splitter = SentenceSplitter(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
     df["chunks"] = df["text"].apply(lambda x: splitter.split_text(x))
     df_chunks = df.explode("chunks", ignore_index=True).rename(columns={"chunks": chunk_column_name})
-    df_chunks["chunk_index"] = df_chunks.groupby("id").cumcount() + 1
+    df_chunks["chunk_index"] = df_chunks.groupby(id_column_name).cumcount() + 1
     df_chunks[chunk_id_column_name] = (
         df_chunks[id_column_name].astype(str) + "_" + df_chunks["chunk_index"].astype(str)
     )
