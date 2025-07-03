@@ -114,12 +114,17 @@ class BaseConfig(BaseSettings):
     REDIS_PASSWORD: Optional[str] = None
     REDIS_QUEUE_NAME: str = "ada_ingestion_queue"
 
-    # S3 configuration
     S3_ENDPOINT_URL: Optional[str] = None
     S3_ACCESS_KEY_ID: Optional[str] = None
     S3_SECRET_ACCESS_KEY: Optional[str] = None
     S3_BUCKET_NAME: Optional[str] = None
     S3_REGION_NAME: Optional[str] = None
+    
+    # Ingestion parameters
+    ZOOM_INGESTION: float = 3.0
+    NUMBER_OF_IMAGES_TO_DETERMINE_TYPE_OF_DOCUMENT: int = 5
+    ENFORCE_PAGE_BY_PAGE_INGESTION: bool = False
+
 
     # Google OAuth configuration
     GOOGLE_CLIENT_ID: Optional[str] = None
