@@ -31,8 +31,8 @@ DEFAULT_MAPPING = {"CURRENT_TIMESTAMP": sqlalchemy.func.current_timestamp()}
 
 
 class SQLLocalService(DBService):
-    def __init__(self, engine_url: str):
-        super().__init__()
+    def __init__(self, engine_url: str, component_instance_name: Optional[str] = None):
+        super().__init__(component_instance_name=component_instance_name)
         self.engine = create_engine(engine_url)
         self.metadata = MetaData()
         self.metadata.reflect(bind=self.engine)

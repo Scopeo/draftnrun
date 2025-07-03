@@ -1,3 +1,4 @@
+from typing import Optional
 from pydantic import BaseModel
 from engine.llm_services.llm_service import LLMService
 from engine.agent.agent import SourceChunk, SourcedResponse
@@ -22,10 +23,12 @@ class RelevantChunkSelector:
         llm_service: LLMService,
         prompt_template: str = CHUNK_SELECTION_PROMPT,
         response_format: BaseModel = RelevantChunk,
+        component_instance_name: Optional[str] = None,
     ):
         self._llm_service = llm_service
         self._prompt_template = prompt_template
         self._response_format = response_format
+        self.component_instance_name = component_instance_name or f"{self.__class__.__name__}"
 
     def get_response(
         self,

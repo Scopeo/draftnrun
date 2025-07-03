@@ -1,3 +1,4 @@
+from typing import Optional
 import pandas as pd
 from opentelemetry import trace as trace_api
 from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttributes
@@ -24,6 +25,7 @@ class VocabularySearch:
         vocabulary_context_prompt_key: str = VOCABULARY_CONTEXT_PROMPT_KEY,
         term_column: str = TERM_COLUMN_NAME,
         definition_column: str = DEFINITION_COLUMN_NAME,
+        component_instance_name: Optional[str] = None,
     ):
         self.trace_manager = trace_manager
         self.term_column = term_column
@@ -33,6 +35,7 @@ class VocabularySearch:
         self.vocabulary_context_data = vocabulary_context_data
         self.vocabulary_information: dict[str, TermDefinition] = self._init_vocabulary_information()
         self.vocabulary_context_prompt_key = vocabulary_context_prompt_key
+        self.component_instance_name = component_instance_name or f"{self.__class__.__name__}"
 
     def _init_vocabulary_information(self):
         vocabulary_information = pd.DataFrame(self.vocabulary_context_data)

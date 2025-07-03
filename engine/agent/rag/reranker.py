@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 import json
+from typing import Optional
 
 from opentelemetry import trace as trace_api
 from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttributes, RerankerAttributes
@@ -13,16 +14,18 @@ class Reranker(ABC):
         self,
         trace_manager: TraceManager,
         model: str,
+        component_instance_name: Optional[str] = None,
     ):
         self.trace_manager = trace_manager
         self._model = model
+        self.component_instance_name = component_instance_name or f"{self.__class__.__name__}"
 
     @abstractmethod
     def _rerank_without_trace(self, query, chunks: list[SourceChunk]) -> list[SourceChunk]:
         pass
 
     def rerank(self, query, chunks: list[SourceChunk]):
-        with self.trace_manager.start_span(self.__class__.__name__) as span:
+        with self.trace_manager.start_span(self.component_instance_name) as span:
             reranker_chunks = self._rerank_without_trace(query, chunks)
             span.set_attributes(
                 {

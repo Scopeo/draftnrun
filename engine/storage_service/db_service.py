@@ -11,8 +11,9 @@ LOGGER = logging.getLogger(__name__)
 
 
 class DBService(ABC):
-    def __init__(self, dialect: Optional[str] = None):
+    def __init__(self, dialect: Optional[str] = None, component_instance_name: Optional[str] = None):
         self.dialect = dialect
+        self.component_instance_name = component_instance_name or f"{self.__class__.__name__}"
 
     @abstractmethod
     def table_exists(self, table_name: str, schema_name: Optional[str] = None) -> bool:

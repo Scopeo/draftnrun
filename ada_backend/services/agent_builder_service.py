@@ -163,8 +163,7 @@ def instantiate_component(
     if tool_description:
         input_params["tool_description"] = tool_description
     LOGGER.debug(f"Tool description: {tool_description}\n")
-    if component_instance.component.is_agent or component_instance.component.function_callable:
-        input_params["component_instance_name"] = component_instance.name
+    input_params["component_instance_name"] = component_instance.name
     # Instantiate the component using its factory
     LOGGER.debug(f"Trying to create component: {component_name} with input params: {input_params}\n")
     try:

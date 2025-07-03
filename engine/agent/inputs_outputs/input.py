@@ -38,7 +38,7 @@ class Input:
 
     async def run(self, input_data: dict):
         filtered_input = {k: input_data[k] for k in self.payload_schema if k in input_data}
-        with self.trace_manager.start_span(self.__class__.__name__) as span:
+        with self.trace_manager.start_span(self.component_instance_name) as span:
             span.set_attributes(
                 {
                     SpanAttributes.OPENINFERENCE_SPAN_KIND: OpenInferenceSpanKindValues.LLM.value,

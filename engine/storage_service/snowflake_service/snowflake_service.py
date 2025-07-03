@@ -26,8 +26,9 @@ class SnowflakeService(DBService):
         database_name: str,
         warehouse: str = "AIRBYTE_WAREHOUSE",
         role_to_use: str = "AIRBYTE_ROLE",
+        component_instance_name: Optional[str] = None,
     ):
-        super().__init__(dialect="snowflake sql")
+        super().__init__(dialect="snowflake sql", component_instance_name=component_instance_name)
         self.database_name = database_name
         self.connector = connect_to_snowflake()
         LOGGER.info(

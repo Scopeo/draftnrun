@@ -1,4 +1,5 @@
 import logging
+from typing import Optional
 
 from opentelemetry import trace as trace_api
 from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttributes
@@ -25,6 +26,7 @@ class DocumentSearch:
         document_name_column: str = "document_name",
         content_document_column: str = "document_content",
         fuzzy_threshold: int = 80,
+        component_instance_name: Optional[str] = None,
     ):
         self.trace_manager = trace_manager
         self.db_service = db_service
@@ -33,6 +35,7 @@ class DocumentSearch:
         self.document_name_column = document_name_column
         self.content_document_column = content_document_column
         self.fuzzy_threshold = fuzzy_threshold
+        self.component_instance_name = component_instance_name or f"{self.__class__.__name__}"
 
     def get_documents_names(self) -> list[str]:
         query = f"SELECT DISTINCT {self.document_name_column} FROM {self.schema_name}.{self.table_name}"
