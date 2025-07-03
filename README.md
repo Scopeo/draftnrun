@@ -311,6 +311,8 @@ CUSTOM_LLM_MODELS={"provider_name": {"model_name":["my-llm-1-model-name", "my-ll
 CUSTOM_EMBEDDING_MODELS={"provider_name": {"model_name":["my-embed-1-model-name", "my-embed-2-model-name"], "base_url": "https://embed1.example.com/v1/", "api_key": "my_api_key}}
 
 ```
+⚠️ Be careful: if you want to have ingestion working locally, you need to use a Vision Model that supports
+the `image_url` parameter, such as `gpt-4o` or `gpt-4o-mini` as the first model in your list in your credentials.
 **How it works:**  
 If you set these variables, your custom model will appear as an option in the model selection dropdown after reseeding. When this model is selected, the backend will route requests to your custom LLM service instead of sending them to OpenAI or other providers.
 
