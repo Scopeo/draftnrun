@@ -192,7 +192,9 @@ def ingestion_database(
         file_id_field=file_id_column_name,
         url_id_field=url_column_name,
         last_edited_ts_field=timestamp_column_name,
-        metadata_fields_to_keep=set(metadata_column_names) if metadata_column_names else None,
+        metadata_fields_to_keep=(
+            set(f"metadata_{col}" for col in metadata_column_names) if metadata_column_names else None
+        ),
     )
     db_definition = get_db_source_definition(
         chunk_id_column_name=chunk_id_column_name,
