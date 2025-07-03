@@ -18,7 +18,7 @@ from engine.storage_service.db_service import DBService
 from engine.storage_service.db_utils import PROCESSED_DATETIME_FIELD, DBColumn, DBDefinition, create_db_if_not_exists
 from engine.storage_service.local_service import SQLLocalService
 from engine.trace.trace_manager import TraceManager
-from ingestion_script.utils import create_source, get_sanitize_names, update_ingestion_task, shorten_source_name
+from ingestion_script.utils import create_source, get_sanitize_names, update_ingestion_task
 from settings import settings
 
 LOGGER = logging.getLogger(__name__)
@@ -138,7 +138,6 @@ def _ingest_folder_source(
     save_supabase: bool = True,
     add_doc_description_to_chunks: bool = False,
 ) -> None:
-    source_name = shorten_source_name(source_name)
     db_table_schema, db_table_name, qdrant_collection_name = get_sanitize_names(
         source_name=source_name,
         organization_id=organization_id,
