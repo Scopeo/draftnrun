@@ -219,7 +219,7 @@ def _ingest_folder_source(
     LOGGER.info(f"Found {len(files_info)} files to ingest")
     try:
         if len(files_info) == 0:
-            raise Exception("No files found to ingest")
+            raise ValueError("No files found to ingest")
         for document in files_info:
             chunks_df = get_chunks_dataframe_from_doc(
                 document,
