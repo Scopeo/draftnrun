@@ -112,6 +112,11 @@ class BaseConfig(BaseSettings):
     REDIS_PASSWORD: Optional[str] = None
     REDIS_QUEUE_NAME: str = "ada_ingestion_queue"
 
+    # Ingestion parameters
+    ZOOM_INGESTION: float = 3.0
+    NUMBER_OF_IMAGES_TO_DETERMINE_TYPE_OF_DOCUMENT: int = 5
+    ENFORCE_PAGE_BY_PAGE_INGESTION: bool = False
+
     @model_validator(mode="after")
     @classmethod
     def sync_db_settings(cls, values):
