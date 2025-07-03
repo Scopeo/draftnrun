@@ -1,0 +1,9 @@
+# config/filer.toml
+
+[filer]
+defaultStore = "redis"
+
+[redis]
+enabled = true
+address = "redis:6379"
+password = "redis_password"

@@ -12,7 +12,6 @@ services:
       - postgres_data:/var/lib/postgresql/data
       - ../config/postgres/init:/docker-entrypoint-initdb.d
 
-  # Needed for running tests in local.
   postgres_test:
     image: postgres:16
     container_name: ada_postgres_test
@@ -29,6 +28,8 @@ services:
       - "6379:6379"
     volumes:
       - redis_data:/data
+    networks:
+      - localprom
     command: ["redis-server", "--appendonly", "yes", "--requirepass", "redis_password"]
     healthcheck:
       test: ["CMD", "redis-cli", "-a", "redis_password", "ping"]
@@ -60,12 +61,102 @@ services:
     ports:
       - 9090:9090
 
+  init_folders:
+    image: busybox
+    entrypoint: [ "sh", "-c" ]
+    command: >
+      "mkdir -p /mnt/config/seaweedfs/master_data &&
+       mkdir -p /mnt/config/seaweedfs/filer_data &&
+       mkdir -p /mnt/config/seaweedfs/volume_data"
+    volumes:
+      - ../config:/mnt/config
+    # Ensures this runs once and exits
+    restart: "no"
+
+
+  seaweedfs-master:
+    image: chrislusf/seaweedfs:latest
+    command: "master -ip=seaweedfs-master -ip.bind=0.0.0.0 -mdir=/data -defaultReplication=000 -metricsPort=9324"
+    ports:
+      - "9333:9333"  # HTTP
+      - "19333:19333"  # gRPC
+      - "9324:9324"  # metrics
+    volumes:
+      - ../config/seaweedfs/master_data:/data
+    networks:
+      - localprom
+    container_name: seaweedfs-master
+
+    depends_on:
+      - init_folders
+
+  seaweedfs-volume:
+    image: chrislusf/seaweedfs:latest
+    entrypoint: /bin/sh
+    command: >
+      -c '
+        weed volume -mserver=seaweedfs-master:9333 -ip.bind=0.0.0.0 -max=0 -dir=/data -metricsPort=9325 &
+        sleep 5 &&
+        echo "volume.create -collection s3-backend -replication 000" | weed shell -master=seaweedfs-master:9333 &&
+        wait
+      '
+    ports:
+      - "8080:8080"
+      - "18080:18080"
+      - "9325:9325"
+    volumes:
+      - seaweed_volume_data:/data
+    networks:
+      - localprom
+    depends_on:
+      - init_folders
+      - seaweedfs-master
+    container_name: seaweedfs-volume
+
+
+
+  seaweedfs-filer:
+    image: chrislusf/seaweedfs:latest
+    command: "filer -master=seaweedfs-master:9333 -ip.bind=0.0.0.0 -port.grpc=18888 -metricsPort=9326 -options=/etc/seaweedfs/filer.toml"
+    ports:
+      - "8888:8888"
+      - "18888:18888"  # gRPC port must be exposed!
+      - "9326:9326"
+    volumes:
+      - ../config/seaweedfs/filer.toml:/etc/seaweedfs/filer.toml
+      - ../config/seaweedfs/filer_data:/data
+    networks:
+      - localprom
+    depends_on:
+      - init_folders
+      - seaweedfs-master
+      - redis
+    container_name: seaweedfs-filer
+
+
+
+  seaweedfs-s3:
+    image: chrislusf/seaweedfs:latest
+    command: "s3 -filer=seaweedfs-filer:8888 -ip.bind=0.0.0.0 -port=8333 -config=/etc/seaweedfs/s3_config.json"
+    ports:
+      - "8333:8333"  # S3 endpoint
+      - "9327:9327"
+    volumes:
+      - ../config/seaweedfs/s3_config.json:/etc/seaweedfs/s3_config.json
+    networks:
+      - localprom
+    depends_on:
+      - seaweedfs-filer
+    container_name: seaweedfs-s3
 
 volumes:
   postgres_data:
   redis_data:
   qdrant_data:
   prometheus_data:
+  seaweed_master_data:
+  seaweed_volume_data:
+  seaweed_filer_data:
 
 networks:
   localprom:
