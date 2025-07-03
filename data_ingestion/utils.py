@@ -66,12 +66,12 @@ def sanitize_filename(filename, remove_extension_dot=True):
     filename = filename.replace(" ", "_")
     # Replace "-" with "_"
     filename = filename.replace("-", "_")
-    # Replace "." with "_"
+    # Remove any characters that are not alphanumeric, underscores, or dots
     if remove_extension_dot:
         filename = filename.replace(".", "_")
-    # Remove any other special characters
-    filename = re.sub(r"[^a-zA-Z0-9_]", "", filename)
-    # Make lowercase
+        filename = re.sub(r"[^a-zA-Z0-9_]", "", filename)
+    else:
+        filename = re.sub(r"[^a-zA-Z0-9_.]", "", filename)
     filename = filename.lower()
     return filename
 
