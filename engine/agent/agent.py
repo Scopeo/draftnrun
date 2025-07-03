@@ -183,7 +183,12 @@ class Agent(ABC):
                     {
                         SpanAttributes.TOOL_NAME: self.tool_description.name,
                         SpanAttributes.TOOL_DESCRIPTION: self.tool_description.description,
-                        SpanAttributes.TOOL_PARAMETERS: json.dumps(kwargs),
+                        SpanAttributes.TOOL_PARAMETERS: json.dumps(
+                            {
+                                "properties": self.tool_description.tool_properties,
+                                "required": self.tool_description.required_tool_properties,
+                            }
+                        ),
                     }
                 )
             try:
