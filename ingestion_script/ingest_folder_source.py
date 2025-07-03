@@ -33,10 +33,10 @@ OPENAI_COMPLETION_SERVICE = VisionService(
     trace_manager=TraceManager(project_name="ingestion"),
 )
 EMBEDDING_SERVICE = EmbeddingService(
-        provider="openai",
-        model_name="text-embedding-3-large",
-        trace_manager=TraceManager(project_name="ingestion"),
-    )
+    provider="openai",
+    model_name="text-embedding-3-large",
+    trace_manager=TraceManager(project_name="ingestion"),
+)
 if settings.custom_embedding_models is not None:
     # TODO: add the selection at the user level
     if len(settings.custom_embedding_models) > 0:
