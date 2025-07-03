@@ -1,8 +1,8 @@
 import json
 from unittest.mock import MagicMock, patch
+from types import SimpleNamespace
 
 import pytest
-from openai.types.chat import ChatCompletionMessageToolCall
 
 from engine.agent.react_function_calling import ReActAgent, INITIAL_PROMPT
 from engine.agent.agent import AgentPayload, ToolDescription, ChatMessage
@@ -43,7 +43,18 @@ def mock_tool_description():
 
 @pytest.fixture
 def mock_llm_service():
-    return MagicMock(spec=CompletionService)
+    mock_llm_service = MagicMock(spec=CompletionService)
+    mock_llm_service._model_name = "test_model"
+    message = SimpleNamespace(
+        role="assistant",
+        content="Test response",
+        tool_calls=[],
+        model_dump=lambda: {"role": "assistant", "content": "Test response", "tool_calls": []},
+    )
+    choice = SimpleNamespace(message=message)
+    response = SimpleNamespace(choices=[choice])
+    mock_llm_service.function_call.return_value = response
+    return mock_llm_service
 
 
 @pytest.fixture
@@ -68,9 +79,6 @@ def test_run_no_tool_calls(agent_calls_mock, get_span_mock, react_agent, agent_i
     get_span_mock.return_value.project_id = "1234"
     counter_mock = MagicMock()
     agent_calls_mock.labels.return_value = counter_mock
-    mock_llm_service.function_call.return_value = MagicMock(
-        choices=[MagicMock(message=MagicMock(content="Test response", tool_calls=[]))]
-    )
 
     output = react_agent.run_sync(agent_input)
 
@@ -106,37 +114,45 @@ def test_run_with_tool_calls(agent_calls_mock, get_span_mock, react_agent, agent
     assert output.is_final
 
 
-@patch.object(CompletionService, "function_call")
 @patch("engine.prometheus_metric.get_tracing_span")
 @patch("engine.prometheus_metric.agent_calls")
-def test_initial_prompt_insertion(agent_calls_mock, get_span_mock, mock_function_call, react_agent, agent_input):
+def test_initial_prompt_insertion(agent_calls_mock, get_span_mock, react_agent, agent_input, mock_llm_service):
     get_span_mock.return_value.project_id = "1234"
     counter_mock = MagicMock()
     agent_calls_mock.labels.return_value = counter_mock
-    mock_function_call.return_value = MagicMock(
-        choices=[MagicMock(message=MagicMock(content="Test response", tool_calls=[]))]
-    )
+
     react_agent.run_sync(agent_input)
     assert agent_input.messages[0].role == "system"
     assert agent_input.messages[0].content == INITIAL_PROMPT
 
 
-@patch.object(CompletionService, "function_call")
 @patch("engine.prometheus_metric.get_tracing_span")
 @patch("engine.prometheus_metric.agent_calls")
-def test_max_iterations(agent_calls_mock, get_span_mock, mock_function_call, react_agent, agent_input, mock_agent):
+def test_max_iterations(agent_calls_mock, get_span_mock, react_agent, agent_input, mock_agent, mock_llm_service):
     get_span_mock.return_value.project_id = "1234"
     counter_mock = MagicMock()
     agent_calls_mock.labels.return_value = counter_mock
-    mock_tool_call = MagicMock(spec=ChatCompletionMessageToolCall)
+    mock_tool_call = MagicMock()
     mock_tool_call.id = "1"
     mock_tool_call_function = MagicMock()
     mock_tool_call_function.name = "test_tool"
     mock_tool_call_function.arguments = json.dumps({"test_property": "Test value"})
-    mock_tool_call.function = mock_tool_call_function
-    mock_function_call.return_value = MagicMock(
-        choices=[MagicMock(message=MagicMock(content="Test response", tool_calls=[mock_tool_call]))]
+    message = SimpleNamespace(
+        role="assistant",
+        tool_calls=mock_tool_call,
+        model_dump=lambda: {
+            "role": "assistant",
+            "tool_calls": [
+                {
+                    "id": "1",
+                    "function": {"name": "test_tool", "arguments": json.dumps({"test_property": "Test value"})},
+                }
+            ],
+        },
     )
+    choice = SimpleNamespace(message=message)
+    response = SimpleNamespace(choices=[choice])
+    mock_llm_service.function_call.return_value = response
 
     react_agent._max_iterations = 1
     mock_agent.run.return_value = AgentPayload(

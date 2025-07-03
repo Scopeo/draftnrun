@@ -1,4 +1,8 @@
+import json
 from typing import Optional
+
+from openinference.semconv.trace import SpanAttributes
+from opentelemetry.trace import get_current_span
 
 from engine.agent.agent import Agent, AgentPayload, ChatMessage, ToolDescription
 from engine.agent.utils import extract_vars_in_text_template, parse_openai_message_format
@@ -83,6 +87,14 @@ class LLMCallAgent(Agent):
             ]
         else:
             content = text_content
+
+        span = get_current_span()
+        span.set_attributes(
+            {
+                SpanAttributes.INPUT_VALUE: json.dumps([{"role": "user", "content": content}]),
+                SpanAttributes.LLM_MODEL_NAME: self._completion_service._model_name,
+            }
+        )
         if self.output_format:
             response = self._completion_service.constrained_complete_with_json_schema(
                 messages=[{"role": "user", "content": content}],

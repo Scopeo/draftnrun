@@ -45,6 +45,13 @@ class Synthesizer:
             input_str = fill_prompt_template_with_dictionary(
                 input_dict, self._prompt_template, component_name=self.__class__.__name__
             )
+            span.set_attributes(
+                {
+                    SpanAttributes.OPENINFERENCE_SPAN_KIND: OpenInferenceSpanKindValues.LLM.value,
+                    SpanAttributes.INPUT_VALUE: input_str,
+                    SpanAttributes.LLM_MODEL_NAME: self._completion_service._model_name,
+                }
+            )
             if self._completion_service._provider != "openai":
                 response = self._completion_service.complete(
                     messages=[ChatMessage(role="user", content=input_str).model_dump()],
@@ -61,8 +68,6 @@ class Synthesizer:
                 )
             span.set_attributes(
                 {
-                    SpanAttributes.OPENINFERENCE_SPAN_KIND: OpenInferenceSpanKindValues.LLM.value,
-                    SpanAttributes.INPUT_VALUE: input_str,
                     SpanAttributes.OUTPUT_VALUE: response.response,
                 }
             )
