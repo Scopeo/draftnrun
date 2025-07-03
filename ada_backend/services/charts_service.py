@@ -97,11 +97,19 @@ def get_agent_usage_chart(project_id: UUID, duration_days: int) -> Chart:
     df["date"] = pd.to_datetime(df["start_time"]).dt.normalize()
 
     df_with_conversation_id = df[
-        df["attributes"].apply(lambda x: "conversation_id" in x and x["conversation_id"] is not None)
+        df["attributes"].apply(
+            lambda x: isinstance(x, dict) and "conversation_id" in x and x["conversation_id"] is not None
+        )
     ].copy()
 
-    df_with_conversation_id["conversation_id"] = df_with_conversation_id["attributes"].apply(lambda x: x.get("conversation_id"))
-    conversation_id_usage = df_with_conversation_id.groupby("date")["conversation_id"].nunique().reset_index(name="unique_conversation_ids")
+    df_with_conversation_id["conversation_id"] = df_with_conversation_id["attributes"].apply(
+        lambda x: x.get("conversation_id")
+    )
+    conversation_id_usage = (
+        df_with_conversation_id.groupby("date")["conversation_id"]
+        .nunique()
+        .reset_index(name="unique_conversation_ids")
+    )
     conversation_id_usage = pd.merge(all_dates_df, conversation_id_usage, on="date", how="left").fillna(0)
     conversation_id_usage["unique_conversation_ids"] = conversation_id_usage["unique_conversation_ids"].astype(int)
     conversation_id_usage["date"] = conversation_id_usage["date"].dt.date.astype(str)
