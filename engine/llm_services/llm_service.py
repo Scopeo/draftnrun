@@ -18,7 +18,11 @@ from engine.llm_services.utils import (
 from engine.trace.trace_manager import TraceManager
 from engine.agent.types import ToolDescription
 from engine.agent.utils import load_str_to_json
-from engine.llm_services.constrained_output_models import OutputFormatModel
+from engine.llm_services.constrained_output_models import (
+    OutputFormatModel,
+    format_prompt_with_pydantic_output,
+    convert_json_answer_to_pydantic,
+)
 from settings import settings
 from engine.llm_services.utils import chat_completion_to_response
 from openai.types.chat import ChatCompletion
@@ -605,7 +609,18 @@ class VisionService(LLMService):
                     for image_content in image_content_list
                 ]
             case _:
-                raise ValueError(f"Invalid provider: {self._provider}")
+
+                import base64
+
+                return [
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": f"data:image/png;base64,{base64.b64encode(image_content).decode('utf-8')}"
+                        },
+                    }
+                    for image_content in image_content_list
+                ]
 
     @with_usage_check
     def get_image_description(
@@ -631,6 +646,14 @@ class VisionService(LLMService):
                 import openai
 
                 client = openai.AsyncOpenAI(api_key=self._api_key, base_url=self._base_url)
+            case _:
+                import openai
+
+                client = openai.AsyncOpenAI(api_key=self._api_key, base_url=self._base_url)
+                if response_format is not None:
+                    text_prompt = format_prompt_with_pydantic_output(text_prompt, response_format)
+
+
         content = [{"type": "text", "text": text_prompt}]
         content.extend(self._format_image_content(image_content_list))
         messages = [
@@ -640,21 +663,40 @@ class VisionService(LLMService):
             }
         ]
         if response_format is not None:
+            match self._provider:
+                case "openai" | "google":
+                    chat_response = await client.beta.chat.completions.parse(
+                        messages=messages,
+                        model=self._model_name,
+                        temperature=self._temperature,
+                        response_format=response_format,
+                    )
+                    span.set_attributes(
+                        {
+                            SpanAttributes.LLM_TOKEN_COUNT_COMPLETION: chat_response.usage.completion_tokens,
+                            SpanAttributes.LLM_TOKEN_COUNT_PROMPT: chat_response.usage.prompt_tokens,
+                            SpanAttributes.LLM_TOKEN_COUNT_TOTAL: chat_response.usage.total_tokens,
+                        }
+                    )
+                    return chat_response.choices[0].message.parsed
+                case _:
+                    chat_response = client.chat.completions.create(
+                        messages=messages,
+                        model=self._model_name,
+                        temperature=self._temperature,
+                    )
+                    span.set_attributes(
+                        {
+                            SpanAttributes.LLM_TOKEN_COUNT_COMPLETION: chat_response.usage.completion_tokens,
+                            SpanAttributes.LLM_TOKEN_COUNT_PROMPT: chat_response.usage.prompt_tokens,
+                            SpanAttributes.LLM_TOKEN_COUNT_TOTAL: chat_response.usage.total_tokens,
+                        }
+                    )
+                    return convert_json_answer_to_pydantic(
+                        chat_response.choices[0].message.content,
+                        response_format,
+                    )
 
-            chat_response = await client.beta.chat.completions.parse(
-                messages=messages,
-                model=self._model_name,
-                temperature=self._temperature,
-                response_format=response_format,
-            )
-            span.set_attributes(
-                {
-                    SpanAttributes.LLM_TOKEN_COUNT_COMPLETION: chat_response.usage.completion_tokens,
-                    SpanAttributes.LLM_TOKEN_COUNT_PROMPT: chat_response.usage.prompt_tokens,
-                    SpanAttributes.LLM_TOKEN_COUNT_TOTAL: chat_response.usage.total_tokens,
-                }
-            )
-            return chat_response.choices[0].message.parsed
         else:
             chat_response = await client.chat.completions.create(
                 messages=messages,

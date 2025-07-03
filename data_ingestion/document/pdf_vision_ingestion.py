@@ -231,9 +231,9 @@ async def create_chunks_from_document(
     get_file_content: Callable[[FileDocument], str],
     google_llm_service: VisionService,
     openai_llm_service: VisionService,
-    zoom: float = 3.0,
     # TODO: Fix when we handle via frontend
     number_of_pages_to_detect_document_type: int = settings.NUMBER_OF_PAGES_TO_DETECT_DOCUMENT_TYPE,
+    zoom: float = settings.ZOOM_INGESTION,
     **kwargs,
 ) -> list[FileChunk]:
     chunks = []
@@ -286,6 +286,8 @@ async def create_chunks_from_document(
             extracted_table_of_content = TableOfContent(sections=[])
 
         if extracted_table_of_content and extracted_table_of_content.sections != []:
+            chunking_by_section = extracted_table_of_content.sections != []
+        if chunking_by_section:
             section_hierarchy = _build_section_hierarchy(
                 sections=extracted_table_of_content.sections,
                 level=1,
