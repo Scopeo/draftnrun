@@ -42,7 +42,7 @@ def get_db_source_definition(
         columns.append(DBColumn(name=url_column_name, type="VARCHAR"))
 
     if metadata_column_names:
-        columns.extend(DBColumn(name=col, type="VARCHAR") for col in metadata_column_names)
+        columns.extend(DBColumn(name=f"metadata_{col}", type="VARCHAR") for col in metadata_column_names)
     return DBDefinition(
         columns=columns,
     )
@@ -98,7 +98,11 @@ def get_db_source(
     if url_column_name:
         columns.append(url_column_name)
     if metadata_column_names:
-        columns += metadata_column_names
+        rename_metadata_columns = {col: f"metadata_{col}" for col in metadata_column_names if col in df_chunks.columns}
+        columns.extend(list(rename_metadata_columns.values()))
+        df_chunks = df_chunks.rename(
+            columns=rename_metadata_columns,
+        )
 
     for col in df_chunks[columns].select_dtypes(include=["datetime64[ns]"]):
         df_chunks[col] = df_chunks[col].astype(object).where(df[col].notna(), None)
