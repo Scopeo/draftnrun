@@ -15,6 +15,7 @@ from data_ingestion.document.prompts_vision_ingestion import (
     PROMPT_DETERMINE_FILE_TYPE,
 )
 from data_ingestion.markdown.tree_chunker import parse_markdown_to_chunks
+from settings import settings
 
 LOGGER = logging.getLogger(__name__)
 OPENAI_MODEL_NAME = "gpt-4o"
@@ -229,7 +230,9 @@ def create_chunks_from_document(
     get_file_content: Callable[[FileDocument], str],
     google_llm_service: VisionService,
     openai_llm_service: VisionService,
-    zoom: float = 3.0,
+    zoom: float = settings.ZOOM_INGESTION,
+    number_of_images_to_determine_type_of_document: int = settings.NUMBER_OF_IMAGES_TO_DETERMINE_TYPE_OF_DOCUMENT,
+    enforce_page_by_page_ingestion: bool = settings.ENFORCE_PAGE_BY_PAGE_INGESTION,
     **kwargs,
 ) -> list[FileChunk]:
     chunks = []
@@ -240,7 +243,7 @@ def create_chunks_from_document(
         prompt=PROMPT_DETERMINE_FILE_TYPE,
         google_llm_service=google_llm_service,
         openai_llm_service=openai_llm_service,
-        image_content_list=images_content_list,
+        image_content_list=images_content_list[:number_of_images_to_determine_type_of_document],
         response_format=FileType,
     )
     if pdf_type == PDFType.landscape or file_type.is_converted_from_powerpoint:
@@ -268,15 +271,17 @@ def create_chunks_from_document(
             chunks.append(chunk)
     elif pdf_type == PDFType.portrait and file_type.is_native_pdf:
         LOGGER.info("Processing PDF in portrait mode...")
-
-        extracted_table_of_content = _extract_text_from_pages_as_images(
-            prompt=PDF_TABLE_OF_CONTENT_EXTRACTION_PROMPT,
-            google_llm_service=google_llm_service,
-            openai_llm_service=openai_llm_service,
-            image_content_list=images_content_list,
-            response_format=TableOfContent,
-        )
-        if extracted_table_of_content.sections != []:
+        chunking_by_section = False
+        if not enforce_page_by_page_ingestion:
+            extracted_table_of_content = _extract_text_from_pages_as_images(
+                prompt=PDF_TABLE_OF_CONTENT_EXTRACTION_PROMPT,
+                google_llm_service=google_llm_service,
+                openai_llm_service=openai_llm_service,
+                image_content_list=images_content_list,
+                response_format=TableOfContent,
+            )
+            chunking_by_section = extracted_table_of_content.sections != []
+        if chunking_by_section:
             section_hierarchy = _build_section_hierarchy(
                 sections=extracted_table_of_content.sections,
                 level=1,
