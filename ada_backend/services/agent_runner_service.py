@@ -117,6 +117,7 @@ async def run_agent(
         project_id=str(project_id),
         organization_id=str(project_details.organization_id),
         organization_llm_providers=get_organization_llm_providers(session, project_details.organization_id),
+        conversation_id=input_data.get("conversation_id"),
     )
     agent = await get_agent_for_project(
         session,
