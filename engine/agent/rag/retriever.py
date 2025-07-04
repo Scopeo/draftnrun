@@ -1,5 +1,4 @@
 from typing import Optional
-from datetime import datetime
 import json
 
 from opentelemetry import trace as trace_api
@@ -45,45 +44,14 @@ class Retriever:
             collection_name=self.collection_name,
             limit=self._max_retrieved_chunks,
             filter=filters,
+            enable_date_penalty_for_chunks=self.enable_chunk_penalization,
+            chunk_age_penalty_rate=self.chunk_age_penalty_rate,
+            default_penalty_rate=self.default_penalty_rate,
+            metadata_date_key=self.metadata_date_key,
+            max_retrieved_chunks_after_penalty=self.max_retrieved_chunks_after_penalty,
         )
-        if self.enable_chunk_penalization:
-            chunks = self.apply_date_penalty_to_chunks(chunks)
 
         return chunks
-
-    @staticmethod
-    def calculate_age_penalty(
-        chunk: SourceChunk,
-        age_penalty_rate: float,
-        metadata_date_key: str,
-        default_age_penalty_rate: float,
-    ) -> float:
-        current_year = datetime.today().year
-        start_of_year = datetime(current_year, 1, 1)
-
-        date = chunk.metadata.get(metadata_date_key)
-        if not date:
-            return default_age_penalty_rate
-        chunk_date = datetime.strptime(date.strip(), "%Y-%m-%d")
-        age = max(0, (start_of_year - chunk_date).days / 365)
-        return min(age * age_penalty_rate, 5 * age_penalty_rate)
-
-    def apply_date_penalty_to_chunks(
-        self,
-        chunks: list[SourceChunk],
-    ) -> list[SourceChunk]:
-        for chunk in chunks:
-            original_score = chunk.metadata.get("similarity_score", 0)
-            penalty = self.calculate_age_penalty(
-                chunk,
-                self.chunk_age_penalty_rate,
-                self.metadata_date_key,
-                self.default_penalty_rate,
-            )
-            chunk.metadata["penalty_score"] = original_score - penalty
-        sorted_chunks = sorted(chunks, key=lambda x: x.metadata["penalty_score"], reverse=True)
-
-        return sorted_chunks[: self.max_retrieved_chunks_after_penalty]
 
     def get_chunks(
         self,
