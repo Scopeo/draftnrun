@@ -119,6 +119,8 @@ class DBService(ABC):
                 ids_to_update = set(common_df[id_column_name])
             LOGGER.info(f"Found {len(ids_to_update)} rows to update in the table")
             updated_data = new_df[new_df[id_column_name].isin(ids_to_update)].copy()
+            for col in updated_data.select_dtypes(include=["datetime64[ns]"]):
+                updated_data[col] = updated_data[col].astype(object).where(updated_data[col].notna(), None)
             self._refresh_table_from_df(
                 df=updated_data,
                 table_name=table_name,
