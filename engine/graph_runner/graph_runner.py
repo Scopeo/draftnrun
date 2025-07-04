@@ -114,7 +114,7 @@ class GraphRunner:
     async def run(self, *inputs: AgentPayload | dict, **kwargs) -> AgentPayload | dict:
         """Run the graph."""
         input_data = inputs[0]
-        with self.trace_manager.start_span(self.__class__.__name__) as span:
+        with self.trace_manager.start_span("Workflow") as span:
             trace_input = convert_data_for_trace_manager_display(input_data, AgentPayload)
             span.set_attributes(
                 {

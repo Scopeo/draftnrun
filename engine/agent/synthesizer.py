@@ -25,11 +25,15 @@ class Synthesizer:
         trace_manager: TraceManager,
         prompt_template: str = get_base_synthetizer_prompt_template(),
         response_format: BaseModel = SynthesizerResponse,
+        component_instance_name: Optional[str] = None,
     ):
         self._prompt_template = prompt_template
         self._completion_service = completion_service
         self.response_format = response_format
         self.trace_manager = trace_manager
+        if not component_instance_name:
+            component_instance_name = f"{self.__class__.__name__}"
+        self.component_instance_name = component_instance_name
 
     def get_response(
         self, chunks: list[SourceChunk], query_str: str, optional_contexts: Optional[dict]
@@ -40,10 +44,10 @@ class Synthesizer:
             llm_metadata_keys=chunks[0].metadata.keys() if chunks else [],
         )
 
-        with self.trace_manager.start_span(self.__class__.__name__) as span:
+        with self.trace_manager.start_span(self.component_instance_name) as span:
             input_dict = {"context_str": context_str, "query_str": query_str, **optional_contexts}
             input_str = fill_prompt_template_with_dictionary(
-                input_dict, self._prompt_template, component_name=self.__class__.__name__
+                input_dict, self._prompt_template, component_name=self.component_instance_name
             )
             span.set_attributes(
                 {

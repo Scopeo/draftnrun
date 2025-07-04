@@ -19,13 +19,15 @@ class CohereReranker(Reranker):
         cohere_model: str = "rerank-multilingual-v3.0",
         num_doc_reranked: int = 5,
         score_threshold: float = 0.0,
+        component_instance_name: Optional[str] = None,
     ):
-        super().__init__(trace_manager, model=cohere_model)
+        super().__init__(trace_manager, model=cohere_model, component_instance_name=component_instance_name)
         if cohere_api_key is None:
             cohere_api_key = settings.COHERE_API_KEY
         self._cohere_client = cohere.ClientV2(cohere_api_key)
         self._num_doc_reranked = num_doc_reranked
         self._score_threshold = score_threshold
+        self.component_instance_name = component_instance_name or f"{self.__class__.__name__}"
 
     def _rerank_without_trace(self, query, chunks: list[SourceChunk]) -> list[SourceChunk]:
         if not chunks:

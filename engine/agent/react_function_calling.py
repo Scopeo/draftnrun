@@ -191,20 +191,11 @@ class ReActAgent(Agent):
                     artifacts=artifacts,
                 )
 
-        span_name = "ToolsCalledInReactAgent"
-        with self.trace_manager.start_span(span_name) as span:
-            # Process only the subset of tool calls that we want to execute
-            agent_outputs, processed_tool_calls = await self._process_tool_calls(
-                original_agent_input,
-                tool_calls=all_tool_calls,
-            )
-            span.set_attributes(
-                {
-                    SpanAttributes.TOOL_NAME: "ReactAgentToolsCalling",
-                    SpanAttributes.TOOL_DESCRIPTION: f"Using the tools passed"
-                    f" in parameters by running them in {self.running_tool_way}",
-                }
-            )
+        # Process only the subset of tool calls that we want to execute
+        agent_outputs, processed_tool_calls = await self._process_tool_calls(
+            original_agent_input,
+            tool_calls=all_tool_calls,
+        )
 
         # Only add the tool calls we actually processed to the message history
         agent_input.messages.append(

@@ -1,3 +1,4 @@
+from typing import Optional
 from pydantic import BaseModel
 
 from engine.agent.synthesizer_prompts import get_hybrid_synthetizer_prompt_template
@@ -31,8 +32,9 @@ class HybridSynthesizer(Synthesizer):
         trace_manager: TraceManager,
         prompt_template: str = get_hybrid_synthetizer_prompt_template(),
         response_format: BaseModel = ResponseLLM,
+        component_instance_name: Optional[str] = None,
     ):
-        super().__init__(completion_service, trace_manager)
+        super().__init__(completion_service, trace_manager, component_instance_name=component_instance_name)
         self._prompt_template = prompt_template
         self.response_format = response_format
 

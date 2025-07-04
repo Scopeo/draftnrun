@@ -22,6 +22,7 @@ class Retriever:
         default_penalty_rate: Optional[float] = None,
         metadata_date_key: Optional[str] = None,
         max_retrieved_chunks_after_penalty: Optional[int] = None,
+        component_instance_name: Optional[str] = None,
     ):
         self.trace_manager = trace_manager
         self.collection_name = collection_name
@@ -32,6 +33,7 @@ class Retriever:
         self.default_penalty_rate = default_penalty_rate
         self.metadata_date_key = metadata_date_key
         self.max_retrieved_chunks_after_penalty = max_retrieved_chunks_after_penalty
+        self.component_instance_name = component_instance_name or f"{self.__class__.__name__}"
 
     def _get_chunks_without_trace(
         self,
@@ -88,7 +90,7 @@ class Retriever:
         query_text: str,
         filters: Optional[dict] = None,
     ) -> list[SourceChunk]:
-        with self.trace_manager.start_span(self.__class__.__name__) as span:
+        with self.trace_manager.start_span(self.component_instance_name) as span:
             chunks = self._get_chunks_without_trace(
                 query_text,
                 filters,
