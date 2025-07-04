@@ -82,12 +82,12 @@ class SQLSpanExporter(SpanExporter):
         for span in spans:
             cumulative_error_count = int(span.status.status_code is StatusCode.ERROR)
             try:
-                cumulative_llm_token_count_prompt = int(span.attributes.get(SpanAttributes.LLM_TOKEN_COUNT_PROMPT), 0)
+                cumulative_llm_token_count_prompt = int(span.attributes.get(SpanAttributes.LLM_TOKEN_COUNT_PROMPT))
             except BaseException:
                 cumulative_llm_token_count_prompt = 0
             try:
                 cumulative_llm_token_count_completion = int(
-                    span.attributes.get(SpanAttributes.LLM_TOKEN_COUNT_COMPLETION, 0)
+                    span.attributes.get(SpanAttributes.LLM_TOKEN_COUNT_COMPLETION)
                 )
             except BaseException:
                 cumulative_llm_token_count_completion = 0
@@ -162,8 +162,8 @@ class SQLSpanExporter(SpanExporter):
 
             if not org_id:
                 org_id, org_llm_providers = self.get_org_info_from_ancestors(json_span["parent_id"])
-            token_prompt = int(span.attributes.get(SpanAttributes.LLM_TOKEN_COUNT_PROMPT, 0) or 0)
-            token_completion = int(span.attributes.get(SpanAttributes.LLM_TOKEN_COUNT_COMPLETION, 0) or 0)
+            token_prompt = int(span.attributes.get(SpanAttributes.LLM_TOKEN_COUNT_PROMPT) or 0)
+            token_completion = int(span.attributes.get(SpanAttributes.LLM_TOKEN_COUNT_COMPLETION) or 0)
             total_tokens = token_prompt + token_completion
 
             provider = span.attributes.get(SpanAttributes.LLM_PROVIDER)
