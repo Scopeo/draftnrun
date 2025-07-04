@@ -8,6 +8,8 @@ import pandas as pd
 from data_ingestion.document.docx_ingestion import get_chunks_from_docx
 from data_ingestion.document.markdown_ingestion import get_chunks_from_markdown
 from data_ingestion.document.pdf_vision_ingestion import create_chunks_from_document
+from data_ingestion.document.excel_ingestion import ingest_excel_file
+from data_ingestion.document.csv_ingestion import ingest_csv_file
 from data_ingestion.document.folder_management.folder_management import (
     FileChunk,
     FileDocument,
@@ -42,6 +44,14 @@ def document_chunking_mapping(
             get_chunks_from_markdown,
             get_file_content_func=get_file_content_func,
             chunk_overlap=docx_overlapping_size,
+        ),
+        FileDocumentType.EXCEL.value: partial(
+            ingest_excel_file,
+            get_file_content_func=get_file_content_func,
+        ),
+        FileDocumentType.CSV.value: partial(
+            ingest_csv_file,
+            get_file_content_func=get_file_content_func,
         ),
     }
     return document_chunking_mapping

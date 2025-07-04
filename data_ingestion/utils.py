@@ -4,6 +4,9 @@ import os
 from datetime import datetime
 import re
 import unicodedata
+import tiktoken
+import pandas as pd
+
 
 from pydantic import BaseModel, Field
 
@@ -82,3 +85,35 @@ def get_image_description_prompt(
     PROMPT_TEMPLATE = image_description_intro_prompt + IMAGE_DESCRIPTION_INITIAL_PROMPT
     prompt_template = PROMPT_TEMPLATE.format(section=section)
     return prompt_template
+
+
+def get_chunk_token_count(
+    model_name: str = "gpt-4o-mini",
+    chunk_df: pd.DataFrame = None,
+) -> int:
+    encoding = tiktoken.encoding_for_model(model_name)
+    markdown_str = chunk_df.to_markdown(index=False)
+    return len(encoding.encode(markdown_str))
+
+
+def split_df_by_token_limit(
+    df: pd.DataFrame,
+    max_tokens: int,
+) -> list[pd.DataFrame]:
+
+    chunks = []
+    current_chunk = []
+
+    for _, row in df.iterrows():
+        current_chunk.append(row)
+        temp_df = pd.DataFrame(current_chunk, columns=df.columns)
+        if get_chunk_token_count(chunk_df=temp_df) > max_tokens:
+            current_chunk.pop()
+            chunk_df = pd.DataFrame(current_chunk, columns=df.columns)
+            chunks.append(chunk_df)
+            current_chunk = [row]
+
+    if current_chunk:
+        chunks.append(pd.DataFrame(current_chunk, columns=df.columns))
+
+    return chunks
