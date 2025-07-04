@@ -42,7 +42,10 @@ def get_db_source_definition(
         columns.append(DBColumn(name=url_column_name, type="VARCHAR"))
 
     if metadata_column_names:
-        columns.extend(DBColumn(name=col, type="VARCHAR") for col in metadata_column_names)
+        existing_names = {c.name for c in columns}
+        columns.extend(
+            DBColumn(name=col, type="VARCHAR") for col in metadata_column_names if col not in existing_names
+        )
     return DBDefinition(
         columns=columns,
     )
@@ -98,10 +101,10 @@ def get_db_source(
     if url_column_name:
         columns.append(url_column_name)
     if metadata_column_names:
-        columns += metadata_column_names
-
-    for col in df_chunks[columns].select_dtypes(include=["datetime64[ns]"]):
-        df_chunks[col] = df_chunks[col].astype(object).where(df[col].notna(), None)
+        metadata_column_names = [col for col in metadata_column_names if col not in columns]
+        if metadata_column_names:
+            LOGGER.debug(f"Metadata columns to keep: {metadata_column_names}")
+            columns.extend(metadata_column_names)
 
     return df_chunks[columns].copy()
 
@@ -188,7 +191,7 @@ def ingestion_database(
         file_id_field=file_id_column_name,
         url_id_field=url_column_name,
         last_edited_ts_field=timestamp_column_name,
-        metadata_fields_to_keep=set(metadata_column_names) if metadata_column_names else None,
+        metadata_fields_to_keep=(set(metadata_column_names) if metadata_column_names else None),
     )
     db_definition = get_db_source_definition(
         chunk_id_column_name=chunk_id_column_name,
