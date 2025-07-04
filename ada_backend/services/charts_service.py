@@ -8,7 +8,6 @@ import pandas as pd
 
 from ada_backend.schemas.chart_schema import Chart, ChartData, ChartType, ChartsResponse, Dataset
 from ada_backend.services.metrics.utils import query_trace_duration
-from settings import settings
 
 
 TOKENS_DISTRIBUTION_BINS = [0, 1000, 2000, 3000, 4000, 5000, 6000, 7000, 8000, 9000, 10000]
@@ -36,7 +35,7 @@ def calculate_prometheus_step(duration_days: int, target_points: int = 200) -> s
 
 
 def query_prometheus_agent_calls(project_id: UUID, start_time: str, end_time: str, step: str) -> dict:
-    url = f"{settings.PROMETHEUS_URL}/api/v1/query_range"
+    url = "http://localhost:9090/api/v1/query_range"
     params = {
         "query": f'agent_calls_total{{project_id="{project_id}"}}',
         "start": start_time,

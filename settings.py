@@ -112,13 +112,6 @@ class BaseConfig(BaseSettings):
     REDIS_PASSWORD: Optional[str] = None
     REDIS_QUEUE_NAME: str = "ada_ingestion_queue"
 
-    # Observability stack endpoints
-    TEMPO_ENDPOINT: str = "http://localhost:4318/v1/traces"
-    PROMETHEUS_URL: str = "http://localhost:9090"
-    GRAFANA_URL: str = "http://localhost:3000"
-    GF_SECURITY_ADMIN_USER: Optional[str] = None
-    GF_SECURITY_ADMIN_PASSWORD: Optional[str] = None
-
     @model_validator(mode="after")
     @classmethod
     def sync_db_settings(cls, values):

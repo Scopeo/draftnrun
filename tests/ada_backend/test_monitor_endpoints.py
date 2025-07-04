@@ -3,7 +3,6 @@ from opentelemetry import trace
 from opentelemetry.sdk.trace import TracerProvider
 
 from ada_backend.main import app
-
 from ada_backend.schemas.project_schema import ChatResponse
 from ada_backend.schemas.trace_schema import TraceSpan
 from ada_backend.scripts.get_supabase_token import get_user_jwt
@@ -38,6 +37,7 @@ def test_monitor_endpoint():
     duration = 7
     url = f"/projects/{project_id}/trace?duration={duration}"
     response = client.get(url, headers=headers)
+
     results = response.json()
     keys_trace_span = [field_name[0] for field_name in TraceSpan.model_fields.items()]
 

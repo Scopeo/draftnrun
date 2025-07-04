@@ -9,7 +9,7 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    steps:
+    steps: 
       - name: Connexion à EC2 et git pull
         uses: appleboy/ssh-action@master
         with:
@@ -22,7 +22,7 @@ jobs:
             git remote set-url origin git@github.com:scopeo/draftnrun.git
             git reset --hard HEAD
             git pull origin main
-
+    
       - name: SSH Remote Commands
         uses: appleboy/ssh-action@master
         with:
@@ -40,15 +40,10 @@ jobs:
 
             echo "👁️ Re-setup the traces database"
             make trace-db-upgrade
-
+            
             echo "🔄 Re-setup the database"
             make db-upgrade
             make db-seed
-
-            echo "🔄 Re-setup observability"
-            cd services
-            ln -s ../credentials.env .env
-            docker compose up -d prometheus tempo grafana
 
             echo "Reload Gunicorn with zero downtime"
             sudo systemctl restart gunicorn

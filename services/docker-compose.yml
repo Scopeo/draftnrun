@@ -29,8 +29,7 @@ services:
       - "6379:6379"
     volumes:
       - redis_data:/data
-    command:
-      ["redis-server", "--appendonly", "yes", "--requirepass", "redis_password"]
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "redis_password"]
     healthcheck:
       test: ["CMD", "redis-cli", "-a", "redis_password", "ping"]
       interval: 10s
@@ -56,51 +55,17 @@ services:
     image: prom/prometheus
     volumes:
       - ../config/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
-      - prometheus_data:/prometheus
     networks:
       - localprom
     ports:
       - 9090:9090
 
-  tempo:
-    image: grafana/tempo:latest
-    user: "root"
-    command: ["-config.file=/etc/tempo.yaml"]
-    volumes:
-      - ./../config/tempo.yaml:/etc/tempo.yaml
-      - tempo_data:/tmp/tempo
-    networks:
-      - localprom
-    ports:
-      - "3200:3200" # Tempo
-      - "4318:4318" # OTLP HTTP
-
-  grafana:
-    image: grafana/grafana:latest
-    env_file:
-      - ../credentials.env
-    volumes:
-      - ./../config/grafana/provisioning:/etc/grafana/provisioning
-      - ./../config/grafana/dashboards:/etc/grafana/dashboards
-      - grafana_data:/var/lib/grafana
-    environment:
-      - GF_SECURITY_ADMIN_USER=${GF_SECURITY_ADMIN_USER:-admin}
-      - GF_SECURITY_ADMIN_PASSWORD=${GF_SECURITY_ADMIN_PASSWORD:-admin}
-      - GF_AUTH_ANONYMOUS_ENABLED=false
-      - GF_AUTH_DISABLE_LOGIN_FORM=false
-      - GF_USERS_ALLOW_SIGN_UP=false
-    networks:
-      - localprom
-    ports:
-      - "3000:3000"
 
 volumes:
   postgres_data:
   redis_data:
   qdrant_data:
   prometheus_data:
-  tempo_data:
-  grafana_data:
 
 networks:
   localprom:
