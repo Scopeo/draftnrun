@@ -2,6 +2,7 @@ import logging
 from typing import Optional, Any
 from dataclasses import dataclass
 import uuid
+from datetime import datetime
 
 import requests
 import pandas as pd
@@ -156,7 +157,7 @@ class QdrantService:
         method: str,
         endpoint: str,
         payload: Optional[dict] = None,
-        timeout: float = 10.0,
+        timeout: float = 20.0,
     ) -> dict:
         """
         Send a request to the Qdrant API.
@@ -193,7 +194,7 @@ class QdrantService:
         collection_name: str,
         filter: Optional[dict] = None,
         **search_params,
-    ) -> list[tuple[str, float]]:
+    ) -> list[tuple[str, dict]]:
         """
         Search for vectors similar to the given query vector in the Qdrant collection.
         Refer to the Qdrant API documentation for more details:
@@ -214,6 +215,8 @@ class QdrantService:
         payload = {
             "vector": query_vector,
             "filter": filter,
+            "with_payload": True,
+            "with_vector": False,
             **search_params,
         }
         response = self._send_request(
@@ -221,7 +224,7 @@ class QdrantService:
             endpoint=f"collections/{collection_name}/points/search",
             payload=payload,
         )
-        vector_results = [(result["id"], result["score"]) for result in response.get("result", [])]
+        vector_results = [(result["id"], result["score"], result["payload"]) for result in response.get("result", [])]
         return vector_results
 
     def get_chunk_data_by_id(
@@ -258,12 +261,43 @@ class QdrantService:
             input_embeddings = [input_text]
         return [data.embedding for data in self._embedding_service.embed_text(input_embeddings)]
 
+    def apply_date_penalty_to_chunks(
+        self,
+        vector_results: list[tuple[str, float, dict]],
+        metadata_date_key: str,
+        default_penalty_rate: float,
+        chunk_age_penalty_rate: float,
+        max_retrieved_chunks_after_penalty: int,
+    ) -> list[tuple[str, float, dict]]:
+        ordered_chunks = []
+        current_year = datetime.today().year
+        start_of_year = datetime(current_year, 1, 1)
+        for vector_id, score, payload in vector_results:
+            date = payload.get(metadata_date_key)
+            if not date:
+                penalized_score = default_penalty_rate
+            else:
+                chunk_date = datetime.strptime(date, "%Y-%m-%d")
+                age = max(0, (start_of_year - chunk_date).days / 365)
+                penalty = min(age * chunk_age_penalty_rate, 5 * chunk_age_penalty_rate)
+                penalized_score = score - penalty
+            ordered_chunks.append((vector_id, penalized_score, payload))
+        ordered_chunks.sort(key=lambda x: x[1], reverse=True)
+        sorted_chunks = ordered_chunks[:max_retrieved_chunks_after_penalty]
+        vector_ids, scores, payloads = zip(*sorted_chunks)
+        return vector_ids, scores, payloads
+
     def retrieve_similar_chunks(
         self,
         query_text: str,
         collection_name: str,
         limit: int = DEFAULT_MAX_CHUNKS,
         filter: dict = None,
+        enable_date_penalty_for_chunks: bool = False,
+        chunk_age_penalty_rate: Optional[float] = None,
+        default_penalty_rate: Optional[float] = None,
+        metadata_date_key: Optional[str] = None,
+        max_retrieved_chunks_after_penalty: Optional[int] = None,
         **search_params,
     ) -> list[SourceChunk]:
         """
@@ -282,15 +316,26 @@ class QdrantService:
         if not vector_results:
             LOGGER.warning(f"No similar vectors found for query: {query_text}")
             return []
-        vector_ids, scores = zip(*vector_results)
+        vector_ids, scores, payloads = zip(*vector_results)
+
         LOGGER.debug(f"Retrieved similar vectors with IDs: {vector_ids}")
         if len(vector_ids) == 0:
             LOGGER.warning(f"No document matched the filtering criteria {filter}.")
             return []
+
+        if enable_date_penalty_for_chunks:
+            vector_ids, scores, payloads = self.apply_date_penalty_to_chunks(
+                vector_results,
+                metadata_date_key,
+                default_penalty_rate,
+                chunk_age_penalty_rate,
+                max_retrieved_chunks_after_penalty,
+            )
+
         results = self.get_chunk_data_by_id(collection_name=collection_name, vector_ids=vector_ids)
 
         chunks: list[SourceChunk] = []
-        for result, score in zip(results, scores):
+        for result in results:
             if not (chunk_data := result.get("payload")):
                 continue
 
@@ -301,7 +346,6 @@ class QdrantService:
 
             if schema.metadata_fields_to_keep:
                 metadata = {key: value for key, value in chunk_data.items() if key in schema.metadata_fields_to_keep}
-                metadata["similarity_score"] = score
             else:
                 metadata = {}
             chunks.append(
