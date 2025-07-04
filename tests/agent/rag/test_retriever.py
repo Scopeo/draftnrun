@@ -52,4 +52,9 @@ def test_get_chunks_(retriever, mock_qdrant_service):
         collection_name="test_collection",
         limit=TEST_MAX_RETRIEVED_CHUNKS,
         filter=None,
+        enable_date_penalty_for_chunks=False,
+        chunk_age_penalty_rate=None,
+        default_penalty_rate=None,
+        metadata_date_key=None,
+        max_retrieved_chunks_after_penalty=None,
     )

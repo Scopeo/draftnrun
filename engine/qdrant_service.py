@@ -157,7 +157,7 @@ class QdrantService:
         method: str,
         endpoint: str,
         payload: Optional[dict] = None,
-        timeout: float = 10.0,
+        timeout: float = 20.0,
     ) -> dict:
         """
         Send a request to the Qdrant API.
