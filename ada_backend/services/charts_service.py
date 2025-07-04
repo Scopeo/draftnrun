@@ -105,7 +105,6 @@ def get_agent_usage_chart(project_id: UUID, duration_days: int) -> Chart:
         df_with_conversation_id["conversation_id"] = df_with_conversation_id["attributes"].apply(
             lambda x: x.get("conversation_id")
         )
-        print(df_with_conversation_id)
         conversation_id_usage = (
             df_with_conversation_id.groupby("date")["conversation_id"]
             .nunique()
@@ -115,13 +114,6 @@ def get_agent_usage_chart(project_id: UUID, duration_days: int) -> Chart:
         conversation_id_usage["unique_conversation_ids"] = conversation_id_usage["unique_conversation_ids"].astype(int)
         conversation_id_usage["date"] = conversation_id_usage["date"].dt.date.astype(str)
         conversation_id_usage = conversation_id_usage.sort_values(by="date", ascending=True)
-        datasets.append(
-            Dataset(
-                label="Number of conversations per day", data=conversation_id_usage["unique_conversation_ids"].tolist()
-            )
-        )
-    else:
-        conversation_id_usage = pd.DataFrame({"date": all_dates_df["date"], "unique_conversation_ids": 0})
         datasets.append(
             Dataset(
                 label="Number of conversations per day", data=conversation_id_usage["unique_conversation_ids"].tolist()
