@@ -9,6 +9,15 @@ from data_ingestion.utils import Chunk
 
 LOGGER = logging.getLogger(__name__)
 
+MIME_MAPPING = {
+    "application/pdf": "PDF",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "DOCX",
+    "text/markdown": "MARKDOWN",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": "EXCEL",
+    "application/vnd.google-apps.spreadsheet": "GOOGLE_SHEET",
+    "text/csv": "CSV",
+}
+
 
 class FileDocumentType(Enum):
     PDF = ".pdf"
@@ -16,18 +25,21 @@ class FileDocumentType(Enum):
     MARKDOWN = ".md"
     EXCEL = ".xlsx"
     CSV = ".csv"
+    GOOGLE_SHEET = ".gsheet"
 
     @classmethod
     def from_mime_type(cls, mime_type: str):
         """Maps MIME type to the corresponding FileDocumentType."""
-        mime_map = {
-            "application/pdf": cls.PDF,
-            "application/vnd.openxmlformats-officedocument.wordprocessingml.document": cls.DOCX,
-            "text/markdown": cls.MARKDOWN,
-            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": cls.EXCEL,
-            "text/csv": cls.CSV,
-        }
-        return mime_map.get(mime_type, None)
+        file_type_name = MIME_MAPPING.get(mime_type)
+        return getattr(cls, file_type_name) if file_type_name else None
+
+    @classmethod
+    def to_mime_type(cls, file_type: "FileDocumentType") -> str | None:
+        """Maps FileDocumentType to the corresponding MIME type."""
+        for mime_type, file_type_name in MIME_MAPPING.items():
+            if getattr(cls, file_type_name) == file_type:
+                return mime_type
+        return None
 
 
 class FileChunk(Chunk):

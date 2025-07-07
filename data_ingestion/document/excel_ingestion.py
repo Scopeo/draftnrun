@@ -23,6 +23,13 @@ def ingest_excel_file(
     sheet_names = xls.sheet_names
     for sheet_name in sheet_names:
         df = pd.read_excel(content_to_process, sheet_name=sheet_name, header=None)
+
+        if all(isinstance(col, int) for col in df.columns) and list(df.columns) == list(range(len(df.columns))):
+            first_row = df.iloc[0]
+            if not all(pd.api.types.is_numeric_dtype(type(cell)) for cell in first_row):
+                df.columns = first_row
+                df = df.iloc[1:]
+
         total_token_count = get_chunk_token_count(chunk_df=df)
         if total_token_count > chunk_size:
             LOGGER.info(f"Splitting {sheet_name} into chunks")
@@ -42,7 +49,7 @@ def ingest_excel_file(
                     document_title=document.file_name,
                     bounding_boxes=None,
                     url=document.url,
-                    metadata={**document.metadata, "sheet": sheet_name, "chunk_index": idx + 1},
+                    metadata={**document.metadata},
                 )
             )
 
