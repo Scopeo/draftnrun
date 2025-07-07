@@ -222,9 +222,9 @@ def seed_projects_db(session: Session):
 
 if __name__ == "__main__":
     import logging
-    from ada_backend.database.setup_db import get_db
+    from ada_backend.database.setup_db import get_sync_db
 
     logging.basicConfig(level=logging.INFO)
 
     print("Seeding projects in database...")
-    seed_projects_db(next(get_db()))
+    seed_projects_db(next(get_sync_db()))
