@@ -4,6 +4,7 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 from fastapi import APIRouter, Depends, HTTPException, status
 
+
 from ada_backend.database.setup_db import get_db
 from ada_backend.schemas.auth_schema import SupabaseUser
 from ada_backend.routers.auth_router import (
@@ -17,7 +18,11 @@ from ada_backend.services.ingestion_task_service import (
     upsert_ingestion_task_by_organization_id,
     delete_ingestion_task_by_id,
 )
-from ada_backend.schemas.ingestion_task_schema import IngestionTaskQueue, IngestionTaskUpdate, IngestionTaskResponse
+from ada_backend.schemas.ingestion_task_schema import (
+    IngestionTaskQueue,
+    IngestionTaskUpdate,
+    IngestionTaskResponse,
+)
 
 router = APIRouter(prefix="/ingestion_task", tags=["Ingestion Task"])
 

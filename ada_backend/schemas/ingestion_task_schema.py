@@ -12,9 +12,18 @@ class IngestionTask(BaseModel):
     status: db.TaskStatus
 
 
+class RemoteFile(BaseModel):
+    path: str
+    name: str
+    s3_path: str | None = None
+    last_edited_ts: str
+    metadata: dict = {}
+
+
 class SourceAttributes(BaseModel):
     access_token: Optional[str] = None
     path: Optional[str] = None
+    list_of_files_from_local_folder: Optional[list[RemoteFile]] = None
     folder_id: Optional[str] = None
     source_db_url: Optional[str] = None
     source_table_name: Optional[str] = None
@@ -46,3 +55,7 @@ class IngestionTaskResponse(IngestionTaskUpdate):
 
 class IngestionTaskQueue(IngestionTask):
     source_attributes: SourceAttributes
+
+
+class S3UploadedInformation(BaseModel):
+    s3_path_file: str
