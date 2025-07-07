@@ -38,14 +38,14 @@ if (settings.custom_llm_models is not None) and (len(settings.custom_llm_models)
         base_url=llm_base_url,
         temperature=0.0,
     )
-    LLM_SERVICE = VISION_COMPLETION_SERVICE
+    FALLBACK_VISION_LLM_SERVICE = VISION_COMPLETION_SERVICE
 else:
     VISION_COMPLETION_SERVICE = VisionService(
         provider="google",
         model_name="gemini-2.0-flash-exp",
         trace_manager=TraceManager(project_name="ingestion"),
     )
-    LLM_SERVICE = VisionService(
+    FALLBACK_VISION_LLM_SERVICE = VisionService(
         provider="openai",
         model_name="gpt-4.1-mini",
         trace_manager=TraceManager(project_name="ingestion"),
@@ -245,7 +245,7 @@ async def _ingest_folder_source(
     try:
         document_chunk_mapping = document_chunking_mapping(
             vision_ingestion_service=VISION_COMPLETION_SERVICE,
-            llm_service=LLM_SERVICE,
+            llm_service=FALLBACK_VISION_LLM_SERVICE,
             get_file_content_func=folder_manager.get_file_content,
             chunk_size=chunk_size,
         )
@@ -276,7 +276,7 @@ async def _ingest_folder_source(
             chunks_df = await get_chunks_dataframe_from_doc(
                 document,
                 document_chunk_mapping,
-                llm_service=LLM_SERVICE,
+                llm_service=FALLBACK_VISION_LLM_SERVICE,
                 add_doc_description_to_chunks=add_doc_description_to_chunks,
                 documents_summary_func=document_summary_func,
                 add_summary_in_chunks_func=add_summary_in_chunks_func,
