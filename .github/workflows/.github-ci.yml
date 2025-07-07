@@ -124,6 +124,9 @@ jobs:
           echo "S3_BUCKET_NAME=${{ secrets.S3_BUCKET_NAME }}" >> credentials.env
           echo "S3_REGION_NAME=eu-west-3" >> credentials.env
           echo "ENABLE_OBSERVABILITY_STACK=false" >> credentials.env
+          echo "ZOOM_INGESTION=3.0" >> credentials.env
+          echo "NUMBER_OF_IMAGES_TO_DETERMINE_TYPE_OF_DOCUMENT=-1" >> credentials.env
+          echo "ENFORCE_PAGE_BY_PAGE_INGESTION=False" >> credentials.env
 
       - name: Upload credentials.env to EC2
         uses: appleboy/scp-action@master
