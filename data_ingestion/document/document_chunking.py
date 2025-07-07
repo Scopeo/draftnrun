@@ -26,6 +26,7 @@ def document_chunking_mapping(
     llm_service: Optional[CompletionService] = None,
     get_file_content_func: Optional[Callable[[FileDocument], str]] = None,
     docx_overlapping_size: int = 50,
+    chunk_size: Optional[int] = 1024,
 ) -> dict[FileDocumentType, FileProcessor]:
 
     document_chunking_mapping = {
@@ -48,14 +49,17 @@ def document_chunking_mapping(
         FileDocumentType.EXCEL.value: partial(
             ingest_excel_file,
             get_file_content_func=get_file_content_func,
+            chunk_size=chunk_size,
         ),
         FileDocumentType.GOOGLE_SHEET.value: partial(
             ingest_excel_file,
             get_file_content_func=get_file_content_func,
+            chunk_size=chunk_size,
         ),
         FileDocumentType.CSV.value: partial(
             ingest_csv_file,
             get_file_content_func=get_file_content_func,
+            chunk_size=chunk_size,
         ),
     }
     return document_chunking_mapping

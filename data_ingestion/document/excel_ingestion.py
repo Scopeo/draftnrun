@@ -13,7 +13,7 @@ LOGGER = logging.getLogger(__name__)
 def ingest_excel_file(
     document: FileDocument,
     get_file_content_func: Callable[[FileDocument], str],
-    chunk_size: Optional[int] = 512,
+    chunk_size: Optional[int] = 1024,
     **kwargs,
 ) -> list[FileChunk]:
     result_chunks = []

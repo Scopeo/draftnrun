@@ -73,6 +73,7 @@ def ingestion_main(
                 save_supabase=True,
                 access_token=access_token,
                 add_doc_description_to_chunks=False,
+                chunk_size=source_attributes.get("chunk_size", 1024),
             )
         except Exception as e:
             LOGGER.error(f"Error during google drive ingestion: {str(e)}")
@@ -99,6 +100,7 @@ def ingestion_main(
                 task_id=task_id,
                 save_supabase=True,
                 add_doc_description_to_chunks=False,
+                chunk_size=source_attributes.get("chunk_size", 1024),
             )
         except Exception as e:
             LOGGER.error(f"Error during local ingestion: {str(e)}")
