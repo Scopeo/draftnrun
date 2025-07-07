@@ -126,6 +126,7 @@ jobs:
           echo "SEGMENT_API_KEY=${{ secrets.SEGMENT_API_KEY }}" >> credentials.env
           echo "ENV=${{ secrets.ENV }}" >> credentials.env
           echo "ZOOM_INGESTION=3.0" >> credentials.env
+          echo "PAGE_RESOLUTION_ZOOM=3.0" >> credentials.env
           echo "NUMBER_OF_IMAGES_TO_DETERMINE_TYPE_OF_DOCUMENT=-1" >> credentials.env
           echo "ENFORCE_PAGE_BY_PAGE_INGESTION=False" >> credentials.env
 

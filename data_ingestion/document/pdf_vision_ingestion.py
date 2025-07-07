@@ -233,7 +233,7 @@ async def create_chunks_from_document(
     openai_llm_service: VisionService,
     # TODO: Fix when we handle via frontend
     number_of_pages_to_detect_document_type: int = settings.NUMBER_OF_PAGES_TO_DETECT_DOCUMENT_TYPE,
-    zoom: float = settings.ZOOM_INGESTION,
+    zoom: float = settings.PAGE_RESOLUTION_ZOOM,
     **kwargs,
 ) -> list[FileChunk]:
     chunks = []
