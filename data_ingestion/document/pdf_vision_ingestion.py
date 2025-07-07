@@ -232,7 +232,8 @@ def create_chunks_from_document(
     openai_llm_service: VisionService,
     # TODO: Fix when we handle via frontend
     number_of_pages_to_detect_document_type: int = settings.NUMBER_OF_PAGES_TO_DETECT_DOCUMENT_TYPE,
-    zoom: float = settings.ZOOM_INGESTION,
+    zoom: float = settings.PAGE_RESOLUTION_ZOOM,
+    number_of_images_to_determine_type_of_document: int = settings.NUMBER_OF_IMAGES_TO_DETERMINE_TYPE_OF_DOCUMENT,
     enforce_page_by_page_ingestion: bool = settings.ENFORCE_PAGE_BY_PAGE_INGESTION,
     **kwargs,
 ) -> list[FileChunk]:
