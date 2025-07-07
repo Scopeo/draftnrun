@@ -32,12 +32,14 @@ from ada_backend.schemas.auth_schema import (
 
 LOGGER = logging.getLogger(__name__)
 
+
 class UserRights(Enum):
     SUPER_ADMIN = ("super-admin",)
     ADMIN = ("super-admin", "admin")
     WRITER = ("super-admin", "admin", "developer")
     READER = ("super-admin", "admin", "developer", "member")
     USER = ("super-admin", "admin", "developer", "member", "user")
+
 
 bearer = HTTPBearer()
 router = APIRouter(prefix="/auth", tags=["Auth"])

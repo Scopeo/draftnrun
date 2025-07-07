@@ -23,8 +23,8 @@ from engine.trace.trace_context import get_trace_manager
 from engine.trace.span_context import set_tracing_span
 
 
-def get_organization_llm_providers(session: AsyncSession, organization_id: UUID) -> list[str]:
-    organization_secrets = get_organization_secrets(
+async def get_organization_llm_providers(session: AsyncSession, organization_id: UUID) -> list[str]:
+    organization_secrets = await get_organization_secrets(
         session,
         organization_id=organization_id,
     )
@@ -69,8 +69,6 @@ async def build_graph_runner(
     for edge in edges:
         if edge.source_node_id:
             graph.add_edge(str(edge.source_node_id), str(edge.target_node_id), order=edge.order)
-    print("GRAPH BUILT SUCCESSFULLY")
-    print("RETURN THE GRAPH RUNNER")
     return GraphRunner(graph, runnables, start_nodes, trace_manager=trace_manager)
 
 
@@ -102,8 +100,7 @@ async def run_env_agent(
     env: EnvType,
     input_data: dict,
 ) -> ChatResponse:
-    """
-    """
+    """ """
     graph_runner = await get_graph_runner_for_env(session=session, project_id=project_id, env=env)
     if not graph_runner:
         raise ValueError(f"{env} graph runner not found for project {project_id}.")
@@ -118,7 +115,7 @@ async def run_agent(
     graph_runner_id: UUID,
     input_data: dict,
 ) -> ChatResponse:
-    project_details = get_project_with_details(session, project_id=project_id)
+    project_details = await get_project_with_details(session, project_id=project_id)
     agent = await get_agent_for_project(
         session,
         project_id=project_id,
@@ -128,13 +125,13 @@ async def run_agent(
     # TODO : Add again the monitoring for frequently asked questions after parallelization of agent run
     # db_service = SQLLocalService(engine_url="sqlite:///ada_backend/database/monitor.db", dialect="sqlite")
     # asyncio.create_task(monitor_questions(db_service, project_id, input_data))
-    input_component = get_input_component(session, graph_runner_id=graph_runner_id)
+    input_component = await get_input_component(session, graph_runner_id=graph_runner_id)
     if input_component:
-        input_data = get_default_values_for_sandbox(session, input_component.id, project_id, input_data)
+        input_data = await get_default_values_for_sandbox(session, input_component.id, project_id, input_data)
     set_tracing_span(
         project_id=str(project_id),
         organization_id=str(project_details.organization_id),
-        organization_llm_providers=get_organization_llm_providers(session, project_details.organization_id),
+        organization_llm_providers=await get_organization_llm_providers(session, project_details.organization_id),
         conversation_id=input_data.get("conversation_id"),
     )
     try:
@@ -146,4 +143,3 @@ async def run_agent(
     return ChatResponse(
         message=agent_output.last_message.content, artifacts=agent_output.artifacts, error=agent_output.error
     )
-

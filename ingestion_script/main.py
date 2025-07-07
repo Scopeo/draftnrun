@@ -1,8 +1,9 @@
 import logging
 from uuid import UUID
+import asyncio
 
 from ada_backend.database.models import SourceType
-from ada_backend.database.setup_db import SessionLocal
+from ada_backend.database.setup_db import AsyncSessionLocal
 from ada_backend.schemas.ingestion_task_schema import IngestionTaskUpdate
 from ada_backend.services.agent_runner_service import get_organization_llm_providers
 from engine.trace.span_context import set_tracing_span
@@ -31,6 +32,12 @@ def check_missing_params(
     return False
 
 
+async def get_organization_llm_providers_async(organization_id: UUID):
+    """Helper function to get organization LLM providers with proper async session handling."""
+    async with AsyncSessionLocal() as session:
+        return await get_organization_llm_providers(session=session, organization_id=organization_id)
+
+
 def ingestion_main(
     source_name: str, organization_id: UUID, task_id: UUID, source_type: SourceType, source_attributes: dict
 ):
@@ -38,9 +45,7 @@ def ingestion_main(
     set_tracing_span(
         project_id="None",
         organization_id=organization_id,
-        organization_llm_providers=get_organization_llm_providers(
-            session=SessionLocal(), organization_id=organization_id
-        ),
+        organization_llm_providers=asyncio.run(get_organization_llm_providers_async(organization_id)),
     )
 
     failed_ingestion_task = IngestionTaskUpdate(

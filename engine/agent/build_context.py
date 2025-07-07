@@ -45,9 +45,7 @@ def format_source_chunk_metadata(
     metadata = source.metadata or {}
     if llm_metadata_keys:
         metadata = {
-            key: metadata[key]
-            for key in llm_metadata_keys
-            if key in metadata and key not in ["reranked_score"]
+            key: metadata[key] for key in llm_metadata_keys if key in metadata and key not in ["reranked_score"]
         }
 
     if not metadata:
