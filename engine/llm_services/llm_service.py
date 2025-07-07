@@ -99,11 +99,7 @@ class EmbeddingService(LLMService):
         base_url: Optional[str] = None,
     ):
         super().__init__(trace_manager, provider, model_name, api_key, base_url)
-        self._embedding_size = embedding_size
-
-    def get_embedding_size(self) -> int:
-        """Return the size of the embeddings for the model."""
-        return self._embedding_size
+        self.embedding_size = embedding_size
 
     def embed_text(self, text: str) -> list[float]:
         span = get_current_span()
@@ -938,10 +934,8 @@ class VisionService(LLMService):
             case _:
                 import openai
 
-                if self._api_key is None:
-                    raise ValueError(f"API key is not set for the provider {self._provider}.")
-                if self._base_url is None:
-                    raise ValueError(f"Base URL is not set for the provider {self._provider}.")
+                if self._api_key is None or self._base_url is None:
+                    self._api_key, self._base_url = get_api_key_and_base_url(self._model_name)
                 client = openai.OpenAI(api_key=self._api_key, base_url=self._base_url)
                 if response_format is not None:
                     text_prompt = format_prompt_with_pydantic_output(text_prompt, response_format)
