@@ -21,6 +21,10 @@ def ingest_csv_file(
         content = content.decode("utf-8")
     csv_io = StringIO(content)
     df = pd.read_csv(csv_io)
+    df = df.dropna(how="all")
+    if df.empty:
+        LOGGER.warning(f"File {document.file_name} is empty. Skipping.")
+        return []
     if all(isinstance(col, int) for col in df.columns) and list(df.columns) == list(range(len(df.columns))):
         first_row = df.iloc[0]
         if not all(pd.api.types.is_numeric_dtype(type(cell)) for cell in first_row):

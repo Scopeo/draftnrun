@@ -23,7 +23,10 @@ def ingest_excel_file(
     sheet_names = xls.sheet_names
     for sheet_name in sheet_names:
         df = pd.read_excel(content_to_process, sheet_name=sheet_name, header=None)
-
+        df = df.dropna(how="all")
+        if df.empty:
+            LOGGER.warning(f"Sheet {sheet_name} is empty. Skipping.")
+            continue
         if all(isinstance(col, int) for col in df.columns) and list(df.columns) == list(range(len(df.columns))):
             first_row = df.iloc[0]
             if not all(pd.api.types.is_numeric_dtype(type(cell)) for cell in first_row):
