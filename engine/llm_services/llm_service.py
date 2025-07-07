@@ -6,7 +6,6 @@ from typing import Optional
 from abc import ABC
 from pydantic import BaseModel
 
-
 from opentelemetry.trace import get_current_span
 from openinference.semconv.trace import SpanAttributes
 
@@ -103,11 +102,7 @@ class EmbeddingService(LLMService):
         base_url: Optional[str] = None,
     ):
         super().__init__(trace_manager, provider, model_name, api_key, base_url)
-        self._embedding_size = embedding_size
-
-    def get_embedding_size(self) -> int:
-        """Return the size of the embeddings for the model."""
-        return self._embedding_size
+        self.embedding_size = embedding_size
 
     def embed_text(self, text: str) -> list[float]:
         return asyncio.run(self.embed_text_async(text))
@@ -638,7 +633,6 @@ class VisionService(LLMService):
         text_prompt: str,
         response_format: Optional[BaseModel] = None,
     ) -> str | BaseModel:
-        client = None
         span = get_current_span()
         span.set_attributes({SpanAttributes.LLM_INVOCATION_PARAMETERS: json.dumps({"temperature": self._temperature})})
         match self._provider:
@@ -652,7 +646,6 @@ class VisionService(LLMService):
                 client = openai.AsyncOpenAI(api_key=self._api_key, base_url=self._base_url)
                 if response_format is not None:
                     text_prompt = format_prompt_with_pydantic_output(text_prompt, response_format)
-
 
         content = [{"type": "text", "text": text_prompt}]
         content.extend(self._format_image_content(image_content_list))

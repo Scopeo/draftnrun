@@ -121,9 +121,9 @@ class BaseConfig(BaseSettings):
     S3_REGION_NAME: Optional[str] = None
     
     # Ingestion parameters
-    ZOOM_INGESTION: float = 3.0
-    NUMBER_OF_IMAGES_TO_DETERMINE_TYPE_OF_DOCUMENT: int = 5
-    ENFORCE_PAGE_BY_PAGE_INGESTION: bool = False
+    ZOOM_INGESTION: float
+    NUMBER_OF_IMAGES_TO_DETERMINE_TYPE_OF_DOCUMENT: int
+    ENFORCE_PAGE_BY_PAGE_INGESTION: bool
 
 
     # Google OAuth configuration
