@@ -28,56 +28,35 @@ def document_chunking_mapping(
     docx_overlapping_size: int = 50,
 ) -> dict[FileDocumentType, FileProcessor]:
 
-    # Create wrapper functions to handle optional parameters
-    def create_pdf_chunks(document: FileDocument, **kwargs) -> list[FileChunk]:
-        if vision_ingestion_service is None or llm_service is None or get_file_content_func is None:
-            raise ValueError(
-                "PDF processing requires vision_ingestion_service, llm_service, and get_file_content_func"
-            )
-        return create_chunks_from_document(
-            document=document,
+    document_chunking_mapping = {
+        FileDocumentType.PDF.value: partial(
+            create_chunks_from_document,
             google_llm_service=vision_ingestion_service,
             openai_llm_service=llm_service,
             get_file_content=get_file_content_func,
-            **kwargs,
-        )
-
-    def create_docx_chunks(document: FileDocument, **kwargs) -> list[FileChunk]:
-        if get_file_content_func is None:
-            raise ValueError("DOCX processing requires get_file_content_func")
-        return get_chunks_from_docx(
-            docx_to_process=document,
+        ),
+        FileDocumentType.DOCX.value: partial(
+            get_chunks_from_docx,
             get_file_content_func=get_file_content_func,
             chunk_overlap=docx_overlapping_size,
-            **kwargs,
-        )
-
-    def create_markdown_chunks(document: FileDocument, **kwargs) -> list[FileChunk]:
-        if get_file_content_func is None:
-            raise ValueError("Markdown processing requires get_file_content_func")
-        return get_chunks_from_markdown(
-            md_doc_to_process=document,
+        ),
+        FileDocumentType.MARKDOWN.value: partial(
+            get_chunks_from_markdown,
             get_file_content_func=get_file_content_func,
             chunk_overlap=docx_overlapping_size,
-            **kwargs,
-        )
-
-    def create_excel_chunks(document: FileDocument, **kwargs) -> list[FileChunk]:
-        if get_file_content_func is None:
-            raise ValueError("Excel processing requires get_file_content_func")
-        return ingest_excel_file(document=document, get_file_content_func=get_file_content_func, **kwargs)
-
-    def create_csv_chunks(document: FileDocument, **kwargs) -> list[FileChunk]:
-        if get_file_content_func is None:
-            raise ValueError("CSV processing requires get_file_content_func")
-        return ingest_csv_file(document=document, get_file_content_func=get_file_content_func, **kwargs)
-
-    document_chunking_mapping = {
-        FileDocumentType.PDF: create_pdf_chunks,
-        FileDocumentType.DOCX: create_docx_chunks,
-        FileDocumentType.MARKDOWN: create_markdown_chunks,
-        FileDocumentType.EXCEL: create_excel_chunks,
-        FileDocumentType.CSV: create_csv_chunks,
+        ),
+        FileDocumentType.EXCEL.value: partial(
+            ingest_excel_file,
+            get_file_content_func=get_file_content_func,
+        ),
+        FileDocumentType.GOOGLE_SHEET.value: partial(
+            ingest_excel_file,
+            get_file_content_func=get_file_content_func,
+        ),
+        FileDocumentType.CSV.value: partial(
+            ingest_csv_file,
+            get_file_content_func=get_file_content_func,
+        ),
     }
     return document_chunking_mapping
 
