@@ -148,6 +148,62 @@ def seed_sources(session: Session):
     session.commit()
 
 
+async def _update_graph_services_async():
+    """
+    Internal async function to handle the update_graph_service calls.
+    """
+    from ada_backend.database.setup_db import get_async_db_session
+
+    async with get_async_db_session() as async_session:
+        LOGGER.info("Starting to build prod graph test project")
+        graph_test_pipeline = build_graph_test_chatbot(
+            COMPONENT_UUIDS,
+            graph_runner_id=GRAPH_RUNNER_UUIDS["graph_runner_prod"],
+            source_id=SOURCE_UUIDS["graph_test_source"],
+        )
+        await update_graph_service(
+            async_session,
+            graph_project=graph_test_pipeline,
+            graph_runner_id=GRAPH_RUNNER_UUIDS["graph_runner_prod"],
+            project_id=PROJECT_UUIDS["graph_test_project"],
+        )
+
+        LOGGER.info("Starting to build draft graph test project")
+        graph_test_pipeline = build_graph_test_chatbot(
+            COMPONENT_UUIDS,
+            graph_runner_id=GRAPH_RUNNER_UUIDS["graph_runner_draft"],
+            source_id=SOURCE_UUIDS["graph_test_source"],
+        )
+        await update_graph_service(
+            async_session,
+            graph_project=graph_test_pipeline,
+            graph_runner_id=GRAPH_RUNNER_UUIDS["graph_runner_draft"],
+            project_id=PROJECT_UUIDS["graph_test_project"],
+        )
+
+        LOGGER.info("Starting to build ReAct SQL Agent project")
+        react_sql_agent_pipeline = build_react_sql_agent_chatbot(
+            COMPONENT_UUIDS, graph_runner_id=GRAPH_RUNNER_UUIDS["react_sql_agent_prod"]
+        )
+        await update_graph_service(
+            async_session,
+            graph_project=react_sql_agent_pipeline,
+            project_id=PROJECT_UUIDS["react_sql_agent_chatbot"],
+            graph_runner_id=GRAPH_RUNNER_UUIDS["react_sql_agent_prod"],
+        )
+
+        LOGGER.info("Starting to build ReAct SQL Agent draft project")
+        react_sql_agent_staging = build_react_sql_agent_chatbot(
+            COMPONENT_UUIDS, graph_runner_id=GRAPH_RUNNER_UUIDS["react_sql_agent_draft"]
+        )
+        await update_graph_service(
+            async_session,
+            graph_project=react_sql_agent_staging,
+            project_id=PROJECT_UUIDS["react_sql_agent_chatbot"],
+            graph_runner_id=GRAPH_RUNNER_UUIDS["react_sql_agent_draft"],
+        )
+
+
 def seed_projects_db(session: Session):
     """
     Seed the database with initial data.
@@ -162,59 +218,7 @@ def seed_projects_db(session: Session):
         if not project:
             raise ValueError("Project1 not found. Ensure the project exists before seeding the pipeline.")
 
-        LOGGER.info("Starting to build prod graph test project")
-        graph_test_pipeline = build_graph_test_chatbot(
-            COMPONENT_UUIDS,
-            graph_runner_id=GRAPH_RUNNER_UUIDS["graph_runner_prod"],
-            source_id=SOURCE_UUIDS["graph_test_source"],
-        )
-        asyncio.run(
-            update_graph_service(
-                session,
-                graph_project=graph_test_pipeline,
-                graph_runner_id=GRAPH_RUNNER_UUIDS["graph_runner_prod"],
-                project_id=PROJECT_UUIDS["graph_test_project"],
-            )
-        )
-        LOGGER.info("Starting to build draft graph test project")
-        graph_test_pipeline = build_graph_test_chatbot(
-            COMPONENT_UUIDS,
-            graph_runner_id=GRAPH_RUNNER_UUIDS["graph_runner_draft"],
-            source_id=SOURCE_UUIDS["graph_test_source"],
-        )
-        asyncio.run(
-            update_graph_service(
-                session,
-                graph_project=graph_test_pipeline,
-                graph_runner_id=GRAPH_RUNNER_UUIDS["graph_runner_draft"],
-                project_id=PROJECT_UUIDS["graph_test_project"],
-            )
-        )
-
-        LOGGER.info("Starting to build ReAct SQL Agent project")
-        react_sql_agent_pipeline = build_react_sql_agent_chatbot(
-            COMPONENT_UUIDS, graph_runner_id=GRAPH_RUNNER_UUIDS["react_sql_agent_prod"]
-        )
-        asyncio.run(
-            update_graph_service(
-                session,
-                graph_project=react_sql_agent_pipeline,
-                project_id=PROJECT_UUIDS["react_sql_agent_chatbot"],
-                graph_runner_id=GRAPH_RUNNER_UUIDS["react_sql_agent_prod"],
-            )
-        )
-        LOGGER.info("Starting to build ReAct SQL Agent draft project")
-        react_sql_agent_staging = build_react_sql_agent_chatbot(
-            COMPONENT_UUIDS, graph_runner_id=GRAPH_RUNNER_UUIDS["react_sql_agent_draft"]
-        )
-        asyncio.run(
-            update_graph_service(
-                session,
-                graph_project=react_sql_agent_staging,
-                project_id=PROJECT_UUIDS["react_sql_agent_chatbot"],
-                graph_runner_id=GRAPH_RUNNER_UUIDS["react_sql_agent_draft"],
-            )
-        )
+        asyncio.run(_update_graph_services_async())
 
     finally:
         session.close()
