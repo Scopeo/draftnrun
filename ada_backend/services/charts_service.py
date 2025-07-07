@@ -95,6 +95,31 @@ def get_agent_usage_chart(project_id: UUID, duration_days: int) -> Chart:
 
     df = query_trace_duration(project_id, duration_days)
     df["date"] = pd.to_datetime(df["start_time"]).dt.normalize()
+    datasets = []
+    df_with_conversation_id = df[
+        df["attributes"].apply(
+            lambda x: isinstance(x, dict) and "conversation_id" in x and x["conversation_id"] is not None
+        )
+    ].copy()
+    if not df_with_conversation_id.empty:
+        df_with_conversation_id["conversation_id"] = df_with_conversation_id["attributes"].apply(
+            lambda x: x.get("conversation_id")
+        )
+        conversation_id_usage = (
+            df_with_conversation_id.groupby("date")["conversation_id"]
+            .nunique()
+            .reset_index(name="unique_conversation_ids")
+        )
+        conversation_id_usage = pd.merge(all_dates_df, conversation_id_usage, on="date", how="left").fillna(0)
+        conversation_id_usage["unique_conversation_ids"] = conversation_id_usage["unique_conversation_ids"].astype(int)
+        conversation_id_usage["date"] = conversation_id_usage["date"].dt.date.astype(str)
+        conversation_id_usage = conversation_id_usage.sort_values(by="date", ascending=True)
+        datasets.append(
+            Dataset(
+                label="Number of conversations per day", data=conversation_id_usage["unique_conversation_ids"].tolist()
+            )
+        )
+
     df[["llm_token_count_prompt", "llm_token_count_completion"]] = df[
         ["llm_token_count_prompt", "llm_token_count_completion"]
     ].fillna(0)
@@ -118,6 +143,8 @@ def get_agent_usage_chart(project_id: UUID, duration_days: int) -> Chart:
     agent_usage = agent_usage.sort_values(by="date", ascending=True)
     agent_usage["date"] = agent_usage["date"].astype(str)
 
+    datasets.append(Dataset(label="Number of calls per day", data=agent_usage["count"].tolist()))
+
     return [
         Chart(
             id=f"agent_usage_{project_id}",
@@ -125,12 +152,7 @@ def get_agent_usage_chart(project_id: UUID, duration_days: int) -> Chart:
             title="Agent Usage",
             data=ChartData(
                 labels=agent_usage["date"].tolist(),
-                datasets=[
-                    Dataset(
-                        label="Number of calls per day",
-                        data=agent_usage["count"].tolist(),
-                    )
-                ],
+                datasets=datasets,
             ),
             x_axis_type="datetime",
         ),
