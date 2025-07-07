@@ -120,12 +120,11 @@ class BaseConfig(BaseSettings):
     S3_SECRET_ACCESS_KEY: Optional[str] = None
     S3_BUCKET_NAME: Optional[str] = None
     S3_REGION_NAME: Optional[str] = None
-    
+
     # Ingestion parameters
-    ZOOM_INGESTION: float
+    PAGE_RESOLUTION_ZOOM: float
     NUMBER_OF_IMAGES_TO_DETERMINE_TYPE_OF_DOCUMENT: int
     ENFORCE_PAGE_BY_PAGE_INGESTION: bool
-
 
     @model_validator(mode="after")
     @classmethod

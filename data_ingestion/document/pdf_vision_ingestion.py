@@ -230,7 +230,7 @@ def create_chunks_from_document(
     get_file_content: Callable[[FileDocument], str],
     google_llm_service: VisionService,
     openai_llm_service: VisionService,
-    zoom: float = settings.ZOOM_INGESTION,
+    zoom: float = settings.PAGE_RESOLUTION_ZOOM,
     number_of_images_to_determine_type_of_document: int = settings.NUMBER_OF_IMAGES_TO_DETERMINE_TYPE_OF_DOCUMENT,
     enforce_page_by_page_ingestion: bool = settings.ENFORCE_PAGE_BY_PAGE_INGESTION,
     **kwargs,

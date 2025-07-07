@@ -123,7 +123,7 @@ jobs:
           echo "S3_SECRET_ACCESS_KEY=${{ secrets.S3_SECRET_ACCESS_KEY }}" >> credentials.env
           echo "S3_BUCKET_NAME=${{ secrets.S3_BUCKET_NAME }}" >> credentials.env
           echo "S3_REGION_NAME=eu-west-3" >> credentials.env
-          echo "ZOOM_INGESTION=3.0" >> credentials.env
+          echo "PAGE_RESOLUTION_ZOOM=3.0" >> credentials.env
           echo "NUMBER_OF_IMAGES_TO_DETERMINE_TYPE_OF_DOCUMENT=-1" >> credentials.env
           echo "ENFORCE_PAGE_BY_PAGE_INGESTION=False" >> credentials.env
 
