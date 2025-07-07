@@ -968,9 +968,9 @@ class QdrantService:
         if self._embedding_service is not None:
             LOGGER.info(
                 "Using embedding service to create collection with vector size "
-                f"{self._embedding_service.get_embedding_size()}"
+                f"{self._embedding_service.embedding_size}"
             )
-            vector_size = self._embedding_service.get_embedding_size()
+            vector_size = self._embedding_service.embedding_size
 
         payload = {"vectors": {"size": vector_size, "distance": distance}}
         response = self._send_request(
