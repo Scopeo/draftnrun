@@ -5,7 +5,7 @@ from opentelemetry import trace as trace_api
 from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttributes
 from jsonschema_pydantic import jsonschema_to_pydantic
 
-from engine.agent.agent import ToolDescription
+from engine.agent.agent import ToolDescription, AgentPayload, ChatMessage
 from engine.trace.trace_manager import TraceManager
 from engine.agent.utils import load_str_to_json
 
@@ -38,16 +38,30 @@ class Output:
         self.output_schema = load_str_to_json(output_schema)
         self.output_model = jsonschema_to_pydantic(self.output_schema)
 
-    async def run(self, output_data: dict):
+    async def run(self, output_data: AgentPayload | dict):
+
+        if isinstance(output_data, AgentPayload):
+            output_data = output_data.model_dump()
         filtered_output = self.output_model(**output_data)
-        filtered_output = filtered_output.model_dump(exclude_unset=True, exclude_none=True)
+        filtered_dict = filtered_output.model_dump(exclude_unset=True, exclude_none=True)
+
+        messages = filtered_dict.get("messages", [])
+        error = filtered_dict.get("error")
+        artifacts = filtered_dict.get("artifacts", {})
+        is_final = filtered_dict.get("is_final", False)
+
+        if messages and isinstance(messages[0], dict):
+            messages = [ChatMessage(**msg) for msg in messages]
+
+        result = AgentPayload(messages=messages, error=error, artifacts=artifacts, is_final=is_final)
+
         with self.trace_manager.start_span(self.component_instance_name) as span:
             span.set_attributes(
                 {
                     SpanAttributes.OPENINFERENCE_SPAN_KIND: OpenInferenceSpanKindValues.LLM.value,
                     SpanAttributes.INPUT_VALUE: json.dumps(output_data),
-                    SpanAttributes.OUTPUT_VALUE: json.dumps(filtered_output),
+                    SpanAttributes.OUTPUT_VALUE: json.dumps(filtered_dict),
                 }
             )
             span.set_status(trace_api.StatusCode.OK)
-        return filtered_output
+        return result

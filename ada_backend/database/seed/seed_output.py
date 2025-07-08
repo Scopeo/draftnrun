@@ -17,6 +17,54 @@ from ada_backend.database.seed.seed_tool_description import TOOL_DESCRIPTION_UUI
 from ada_backend.database.seed.utils import COMPONENT_UUIDS
 
 OUTPUT_SCHEMA_PARAMETER_NAME = "output_schema"
+DEFAULT_OUTPUT_FORMAT = {
+    "type": "object",
+    "title": "AgentPayload",
+    "properties": {
+        "messages": {
+            "type": "array",
+            "items": {
+                "type": "ChatMessage",
+                "properties": {
+                    "role": {"type": "string"},
+                    "content": {"anyOf": [{"type": "string"}, {"type": "array", "items": {"type": "string"}}]},
+                    "tool_calls": {"type": "array", "items": {"type": "object"}},
+                    "tool_call_id": {"type": "string"},
+                },
+                "required": ["role"],
+            },
+        },
+        "error": {"type": "string"},
+        "artifacts": {
+            "type": "object",
+            "properties": {
+                "sources": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "title": "SourceChunk",
+                        "properties": {
+                            "name": {"type": "string"},
+                            "document_name": {"type": "string"},
+                            "content": {"type": "string"},
+                            "url": {"type": "string"},
+                            "url_display_type": {
+                                "type": "string",
+                                "enum": ["blank", "download", "viewer", "no_show"],
+                                "default": "viewer",
+                            },
+                            "metadata": {"type": "object", "additionalProperties": True},
+                        },
+                        "required": ["name", "document_name", "content"],
+                    },
+                }
+            },
+            "additionalProperties": True,
+        },
+        "is_final": {"type": "boolean"},
+    },
+    "required": ["messages"],
+}
 
 
 def seed_output_components(session: Session):
@@ -44,9 +92,7 @@ def seed_output_components(session: Session):
                 name=OUTPUT_SCHEMA_PARAMETER_NAME,
                 type=ParameterType.STRING,
                 nullable=False,
-                default=json.dumps(
-                    {"response": "The final response", "confidence": 0.9}, indent=4
-                ),
+                default=json.dumps(DEFAULT_OUTPUT_FORMAT, indent=4),
                 ui_component=UIComponent.TEXTAREA,
                 ui_component_properties=UIComponentProperties(
                     label="""An example of your output schema""",
@@ -58,4 +104,4 @@ def seed_output_components(session: Session):
                 ).model_dump(exclude_unset=True, exclude_none=True),
             ),
         ],
-    ) 
+    )
