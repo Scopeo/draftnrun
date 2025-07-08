@@ -73,7 +73,7 @@ def get_chunks_dataframe_from_doc(
     add_doc_description_to_chunks: bool = False,
     documents_summary_func: Optional[Callable] = None,
     add_summary_in_chunks_func: Optional[Callable] = None,
-    default_chunk_size: int = 1024,
+    default_chunk_size: Optional[int] = 1024,
 ) -> pd.DataFrame:
     all_chunks = []
     LOGGER.info(f"Processing document {document.file_name} of type {document.type}")

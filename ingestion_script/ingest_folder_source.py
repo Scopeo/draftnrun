@@ -234,6 +234,7 @@ def _ingest_folder_source(
                 add_doc_description_to_chunks=add_doc_description_to_chunks,
                 documents_summary_func=document_summary_func,
                 add_summary_in_chunks_func=add_summary_in_chunks_func,
+                default_chunk_size=chunk_size,
             )
             LOGGER.info(f"Sync chunks to db table {db_table_name}")
             db_service.update_table(
