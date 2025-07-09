@@ -114,14 +114,20 @@ class GraphRunner:
     async def run(self, *inputs: AgentPayload | dict, **kwargs) -> AgentPayload | dict:
         """Run the graph."""
         input_data = inputs[0]
+        is_root = kwargs.pop("is_root", False)
+
         with self.trace_manager.start_span("Workflow") as span:
             trace_input = convert_data_for_trace_manager_display(input_data, AgentPayload)
-            span.set_attributes(
-                {
-                    SpanAttributes.OPENINFERENCE_SPAN_KIND: self.TRACE_SPAN_KIND,
-                    SpanAttributes.INPUT_VALUE: trace_input,
-                }
-            )
+            attributes = {
+                SpanAttributes.OPENINFERENCE_SPAN_KIND: self.TRACE_SPAN_KIND,
+                SpanAttributes.INPUT_VALUE: trace_input,
+            }
+
+            # Mark as root agent execution if this is a user-initiated workflow
+            if is_root:
+                attributes["is_root_agent_execution"] = True
+
+            span.set_attributes(attributes)
             final_output = await self._run_without_trace(input_data, **kwargs)
             # TODO: Update trace when AgentInput/Output is refactored
             trace_input = convert_data_for_trace_manager_display(input_data, AgentPayload)
