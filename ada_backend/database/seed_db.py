@@ -23,6 +23,7 @@ from ada_backend.database.seed.seed_tavily import seed_tavily_components
 from ada_backend.database.seed.seed_api_call_tool import seed_api_call_components
 from ada_backend.database.seed.seed_python_code_e2b_tool import seed_python_code_e2b_components
 from ada_backend.database.seed.seed_web_search import seed_web_search_components
+from ada_backend.database.seed.seed_openai_code_interpreter import seed_openai_code_interpreter_components
 from ada_backend.database.seed.seed_tool_description import seed_tool_description
 from ada_backend.database.seed.utils import COMPONENT_UUIDS
 
@@ -47,6 +48,7 @@ def seed_db(session: Session):
         seed_react_sql_components(session)
         seed_smart_rag_components(session)
         seed_web_search_components(session)
+        seed_openai_code_interpreter_components(session)
         seed_input_components(session)
 
         # Verify components exist

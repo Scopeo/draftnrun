@@ -15,6 +15,7 @@ from engine.agent.sql.react_sql_tool import DEFAULT_REACT_SQL_TOOL_DESCRIPTION
 from engine.agent.sql.run_sql_query_tool import DEFAULT_RUN_SQL_QUERY_TOOL_DESCRIPTION
 from engine.agent.web_search_tool_openai import DEFAULT_WEB_SEARCH_OPENAI_TOOL_DESCRIPTION
 from engine.agent.tools.python_code_interpreter_e2b_tool import E2B_PYTHONCODE_INTERPRETER_TOOL_DESCRIPTION
+from engine.agent.openai_code_interpreter_tool import DEFAULT_OPENAI_CODE_INTERPRETER_TOOL_DESCRIPTION
 
 
 TOOL_DESCRIPTION_UUIDS = {
@@ -26,6 +27,7 @@ TOOL_DESCRIPTION_UUIDS = {
     "default_run_sql_query_tool_description": UUID("949c27b4-5403-42b0-bad6-1c71a7a4e5d1"),
     "default_tool_description": UUID("15e1198f-850a-4f66-91d7-34286de52795"),
     "default_web_search_openai_tool_description": UUID("b6d6d281-6c75-4d1b-a750-40b53deea3f6"),
+    "default_openai_code_interpreter_tool_description": UUID("c0de1111-2222-3333-4444-555555555555"),
     "default_document_enhanced_llm_agent": UUID("d01978d9-c785-4492-9e71-7af0aa8c05f7"),
     "default_input_tool_description": UUID("5be22376-7d08-486b-a004-b495bae58f77"),
     "python_code_interpreter_e2b_tool_description": UUID("e2b11111-2222-3333-4444-555555555555"),
@@ -61,6 +63,10 @@ def seed_tool_description(session: Session):
         id=TOOL_DESCRIPTION_UUIDS["default_web_search_openai_tool_description"],
         **DEFAULT_WEB_SEARCH_OPENAI_TOOL_DESCRIPTION.model_dump(),
     )
+    default_openai_code_interpreter_tool_description = db.ToolDescription(
+        id=TOOL_DESCRIPTION_UUIDS["default_openai_code_interpreter_tool_description"],
+        **DEFAULT_OPENAI_CODE_INTERPRETER_TOOL_DESCRIPTION.model_dump(),
+    )
     default_document_enhanced_llm_agent = db.ToolDescription(
         id=TOOL_DESCRIPTION_UUIDS["default_document_enhanced_llm_agent"],
         **DEFAULT_DOCUMENT_ENHANCED_LLM_CALL_TOOL_DESCRIPTION.model_dump(),
@@ -83,6 +89,7 @@ def seed_tool_description(session: Session):
             default_run_sql_query_tool_description,
             default_tool_description,
             default_web_search_openai_tool_description,
+            default_openai_code_interpreter_tool_description,
             default_document_enhanced_llm_agent,
             default_input_tool_description,
             python_code_interpreter_e2b_tool_description,
