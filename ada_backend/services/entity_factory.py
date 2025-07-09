@@ -8,7 +8,12 @@ from pydantic import BaseModel
 
 from engine.agent.agent import ToolDescription
 from engine.trace.trace_context import get_trace_manager
-from engine.llm_services.llm_service import EmbeddingService, CompletionService, WebSearchService
+from engine.llm_services.llm_service import (
+    EmbeddingService,
+    CompletionService,
+    WebSearchService,
+    CodeInterpreterService,
+)
 from engine.qdrant_service import QdrantService, QdrantCollectionSchema
 from ada_backend.database.setup_db import get_db_session
 from ada_backend.repositories.source_repository import get_data_source_by_id
@@ -378,6 +383,41 @@ def build_qdrant_service_processor(target_name: str = "qdrant_service") -> Param
         params[target_name] = qdrant_service
         params["collection_name"] = collection_name
 
+        return params
+
+    return processor
+
+
+def build_code_interpreter_service_processor(target_name: str = "code_interpreter_service") -> ParameterProcessor:
+    """
+    Returns a processor function to inject a CodeInterpreterService into the parameters.
+
+    This processor consumes and removes the following parameters from the input:
+    - completion_model: Required. String in "provider:model_name" format (e.g., "openai:gpt-4").
+    - llm_api_key: Optional. API key for the LLM provider.
+
+    The processor creates an appropriate CodeInterpreterService instance based on the provider
+    and injects it into the params dictionary under the key specified by target_name.
+
+    Args:
+        target_name (str): The parameter name to use for the created CodeInterpreterService.
+                          Defaults to "code_interpreter_service".
+
+    Returns:
+        ParameterProcessor: A function that processes parameters to inject a CodeInterpreterService.
+    """
+
+    def processor(params: dict, constructor_params: dict[str, Any]) -> dict:
+        provider, model_name = get_llm_provider_and_model(llm_model=params.pop("completion_model"))
+
+        code_interpreter_service = CodeInterpreterService(
+            trace_manager=get_trace_manager(),
+            provider=provider,
+            model_name=model_name,
+            api_key=params.pop("llm_api_key", None),
+        )
+
+        params[target_name] = code_interpreter_service
         return params
 
     return processor
