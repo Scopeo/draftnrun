@@ -18,6 +18,7 @@ from engine.agent.rag.cohere_reranker import CohereReranker
 from engine.agent.rag.vocabulary_search import VocabularySearch
 from engine.agent.tools.tavily_search_tool import TavilyApiTool
 from engine.agent.web_search_tool_openai import WebSearchOpenAITool
+from engine.agent.openai_code_interpreter_tool import OpenAICodeInterpreterTool
 from engine.agent.tools.api_call_tool import APICallTool
 from engine.agent.tools.python_code_interpreter_e2b_tool import PythonCodeInterpreterE2BTool
 from engine.agent.document_enhanced_llm_call import DocumentEnhancedLLMCallAgent
@@ -35,6 +36,7 @@ from ada_backend.services.entity_factory import (
     build_qdrant_service_processor,
     compose_processors,
     build_web_service_processor,
+    build_code_interpreter_service_processor,
 )
 
 COMPLETION_MODEL_IN_DB = "completion_model"
@@ -65,6 +67,7 @@ class SupportedEntityType(StrEnum):
     SNOWFLAKE_DB_SERVICE = "SnowflakeDBService"
     TAVILY_AGENT = "Internet Search with Tavily"
     OPENAI_WEB_SEARCH_AGENT = "Internet Search with OpenAI"
+    OPENAI_CODE_INTERPRETER_AGENT = "OpenAI Code Interpreter"
     API_CALL_TOOL = "API Call"
 
     PYTHON_CODE_INTERPRETER_E2B_TOOL = "Python Code Interpreter E2B"
@@ -182,6 +185,15 @@ def create_factory_registry() -> FactoryRegistry:
             }
         ),
         build_web_service_processor(),
+    )
+    code_interpreter_service_processor = compose_processors(
+        build_param_name_translator(
+            {
+                COMPLETION_MODEL_IN_DB: "completion_model",
+                "api_key": "llm_api_key",
+            }
+        ),
+        build_code_interpreter_service_processor(),
     )
 
     # Register components
@@ -321,6 +333,15 @@ def create_factory_registry() -> FactoryRegistry:
         name=SupportedEntityType.API_CALL_TOOL,
         factory=AgentFactory(
             entity_class=APICallTool,
+        ),
+    )
+    registry.register(
+        name=SupportedEntityType.OPENAI_CODE_INTERPRETER_AGENT,
+        factory=AgentFactory(
+            entity_class=OpenAICodeInterpreterTool,
+            parameter_processors=[
+                code_interpreter_service_processor,
+            ],
         ),
     )
     registry.register(

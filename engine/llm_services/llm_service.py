@@ -369,6 +369,45 @@ class WebSearchService(LLMService):
                 raise ValueError(f"Invalid provider: {self._provider}")
 
 
+class CodeInterpreterService(LLMService):
+    def __init__(
+        self,
+        trace_manager: TraceManager,
+        provider: str = "openai",
+        model_name: str = "gpt-4.1-mini",
+        api_key: Optional[str] = None,
+        base_url: Optional[str] = None,
+    ):
+        super().__init__(trace_manager, provider, model_name, api_key, base_url)
+
+    @with_usage_check
+    def execute_code(self, code_prompt: str) -> str:
+        """Execute Python code using OpenAI's code interpreter tool."""
+        span = get_current_span()
+        match self._provider:
+            case "openai":
+                import openai
+
+                if self._api_key is None:
+                    self._api_key = settings.OPENAI_API_KEY
+                client = openai.OpenAI(api_key=self._api_key)
+                response = client.responses.create(
+                    model=self._model_name,
+                    input=code_prompt,
+                    tools=[{"type": "code_interpreter"}],
+                )
+                span.set_attributes(
+                    {
+                        SpanAttributes.LLM_TOKEN_COUNT_COMPLETION: response.usage.output_tokens,
+                        SpanAttributes.LLM_TOKEN_COUNT_PROMPT: response.usage.input_tokens,
+                        SpanAttributes.LLM_TOKEN_COUNT_TOTAL: response.usage.total_tokens,
+                    }
+                )
+                return response.output_text
+            case _:
+                raise ValueError(f"Invalid provider: {self._provider}")
+
+
 class VisionService(LLMService):
     def __init__(
         self,
