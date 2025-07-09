@@ -156,6 +156,33 @@ class CompletionService(LLMService):
                 )
                 return response.output_text
 
+            case "cerebras":
+                import openai
+
+                if self._api_key is None:
+                    raise ValueError("API key is required for Cerebras provider")
+                
+                if self._base_url is None:
+                    self._base_url = "https://api.cerebras.ai/v1"
+
+                client = openai.OpenAI(
+                    api_key=self._api_key,
+                    base_url=self._base_url,
+                )
+                response = client.chat.completions.create(
+                    model=self._model_name,
+                    messages=messages,
+                    temperature=self._temperature,
+                )
+                span.set_attributes(
+                    {
+                        SpanAttributes.LLM_TOKEN_COUNT_COMPLETION: response.usage.completion_tokens,
+                        SpanAttributes.LLM_TOKEN_COUNT_PROMPT: response.usage.prompt_tokens,
+                        SpanAttributes.LLM_TOKEN_COUNT_TOTAL: response.usage.total_tokens,
+                    }
+                )
+                return response.choices[0].message.content
+
             case _:
                 import openai
 
@@ -287,6 +314,35 @@ class CompletionService(LLMService):
                 if self._api_key is None:
                     self._api_key = settings.OPENAI_API_KEY
                 client = openai.OpenAI(api_key=self._api_key)
+                response = client.chat.completions.create(
+                    model=self._model_name,
+                    messages=messages,
+                    tools=openai_tools,
+                    temperature=self._temperature,
+                    stream=stream,
+                    tool_choice=tool_choice,
+                )
+                span.set_attributes(
+                    {
+                        SpanAttributes.LLM_TOKEN_COUNT_COMPLETION: response.usage.completion_tokens,
+                        SpanAttributes.LLM_TOKEN_COUNT_PROMPT: response.usage.prompt_tokens,
+                        SpanAttributes.LLM_TOKEN_COUNT_TOTAL: response.usage.total_tokens,
+                    }
+                )
+                return response
+            case "cerebras":
+                import openai
+
+                if self._api_key is None:
+                    raise ValueError("API key is required for Cerebras provider")
+                
+                if self._base_url is None:
+                    self._base_url = "https://api.cerebras.ai/v1"
+
+                client = openai.OpenAI(
+                    api_key=self._api_key,
+                    base_url=self._base_url,
+                )
                 response = client.chat.completions.create(
                     model=self._model_name,
                     messages=messages,
