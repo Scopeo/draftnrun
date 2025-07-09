@@ -14,13 +14,15 @@ from sqlalchemy.orm import sessionmaker
 
 from engine.trace.nested_utils import split_nested_keys
 from engine.trace import models
-
+from settings import settings
 
 LOGGER = logging.getLogger(__name__)
 
 
 def get_session_trace():
-    engine = create_engine(models.TRACES_DB_URL, echo=False)
+    if not settings.TRACES_DB_URL:
+        raise ValueError("TRACES_DB_URL is not set")
+    engine = create_engine(settings.TRACES_DB_URL, echo=False)
     Session = sessionmaker(bind=engine)
     session = Session()
     return session
