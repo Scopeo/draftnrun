@@ -126,7 +126,13 @@ def build_span_trees(df: pd.DataFrame) -> List[TraceSpan]:
         for span_id, span in span_dict.items():
             parent_id = df[df["span_id"] == span_id]["parent_id"].values[0]
             if pd.notna(parent_id):
-                span_dict[parent_id].children.append(span)
+                # Only add to parent if parent exists in our span_dict
+                if parent_id in span_dict:
+                    span_dict[parent_id].children.append(span)
+                else:
+                    # Parent doesn't exist, treat as root span
+                    LOGGER.warning(f"Parent span {parent_id} not found for span {span_id}, treating as root")
+                    root_spans.append(span)
             else:  # Root span
                 root_spans.append(span)
 
