@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from opentelemetry import trace as trace_api
 from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 from opentelemetry.sdk.resources import Resource
@@ -17,4 +18,11 @@ def setup_performance_instrumentation(app: FastAPI):
     otlp_exporter = OTLPSpanExporter(endpoint=settings.TEMPO_ENDPOINT)
     tracer_provider.add_span_processor(BatchSpanProcessor(otlp_exporter))
 
-    FastAPIInstrumentor.instrument_app(app, tracer_provider=tracer_provider, excluded_urls="healthz,metrics")
+    # Set as global provider for auto-instrumentations
+    trace_api.set_tracer_provider(tracer_provider)
+
+    FastAPIInstrumentor.instrument_app(
+        app,
+        tracer_provider=tracer_provider,
+        excluded_urls="healthz,metrics",
+    )
