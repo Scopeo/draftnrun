@@ -3,17 +3,14 @@ import logging
 from openinference.semconv.resource import ResourceAttributes
 from opentelemetry import trace as trace_api
 from opentelemetry.sdk.resources import Resource
+from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from opentelemetry.sdk import trace as trace_sdk
-from opentelemetry.sdk.trace import ReadableSpan
 
 from engine.trace.sql_exporter import SQLSpanExporter
 from engine.trace.span_context import get_tracing_span
-from engine.trace.filtered_span_processor import FilteredSpanProcessor
 
 
 LOGGER = logging.getLogger(__name__)
-
-USER_AGENT_TRACE_TYPE = "user-agent"
 
 
 def setup_tracer(
@@ -28,18 +25,8 @@ def setup_tracer(
     )
 
     tracer_provider = trace_sdk.TracerProvider(resource=resource)
-
-    def user_agent_filter(span: ReadableSpan) -> bool:
-        """Filter to only export user-agent spans to SQLSpanExporter"""
-        trace_type = span.attributes.get("trace.type") if span.attributes else None
-        return trace_type == USER_AGENT_TRACE_TYPE
-
     sql_exporter = SQLSpanExporter()
-    filtered_processor = FilteredSpanProcessor(
-        exporter=sql_exporter,
-        filter_func=user_agent_filter,
-    )
-    tracer_provider.add_span_processor(filtered_processor)
+    tracer_provider.add_span_processor(BatchSpanProcessor(sql_exporter))
 
     trace_api.set_tracer_provider(tracer_provider=tracer_provider)
 
@@ -79,10 +66,6 @@ class TraceManager:
             attributes["organization_id"] = params.organization_id
             attributes["organization_llm_providers"] = params.organization_llm_providers
             attributes["conversation_id"] = params.conversation_id
-
-        # Mark all spans from TraceManager as user-facing agent spans
-        attributes["trace.type"] = USER_AGENT_TRACE_TYPE
-
         return self.tracer.start_as_current_span(
             name=name,
             attributes=attributes,
