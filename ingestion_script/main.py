@@ -37,6 +37,7 @@ def check_missing_params(
 def ingestion_main(
     source_name: str, organization_id: UUID, task_id: UUID, source_type: SourceType, source_attributes: dict
 ):
+
     set_trace_manager(TraceManager(project_name="Ingestion"))
     set_tracing_span(
         project_id="None",
@@ -45,6 +46,15 @@ def ingestion_main(
             session=SessionLocal(), organization_id=organization_id
         ),
     )
+    chunk_size = source_attributes.get("chunk_size")
+    if chunk_size is None:
+        chunk_size = DEFAULT_CHUNK_SIZE
+    chunk_overlap = source_attributes.get("chunk_overlap")
+    if chunk_overlap is None:
+        chunk_overlap = DEFAULT_CHUNK_OVERLAP
+    replace_existing = source_attributes.get("replace_existing")
+    if replace_existing is None:
+        replace_existing = DEFAULT_REPLACE_EXISTING
 
     failed_ingestion_task = IngestionTaskUpdate(
         id=task_id,
@@ -67,15 +77,6 @@ def ingestion_main(
             LOGGER.warning(
                 "Google Drive folder_id should be a specific ID, not just '/'",
             )
-        chunk_size = source_attributes.get("chunk_size")
-        if chunk_size is None:
-            chunk_size = DEFAULT_CHUNK_SIZE
-        chunk_overlap = source_attributes.get("chunk_overlap")
-        if chunk_overlap is None:
-            chunk_overlap = DEFAULT_CHUNK_OVERLAP
-        replace_existing = source_attributes.get("replace_existing")
-        if replace_existing is None:
-            replace_existing = DEFAULT_REPLACE_EXISTING
         try:
             ingest_google_drive_source(
                 folder_id=folder_id,
