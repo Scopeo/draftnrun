@@ -41,7 +41,7 @@ class Input:
         with self.trace_manager.start_span(self.component_instance_name) as span:
             span.set_attributes(
                 {
-                    SpanAttributes.OPENINFERENCE_SPAN_KIND: OpenInferenceSpanKindValues.LLM.value,
+                    SpanAttributes.OPENINFERENCE_SPAN_KIND: OpenInferenceSpanKindValues.UNKNOWN.value,
                     SpanAttributes.INPUT_VALUE: json.dumps(input_data),
                     SpanAttributes.OUTPUT_VALUE: json.dumps(filtered_input),
                 }
