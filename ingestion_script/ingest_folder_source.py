@@ -1,5 +1,6 @@
 import logging
 from uuid import UUID
+from typing import Optional
 
 from ada_backend.database import models as db
 from ada_backend.schemas.ingestion_task_schema import IngestionTaskUpdate
@@ -91,6 +92,7 @@ def ingest_google_drive_source(
     save_supabase: bool = True,
     access_token: str = None,
     add_doc_description_to_chunks: bool = False,
+    chunk_size: Optional[int] = 1024,
 ) -> None:
     # TODO: see how we can change whole code to use id instead of path
     path = "https://drive.google.com/drive/folders/" + folder_id
@@ -104,6 +106,7 @@ def ingest_google_drive_source(
         task_id=task_id,
         save_supabase=save_supabase,
         add_doc_description_to_chunks=add_doc_description_to_chunks,
+        chunk_size=chunk_size,
     )
 
 
@@ -114,6 +117,7 @@ def ingest_local_folder_source(
     task_id: UUID,
     save_supabase: bool = True,
     add_doc_description_to_chunks: bool = False,
+    chunk_size: Optional[int] = 1024,
 ) -> None:
     folder_manager = S3FolderManager(folder_payload=list_of_files_to_ingest)
     source_type = db.SourceType.LOCAL
@@ -125,6 +129,7 @@ def ingest_local_folder_source(
         task_id=task_id,
         save_supabase=save_supabase,
         add_doc_description_to_chunks=add_doc_description_to_chunks,
+        chunk_size=chunk_size,
     )
     folder_manager.clean_bucket()
 
@@ -137,6 +142,7 @@ def _ingest_folder_source(
     task_id: UUID,
     save_supabase: bool = True,
     add_doc_description_to_chunks: bool = False,
+    chunk_size: Optional[int] = 1024,
 ) -> None:
     db_table_schema, db_table_name, qdrant_collection_name = get_sanitize_names(
         source_name=source_name,
@@ -195,6 +201,7 @@ def _ingest_folder_source(
             vision_ingestion_service=GOOGLE_COMPLETION_SERVICE,
             llm_service=OPENAI_COMPLETION_SERVICE,
             get_file_content_func=folder_manager.get_file_content,
+            chunk_size=chunk_size,
         )
     except Exception as e:
         LOGGER.error(f"Failed to chunk documents: {str(e)}")
@@ -227,6 +234,7 @@ def _ingest_folder_source(
                 add_doc_description_to_chunks=add_doc_description_to_chunks,
                 documents_summary_func=document_summary_func,
                 add_summary_in_chunks_func=add_summary_in_chunks_func,
+                default_chunk_size=chunk_size,
             )
             LOGGER.info(f"Sync chunks to db table {db_table_name}")
             db_service.update_table(

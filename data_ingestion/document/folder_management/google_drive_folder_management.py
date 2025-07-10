@@ -5,6 +5,7 @@ import logging
 
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
+from googleapiclient.http import MediaIoBaseDownload
 
 from data_ingestion.document.folder_management.folder_management import FileDocument, FileDocumentType, FolderManager
 
@@ -25,7 +26,8 @@ class GoogleDriveFolderManager(FolderManager):
     def __init__(self, path: str, access_token: dict) -> None:
         super().__init__(path)
         self._cached_file_info = {}
-        self._service = _get_service_google_drive(access_token)
+        token = access_token.get("token") if isinstance(access_token, dict) else access_token
+        self._service = _get_service_google_drive(token)
 
     def _is_file(self, path: str) -> bool:
         if path.startswith("https://drive.google.com/drive/folders/"):
@@ -106,5 +108,17 @@ class GoogleDriveFolderManager(FolderManager):
 
     def get_file_content(self, file_id: str) -> bytes:
         file = self._fetch_file_details(file_id)
-        file_content = BytesIO(self._service.files().get_media(fileId=file["id"]).execute())
-        return file_content.getvalue()
+        file_type = FileDocumentType.from_mime_type(file["mimeType"])
+
+        if file_type == FileDocumentType.GOOGLE_SHEET:
+            export_mime = FileDocumentType.to_mime_type(FileDocumentType.EXCEL)
+            request = self._service.files().export_media(fileId=file["id"], mimeType=export_mime)
+        else:
+            request = self._service.files().get_media(fileId=file["id"])
+
+        fh = BytesIO()
+        downloader = MediaIoBaseDownload(fh, request)
+        done = False
+        while not done:
+            status, done = downloader.next_chunk()
+        return fh.getvalue()

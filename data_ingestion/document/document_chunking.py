@@ -8,6 +8,8 @@ import pandas as pd
 from data_ingestion.document.docx_ingestion import get_chunks_from_docx
 from data_ingestion.document.markdown_ingestion import get_chunks_from_markdown
 from data_ingestion.document.pdf_vision_ingestion import create_chunks_from_document
+from data_ingestion.document.excel_ingestion import ingest_excel_file
+from data_ingestion.document.csv_ingestion import ingest_csv_file
 from data_ingestion.document.folder_management.folder_management import (
     FileChunk,
     FileDocument,
@@ -24,6 +26,7 @@ def document_chunking_mapping(
     llm_service: Optional[CompletionService] = None,
     get_file_content_func: Optional[Callable[[FileDocument], str]] = None,
     docx_overlapping_size: int = 50,
+    chunk_size: Optional[int] = 1024,
 ) -> dict[FileDocumentType, FileProcessor]:
 
     document_chunking_mapping = {
@@ -43,6 +46,21 @@ def document_chunking_mapping(
             get_file_content_func=get_file_content_func,
             chunk_overlap=docx_overlapping_size,
         ),
+        FileDocumentType.EXCEL.value: partial(
+            ingest_excel_file,
+            get_file_content_func=get_file_content_func,
+            chunk_size=chunk_size,
+        ),
+        FileDocumentType.GOOGLE_SHEET.value: partial(
+            ingest_excel_file,
+            get_file_content_func=get_file_content_func,
+            chunk_size=chunk_size,
+        ),
+        FileDocumentType.CSV.value: partial(
+            ingest_csv_file,
+            get_file_content_func=get_file_content_func,
+            chunk_size=chunk_size,
+        ),
     }
     return document_chunking_mapping
 
@@ -55,7 +73,7 @@ def get_chunks_dataframe_from_doc(
     add_doc_description_to_chunks: bool = False,
     documents_summary_func: Optional[Callable] = None,
     add_summary_in_chunks_func: Optional[Callable] = None,
-    default_chunk_size: int = 1024,
+    default_chunk_size: Optional[int] = 1024,
 ) -> pd.DataFrame:
     all_chunks = []
     LOGGER.info(f"Processing document {document.file_name} of type {document.type}")
