@@ -13,9 +13,9 @@ from ingestion_script.utils import update_ingestion_task
 from ada_backend.database import models as db
 
 LOGGER = logging.getLogger(__name__)
-CHUNK_SIZE = 1024
-CHUNK_OVERLAP = 0
-REPLACE_EXISTING = False
+DEFAULT_CHUNK_SIZE = 1024
+DEFAULT_CHUNK_OVERLAP = 0
+DEFAULT_REPLACE_EXISTING = False
 
 
 def check_missing_params(
@@ -69,13 +69,13 @@ def ingestion_main(
             )
         chunk_size = source_attributes.get("chunk_size")
         if chunk_size is None:
-            chunk_size = CHUNK_SIZE
+            chunk_size = DEFAULT_CHUNK_SIZE
         chunk_overlap = source_attributes.get("chunk_overlap")
         if chunk_overlap is None:
-            chunk_overlap = CHUNK_OVERLAP
+            chunk_overlap = DEFAULT_CHUNK_OVERLAP
         replace_existing = source_attributes.get("replace_existing")
         if replace_existing is None:
-            replace_existing = REPLACE_EXISTING
+            replace_existing = DEFAULT_REPLACE_EXISTING
         try:
             ingest_google_drive_source(
                 folder_id=folder_id,
