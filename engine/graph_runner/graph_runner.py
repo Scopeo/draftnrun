@@ -114,7 +114,11 @@ class GraphRunner:
     async def run(self, *inputs: AgentPayload | dict, **kwargs) -> AgentPayload | dict:
         """Run the graph."""
         input_data = inputs[0]
-        with self.trace_manager.start_span("Workflow") as span:
+
+        # Isolate trace if this is a root execution
+        is_root_execution = kwargs.pop("is_root_execution", False)
+
+        with self.trace_manager.start_span("Workflow", isolate_context=is_root_execution) as span:
             trace_input = convert_data_for_trace_manager_display(input_data, AgentPayload)
             span.set_attributes(
                 {

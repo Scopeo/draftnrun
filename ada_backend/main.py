@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from prometheus_client import start_http_server
-from prometheus_fastapi_instrumentator import Instrumentator
+from prometheus_fastapi_instrumentator import PrometheusFastApiInstrumentator
 
 from ada_backend.admin.admin import setup_admin
 from ada_backend.instrumentation import setup_performance_instrumentation
@@ -79,9 +79,10 @@ app = FastAPI(
     ],
 )
 
+PrometheusFastApiInstrumentator().instrument(app).expose(app, endpoint="/metrics")
+
 # Setup HTTP metrics and traces instrumentation
 if settings.ENABLE_OBSERVABILITY_STACK:
-    Instrumentator().instrument(app).expose(app, endpoint="/metrics")
     setup_performance_instrumentation(app)
 
 setup_admin(app)
