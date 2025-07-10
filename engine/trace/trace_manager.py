@@ -2,6 +2,7 @@ import logging
 
 from openinference.semconv.resource import ResourceAttributes
 from opentelemetry import trace as trace_api
+from opentelemetry.context import Context
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from opentelemetry.sdk import trace as trace_sdk
@@ -28,14 +29,13 @@ def setup_tracer(
     sql_exporter = SQLSpanExporter()
     tracer_provider.add_span_processor(BatchSpanProcessor(sql_exporter))
 
-    trace_api.set_tracer_provider(tracer_provider=tracer_provider)
-
-    tracer = trace_api.get_tracer(__name__)
+    tracer = tracer_provider.get_tracer(__name__)
 
     LOGGER.info(f"Tracer setup for project: {project_name}")
     return tracer
 
 
+# TODO: Rename so it's clear that these are the traces for user agents
 class TraceManager:
     """A manager to handle traces and spans"""
 
@@ -53,10 +53,16 @@ class TraceManager:
     def start_span(
         self,
         name: str,
+        isolate_context: bool = False,
         **kwargs,
     ):
         """
         Context manager to start a span.
+
+        Args:
+            name: Name of the span
+            isolate_context: If True, creates a root span with no parent (for trace isolation)
+            **kwargs: Additional arguments passed to start_as_current_span.
         """
         attributes = kwargs.pop("attributes", {})
         params = get_tracing_span()
@@ -66,6 +72,11 @@ class TraceManager:
             attributes["organization_id"] = params.organization_id
             attributes["organization_llm_providers"] = params.organization_llm_providers
             attributes["conversation_id"] = params.conversation_id
+
+        # Handle trace isolation for root spans
+        if isolate_context:
+            kwargs["context"] = Context()
+
         return self.tracer.start_as_current_span(
             name=name,
             attributes=attributes,
