@@ -36,12 +36,12 @@ class Retriever:
             component_instance_name=self.__class__.__name__
         )
 
-    def _get_chunks_without_trace(
+    async def _get_chunks_without_trace(
         self,
         query_text: str,
         filters: Optional[dict] = None,
     ) -> list[SourceChunk]:
-        chunks = self._vectorestore_service.retrieve_similar_chunks(
+        chunks = await self._vectorestore_service.aretrieve_similar_chunks(
             query_text=query_text,
             collection_name=self.collection_name,
             limit=self._max_retrieved_chunks,
@@ -55,13 +55,13 @@ class Retriever:
 
         return chunks
 
-    def get_chunks(
+    async def get_chunks(
         self,
         query_text: str,
         filters: Optional[dict] = None,
     ) -> list[SourceChunk]:
         with self.trace_manager.start_span(self.component_attributes.component_instance_name) as span:
-            chunks = self._get_chunks_without_trace(
+            chunks = await self._get_chunks_without_trace(
                 query_text,
                 filters,
             )

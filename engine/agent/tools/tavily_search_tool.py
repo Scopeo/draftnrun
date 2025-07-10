@@ -130,7 +130,7 @@ class TavilyApiTool(Agent):
                     }
                 )
 
-        response = self._synthesizer.get_response(
+        response = await self._synthesizer.get_response(
             chunks=sources,
             query_str=str(agent_input.last_message.model_dump(include={"role", "content"})),
         )

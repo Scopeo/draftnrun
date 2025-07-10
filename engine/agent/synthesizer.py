@@ -35,7 +35,7 @@ class Synthesizer:
             component_instance_name=self.__class__.__name__,
         )
 
-    def get_response(
+    async def get_response(
         self, chunks: list[SourceChunk], query_str: str, optional_contexts: Optional[dict]
     ) -> SourcedResponse:
 

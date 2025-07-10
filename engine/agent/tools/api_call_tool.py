@@ -3,7 +3,7 @@ import json
 import string
 from typing import Optional, Dict, Any
 
-import requests
+import httpx
 from openinference.semconv.trace import OpenInferenceSpanKindValues
 
 from engine.agent.agent import (
@@ -60,7 +60,7 @@ class APICallTool(Agent):
         self.timeout = timeout
         self.fixed_parameters = fixed_parameters or {}
 
-    def make_api_call(self, **kwargs) -> Dict[str, Any]:
+    async def make_api_call(self, **kwargs) -> Dict[str, Any]:
         """Make an HTTP request to the configured API endpoint."""
 
         # Prepare headers
@@ -81,6 +81,7 @@ class APICallTool(Agent):
             "headers": request_headers,
             "timeout": self.timeout,
         }
+
         # Handle parameters based on HTTP method
         if self.method in [
             "GET",
@@ -96,23 +97,24 @@ class APICallTool(Agent):
             request_kwargs["json"] = filtered_parameters
 
         try:
-            response = requests.request(**request_kwargs)
-            response.raise_for_status()
+            async with httpx.AsyncClient() as client:
+                response = await client.request(**request_kwargs)
+                response.raise_for_status()
 
-            # Try to parse JSON response, fall back to text
-            try:
-                response_data = response.json()
-            except ValueError:
-                response_data = {"text": response.text}
+                # Try to parse JSON response, fall back to text
+                try:
+                    response_data = response.json()
+                except ValueError:
+                    response_data = {"text": response.text}
 
-            return {
-                "status_code": response.status_code,
-                "data": response_data,
-                "headers": dict(response.headers),
-                "success": True,
-            }
+                return {
+                    "status_code": response.status_code,
+                    "data": response_data,
+                    "headers": dict(response.headers),
+                    "success": True,
+                }
 
-        except requests.exceptions.RequestException as e:
+        except httpx.HTTPError as e:
             LOGGER.error(f"API request failed: {str(e)}")
             return {
                 "status_code": getattr(e.response, "status_code", None) if hasattr(e, "response") else None,
@@ -126,7 +128,7 @@ class APICallTool(Agent):
         **kwargs: Any,
     ) -> AgentPayload:
         # Make the API call
-        api_response = self.make_api_call(**kwargs)
+        api_response = await self.make_api_call(**kwargs)
 
         # Format the API response as a readable message
         if api_response.get("success", False):
