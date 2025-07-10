@@ -40,6 +40,7 @@ class BaseConfig(BaseSettings):
     MISTRAL_API_KEY: Optional[str] = None
     GOOGLE_API_KEY: Optional[str] = None
     GOOGLE_BASE_URL: Optional[str] = None
+    CEREBRAS_API_KEY: Optional[str] = None
 
     COHERE_API_KEY: Optional[str] = None
 

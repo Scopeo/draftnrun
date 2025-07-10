@@ -160,7 +160,7 @@ class CompletionService(LLMService):
                 from cerebras.cloud.sdk import Cerebras
 
                 if self._api_key is None:
-                    raise ValueError("API key is required for Cerebras provider")
+                    self._api_key = settings.CEREBRAS_API_KEY
 
                 client = Cerebras(api_key=self._api_key)
                 response = client.chat.completions.create(
@@ -244,7 +244,7 @@ class CompletionService(LLMService):
                 from cerebras.cloud.sdk import Cerebras
 
                 if self._api_key is None:
-                    raise ValueError("API key is required for Cerebras provider")
+                    self._api_key = settings.CEREBRAS_API_KEY
 
                 client = Cerebras(api_key=self._api_key)
                 response = client.chat.completions.create(
@@ -317,7 +317,7 @@ class CompletionService(LLMService):
                 from cerebras.cloud.sdk import Cerebras
 
                 if self._api_key is None:
-                    raise ValueError("API key is required for Cerebras provider")
+                    self._api_key = settings.CEREBRAS_API_KEY
 
                 client = Cerebras(api_key=self._api_key)
                 response = client.chat.completions.create(
@@ -380,7 +380,7 @@ class CompletionService(LLMService):
                 from cerebras.cloud.sdk import Cerebras
 
                 if self._api_key is None:
-                    raise ValueError("API key is required for Cerebras provider")
+                    self._api_key = settings.CEREBRAS_API_KEY
 
                 client = Cerebras(api_key=self._api_key)
                 response = client.chat.completions.create(

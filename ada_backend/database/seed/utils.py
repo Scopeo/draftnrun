@@ -220,7 +220,6 @@ def build_web_service_config_definitions(
                             # OpenAI
                             SelectOption(value="openai:gpt-4.1", label="GPT-4.1"),
                             SelectOption(value="openai:gpt-4.1-mini", label="GPT-4.1 Mini"),
-                            SelectOption(value="openai:gpt-4.1-nano", label="GPT-4.1 Nano"),
                             SelectOption(value="openai:gpt-4o", label="GPT-4o"),
                             SelectOption(value="openai:gpt-4o-mini", label="GPT-4o Mini"),
                         ],
