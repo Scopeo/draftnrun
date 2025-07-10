@@ -131,7 +131,6 @@ async def run_agent(
     try:
         agent_output = await agent.run(
             input_data,
-            is_root=True,  # Mark as root agent execution (user-initiated)
         )
     except Exception as e:
         raise ValueError(f"Error running agent: {str(e)}") from e
