@@ -1,9 +1,9 @@
-name: Deploy systemd service Staging
+name: Deploy systemd service Preprod
 
 on:
   workflow_dispatch:
   push:
-    branches: [staging]
+    branches: [main]
     paths:
       - 'infra/systemd/**'
 
@@ -38,7 +38,7 @@ jobs:
     - name: Upload service to EC2
       uses: appleboy/scp-action@master
       with:
-        host: ${{ secrets.EC2_HOST_SCOPEO_STAGING }}
+        host: ${{ secrets.EC2_HOST_SCOPEO_PREPROD }}
         username: ec2-user
         key: ${{ secrets.SSH_PRIVATE_KEY }}
         source: "filled-gunicorn.service"
@@ -47,7 +47,7 @@ jobs:
     - name: Deploy systemd service
       uses: appleboy/ssh-action@master
       with:
-        host: ${{ secrets.EC2_HOST_SCOPEO_STAGING }}
+        host: ${{ secrets.EC2_HOST_SCOPEO_PREPROD }}
         username: ec2-user
         key: ${{ secrets.SSH_PRIVATE_KEY }}
         port: 22
@@ -62,7 +62,7 @@ jobs:
       run: |
         echo "Waiting 5s before checking the app..."
         sleep 5
-        curl --fail --retry 3 --retry-delay 3 http://${{ secrets.EC2_HOST_SCOPEO_STAGING }}:${{ secrets.HEALTHCHECK_PORT }}/health || {
+        curl --fail --retry 3 --retry-delay 3 http://${{ secrets.EC2_HOST_SCOPEO_PREPROD }}:${{ secrets.HEALTHCHECK_PORT }}/health || {
           echo "❌ Healthcheck failed. Gunicorn may not be running correctly."
           exit 1
         }

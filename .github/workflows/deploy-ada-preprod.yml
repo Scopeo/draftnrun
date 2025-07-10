@@ -1,9 +1,9 @@
-name: Deploy Ada Staging and restart
+name: Deploy Ada preprod and restart
 
 on:
   push:
     branches:
-      - staging
+      - main
   workflow_dispatch:
 
 jobs:
@@ -13,7 +13,7 @@ jobs:
       - name: Connexion à EC2 et git pull
         uses: appleboy/ssh-action@master
         with:
-          host: ${{ secrets.EC2_HOST_SCOPEO_STAGING }}
+          host: ${{ secrets.EC2_HOST_SCOPEO_PREPROD }}
           username: ec2-user
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: 22
@@ -21,12 +21,12 @@ jobs:
             cd /home/ec2-user/draftnrun
             git remote set-url origin git@github.com:scopeo/draftnrun.git
             git reset --hard HEAD
-            git pull origin staging
+            git pull origin main
     
       - name: SSH Remote Commands
         uses: appleboy/ssh-action@master
         with:
-          host: ${{ secrets.EC2_HOST_SCOPEO_STAGING }}
+          host: ${{ secrets.EC2_HOST_SCOPEO_PREPROD }}
           username: ec2-user
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: 22
