@@ -157,12 +157,15 @@ class CompletionService(LLMService):
                 return response.output_text
 
             case "cerebras":
-                from cerebras.cloud.sdk import Cerebras
+                import openai
 
                 if self._api_key is None:
                     self._api_key = settings.CEREBRAS_API_KEY
 
-                client = Cerebras(api_key=self._api_key)
+                client = openai.OpenAI(
+                    api_key=self._api_key,
+                    base_url="https://api.cerebras.ai/v1",
+                )
                 response = client.chat.completions.create(
                     model=self._model_name,
                     messages=messages,
@@ -241,12 +244,15 @@ class CompletionService(LLMService):
                 return response.output_parsed
 
             case "cerebras":
-                from cerebras.cloud.sdk import Cerebras
+                import openai
 
                 if self._api_key is None:
                     self._api_key = settings.CEREBRAS_API_KEY
 
-                client = Cerebras(api_key=self._api_key)
+                client = openai.OpenAI(
+                    api_key=self._api_key,
+                    base_url="https://api.cerebras.ai/v1",
+                )
                 response = client.chat.completions.create(
                     model=self._model_name,
                     messages=messages,
@@ -314,12 +320,15 @@ class CompletionService(LLMService):
                 )
                 return response.output_text
             case "cerebras":
-                from cerebras.cloud.sdk import Cerebras
+                import openai
 
                 if self._api_key is None:
                     self._api_key = settings.CEREBRAS_API_KEY
 
-                client = Cerebras(api_key=self._api_key)
+                client = openai.OpenAI(
+                    api_key=self._api_key,
+                    base_url="https://api.cerebras.ai/v1",
+                )
                 response = client.chat.completions.create(
                     model=self._model_name,
                     messages=messages,
@@ -377,12 +386,15 @@ class CompletionService(LLMService):
                 )
                 return response
             case "cerebras":
-                from cerebras.cloud.sdk import Cerebras
+                import openai
 
                 if self._api_key is None:
                     self._api_key = settings.CEREBRAS_API_KEY
 
-                client = Cerebras(api_key=self._api_key)
+                client = openai.OpenAI(
+                    api_key=self._api_key,
+                    base_url="https://api.cerebras.ai/v1",
+                )
                 response = client.chat.completions.create(
                     model=self._model_name,
                     messages=messages,
