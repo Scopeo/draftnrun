@@ -2,7 +2,7 @@ from typing import Any
 from enum import StrEnum
 
 from engine.agent.inputs_outputs.input import Input
-from engine.agent.inputs_outputs.output import Output
+from engine.agent.inputs_outputs.filter import Filter
 from engine.agent.llm_call_agent import LLMCallAgent
 from engine.agent.sql.react_sql_tool import ReactSQLAgent
 from engine.agent.sql.run_sql_query_tool import RunSQLQueryTool
@@ -76,7 +76,7 @@ class SupportedEntityType(StrEnum):
     DOCUMENT_ENHANCED_LLM_CALL = "Document Enhanced LLM Agent"
     DOCUMENT_REACT_LOADER_AGENT = "Document AI Agent"
     INPUT = "Input"
-    OUTPUT = "Output"
+    FILTER = "Filter"
 
 
 class FactoryRegistry:
@@ -379,9 +379,9 @@ def create_factory_registry() -> FactoryRegistry:
     )
 
     registry.register(
-        name=SupportedEntityType.OUTPUT,
+        name=SupportedEntityType.FILTER,
         factory=AgentFactory(
-            entity_class=Output,
+            entity_class=Filter,
         ),
     )
 

@@ -9,7 +9,7 @@ from engine.agent.tools.tavily_search_tool import TAVILY_TOOL_DESCRIPTION
 from engine.agent.tools.api_call_tool import API_CALL_TOOL_DESCRIPTION
 from engine.agent.document_enhanced_llm_call import DEFAULT_DOCUMENT_ENHANCED_LLM_CALL_TOOL_DESCRIPTION
 from engine.agent.inputs_outputs.input import DEFAULT_INPUT_TOOL_DESCRIPTION
-from engine.agent.inputs_outputs.output import DEFAULT_OUTPUT_TOOL_DESCRIPTION
+from engine.agent.inputs_outputs.filter import DEFAULT_FILTER_TOOL_DESCRIPTION
 from engine.agent.rag.rag import format_rag_tool_description
 from engine.agent.react_function_calling import get_dummy_ai_agent_description
 from engine.agent.sql.react_sql_tool import DEFAULT_REACT_SQL_TOOL_DESCRIPTION
@@ -29,7 +29,7 @@ TOOL_DESCRIPTION_UUIDS = {
     "default_web_search_openai_tool_description": UUID("b6d6d281-6c75-4d1b-a750-40b53deea3f6"),
     "default_document_enhanced_llm_agent": UUID("d01978d9-c785-4492-9e71-7af0aa8c05f7"),
     "default_input_tool_description": UUID("5be22376-7d08-486b-a004-b495bae58f77"),
-    "default_output_tool_description": UUID("6cf33487-8e19-597c-b115-c5a6cbf69a88"),
+    "default_filter_tool_description": UUID("6cf33487-8e19-597c-b115-c5a6cbf69a88"),
     "python_code_interpreter_e2b_tool_description": UUID("e2b11111-2222-3333-4444-555555555555"),
 }
 
@@ -70,8 +70,8 @@ def seed_tool_description(session: Session):
     default_input_tool_description = db.ToolDescription(
         id=TOOL_DESCRIPTION_UUIDS["default_input_tool_description"], **DEFAULT_INPUT_TOOL_DESCRIPTION.model_dump()
     )
-    default_output_tool_description = db.ToolDescription(
-        id=TOOL_DESCRIPTION_UUIDS["default_output_tool_description"], **DEFAULT_OUTPUT_TOOL_DESCRIPTION.model_dump()
+    default_filter_tool_description = db.ToolDescription(
+        id=TOOL_DESCRIPTION_UUIDS["default_filter_tool_description"], **DEFAULT_FILTER_TOOL_DESCRIPTION.model_dump()
     )
     python_code_interpreter_e2b_tool_description = db.ToolDescription(
         id=TOOL_DESCRIPTION_UUIDS["python_code_interpreter_e2b_tool_description"],
@@ -90,7 +90,7 @@ def seed_tool_description(session: Session):
             default_web_search_openai_tool_description,
             default_document_enhanced_llm_agent,
             default_input_tool_description,
-            default_output_tool_description,
+            default_filter_tool_description,
             python_code_interpreter_e2b_tool_description,
         ],
     )

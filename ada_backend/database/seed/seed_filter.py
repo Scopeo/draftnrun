@@ -67,20 +67,20 @@ DEFAULT_OUTPUT_FORMAT = {
 }
 
 
-def seed_output_components(session: Session):
-    output = db.Component(
-        id=COMPONENT_UUIDS["output"],
-        name="Output",
-        description="Output: takes a json and filters it according to an output schema",
+def seed_filter_components(session: Session):
+    filter = db.Component(
+        id=COMPONENT_UUIDS["filter"],
+        name="Filter",
+        description="Filter: takes a json and filters it according to an output schema",
         is_agent=True,
         is_protected=True,
         release_stage=db.ReleaseStage.PUBLIC,
-        default_tool_description_id=TOOL_DESCRIPTION_UUIDS["default_output_tool_description"],
+        default_tool_description_id=TOOL_DESCRIPTION_UUIDS["default_filter_tool_description"],
     )
     upsert_components(
         session=session,
         components=[
-            output,
+            filter,
         ],
     )
     upsert_components_parameter_definitions(
@@ -88,7 +88,7 @@ def seed_output_components(session: Session):
         component_parameter_definitions=[
             db.ComponentParameterDefinition(
                 id=UUID("59443366-5b1f-5543-9fc5-57378f9aaf6e"),
-                component_id=output.id,
+                component_id=filter.id,
                 name=OUTPUT_SCHEMA_PARAMETER_NAME,
                 type=ParameterType.STRING,
                 nullable=False,

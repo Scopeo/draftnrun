@@ -11,20 +11,20 @@ from engine.agent.utils import load_str_to_json
 
 LOGGER = logging.getLogger(__name__)
 
-DEFAULT_OUTPUT_TOOL_DESCRIPTION = ToolDescription(
-    name="Output_Tool",
-    description=("An output tool that filters the input data to return an AgentPayload."),
+DEFAULT_FILTER_TOOL_DESCRIPTION = ToolDescription(
+    name="Filter_Tool",
+    description=("An filter tool that filters the input data to return an AgentPayload."),
     tool_properties={
         "input_data": {
             "type": "json",
-            "description": "An output tool",
+            "description": "An filter tool",
         },
     },
     required_tool_properties=[],
 )
 
 
-class Output:
+class Filter:
     def __init__(
         self,
         trace_manager: TraceManager,
