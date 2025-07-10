@@ -14,6 +14,8 @@ from ada_backend.database import models as db
 
 LOGGER = logging.getLogger(__name__)
 CHUNK_SIZE = 1024
+CHUNK_OVERLAP = 0
+REPLACE_EXISTING = False
 
 
 def check_missing_params(
@@ -68,6 +70,12 @@ def ingestion_main(
         chunk_size = source_attributes.get("chunk_size")
         if chunk_size is None:
             chunk_size = CHUNK_SIZE
+        chunk_overlap = source_attributes.get("chunk_overlap")
+        if chunk_overlap is None:
+            chunk_overlap = CHUNK_OVERLAP
+        replace_existing = source_attributes.get("replace_existing")
+        if replace_existing is None:
+            replace_existing = REPLACE_EXISTING
         try:
             ingest_google_drive_source(
                 folder_id=folder_id,
@@ -144,8 +152,8 @@ def ingestion_main(
                 timestamp_column_name=source_attributes.get("timestamp_column_name"),
                 url_column_name=source_attributes.get("url_column_name"),
                 chunk_size=chunk_size,
-                chunk_overlap=source_attributes.get("chunk_overlap", 0),
-                replace_existing=source_attributes.get("replace_existing", False),
+                chunk_overlap=chunk_overlap,
+                replace_existing=replace_existing,
             )
         except Exception as e:
             LOGGER.error(f"Error during database ingestion: {str(e)}")
