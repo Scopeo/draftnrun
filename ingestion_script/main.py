@@ -13,6 +13,7 @@ from ingestion_script.utils import update_ingestion_task
 from ada_backend.database import models as db
 
 LOGGER = logging.getLogger(__name__)
+CHUNK_SIZE = 1024
 
 
 def check_missing_params(
@@ -64,6 +65,9 @@ def ingestion_main(
             LOGGER.warning(
                 "Google Drive folder_id should be a specific ID, not just '/'",
             )
+        chunk_size = source_attributes.get("chunk_size")
+        if chunk_size is None:
+            chunk_size = CHUNK_SIZE
         try:
             ingest_google_drive_source(
                 folder_id=folder_id,
@@ -73,7 +77,7 @@ def ingestion_main(
                 save_supabase=True,
                 access_token=access_token,
                 add_doc_description_to_chunks=False,
-                chunk_size=source_attributes.get("chunk_size", 1024),
+                chunk_size=chunk_size,
             )
         except Exception as e:
             LOGGER.error(f"Error during google drive ingestion: {str(e)}")
@@ -100,7 +104,7 @@ def ingestion_main(
                 task_id=task_id,
                 save_supabase=True,
                 add_doc_description_to_chunks=False,
-                chunk_size=source_attributes.get("chunk_size", 1024),
+                chunk_size=chunk_size,
             )
         except Exception as e:
             LOGGER.error(f"Error during local ingestion: {str(e)}")
@@ -139,7 +143,7 @@ def ingestion_main(
                 metadata_column_names=source_attributes.get("metadata_column_names"),
                 timestamp_column_name=source_attributes.get("timestamp_column_name"),
                 url_column_name=source_attributes.get("url_column_name"),
-                chunk_size=source_attributes.get("chunk_size", 1024),
+                chunk_size=chunk_size,
                 chunk_overlap=source_attributes.get("chunk_overlap", 0),
                 replace_existing=source_attributes.get("replace_existing", False),
             )
