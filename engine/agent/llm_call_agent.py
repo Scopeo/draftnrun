@@ -96,12 +96,12 @@ class LLMCallAgent(Agent):
             }
         )
         if self.output_format:
-            response = self._completion_service.constrained_complete_with_json_schema(
+            response = await self._completion_service.aconstrained_complete_with_json_schema(
                 messages=[{"role": "user", "content": content}],
                 response_format=self.output_format,
             )
         else:
-            response = self._completion_service.complete(
+            response = await self._completion_service.acomplete(
                 messages=[{"role": "user", "content": content}],
             )
         return AgentPayload(

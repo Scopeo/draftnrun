@@ -107,7 +107,9 @@ class SQLTool(Agent):
         if self._additional_db_description:
             schema += self._additional_db_description
         input_prompt = self._text_to_sql_prompt.format(query_str=query_str, schema=schema, dialect=self._dialect)
-        generate_sql_query = self._completion_service.complete(messages=[{"role": "user", "content": input_prompt}])
+        generate_sql_query = await self._completion_service.acomplete(
+            messages=[{"role": "user", "content": input_prompt}]
+        )
 
         sql_query = generate_sql_query
         sql_output = self._db_service.run_query(sql_query).to_markdown(index=False)
@@ -117,7 +119,7 @@ class SQLTool(Agent):
             synthetize_prompt = self.synthesize_sql_prompt.format(
                 query_str=query_str, sql_query=sql_query, sql_answer=sql_output
             )
-            synthetize_answer = self._completion_service.complete(
+            synthetize_answer = await self._completion_service.acomplete(
                 messages=[{"role": "assistant", "content": synthetize_prompt}]
             )
             output_message = synthetize_answer

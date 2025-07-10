@@ -30,7 +30,7 @@ class RelevantChunkSelector:
         self._response_format = response_format
         self.component_instance_name = component_instance_name or f"{self.__class__.__name__}"
 
-    def get_response(
+    async def get_response(
         self,
         chunks: list[SourceChunk],
         question: str,
@@ -39,7 +39,7 @@ class RelevantChunkSelector:
             sources=chunks,
             llm_metadata_keys=chunks[0].metadata.keys() if chunks else [],
         )
-        response = self._llm_service.constrained_complete_with_pydantic(
+        response = await self._llm_service.aconstrained_complete_with_pydantic(
             messages=[
                 {
                     "role": "system",
