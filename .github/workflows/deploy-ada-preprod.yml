@@ -1,4 +1,4 @@
-name: Deploy Ada Staging and restart
+name: Deploy Ada preprod and restart
 
 on:
   push:

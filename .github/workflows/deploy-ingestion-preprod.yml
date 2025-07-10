@@ -1,4 +1,4 @@
-name: Deploy ADA Ingestion Worker to Staging
+name: Deploy ADA Ingestion Worker to Preprod
 
 on:
   push:
