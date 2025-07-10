@@ -3,7 +3,7 @@ import secrets
 import hashlib
 from uuid import UUID
 
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 from ada_backend.schemas.auth_schema import (
     ApiKeyCreatedResponse,
     VerifiedApiKey,
@@ -44,17 +44,17 @@ def _generate_api_key() -> str:
     return f"{API_KEY_PREFIX}{base64_key}"
 
 
-def get_api_keys_service(session: Session, project_id: UUID) -> ApiKeyGetResponse:
+async def get_api_keys_service(session: AsyncSession, project_id: UUID) -> ApiKeyGetResponse:
     """Service function to get all API keys by project id."""
-    api_keys = get_api_keys_by_project_id(session, project_id)
+    api_keys = await get_api_keys_by_project_id(session, project_id)
     return ApiKeyGetResponse(
         project_id=project_id,
         api_keys=[ApiKeyData(key_id=key.id, key_name=key.name) for key in api_keys],
     )
 
 
-def generate_api_key(
-    session: Session,
+async def generate_api_key(
+    session: AsyncSession,
     project_id: UUID,
     key_name: str,
     creator_user_id: UUID,
@@ -66,7 +66,7 @@ def generate_api_key(
     api_key = _generate_api_key()
     hashed_key = _hash_key(api_key)
 
-    key_id = create_api_key(
+    key_id = await create_api_key(
         session=session,
         project_id=project_id,
         key_name=key_name,
@@ -79,7 +79,7 @@ def generate_api_key(
     )
 
 
-def verify_api_key(session: Session, private_key: str) -> VerifiedApiKey:
+async def verify_api_key(session: AsyncSession, private_key: str) -> VerifiedApiKey:
     """
     Service function to verify an API key.
     """
@@ -88,13 +88,13 @@ def verify_api_key(session: Session, private_key: str) -> VerifiedApiKey:
     except ValueError as e:
         raise ValueError("Invalid API key") from e
 
-    api_key = get_api_key_by_hashed_key(session, hashed_key=hashed_key)
+    api_key = await get_api_key_by_hashed_key(session, hashed_key=hashed_key)
     if not api_key:
         raise ValueError("Invalid API key")
     if not api_key.is_active:
         raise ValueError("API key is not active")
 
-    project = get_project_by_api_key(session, hashed_key=hashed_key)
+    project = await get_project_by_api_key(session, hashed_key=hashed_key)
     if not project:
         raise ValueError("Project not found for the given API key")
     if project.id != api_key.project_id:
@@ -106,13 +106,14 @@ def verify_api_key(session: Session, private_key: str) -> VerifiedApiKey:
     )
 
 
-def deactivate_api_key_service(
-    session: Session,
+async def deactivate_api_key_service(
+    session: AsyncSession,
     key_id: UUID,
     revoker_user_id: UUID,
 ) -> UUID:
     """Service function to deactivate an API key."""
-    return deactivate_api_key(session, key_id, revoker_user_id)
+    result = await deactivate_api_key(session, key_id, revoker_user_id)
+    return result
 
 
 def verify_ingestion_api_key(

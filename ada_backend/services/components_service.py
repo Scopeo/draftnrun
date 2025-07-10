@@ -1,6 +1,6 @@
 import logging
 
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from ada_backend.repositories.component_repository import get_all_components_with_parameters
 from ada_backend.schemas.components_schema import ComponentsResponse
@@ -8,6 +8,7 @@ from ada_backend.schemas.components_schema import ComponentsResponse
 LOGGER = logging.getLogger(__name__)
 
 
-def get_all_components_endpoint(session: Session) -> ComponentsResponse:
-    components = get_all_components_with_parameters(session)
+async def get_all_components_endpoint(session: AsyncSession) -> ComponentsResponse:
+    """"""
+    components = await get_all_components_with_parameters(session)
     return ComponentsResponse(components=components)

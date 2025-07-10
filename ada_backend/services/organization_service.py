@@ -1,7 +1,7 @@
 from uuid import UUID
 import logging
 
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from ada_backend.repositories.graph_runner_repository import get_graph_runners_by_project
 from ada_backend.repositories.organization_repository import (
@@ -18,13 +18,19 @@ from ada_backend.services.graph.update_graph_service import update_graph_service
 LOGGER = logging.getLogger(__name__)
 
 
-async def update_api_key_in_organization(session: Session, organization_id: UUID):
-    org_projects = get_projects_by_organization_service(session, organization_id)
+async def update_api_key_in_organization(session: AsyncSession, organization_id: UUID):
+    """
+    Asynchronously updates API keys in graphs associated with projects belonging to an organization.
+    It iterates through projects and their graph runners, attempting to update their graphs.
+    """
+    org_projects = await get_projects_by_organization_service(session, organization_id)
     for project in org_projects:
-        graph_runners = get_graph_runners_by_project(session, project.id)
+        graph_runners = await get_graph_runners_by_project(session, project.id)
         for graph_runner in graph_runners:
             try:
-                graph_project = get_graph_service(session, project_id=project.id, graph_runner_id=graph_runner.id)
+                graph_project = await get_graph_service(
+                    session, project_id=project.id, graph_runner_id=graph_runner.id
+                )
                 await update_graph_service(session, graph_runner.id, project.id, graph_project)
             except Exception as e:
                 LOGGER.error(
@@ -33,11 +39,14 @@ async def update_api_key_in_organization(session: Session, organization_id: UUID
                 continue
 
 
-def get_secret_keys_service(
-    sqlaclhemy_db_session: Session,
+async def get_secret_keys_service(
+    sqlaclhemy_db_session: AsyncSession,
     organization_id: UUID,
 ) -> OrganizationGetSecretKeysResponse:
-    organization_secrets = get_organization_secrets(
+    """
+    Asynchronously retrieves all secret keys for a given organization.
+    """
+    organization_secrets = await get_organization_secrets(
         session=sqlaclhemy_db_session,
         organization_id=organization_id,
     )
@@ -48,9 +57,13 @@ def get_secret_keys_service(
 
 
 async def upsert_secret_to_org_service(
-    sqlaclhemy_db_session: Session, organization_id: UUID, secret_key: str, secret: str
+    sqlaclhemy_db_session: AsyncSession, organization_id: UUID, secret_key: str, secret: str
 ):
-    organization_secret = upsert_organization_secret(
+    """
+    Asynchronously inserts or updates an organization secret and then triggers an API key update
+    across relevant graphs within the organization.
+    """
+    organization_secret = await upsert_organization_secret(
         session=sqlaclhemy_db_session,
         organization_id=organization_id,
         key=secret_key,
@@ -68,10 +81,13 @@ async def upsert_secret_to_org_service(
     )
 
 
-def delete_secret_to_org_service(
-    sqlaclhemy_db_session: Session, organization_id: UUID, secret_key: str
+async def delete_secret_to_org_service(
+    sqlaclhemy_db_session: AsyncSession, organization_id: UUID, secret_key: str
 ) -> OrganizationSecretResponse:
-    deleted_organization_secret = delete_organization_secret(
+    """
+    Asynchronously deletes an organization secret.
+    """
+    deleted_organization_secret = await delete_organization_secret(
         session=sqlaclhemy_db_session,
         organization_id=organization_id,
         key=secret_key,

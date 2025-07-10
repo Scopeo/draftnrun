@@ -1,22 +1,36 @@
 import uuid
 import json
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 
-from ada_backend.database.models import BasicParameter, ComponentParameterDefinition, Component, ComponentInstance
+from ada_backend.database.models import (
+    Component,
+    ComponentParameterDefinition,
+    BasicParameter,
+    ComponentInstance,
+)
 from ada_backend.database.seed.utils import COMPONENT_UUIDS
 
 
-def create_input_component(session, name: str = "Input") -> ComponentInstance:
-    """Creates a new input component instance"""
-    # First get or create the input component
-    input_component = session.query(Component).filter(Component.id == COMPONENT_UUIDS["input"]).first()
-    # Fetch parameter definitions for this component
-    parameter_definitions = (
-        session.query(ComponentParameterDefinition)
-        .filter(ComponentParameterDefinition.component_id == input_component.id)
-        .all()
-    )
+async def create_input_component(session: AsyncSession, name: str = "Input") -> ComponentInstance:
+    """Creates a new input component instance asynchronously."""
 
+    # Fetch the input component
+    result = await session.execute(select(Component).filter(Component.id == COMPONENT_UUIDS["input"]))
+    input_component = result.scalar_one_or_none()
+    if input_component is None:
+        raise ValueError("Input component not found in DB")
+
+    # Fetch parameter definitions
+    result = await session.execute(
+        select(ComponentParameterDefinition).filter(ComponentParameterDefinition.component_id == input_component.id)
+    )
+    parameter_definitions = result.scalars().all()
+
+    # Generate new component instance ID
     component_instance_id = uuid.uuid4()
+
+    # Create parameters
     basic_parameters = [
         BasicParameter(
             id=uuid.uuid4(),
@@ -28,15 +42,14 @@ def create_input_component(session, name: str = "Input") -> ComponentInstance:
         for index, definition in enumerate(parameter_definitions)
     ]
 
-    # Create the component instance
+    # Create component instance
     instance = ComponentInstance(
-        id=component_instance_id,  # uuid.uuid4(),  # Generate a new UUID for the instance
+        id=component_instance_id,
         component_id=input_component.id,
         name=name,
         basic_parameters=basic_parameters,
     )
 
     session.add(instance)
-    session.commit()
-
+    await session.commit()
     return instance

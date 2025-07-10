@@ -1,47 +1,44 @@
 from uuid import UUID
-
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 
 from ada_backend.database.models import EnvType
 from ada_backend.database import models as db
 
 
-def get_env_relationship_by_graph_runner_id(session: Session, graph_runner_id: UUID) -> db.ProjectEnvironmentBinding:
-    env_relationship = (
-        session.query(db.ProjectEnvironmentBinding)
-        .filter(db.ProjectEnvironmentBinding.graph_runner_id == graph_runner_id)
-        .first()
+async def get_env_relationship_by_graph_runner_id(
+    session: AsyncSession, graph_runner_id: UUID
+) -> db.ProjectEnvironmentBinding:
+    result = await session.execute(
+        select(db.ProjectEnvironmentBinding).where(db.ProjectEnvironmentBinding.graph_runner_id == graph_runner_id)
     )
+    env_relationship = result.scalar_one_or_none()
     if not env_relationship:
         raise ValueError(f"Graph runner with ID {graph_runner_id} not found.")
     return env_relationship
 
 
-def update_graph_runner_env(session: Session, graph_runner_id: UUID, env: EnvType):
-    env_relationship = (
-        session.query(db.ProjectEnvironmentBinding)
-        .filter(db.ProjectEnvironmentBinding.graph_runner_id == graph_runner_id)
-        .first()
+async def update_graph_runner_env(session: AsyncSession, graph_runner_id: UUID, env: EnvType) -> None:
+    result = await session.execute(
+        select(db.ProjectEnvironmentBinding).where(db.ProjectEnvironmentBinding.graph_runner_id == graph_runner_id)
     )
+    env_relationship = result.scalar_one_or_none()
     if not env_relationship:
         raise ValueError(f"Graph runner with ID {graph_runner_id} not found.")
     env_relationship.environment = env
     session.add(env_relationship)
-    session.commit()
+    await session.commit()
 
 
-def bind_graph_runner_to_project(
-    session: Session,
+async def bind_graph_runner_to_project(
+    session: AsyncSession,
     graph_runner_id: UUID,
     project_id: UUID,
     env: EnvType,
-) -> None:
-    """
-    Binds a graph runner to a project and environment.
-    """
+) -> db.ProjectEnvironmentBinding:
     relationship = db.ProjectEnvironmentBinding(
         graph_runner_id=graph_runner_id, project_id=project_id, environment=env
     )
     session.add(relationship)
-    session.commit()
+    await session.commit()
     return relationship

@@ -2,7 +2,7 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from ada_backend.repositories.project_repository import get_project
 from ada_backend.routers.auth_router import (
@@ -28,18 +28,18 @@ router = APIRouter(
 
 
 @router.get("/{graph_runner_id}", summary="Get Project Graph", response_model=GraphGetResponse, tags=["Graph"])
-def get_project_graph(
+async def get_project_graph(
     project_id: UUID,
     graph_runner_id: UUID,
     user: Annotated[
         SupabaseUser, Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.READER.value))
     ],
-    sqlaclhemy_db_session: Session = Depends(get_db),
+    sqlaclhemy_db_session: AsyncSession = Depends(get_db),
 ) -> GraphGetResponse:
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
     try:
-        return get_graph_service(sqlaclhemy_db_session, project_id, graph_runner_id)
+        return await get_graph_service(sqlaclhemy_db_session, project_id, graph_runner_id)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
@@ -56,7 +56,7 @@ async def update_project_pipeline(
     user: Annotated[
         SupabaseUser, Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.WRITER.value))
     ],
-    session: Session = Depends(get_db),
+    session: AsyncSession = Depends(get_db),  # Changed from Session
 ) -> GraphUpdateResponse:
     """
     Replace an entire pipeline for a project.
@@ -65,10 +65,9 @@ async def update_project_pipeline(
     """
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
-    project = get_project(session, project_id=project_id)
+    project = await get_project(session, project_id=project_id)
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
-
     try:
         return await update_graph_service(
             session=session,
@@ -83,22 +82,22 @@ async def update_project_pipeline(
 @router.post(
     "/{graph_runner_id}/deploy", summary="Deploy Graph Runner", response_model=GraphDeployResponse, tags=["Graph"]
 )
-def deploy_graph(
+async def deploy_graph(
     project_id: UUID,
     graph_runner_id: UUID,
     user: Annotated[
         SupabaseUser, Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.ADMIN.value))
     ],
-    session: Session = Depends(get_db),
+    session: AsyncSession = Depends(get_db),
 ) -> GraphDeployResponse:
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
-    project = get_project(session, project_id=project_id)
+    project = await get_project(session, project_id=project_id)
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
     try:
-        return deploy_graph_service(
+        return await deploy_graph_service(
             session=session,
             graph_runner_id=graph_runner_id,
             project_id=project_id,

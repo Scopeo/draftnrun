@@ -1,7 +1,7 @@
 from uuid import UUID
 import logging
 
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from ada_backend.repositories.component_repository import delete_component_instances
 from ada_backend.repositories.graph_runner_repository import delete_graph_runner, get_component_nodes
@@ -9,28 +9,28 @@ from ada_backend.repositories.graph_runner_repository import delete_graph_runner
 LOGGER = logging.getLogger(__name__)
 
 
-def delete_component_instances_from_nodes(session: Session, component_node_ids: set[UUID]) -> None:
+async def delete_component_instances_from_nodes(session: AsyncSession, component_node_ids: set[UUID]) -> None:
     """
-    Deletes component instances from the database.
+    Deletes component instances from the database asynchronously.
 
     Args:
-        session (Session): SQLAlchemy session.
-        graph_nodes (list[ComponentNodeDTO]): List of component nodes to delete.
+        session (AsyncSession): SQLAlchemy asynchronous session.
+        component_node_ids (set[UUID]): Set of component instance IDs to delete.
     """
-    delete_component_instances(session, component_instance_ids=component_node_ids)
+    await delete_component_instances(session, component_instance_ids=component_node_ids)
     LOGGER.info("Deleted instances: {}".format(len(component_node_ids)))
 
 
-def delete_graph_runner_service(session: Session, graph_runner_id: UUID):
+async def delete_graph_runner_service(session: AsyncSession, graph_runner_id: UUID):
     """
-    Deletes a graph runner and all its associated nodes and edges.
+    Deletes a graph runner and all its associated nodes and edges asynchronously.
 
     Args:
-        session (Session): SQLAlchemy session.
+        session (AsyncSession): SQLAlchemy asynchronous session.
         graph_runner_id (UUID): ID of the graph runner to delete.
     """
-    graph_nodes = get_component_nodes(session, graph_runner_id)
-    delete_graph_runner(session, graph_runner_id)
+    graph_nodes = await get_component_nodes(session, graph_runner_id)
+    await delete_graph_runner(session, graph_runner_id)
 
     # Delete all component instances associated with the graph runner
-    delete_component_instances_from_nodes(session, component_node_ids={node.id for node in graph_nodes})
+    await delete_component_instances_from_nodes(session, component_node_ids={node.id for node in graph_nodes})

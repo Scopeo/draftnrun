@@ -112,7 +112,8 @@ jobs:
           echo "REDIS_PASSWORD=${{ secrets.REDIS_PASSWORD }}" >> credentials.env
           echo "REDIS_QUEUE_NAME=${{ secrets.REDIS_QUEUE_NAME }}" >> credentials.env
           echo "ADA_DB_DRIVER=postgres" >> credentials.env
-          echo "ADA_DB_URL=postgresql://postgres:ada_password@localhost:5432/ada_backend" >> credentials.env
+          echo "ADA_SYNC_DB_URL=postgresql://postgres:ada_password@localhost:5432/ada_backend" >> credentials.env
+          echo "ADA_DB_URL=postgresql+asyncpg://postgres:ada_password@localhost:5432/ada_backend" >> credentials.env
           echo "INGESTION_DB_URL=postgresql://postgres:ada_password@localhost:5432/ada_ingestion" >> credentials.env
           echo "TRACES_DB_URL=postgresql://postgres:ada_password@localhost:5432/ada_traces" >> credentials.env
           echo "ADA_URL=http://localhost:8000" >> credentials.env
