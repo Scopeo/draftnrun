@@ -59,7 +59,7 @@ COMPONENT_UUIDS: dict[str, UUID] = {
     "python_code_interpreter_e2b": UUID("e2b00000-0000-1111-2222-333333333333"),
 }
 
-ALL_PURPOSE_MODELS = [
+FULL_CAPACITY_COMPLETION_MODELS = [
     # OpenAI
     SelectOption(value="openai:gpt-4.1", label="GPT-4.1"),
     SelectOption(value="openai:gpt-4.1-mini", label="GPT-4.1 Mini"),
@@ -70,7 +70,7 @@ ALL_PURPOSE_MODELS = [
     SelectOption(value="cerebras:llama-3.3-70b", label="Llama 3.3 70B (Cerebras)"),
 ]
 
-OPTIONS_COMPLETION_MODELS = ALL_PURPOSE_MODELS + [
+OPTIONS_COMPLETION_MODELS = FULL_CAPACITY_COMPLETION_MODELS + [
     # Google (Gemini)
     SelectOption(value="google:gemini-2.5-pro-preview-06-05", label="Gemini 2.5 Pro"),
     SelectOption(value="google:gemini-2.5-flash-preview-05-20", label="Gemini 2.5 Flash"),
@@ -90,7 +90,7 @@ OPTIONS_COMPLETION_MODELS.extend(
     add_custom_llm_model(settings.custom_models, "completion_models", "constrained_completion_with_pydantic")
 )
 
-OPTIONS_FUNCTION_CALLING_MODELS = ALL_PURPOSE_MODELS
+OPTIONS_FUNCTION_CALLING_MODELS = FULL_CAPACITY_COMPLETION_MODELS
 OPTIONS_FUNCTION_CALLING_MODELS.extend(
     add_custom_llm_model(settings.custom_models, "completion_models", "function_calling")
 )
