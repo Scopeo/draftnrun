@@ -86,11 +86,11 @@ def get_prometheus_agent_calls_chart(project_id: UUID, duration_days: int) -> Ch
     )
 
 
-def get_agent_usage_chart(project_id: UUID, duration_days: int) -> Chart:
+def get_agent_usage_chart(project_id: UUID, duration_days: int) -> list[Chart]:
     current_date = datetime.now(tz=timezone.utc)
     start_date = current_date - timedelta(days=duration_days)
     all_dates_df = pd.DataFrame(
-        pd.date_range(start=start_date.date(), end=current_date.date(), freq="D"), columns=["date"]
+        pd.date_range(start=start_date.date(), end=current_date.date(), freq="D", tz=timezone.utc), columns=["date"]
     )
 
     df = query_trace_duration(project_id, duration_days)
