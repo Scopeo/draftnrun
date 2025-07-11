@@ -41,57 +41,6 @@ def chat_completion_to_response(
     return response_messages
 
 
-def filter_unsupported_content_for_chat_completion(
-    messages: list[dict[str, Any]] | str,
-) -> list[dict[str, Any]] | str:
-    """
-    Filters out content types that are not supported by standard chat completion APIs.
-    
-    This function removes file content types and other unsupported content types,
-    keeping only text and image_url content types that are supported by most chat completion APIs.
-    """
-    
-    if isinstance(messages, str):
-        return messages
-    
-    filtered_messages = []
-    for message in messages:
-        if "content" in message and isinstance(message["content"], list) and "role" in message:
-            filtered_content = []
-            for content in message["content"]:
-                if "type" in content:
-                    # Keep only supported content types
-                    if content["type"] in ["text", "image_url"]:
-                        filtered_content.append(content)
-                    elif content["type"] == "file":
-                        # For now, we'll skip file content as most chat completion APIs don't support it
-                        # In the future, this could be enhanced to extract text from files or convert images
-                        filename = content.get('file', {}).get('filename', 'unknown')
-                        LOGGER.warning(f"Filtering out unsupported file content: {filename}")
-                        continue
-                    else:
-                        # Skip other unsupported content types
-                        LOGGER.warning(f"Filtering out unsupported content type: {content['type']}")
-                        continue
-                else:
-                    # If no type specified, assume it's supported
-                    filtered_content.append(content)
-            
-            # If we have any content left, add the message
-            if filtered_content:
-                message_copy = message.copy()
-                message_copy["content"] = filtered_content
-                filtered_messages.append(message_copy)
-            elif isinstance(message.get("content"), str):
-                # If content is a string, keep it as is
-                filtered_messages.append(message)
-        else:
-            # If content is a string or other format, keep it as is
-            filtered_messages.append(message)
-    
-    return filtered_messages
-
-
 class LLMKeyLimitExceededError(Exception):
     pass
 
