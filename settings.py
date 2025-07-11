@@ -14,6 +14,7 @@ BASE_DIR = Path(__file__).parent.resolve()
 CHATBOT_CONFIG_TEMPLATE_VARS = {
     "base_dir": str(BASE_DIR),
 }
+CUSTOM_MODELS_JSON_PATH = BASE_DIR / "custom_models.json"
 
 
 def load_yaml(file_path: Path) -> Dict[str, Any]:
@@ -41,7 +42,7 @@ class BaseConfig(BaseSettings):
     GOOGLE_API_KEY: Optional[str] = None
     GOOGLE_BASE_URL: Optional[str] = None
     CEREBRAS_API_KEY: Optional[str] = None
-
+    CEREBRAS_BASE_URL: Optional[str] = None
     COHERE_API_KEY: Optional[str] = None
 
     SNOWFLAKE_ACCOUNT: Optional[str] = None
@@ -54,20 +55,13 @@ class BaseConfig(BaseSettings):
     TAVILY_API_KEY: Optional[str] = None
     E2B_API_KEY: Optional[str] = None
 
-    CUSTOM_LLM_MODELS: Optional[str] = None
-    CUSTOM_EMBEDDING_MODELS: Optional[str] = None
-
     @property
-    def custom_llm_models(self) -> dict[str, str]:
-        if self.CUSTOM_LLM_MODELS is None:
+    def custom_models(self) -> dict[str, dict[str, Any]]:
+        if not CUSTOM_MODELS_JSON_PATH.exists():
             return {}
-        return json.loads(self.CUSTOM_LLM_MODELS)
-
-    @property
-    def custom_embedding_models(self) -> dict[str, str]:
-        if self.CUSTOM_EMBEDDING_MODELS is None:
-            return {}
-        return json.loads(self.CUSTOM_EMBEDDING_MODELS)
+        with open(CUSTOM_MODELS_JSON_PATH, "r") as file:
+            custom_models = json.load(file)
+            return custom_models
 
     FERNET_KEY: Optional[str] = None
     BACKEND_SECRET_KEY: Optional[str] = None

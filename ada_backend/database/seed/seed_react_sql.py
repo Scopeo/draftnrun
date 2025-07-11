@@ -17,7 +17,7 @@ from ada_backend.database.seed.seed_tool_description import TOOL_DESCRIPTION_UUI
 from ada_backend.database.seed.utils import (
     COMPONENT_UUIDS,
     ParameterLLMConfig,
-    build_completion_service_config_definitions,
+    build_function_calling_service_config_definitions,
 )
 from ada_backend.services.registry import COMPLETION_MODEL_IN_DB
 from engine.agent.sql.react_sql_tool import DEFAULT_REACT_SQL_TOOL_PROMPT
@@ -110,7 +110,7 @@ def seed_react_sql_components(session: Session):
                 ).model_dump(exclude_unset=True, exclude_none=True),
                 is_advanced=True,
             ),
-            *build_completion_service_config_definitions(
+            *build_function_calling_service_config_definitions(
                 component_id=react_sql_agent.id,
                 params_to_seed=[
                     ParameterLLMConfig(
