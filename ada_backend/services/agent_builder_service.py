@@ -1,11 +1,9 @@
-import json
 import logging
 from typing import Any, Optional
 from uuid import UUID
 
 from sqlalchemy.orm import Session
 
-from ada_backend.database.seed.seed_input import INPUT_PAYLOAD_PARAMETER_NAME
 from ada_backend.repositories.organization_repository import get_organization_secrets_from_project_id
 from engine.agent.agent import ToolDescription
 from ada_backend.database.models import ComponentInstance
@@ -208,17 +206,3 @@ def _get_tool_description(
         tool_properties=db_tool_description.tool_properties,
         required_tool_properties=db_tool_description.required_tool_properties,
     )
-
-
-def get_default_values_for_sandbox(session, input_component_instance: UUID, project_id: UUID, input_data: dict):
-    input_params = get_component_params(
-        session,
-        input_component_instance,
-        project_id=project_id,
-    )
-    input_data_schema = json.loads(input_params[INPUT_PAYLOAD_PARAMETER_NAME])
-    for input_data_key in input_data_schema.keys():
-        if input_data_key not in input_data:
-            input_data[input_data_key] = input_data_schema[input_data_key]
-            LOGGER.debug(f"Add default value for {input_data_key}")
-    return input_data
