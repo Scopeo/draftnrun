@@ -1,0 +1,28 @@
+{
+    "provider_name": {
+        "completion_models": [
+            {
+                "model_name": "my-llm-1-model-name",
+                "function_calling": true,
+                "multimodal": true,
+                "constrained_completion_with_pydantic": true,
+                "constrained_completion_with_json_schema": true
+            },
+            {
+                "model_name": "my-llm-2-model-name",
+                "function_calling": false,
+                "multimodal": false,
+                "constrained_completion_with_pydantic": false,
+                "constrained_completion_with_json_schema": false
+            }
+        ],
+        "embedding_models": [
+            {
+                "model_name": "my-embed-1-model-name",
+                "embedding_size": 3072
+            }
+        ],
+        "base_url": "https://llm1.example.com/v1/",
+        "api_key": "my_api_key"
+    }
+}
