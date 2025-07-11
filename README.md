@@ -311,9 +311,26 @@ You can configure Draft'n run to use your own custom Large Language Model (LLM) 
 
 CUSTOM_LLM_MODELS={"provider_name": {"model_name":["my-llm-1-model-name", "my-llm-2-model-name"], "base_url": "https://llm1.example.com/v1/", "api_key": "my_api_key}}
 
-CUSTOM_EMBEDDING_MODELS={"provider_name": {"model_name":["my-embed-1-model-name", "my-embed-2-model-name"], "base_url": "https://embed1.example.com/v1/", "api_key": "my_api_key}}
+CUSTOM_EMBEDDING_MODELS={"provider_name": {"model_name":["my-embed-1-model-name", "my-embed-2-model-name"], "embedding_size" : {"my-embed-1-model-name" : 100, "my-embed-2-model-name" : 200 }, "base_url": "https://embed1.example.com/v1/", "api_key": "my_api_key}}
 
 ```
+
+You can also configure the parameters of the ingestion on the `credentials.env` file:
+
+```env
+PAGE_RESOLUTION_ZOOM=1.0
+NUMBER_OF_IMAGES_TO_DETERMINE_TYPE_OF_DOCUMENT=2
+INGESTION_WITH_OPEN_SOURCE_LLM=False
+```
+
+Here is a breakdown of the variables:
+`PAGE_RESOLUTION_ZOOM`: This parameter controls the zoom level for page resolution during ingestion. A value of `1.0` means no zoom, while values greater than `1.0` will increase the resolution.
+`NUMBER_OF_IMAGES_TO_DETERMINE_TYPE_OF_DOCUMENT`: This parameter specifies how many images are used to determine the type of document during ingestion. A value of `2` means that the first two images will be analyzed to classify the document type. You set up to `-1` to use all the images of the documents.
+`ENFORCE_PAGE_BY_PAGE_INGESTION`: This parameter, when set to `True`, enforces page-by-page ingestion of documents. This is useful for ensuring that each page is processed individually, which can be important if you are using local llms with a short context window.
+
+
+⚠️ Be careful: if you want to have ingestion working locally, you need to use a Vision Model that supports
+the `image_url` parameter, such as `gpt-4o` or `gpt-4o-mini` as the **first** model in your list `CUSTOM_LLM_MODELS` in your credentials.
 **How it works:**  
 If you set these variables, your custom model will appear as an option in the model selection dropdown after reseeding. When this model is selected, the backend will route requests to your custom LLM service instead of sending them to OpenAI or other providers.
 
