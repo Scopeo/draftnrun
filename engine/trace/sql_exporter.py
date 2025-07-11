@@ -55,6 +55,48 @@ def convert_to_list(obj: Any) -> list[str] | None:
     return None
 
 
+def parse_str_or_dict(input_str: str) -> str | dict | list:
+    if isinstance(input_str, list):
+        return input_str
+    try:
+        result = json.loads(input_str)
+        if isinstance(result, dict) or isinstance(result, list):
+            return result
+        else:
+            return input_str  # It's valid JSON, but not a dict
+    except json.JSONDecodeError:
+        # Not a JSON string, return as-is
+        return input_str
+
+
+def get_messages_from_span(attributes: dict) -> list[dict]:
+    try:
+        input = []
+        output = []
+        if "llm" in attributes:
+            if "input_messages" in attributes["llm"]:
+                input = parse_str_or_dict(attributes["llm"]["input_messages"])
+                input = input if isinstance(input, list) else [input]
+            if "output_messages" in attributes["llm"]:
+                output = parse_str_or_dict(attributes["llm"]["output_messages"])
+                output = output if isinstance(output, list) else [output]
+
+        if input is None or len(input) == 0:
+            if "input" in attributes:
+                input = parse_str_or_dict(attributes["input"].get("value", []))
+            if not isinstance(input, list):
+                input = [input]
+        if output is None or len(output) == 0:
+            if "output" in attributes:
+                output = parse_str_or_dict(attributes["output"].get("value", []))
+            if not isinstance(output, list):
+                output = [output]
+        return input, output
+    except Exception as e:
+        LOGGER.error(f"Error processing span attributes {attributes}: {e}")
+        return [], []
+
+
 class SQLSpanExporter(SpanExporter):
     def __init__(self):
         self.session = get_session_trace()
@@ -62,12 +104,12 @@ class SQLSpanExporter(SpanExporter):
     def get_org_info_from_ancestors(self, parent_id: str) -> tuple[str, str] | None:
         """Get org_id and org_llm_providers from ancestors of the span."""
         while parent_id:
-            row = self.session.execute(
+            span = self.session.execute(
                 select(models.Span.attributes, models.Span.parent_id).where(models.Span.span_id == parent_id)
             ).first()
-            if not row:
+            if not span:
                 break
-            attributes, parent_id = row
+            attributes, parent_id = span
             if attributes:
                 try:
                     attrs = json.loads(attributes)
@@ -147,6 +189,24 @@ class SQLSpanExporter(SpanExporter):
                 )
             )
             self.session.add(span_row)
+
+            input, output = get_messages_from_span(formatted_attributes)
+            if input is not None and len(input) > 0:
+                self.session.add(
+                    models.SpanMessage(
+                        span_id=span_row.span_id,
+                        direction=models.SpanMessageDirection.INPUT,
+                        content=json.dumps(input),
+                    )
+                )
+            if output is not None and len(output) > 0:
+                self.session.add(
+                    models.SpanMessage(
+                        span_id=span_row.span_id,
+                        direction=models.SpanMessageDirection.OUTPUT,
+                        content=json.dumps(output),
+                    )
+                )
         self.session.commit()
 
         org_token_counts = defaultdict(int)
