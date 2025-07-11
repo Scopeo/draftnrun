@@ -1,5 +1,5 @@
 import json
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, patch, AsyncMock
 from types import SimpleNamespace
 
 import pytest
@@ -21,6 +21,8 @@ def mock_agent():
     }
     mock_tool_description.required_tool_properties = ["test_property"]
     mock_agent.tool_description = mock_tool_description
+
+    mock_agent.run = AsyncMock()
     return mock_agent
 
 
@@ -51,9 +53,11 @@ def mock_llm_service():
         tool_calls=[],
         model_dump=lambda: {"role": "assistant", "content": "Test response", "tool_calls": []},
     )
+
     choice = SimpleNamespace(message=message)
     response = SimpleNamespace(choices=[choice])
-    mock_llm_service.function_call.return_value = response
+
+    mock_llm_service.afunction_call = AsyncMock(return_value=response)
     return mock_llm_service
 
 
@@ -92,26 +96,166 @@ def test_run_with_tool_calls(agent_calls_mock, get_span_mock, react_agent, agent
     get_span_mock.return_value.project_id = "1234"
     counter_mock = MagicMock()
     agent_calls_mock.labels.return_value = counter_mock
-    mock_tool_call = MagicMock()
-    mock_tool_call.id = "1"
-    mock_tool_call_function = MagicMock()
-    mock_tool_call_function.name = "test_tool"
-    mock_tool_call_function.arguments = json.dumps({"test_property": "Test value"})
-    mock_tool_call.function = mock_tool_call_function
-    mock_response_message = ChatMessage(role="assistant", content="Tool response")
 
-    mock_llm_service.function_call.return_value = MagicMock(
-        choices=[MagicMock(message=mock_response_message, tool_calls=[mock_tool_call])]
+    # Enable tool shortcuts so that when there's exactly one successful output, it returns it
+    react_agent._allow_tool_shortcuts = True
+
+    # Create a simple object that has the required attributes
+    class MockToolCall:
+        def __init__(self):
+            self.id = "1"
+            self.function = SimpleNamespace(name="test_tool", arguments=json.dumps({"test_property": "Test value"}))
+            self.type = "function"
+
+        def model_dump(self):
+            return {
+                "id": "1",
+                "function": {"name": "test_tool", "arguments": json.dumps({"test_property": "Test value"})},
+                "type": "function",
+            }
+
+    mock_tool_call = MockToolCall()
+
+    mock_message = SimpleNamespace(
+        role="assistant",
+        content="Tool response",
+        tool_calls=[mock_tool_call],
+        model_dump=lambda: {
+            "role": "assistant",
+            "content": "Tool response",
+            "tool_calls": [
+                {
+                    "id": "1",
+                    "function": {"name": "test_tool", "arguments": json.dumps({"test_property": "Test value"})},
+                    "type": "function",
+                }
+            ],
+        },
     )
+
+    mock_choice = SimpleNamespace(message=mock_message)
+    mock_response = SimpleNamespace(choices=[mock_choice])
+
+    mock_llm_service.afunction_call.return_value = mock_response
     mock_agent.run.return_value = AgentPayload(
         messages=[ChatMessage(role="assistant", content="Tool response")], is_final=True
     )
 
-    output = react_agent.run_sync(agent_input)
+    # Patch the _process_tool_calls method to return dictionaries instead of MockToolCall objects
+    async def mock_process_tool_calls(*args, **kwargs):
+        tool_outputs = {
+            "1": AgentPayload(messages=[ChatMessage(role="assistant", content="Tool response")], is_final=True)
+        }
+        processed_tool_calls = [
+            {
+                "id": "1",
+                "function": {"name": "test_tool", "arguments": json.dumps({"test_property": "Test value"})},
+                "type": "function",
+            }
+        ]
+        return tool_outputs, processed_tool_calls
+
+    with patch.object(react_agent, "_process_tool_calls", side_effect=mock_process_tool_calls):
+        output = react_agent.run_sync(agent_input)
 
     assert output.last_message.role == "assistant"
     assert output.last_message.content == "Tool response"
     assert output.is_final
+
+
+@patch("engine.prometheus_metric.get_tracing_span")
+@patch("engine.prometheus_metric.agent_calls")
+def test_run_with_tool_calls_no_shortcut(
+    agent_calls_mock, get_span_mock, react_agent, agent_input, mock_agent, mock_llm_service
+):
+    get_span_mock.return_value.project_id = "1234"
+    counter_mock = MagicMock()
+    agent_calls_mock.labels.return_value = counter_mock
+
+    # Disable tool shortcuts to test the full iteration logic
+    react_agent._allow_tool_shortcuts = False
+
+    # Create a simple object that has the required attributes
+    class MockToolCall:
+        def __init__(self):
+            self.id = "1"
+            self.function = SimpleNamespace(name="test_tool", arguments=json.dumps({"test_property": "Test value"}))
+            self.type = "function"
+
+        def model_dump(self):
+            return {
+                "id": "1",
+                "function": {"name": "test_tool", "arguments": json.dumps({"test_property": "Test value"})},
+                "type": "function",
+            }
+
+    mock_tool_call = MockToolCall()
+
+    # First call: return tool calls
+    mock_message_with_tools = SimpleNamespace(
+        role="assistant",
+        content="Tool response",
+        tool_calls=[mock_tool_call],
+        model_dump=lambda: {
+            "role": "assistant",
+            "content": "Tool response",
+            "tool_calls": [
+                {
+                    "id": "1",
+                    "function": {"name": "test_tool", "arguments": json.dumps({"test_property": "Test value"})},
+                    "type": "function",
+                }
+            ],
+        },
+    )
+
+    # Second call: return no tool calls (final response)
+    mock_message_final = SimpleNamespace(
+        role="assistant",
+        content="Final response",
+        tool_calls=[],
+        model_dump=lambda: {
+            "role": "assistant",
+            "content": "Final response",
+            "tool_calls": [],
+        },
+    )
+
+    mock_choice_with_tools = SimpleNamespace(message=mock_message_with_tools)
+    mock_choice_final = SimpleNamespace(message=mock_message_final)
+    mock_response_with_tools = SimpleNamespace(choices=[mock_choice_with_tools])
+    mock_response_final = SimpleNamespace(choices=[mock_choice_final])
+
+    # Set up the mock to return different responses on subsequent calls
+    mock_llm_service.afunction_call.side_effect = [mock_response_with_tools, mock_response_final]
+
+    mock_agent.run.return_value = AgentPayload(
+        messages=[ChatMessage(role="assistant", content="Tool response")], is_final=True
+    )
+
+    # Patch the _process_tool_calls method to return dictionaries instead of MockToolCall objects
+    async def mock_process_tool_calls(*args, **kwargs):
+        tool_outputs = {
+            "1": AgentPayload(messages=[ChatMessage(role="assistant", content="Tool response")], is_final=True)
+        }
+        processed_tool_calls = [
+            {
+                "id": "1",
+                "function": {"name": "test_tool", "arguments": json.dumps({"test_property": "Test value"})},
+                "type": "function",
+            }
+        ]
+        return tool_outputs, processed_tool_calls
+
+    with patch.object(react_agent, "_process_tool_calls", side_effect=mock_process_tool_calls):
+        output = react_agent.run_sync(agent_input)
+
+    # Should get the final response from the second iteration
+    assert output.last_message.role == "assistant"
+    assert output.last_message.content == "Final response"
+    assert output.is_final
+    # Verify that afunction_call was called twice (once for tool calls, once for final response)
+    assert mock_llm_service.afunction_call.call_count == 2
 
 
 @patch("engine.prometheus_metric.get_tracing_span")
@@ -132,34 +276,64 @@ def test_max_iterations(agent_calls_mock, get_span_mock, react_agent, agent_inpu
     get_span_mock.return_value.project_id = "1234"
     counter_mock = MagicMock()
     agent_calls_mock.labels.return_value = counter_mock
-    mock_tool_call = MagicMock()
-    mock_tool_call.id = "1"
-    mock_tool_call_function = MagicMock()
-    mock_tool_call_function.name = "test_tool"
-    mock_tool_call_function.arguments = json.dumps({"test_property": "Test value"})
-    message = SimpleNamespace(
+
+    # Create a simple object that has the required attributes
+    class MockToolCall:
+        def __init__(self):
+            self.id = "1"
+            self.function = SimpleNamespace(name="test_tool", arguments=json.dumps({"test_property": "Test value"}))
+            self.type = "function"
+
+        def model_dump(self):
+            return {
+                "id": "1",
+                "function": {"name": "test_tool", "arguments": json.dumps({"test_property": "Test value"})},
+                "type": "function",
+            }
+
+    mock_tool_call = MockToolCall()
+
+    mock_message = SimpleNamespace(
         role="assistant",
-        tool_calls=mock_tool_call,
+        tool_calls=[mock_tool_call],
         model_dump=lambda: {
             "role": "assistant",
             "tool_calls": [
                 {
                     "id": "1",
                     "function": {"name": "test_tool", "arguments": json.dumps({"test_property": "Test value"})},
+                    "type": "function",
                 }
             ],
         },
     )
-    choice = SimpleNamespace(message=message)
-    response = SimpleNamespace(choices=[choice])
-    mock_llm_service.function_call.return_value = response
+
+    mock_choice = SimpleNamespace(message=mock_message)
+    mock_response = SimpleNamespace(choices=[mock_choice])
+
+    mock_llm_service.afunction_call.return_value = mock_response
 
     react_agent._max_iterations = 1
     mock_agent.run.return_value = AgentPayload(
         messages=[ChatMessage(role="assistant", content="Tool response")], is_final=False
     )
 
-    output = react_agent.run_sync(agent_input)
+    # Patch the _process_tool_calls method to return dictionaries instead of MockToolCall objects
+    async def mock_process_tool_calls(*args, **kwargs):
+        tool_outputs = {
+            "1": AgentPayload(messages=[ChatMessage(role="assistant", content="Tool response")], is_final=False)
+        }
+        processed_tool_calls = [
+            {
+                "id": "1",
+                "function": {"name": "test_tool", "arguments": json.dumps({"test_property": "Test value"})},
+                "type": "function",
+            }
+        ]
+        return tool_outputs, processed_tool_calls
+
+    with patch.object(react_agent, "_process_tool_calls", side_effect=mock_process_tool_calls):
+        output = react_agent.run_sync(agent_input)
 
     assert output.last_message.content == DEFAULT_FALLBACK_REACT_ANSWER
     assert not output.is_final

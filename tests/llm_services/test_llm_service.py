@@ -5,11 +5,23 @@ import pytest
 
 from engine.llm_services.llm_service import CompletionService, EmbeddingService
 from engine.llm_services.constrained_output_models import OutputFormatModel
+from engine.trace.span_context import set_tracing_span
 
 
 class ResponseFormat(BaseModel):
     response: str
     is_successful: bool
+
+
+@pytest.fixture(autouse=True)
+def setup_tracing_context():
+    """Set up tracing context for all tests in this module."""
+    set_tracing_span(
+        project_id="test-project",
+        organization_id="test-org",
+        organization_llm_providers=["openai", "mistral", "google", "cohere"],
+        conversation_id="test-conversation",
+    )
 
 
 def test_completion_service():

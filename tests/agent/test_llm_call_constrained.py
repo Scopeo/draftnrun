@@ -1,6 +1,7 @@
 import pytest
 import base64
 from unittest.mock import MagicMock
+from unittest.mock import AsyncMock
 
 from engine.agent.llm_call_agent import LLMCallAgent
 from engine.agent.utils import load_str_to_json
@@ -51,7 +52,13 @@ def input_payload_with_file():
 @pytest.fixture
 def llm_call_with_output_format():
     trace_manager = MagicMock()
+
     llm_service = MagicMock()
+    llm_service.aconstrained_complete_with_json_schema = AsyncMock(
+        return_value='{"location": "Miami", "unit": "F", "value": 85}'
+    )
+    llm_service.acomplete = AsyncMock(return_value="Sample response")
+
     tool_description = MagicMock()
     component_attributes = ComponentAttributes(
         component_instance_name="test_component",
@@ -121,7 +128,7 @@ async def test_chat_completion_to_response(llm_call_with_output_format, input_pa
     assert isinstance(response, AgentPayload)
 
     llm_service_input_messages = (
-        llm_call_with_output_format._completion_service.constrained_complete_with_json_schema.call_args[1]["messages"]
+        llm_call_with_output_format._completion_service.aconstrained_complete_with_json_schema.call_args[1]["messages"]
     )
     converted_messages = chat_completion_to_response(llm_service_input_messages)
     assert converted_messages == [

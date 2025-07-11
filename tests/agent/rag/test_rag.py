@@ -30,11 +30,11 @@ def make_mock_llm_service():
         mock_llm.last_prompt = None
         mock_llm._model_name = "mock_model"
 
-        def constrained_complete_with_pydantic(messages, response_format):
+        async def aconstrained_complete_with_pydantic(messages, response_format):
             mock_llm.last_prompt = messages
             return response_format(response=default_response, is_successful=True)
 
-        mock_llm.constrained_complete_with_pydantic.side_effect = constrained_complete_with_pydantic
+        mock_llm.aconstrained_complete_with_pydantic = aconstrained_complete_with_pydantic
         mock_llm._provider = "openai"
         return mock_llm
 
