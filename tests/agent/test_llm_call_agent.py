@@ -1,7 +1,7 @@
 import pytest
 import base64
 import asyncio
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, AsyncMock
 from engine.agent.llm_call_agent import LLMCallAgent
 
 FILE_PATH_1 = "file_1.pdf"
@@ -90,7 +90,7 @@ def input_payload_format_no_file():
     }
 
 
-def complete_side_effect(**kwargs):
+async def complete_side_effect(**kwargs):
     return kwargs["messages"][0]["content"]
 
 
@@ -98,8 +98,8 @@ def complete_side_effect(**kwargs):
 def llm_call_with_file_content():
     trace_manager = MagicMock()
     llm_service = MagicMock()
-    # Mock complete to return the input text content as response
-    llm_service.complete.side_effect = complete_side_effect
+
+    llm_service.acomplete = AsyncMock(side_effect=complete_side_effect)
     tool_description = MagicMock()
     component_instance_name = "test_component"
     prompt_template = "{input}"
@@ -118,8 +118,8 @@ def llm_call_with_file_content():
 def llm_call_without_file_content():
     trace_manager = MagicMock()
     llm_service = MagicMock()
-    # Mock complete to return the input text content as response
-    llm_service.complete.side_effect = complete_side_effect
+
+    llm_service.acomplete = AsyncMock(side_effect=complete_side_effect)
     tool_description = MagicMock()
     component_instance_name = "test_component"
     prompt_template = "{input}"

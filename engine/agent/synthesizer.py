@@ -35,7 +35,7 @@ class Synthesizer:
             component_instance_name = f"{self.__class__.__name__}"
         self.component_instance_name = component_instance_name
 
-    def get_response(
+    async def get_response(
         self, chunks: list[SourceChunk], query_str: str, optional_contexts: Optional[dict]
     ) -> SourcedResponse:
 
@@ -57,7 +57,7 @@ class Synthesizer:
                 }
             )
             if self._completion_service._provider != "openai":
-                response = self._completion_service.complete(
+                response = await self._completion_service.acomplete(
                     messages=[ChatMessage(role="user", content=input_str).model_dump()],
                 )
 
@@ -66,7 +66,7 @@ class Synthesizer:
                     is_successful=False,
                 )
             else:
-                response = self._completion_service.constrained_complete_with_pydantic(
+                response = await self._completion_service.aconstrained_complete_with_pydantic(
                     messages=input_str,
                     response_format=self.response_format,
                 )
