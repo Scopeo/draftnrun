@@ -30,13 +30,13 @@ class Filter:
         trace_manager: TraceManager,
         tool_description: ToolDescription,
         component_instance_name: str,
-        output_schema: str,
+        filtering_json_schema: str,
     ):
         self.trace_manager = trace_manager
         self.tool_description = tool_description
         self.component_instance_name = component_instance_name
-        self.output_schema = load_str_to_json(output_schema)
-        self.output_model = jsonschema_to_pydantic(self.output_schema)
+        self.filtering_json_schema = load_str_to_json(filtering_json_schema)
+        self.output_model = jsonschema_to_pydantic(self.filtering_json_schema)
 
     async def run(self, output_data: AgentPayload | dict):
 
