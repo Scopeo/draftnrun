@@ -16,7 +16,7 @@ LOGGER = logging.getLogger(__name__)
 
 def setup_tracer(
     project_name: str,
-) -> trace_api.Tracer:
+) -> tuple[trace_api.Tracer, trace_sdk.TracerProvider]:
     """Setup a tracer with the given project name and collector endpoint."""
 
     resource = Resource(
@@ -32,7 +32,7 @@ def setup_tracer(
     tracer = tracer_provider.get_tracer(__name__)
 
     LOGGER.info(f"Tracer setup for project: {project_name}")
-    return tracer
+    return tracer, tracer_provider
 
 
 # TODO: Rename so it's clear that these are the traces for user agents
@@ -46,7 +46,7 @@ class TraceManager:
 
         LOGGER.info("Setting up trace manager")
 
-        self.tracer = setup_tracer(
+        self.tracer, self.tracer_provider = setup_tracer(
             project_name=project_name,
         )
 
@@ -82,6 +82,10 @@ class TraceManager:
             attributes=attributes,
             **kwargs,
         )
+
+    def force_flush(self):
+        """Force flush all pending spans to the exporter."""
+        self.tracer_provider.force_flush()
 
     @classmethod
     def from_config(cls, config: dict):
