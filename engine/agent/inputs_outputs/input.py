@@ -38,10 +38,11 @@ class Input:
 
     async def run(self, input_data: dict):
         filtered_input = {k: input_data[k] for k in self.payload_schema if k in input_data}
+        filtered_input.update({k: self.payload_schema[k] for k in self.payload_schema if k not in input_data})
         with self.trace_manager.start_span(self.component_instance_name) as span:
             span.set_attributes(
                 {
-                    SpanAttributes.OPENINFERENCE_SPAN_KIND: OpenInferenceSpanKindValues.LLM.value,
+                    SpanAttributes.OPENINFERENCE_SPAN_KIND: OpenInferenceSpanKindValues.UNKNOWN.value,
                     SpanAttributes.INPUT_VALUE: json.dumps(input_data),
                     SpanAttributes.OUTPUT_VALUE: json.dumps(filtered_input),
                 }

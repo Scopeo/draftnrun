@@ -20,6 +20,7 @@ dependencies = [
     { name = "google-genai" },
     { name = "httpx" },
     { name = "itsdangerous" },
+    { name = "jsonschema-pydantic" },
     { name = "llama-index" },
     { name = "more-itertools" },
     { name = "mysql-connector-python" },
@@ -109,6 +110,7 @@ requires-dist = [
     { name = "google-genai", specifier = ">=1.9.0,<2" },
     { name = "httpx", specifier = ">=0.28.1" },
     { name = "itsdangerous", specifier = ">=2.2.0,<3" },
+    { name = "jsonschema-pydantic", specifier = ">=0.6" },
     { name = "llama-index", specifier = ">=0.12.38,<0.13" },
     { name = "more-itertools", specifier = ">=10.5.0,<11" },
     { name = "mysql-connector-python", specifier = "==9.3.0" },
@@ -1369,6 +1371,18 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/dc/fe/0f5a938c54105553436dbff7a61dc4fed4b1b2c98852f8833beaf4d5968f/joblib-1.5.1.tar.gz", hash = "sha256:f4f86e351f39fe3d0d32a9f2c3d8af1ee4cec285aafcb27003dda5205576b444", size = 330475, upload-time = "2025-05-23T12:04:37.097Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/7d/4f/1195bbac8e0c2acc5f740661631d8d750dc38d4a32b23ee5df3cde6f4e0d/joblib-1.5.1-py3-none-any.whl", hash = "sha256:4719a31f054c7d766948dcd83e9613686b27114f190f717cec7eaa2084f8a74a", size = 307746, upload-time = "2025-05-23T12:04:35.124Z" },
+]
+
+[[package]]
+name = "jsonschema-pydantic"
+version = "0.6"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "pydantic" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/d4/3e/088097e87f6b24b162cd42b090b1d3891b68e9dac96ceeac8ed5dff94db7/jsonschema_pydantic-0.6.tar.gz", hash = "sha256:6069a8929a333a7c7ea8510e9de50f062e747e655e6ba106da5af1981f995270", size = 6227, upload-time = "2024-02-03T21:50:23.285Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/e7/67/cbb63be985519b51d13499e726db2c960069588d5c2c479859856158b4de/jsonschema_pydantic-0.6-py3-none-any.whl", hash = "sha256:98385ed53ab87598665956b43756746350e2b60411a38381231f9703d36e40eb", size = 4154, upload-time = "2024-02-03T21:50:20.622Z" },
 ]
 
 [[package]]

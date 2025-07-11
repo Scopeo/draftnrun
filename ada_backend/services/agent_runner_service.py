@@ -6,12 +6,11 @@ import networkx as nx
 from ada_backend.database.models import EnvType, OrgSecretType
 from ada_backend.repositories.edge_repository import get_edges
 from ada_backend.schemas.project_schema import ChatResponse
-from ada_backend.services.agent_builder_service import get_default_values_for_sandbox, instantiate_component
+from ada_backend.services.agent_builder_service import instantiate_component
 from engine.graph_runner.graph_runner import GraphRunner
 from ada_backend.repositories.graph_runner_repository import (
     get_component_nodes,
     get_graph_runner_for_env,
-    get_input_component,
     get_start_components,
     graph_runner_exists,
 )
@@ -122,9 +121,7 @@ async def run_agent(
     # TODO : Add again the monitoring for frequently asked questions after parallelization of agent run
     # db_service = SQLLocalService(engine_url="sqlite:///ada_backend/database/monitor.db", dialect="sqlite")
     # asyncio.create_task(monitor_questions(db_service, project_id, input_data))
-    input_component = get_input_component(session, graph_runner_id=graph_runner_id)
-    if input_component:
-        input_data = get_default_values_for_sandbox(session, input_component.id, project_id, input_data)
+
     set_tracing_span(
         project_id=str(project_id),
         organization_id=str(project_details.organization_id),

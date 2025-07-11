@@ -90,6 +90,13 @@ def build_span_trees(df: pd.DataFrame) -> List[TraceSpan]:
                 input = [row["attributes"]["input"].get("value", "")]
                 output = [row["attributes"]["output"].get("value", "")]
                 tool_info = row["attributes"]["tool"]
+            elif span_kind == "UNKNOWN":
+                if "input" in row["attributes"]:
+                    input = parse_str_or_dict(row["attributes"]["input"].get("value", ""))
+                    input = input if isinstance(input, list) else [input]
+                if "output" in row["attributes"]:
+                    output = parse_str_or_dict(row["attributes"]["output"].get("value", ""))
+                    output = output if isinstance(output, list) else [output]
         except Exception as e:
             LOGGER.error(f"Error processing row {row}: {e}")
 
