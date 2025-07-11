@@ -2,7 +2,7 @@ from typing import Any
 from enum import StrEnum
 
 from engine.agent.inputs_outputs.input import Input
-from engine.agent.inputs_outputs.filter import Filter
+from engine.agent.filter import Filter
 from engine.agent.llm_call_agent import LLMCallAgent
 from engine.agent.sql.react_sql_tool import ReactSQLAgent
 from engine.agent.sql.run_sql_query_tool import RunSQLQueryTool

@@ -16,7 +16,7 @@ from ada_backend.database.component_definition_seeding import (
 from ada_backend.database.seed.seed_tool_description import TOOL_DESCRIPTION_UUIDS
 from ada_backend.database.seed.utils import COMPONENT_UUIDS
 
-OUTPUT_SCHEMA_PARAMETER_NAME = "output_schema"
+FILTER_SCHEMA_PARAMETER_NAME = "filtering_json_schema"
 DEFAULT_OUTPUT_FORMAT = {
     "type": "object",
     "title": "AgentPayload",
@@ -71,7 +71,7 @@ def seed_filter_components(session: Session):
     filter = db.Component(
         id=COMPONENT_UUIDS["filter"],
         name="Filter",
-        description="Filter: takes a json and filters it according to an output schema",
+        description="Filter: takes a json and filters it according to a given json schema",
         is_agent=True,
         is_protected=True,
         release_stage=db.ReleaseStage.PUBLIC,
@@ -89,16 +89,16 @@ def seed_filter_components(session: Session):
             db.ComponentParameterDefinition(
                 id=UUID("59443366-5b1f-5543-9fc5-57378f9aaf6e"),
                 component_id=filter.id,
-                name=OUTPUT_SCHEMA_PARAMETER_NAME,
+                name=FILTER_SCHEMA_PARAMETER_NAME,
                 type=ParameterType.STRING,
                 nullable=False,
                 default=json.dumps(DEFAULT_OUTPUT_FORMAT, indent=4),
                 ui_component=UIComponent.TEXTAREA,
                 ui_component_properties=UIComponentProperties(
-                    label="""An example of your output schema""",
-                    placeholder="An output schema for filtering the final response. Must be a correct "
+                    label="""An example of your filter schema""",
+                    placeholder="A schema for filtering the final response. Must be a correct "
                     "json schema that defines the structure of the expected output.",
-                    description="Describe here the output schema for filtering the final workflow response."
+                    description="Describe here the schema for filtering the final workflow response."
                     " Must be a correct json schema. The output will be validated against this schema"
                     " and filtered to only include the specified fields.",
                 ).model_dump(exclude_unset=True, exclude_none=True),

@@ -9,7 +9,7 @@ from engine.agent.tools.tavily_search_tool import TAVILY_TOOL_DESCRIPTION
 from engine.agent.tools.api_call_tool import API_CALL_TOOL_DESCRIPTION
 from engine.agent.document_enhanced_llm_call import DEFAULT_DOCUMENT_ENHANCED_LLM_CALL_TOOL_DESCRIPTION
 from engine.agent.inputs_outputs.input import DEFAULT_INPUT_TOOL_DESCRIPTION
-from engine.agent.inputs_outputs.filter import DEFAULT_FILTER_TOOL_DESCRIPTION
+from engine.agent.filter import DEFAULT_FILTER_TOOL_DESCRIPTION
 from engine.agent.rag.rag import format_rag_tool_description
 from engine.agent.react_function_calling import get_dummy_ai_agent_description
 from engine.agent.sql.react_sql_tool import DEFAULT_REACT_SQL_TOOL_DESCRIPTION
