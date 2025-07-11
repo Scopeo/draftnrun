@@ -1,6 +1,8 @@
 import logging
 from functools import lru_cache
 
+import boto3
+
 from ada_backend.schemas.ingestion_task_schema import (
     S3UploadedInformation,
 )
@@ -18,11 +20,16 @@ LOGGER = logging.getLogger(__name__)
 
 
 @lru_cache()
-def get_s3_client_and_ensure_bucket():
+def get_s3_client_and_ensure_bucket() -> boto3.client:
     """
     Lazily create the S3 client and ensure the bucket exists.
     """
     s3_client = get_s3_boto3_client()
+    if settings.S3_BUCKET_NAME is None:
+        raise ValueError(
+            "S3_BUCKET_NAME (bucket to store files for ingestion) is not configured in settings."
+            " Please set it in the credentials.env file."
+        )
 
     if not is_bucket_existing(s3_client=s3_client, bucket_name=settings.S3_BUCKET_NAME):
         LOGGER.warning(f"Bucket {settings.S3_BUCKET_NAME} does not exist. Creating it.")
