@@ -79,7 +79,6 @@ class PythonCodeInterpreterE2BTool(Agent):
         if not sandbox:
             sandbox = await AsyncSandbox.create(api_key=self.e2b_api_key)
         try:
-            # E2B's run_code method is synchronous, not async
             execution = await sandbox.run_code(code=python_code, timeout=self.sandbox_timeout)
         except Exception as e:
             LOGGER.error(f"E2B sandbox execution failed: {str(e)}")
