@@ -1,8 +1,7 @@
 from fastapi.testclient import TestClient
-from opentelemetry import trace
-from opentelemetry.sdk.trace import TracerProvider
 
 from ada_backend.main import app
+
 from ada_backend.schemas.project_schema import ChatResponse
 from ada_backend.schemas.trace_schema import TraceSpan
 from ada_backend.scripts.get_supabase_token import get_user_jwt
@@ -14,7 +13,8 @@ client = TestClient(app)
 
 
 def test_monitor_endpoint():
-    set_trace_manager(TraceManager(project_name="ada-backend-test"))
+    trace_manager = TraceManager(project_name="ada-backend-test")
+    set_trace_manager(trace_manager)
     project_id = "f7ddbfcb-6843-4ae9-a15b-40aa565b955b"  # graph test project
 
     token = get_user_jwt(settings.TEST_USER_EMAIL, settings.TEST_USER_PASSWORD)
@@ -30,14 +30,12 @@ def test_monitor_endpoint():
     assert output.error is None or isinstance(output.error, str)
     assert isinstance(output.artifacts, dict)
 
-    provider = trace.get_tracer_provider()
-    if isinstance(provider, TracerProvider):
-        provider.force_flush()
+    # Force flush the trace manager to ensure spans are exported
+    trace_manager.force_flush()
 
     duration = 7
     url = f"/projects/{project_id}/trace?duration={duration}"
     response = client.get(url, headers=headers)
-
     results = response.json()
     keys_trace_span = [field_name[0] for field_name in TraceSpan.model_fields.items()]
 
