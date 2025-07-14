@@ -2,7 +2,7 @@ import logging
 import json
 from typing import Any, Optional
 
-from e2b import Sandbox
+from e2b_code_interpreter import Sandbox
 from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttributes
 from opentelemetry.trace import get_current_span
 
@@ -60,8 +60,9 @@ class TerminalCommandE2BTool(Agent):
         
         sandbox = shared_sandbox if shared_sandbox else Sandbox(api_key=self.e2b_api_key, timeout=self.command_timeout)
         try:
-            # Use the correct E2B v1 API for running commands
+            # Use the sandbox's terminal capabilities
             execution = sandbox.commands.run(command)
+
             result = {
                 "stdout": execution.stdout,
                 "stderr": execution.stderr,
@@ -79,7 +80,7 @@ class TerminalCommandE2BTool(Agent):
             }
         finally:
             if not shared_sandbox:
-                sandbox.kill()
+                sandbox.close()
         
         return result
 
@@ -97,7 +98,14 @@ class TerminalCommandE2BTool(Agent):
             }
         )
 
-        execution_result_dict = self.execute_terminal_command(**kwargs)
+        # Extract only the parameters that execute_terminal_command accepts
+        command = kwargs["command"]
+        shared_sandbox = kwargs.get("shared_sandbox")
+        
+        execution_result_dict = self.execute_terminal_command(
+            command=command,
+            shared_sandbox=shared_sandbox
+        )
         content = json.dumps(execution_result_dict, indent=2)
 
         artifacts = {"execution_result": execution_result_dict}

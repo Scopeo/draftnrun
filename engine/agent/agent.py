@@ -19,6 +19,20 @@ from engine.prometheus_metric import track_calls
 LOGGER = logging.getLogger(__name__)
 
 
+def _filter_serializable_kwargs(kwargs: dict) -> dict:
+    """Filter out non-JSON serializable objects from kwargs for tracing."""
+    filtered_kwargs = {}
+    for key, value in kwargs.items():
+        try:
+            # Try to serialize the value to check if it's JSON serializable
+            json.dumps(value)
+            filtered_kwargs[key] = value
+        except (TypeError, ValueError):
+            # If not serializable, store a string representation instead
+            filtered_kwargs[key] = f"<{type(value).__name__} object>"
+    return filtered_kwargs
+
+
 class ChatMessage(BaseModel):
     role: str
     content: Optional[str | list] = None
@@ -183,7 +197,7 @@ class Agent(ABC):
                     {
                         SpanAttributes.TOOL_NAME: self.tool_description.name,
                         SpanAttributes.TOOL_DESCRIPTION: self.tool_description.description,
-                        SpanAttributes.TOOL_PARAMETERS: json.dumps(kwargs),
+                        SpanAttributes.TOOL_PARAMETERS: json.dumps(_filter_serializable_kwargs(kwargs)),
                     }
                 )
             try:
