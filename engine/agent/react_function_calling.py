@@ -6,6 +6,7 @@ from typing import Optional
 from opentelemetry import trace as trace_api
 from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttributes
 from openai.types.chat import ChatCompletionMessageToolCall
+from e2b_code_interpreter import Sandbox as E2BSandbox
 
 from engine.agent.agent import (
     Agent,
@@ -18,6 +19,7 @@ from engine.agent.history_message_handling import HistoryMessageHandler
 from engine.trace.trace_manager import TraceManager
 from engine.llm_services.llm_service import CompletionService
 from engine.agent.utils_prompt import fill_prompt_template_with_dictionary
+from settings import settings
 
 
 LOGGER = logging.getLogger(__name__)
@@ -27,6 +29,7 @@ INITIAL_PROMPT = (
     "clarification if a user request is ambiguous. "
 )
 DEFAULT_FALLBACK_REACT_ANSWER = "I'm sorry, I couldn't find a solution to your problem."
+CODE_RUNNER_TOOLS = ["python_code_interpreter", "terminal_command"]
 
 
 class ReActAgent(Agent):
@@ -69,6 +72,8 @@ class ReActAgent(Agent):
         self._completion_service = completion_service
         self.input_data_field_for_messages_history = input_data_field_for_messages_history
         self._allow_tool_shortcuts = allow_tool_shortcuts
+        self._shared_sandbox: Optional[E2BSandbox] = None
+        self._e2b_api_key = getattr(settings, "E2B_API_KEY", None)
 
     async def _run_tool_call(
         self, *original_agent_inputs: AgentPayload, tool_call: ChatCompletionMessageToolCall
@@ -81,6 +86,10 @@ class ReActAgent(Agent):
         tool_to_use: Runnable = next(
             tool for tool in self.agent_tools if tool.tool_description.name == tool_function_name
         )
+        if tool_function_name in CODE_RUNNER_TOOLS:
+            if not self._shared_sandbox:
+                self._shared_sandbox = E2BSandbox(api_key=self._e2b_api_key)
+            tool_arguments["shared_sandbox"] = self._shared_sandbox
         tool_output = await tool_to_use.run(*original_agent_inputs, **tool_arguments)
         return tool_call_id, tool_output
 
@@ -185,6 +194,8 @@ class ReActAgent(Agent):
                     artifacts["images"] = imgs
                 else:
                     LOGGER.debug("No images found in the response.")
+                if self._shared_sandbox:
+                    self._shared_sandbox.kill()
                 return AgentPayload(
                     messages=[ChatMessage(role="assistant", content=chat_response.choices[0].message.content)],
                     is_final=True,
@@ -225,10 +236,11 @@ class ReActAgent(Agent):
                     f"iterations. Returning the final output."
                 )
             )
-
             final_output: AgentPayload = next(
                 agent_output for agent_output in agent_outputs.values() if agent_output.is_final
             )
+            if self._shared_sandbox:
+                self._shared_sandbox.kill()
             return final_output
 
         elif self._current_iteration < self._max_iterations:
@@ -244,6 +256,8 @@ class ReActAgent(Agent):
                     f"Returning the fallback answer: {self.fallback_react_answer}"
                 )
             )
+            if self._shared_sandbox:
+                self._shared_sandbox.kill()
             return AgentPayload(
                 messages=[ChatMessage(role="assistant", content=self.fallback_react_answer)],
                 is_final=False,

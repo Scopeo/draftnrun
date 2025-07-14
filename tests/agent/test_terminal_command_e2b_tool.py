@@ -31,7 +31,7 @@ def mock_sandbox():
     mock_execution.stdout = "Hello World\n"
     mock_execution.stderr = ""
     mock_execution.exit_code = 0
-    mock_sandbox.run_command.return_value = mock_execution
+    mock_sandbox.commands.run.return_value = mock_execution
     return mock_sandbox
 
 
@@ -62,8 +62,8 @@ class TestTerminalCommandE2BTool:
         assert result["command"] == "echo 'Hello World'"
         assert "error" not in result
 
-        mock_sandbox.run_command.assert_called_once_with("echo 'Hello World'", timeout=30)
-        mock_sandbox.kill.assert_called_once()
+        mock_sandbox.commands.run.assert_called_once_with("echo 'Hello World'", timeout=30)
+        mock_sandbox.close.assert_called_once()
 
     @patch("engine.agent.tools.terminal_command_e2b_tool.Sandbox")
     def test_execute_terminal_command_with_shared_sandbox(
@@ -75,22 +75,22 @@ class TestTerminalCommandE2BTool:
         shared_execution.stdout = "Shared output\n"
         shared_execution.stderr = ""
         shared_execution.exit_code = 0
-        shared_sandbox.run_command.return_value = shared_execution
+        shared_sandbox.commands.run.return_value = shared_execution
 
         result = terminal_command_tool.execute_terminal_command("ls -la", shared_sandbox=shared_sandbox)
 
         assert result["stdout"] == "Shared output\n"
         assert result["exit_code"] == 0
-        
-        # Should not create a new sandbox or kill the shared one
+
+        # Should not create a new sandbox or close the shared one
         mock_sandbox_class.assert_not_called()
-        shared_sandbox.kill.assert_not_called()
-        shared_sandbox.run_command.assert_called_once_with("ls -la", timeout=30)
+        shared_sandbox.close.assert_not_called()
+        shared_sandbox.commands.run.assert_called_once_with("ls -la", timeout=30)
 
     @patch("engine.agent.tools.terminal_command_e2b_tool.Sandbox")
     def test_execute_terminal_command_error(self, mock_sandbox_class, terminal_command_tool, mock_sandbox):
         """Test command execution with error."""
-        mock_sandbox.run_command.side_effect = Exception("Command failed")
+        mock_sandbox.commands.run.side_effect = Exception("Command failed")
         mock_sandbox_class.return_value = mock_sandbox
 
         result = terminal_command_tool.execute_terminal_command("invalid_command")
@@ -101,7 +101,7 @@ class TestTerminalCommandE2BTool:
         assert result["command"] == "invalid_command"
         assert result["error"] == "Command failed"
 
-        mock_sandbox.kill.assert_called_once()
+        mock_sandbox.close.assert_called_once()
 
     @patch("engine.agent.tools.terminal_command_e2b_tool.Sandbox")
     def test_execute_terminal_command_no_api_key(self, mock_sandbox_class, terminal_command_tool):
@@ -125,7 +125,7 @@ class TestTerminalCommandE2BTool:
 
         assert len(result.messages) == 1
         assert result.messages[0].role == "assistant"
-        
+
         content = json.loads(result.messages[0].content)
         assert content["stdout"] == "Hello World\n"
         assert content["command"] == "pwd"
@@ -142,7 +142,7 @@ class TestTerminalCommandE2BTool:
         mock_execution.stdout = ""
         mock_execution.stderr = "command not found"
         mock_execution.exit_code = 127
-        mock_sandbox.run_command.return_value = mock_execution
+        mock_sandbox.commands.run.return_value = mock_execution
         mock_sandbox_class.return_value = mock_sandbox
 
         input_payload = AgentPayload(messages=[ChatMessage(role="user", content="test input")])
@@ -158,7 +158,7 @@ class TestTerminalCommandE2BTool:
     @patch("engine.agent.tools.terminal_command_e2b_tool.Sandbox")
     async def test_run_without_trace_exception_handling(self, mock_sandbox_class, terminal_command_tool, mock_sandbox):
         """Test that exceptions during execution are handled properly."""
-        mock_sandbox.run_command.side_effect = Exception("Sandbox error")
+        mock_sandbox.commands.run.side_effect = Exception("Sandbox error")
         mock_sandbox_class.return_value = mock_sandbox
 
         input_payload = AgentPayload(messages=[ChatMessage(role="user", content="test input")])
@@ -171,4 +171,4 @@ class TestTerminalCommandE2BTool:
         assert content["error"] == "Sandbox error"
 
         # Ensure sandbox cleanup happens even on error
-        mock_sandbox.kill.assert_called_once()
+        mock_sandbox.close.assert_called_once()
