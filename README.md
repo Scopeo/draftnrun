@@ -305,7 +305,7 @@ INGESTION_API_KEY_HASHED=xxxx
 
 #### Custom LLM Configuration
 
-You can configure Draft'n run to use your own custom Large Language Model (LLM) service by creating a `custom_models.json` file in the root directory. Copy the example file and customize it:
+You can configure Draft'n run to use your own custom Large Language Model (LLM) service by copying the `custom_models_example.json` one a `custom_models.json` file in the root directory.
 
 **Configuration options:**
 
@@ -323,11 +323,19 @@ You can configure Draft'n run to use your own custom Large Language Model (LLM) 
 - **`base_url`**: The API endpoint URL for your LLM provider
 - **`api_key`**: Your API key for the provider
 
+**Note:** If you dont have embedding models pass an empty list.
+
 **3. Usage:**
 
 Once configured, your custom models will appear in the model selection dropdowns throughout the application. You can reference them using the format `provider_name:model_name` (e.g., `your_provider_name:your-completion-model`).
 
 **Note:** The `custom_models.json` file is automatically loaded by the application. No additional environment variables are required.
+
+When you have done all configuration for local models you need to run seed again 
+
+```bash
+make db-seed
+```
 
 #### Non-local version
 
