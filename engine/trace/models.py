@@ -81,5 +81,5 @@ class SpanMessage(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     span_id = Column(String, nullable=False)
-    direction = mapped_column(make_pg_string_enum(SpanMessageDirection), nullable=False)
-    content = Column(Text, nullable=False)
+    input_content = Column(Text, nullable=False)
+    output_content = Column(Text, nullable=False)
