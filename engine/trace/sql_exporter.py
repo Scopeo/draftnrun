@@ -191,22 +191,13 @@ class SQLSpanExporter(SpanExporter):
             self.session.add(span_row)
 
             input, output = get_messages_from_span(formatted_attributes)
-            if input is not None and len(input) > 0:
-                self.session.add(
-                    models.SpanMessage(
-                        span_id=span_row.span_id,
-                        direction=models.SpanMessageDirection.INPUT,
-                        content=json.dumps(input),
-                    )
+            self.session.add(
+                models.SpanMessage(
+                    span_id=span_row.span_id,
+                    input_content=json.dumps(input) if input is not None else None,
+                    output_content=json.dumps(output) if output is not None else None,
                 )
-            if output is not None and len(output) > 0:
-                self.session.add(
-                    models.SpanMessage(
-                        span_id=span_row.span_id,
-                        direction=models.SpanMessageDirection.OUTPUT,
-                        content=json.dumps(output),
-                    )
-                )
+            )
         self.session.commit()
 
         org_token_counts = defaultdict(int)
