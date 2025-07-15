@@ -225,9 +225,12 @@ class CompletionService(LLMService):
                         "strict": True,
                     },
                 }
+                if isinstance(messages, str):
+                    messages = [{"role": "user", "content": messages}]
+
                 response = client.chat.completions.create(
                     model=self._model_name,
-                    messages=[{"role": "user", "content": messages}],
+                    messages=messages,
                     temperature=self._temperature,
                     stream=stream,
                     response_format=response_format_schema,
