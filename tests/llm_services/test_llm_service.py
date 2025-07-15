@@ -15,7 +15,7 @@ def test_completion_service():
     completion_service = CompletionService(trace_manager=MagicMock(), provider="openai", model_name="gpt-4.1-mini")
     assert completion_service._provider == "openai"
     assert completion_service._model_name == "gpt-4.1-mini"
-    assert completion_service._api_key is None
+    assert completion_service._api_key is not None
     assert completion_service._temperature == 0.5
     assert completion_service._trace_manager is not None
     text = "Hello, world!"
@@ -57,7 +57,7 @@ def test_embedding_service():
     )
     assert embedding_service._provider == "openai"
     assert embedding_service._model_name == "text-embedding-3-large"
-    assert embedding_service._api_key is None
+    assert embedding_service._api_key is not None
     assert embedding_service._trace_manager is not None
     text = "Hello, world!"
     response = embedding_service.embed_text(text)
