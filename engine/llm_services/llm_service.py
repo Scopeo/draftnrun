@@ -212,7 +212,7 @@ class CompletionService(LLMService):
                     }
                 )
                 return response.output_parsed
-            case "cerebras":
+            case "cerebras":  # all providers using only json schema for structured output go here
                 import openai
 
                 client = openai.OpenAI(api_key=self._api_key, base_url=self._base_url)
