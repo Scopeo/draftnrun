@@ -37,15 +37,12 @@ def query_trace_messages(
     LOGGER.debug(f"Querying messages for since {start_time_offset_days}")
 
     query = (
-        "SELECT m1.span_id, m1.content AS input_content, m2.content AS output_content "
-        "FROM messages m1 JOIN messages m2 ON m1.span_id = m2.span_id "
-        "JOIN spans s ON m1.span_id = s.span_id "
-        "WHERE m1.direction = 'input' AND m2.direction = 'output' "
-        f"AND s.start_time > '{start_time_offset_days}';"
+        "SELECT m.span_id, m.input_content, m.output_content FROM messages m "
+        "JOIN spans s ON m.span_id = s.span_id "
+        f"WHERE s.start_time > '{start_time_offset_days}';"
     )
     session = get_session_trace()
     df = pd.read_sql_query(query, session.bind)
     session.close()
-    df = df.replace({np.nan: None})
 
     return df

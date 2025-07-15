@@ -5,6 +5,7 @@ from uuid import UUID
 import logging
 
 import pandas as pd
+import numpy as np
 
 from ada_backend.schemas.trace_schema import TraceSpan, TokenUsage
 from ada_backend.services.metrics.utils import query_trace_duration, query_trace_messages
@@ -29,9 +30,8 @@ def build_span_trees(df: pd.DataFrame) -> List[TraceSpan]:
         span_id = row["span_id"]
         parent_id = row["parent_id"]
         span_kind = row["span_kind"]
-        print('row["input_content"]', type(row["input_content"]), row["input_content"])
-        input = json.loads(row["input_content"])
-        output = json.loads(row["output_content"])
+        input = json.loads(row["input_content"]) if row["input_content"] else []
+        output = json.loads(row["output_content"]) if row["output_content"] else []
         documents = []
         tool_info = {}
         model_name = ""
@@ -92,6 +92,7 @@ def get_trace_by_project(user_id: UUID, project_id: UUID, duration: int) -> List
     track_project_observability_loaded(user_id, project_id)
     df_messages = query_trace_messages(duration)
     df = df_span.merge(df_messages, on="span_id", how="left")
+    df = df.replace({np.nan: None})
     return build_span_trees(df)
 
 
