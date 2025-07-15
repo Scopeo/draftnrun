@@ -83,8 +83,6 @@ OPTIONS_COMPLETION_MODELS = FULL_CAPACITY_COMPLETION_MODELS + [
     # SelectOption(value="anthropic:claude-3.7-sonnet", label="Claude 3.7 Sonnet"),
     # SelectOption(value="anthropic:claude-3.5-sonnet", label="Claude 3.5 Sonnet"),
     # SelectOption(value="anthropic:claude-3.5-haiku", label="Claude 3.5 Haiku"),
-    # Cerebras
-    SelectOption(value="cerebras:llama-3.3-70b", label="Llama 3.3 70B (Cerebras)"),
 ]
 OPTIONS_COMPLETION_MODELS.extend(
     add_custom_llm_model(settings.custom_models, "completion_models", "constrained_completion_with_pydantic")
@@ -99,9 +97,7 @@ OPTIONS_EMBEDDING_MODELS = [
     # OpenAI
     SelectOption(value="openai:text-embedding-3-large", label="Text Embedding 3 Large"),
 ]
-OPTIONS_EMBEDDING_MODELS.extend(
-    add_custom_llm_model(settings.custom_models, "embedding_models")
-)
+OPTIONS_EMBEDDING_MODELS.extend(add_custom_llm_model(settings.custom_models, "embedding_models"))
 
 
 class ParameterLLMConfig(BaseModel):

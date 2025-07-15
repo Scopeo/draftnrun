@@ -60,8 +60,8 @@ class LLMService(ABC):
                     self._api_key = settings.GOOGLE_API_KEY
                     self._base_url = settings.GOOGLE_BASE_URL
                 case _:
-                    self._api_key = settings.custom_llm_models.get(self._provider).get("api_key")
-                    self._base_url = settings.custom_llm_models.get(self._provider).get("base_url")
+                    self._api_key = settings.custom_models.get(self._provider).get("api_key")
+                    self._base_url = settings.custom_models.get(self._provider).get("base_url")
                     LOGGER.debug(f"Using custom api key and base url for provider: {self._provider}")
 
 
@@ -212,7 +212,35 @@ class CompletionService(LLMService):
                     }
                 )
                 return response.output_parsed
+            case "cerebras":
+                import openai
 
+                client = openai.OpenAI(api_key=self._api_key, base_url=self._base_url)
+
+                response_format_schema = {
+                    "type": "json_schema",
+                    "json_schema": {
+                        "name": response_format.__name__,
+                        "schema": response_format.model_json_schema(),
+                        "strict": True,
+                    },
+                }
+                response = client.chat.completions.create(
+                    model=self._model_name,
+                    messages=[{"role": "user", "content": messages}],
+                    temperature=self._temperature,
+                    stream=stream,
+                    response_format=response_format_schema,
+                )
+                span.set_attributes(
+                    {
+                        SpanAttributes.LLM_TOKEN_COUNT_COMPLETION: response.usage.completion_tokens,
+                        SpanAttributes.LLM_TOKEN_COUNT_PROMPT: response.usage.prompt_tokens,
+                        SpanAttributes.LLM_TOKEN_COUNT_TOTAL: response.usage.total_tokens,
+                    }
+                )
+                response_dict = json.loads(response.choices[0].message.content)
+                return response_format(**response_dict)
             case _:
                 raise ValueError(f"Invalid provider for constrained complete with pydantic: {self._provider}")
 
@@ -263,8 +291,8 @@ class CompletionService(LLMService):
                     "type": "json_schema",
                     "json_schema": {
                         "name": name,
-                        "schema": schema
-                    }
+                        "schema": schema,
+                    },
                 }
 
                 client = openai.OpenAI(
@@ -276,7 +304,7 @@ class CompletionService(LLMService):
                     messages=messages,
                     temperature=self._temperature,
                     stream=stream,
-                    response_format=response_format
+                    response_format=response_format,
                 )
                 span.set_attributes(
                     {
