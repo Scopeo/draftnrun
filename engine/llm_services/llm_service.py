@@ -592,34 +592,40 @@ class VisionService(LLMService):
     ):
         super().__init__(trace_manager, provider, model_name, api_key, base_url)
         self._temperature = temperature
+        self._image_format = None
+        match self._provider:
+            case "openai":
+                self._image_format = "jpeg"
+            case "google":
+                self._image_format = "jpeg"
+            case "cerebras":
+                raise ValueError("Our implentation of Cerebras does not support vision models.")
+            case _:
+                completions_models = settings.custom_models.get(self._provider).get("completion_models")
+                for model in completions_models:
+                    if model.get("model_name") == self._model_name:
+                        self._image_format = model.get("image_format", None)
+                        break
+
+                LOGGER.debug(f"Using image format for custom model {self._model_name}: {self._image_format}")
+                if self._image_format is None:
+                    raise ValueError(
+                        f"image format not provided for custom model {self._model_name} "
+                        f"for provider {self._provider}"
+                    )
 
     def _format_image_content(self, image_content_list: list[bytes]) -> list[dict[str, str]]:
-        match self._provider:
-            case "openai" | "google":
-                import base64
+        import base64
 
-                return [
-                    {
-                        "type": "image_url",
-                        "image_url": {
-                            "url": f"data:image/jpeg;base64,{base64.b64encode(image_content).decode('utf-8')}"
-                        },
-                    }
-                    for image_content in image_content_list
-                ]
-            case _:
-
-                import base64
-
-                return [
-                    {
-                        "type": "image_url",
-                        "image_url": {
-                            "url": f"data:image/png;base64,{base64.b64encode(image_content).decode('utf-8')}"
-                        },
-                    }
-                    for image_content in image_content_list
-                ]
+        return [
+            {
+                "type": "image_url",
+                "image_url": {
+                    "url": f"data:image/{self._image_format};base64,{base64.b64encode(image_content).decode('utf-8')}"
+                },
+            }
+            for image_content in image_content_list
+        ]
 
     @with_usage_check
     def get_image_description(
