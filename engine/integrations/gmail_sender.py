@@ -7,6 +7,7 @@ from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttributes
 from google_auth_oauthlib.flow import InstalledAppFlow
+from opentelemetry.trace import get_current_span
 
 from engine.agent.agent import AgentPayload, ChatMessage, ToolDescription
 from engine.agent.agent import Agent
@@ -79,6 +80,12 @@ class GmailSender(Agent):
             raise ValueError("Both email_subject and email_body must be provided")
         if self.send_as_draft:
             LOGGER.info("Creating draft email")
+            span = get_current_span()
+            span.set_attributes(
+                {
+                    SpanAttributes.INPUT_VALUE: f"Subject: {mail_subject}\n Body: {mail_body}",
+                }
+            )
             draft = self.gmail_create_draft(mail_subject, mail_body)
             if not draft:
                 raise RuntimeError("Failed to create draft email")
