@@ -1018,16 +1018,13 @@ class QdrantService:
         collections = response.get("result", {}).get("collections", [])
         return [collection["name"] for collection in collections]
 
-    def get_collection_data(self, collection_name: str) -> pd.DataFrame:
-        """
-        Retrieve all data for a specific collection, organizing metadata into custom columns.
 
-        Args:
-            collection_name (str): The name of the collection to retrieve data for.
+    def get_collection_data(
+        self,
+        collection_name: str,
+        query_filter: Optional[str] = "",
+    ) -> pd.DataFrame:
 
-        Returns:
-            pd.DataFrame: A DataFrame with all points and metadata in the collection.
-        """
         if not self.collection_exists(collection_name):
             raise ValueError(f"Collection {collection_name} does not exist.")
 
@@ -1056,13 +1053,17 @@ class QdrantService:
                     row[field] = payload.get(field)
             rows.append(row)
 
-        return pd.DataFrame(rows)
+        df = pd.DataFrame(rows)
+        if query_filter:
+            df = df.query(query_filter)
+        return df
 
-    async def get_collection_data_async(self, collection_name: str) -> pd.DataFrame:
-        """
-        Async version of get_collection_data.
-        Retrieve all data for a specific collection, organizing metadata into custom columns.
-        """
+    async def get_collection_data_async(
+        self,
+        collection_name: str,
+        query_filter: Optional[str] = "",
+    ) -> pd.DataFrame:
+
         if not await self.collection_exists_async(collection_name):
             raise ValueError(f"Collection {collection_name} does not exist.")
 
@@ -1091,21 +1092,34 @@ class QdrantService:
                     row[field] = payload.get(field)
             rows.append(row)
 
-        return pd.DataFrame(rows)
+        df = pd.DataFrame(rows)
+        if query_filter:
+            df = df.query(query_filter)
+        return df
 
-    def sync_df_with_collection(self, df: pd.DataFrame, collection_name: str) -> bool:
-        """
-        Synchronize a DataFrame with a Qdrant collection.
-        The DataFrame should have the same schema as the Qdrant collection.
-        The function will update existing points and add new points to the collection.
 
-        Args:
-            df (pd.DataFrame): The DataFrame to synchronize with the collection.
-            collection_name (str): The name of the collection to sync with.
+    def sync_df_with_collection(
+        self,
+        df: pd.DataFrame,
+        collection_name: str,
+        query_filter: Optional[str] = "",
+    ) -> bool:
 
-        Returns:
-            bool: True if the synchronization was successful, False otherwise.
-        """
+        if query_filter:
+            old_df = self.get_collection_data(collection_name, query_filter=query_filter)
+            ids_to_delete = set(old_df[self.default_schema.chunk_id_field])
+            if len(ids_to_delete) > 0:
+                self.delete_chunks(
+                    point_ids=list(ids_to_delete),
+                    id_field=self.default_schema.chunk_id_field,
+                    collection_name=collection_name,
+                )
+                LOGGER.info(f"Deleted {len(ids_to_delete)} chunks from Qdrant")
+
+            self.add_chunks(df.to_dict(orient="records"), collection_name)
+            LOGGER.info(f"Added {len(df)} chunks to Qdrant")
+            return True
+
         old_df = self.get_collection_data(collection_name)
         if old_df.empty:
             self.add_chunks(df.to_dict(orient="records"), collection_name)
@@ -1159,14 +1173,31 @@ class QdrantService:
             LOGGER.info(f"Sync successful : number of points in Qdrant is {n_points}")
             return True
 
-    async def sync_df_with_collection_async(self, df: pd.DataFrame, collection_name: str) -> bool:
-        """
-        Async version of sync_df_with_collection.
-        Synchronize a DataFrame with a Qdrant collection asynchronously.
-        """
+    async def sync_df_with_collection_async(
+        self,
+        df: pd.DataFrame,
+        collection_name: str,
+        query_filter: Optional[str] = "",
+    ) -> bool:
+
+        if query_filter:
+            old_df = await self.get_collection_data_async(collection_name, query_filter=query_filter)
+            ids_to_delete = set(old_df[self.default_schema.chunk_id_field])
+            if len(ids_to_delete) > 0:
+                self.delete_chunks(
+                    point_ids=list(ids_to_delete),
+                    id_field=self.default_schema.chunk_id_field,
+                    collection_name=collection_name,
+                )
+                LOGGER.info(f"Deleted {len(ids_to_delete)} chunks from Qdrant")
+
+            self.add_chunks(df.to_dict(orient="records"), collection_name)
+            LOGGER.info(f"Added {len(df)} chunks to Qdrant")
+            return True
+
         old_df = await self.get_collection_data_async(collection_name)
         if old_df.empty:
-            await self.add_chunks_async(df.to_dict(orient="records"), collection_name)
+            self.add_chunks(df.to_dict(orient="records"), collection_name)
             LOGGER.info(f"Qdrant collection is empty. Added {len(df)} chunks to Qdrant")
             return True
 

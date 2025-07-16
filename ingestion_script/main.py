@@ -16,6 +16,7 @@ LOGGER = logging.getLogger(__name__)
 DEFAULT_CHUNK_SIZE = 1024
 DEFAULT_CHUNK_OVERLAP = 0
 DEFAULT_REPLACE_EXISTING = False
+DEFAULT_QUERY_FILTER = ""
 
 
 def check_missing_params(
@@ -55,6 +56,9 @@ def ingestion_main(
     replace_existing = source_attributes.get("replace_existing")
     if replace_existing is None:
         replace_existing = DEFAULT_REPLACE_EXISTING
+    query_filter = source_attributes.get("query_filter")
+    if query_filter is None:
+        query_filter = DEFAULT_QUERY_FILTER
 
     failed_ingestion_task = IngestionTaskUpdate(
         id=task_id,
@@ -155,6 +159,7 @@ def ingestion_main(
                 chunk_size=chunk_size,
                 chunk_overlap=chunk_overlap,
                 replace_existing=replace_existing,
+                query_filter=query_filter,
             )
         except Exception as e:
             LOGGER.error(f"Error during database ingestion: {str(e)}")
