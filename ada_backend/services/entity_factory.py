@@ -12,7 +12,6 @@ from engine.llm_services.llm_service import EmbeddingService, CompletionService,
 from engine.qdrant_service import QdrantService, QdrantCollectionSchema
 from ada_backend.database.setup_db import get_db_session
 from ada_backend.repositories.source_repository import get_data_source_by_id
-from settings import settings
 
 LOGGER = logging.getLogger(__name__)
 
