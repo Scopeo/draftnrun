@@ -4,8 +4,8 @@ import json
 from ada_backend.database import models as db
 from ada_backend.schemas.parameter_schema import PipelineParameterSchema
 from ada_backend.schemas.pipeline.base import (
-    ComponentInstanceSchema,
     ComponentRelationshipSchema,
+    UpdateComponentInstanceSchema,
 )
 from ada_backend.schemas.pipeline.graph_schema import EdgeSchema, GraphUpdateSchema
 from engine.agent.agent import ToolDescription
@@ -56,7 +56,7 @@ def build_graph_test_chatbot(
     }
 
     instances = [
-        ComponentInstanceSchema(
+        UpdateComponentInstanceSchema(
             id=COMPONENT_INSTANCES_IDS["llm_call_instance"],
             name="LLM Call",
             component_id=components["llm_call"],
@@ -71,7 +71,7 @@ def build_graph_test_chatbot(
             ],
             tool_description=GRAPH_TEST_TOOL_DESCRIPTION,
         ),
-        ComponentInstanceSchema(
+        UpdateComponentInstanceSchema(
             id=COMPONENT_INSTANCES_IDS["rag_agent_instance"],
             name="RAG",
             component_id=components["rag_agent"],
@@ -79,7 +79,7 @@ def build_graph_test_chatbot(
             parameters=[],
             tool_description=format_rag_tool_description(source="customer_service"),
         ),
-        ComponentInstanceSchema(
+        UpdateComponentInstanceSchema(
             id=COMPONENT_INSTANCES_IDS["synthesizer_instance"],
             component_id=components["synthesizer"],
             name="Synthesizer",
@@ -89,7 +89,7 @@ def build_graph_test_chatbot(
             ],
         ),
         # Retriever
-        ComponentInstanceSchema(
+        UpdateComponentInstanceSchema(
             id=COMPONENT_INSTANCES_IDS["retriever_instance"],
             component_id=components["retriever"],
             name="Retriever",
@@ -101,7 +101,7 @@ def build_graph_test_chatbot(
                 ),
             ],
         ),
-        ComponentInstanceSchema(
+        UpdateComponentInstanceSchema(
             id=COMPONENT_INSTANCES_IDS["evaluation_instance"],
             name="Evaluation",
             component_id=components["llm_call"],

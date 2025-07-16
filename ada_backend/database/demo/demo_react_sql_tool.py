@@ -1,9 +1,9 @@
 from uuid import UUID, uuid4
 
 from ada_backend.schemas.pipeline.base import (
-    ComponentInstanceSchema,
     ComponentRelationshipSchema,
     PipelineParameterSchema,
+    UpdateComponentInstanceSchema,
 )
 from ada_backend.schemas.pipeline.graph_schema import GraphUpdateSchema
 from ada_backend.services.registry import COMPLETION_MODEL_IN_DB
@@ -55,7 +55,7 @@ def build_react_sql_agent_chatbot(components: dict[str, UUID], graph_runner_id: 
     }
 
     instances = [
-        ComponentInstanceSchema(
+        UpdateComponentInstanceSchema(
             id=COMPONENT_INSTANCES_IDS["react_sql_agent"],
             name="ReAct SQL Agent",
             component_id=components["react_sql_agent"],
@@ -72,7 +72,7 @@ def build_react_sql_agent_chatbot(components: dict[str, UUID], graph_runner_id: 
                 ),
             ],
         ),
-        ComponentInstanceSchema(
+        UpdateComponentInstanceSchema(
             id=COMPONENT_INSTANCES_IDS["snowflake_service"],
             name="Snowflake DB Service",
             component_id=components["snowflake_db_service"],
