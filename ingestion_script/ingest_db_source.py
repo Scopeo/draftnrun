@@ -65,7 +65,7 @@ def get_db_source(
     url_column_name: Optional[str] = None,
     chunk_size: int = 1024,
     chunk_overlap: int = 0,
-    query_filter: Optional[str] = "",
+    query_filter: Optional[str] = None,
 ) -> pd.DataFrame:
     sql_local_service = SQLLocalService(engine_url=db_url)
     df = sql_local_service.get_table_df(
@@ -132,8 +132,8 @@ def upload_db_source(
     url_column_name: Optional[str] = None,
     chunk_size: int = 1024,
     chunk_overlap: int = 0,
-    replace_existing: bool = False,
-    query_filter: Optional[str] = "",
+    update_existing: bool = False,
+    query_filter: Optional[str] = None,
 ):
     df = get_db_source(
         db_url=source_db_url,
@@ -158,7 +158,7 @@ def upload_db_source(
         table_definition=db_definition,
         id_column_name=chunk_id_column_name,
         timestamp_column_name=timestamp_column_name,
-        append_mode=not replace_existing,
+        append_mode=not update_existing,
         schema_name=storage_schema_name,
         query_filter=query_filter,
     )
@@ -187,8 +187,8 @@ def ingestion_database(
     url_column_name: Optional[str] = None,
     chunk_size: int = 1024,
     chunk_overlap: int = 0,
-    replace_existing: bool = False,
-    query_filter: Optional[str] = "",
+    update_existing: bool = False,
+    query_filter: Optional[str] = None,
 ) -> None:
     chunk_id_column_name = "chunk_id"
     chunk_column_name = "content"
@@ -217,7 +217,7 @@ def ingestion_database(
         task_id,
         source_type,
         qdrant_schema,
-        replace_existing=replace_existing,
+        update_existing=update_existing,
         ingestion_function=partial(
             upload_db_source,
             db_definition=db_definition,

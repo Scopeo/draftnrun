@@ -1022,7 +1022,7 @@ class QdrantService:
     def get_collection_data(
         self,
         collection_name: str,
-        query_filter: Optional[str] = "",
+        query_filter: Optional[str] = None,
     ) -> pd.DataFrame:
 
         if not self.collection_exists(collection_name):
@@ -1102,7 +1102,7 @@ class QdrantService:
         self,
         df: pd.DataFrame,
         collection_name: str,
-        query_filter: Optional[str] = "",
+        query_filter: Optional[str] = None,
     ) -> bool:
 
         if query_filter:

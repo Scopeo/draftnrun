@@ -95,7 +95,7 @@ def upload_source(
     source_type: db.SourceType,
     qdrant_schema: QdrantCollectionSchema,
     ingestion_function: callable,
-    replace_existing: bool = False,
+    update_existing: bool = False,
 ) -> None:
     check_signature(
         ingestion_function,
@@ -131,7 +131,7 @@ def upload_source(
         default_collection_schema=qdrant_schema,
     )
 
-    if not replace_existing and db_service.schema_exists(schema_name=schema_name):
+    if not update_existing and db_service.schema_exists(schema_name=schema_name):
         if db_service.table_exists(table_name=table_name, schema_name=schema_name):
             LOGGER.error(f"Source {source_name} already exists db in {schema_name}")
             update_ingestion_task(
@@ -139,7 +139,7 @@ def upload_source(
                 ingestion_task=ingestion_task,
             )
             return
-    elif not replace_existing and qdrant_service.collection_exists(qdrant_collection_name):
+    elif not update_existing and qdrant_service.collection_exists(qdrant_collection_name):
         LOGGER.error(f"Source {source_name} already exists in Qdrant")
         update_ingestion_task(
             organization_id=organization_id,
@@ -154,7 +154,7 @@ def upload_source(
             storage_schema_name=schema_name,
             storage_table_name=table_name,
             qdrant_collection_name=qdrant_collection_name,
-            replace_existing=replace_existing,
+            update_existing=update_existing,
         )
     except Exception as e:
         LOGGER.error(f"Failed to get data from the database: {str(e)}")
