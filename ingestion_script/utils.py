@@ -240,15 +240,10 @@ def get_first_available_multimodal_custom_llm():
             list_completion_models = config_provider.get("completion_models", [])
             for model_config in list_completion_models:
                 if model_config.get("multimodal", False):
-                    model_name = model_config.get("model_name")
-                    base_url = config_provider.get("base_url")
-                    api_key = config_provider.get("api_key")
                     return VisionService(
                         trace_manager=TraceManager(project_name="ingestion"),
                         provider=provider,
-                        model_name=model_name,
-                        api_key=api_key,
-                        base_url=base_url,
+                        model_name=model_config.get("model_name"),
                         temperature=0.0,
                     )
     return None
@@ -260,16 +255,10 @@ def get_first_available_embeddings_custom_llm() -> EmbeddingService | None:
         for provider, config_provider in custom_models.items():
             list_embeddings_models = config_provider.get("embedding_models", [])
             for model_config in list_embeddings_models:
-                model_name = model_config.get("model_name")
-                embedding_size = model_config.get("embedding_size")
-                base_url = config_provider.get("base_url")
-                api_key = config_provider.get("api_key")
                 return EmbeddingService(
                     provider=provider,
-                    model_name=model_name,
+                    model_name=model_config.get("model_name"),
                     trace_manager=TraceManager(project_name="ingestion"),
-                    api_key=api_key,
-                    base_url=base_url,
-                    embedding_size=embedding_size,
+                    embedding_size=model_config.get("embedding_size"),
                 )
     return None
