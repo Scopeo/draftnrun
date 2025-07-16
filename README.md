@@ -304,18 +304,38 @@ INGESTION_API_KEY_HASHED=xxxx
 ```
 
 #### Custom LLM Configuration
-You can configure Draft'n run to use your own custom Large Language Model (LLM) service by adding the following variables to your `credentials.env` file:
 
-```env
-# Custom LLM configuration
+You can configure Draft'n run to use your own custom Large Language Model (LLM) service by copying the `custom_models_example.json` one a `custom_models.json` file in the root directory.
 
-CUSTOM_LLM_MODELS={"provider_name": {"model_name":["my-llm-1-model-name", "my-llm-2-model-name"], "base_url": "https://llm1.example.com/v1/", "api_key": "my_api_key}}
+**Configuration options:**
 
-CUSTOM_EMBEDDING_MODELS={"provider_name": {"model_name":["my-embed-1-model-name", "my-embed-2-model-name"], "base_url": "https://embed1.example.com/v1/", "api_key": "my_api_key}}
+- **`completion_models`**: List of available completion models
+  - `model_name`: The name of your model
+  - `function_calling`: Whether the model supports function calling
+  - `multimodal`: Whether the model supports multimodal inputs (images, etc.)
+  - `constrained_completion_with_pydantic`: Whether the model supports Pydantic-constrained outputs
+  - `constrained_completion_with_json_schema`: Whether the model supports JSON schema-constrained outputs
 
+- **`embedding_models`**: List of available embedding models
+  - `model_name`: The name of your embedding model
+  - `embedding_size`: The dimension of the embeddings
+
+- **`base_url`**: The API endpoint URL for your LLM provider
+- **`api_key`**: Your API key for the provider
+
+**Note:** If you dont have embedding models pass an empty list.
+
+**3. Usage:**
+
+Once configured, your custom models will appear in the model selection dropdowns throughout the application. You can reference them using the format `provider_name:model_name` (e.g., `your_provider_name:your-completion-model`).
+
+**Note:** The `custom_models.json` file is automatically loaded by the application. No additional environment variables are required.
+
+When you have done all configuration for local models you need to run seed again 
+
+```bash
+make db-seed
 ```
-**How it works:**  
-If you set these variables, your custom model will appear as an option in the model selection dropdown after reseeding. When this model is selected, the backend will route requests to your custom LLM service instead of sending them to OpenAI or other providers.
 
 #### Non-local version
 

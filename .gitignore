@@ -26,6 +26,7 @@ config/seaweedfs/s3_config.json
 # .env
 credentials.env
 sql_credentials.env
+custom_models.json
 
 # .env files for ada_ingestion_system
 ada_ingestion_system/.env

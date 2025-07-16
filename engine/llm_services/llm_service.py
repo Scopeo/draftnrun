@@ -1,4 +1,5 @@
 import json
+import logging
 from functools import wraps
 from typing import Optional
 from abc import ABC
@@ -17,6 +18,9 @@ from engine.llm_services.utils import chat_completion_to_response
 from openai.types.chat import ChatCompletion
 
 
+LOGGER = logging.getLogger(__name__)
+
+
 def with_usage_check(func):
     @wraps(func)
     def wrapper(self, *args, **kwargs):
@@ -28,16 +32,6 @@ def with_usage_check(func):
         return func(self, *args, **kwargs)
 
     return wrapper
-
-
-def get_api_key_and_base_url(model_name: str) -> tuple[str, str]:
-    try:
-        for provider, model_info in settings.custom_llm_models.items():
-            model_names = model_info.get("model_name")
-            if model_name in model_names:
-                return model_info.get("api_key"), model_info.get("base_url")
-    except Exception as e:
-        raise ValueError(f"No api_key and base_url found for model name: {model_name}") from e
 
 
 class LLMService(ABC):
@@ -54,6 +48,21 @@ class LLMService(ABC):
         self._model_name = model_name
         self._api_key = api_key
         self._base_url = base_url
+        if self._api_key is None or self._base_url is None:
+            match self._provider:
+                case "openai":
+                    self._api_key = settings.OPENAI_API_KEY
+                    self._base_url = None
+                case "cerebras":
+                    self._api_key = settings.CEREBRAS_API_KEY
+                    self._base_url = settings.CEREBRAS_BASE_URL
+                case "google":
+                    self._api_key = settings.GOOGLE_API_KEY
+                    self._base_url = settings.GOOGLE_BASE_URL
+                case _:
+                    self._api_key = settings.custom_models.get(self._provider).get("api_key")
+                    self._base_url = settings.custom_models.get(self._provider).get("base_url")
+                    LOGGER.debug(f"Using custom api key and base url for provider: {self._provider}")
 
 
 class EmbeddingService(LLMService):
@@ -73,9 +82,6 @@ class EmbeddingService(LLMService):
             case "openai":
                 import openai
 
-                if self._api_key is None:
-                    self._api_key = settings.OPENAI_API_KEY
-
                 client = openai.OpenAI(api_key=self._api_key)
                 response = client.embeddings.create(
                     model=self._model_name,
@@ -91,9 +97,6 @@ class EmbeddingService(LLMService):
 
             case _:
                 import openai
-
-                if self._api_key is None or self._base_url is None:
-                    self._api_key, self._base_url = get_api_key_and_base_url(self._model_name)
 
                 client = openai.OpenAI(
                     api_key=self._api_key,
@@ -137,8 +140,6 @@ class CompletionService(LLMService):
             case "openai":
                 import openai
 
-                if self._api_key is None:
-                    self._api_key = settings.OPENAI_API_KEY
                 messages = chat_completion_to_response(messages)
                 client = openai.OpenAI(api_key=self._api_key)
                 response = client.responses.create(
@@ -156,11 +157,8 @@ class CompletionService(LLMService):
                 )
                 return response.output_text
 
-            case _:
+            case _:  # all the providers that are using openai chat completion go here
                 import openai
-
-                if self._api_key is None or self._base_url is None:
-                    self._api_key, self._base_url = get_api_key_and_base_url(self._model_name)
 
                 client = openai.OpenAI(
                     api_key=self._api_key,
@@ -170,6 +168,7 @@ class CompletionService(LLMService):
                     model=self._model_name,
                     messages=messages,
                     temperature=self._temperature,
+                    stream=stream,
                 )
                 span.set_attributes(
                     {
@@ -186,10 +185,7 @@ class CompletionService(LLMService):
         messages: list[dict] | str,
         response_format: BaseModel,
         stream: bool = False,
-        tools: Optional[list[ToolDescription]] = None,
-        tool_choice: str = "auto",
     ) -> BaseModel:
-        messages = chat_completion_to_response(messages)
         kwargs = {
             "input": messages,
             "model": self._model_name,
@@ -205,9 +201,8 @@ class CompletionService(LLMService):
             case "openai":
                 import openai
 
-                if self._api_key is None:
-                    self._api_key = settings.OPENAI_API_KEY
                 client = openai.OpenAI(api_key=self._api_key)
+                messages = chat_completion_to_response(messages)
                 response = client.responses.parse(**kwargs)
                 span.set_attributes(
                     {
@@ -217,9 +212,40 @@ class CompletionService(LLMService):
                     }
                 )
                 return response.output_parsed
+            case "cerebras":  # all providers using only json schema for structured output go here
+                import openai
 
+                client = openai.OpenAI(api_key=self._api_key, base_url=self._base_url)
+
+                response_format_schema = {
+                    "type": "json_schema",
+                    "json_schema": {
+                        "name": response_format.__name__,
+                        "schema": response_format.model_json_schema(),
+                        "strict": True,
+                    },
+                }
+                if isinstance(messages, str):
+                    messages = [{"role": "user", "content": messages}]
+
+                response = client.chat.completions.create(
+                    model=self._model_name,
+                    messages=messages,
+                    temperature=self._temperature,
+                    stream=stream,
+                    response_format=response_format_schema,
+                )
+                span.set_attributes(
+                    {
+                        SpanAttributes.LLM_TOKEN_COUNT_COMPLETION: response.usage.completion_tokens,
+                        SpanAttributes.LLM_TOKEN_COUNT_PROMPT: response.usage.prompt_tokens,
+                        SpanAttributes.LLM_TOKEN_COUNT_TOTAL: response.usage.total_tokens,
+                    }
+                )
+                response_dict = json.loads(response.choices[0].message.content)
+                return response_format(**response_dict)
             case _:
-                raise ValueError(f"Invalid provider: {self._provider}")
+                raise ValueError(f"Invalid provider for constrained complete with pydantic: {self._provider}")
 
     @with_usage_check
     def constrained_complete_with_json_schema(
@@ -227,8 +253,6 @@ class CompletionService(LLMService):
         messages: list[dict] | str,
         response_format: str,
         stream: bool = False,
-        tools: Optional[list[ToolDescription]] = None,
-        tool_choice: str = "auto",
     ) -> str:
         kwargs = {
             "input": messages,
@@ -236,7 +260,6 @@ class CompletionService(LLMService):
             "temperature": self._temperature,
             "stream": stream,
         }
-        messages = chat_completion_to_response(messages)
         response_format = load_str_to_json(response_format)
         # validate with the basemodel OutputFormatModel
         response_format["strict"] = True
@@ -250,9 +273,8 @@ class CompletionService(LLMService):
             case "openai":
                 import openai
 
-                if self._api_key is None:
-                    self._api_key = settings.OPENAI_API_KEY
                 client = openai.OpenAI(api_key=self._api_key)
+                messages = chat_completion_to_response(messages)
                 response = client.responses.parse(**kwargs)
                 span.set_attributes(
                     {
@@ -262,8 +284,41 @@ class CompletionService(LLMService):
                     }
                 )
                 return response.output_text
+            case "cerebras" | "google":  # all the providers that are using openai chat completion go here
+                import openai
+
+                schema = response_format.get("schema", {})
+                name = response_format.get("name", "response")
+
+                response_format = {
+                    "type": "json_schema",
+                    "json_schema": {
+                        "name": name,
+                        "schema": schema,
+                    },
+                }
+
+                client = openai.OpenAI(
+                    api_key=self._api_key,
+                    base_url=self._base_url,
+                )
+                response = client.chat.completions.create(
+                    model=self._model_name,
+                    messages=messages,
+                    temperature=self._temperature,
+                    stream=stream,
+                    response_format=response_format,
+                )
+                span.set_attributes(
+                    {
+                        SpanAttributes.LLM_TOKEN_COUNT_COMPLETION: response.usage.completion_tokens,
+                        SpanAttributes.LLM_TOKEN_COUNT_PROMPT: response.usage.prompt_tokens,
+                        SpanAttributes.LLM_TOKEN_COUNT_TOTAL: response.usage.total_tokens,
+                    }
+                )
+                return response.choices[0].message.content
             case _:
-                raise ValueError(f"Invalid provider: {self._provider}")
+                raise ValueError(f"Invalid provider for constrained complete with json schema: {self._provider}")
 
     @with_usage_check
     def function_call(
@@ -284,9 +339,30 @@ class CompletionService(LLMService):
             case "openai":
                 import openai
 
-                if self._api_key is None:
-                    self._api_key = settings.OPENAI_API_KEY
                 client = openai.OpenAI(api_key=self._api_key)
+                response = client.chat.completions.create(
+                    model=self._model_name,
+                    messages=messages,
+                    tools=openai_tools,
+                    temperature=self._temperature,
+                    stream=stream,
+                    tool_choice=tool_choice,
+                )
+                span.set_attributes(
+                    {
+                        SpanAttributes.LLM_TOKEN_COUNT_COMPLETION: response.usage.completion_tokens,
+                        SpanAttributes.LLM_TOKEN_COUNT_PROMPT: response.usage.prompt_tokens,
+                        SpanAttributes.LLM_TOKEN_COUNT_TOTAL: response.usage.total_tokens,
+                    }
+                )
+                return response
+            case "cerebras":  # all the providers that are using openai chat completion go here
+                import openai
+
+                client = openai.OpenAI(
+                    api_key=self._api_key,
+                    base_url=self._base_url,
+                )
                 response = client.chat.completions.create(
                     model=self._model_name,
                     messages=messages,
@@ -305,9 +381,6 @@ class CompletionService(LLMService):
                 return response
             case _:
                 import openai
-
-                if self._api_key is None or self._base_url is None:
-                    self._api_key, self._base_url = get_api_key_and_base_url(self._model_name)
 
                 client = openai.OpenAI(
                     api_key=self._api_key,
@@ -349,8 +422,6 @@ class WebSearchService(LLMService):
             case "openai":
                 import openai
 
-                if self._api_key is None:
-                    self._api_key = settings.OPENAI_API_KEY
                 client = openai.OpenAI(api_key=self._api_key)
                 response = client.responses.create(
                     model=self._model_name,
@@ -413,16 +484,11 @@ class VisionService(LLMService):
             case "openai":
                 import openai
 
-                if self._api_key is None:
-                    self._api_key = settings.OPENAI_API_KEY
                 client = openai.OpenAI(api_key=self._api_key)
             case "google":
                 import openai
 
-                if self._api_key is None:
-                    self._api_key = settings.GOOGLE_API_KEY
-
-                client = openai.OpenAI(api_key=self._api_key, base_url=settings.GOOGLE_BASE_URL)
+                client = openai.OpenAI(api_key=self._api_key, base_url=self._base_url)
         content = [{"type": "text", "text": text_prompt}]
         content.extend(self._format_image_content(image_content_list))
         messages = [

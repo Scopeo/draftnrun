@@ -17,7 +17,7 @@ from ada_backend.database.seed.seed_tool_description import TOOL_DESCRIPTION_UUI
 from ada_backend.database.seed.utils import (
     COMPONENT_UUIDS,
     ParameterLLMConfig,
-    build_completion_service_config_definitions,
+    build_function_calling_service_config_definitions,
 )
 from ada_backend.services.registry import COMPLETION_MODEL_IN_DB
 from engine.agent.document_react_loader import INITIAL_PROMPT as DEFAULT_DOCUMENT_REACT_LOADER_PROMPT
@@ -144,7 +144,7 @@ def seed_smart_rag_components(session: Session):
                 ).model_dump(exclude_unset=True, exclude_none=True),
                 is_advanced=False,
             ),
-            *build_completion_service_config_definitions(
+            *build_function_calling_service_config_definitions(
                 component_id=document_react_loader_agent.id,
                 params_to_seed=[
                     ParameterLLMConfig(

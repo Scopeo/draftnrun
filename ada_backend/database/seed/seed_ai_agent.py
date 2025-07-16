@@ -16,7 +16,7 @@ from ada_backend.database.seed.seed_tool_description import TOOL_DESCRIPTION_UUI
 from ada_backend.database.seed.utils import (
     COMPONENT_UUIDS,
     ParameterLLMConfig,
-    build_completion_service_config_definitions,
+    build_function_calling_service_config_definitions,
 )
 from ada_backend.services.registry import COMPLETION_MODEL_IN_DB
 
@@ -167,7 +167,7 @@ def seed_ai_agent_components(session: Session):
                 ).model_dump(exclude_unset=True, exclude_none=True),
                 is_advanced=True,
             ),
-            *build_completion_service_config_definitions(
+            *build_function_calling_service_config_definitions(
                 component_id=base_ai_agent.id,
                 params_to_seed=[
                     ParameterLLMConfig(
