@@ -76,12 +76,13 @@ def sync_chunks_to_qdrant(
     collection_name: str,
     db_service: DBService,
     qdrant_service: QdrantService,
+    query_filter: Optional[str] = "",
 ) -> None:
-    chunks_df = db_service.get_table_df(table_name, schema_name=table_schema)
+    chunks_df = db_service.get_table_df(table_name, schema_name=table_schema, query_filter=query_filter)
     LOGGER.info(f"Syncing chunks to Qdrant collection {collection_name} with {len(chunks_df)} rows")
     if not qdrant_service.collection_exists(collection_name):
         qdrant_service.create_collection(collection_name)
-    qdrant_service.sync_df_with_collection(df=chunks_df, collection_name=collection_name)
+    qdrant_service.sync_df_with_collection(df=chunks_df, collection_name=collection_name, query_filter=query_filter)
 
 
 def ingest_google_drive_source(

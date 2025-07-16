@@ -65,9 +65,12 @@ def get_db_source(
     url_column_name: Optional[str] = None,
     chunk_size: int = 1024,
     chunk_overlap: int = 0,
+    query_filter: Optional[str] = "",
 ) -> pd.DataFrame:
     sql_local_service = SQLLocalService(engine_url=db_url)
-    df = sql_local_service.get_table_df(table_name=table_name, schema_name=source_schema_name)
+    df = sql_local_service.get_table_df(
+        table_name=table_name, schema_name=source_schema_name, query_filter=query_filter
+    )
     if df.empty:
         raise ValueError(f"The table '{table_name}' is empty. No data to ingest.")
 
@@ -130,6 +133,7 @@ def upload_db_source(
     chunk_size: int = 1024,
     chunk_overlap: int = 0,
     replace_existing: bool = False,
+    query_filter: Optional[str] = "",
 ):
     df = get_db_source(
         db_url=source_db_url,
@@ -145,6 +149,7 @@ def upload_db_source(
         url_column_name=url_column_name,
         chunk_size=chunk_size,
         chunk_overlap=chunk_overlap,
+        query_filter=query_filter,
     )
 
     db_service.update_table(
@@ -155,6 +160,7 @@ def upload_db_source(
         timestamp_column_name=timestamp_column_name,
         append_mode=not replace_existing,
         schema_name=storage_schema_name,
+        query_filter=query_filter,
     )
     LOGGER.info(f"Updated table '{storage_table_name}' in schema '{storage_schema_name}' with {len(df)} rows.")
     sync_chunks_to_qdrant(
@@ -163,6 +169,7 @@ def upload_db_source(
         collection_name=qdrant_collection_name,
         db_service=db_service,
         qdrant_service=qdrant_service,
+        query_filter=query_filter,
     )
 
 
@@ -181,6 +188,7 @@ def ingestion_database(
     chunk_size: int = 1024,
     chunk_overlap: int = 0,
     replace_existing: bool = False,
+    query_filter: Optional[str] = "",
 ) -> None:
     chunk_id_column_name = "chunk_id"
     chunk_column_name = "content"
@@ -226,5 +234,6 @@ def ingestion_database(
             url_column_name=url_column_name,
             chunk_size=chunk_size,
             chunk_overlap=chunk_overlap,
+            query_filter=query_filter,
         ),
     )

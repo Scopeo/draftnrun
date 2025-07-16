@@ -45,7 +45,12 @@ class DBService(ABC):
         pass
 
     @abstractmethod
-    def get_table_df(self, table_name: str, schema_name: Optional[str] = None) -> pd.DataFrame:
+    def get_table_df(
+        self,
+        table_name: str,
+        schema_name: Optional[str] = None,
+        query_filter: Optional[str] = "",
+    ) -> pd.DataFrame:
         pass
 
     @abstractmethod
@@ -85,6 +90,7 @@ class DBService(ABC):
         schema_name: Optional[str] = None,
         timestamp_column_name: Optional[str] = None,
         append_mode: bool = True,
+        query_filter: Optional[str] = "",
     ) -> None:
         """
         Update a table on Database with a new DataFrame.
@@ -105,10 +111,13 @@ class DBService(ABC):
             self.insert_df_to_table(df=new_df, table_name=table_name, schema_name=schema_name)
         else:  # Update existing table
             query = (
-                f"SELECT {id_column_name}, {timestamp_column_name} FROM {target_table_name};"
+                f"SELECT {id_column_name}, {timestamp_column_name} FROM {target_table_name}"
                 if timestamp_column_name
-                else f"SELECT {id_column_name} FROM {target_table_name};"
+                else f"SELECT {id_column_name} FROM {target_table_name}"
             )
+            if query_filter:
+                query += f" WHERE {query_filter}"
+            query += ";"
             old_df = self._fetch_sql_query_as_dataframe(query)
             old_df = convert_to_correct_pandas_type(old_df, id_column_name, table_definition)
 
