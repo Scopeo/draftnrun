@@ -3,10 +3,7 @@ from uuid import UUID
 
 from pydantic import BaseModel
 
-from ada_backend.schemas.pipeline.base import (
-    ComponentRelationshipSchema,
-    UpdateComponentInstanceSchema,
-)
+from ada_backend.schemas.pipeline.base import ComponentRelationshipSchema, UpdateComponentInstanceSchema
 from ada_backend.schemas.pipeline.get_pipeline_schema import ComponentInstanceReadSchema
 
 

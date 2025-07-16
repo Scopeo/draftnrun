@@ -302,12 +302,7 @@ def get_all_components_with_parameters(
             else None
         )
         if component.integration_id:
-            integration_db = get_integration(session, component.integration_id)
-            integration = IntegrationSchema(
-                id=integration_db.id,
-                name=integration_db.name,
-                service=integration_db.service,
-            )
+            integration = get_integration(session, component.integration_id)
         # Create ComponentWithParametersDTO
         result.append(
             ComponentWithParametersDTO(
@@ -315,7 +310,15 @@ def get_all_components_with_parameters(
                 name=component.name,
                 description=component.description,
                 is_agent=component.is_agent,
-                integration=integration if component.integration_id else None,
+                integration=(
+                    IntegrationSchema(
+                        id=integration.id,
+                        name=integration.name,
+                        service=integration.service,
+                    )
+                    if component.integration_id
+                    else None
+                ),
                 tool_parameter_name=tool_param_name,
                 function_callable=component.function_callable,
                 release_stage=component.release_stage,

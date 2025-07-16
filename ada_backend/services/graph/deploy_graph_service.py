@@ -26,7 +26,7 @@ from ada_backend.repositories.graph_runner_repository import (
 from ada_backend.repositories.integration_repository import get_component_instance_integration
 from ada_backend.schemas.integration_schema import CreateComponentIntegrationSchema
 from ada_backend.schemas.parameter_schema import PipelineParameterSchema
-from ada_backend.schemas.pipeline.base import ComponentInstanceSchema, UpdateComponentInstanceSchema
+from ada_backend.schemas.pipeline.base import UpdateComponentInstanceSchema
 from ada_backend.schemas.pipeline.graph_schema import GraphDeployResponse
 from ada_backend.services.pipeline.get_pipeline_service import get_component_instance, get_relationships
 from ada_backend.services.pipeline.update_pipeline_service import create_or_update_component_instance
