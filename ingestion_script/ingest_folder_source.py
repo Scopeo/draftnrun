@@ -19,25 +19,21 @@ from engine.storage_service.db_service import DBService
 from engine.storage_service.db_utils import PROCESSED_DATETIME_FIELD, DBColumn, DBDefinition, create_db_if_not_exists
 from engine.storage_service.local_service import SQLLocalService
 from engine.trace.trace_manager import TraceManager
-from ingestion_script.utils import create_source, get_sanitize_names, update_ingestion_task
+from ingestion_script.utils import (
+    create_source,
+    get_sanitize_names,
+    update_ingestion_task,
+    get_first_available_embeddings_custom_llm,
+    get_first_available_multimodal_custom_llm,
+)
 from settings import settings
 
 LOGGER = logging.getLogger(__name__)
 
-# TODO: add the selection at the user level
-if (settings.custom_llm_models is not None) and (len(settings.custom_llm_models) > 0):
-    llm_model_provider = list(settings.custom_llm_models.keys())[0]
-    llm_base_url = settings.custom_llm_models[llm_model_provider]["base_url"]
-    llm_api_key = settings.custom_llm_models[llm_model_provider]["api_key"]
-    llm_model_name = settings.custom_llm_models[llm_model_provider]["model_name"][0]
-    VISION_COMPLETION_SERVICE = VisionService(
-        trace_manager=TraceManager(project_name="ingestion"),
-        provider=llm_model_provider,
-        model_name=llm_model_name,
-        api_key=llm_api_key,
-        base_url=llm_base_url,
-        temperature=0.0,
-    )
+# TODO: add the selection at the user level via Front
+VISION_COMPLETION_SERVICE = get_first_available_multimodal_custom_llm()
+
+if VISION_COMPLETION_SERVICE is not None:
     FALLBACK_VISION_LLM_SERVICE = VISION_COMPLETION_SERVICE
 else:
     VISION_COMPLETION_SERVICE = VisionService(
@@ -51,24 +47,9 @@ else:
         trace_manager=TraceManager(project_name="ingestion"),
     )
 
-# TODO: add the selection at the user level
-if (settings.custom_embedding_models is not None) and (len(settings.custom_embedding_models) > 0):
-    embedding_model_provider = list(settings.custom_embedding_models.keys())[0]
-    embedding_base_url = settings.custom_embedding_models[embedding_model_provider]["base_url"]
-    embedding_api_key = settings.custom_embedding_models[embedding_model_provider]["api_key"]
-    embedding_model_name = settings.custom_embedding_models[embedding_model_provider]["model_name"][0]
-    embedding_model_embedding_size = settings.custom_embedding_models[embedding_model_provider]["embedding_size"][
-        embedding_model_name
-    ]
-    EMBEDDING_SERVICE = EmbeddingService(
-        provider=embedding_model_provider,
-        model_name=embedding_model_name,
-        trace_manager=TraceManager(project_name="ingestion"),
-        api_key=embedding_api_key,
-        base_url=embedding_base_url,
-        embedding_size=embedding_model_embedding_size,
-    )
-else:
+# TODO: add the selection at the user level via Front
+EMBEDDING_SERVICE = get_first_available_embeddings_custom_llm()
+if EMBEDDING_SERVICE is None:
     EMBEDDING_SERVICE = EmbeddingService(
         provider="openai",
         model_name="text-embedding-3-large",
