@@ -257,7 +257,7 @@ class QdrantService:
         vector_results = [(result["id"], result["score"], result["payload"]) for result in response.get("result", [])]
         return vector_results
 
-    async def asearch_vectors(
+    async def search_vectors_async(
         self,
         query_vector: list[float],
         collection_name: str,
@@ -313,7 +313,7 @@ class QdrantService:
 
         return response.get("result", [])
 
-    async def aget_chunk_data_by_id(
+    async def get_chunk_data_by_id_async(
         self,
         vector_ids: list[str],
         collection_name: str,
@@ -346,12 +346,12 @@ class QdrantService:
             input_embeddings = [input_text]
         return [data.embedding for data in self._embedding_service.embed_text(input_embeddings)]
 
-    async def _abuild_vectors(self, input_text: str | list[str]) -> list[list[float]]:
+    async def _build_vectors_async(self, input_text: str | list[str]) -> list[list[float]]:
         """Asynchronously build embedding vectors for the given text using the embedding service."""
         input_embeddings = input_text
         if isinstance(input_text, str):
             input_embeddings = [input_text]
-        return [data.embedding for data in await self._embedding_service.aembed_text(input_embeddings)]
+        return [data.embedding for data in await self._embedding_service.embed_text_async(input_embeddings)]
 
     def apply_date_penalty_to_chunks(
         self,
@@ -451,7 +451,7 @@ class QdrantService:
             )
         return chunks
 
-    async def aretrieve_similar_chunks(
+    async def retrieve_similar_chunks_async(
         self,
         query_text: str,
         collection_name: str,
@@ -469,8 +469,8 @@ class QdrantService:
         Search for chunks similar to the given text.
         """
         schema = self._get_schema(collection_name)
-        query_vector = (await self._abuild_vectors(query_text))[0]
-        vector_results = await self.asearch_vectors(
+        query_vector = (await self._build_vectors_async(query_text))[0]
+        vector_results = await self.search_vectors_async(
             query_vector=query_vector,
             collection_name=collection_name,
             filter=filter,
@@ -496,7 +496,7 @@ class QdrantService:
                 max_retrieved_chunks_after_penalty,
             )
 
-        results = await self.aget_chunk_data_by_id(collection_name=collection_name, vector_ids=vector_ids)
+        results = await self.get_chunk_data_by_id_async(collection_name=collection_name, vector_ids=vector_ids)
 
         chunks: list[SourceChunk] = []
         for result in results:
@@ -528,7 +528,7 @@ class QdrantService:
         payload_schema = results.get("result", {}).get("payload_schema", {})
         return index_name in payload_schema
 
-    async def acheck_index_exists(self, collection_name: str, index_name: str) -> bool:
+    async def check_index_exists_async(self, collection_name: str, index_name: str) -> bool:
         """Async version of check_index_exists."""
         results = await self._send_request_async(method="GET", endpoint=f"/collections/{collection_name}")
         payload_schema = results.get("result", {}).get("payload_schema", {})
@@ -541,9 +541,9 @@ class QdrantService:
             payload = {"field_name": index_name, "field_schema": "keyword"}
             self._send_request(method="PUT", endpoint=endpoint, payload=payload)
 
-    async def acreate_index_if_needed(self, collection_name: str, index_name: str) -> None:
+    async def create_index_if_needed_async(self, collection_name: str, index_name: str) -> None:
         """Async version of create_index_if_needed."""
-        if not await self.acheck_index_exists(collection_name, index_name):
+        if not await self.check_index_exists_async(collection_name, index_name):
             LOGGER.info(f"Creating index '{index_name}' for collection '{collection_name}'")
             endpoint = f"/collections/{collection_name}/index"
             payload = {"field_name": index_name, "field_schema": "keyword"}
@@ -603,7 +603,7 @@ class QdrantService:
         LOGGER.info(f"Added {len(list_chunks)} chunks to the collection")
         return True
 
-    async def aadd_chunks(
+    async def add_chunks_async(
         self,
         list_chunks: list[dict[str, Any]],
         collection_name: str,
@@ -613,13 +613,13 @@ class QdrantService:
         Add chunks to the Qdrant collection asynchronously.
         """
         schema = self._get_schema(collection_name)
-        await self.acreate_index_if_needed(collection_name, index_name=schema.chunk_id_field)
+        await self.create_index_if_needed_async(collection_name, index_name=schema.chunk_id_field)
         if schema.metadata_fields_to_keep:
             for metadata_field in schema.metadata_fields_to_keep:
-                await self.acreate_index_if_needed(collection_name, index_name=metadata_field)
+                await self.create_index_if_needed_async(collection_name, index_name=metadata_field)
         for i in range(0, len(list_chunks), self._max_chunks_to_add):
             current_chunk_batch = list_chunks[i : i + self._max_chunks_to_add]
-            list_embeddings = await self._abuild_vectors(
+            list_embeddings = await self._build_vectors_async(
                 [chunk[schema.content_field] for chunk in current_chunk_batch]
             )
             metadata_to_keep = set(schema.metadata_fields_to_keep or [])
@@ -643,7 +643,7 @@ class QdrantService:
                 }
                 for chunk, vector in zip(current_chunk_batch, list_embeddings)
             ]
-            if not await self.ainsert_points_in_collection(
+            if not await self.insert_points_in_collection_async(
                 points=list_payloads,
                 collection_name=collection_name,
             ):
@@ -667,7 +667,7 @@ class QdrantService:
             collection_name=collection_name,
         )
 
-    async def adelete_chunks(
+    async def delete_chunks_async(
         self,
         point_ids: list[str],
         id_field: str,
@@ -679,8 +679,8 @@ class QdrantService:
         of IDs for a given field name.
         """
         filter_on_qdrant_field = {"should": [{"key": id_field, "match": {"any": point_ids}}]}
-        points = await self.aget_points(filter=filter_on_qdrant_field, collection_name=collection_name)
-        return await self.adelete_points(
+        points = await self.get_points_async(filter=filter_on_qdrant_field, collection_name=collection_name)
+        return await self.delete_points_async(
             point_ids=[point["id"] for point in points],
             collection_name=collection_name,
         )
@@ -755,7 +755,7 @@ class QdrantService:
         )
         return response.get("result", {}).get("points", [])
 
-    async def aget_points(
+    async def get_points_async(
         self,
         collection_name: str,
         filter: Optional[dict] = None,
@@ -767,7 +767,7 @@ class QdrantService:
         payload = {
             "filter": filter,
             "offset": None,
-            "limit": max(await self.acount_points(filter=filter, collection_name=collection_name), 1),
+            "limit": max(await self.count_points_async(filter=filter, collection_name=collection_name), 1),
         }
         response = await self._send_request_async(
             method="POST", endpoint=f"collections/{collection_name}/points/scroll?wait=true", payload=payload
@@ -786,7 +786,7 @@ class QdrantService:
         response = self._send_request(method="GET", endpoint=f"collections/{collection_name}/exists")
         return response.get("result", {}).get("exists", False)
 
-    async def acollection_exists(self, collection_name: str) -> bool:
+    async def collection_exists_async(self, collection_name: str) -> bool:
         """Async version of collection_exists."""
         response = await self._send_request_async(method="GET", endpoint=f"collections/{collection_name}/exists")
         return response.get("result", {}).get("exists", False)
@@ -820,14 +820,14 @@ class QdrantService:
         LOGGER.error(f"Problem with status of collection creation {collection_name} : {response}")
         return False
 
-    async def acreate_collection(
+    async def create_collection_async(
         self,
         collection_name: str,
         vector_size: int = 3072,
         distance: str = "Cosine",
     ) -> bool:
         """Async version of create_collection."""
-        if await self.acollection_exists(collection_name):
+        if await self.collection_exists_async(collection_name):
             LOGGER.error(f"Collection {collection_name} already exists.")
             return False
         payload = {"vectors": {"size": vector_size, "distance": distance}}
@@ -856,7 +856,7 @@ class QdrantService:
         LOGGER.error(f"Problem with status of collection deletion {collection_name} : {response}")
         return False
 
-    async def adelete_collection(self, collection_name: str) -> bool:
+    async def delete_collection_async(self, collection_name: str) -> bool:
         """Async version of delete_collection."""
         response = await self._send_request_async(method="DELETE", endpoint=f"collections/{collection_name}?wait=true")
         if "result" in response:
@@ -888,13 +888,13 @@ class QdrantService:
         )
         return response.get("result", {}).get("count", 0)
 
-    async def acount_points(
+    async def count_points_async(
         self,
         collection_name: str,
         filter: Optional[dict] = None,
     ) -> int:
         """Async version of count_points."""
-        if not await self.acollection_exists(collection_name):
+        if not await self.collection_exists_async(collection_name):
             raise ValueError(f"Collection {collection_name} does not exist.")
         payload = {"filter": filter} if filter else {}
         response = await self._send_request_async(
@@ -931,7 +931,7 @@ class QdrantService:
         LOGGER.error(f"Problem with status of points deletion : {response}")
         return False
 
-    async def adelete_points(
+    async def delete_points_async(
         self,
         point_ids: list[str],
         collection_name: str,
@@ -978,7 +978,7 @@ class QdrantService:
         LOGGER.error(f"Problem with status of points addition : {response}")
         return False
 
-    async def ainsert_points_in_collection(
+    async def insert_points_in_collection_async(
         self,
         points: list[dict],
         collection_name: str,
@@ -1009,7 +1009,7 @@ class QdrantService:
 
         return [collection["name"] for collection in collections]
 
-    async def alist_collection_names(self) -> list[str]:
+    async def list_collection_names_async(self) -> list[str]:
         """
         Async version of list_collection_names.
         Retrieve a list of all collection names in Qdrant.
@@ -1058,16 +1058,16 @@ class QdrantService:
 
         return pd.DataFrame(rows)
 
-    async def aget_collection_data(self, collection_name: str) -> pd.DataFrame:
+    async def get_collection_data_async(self, collection_name: str) -> pd.DataFrame:
         """
         Async version of get_collection_data.
         Retrieve all data for a specific collection, organizing metadata into custom columns.
         """
-        if not await self.acollection_exists(collection_name):
+        if not await self.collection_exists_async(collection_name):
             raise ValueError(f"Collection {collection_name} does not exist.")
 
         schema = self._get_schema(collection_name)
-        all_points = await self.aget_points(collection_name=collection_name)
+        all_points = await self.get_points_async(collection_name=collection_name)
 
         rows = []
         for point in all_points:
@@ -1159,14 +1159,14 @@ class QdrantService:
             LOGGER.info(f"Sync successful : number of points in Qdrant is {n_points}")
             return True
 
-    async def async_sync_df_with_collection(self, df: pd.DataFrame, collection_name: str) -> bool:
+    async def sync_df_with_collection_async(self, df: pd.DataFrame, collection_name: str) -> bool:
         """
         Async version of sync_df_with_collection.
         Synchronize a DataFrame with a Qdrant collection asynchronously.
         """
-        old_df = await self.aget_collection_data(collection_name)
+        old_df = await self.get_collection_data_async(collection_name)
         if old_df.empty:
-            await self.aadd_chunks(df.to_dict(orient="records"), collection_name)
+            await self.add_chunks_async(df.to_dict(orient="records"), collection_name)
             LOGGER.info(f"Qdrant collection is empty. Added {len(df)} chunks to Qdrant")
             return True
 
@@ -1192,7 +1192,7 @@ class QdrantService:
         ids_to_upsert = new_ids_to_add.union(ids_to_update)
 
         if len(ids_to_delete) > 0:
-            await self.adelete_chunks(
+            await self.delete_chunks_async(
                 point_ids=list(ids_to_delete),
                 id_field=self.default_schema.chunk_id_field,
                 collection_name=collection_name,
@@ -1201,10 +1201,10 @@ class QdrantService:
         if len(ids_to_upsert) > 0:
             chunks_to_upsert = df[df[self.default_schema.chunk_id_field].isin(ids_to_upsert)]
             list_payloads = chunks_to_upsert.to_dict(orient="records")
-            await self.aadd_chunks(list_payloads, collection_name)
+            await self.add_chunks_async(list_payloads, collection_name)
             LOGGER.info(f"Upserted {len(ids_to_upsert)} chunks to Qdrant")
 
-        n_points = await self.acount_points(collection_name)
+        n_points = await self.count_points_async(collection_name)
         if n_points != len(df):
             LOGGER.error(
                 (

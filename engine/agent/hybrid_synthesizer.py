@@ -51,7 +51,7 @@ class HybridSynthesizer(Synthesizer):
         with open(image_id, "rb") as image_file:
             encoded_image = image_file.read()
 
-        response_using_image = await self._completion_service.aget_image_description(
+        response_using_image = await self._completion_service.get_image_description_async(
             image_content_list=[encoded_image],
             text_prompt=self._prompt_template.format(
                 image_id=image_id,

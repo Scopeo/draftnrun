@@ -126,7 +126,7 @@ class EmbeddingService(LLMService):
                 )
                 return response.data
 
-    async def aembed_text(self, text: str) -> list[float]:
+    async def embed_text_async(self, text: str) -> list[float]:
         span = get_current_span()
         match self._provider:
             case "openai":
@@ -150,9 +150,6 @@ class EmbeddingService(LLMService):
 
             case _:
                 import openai
-
-                if self._api_key is None or self._base_url is None:
-                    self._api_key, self._base_url = get_api_key_and_base_url(self._model_name)
 
                 client = openai.AsyncOpenAI(
                     api_key=self._api_key,
@@ -236,7 +233,7 @@ class CompletionService(LLMService):
                 return response.choices[0].message.content
 
     @with_async_usage_check
-    async def acomplete(
+    async def complete_async(
         self,
         messages: list[dict] | str,
         stream: bool = False,
@@ -268,9 +265,6 @@ class CompletionService(LLMService):
 
             case _:
                 import openai
-
-                if self._api_key is None or self._base_url is None:
-                    self._api_key, self._base_url = get_api_key_and_base_url(self._model_name)
 
                 client = openai.AsyncOpenAI(
                     api_key=self._api_key,
@@ -359,7 +353,7 @@ class CompletionService(LLMService):
                 raise ValueError(f"Invalid provider for constrained complete with pydantic: {self._provider}")
 
     @with_async_usage_check
-    async def aconstrained_complete_with_pydantic(
+    async def constrained_complete_with_pydantic_async(
         self,
         messages: list[dict] | str,
         response_format: BaseModel,
@@ -395,6 +389,39 @@ class CompletionService(LLMService):
                     }
                 )
                 return response.output_parsed
+
+            case "cerebras":  # all providers using only json schema for structured output go here
+                import openai
+
+                client = openai.AsyncOpenAI(api_key=self._api_key, base_url=self._base_url)
+
+                response_format_schema = {
+                    "type": "json_schema",
+                    "json_schema": {
+                        "name": response_format.__name__,
+                        "schema": response_format.model_json_schema(),
+                        "strict": True,
+                    },
+                }
+                if isinstance(messages, str):
+                    messages = [{"role": "user", "content": messages}]
+
+                response = await client.chat.completions.create(
+                    model=self._model_name,
+                    messages=messages,
+                    temperature=self._temperature,
+                    stream=stream,
+                    response_format=response_format_schema,
+                )
+                span.set_attributes(
+                    {
+                        SpanAttributes.LLM_TOKEN_COUNT_COMPLETION: response.usage.completion_tokens,
+                        SpanAttributes.LLM_TOKEN_COUNT_PROMPT: response.usage.prompt_tokens,
+                        SpanAttributes.LLM_TOKEN_COUNT_TOTAL: response.usage.total_tokens,
+                    }
+                )
+                response_dict = json.loads(response.choices[0].message.content)
+                return response_format(**response_dict)
 
             case _:
                 raise ValueError(f"Invalid provider: {self._provider}")
@@ -473,7 +500,7 @@ class CompletionService(LLMService):
                 raise ValueError(f"Invalid provider for constrained complete with json schema: {self._provider}")
 
     @with_async_usage_check
-    async def aconstrained_complete_with_json_schema(
+    async def constrained_complete_with_json_schema_async(
         self,
         messages: list[dict] | str,
         response_format: str,
@@ -513,6 +540,39 @@ class CompletionService(LLMService):
                     }
                 )
                 return response.output_text
+            case "cerebras" | "google":  # all the providers that are using openai chat completion go here
+                import openai
+
+                schema = response_format.get("schema", {})
+                name = response_format.get("name", "response")
+
+                response_format = {
+                    "type": "json_schema",
+                    "json_schema": {
+                        "name": name,
+                        "schema": schema,
+                    },
+                }
+
+                client = openai.AsyncOpenAI(
+                    api_key=self._api_key,
+                    base_url=self._base_url,
+                )
+                response = await client.chat.completions.create(
+                    model=self._model_name,
+                    messages=messages,
+                    temperature=self._temperature,
+                    stream=stream,
+                    response_format=response_format,
+                )
+                span.set_attributes(
+                    {
+                        SpanAttributes.LLM_TOKEN_COUNT_COMPLETION: response.usage.completion_tokens,
+                        SpanAttributes.LLM_TOKEN_COUNT_PROMPT: response.usage.prompt_tokens,
+                        SpanAttributes.LLM_TOKEN_COUNT_TOTAL: response.usage.total_tokens,
+                    }
+                )
+                return response.choices[0].message.content
             case _:
                 raise ValueError(f"Invalid provider: {self._provider}")
 
@@ -600,7 +660,7 @@ class CompletionService(LLMService):
                 return response
 
     @with_async_usage_check
-    async def afunction_call(
+    async def function_call_async(
         self,
         messages: list[dict] | str,
         stream: bool = False,
@@ -639,9 +699,6 @@ class CompletionService(LLMService):
                 return response
             case _:
                 import openai
-
-                if self._api_key is None or self._base_url is None:
-                    self._api_key, self._base_url = get_api_key_and_base_url(self._model_name)
 
                 client = openai.AsyncOpenAI(
                     api_key=self._api_key,
@@ -701,7 +758,7 @@ class WebSearchService(LLMService):
                 raise ValueError(f"Invalid provider: {self._provider}")
 
     @with_async_usage_check
-    async def aweb_search(self, query: str) -> str:
+    async def web_search_async(self, query: str) -> str:
         span = get_current_span()
         match self._provider:
             case "openai":
@@ -816,7 +873,7 @@ class VisionService(LLMService):
             return chat_response.choices[0].message.content
 
     @with_async_usage_check
-    async def aget_image_description(
+    async def get_image_description_async(
         self,
         image_content_list: list[bytes],
         text_prompt: str,

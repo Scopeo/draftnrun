@@ -161,7 +161,7 @@ class ReActAgent(Agent):
                     SpanAttributes.LLM_MODEL_NAME: self._completion_service._model_name,
                 }
             )
-            chat_response = await self._completion_service.afunction_call(
+            chat_response = await self._completion_service.function_call_async(
                 messages=llm_input_messages,
                 tools=[agent.tool_description for agent in self.agent_tools],
                 tool_choice=tool_choice,

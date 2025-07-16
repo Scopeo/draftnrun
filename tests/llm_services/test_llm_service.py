@@ -47,7 +47,7 @@ async def test_completion_service_async():
     assert completion_service._temperature == 0.5
     assert completion_service._trace_manager is not None
     text = "Hello, world!"
-    response = await completion_service.acomplete(text)
+    response = await completion_service.complete_async(text)
     assert response is not None
     assert isinstance(response, str)
     assert len(response) > 0
@@ -84,7 +84,7 @@ async def test_completion_service_constrained_complete_async():
     completion_service = CompletionService(trace_manager=MagicMock(), provider="openai", model_name="gpt-4o-mini")
     text = "Hello, world!"
 
-    response = await completion_service.aconstrained_complete_with_pydantic(text, ResponseFormat)
+    response = await completion_service.constrained_complete_with_pydantic_async(text, ResponseFormat)
     assert response is not None
     assert isinstance(response, ResponseFormat)
     assert len(response.response) > 0
@@ -100,7 +100,7 @@ async def test_completion_service_constrained_complete_async():
         },
     }
     assert OutputFormatModel.model_validate(response_json) is not None
-    response = await completion_service.aconstrained_complete_with_json_schema(text, json.dumps(response_json))
+    response = await completion_service.constrained_complete_with_json_schema_async(text, json.dumps(response_json))
     assert response is not None
     assert isinstance(response, str)
     assert len(response) > 0
@@ -131,7 +131,7 @@ async def test_embedding_service_async():
     assert embedding_service._api_key is None
     assert embedding_service._trace_manager is not None
     text = "Hello, world!"
-    response = await embedding_service.aembed_text(text)
+    response = await embedding_service.embed_text_async(text)
     assert response is not None
     assert isinstance(response, list)
     assert len(response) > 0

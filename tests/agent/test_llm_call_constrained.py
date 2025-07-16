@@ -128,7 +128,9 @@ async def test_chat_completion_to_response(llm_call_with_output_format, input_pa
     assert isinstance(response, AgentPayload)
 
     llm_service_input_messages = (
-        llm_call_with_output_format._completion_service.aconstrained_complete_with_json_schema.call_args[1]["messages"]
+        llm_call_with_output_format._completion_service.constrained_complete_with_json_schema_async.call_args[1][
+            "messages"
+        ]
     )
     converted_messages = chat_completion_to_response(llm_service_input_messages)
     assert converted_messages == [

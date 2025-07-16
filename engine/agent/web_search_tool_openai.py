@@ -50,5 +50,5 @@ class WebSearchOpenAITool(Agent):
                 SpanAttributes.LLM_MODEL_NAME: self._web_service._model_name,
             }
         )
-        output = await self._web_service.aweb_search(query_str)
+        output = await self._web_service.web_search_async(query_str)
         return AgentPayload(messages=[ChatMessage(role="assistant", content=output)])

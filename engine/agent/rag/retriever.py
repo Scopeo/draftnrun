@@ -41,7 +41,7 @@ class Retriever:
         query_text: str,
         filters: Optional[dict] = None,
     ) -> list[SourceChunk]:
-        chunks = await self._vectorestore_service.aretrieve_similar_chunks(
+        chunks = await self._vectorestore_service.retrieve_similar_chunks_async(
             query_text=query_text,
             collection_name=self.collection_name,
             limit=self._max_retrieved_chunks,

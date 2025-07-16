@@ -62,7 +62,7 @@ async def monitor_questions(db_service: DBService, project_id: UUID, agent_input
     previous_questions = await get_previous_questions(db_service, project_id, table_name)
     query = PROMPT.format(questions_list=previous_questions, question=agent_input.last_message.content)
 
-    answer = await llm_service.aconstrained_complete_with_pydantic(
+    answer = await llm_service.constrained_complete_with_pydantic_async(
         messages=query, response_format=OccurenceQuestionsList
     )
 
