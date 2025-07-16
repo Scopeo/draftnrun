@@ -134,7 +134,7 @@ class SQLLocalService(DBService):
         self,
         table_name: str,
         schema_name: Optional[str] = None,
-        query_filter: Optional[str] = "",
+        query_filter: Optional[str] = None,
     ) -> pd.DataFrame:
         table = self.get_table(table_name, schema_name)
         with self.Session() as session:
