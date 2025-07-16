@@ -15,19 +15,19 @@ from engine.trace.trace_context import get_trace_manager
 from engine.trace.trace_manager import TraceManager
 
 
-# --- Test classes ---
+# --- Sample classes for testing ---
 @dataclass
-class TestDataclass:
+class SampleDataclass:
     name: str
     value: int
 
 
-class TestPydanticModel(BaseModel):
+class SamplePydanticModel(BaseModel):
     name: str
     value: int
 
 
-class TestEntity:
+class SampleEntity:
     def __init__(self, param1: str, param2: int, param3: float, param4: bool):
         self.param1 = param1
         self.param2 = param2
@@ -35,19 +35,19 @@ class TestEntity:
         self.param4 = param4
 
 
-class TestEntityWithDataclass:
-    def __init__(self, dataclass_param: TestDataclass, primitive_param: str):
+class SampleEntityWithDataclass:
+    def __init__(self, dataclass_param: SampleDataclass, primitive_param: str):
         self.dataclass_param = dataclass_param
         self.primitive_param = primitive_param
 
 
-class TestEntityWithPydantic:
-    def __init__(self, pydantic_param: TestPydanticModel, primitive_param: int):
+class SampleEntityWithPydantic:
+    def __init__(self, pydantic_param: SamplePydanticModel, primitive_param: int):
         self.pydantic_param = pydantic_param
         self.primitive_param = primitive_param
 
 
-class TestAgent:
+class SampleAgent:
     def __init__(self, tool_description: ToolDescription, trace_manager: TraceManager):
         self.tool_description = tool_description
         self.trace_manager = trace_manager
@@ -55,9 +55,9 @@ class TestAgent:
 
 # --- Tests ---
 def test_entity_factory_basic_instantiation():
-    factory = EntityFactory(TestEntity)
+    factory = EntityFactory(SampleEntity)
     instance = factory(param1="test", param2=42, param3=3.14, param4=True)
-    assert isinstance(instance, TestEntity)
+    assert isinstance(instance, SampleEntity)
     assert instance.param1 == "test"
     assert instance.param2 == 42
     assert instance.param3 == 3.14
@@ -65,22 +65,22 @@ def test_entity_factory_basic_instantiation():
 
 
 def test_entity_factory_missing_params():
-    factory = EntityFactory(TestEntity)
+    factory = EntityFactory(SampleEntity)
     with pytest.raises(TypeError):
         factory(param1="test", param2=42)  # Missing param3 and param4
 
 
 def test_entity_factory_with_processors():
     factory = EntityFactory(
-        TestEntityWithDataclass,
+        SampleEntityWithDataclass,
         parameter_processors=[detect_and_convert_dataclasses],
     )
     instance = factory(
         dataclass_param={"name": "test_dataclass", "value": 42},
         primitive_param="primitive_value",
     )
-    assert isinstance(instance, TestEntityWithDataclass)
-    assert isinstance(instance.dataclass_param, TestDataclass)
+    assert isinstance(instance, SampleEntityWithDataclass)
+    assert isinstance(instance.dataclass_param, SampleDataclass)
     assert instance.dataclass_param.name == "test_dataclass"
     assert instance.dataclass_param.value == 42
     assert instance.primitive_param == "primitive_value"
@@ -88,7 +88,7 @@ def test_entity_factory_with_processors():
 
 def test_agent_factory_instantiation():
     factory = AgentFactory(
-        entity_class=TestAgent,
+        entity_class=SampleAgent,
         parameter_processors=[],
     )
 
@@ -100,14 +100,14 @@ def test_agent_factory_instantiation():
     )
 
     instance = factory(tool_description=tool_description)
-    assert isinstance(instance, TestAgent)
+    assert isinstance(instance, SampleAgent)
     assert instance.tool_description == tool_description
     assert instance.trace_manager == get_trace_manager()
 
 
 def test_agent_factory_missing_tool_description():
     factory = AgentFactory(
-        entity_class=TestAgent,
+        entity_class=SampleAgent,
         parameter_processors=[],
     )
 
@@ -117,15 +117,15 @@ def test_agent_factory_missing_tool_description():
 
 def test_pydantic_processor():
     factory = EntityFactory(
-        TestEntityWithPydantic,
+        SampleEntityWithPydantic,
         parameter_processors=[pydantic_processor],
     )
     instance = factory(
         pydantic_param={"name": "pydantic_name", "value": 99},
         primitive_param=100,
     )
-    assert isinstance(instance, TestEntityWithPydantic)
-    assert isinstance(instance.pydantic_param, TestPydanticModel)
+    assert isinstance(instance, SampleEntityWithPydantic)
+    assert isinstance(instance.pydantic_param, SamplePydanticModel)
     assert instance.pydantic_param.name == "pydantic_name"
     assert instance.pydantic_param.value == 99
     assert instance.primitive_param == 100
@@ -133,7 +133,7 @@ def test_pydantic_processor():
 
 def test_combined_processor_usage():
     factory = EntityFactory(
-        TestEntityWithDataclass,
+        SampleEntityWithDataclass,
         parameter_processors=[detect_and_convert_dataclasses, pydantic_processor],
     )
 
@@ -141,14 +141,14 @@ def test_combined_processor_usage():
         dataclass_param={"name": "dc_test", "value": 1},
         primitive_param="dc_value",
     )
-    assert isinstance(instance, TestEntityWithDataclass)
-    assert isinstance(instance.dataclass_param, TestDataclass)
+    assert isinstance(instance, SampleEntityWithDataclass)
+    assert isinstance(instance.dataclass_param, SampleDataclass)
     assert instance.dataclass_param.name == "dc_test"
     assert instance.primitive_param == "dc_value"
 
 
 def test_trace_manager_processor():
-    factory = EntityFactory(TestAgent, parameter_processors=[build_trace_manager_processor()])
+    factory = EntityFactory(SampleAgent, parameter_processors=[build_trace_manager_processor()])
     tool_description = ToolDescription(
         name="tool_name",
         description="A tool description",
@@ -163,7 +163,7 @@ def test_trace_manager_processor():
 
 def test_agent_factory_invalid_tool_description():
     factory = AgentFactory(
-        entity_class=TestAgent,
+        entity_class=SampleAgent,
         parameter_processors=[],
     )
 
