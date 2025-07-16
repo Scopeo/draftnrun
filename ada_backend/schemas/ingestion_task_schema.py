@@ -35,7 +35,7 @@ class SourceAttributes(BaseModel):
     metadata_column_names: Optional[list[str]] = None
     timestamp_column_name: Optional[str] = None
     url_column_name: Optional[str] = None
-    replace_existing: Optional[bool] = False
+    update_existing: Optional[bool] = False
     query_filter: Optional[str] = None
 
 

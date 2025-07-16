@@ -662,7 +662,7 @@ class QdrantService:
     def get_collection_data(
         self,
         collection_name: str,
-        query_filter: Optional[str] = "",
+        query_filter: Optional[str] = None,
     ) -> pd.DataFrame:
         """
         Retrieve all data for a specific collection, organizing metadata into custom columns.
@@ -710,7 +710,7 @@ class QdrantService:
         self,
         df: pd.DataFrame,
         collection_name: str,
-        query_filter: Optional[str] = "",
+        query_filter: Optional[str] = None,
     ) -> bool:
         """
         Synchronize a DataFrame with a Qdrant collection.

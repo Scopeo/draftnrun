@@ -46,7 +46,7 @@ class DBService(ABC):
         self,
         table_name: str,
         schema_name: Optional[str] = None,
-        query_filter: Optional[str] = "",
+        query_filter: Optional[str] = None,
     ) -> pd.DataFrame:
         pass
 
@@ -87,7 +87,7 @@ class DBService(ABC):
         schema_name: Optional[str] = None,
         timestamp_column_name: Optional[str] = None,
         append_mode: bool = True,
-        query_filter: Optional[str] = "",
+        query_filter: Optional[str] = None,
     ) -> None:
         """
         Update a table on Database with a new DataFrame.
