@@ -659,7 +659,11 @@ class QdrantService:
 
         return [collection["name"] for collection in collections]
 
-    def get_collection_data(self, collection_name: str) -> pd.DataFrame:
+    def get_collection_data(
+        self,
+        collection_name: str,
+        query_filter: Optional[str] = "",
+    ) -> pd.DataFrame:
         """
         Retrieve all data for a specific collection, organizing metadata into custom columns.
 
@@ -697,9 +701,17 @@ class QdrantService:
                     row[field] = payload.get(field)
             rows.append(row)
 
-        return pd.DataFrame(rows)
+        df = pd.DataFrame(rows)
+        if query_filter:
+            df = df.query(query_filter)
+        return df
 
-    def sync_df_with_collection(self, df: pd.DataFrame, collection_name: str) -> bool:
+    def sync_df_with_collection(
+        self,
+        df: pd.DataFrame,
+        collection_name: str,
+        query_filter: Optional[str] = "",
+    ) -> bool:
         """
         Synchronize a DataFrame with a Qdrant collection.
         The DataFrame should have the same schema as the Qdrant collection.
@@ -712,6 +724,21 @@ class QdrantService:
         Returns:
             bool: True if the synchronization was successful, False otherwise.
         """
+        if query_filter:
+            old_df = self.get_collection_data(collection_name, query_filter=query_filter)
+            ids_to_delete = set(old_df[self.default_schema.chunk_id_field])
+            if len(ids_to_delete) > 0:
+                self.delete_chunks(
+                    point_ids=list(ids_to_delete),
+                    id_field=self.default_schema.chunk_id_field,
+                    collection_name=collection_name,
+                )
+                LOGGER.info(f"Deleted {len(ids_to_delete)} chunks from Qdrant")
+
+            self.add_chunks(df.to_dict(orient="records"), collection_name)
+            LOGGER.info(f"Added {len(df)} chunks to Qdrant")
+            return True
+
         old_df = self.get_collection_data(collection_name)
         if old_df.empty:
             self.add_chunks(df.to_dict(orient="records"), collection_name)
