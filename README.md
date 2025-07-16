@@ -326,6 +326,7 @@ You can configure Draft'n run to use your own custom Large Language Model (LLM) 
   - `model_name`: The name of your model
   - `function_calling`: Whether the model supports function calling
   - `multimodal`: Whether the model supports multimodal inputs (images, etc.)
+  - `image_format`: the type of image to put in the url for the payload to the llm ("jpeg", "png", etc.)
   - `constrained_completion_with_pydantic`: Whether the model supports Pydantic-constrained outputs
   - `constrained_completion_with_json_schema`: Whether the model supports JSON schema-constrained outputs
 
