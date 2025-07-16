@@ -102,7 +102,10 @@ def llm_call_with_file_content():
     trace_manager = MagicMock()
     llm_service = MagicMock()
 
-    llm_service.acomplete = AsyncMock(side_effect=complete_side_effect)
+    # Use AsyncMock for the async methods
+    llm_service.complete_async = AsyncMock(side_effect=complete_side_effect)
+    llm_service.constrained_complete_with_json_schema_async = AsyncMock(side_effect=complete_side_effect)
+
     tool_description = MagicMock()
     component_attributes = ComponentAttributes(
         component_instance_name="test_component",
@@ -124,7 +127,10 @@ def llm_call_without_file_content():
     trace_manager = MagicMock()
     llm_service = MagicMock()
 
-    llm_service.acomplete = AsyncMock(side_effect=complete_side_effect)
+    # Use AsyncMock for the async methods
+    llm_service.complete_async = AsyncMock(side_effect=complete_side_effect)
+    llm_service.constrained_complete_with_json_schema_async = AsyncMock(side_effect=complete_side_effect)
+
     tool_description = MagicMock()
     component_attributes = ComponentAttributes(component_instance_name="test_component")
     prompt_template = "{input}"

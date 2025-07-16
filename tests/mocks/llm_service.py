@@ -56,7 +56,10 @@ def mock_llm_service():
     message = create_mock_message()
     response = create_mock_llm_response(message)
 
-    mock_llm_service.afunction_call = AsyncMock(return_value=response)
+    # Use correct async method names
+    mock_llm_service.function_call_async = AsyncMock(return_value=response)
+    mock_llm_service.complete_async = AsyncMock(return_value="Test response")
+    mock_llm_service.constrained_complete_with_json_schema_async = AsyncMock(return_value="Test response")
     return mock_llm_service
 
 
@@ -70,7 +73,10 @@ def mock_llm_service_with_tool_calls():
     message = create_mock_message(content="Tool response", tool_calls=[tool_call])
     response = create_mock_llm_response(message)
 
-    mock_llm_service.afunction_call = AsyncMock(return_value=response)
+    # Use correct async method names
+    mock_llm_service.function_call_async = AsyncMock(return_value=response)
+    mock_llm_service.complete_async = AsyncMock(return_value="Test response")
+    mock_llm_service.constrained_complete_with_json_schema_async = AsyncMock(return_value="Test response")
     return mock_llm_service
 
 
@@ -89,5 +95,8 @@ def mock_llm_service_sequential():
     message_final = create_mock_message(content="Final response", tool_calls=[])
     response_final = create_mock_llm_response(message_final)
 
-    mock_llm_service.afunction_call = AsyncMock(side_effect=[response_with_tools, response_final])
+    # Use correct async method names
+    mock_llm_service.function_call_async = AsyncMock(side_effect=[response_with_tools, response_final])
+    mock_llm_service.complete_async = AsyncMock(return_value="Test response")
+    mock_llm_service.constrained_complete_with_json_schema_async = AsyncMock(return_value="Test response")
     return mock_llm_service

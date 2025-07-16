@@ -54,10 +54,10 @@ def llm_call_with_output_format():
     trace_manager = MagicMock()
 
     llm_service = MagicMock()
-    llm_service.aconstrained_complete_with_json_schema = AsyncMock(
+    llm_service.constrained_complete_with_json_schema_async = AsyncMock(
         return_value='{"location": "Miami", "unit": "F", "value": 85}'
     )
-    llm_service.acomplete = AsyncMock(return_value="Sample response")
+    llm_service.complete_async = AsyncMock(return_value="Sample response")
 
     tool_description = MagicMock()
     component_attributes = ComponentAttributes(

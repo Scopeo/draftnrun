@@ -171,25 +171,25 @@ async def test_qdrant_service_async():
     )
 
     # Ensure a clean state
-    if await qdrant_agentic_service.acollection_exists(TEST_COLLECTION_NAME):
-        await qdrant_agentic_service.adelete_collection(TEST_COLLECTION_NAME)
-    assert not await qdrant_agentic_service.acollection_exists(TEST_COLLECTION_NAME)
+    if await qdrant_agentic_service.collection_exists_async(TEST_COLLECTION_NAME):
+        await qdrant_agentic_service.delete_collection_async(TEST_COLLECTION_NAME)
+    assert not await qdrant_agentic_service.collection_exists_async(TEST_COLLECTION_NAME)
 
-    await qdrant_agentic_service.acreate_collection(collection_name=TEST_COLLECTION_NAME)
-    assert await qdrant_agentic_service.acollection_exists(TEST_COLLECTION_NAME)
-    assert await qdrant_agentic_service.acount_points(TEST_COLLECTION_NAME) == 0
-    await qdrant_agentic_service.aadd_chunks(
+    await qdrant_agentic_service.create_collection_async(collection_name=TEST_COLLECTION_NAME)
+    assert await qdrant_agentic_service.collection_exists_async(TEST_COLLECTION_NAME)
+    assert await qdrant_agentic_service.count_points_async(TEST_COLLECTION_NAME) == 0
+    await qdrant_agentic_service.add_chunks_async(
         list_chunks=chunks,
         collection_name=TEST_COLLECTION_NAME,
     )
-    assert await qdrant_agentic_service.acount_points(TEST_COLLECTION_NAME) == 2
-    assert await qdrant_agentic_service.adelete_chunks(
+    assert await qdrant_agentic_service.count_points_async(TEST_COLLECTION_NAME) == 2
+    assert await qdrant_agentic_service.delete_chunks_async(
         point_ids=["1"],
         id_field="chunk_id",
         collection_name=TEST_COLLECTION_NAME,
     )
-    assert await qdrant_agentic_service.acount_points(TEST_COLLECTION_NAME) == 1
-    retrieved_chunks = await qdrant_agentic_service.aretrieve_similar_chunks(
+    assert await qdrant_agentic_service.count_points_async(TEST_COLLECTION_NAME) == 1
+    retrieved_chunks = await qdrant_agentic_service.retrieve_similar_chunks_async(
         query_text="chunk2",
         collection_name=TEST_COLLECTION_NAME,
     )
@@ -220,9 +220,9 @@ async def test_qdrant_service_async():
             },
         ]
     )
-    await qdrant_agentic_service.async_sync_df_with_collection(new_df_1, TEST_COLLECTION_NAME)
-    assert await qdrant_agentic_service.acount_points(TEST_COLLECTION_NAME) == 2
-    synced_df = await qdrant_agentic_service.aget_collection_data(TEST_COLLECTION_NAME)
+    await qdrant_agentic_service.sync_df_with_collection_async(new_df_1, TEST_COLLECTION_NAME)
+    assert await qdrant_agentic_service.count_points_async(TEST_COLLECTION_NAME) == 2
+    synced_df = await qdrant_agentic_service.get_collection_data_async(TEST_COLLECTION_NAME)
     synced_df.sort_values(by="chunk_id", inplace=True)
     synced_df.reset_index(drop=True, inplace=True)
     assert synced_df.equals(new_df_1)
@@ -245,15 +245,15 @@ async def test_qdrant_service_async():
             },
         ]
     )
-    await qdrant_agentic_service.async_sync_df_with_collection(new_df_2, TEST_COLLECTION_NAME)
-    assert await qdrant_agentic_service.acount_points(TEST_COLLECTION_NAME) == 2
-    synced_df = await qdrant_agentic_service.aget_collection_data(TEST_COLLECTION_NAME)
+    await qdrant_agentic_service.sync_df_with_collection_async(new_df_2, TEST_COLLECTION_NAME)
+    assert await qdrant_agentic_service.count_points_async(TEST_COLLECTION_NAME) == 2
+    synced_df = await qdrant_agentic_service.get_collection_data_async(TEST_COLLECTION_NAME)
     synced_df.sort_values(by="chunk_id", inplace=True)
     synced_df.reset_index(drop=True, inplace=True)
     assert synced_df.equals(new_df_2)
 
-    assert await qdrant_agentic_service.adelete_collection(TEST_COLLECTION_NAME)
-    assert not await qdrant_agentic_service.acollection_exists(TEST_COLLECTION_NAME)
+    assert await qdrant_agentic_service.delete_collection_async(TEST_COLLECTION_NAME)
+    assert not await qdrant_agentic_service.collection_exists_async(TEST_COLLECTION_NAME)
 
 
 @pytest.mark.parametrize(
@@ -419,29 +419,29 @@ async def test_qdrant_filtering_async(
     )
 
     # Ensure a clean state before testing
-    if await qdrant_agentic_service.acollection_exists(TEST_COLLECTION_NAME):
-        await qdrant_agentic_service.adelete_collection(TEST_COLLECTION_NAME)
-    assert not await qdrant_agentic_service.acollection_exists(TEST_COLLECTION_NAME)
+    if await qdrant_agentic_service.collection_exists_async(TEST_COLLECTION_NAME):
+        await qdrant_agentic_service.delete_collection_async(TEST_COLLECTION_NAME)
+    assert not await qdrant_agentic_service.collection_exists_async(TEST_COLLECTION_NAME)
 
     # Create the collection and add chunks
-    await qdrant_agentic_service.acreate_collection(collection_name=TEST_COLLECTION_NAME)
-    assert await qdrant_agentic_service.acollection_exists(TEST_COLLECTION_NAME)
-    assert await qdrant_agentic_service.acount_points(TEST_COLLECTION_NAME) == 0
+    await qdrant_agentic_service.create_collection_async(collection_name=TEST_COLLECTION_NAME)
+    assert await qdrant_agentic_service.collection_exists_async(TEST_COLLECTION_NAME)
+    assert await qdrant_agentic_service.count_points_async(TEST_COLLECTION_NAME) == 0
 
-    await qdrant_agentic_service.aadd_chunks(
+    await qdrant_agentic_service.add_chunks_async(
         list_chunks=chunks,
         collection_name=TEST_COLLECTION_NAME,
     )
-    assert await qdrant_agentic_service.acount_points(TEST_COLLECTION_NAME) == 2
+    assert await qdrant_agentic_service.count_points_async(TEST_COLLECTION_NAME) == 2
 
     formatted_filter = format_qdrant_filter(filter_dict, filtering_condition)
 
-    retrieved_chunks = await qdrant_agentic_service.aretrieve_similar_chunks(
+    retrieved_chunks = await qdrant_agentic_service.retrieve_similar_chunks_async(
         query_text="chunk1",
         collection_name=TEST_COLLECTION_NAME,
         filter=formatted_filter,
     )
     set_chunks = set([chunk.name for chunk in retrieved_chunks])
     assert expected_chunk == set_chunks
-    assert await qdrant_agentic_service.adelete_collection(TEST_COLLECTION_NAME)
-    assert not await qdrant_agentic_service.acollection_exists(TEST_COLLECTION_NAME)
+    assert await qdrant_agentic_service.delete_collection_async(TEST_COLLECTION_NAME)
+    assert not await qdrant_agentic_service.collection_exists_async(TEST_COLLECTION_NAME)

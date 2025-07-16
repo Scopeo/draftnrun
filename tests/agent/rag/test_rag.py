@@ -1,5 +1,5 @@
 import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, patch, AsyncMock
 
 from llama_index.llms.openai import OpenAI
 from engine.agent.agent import SourceChunk
@@ -30,11 +30,17 @@ def make_mock_llm_service():
         mock_llm.last_prompt = None
         mock_llm._model_name = "mock_model"
 
+        from engine.agent.synthesizer import SynthesizerResponse
+
+        mock_response = SynthesizerResponse(response=default_response, is_successful=True)
+
         async def constrained_complete_with_pydantic_async(messages, response_format):
             mock_llm.last_prompt = messages
-            return response_format(response=default_response, is_successful=True)
+            return mock_response
 
-        mock_llm.constrained_complete_with_pydantic_async = constrained_complete_with_pydantic_async
+        mock_llm.constrained_complete_with_pydantic_async = AsyncMock(
+            side_effect=constrained_complete_with_pydantic_async
+        )
         mock_llm._provider = "openai"
         return mock_llm
 

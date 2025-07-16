@@ -122,8 +122,8 @@ def test_run_with_tool_calls_no_shortcut(
     assert output.last_message.role == "assistant"
     assert output.last_message.content == "Final response"
     assert output.is_final
-    # Verify that afunction_call was called twice (once for tool calls, once for final response)
-    assert react_agent_sequential._completion_service.afunction_call.call_count == 2
+    # Verify that function_call_async was called twice (once for tool calls, once for final response)
+    assert react_agent_sequential._completion_service.function_call_async.call_count == 2
 
 
 @patch("engine.prometheus_metric.get_tracing_span")
