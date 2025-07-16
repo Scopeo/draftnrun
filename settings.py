@@ -121,10 +121,11 @@ class BaseConfig(BaseSettings):
     S3_REGION_NAME: Optional[str] = None
 
     # Ingestion parameters
-    PAGE_RESOLUTION_ZOOM: float
-    NUMBER_OF_IMAGES_TO_DETERMINE_TYPE_OF_DOCUMENT: int
-    ENFORCE_PAGE_BY_PAGE_INGESTION: bool
 
+    # Number of pages to detect document type
+    NUMBER_OF_PAGES_TO_DETECT_DOCUMENT_TYPE: Optional[int] = 5
+    PAGE_RESOLUTION_ZOOM: Optional[float] = 3.0
+    ENFORCE_PAGE_BY_PAGE_INGESTION: Optional[bool] = False
 
     # Google OAuth configuration
     GOOGLE_CLIENT_ID: Optional[str] = None
@@ -139,12 +140,6 @@ class BaseConfig(BaseSettings):
 
     # Observability stack feature flag
     ENABLE_OBSERVABILITY_STACK: bool = False
-
-<<<<<<< HEAD
-    # Number of pages to detect document type
-    NUMBER_OF_PAGES_TO_DETECT_DOCUMENT_TYPE: Optional[int] = 5
-=======
->>>>>>> bf7d172 (correct LLM names for ingestion + zoom variable)
 
     @model_validator(mode="after")
     @classmethod

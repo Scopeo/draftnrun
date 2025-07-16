@@ -19,7 +19,6 @@ from ada_backend.repositories.source_repository import get_data_source_by_id
 from ada_backend.repositories.project_repository import get_project
 from ada_backend.context import get_request_context
 from ada_backend.services.user_roles_service import get_user_access_to_organization
-from settings import settings
 
 LOGGER = logging.getLogger(__name__)
 
