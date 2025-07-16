@@ -125,6 +125,8 @@ class EmbeddingService(LLMService):
                 return response.data
 
             case _:
+                if self._base_url is None or self._api_key is None:
+                    raise ValueError(f"API key and base URL must be provided for custom provider: {self._provider}")
                 import openai
 
                 client = openai.OpenAI(
