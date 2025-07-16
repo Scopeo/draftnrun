@@ -123,6 +123,7 @@ jobs:
           echo "S3_SECRET_ACCESS_KEY=${{ secrets.S3_SECRET_ACCESS_KEY }}" >> credentials.env
           echo "S3_BUCKET_NAME=${{ secrets.S3_BUCKET_NAME }}" >> credentials.env
           echo "S3_REGION_NAME=eu-west-3" >> credentials.env
+          echo "ENABLE_OBSERVABILITY_STACK=false" >> credentials.env
 
       - name: Upload credentials.env to EC2
         uses: appleboy/scp-action@master
