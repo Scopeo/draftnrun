@@ -10,14 +10,13 @@ from opentelemetry.sdk import trace as trace_sdk
 from engine.trace.sql_exporter import SQLSpanExporter
 from engine.trace.span_context import get_tracing_span
 
-
 LOGGER = logging.getLogger(__name__)
 
 
 def setup_tracer(
     project_name: str,
 ) -> tuple[trace_api.Tracer, trace_sdk.TracerProvider]:
-    """Setup a tracer with the given project name and collector endpoint."""
+    """Set up a tracer with the given project name and collector endpoint."""
 
     resource = Resource(
         attributes={
@@ -26,8 +25,15 @@ def setup_tracer(
     )
 
     tracer_provider = trace_sdk.TracerProvider(resource=resource)
-    sql_exporter = SQLSpanExporter()
-    tracer_provider.add_span_processor(BatchSpanProcessor(sql_exporter))
+
+    # Add error handling for SQL exporter initialization
+    try:
+        sql_exporter = SQLSpanExporter()
+        tracer_provider.add_span_processor(BatchSpanProcessor(sql_exporter))
+        LOGGER.info(f"SQL exporter initialized for project: {project_name}")
+    except Exception as e:
+        LOGGER.error(f"Failed to initialize SQL exporter: {e}")
+        # Continue without database persistence
 
     tracer = tracer_provider.get_tracer(__name__)
 
