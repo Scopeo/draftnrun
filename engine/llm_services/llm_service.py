@@ -89,6 +89,10 @@ class LLMService(ABC):
                     self._api_key = settings.custom_models.get(self._provider).get("api_key")
                     self._base_url = settings.custom_models.get(self._provider).get("base_url")
                     LOGGER.debug(f"Using custom api key and base url for provider: {self._provider}")
+                    if self._api_key is None or self._base_url is None:
+                        raise ValueError(
+                            f"API key and base URL must be provided for custom provider: {self._provider}"
+                        )
 
 
 class EmbeddingService(LLMService):
@@ -644,6 +648,7 @@ class VisionService(LLMService):
                 import openai
 
                 client = openai.AsyncOpenAI(api_key=self._api_key, base_url=self._base_url)
+
                 if response_format is not None:
                     text_prompt = format_prompt_with_pydantic_output(text_prompt, response_format)
 
