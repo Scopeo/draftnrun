@@ -89,7 +89,7 @@ class ReActAgent(Agent):
             try:
                 self._shared_sandbox.kill()
             except Exception as e:
-                LOGGER.warning(f"Failed to kill shared sandbox: {e}")
+                LOGGER.error(f"Failed to kill shared sandbox: {e}")
             finally:
                 self._shared_sandbox = None
 
