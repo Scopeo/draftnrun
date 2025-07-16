@@ -25,7 +25,6 @@ INITIAL_PROMPT = (
     "Here is a description in an ascii tree of the documents available: \n\n"
     "{documents_tree}\n\n"
 )
-DEFAULT_FALLBACK_REACT_ANSWER = "I'm sorry, I couldn't find load the document you seemed to have requested"
 
 
 def get_document_react_loader_tool_description() -> ToolDescription:

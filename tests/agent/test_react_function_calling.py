@@ -161,7 +161,7 @@ def test_max_iterations(agent_calls_mock, get_span_mock, react_agent, agent_inpu
 
     output = react_agent.run_sync(agent_input)
 
-    assert output.last_message.content == "I'm sorry, I couldn't find a solution to your problem."
+    assert output.last_message.content == "I couldn't find a solution to your problem."
     assert not output.is_final
 
 
