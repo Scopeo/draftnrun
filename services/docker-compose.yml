@@ -159,19 +159,25 @@ services:
       - "4318:4318" # OTLP HTTP
 
   grafana:
-    image: grafana/grafana:latest
+    build:
+      context: ../config/grafana
+      dockerfile: Dockerfile
     env_file:
       - ../credentials.env
     volumes:
-      - ./../config/grafana/provisioning:/etc/grafana/provisioning
-      - ./../config/grafana/dashboards:/etc/grafana/dashboards
       - grafana_data:/var/lib/grafana
     environment:
+      # Grafana configuration
       - GF_SECURITY_ADMIN_USER=${GF_SECURITY_ADMIN_USER:-admin}
       - GF_SECURITY_ADMIN_PASSWORD=${GF_SECURITY_ADMIN_PASSWORD:-admin}
       - GF_AUTH_ANONYMOUS_ENABLED=false
       - GF_AUTH_DISABLE_LOGIN_FORM=false
       - GF_USERS_ALLOW_SIGN_UP=false
+      # Grafana datasource configuration - defaults to local Docker services
+      - GRAFANA_PROMETHEUS_HOST=${GRAFANA_PROMETHEUS_HOST:-prometheus}
+      - GRAFANA_PROMETHEUS_PORT=${GRAFANA_PROMETHEUS_PORT:-9090}
+      - GRAFANA_TEMPO_HOST=${GRAFANA_TEMPO_HOST:-tempo}
+      - GRAFANA_TEMPO_PORT=${GRAFANA_TEMPO_PORT:-3200}
     networks:
       - localprom
     ports:

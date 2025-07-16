@@ -4,14 +4,14 @@ datasources:
   - name: Prometheus
     type: prometheus
     access: proxy
-    url: http://prometheus:9090
+    url: http://${GRAFANA_PROMETHEUS_HOST}:${GRAFANA_PROMETHEUS_PORT}
     uid: prometheus
     isDefault: true
 
   - name: Tempo
     type: tempo
     access: proxy
-    url: http://tempo:3200
+    url: http://${GRAFANA_TEMPO_HOST}:${GRAFANA_TEMPO_PORT}
     uid: tempo
     jsonData:
       tracesToMetrics:
@@ -19,4 +19,4 @@ datasources:
         tags: [ 'service.name', 'span.name' ]
         queries:
           - name: 'Sample query'
-            query: 'sum(rate(traces_spanmetrics_latency_count{$$__tags}[5m])) by ($$__rate_by)' 
+            query: 'sum(rate(traces_spanmetrics_latency_count{$$__tags}[5m])) by ($$__rate_by)'
