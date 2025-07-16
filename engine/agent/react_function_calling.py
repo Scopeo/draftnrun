@@ -89,7 +89,7 @@ class ReActAgent(Agent):
             try:
                 self._shared_sandbox.kill()
             except Exception as e:
-                LOGGER.warning(f"Failed to kill shared sandbox: {e}")
+                LOGGER.error(f"Failed to kill shared sandbox: {e}")
             finally:
                 self._shared_sandbox = None
 
@@ -264,7 +264,9 @@ class ReActAgent(Agent):
 
             elif self._current_iteration < self._max_iterations:
                 self.log_trace_event(
-                    message=(f"Number of successful tool outputs: {successful_output_count}. " f"Running the agent again.")
+                    message=(
+                        f"Number of successful tool outputs: {successful_output_count}. " f"Running the agent again."
+                    )
                 )
                 self._current_iteration += 1
                 return await self._run_without_trace(agent_input)
