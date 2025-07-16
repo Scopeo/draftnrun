@@ -63,7 +63,7 @@ class TestTerminalCommandE2BTool:
         assert "error" not in result
 
         mock_sandbox.commands.run.assert_called_once_with("echo 'Hello World'", timeout=30)
-        mock_sandbox.close.assert_called_once()
+        mock_sandbox.kill.assert_called_once()
 
     @patch("engine.agent.tools.terminal_command_e2b_tool.Sandbox")
     def test_execute_terminal_command_with_shared_sandbox(
@@ -82,9 +82,9 @@ class TestTerminalCommandE2BTool:
         assert result["stdout"] == "Shared output\n"
         assert result["exit_code"] == 0
 
-        # Should not create a new sandbox or close the shared one
+        # Should not create a new sandbox or kill the shared one
         mock_sandbox_class.assert_not_called()
-        shared_sandbox.close.assert_not_called()
+        shared_sandbox.kill.assert_not_called()
         shared_sandbox.commands.run.assert_called_once_with("ls -la", timeout=30)
 
     @patch("engine.agent.tools.terminal_command_e2b_tool.Sandbox")
@@ -101,7 +101,7 @@ class TestTerminalCommandE2BTool:
         assert result["command"] == "invalid_command"
         assert result["error"] == "Command failed"
 
-        mock_sandbox.close.assert_called_once()
+        mock_sandbox.kill.assert_called_once()
 
     @patch("engine.agent.tools.terminal_command_e2b_tool.Sandbox")
     def test_execute_terminal_command_no_api_key(self, mock_sandbox_class, terminal_command_tool):
@@ -171,4 +171,4 @@ class TestTerminalCommandE2BTool:
         assert content["error"] == "Sandbox error"
 
         # Ensure sandbox cleanup happens even on error
-        mock_sandbox.close.assert_called_once()
+        mock_sandbox.kill.assert_called_once()
