@@ -22,8 +22,8 @@ INPUT_PAYLOAD_PARAMETER_NAME = "payload_schema"
 def seed_input_components(session: Session):
     input = db.Component(
         id=COMPONENT_UUIDS["input"],
-        name="Input",
-        description="Input: takes a json and output an AgentPayload",
+        name="API Input",
+        description="This block is triggered by an API call",
         is_agent=True,
         is_protected=True,
         release_stage=db.ReleaseStage.PUBLIC,
@@ -50,11 +50,8 @@ def seed_input_components(session: Session):
                 ui_component=UIComponent.TEXTAREA,
                 ui_component_properties=UIComponentProperties(
                     label="""An exemple of your payload schema""",
-                    placeholder="A payload schema of your input for the pipeline. Must be a correct "
-                    "api-formatted json. To connect to agents, the messages key with openai message format"
-                    " is mandatory",
-                    description="Describe here the payload schema of your input for the workflow."
-                    " Must be a correct json. The keys of this dictonary can be used in next components"
+                    description="Give here an example of the payload schema of your input for the workflow."
+                    " Must be a correct json. The keys of this dictonary can be referenced in the next components"
                     " as variables, for example: {{additional_info}}",
                 ).model_dump(exclude_unset=True, exclude_none=True),
             ),

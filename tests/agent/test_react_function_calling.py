@@ -4,7 +4,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from engine.agent.react_function_calling import ReActAgent, INITIAL_PROMPT
+from engine.agent.react_function_calling import ReActAgent, INITIAL_PROMPT, DEFAULT_FALLBACK_REACT_ANSWER
 from engine.agent.agent import AgentPayload, ToolDescription, ChatMessage
 from engine.trace.trace_manager import TraceManager
 from engine.llm_services.llm_service import CompletionService
@@ -161,7 +161,7 @@ def test_max_iterations(agent_calls_mock, get_span_mock, react_agent, agent_inpu
 
     output = react_agent.run_sync(agent_input)
 
-    assert output.last_message.content == "I'm sorry, I couldn't find a solution to your problem."
+    assert output.last_message.content == DEFAULT_FALLBACK_REACT_ANSWER
     assert not output.is_final
 
 
