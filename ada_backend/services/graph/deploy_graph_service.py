@@ -23,8 +23,10 @@ from ada_backend.repositories.graph_runner_repository import (
     insert_graph_runner,
     upsert_component_node,
 )
+from ada_backend.repositories.integration_repository import get_component_instance_integration
+from ada_backend.schemas.integration_schema import CreateComponentIntegrationSchema
 from ada_backend.schemas.parameter_schema import PipelineParameterSchema
-from ada_backend.schemas.pipeline.base import ComponentInstanceSchema
+from ada_backend.schemas.pipeline.base import ComponentInstanceSchema, UpdateComponentInstanceSchema
 from ada_backend.schemas.pipeline.graph_schema import GraphDeployResponse
 from ada_backend.services.pipeline.get_pipeline_service import get_component_instance, get_relationships
 from ada_backend.services.pipeline.update_pipeline_service import create_or_update_component_instance
@@ -47,7 +49,11 @@ def copy_component_instance(
         component_instance_id_to_copy,
         is_start_node=is_start_node,
     )
-    new_composant_instance = ComponentInstanceSchema(
+    if component_instance.integration:
+        component_instance_integration = get_component_instance_integration(
+            session, component_instance_id_to_copy, integration_id=component_instance.integration.id
+        )
+    new_composant_instance = UpdateComponentInstanceSchema(
         name=component_instance.name,
         component_id=component_instance.component_id,
         tool_description=component_instance.tool_description,
@@ -56,6 +62,16 @@ def copy_component_instance(
             PipelineParameterSchema(name=parameter.name, value=parameter.value, order=parameter.order)
             for parameter in component_instance.parameters
         ],
+        integration=(
+            CreateComponentIntegrationSchema(
+                integration_id=component_instance_integration.integration_id,
+                access_token=component_instance_integration.get_access_token(),
+                refresh_token=component_instance_integration.get_refresh_token(),
+                expires_at=component_instance_integration.expires_at,
+            )
+            if component_instance.integration
+            else None
+        ),
     )
     return create_or_update_component_instance(session, new_composant_instance, project_id)
 

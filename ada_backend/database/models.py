@@ -165,6 +165,7 @@ class Component(Base):
     name = mapped_column(String, unique=True, nullable=False)
     description = mapped_column(Text, nullable=True)
     is_agent = mapped_column(Boolean, nullable=False, default=False)
+    integration_id = mapped_column(UUID(as_uuid=True), ForeignKey("integrations.id"), nullable=True)
     created_at = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     function_callable = mapped_column(Boolean, nullable=False, default=False)
@@ -185,6 +186,39 @@ class Component(Base):
 
     def __str__(self):
         return f"Component({self.name})"
+
+
+class Integration(Base):
+    __tablename__ = "integrations"
+
+    id = mapped_column(UUID(as_uuid=True), primary_key=True)
+    name = mapped_column(String, nullable=False)
+    service = mapped_column(String, nullable=False)
+
+
+class ComponentIntegration(Base):
+    __tablename__ = "component_integrations"
+
+    id = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    component_instance_id = mapped_column(UUID(as_uuid=True), ForeignKey("component_instances.id"))
+    integration_id = mapped_column(UUID(as_uuid=True), ForeignKey("integrations.id"))
+    encrypted_access_token = mapped_column(String)
+    encrypted_refresh_token = mapped_column(String)
+    expires_at = mapped_column(DateTime(timezone=True))
+
+    def set_access_token(self, access_token: str) -> None:
+        """Encrypts and sets the access token."""
+        self.encrypted_access_token = CIPHER.encrypt(access_token.encode()).decode()
+
+    def set_refresh_token(self, refresh_token: str) -> None:
+        """Encrypts and sets the refresh token."""
+        self.encrypted_refresh_token = CIPHER.encrypt(refresh_token.encode()).decode()
+
+    def get_access_token(self) -> str:
+        return CIPHER.decrypt(self.encrypted_access_token.encode()).decode()
+
+    def get_refresh_token(self) -> str:
+        return CIPHER.decrypt(self.encrypted_refresh_token.encode()).decode()
 
 
 class GraphRunner(Base):

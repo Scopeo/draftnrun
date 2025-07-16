@@ -24,6 +24,7 @@ from engine.agent.tools.python_code_interpreter_e2b_tool import PythonCodeInterp
 from engine.agent.document_enhanced_llm_call import DocumentEnhancedLLMCallAgent
 from engine.agent.document_react_loader import DocumentReactLoaderAgent
 from engine.agent.rag.document_search import DocumentSearch
+from engine.integrations.gmail_sender import GmailSender
 from engine.storage_service.local_service import SQLLocalService
 from engine.storage_service.snowflake_service.snowflake_service import SnowflakeService
 from ada_backend.services.entity_factory import (
@@ -77,6 +78,9 @@ class SupportedEntityType(StrEnum):
     DOCUMENT_REACT_LOADER_AGENT = "Document AI Agent"
     INPUT = "Input"
     FILTER = "Filter"
+
+    # Integrations
+    GMAIL_SENDER = "Gmail Sender"
 
 
 class FactoryRegistry:
@@ -382,6 +386,13 @@ def create_factory_registry() -> FactoryRegistry:
         name=SupportedEntityType.FILTER,
         factory=AgentFactory(
             entity_class=Filter,
+        ),
+    )
+
+    registry.register(
+        name=SupportedEntityType.GMAIL_SENDER,
+        factory=AgentFactory(
+            entity_class=GmailSender,
         ),
     )
 

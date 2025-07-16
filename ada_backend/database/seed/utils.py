@@ -35,6 +35,7 @@ COMPONENT_UUIDS: dict[str, UUID] = {
     "input": UUID("01357c0b-bc99-44ce-a435-995acc5e2544"),
     "filter": UUID("02468c0b-bc99-44ce-a435-995acc5e2545"),
     "python_code_interpreter_e2b": UUID("e2b00000-0000-1111-2222-333333333333"),
+    "gmail_sender": UUID("af96bb40-c9ea-4851-a663-f0e64363fcb2"),
 }
 
 OPTIONS_COMPLETION_MODELS = [
