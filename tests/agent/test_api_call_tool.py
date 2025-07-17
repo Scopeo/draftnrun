@@ -17,7 +17,7 @@ def mock_trace_manager():
 def api_tool(mock_trace_manager):
     return APICallTool(
         trace_manager=mock_trace_manager,
-        component_instance_name="test_api_tool",
+        component_attributes=ComponentAttributes(component_instance_name="test_api_tool"),
         endpoint="https://api.example.com/test",
         method="GET",
         headers={"Content-Type": "application/json", "Authorization": "Bearer test_token"},
@@ -138,7 +138,7 @@ def test_make_api_call_post_with_empty_params(mock_request, mock_trace_manager, 
     api_tool = APICallTool(
         trace_manager=mock_trace_manager,
         component_attributes=ComponentAttributes(
-            component_instance_name="test_api_tool", component_instance_id="test_instance_id"
+            component_instance_name="test_api_tool",
         ),
         endpoint="https://api.example.com/test",
         method="POST",
@@ -167,7 +167,7 @@ def test_make_api_call_get_with_empty_params(mock_request, mock_trace_manager, m
     api_tool = APICallTool(
         trace_manager=mock_trace_manager,
         component_attributes=ComponentAttributes(
-            component_instance_name="test_api_tool", component_instance_id="test_instance_id"
+            component_instance_name="test_api_tool",
         ),
         endpoint="https://api.example.com/test",
         method="GET",

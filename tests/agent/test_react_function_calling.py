@@ -66,10 +66,7 @@ def agent_input():
 def react_agent(mock_agent, mock_trace_manager, mock_tool_description, mock_llm_service):
     return ReActAgent(
         completion_service=mock_llm_service,
-        component_attributes=ComponentAttributes(
-            component_instance_name="Test React Agent",
-            component_instance_id="test_react_agent_instance_id",
-        ),
+        component_attributes=ComponentAttributes(component_instance_name="Test React Agent"),
         agent_tools=[mock_agent],
         trace_manager=mock_trace_manager,
         tool_description=mock_tool_description,
@@ -172,10 +169,7 @@ def test_react_agent_without_tools(mock_trace_manager, mock_tool_description, mo
     """Test that ReActAgent can be instantiated without tools."""
     react_agent = ReActAgent(
         completion_service=mock_llm_service,
-        component_attributes=ComponentAttributes(
-            component_instance_name="Test React Agent Without Tools",
-            component_instance_id="test_react_agent_without_tools_instance_id",
-        ),
+        component_attributes=ComponentAttributes(component_instance_name="Test React Agent Without Tools"),
         trace_manager=mock_trace_manager,
         tool_description=mock_tool_description,
     )

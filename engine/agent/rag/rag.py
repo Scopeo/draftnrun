@@ -40,6 +40,8 @@ class RAG(Agent):
         vocabulary_search: Optional[VocabularySearch] = None,
         input_data_field_for_messages_history: str = "messages",
     ) -> None:
+        if component_attributes is None:
+            component_attributes = ComponentAttributes(component_instance_name=self.__class__.__name__)
         super().__init__(
             trace_manager=trace_manager,
             tool_description=tool_description,

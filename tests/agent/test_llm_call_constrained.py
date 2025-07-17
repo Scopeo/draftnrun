@@ -54,7 +54,7 @@ def llm_call_with_output_format():
     llm_service = MagicMock()
     tool_description = MagicMock()
     component_attributes = ComponentAttributes(
-        component_instance_name="test_component", component_instance_id="test_instance_id"
+        component_instance_name="test_component",
     )
     prompt_template = "{input}"
     output_format = load_str_to_json(

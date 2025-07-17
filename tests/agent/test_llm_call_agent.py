@@ -104,7 +104,7 @@ def llm_call_with_file_content():
     llm_service.complete.side_effect = complete_side_effect
     tool_description = MagicMock()
     component_attributes = ComponentAttributes(
-        component_instance_name="test_component", component_instance_id="test_instance_id"
+        component_instance_name="test_component",
     )
     prompt_template = "{input}"
     file_content = "{file}"
@@ -125,9 +125,7 @@ def llm_call_without_file_content():
     # Mock complete to return the input text content as response
     llm_service.complete.side_effect = complete_side_effect
     tool_description = MagicMock()
-    component_attributes = ComponentAttributes(
-        component_instance_name="test_component", component_instance_id="test_instance_id"
-    )
+    component_attributes = ComponentAttributes(component_instance_name="test_component")
     prompt_template = "{input}"
     return LLMCallAgent(trace_manager, llm_service, tool_description, component_attributes, prompt_template)
 
