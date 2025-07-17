@@ -83,8 +83,11 @@ class LLMService(ABC):
                     self._api_key = settings.MISTRAL_API_KEY
                     self._base_url = settings.MISTRAL_BASE_URL
                 case _:
-                    self._api_key = settings.custom_models.get(self._provider).get("api_key")
-                    self._base_url = settings.custom_models.get(self._provider).get("base_url")
+                    config_provider = settings.custom_models.get(self._provider)
+                    if config_provider is None:
+                        raise ValueError(f"Provider {self._provider} not found in settings")
+                    self._api_key = config_provider.get("api_key")
+                    self._base_url = config_provider.get("base_url")
                     LOGGER.debug(f"Using custom api key and base url for provider: {self._provider}")
                     if self._api_key is None or self._base_url is None:
                         raise ValueError(
@@ -125,8 +128,6 @@ class EmbeddingService(LLMService):
                 return response.data
 
             case _:
-                if self._base_url is None or self._api_key is None:
-                    raise ValueError(f"API key and base URL must be provided for custom provider: {self._provider}")
                 import openai
 
                 client = openai.OpenAI(
@@ -891,9 +892,7 @@ class VisionService(LLMService):
         self._temperature = temperature
         self._image_format = None
         match self._provider:
-            case "openai":
-                self._image_format = "jpeg"
-            case "google":
+            case "openai" | "google":
                 self._image_format = "jpeg"
             case "cerebras":
                 raise ValueError("Our implentation of Cerebras does not support vision models.")
