@@ -70,14 +70,19 @@ FULL_CAPACITY_COMPLETION_MODELS = [
     # Cerebras
     SelectOption(value="cerebras:llama-3.3-70b", label="Llama 3.3 70B (Cerebras)"),
     SelectOption(value="cerebras:qwen-3-235b-a22b", label="Qwen 3 235B (Cerebras)"),
-]
-
-OPTIONS_COMPLETION_MODELS = FULL_CAPACITY_COMPLETION_MODELS + [
     # Google (Gemini)
     SelectOption(value="google:gemini-2.5-pro-preview-06-05", label="Gemini 2.5 Pro"),
     SelectOption(value="google:gemini-2.5-flash-preview-05-20", label="Gemini 2.5 Flash"),
     SelectOption(value="google:gemini-2.0-flash", label="Gemini 2.0 Flash"),
     SelectOption(value="google:gemini-2.0-flash-lite", label="Gemini 2.0 Flash lite"),
+    # Mistral
+    SelectOption(value="mistral:mistral-large-2411", label="Mistral Large"),
+    SelectOption(value="mistral:mistral-medium-2505", label="Mistral Medium"),
+]
+
+OPTIONS_COMPLETION_MODELS = FULL_CAPACITY_COMPLETION_MODELS + [
+    # Mistral
+    SelectOption(value="mistral:mistral-small-2506", label="Mistral Small"),
     # Mistral
     # SelectOption(value="mistral:mistral-large", label="Mistral Large"),
     # SelectOption(value="mistral:mistral-small-3", label="Mistral Small 3"),

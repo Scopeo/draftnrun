@@ -317,7 +317,7 @@ class CompletionService(LLMService):
                     }
                 )
                 return response.output_parsed
-            case "cerebras":  # all providers using only json schema for structured output go here
+            case "cerebras" | "google":  # all providers using only json schema for structured output go here
                 import openai
 
                 client = openai.OpenAI(api_key=self._api_key, base_url=self._base_url)
@@ -592,10 +592,10 @@ class CompletionService(LLMService):
         span = get_current_span()
         span.set_attributes({SpanAttributes.LLM_INVOCATION_PARAMETERS: json.dumps({"temperature": self._temperature})})
         match self._provider:
-            case "openai":
+            case "openai" | "google":
                 import openai
 
-                client = openai.OpenAI(api_key=self._api_key)
+                client = openai.OpenAI(api_key=self._api_key, base_url=self._base_url)
                 response = client.chat.completions.create(
                     model=self._model_name,
                     messages=messages,
@@ -604,6 +604,7 @@ class CompletionService(LLMService):
                     stream=stream,
                     tool_choice=tool_choice,
                 )
+                print(response)
                 span.set_attributes(
                     {
                         SpanAttributes.LLM_TOKEN_COUNT_COMPLETION: response.usage.completion_tokens,
