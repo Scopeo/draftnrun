@@ -68,6 +68,11 @@ FULL_CAPACITY_COMPLETION_MODELS = [
     SelectOption(value="openai:gpt-4o-mini", label="GPT-4o Mini"),
     # Cerebras
     SelectOption(value="cerebras:llama-3.3-70b", label="Llama 3.3 70B (Cerebras)"),
+    # Google (Gemini)
+    SelectOption(value="google:gemini-2.5-pro-preview-06-05", label="Gemini 2.5 Pro"),
+    SelectOption(value="google:gemini-2.5-flash-preview-05-20", label="Gemini 2.5 Flash"),
+    SelectOption(value="google:gemini-2.0-flash", label="Gemini 2.0 Flash"),
+    SelectOption(value="google:gemini-2.0-flash-lite", label="Gemini 2.0 Flash lite"),
 ]
 
 OPTIONS_COMPLETION_MODELS = FULL_CAPACITY_COMPLETION_MODELS + [
