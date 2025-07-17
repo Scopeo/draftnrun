@@ -1,10 +1,10 @@
 import pytest
 import base64
 import asyncio
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, AsyncMock
+
 
 from engine.agent.agent import ComponentAttributes
-from unittest.mock import MagicMock, AsyncMock
 from engine.agent.llm_call_agent import LLMCallAgent
 
 FILE_PATH_1 = "file_1.pdf"

@@ -1,22 +1,27 @@
-from unittest.mock import patch
+import json
+from unittest.mock import MagicMock, patch, AsyncMock
+from types import SimpleNamespace
 
+import pytest
 
 from engine.agent.react_function_calling import ReActAgent, INITIAL_PROMPT, DEFAULT_FALLBACK_REACT_ANSWER
 from engine.agent.agent import AgentPayload, ComponentAttributes, ToolDescription, ChatMessage
 from engine.trace.trace_manager import TraceManager
 from engine.llm_services.llm_service import CompletionService
-from engine.agent.react_function_calling import ReActAgent, INITIAL_PROMPT
-from engine.agent.agent import AgentPayload, ChatMessage
 
-# Import shared mocks
-from tests.mocks.react_agent import (
-    mock_process_tool_calls,
-)
-# Import prometheus metrics mocks
-from tests.mocks.prometheus_metrics import (
-    setup_prometheus_mocks,
-)
 
+@pytest.fixture
+def mock_agent():
+    mock_agent = MagicMock(spec=ReActAgent)
+    mock_tool_description = MagicMock(spec=ToolDescription)
+    mock_tool_description.name = "test_tool"
+    mock_tool_description.description = "Test tool description"
+    mock_tool_description.tool_properties = {
+        "test_property": {"type": "string", "description": "Test property description"}
+    }
+    mock_tool_description.required_tool_properties = ["test_property"]
+    mock_agent.tool_description = mock_tool_description
+    return mock_agent
 
 
 @pytest.fixture
@@ -46,11 +51,9 @@ def mock_llm_service():
         tool_calls=[],
         model_dump=lambda: {"role": "assistant", "content": "Test response", "tool_calls": []},
     )
-
     choice = SimpleNamespace(message=message)
     response = SimpleNamespace(choices=[choice])
-
-    mock_llm_service.afunction_call = AsyncMock(return_value=response)
+    mock_llm_service.function_call_async = AsyncMock(return_value=response)
     return mock_llm_service
 
 
@@ -73,7 +76,9 @@ def react_agent(mock_agent, mock_trace_manager, mock_tool_description, mock_llm_
 @patch("engine.prometheus_metric.get_tracing_span")
 @patch("engine.prometheus_metric.agent_calls")
 def test_run_no_tool_calls(agent_calls_mock, get_span_mock, react_agent, agent_input, mock_llm_service):
-    setup_prometheus_mocks(get_span_mock, agent_calls_mock)
+    get_span_mock.return_value.project_id = "1234"
+    counter_mock = MagicMock()
+    agent_calls_mock.labels.return_value = counter_mock
 
     output = react_agent.run_sync(agent_input)
 
@@ -83,18 +88,26 @@ def test_run_no_tool_calls(agent_calls_mock, get_span_mock, react_agent, agent_i
 
 @patch("engine.prometheus_metric.get_tracing_span")
 @patch("engine.prometheus_metric.agent_calls")
-def test_run_with_tool_calls(agent_calls_mock, get_span_mock, react_agent_with_tool_calls, agent_input, mock_agent):
-    setup_prometheus_mocks(get_span_mock, agent_calls_mock)
+def test_run_with_tool_calls(agent_calls_mock, get_span_mock, react_agent, agent_input, mock_agent, mock_llm_service):
+    get_span_mock.return_value.project_id = "1234"
+    counter_mock = MagicMock()
+    agent_calls_mock.labels.return_value = counter_mock
+    mock_tool_call = MagicMock()
+    mock_tool_call.id = "1"
+    mock_tool_call_function = MagicMock()
+    mock_tool_call_function.name = "test_tool"
+    mock_tool_call_function.arguments = json.dumps({"test_property": "Test value"})
+    mock_tool_call.function = mock_tool_call_function
+    mock_response_message = ChatMessage(role="assistant", content="Tool response")
 
-    # Enable tool shortcuts so that when there's exactly one successful output, it returns it
-    react_agent_with_tool_calls._allow_tool_shortcuts = True
-
+    mock_llm_service.function_call_async = AsyncMock(
+        return_value=MagicMock(choices=[MagicMock(message=mock_response_message, tool_calls=[mock_tool_call])])
+    )
     mock_agent.run.return_value = AgentPayload(
         messages=[ChatMessage(role="assistant", content="Tool response")], is_final=True
     )
 
-    with patch.object(react_agent_with_tool_calls, "_process_tool_calls", side_effect=mock_process_tool_calls):
-        output = react_agent_with_tool_calls.run_sync(agent_input)
+    output = react_agent.run_sync(agent_input)
 
     assert output.last_message.role == "assistant"
     assert output.last_message.content == "Tool response"
@@ -104,32 +117,74 @@ def test_run_with_tool_calls(agent_calls_mock, get_span_mock, react_agent_with_t
 @patch("engine.prometheus_metric.get_tracing_span")
 @patch("engine.prometheus_metric.agent_calls")
 def test_run_with_tool_calls_no_shortcut(
-    agent_calls_mock, get_span_mock, react_agent_sequential, agent_input, mock_agent
+    agent_calls_mock, get_span_mock, react_agent, agent_input, mock_agent, mock_llm_service
 ):
-    setup_prometheus_mocks(get_span_mock, agent_calls_mock)
+    get_span_mock.return_value.project_id = "1234"
+    counter_mock = MagicMock()
+    agent_calls_mock.labels.return_value = counter_mock
 
     # Disable tool shortcuts to test the full iteration logic
-    react_agent_sequential._allow_tool_shortcuts = False
+    react_agent._allow_tool_shortcuts = False
 
     mock_agent.run.return_value = AgentPayload(
         messages=[ChatMessage(role="assistant", content="Tool response")], is_final=True
     )
 
-    with patch.object(react_agent_sequential, "_process_tool_calls", side_effect=mock_process_tool_calls):
-        output = react_agent_sequential.run_sync(agent_input)
+    # Mock the LLM service to return different responses for each call
+    # First call: with tool calls, second call: final response
+    first_response = MagicMock()
+    first_response.choices = [
+        MagicMock(
+            message=MagicMock(
+                content=None,
+                tool_calls=[MagicMock()],
+                model_dump=lambda: {"role": "assistant", "content": None, "tool_calls": [{"id": "1"}]},
+            )
+        )
+    ]
+
+    second_response = MagicMock()
+    second_response.choices = [
+        MagicMock(
+            message=MagicMock(
+                content="Final response",
+                tool_calls=[],
+                model_dump=lambda: {"role": "assistant", "content": "Final response", "tool_calls": []},
+            )
+        )
+    ]
+
+    mock_llm_service.function_call_async = AsyncMock(side_effect=[first_response, second_response])
+
+    # Mock the tool call processing to simulate successful tool execution
+    with patch.object(react_agent, "_process_tool_calls") as mock_process:
+        mock_process.return_value = (
+            {"1": AgentPayload(messages=[ChatMessage(role="assistant", content="Tool response")], is_final=True)},
+            [
+                {
+                    "id": "1",
+                    "function": {"name": "test_tool", "arguments": json.dumps({"test_property": "Test value"})},
+                    "type": "function",
+                }
+            ],
+        )
+
+        output = react_agent.run_sync(agent_input)
 
     # Should get the final response from the second iteration
     assert output.last_message.role == "assistant"
     assert output.last_message.content == "Final response"
     assert output.is_final
     # Verify that function_call_async was called twice (once for tool calls, once for final response)
-    assert react_agent_sequential._completion_service.function_call_async.call_count == 2
+    assert react_agent._completion_service.function_call_async.call_count == 2
 
 
 @patch("engine.prometheus_metric.get_tracing_span")
 @patch("engine.prometheus_metric.agent_calls")
 def test_initial_prompt_insertion(agent_calls_mock, get_span_mock, react_agent, agent_input, mock_llm_service):
-    setup_prometheus_mocks(get_span_mock, agent_calls_mock)
+    get_span_mock.return_value.project_id = "1234"
+    counter_mock = MagicMock()
+    agent_calls_mock.labels.return_value = counter_mock
 
     react_agent.run_sync(agent_input)
     assert agent_input.messages[0].role == "system"
@@ -138,16 +193,38 @@ def test_initial_prompt_insertion(agent_calls_mock, get_span_mock, react_agent, 
 
 @patch("engine.prometheus_metric.get_tracing_span")
 @patch("engine.prometheus_metric.agent_calls")
-def test_max_iterations(agent_calls_mock, get_span_mock, react_agent_with_tool_calls, agent_input, mock_agent):
-    setup_prometheus_mocks(get_span_mock, agent_calls_mock)
+def test_max_iterations(agent_calls_mock, get_span_mock, react_agent, agent_input, mock_agent, mock_llm_service):
+    get_span_mock.return_value.project_id = "1234"
+    counter_mock = MagicMock()
+    agent_calls_mock.labels.return_value = counter_mock
+    mock_tool_call = MagicMock()
+    mock_tool_call.id = "1"
+    mock_tool_call_function = MagicMock()
+    mock_tool_call_function.name = "test_tool"
+    mock_tool_call_function.arguments = json.dumps({"test_property": "Test value"})
+    message = SimpleNamespace(
+        role="assistant",
+        tool_calls=mock_tool_call,
+        model_dump=lambda: {
+            "role": "assistant",
+            "tool_calls": [
+                {
+                    "id": "1",
+                    "function": {"name": "test_tool", "arguments": json.dumps({"test_property": "Test value"})},
+                }
+            ],
+        },
+    )
+    choice = SimpleNamespace(message=message)
+    response = SimpleNamespace(choices=[choice])
+    mock_llm_service.function_call_async = AsyncMock(return_value=response)
 
-    react_agent_with_tool_calls._max_iterations = 1
+    react_agent._max_iterations = 1
     mock_agent.run.return_value = AgentPayload(
         messages=[ChatMessage(role="assistant", content="Tool response")], is_final=False
     )
 
-    with patch.object(react_agent_with_tool_calls, "_process_tool_calls", side_effect=mock_process_tool_calls):
-        output = react_agent_with_tool_calls.run_sync(agent_input)
+    output = react_agent.run_sync(agent_input)
 
     assert output.last_message.content == DEFAULT_FALLBACK_REACT_ANSWER
     assert not output.is_final
