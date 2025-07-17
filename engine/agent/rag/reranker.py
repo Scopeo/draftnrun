@@ -19,7 +19,7 @@ class Reranker(ABC):
         self.trace_manager = trace_manager
         self._model = model
         self.component_attributes = component_attributes or ComponentAttributes(
-            component_name=self.__class__.__name__,
+            component_instance_name=self.__class__.__name__,
             component_instance_id=None,
         )
 

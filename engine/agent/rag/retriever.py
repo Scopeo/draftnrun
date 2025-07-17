@@ -33,8 +33,7 @@ class Retriever:
         self.metadata_date_key = metadata_date_key
         self.max_retrieved_chunks_after_penalty = max_retrieved_chunks_after_penalty
         self.component_attributes = component_attributes or ComponentAttributes(
-            component_name=self.__class__.__name__,
-            component_instance_id=None,
+            component_instance_name=self.__class__.__name__
         )
 
     def _get_chunks_without_trace(

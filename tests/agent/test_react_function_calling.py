@@ -67,7 +67,7 @@ def react_agent(mock_agent, mock_trace_manager, mock_tool_description, mock_llm_
     return ReActAgent(
         completion_service=mock_llm_service,
         component_attributes=ComponentAttributes(
-            component_name="Test React Agent",
+            component_instance_name="Test React Agent",
             component_instance_id="test_react_agent_instance_id",
         ),
         agent_tools=[mock_agent],
@@ -173,7 +173,7 @@ def test_react_agent_without_tools(mock_trace_manager, mock_tool_description, mo
     react_agent = ReActAgent(
         completion_service=mock_llm_service,
         component_attributes=ComponentAttributes(
-            component_name="Test React Agent Without Tools",
+            component_instance_name="Test React Agent Without Tools",
             component_instance_id="test_react_agent_without_tools_instance_id",
         ),
         trace_manager=mock_trace_manager,

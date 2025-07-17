@@ -15,7 +15,7 @@ class DBService(ABC):
     def __init__(self, dialect: Optional[str] = None, component_attributes: Optional[ComponentAttributes] = None):
         self.dialect = dialect
         self.component_attributes = component_attributes or ComponentAttributes(
-            component_name=self.__class__.__name__,
+            component_instance_name=self.__class__.__name__,
         )
 
     @abstractmethod

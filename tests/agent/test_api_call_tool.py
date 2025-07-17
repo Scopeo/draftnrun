@@ -138,7 +138,7 @@ def test_make_api_call_post_with_empty_params(mock_request, mock_trace_manager, 
     api_tool = APICallTool(
         trace_manager=mock_trace_manager,
         component_attributes=ComponentAttributes(
-            component_name="test_api_tool", component_instance_id="test_instance_id"
+            component_instance_name="test_api_tool", component_instance_id="test_instance_id"
         ),
         endpoint="https://api.example.com/test",
         method="POST",
@@ -167,7 +167,7 @@ def test_make_api_call_get_with_empty_params(mock_request, mock_trace_manager, m
     api_tool = APICallTool(
         trace_manager=mock_trace_manager,
         component_attributes=ComponentAttributes(
-            component_name="test_api_tool", component_instance_id="test_instance_id"
+            component_instance_name="test_api_tool", component_instance_id="test_instance_id"
         ),
         endpoint="https://api.example.com/test",
         method="GET",

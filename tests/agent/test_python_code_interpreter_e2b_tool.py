@@ -23,7 +23,7 @@ def e2b_tool(mock_trace_manager):
     return PythonCodeInterpreterE2BTool(
         trace_manager=mock_trace_manager,
         component_attributes=ComponentAttributes(
-            component_name="test_e2b_tool", component_instance_id="test_instance_id"
+            component_instance_name="test_e2b_tool", component_instance_id="test_instance_id"
         ),
         timeout=30,
     )
@@ -618,7 +618,7 @@ def test_missing_api_key():
         tool = PythonCodeInterpreterE2BTool(
             trace_manager=MagicMock(spec=TraceManager),
             component_attributes=ComponentAttributes(
-                component_name="test_no_api_key", component_instance_id="test_instance_id"
+                component_instance_name="test_no_api_key", component_instance_id="test_instance_id"
             ),
         )
 
@@ -632,7 +632,7 @@ def test_sandbox_timeout_configuration():
     tool = PythonCodeInterpreterE2BTool(
         trace_manager=MagicMock(spec=TraceManager),
         component_attributes=ComponentAttributes(
-            component_name="test_timeout", component_instance_id="test_instance_id"
+            component_instance_name="test_timeout", component_instance_id="test_instance_id"
         ),
         timeout=10,
     )

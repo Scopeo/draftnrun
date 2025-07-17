@@ -32,7 +32,7 @@ class Synthesizer:
         self.response_format = response_format
         self.trace_manager = trace_manager
         self.component_attributes = component_attributes or ComponentAttributes(
-            component_name=self.__class__.__name__,
+            component_instance_name=self.__class__.__name__,
         )
 
     def get_response(

@@ -36,8 +36,7 @@ class VocabularySearch:
         self.vocabulary_information: dict[str, TermDefinition] = self._init_vocabulary_information()
         self.vocabulary_context_prompt_key = vocabulary_context_prompt_key
         self.component_attributes = component_attributes or ComponentAttributes(
-            component_name=self.__class__.__name__,
-            component_instance_id=None,
+            component_instance_name=self.__class__.__name__
         )
 
     def _init_vocabulary_information(self):
