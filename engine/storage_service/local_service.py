@@ -139,10 +139,9 @@ class SQLLocalService(DBService):
         table = self.get_table(table_name, schema_name)
         with self.Session() as session:
             stmt = sqlalchemy.select(table)
-            result = session.execute(stmt)
             if query_filter:
-                stmt = stmt.where(text(query_filter))
-                result = session.execute(stmt)
+                stmt = sqlalchemy.select(table).where(text(query_filter))
+            result = session.execute(stmt)
             return pd.DataFrame(result.fetchall(), columns=result.keys())
 
     def describe_table(self, table_name: str, schema_name: Optional[str] = None) -> list[dict]:
