@@ -8,11 +8,15 @@ from engine.llm_services.llm_service import CompletionService
 from engine.agent.react_function_calling import ReActAgent, INITIAL_PROMPT
 from engine.agent.agent import AgentPayload, ChatMessage
 
-
 # Import shared mocks
 from tests.mocks.react_agent import (
     mock_process_tool_calls,
 )
+# Import prometheus metrics mocks
+from tests.mocks.prometheus_metrics import (
+    setup_prometheus_mocks,
+)
+
 
 
 @pytest.fixture
@@ -64,10 +68,6 @@ def react_agent(mock_agent, mock_trace_manager, mock_tool_description, mock_llm_
         trace_manager=mock_trace_manager,
         tool_description=mock_tool_description,
     )
-# Import prometheus metrics mocks
-from tests.mocks.prometheus_metrics import (
-    setup_prometheus_mocks,
-)
 
 
 @patch("engine.prometheus_metric.get_tracing_span")
