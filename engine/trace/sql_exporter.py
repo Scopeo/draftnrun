@@ -63,30 +63,22 @@ class SQLSpanExporter(SpanExporter):
 
     def get_org_info_from_ancestors(self, parent_id: str) -> tuple[str, str] | None:
         """Get org_id and org_llm_providers from ancestors of the span."""
-        try:
-            while parent_id:
+        while parent_id:
+            row = self.session.execute(
+                select(models.Span.attributes, models.Span.parent_id).where(models.Span.span_id == parent_id)
+            ).first()
+            if not row:
+                break
+            attributes, parent_id = row
+            if attributes:
                 try:
-                    row = self.session.execute(
-                        select(models.Span.attributes, models.Span.parent_id).where(models.Span.span_id == parent_id)
-                    ).first()
-                    if not row:
-                        break
-                    attributes, parent_id = row
-                    if attributes:
-                        try:
-                            attrs = json.loads(attributes)
-                        except Exception as e:
-                            LOGGER.debug(f"Failed to parse attributes JSON for parent {parent_id}: {e}")
-                            continue
-                        org_id = attrs.get("organization_id")
-                        org_llm_providers = convert_to_list(attrs.get("organization_llm_providers"))
-                        if org_id:
-                            return org_id, org_llm_providers
-                except SQLAlchemyError as e:
-                    LOGGER.error(f"Database error while getting org info from ancestors for parent {parent_id}: {e}")
-                    break
-        except Exception as e:
-            LOGGER.error(f"Unexpected error in get_org_info_from_ancestors: {e}")
+                    attrs = json.loads(attributes)
+                except Exception:
+                    continue
+                org_id = attrs.get("organization_id")
+                org_llm_providers = convert_to_list(attrs.get("organization_llm_providers"))
+                if org_id:
+                    return org_id, org_llm_providers
         return None, None
 
     def _log_span_details(self, span: ReadableSpan, operation: str):
