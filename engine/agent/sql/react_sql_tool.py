@@ -1,5 +1,4 @@
 from typing import Optional
-from uuid import UUID
 
 from engine.agent.agent import ComponentAttributes, ToolDescription
 from engine.agent.react_function_calling import ReActAgent
