@@ -1055,7 +1055,10 @@ class QdrantService:
 
         df = pd.DataFrame(rows)
         if query_filter:
-            df = df.query(query_filter)
+            import re
+
+            converted_query_filter = re.sub(r"(?<![!><])=(?!=)", "==", query_filter)
+            df = df.query(converted_query_filter)
         return df
 
     async def get_collection_data_async(
