@@ -165,3 +165,33 @@ def upsert_integrations(session: Session, integrations: list[db.Integration]) ->
             session.add(integration)
             LOGGER.info(f"Integration {integration.name} inserted.")
     session.commit()
+
+
+def upsert_categories(
+    session: Session,
+    categories: list[db.Category],
+) -> None:
+    """
+    Upserts categories in the database.
+    If a category already exists and has same attributes, it will be skipped.
+    If it exists but has different attributes, it will be updated.
+    If it does not exist, it will be inserted.
+    """
+    for category in categories:
+        existing_category = (
+            session.query(db.Category)
+            .filter(
+                db.Category.id == category.id,
+            )
+            .first()
+        )
+        if existing_category:
+            if models_are_equal(existing_category, category):
+                LOGGER.info(f"Category {category.name} did not change, skipping.")
+            else:
+                update_model_fields(existing_category, category)
+                LOGGER.info(f"Category {category.name} updated.")
+        else:
+            session.add(category)
+            LOGGER.info(f"Category {category.name} inserted.")
+    session.commit()

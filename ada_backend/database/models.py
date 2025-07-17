@@ -271,6 +271,47 @@ class IntegrationComponentInstanceRelationship(Base):
     component_instance = relationship("ComponentInstance")
 
 
+class Category(Base):
+    """
+    Defines categories for components, allowing for better organization and retrieval.
+    """
+
+    __tablename__ = "categories"
+
+    id = mapped_column(UUID(as_uuid=True), primary_key=True, index=True, default=uuid.uuid4)
+    name = mapped_column(String, unique=True, nullable=False)
+    description = mapped_column(Text, nullable=True)
+    created_at = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    def __str__(self):
+        return f"Category({self.name})"
+
+
+class ComponentCategory(Base):
+    """
+    Defines the relationship between components and categories.
+    A component can belong to multiple categories.
+    """
+
+    __tablename__ = "component_categories"
+
+    id = mapped_column(UUID(as_uuid=True), primary_key=True, index=True, default=uuid.uuid4)
+    component_id = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("components.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    category_id = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("categories.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+
+    component = relationship("Component", back_populates="categories")
+    category = relationship("Category", back_populates="components")
+
+
 class GraphRunner(Base):
     """
     Defines graph runners, which are used to execute a graph of components.
