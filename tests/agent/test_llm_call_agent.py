@@ -6,6 +6,7 @@ from unittest.mock import MagicMock, AsyncMock
 
 from engine.agent.agent import ComponentAttributes
 from engine.agent.llm_call_agent import LLMCallAgent
+from engine.agent.data_structures import AgentPayload
 
 FILE_PATH_1 = "file_1.pdf"
 FILE_PATH_2 = "file_2.pdf"
@@ -160,9 +161,19 @@ def llm_call_without_file_content():
 )
 def test_agent_input_combinations(agent, input_payload, expected_file, request):
     agent_instance = request.getfixturevalue(agent)
-    payload_instance = request.getfixturevalue(input_payload)
+    payload_dict = request.getfixturevalue(input_payload)
 
-    response = asyncio.run(agent_instance._run_without_trace(payload_instance))
+    # Convert dictionary to AgentPayload object
+    if "messages" in payload_dict:
+        messages = payload_dict["messages"]
+    else:
+        messages = payload_dict.get("content", "")
+
+    # Include any additional fields from the payload
+    additional_fields = {k: v for k, v in payload_dict.items() if k not in ["messages", "content"]}
+    payload_instance = AgentPayload(messages=messages, **additional_fields)
+
+    response = asyncio.run(agent_instance._run_without_io_trace(payload_instance))
 
     assert QUESTION in response.messages[0].content or QUESTION in response.messages[0].content[0]["text"]
     if isinstance(response.messages[0].content, list):

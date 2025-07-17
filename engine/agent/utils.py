@@ -5,6 +5,8 @@ import logging
 
 from fuzzywuzzy import fuzz, process
 
+from engine.agent.data_structures import AgentPayload, SplitPayload
+
 
 LOGGER = logging.getLogger(__name__)
 BASE64_CHARS = set("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=")
@@ -124,6 +126,26 @@ def parse_openai_message_format(message: Union[str, list], provider: str) -> tup
                         )
 
     return text_content, files_content, images_content
+
+
+def convert_data_for_trace_manager_display(*input_data):
+    if len(input_data) == 1:
+        single_input = input_data[0]
+        if isinstance(single_input, dict):
+            trace_input = json.dumps(single_input)
+            return trace_input
+        elif isinstance(single_input, AgentPayload):
+            trace_input = single_input.main_content
+            return trace_input
+        elif isinstance(single_input, SplitPayload):
+            trace_input = single_input.main_content
+            return trace_input
+        else:
+            LOGGER.error(f"Error with the {single_input} for trace display")
+            raise ValueError(f"Error with the {single_input} for trace display")
+    else:
+        trace_input = "\n".join([convert_data_for_trace_manager_display(item) for item in input_data])
+        return trace_input
 
 
 def load_str_to_json(str_to_parse: str) -> dict:

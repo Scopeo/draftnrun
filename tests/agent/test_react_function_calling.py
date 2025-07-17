@@ -5,7 +5,7 @@ from types import SimpleNamespace
 import pytest
 
 from engine.agent.react_function_calling import ReActAgent, INITIAL_PROMPT, DEFAULT_FALLBACK_REACT_ANSWER
-from engine.agent.agent import AgentPayload, ComponentAttributes, ToolDescription, ChatMessage
+from engine.agent.data_structures import AgentPayload, ToolDescription, ChatMessage, ComponentAttributes
 from engine.trace.trace_manager import TraceManager
 from engine.llm_services.llm_service import CompletionService
 
@@ -82,7 +82,7 @@ def test_run_no_tool_calls(agent_calls_mock, get_span_mock, react_agent, agent_i
 
     output = react_agent.run_sync(agent_input)
 
-    assert output.last_message.content == "Test response"
+    assert output.content == "Test response"
     assert output.is_final
 
 
@@ -109,8 +109,7 @@ def test_run_with_tool_calls(agent_calls_mock, get_span_mock, react_agent, agent
 
     output = react_agent.run_sync(agent_input)
 
-    assert output.last_message.role == "assistant"
-    assert output.last_message.content == "Tool response"
+    assert output.content == "Tool response"
     assert output.is_final
 
 
@@ -172,8 +171,7 @@ def test_run_with_tool_calls_no_shortcut(
         output = react_agent.run_sync(agent_input)
 
     # Should get the final response from the second iteration
-    assert output.last_message.role == "assistant"
-    assert output.last_message.content == "Final response"
+    assert output.content == "Final response"
     assert output.is_final
     # Verify that function_call_async was called twice (once for tool calls, once for final response)
     assert react_agent._completion_service.function_call_async.call_count == 2
@@ -226,7 +224,7 @@ def test_max_iterations(agent_calls_mock, get_span_mock, react_agent, agent_inpu
 
     output = react_agent.run_sync(agent_input)
 
-    assert output.last_message.content == DEFAULT_FALLBACK_REACT_ANSWER
+    assert output.content == DEFAULT_FALLBACK_REACT_ANSWER
     assert not output.is_final
 
 

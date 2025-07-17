@@ -1,7 +1,7 @@
 import logging
 from typing import Optional
 
-from engine.agent.agent import ToolDescription
+from engine.agent.data_structures import ToolDescription
 from engine.agent.rag.rag import RAG, format_rag_tool_description
 from engine.agent.rag.retriever import Retriever, DummyRetriever
 from engine.qdrant_service import QdrantService, QdrantCollectionSchema

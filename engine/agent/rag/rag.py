@@ -3,8 +3,8 @@ from typing import Optional
 
 from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttributes
 
-from engine.agent.agent import (
-    Agent,
+from engine.agent.agent import Agent
+from engine.agent.data_structures import (
     ChatMessage,
     AgentPayload,
     ComponentAttributes,
@@ -56,7 +56,7 @@ class RAG(Agent):
         self._vocabulary_search = vocabulary_search
         self.input_data_field_for_messages_history = input_data_field_for_messages_history
 
-    async def _run_without_trace(
+    async def _run_without_io_trace(
         self,
         *inputs: dict | AgentPayload,
         query_text: Optional[str] = None,
@@ -67,7 +67,7 @@ class RAG(Agent):
             # TODO : Will be suppressed when AgentPayload will be suppressed
             agent_input["messages"] = agent_input[self.input_data_field_for_messages_history]
             agent_input = AgentPayload(**agent_input)
-        content = query_text or agent_input.last_message.content
+        content = query_text or agent_input.main_content
         if content is None:
             raise ValueError("No content provided for the RAG tool.")
         formatted_filters = format_qdrant_filter(filters, FILTERING_CONDITION_WITH_METADATA_QDRANT)

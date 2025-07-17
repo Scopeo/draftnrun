@@ -3,6 +3,8 @@ from enum import StrEnum
 
 from engine.agent.inputs_outputs.input import Input
 from engine.agent.filter import Filter
+from engine.agent.splitter import Splitter
+from engine.agent.merger import Merger
 from engine.agent.llm_call_agent import LLMCallAgent
 from engine.agent.sql.react_sql_tool import ReactSQLAgent
 from engine.agent.sql.run_sql_query_tool import RunSQLQueryTool
@@ -83,6 +85,8 @@ class SupportedEntityType(StrEnum):
     OCR_CALL = "OCR Call"
     INPUT = "API Input"
     FILTER = "Filter"
+    SPLITTER = "Splitter"
+    MERGER = "Merger"
 
     # Integrations
     GMAIL_SENDER = "Gmail Sender"
@@ -422,6 +426,20 @@ def create_factory_registry() -> FactoryRegistry:
         name=SupportedEntityType.GMAIL_SENDER,
         factory=AgentFactory(
             entity_class=GmailSender,
+        ),
+    )
+
+    registry.register(
+        name=SupportedEntityType.SPLITTER,
+        factory=AgentFactory(
+            entity_class=Splitter,
+        ),
+    )
+
+    registry.register(
+        name=SupportedEntityType.MERGER,
+        factory=AgentFactory(
+            entity_class=Merger,
         ),
     )
 

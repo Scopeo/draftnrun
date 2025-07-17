@@ -5,7 +5,7 @@ from types import SimpleNamespace
 import pytest
 
 from engine.agent.react_function_calling import ReActAgent
-from engine.agent.agent import AgentPayload, ToolDescription, ChatMessage
+from engine.agent.data_structures import AgentPayload, ToolDescription, ChatMessage
 from engine.trace.trace_manager import TraceManager
 
 

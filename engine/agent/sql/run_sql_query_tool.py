@@ -1,6 +1,7 @@
 from typing import Optional
 
-from engine.agent.agent import Agent, AgentPayload, ChatMessage, ComponentAttributes, ToolDescription
+from engine.agent.agent import Agent
+from engine.agent.data_structures import AgentPayload, ChatMessage, ToolDescription, ComponentAttributes
 from engine.storage_service.db_service import DBService
 from engine.trace.trace_manager import TraceManager
 
@@ -33,6 +34,6 @@ class RunSQLQueryTool(Agent):
         )
         self._db_service = db_service
 
-    async def _run_without_trace(self, *inputs: AgentPayload, sql_query) -> AgentPayload:
+    async def _run_without_io_trace(self, *inputs: AgentPayload, sql_query) -> AgentPayload:
         sql_output = self._db_service.run_query(sql_query).to_markdown(index=False)
         return AgentPayload(messages=[ChatMessage(role="assistant", content=sql_output)])

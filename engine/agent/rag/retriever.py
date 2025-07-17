@@ -4,7 +4,7 @@ import json
 from opentelemetry import trace as trace_api
 from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttributes
 
-from engine.agent.agent import ComponentAttributes, SourceChunk
+from engine.agent.data_structures import SourceChunk, ComponentAttributes
 from engine.qdrant_service import QdrantService
 from engine.trace.trace_manager import TraceManager
 

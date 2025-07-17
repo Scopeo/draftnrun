@@ -2,12 +2,12 @@ import pytest
 from unittest.mock import MagicMock, patch, AsyncMock
 
 from llama_index.llms.openai import OpenAI
-from engine.agent.agent import SourceChunk
+from engine.agent.data_structures import SourceChunk
 from engine.agent.rag.retriever import Retriever
 from engine.agent.synthesizer import Synthesizer
 from engine.agent.rag.vocabulary_search import VocabularySearch
 from engine.llm_services.llm_service import CompletionService
-from engine.agent.agent import AgentPayload, ChatMessage
+from engine.agent.data_structures import AgentPayload, ChatMessage
 from engine.agent.rag.rag import RAG
 from tests.mocks.trace_manager import MockTraceManager
 
@@ -115,7 +115,7 @@ def test_rag_run(
     mock_complete.return_value.text = response_text
 
     output = rag.run_sync(message_to_process)
-    assert output.last_message.content == response_text
+    assert output.main_content == response_text
     assert isinstance(output.artifacts["sources"], list)
     assert all(isinstance(source, SourceChunk) for source in output.artifacts["sources"])
     assert output.artifacts["sources"][0].name == results[0].payload["name"]
@@ -161,8 +161,7 @@ def test_vocabulary_rag_run(
         MockQdrantResult(name="SourceChunk_2", content="Result 2"),
     ]
     assert (
-        output.last_message.content
-        == "Test Response [1][2]\nSources:\n[1] <url1|SourceChunk_1>\n[2] <url2|SourceChunk_2>\n"
+        output.main_content == "Test Response [1][2]\nSources:\n[1] <url1|SourceChunk_1>\n[2] <url2|SourceChunk_2>\n"
     )
     assert isinstance(output.artifacts["sources"], list)
     assert all(isinstance(source, SourceChunk) for source in output.artifacts["sources"])

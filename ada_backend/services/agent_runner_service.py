@@ -135,6 +135,4 @@ async def run_agent(
         )
     except Exception as e:
         raise ValueError(f"Error running agent: {str(e)}") from e
-    return ChatResponse(
-        message=agent_output.last_message.content, artifacts=agent_output.artifacts, error=agent_output.error
-    )
+    return ChatResponse(message=agent_output.main_content, artifacts=agent_output.artifacts, error=agent_output.error)

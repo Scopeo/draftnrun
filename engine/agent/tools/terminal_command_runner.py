@@ -6,13 +6,8 @@ from e2b_code_interpreter import AsyncSandbox
 from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttributes
 from opentelemetry.trace import get_current_span
 
-from engine.agent.agent import (
-    Agent,
-    ChatMessage,
-    AgentPayload,
-    ToolDescription,
-    ComponentAttributes,
-)
+from engine.agent.agent import Agent
+from engine.agent.data_structures import ComponentAttributes, ToolDescription, AgentPayload, ChatMessage
 from engine.trace.trace_manager import TraceManager
 from settings import settings
 
@@ -85,7 +80,7 @@ class TerminalCommandRunner(Agent):
 
         return result
 
-    async def _run_without_trace(
+    async def _run_without_io_trace(
         self,
         *inputs: AgentPayload,
         **kwargs: Any,

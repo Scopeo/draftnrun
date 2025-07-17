@@ -1,4 +1,4 @@
-from engine.agent.agent import ChatMessage
+from engine.agent.data_structures import ChatMessage
 
 MINIMAL_FIRST_MESSAGE_RETAINED = 1  # To retain the prompt system message
 MINIMAL_LAST_MESSAGE_RETAINED = 50

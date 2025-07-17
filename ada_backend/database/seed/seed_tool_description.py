@@ -10,6 +10,8 @@ from engine.agent.tools.api_call_tool import API_CALL_TOOL_DESCRIPTION
 from engine.agent.document_enhanced_llm_call import DEFAULT_DOCUMENT_ENHANCED_LLM_CALL_TOOL_DESCRIPTION
 from engine.agent.inputs_outputs.input import DEFAULT_INPUT_TOOL_DESCRIPTION
 from engine.agent.filter import DEFAULT_FILTER_TOOL_DESCRIPTION
+from engine.agent.splitter import DEFAULT_SPLITTER_TOOL_DESCRIPTION
+from engine.agent.merger import DEFAULT_MERGER_TOOL_DESCRIPTION
 from engine.agent.rag.rag import format_rag_tool_description
 from engine.agent.react_function_calling import get_dummy_ai_agent_description
 from engine.agent.sql.react_sql_tool import DEFAULT_REACT_SQL_TOOL_DESCRIPTION
@@ -35,6 +37,8 @@ TOOL_DESCRIPTION_UUIDS = {
     "gmail_sender_tool_description": UUID("c1d3aca1-5187-40c6-a350-e3b28b15c802"),
     "python_code_runner_tool_description": UUID("e2b11111-2222-3333-4444-555555555555"),
     "terminal_command_runner_tool_description": UUID("e2b11112-2222-3333-4444-555555555555"),
+    "default_splitter_tool_description": UUID("7de44598-9f2a-608d-c226-d6b7dce7b999"),
+    "default_merger_tool_description": UUID("8ef55609-0a3b-719e-d337-e7c8edf8c000"),
 }
 
 
@@ -89,6 +93,13 @@ def seed_tool_description(session: Session):
         id=TOOL_DESCRIPTION_UUIDS["gmail_sender_tool_description"],
         **GMAIL_SENDER_TOOL_DESCRIPTION.model_dump(),
     )
+    default_splitter_tool_description = db.ToolDescription(
+        id=TOOL_DESCRIPTION_UUIDS["default_splitter_tool_description"],
+        **DEFAULT_SPLITTER_TOOL_DESCRIPTION.model_dump(),
+    )
+    default_merger_tool_description = db.ToolDescription(
+        id=TOOL_DESCRIPTION_UUIDS["default_merger_tool_description"], **DEFAULT_MERGER_TOOL_DESCRIPTION.model_dump()
+    )
     upsert_tool_descriptions(
         session=session,
         tool_descriptions=[
@@ -106,5 +117,7 @@ def seed_tool_description(session: Session):
             gmail_sender_tool_description,
             python_code_runner_tool_description,
             terminal_command_runner_tool_description,
+            default_splitter_tool_description,
+            default_merger_tool_description,
         ],
     )

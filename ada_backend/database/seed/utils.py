@@ -73,6 +73,8 @@ COMPONENT_UUIDS: dict[str, UUID] = {
     "gmail_sender": UUID("af96bb40-c9ea-4851-a663-f0e64363fcb2"),
     "python_code_runner": UUID("e2b00000-0000-1111-2222-333333333333"),
     "terminal_command_runner": UUID("e2b10000-1111-2222-3333-444444444444"),
+    "splitter": UUID("03579c0b-bc99-44ce-a435-995acc5e2546"),
+    "merger": UUID("04680c0b-bc99-44ce-a435-995acc5e2547"),
 }
 
 # Get models by capability and convert to select options
@@ -104,9 +106,7 @@ OCR_MODELS = [
 COMPLETION_MODELS.extend(
     add_custom_llm_model(settings.custom_models, "completion_models", "constrained_completion_with_pydantic")
 )
-FUNCTION_CALLING_MODELS.extend(
-    add_custom_llm_model(settings.custom_models, "completion_models", "function_calling")
-)
+FUNCTION_CALLING_MODELS.extend(add_custom_llm_model(settings.custom_models, "completion_models", "function_calling"))
 
 EMBEDDING_MODELS.extend(add_custom_llm_model(settings.custom_models, "embedding_models"))
 

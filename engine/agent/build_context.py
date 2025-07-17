@@ -2,7 +2,7 @@ import logging
 from typing import Optional, Callable
 from functools import partial
 
-from engine.agent.agent import SourceChunk, TermDefinition
+from engine.agent.data_structures import SourceChunk, TermDefinition
 
 LOGGER = logging.getLogger(__name__)
 

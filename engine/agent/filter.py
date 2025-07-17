@@ -5,7 +5,7 @@ from opentelemetry import trace as trace_api
 from openinference.semconv.trace import SpanAttributes, OpenInferenceSpanKindValues
 from jsonschema_pydantic import jsonschema_to_pydantic
 
-from engine.agent.agent import ComponentAttributes, ToolDescription, AgentPayload, ChatMessage
+from engine.agent.data_structures import ToolDescription, AgentPayload, ChatMessage, ComponentAttributes
 from engine.trace.trace_manager import TraceManager
 from engine.agent.utils import load_str_to_json
 

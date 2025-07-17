@@ -18,6 +18,8 @@ from ada_backend.database.seed.seed_db_service import seed_db_service_components
 from ada_backend.database.seed.integrations.seed_gmail import seed_gmail_components
 from ada_backend.database.seed.seed_input import seed_input_components
 from ada_backend.database.seed.seed_filter import seed_filter_components
+from ada_backend.database.seed.seed_splitter import seed_splitter_components
+from ada_backend.database.seed.seed_merger import seed_merger_components
 from ada_backend.database.seed.seed_llm_call import seed_llm_call_components
 from ada_backend.database.seed.seed_rag import seed_rag_components
 from ada_backend.database.seed.seed_react_sql import seed_react_sql_components
@@ -60,6 +62,8 @@ def seed_db(session: Session):
         seed_input_components(session)
         seed_filter_components(session)
         seed_gmail_components(session)
+        seed_splitter_components(session)
+        seed_merger_components(session)
 
         # Verify components exist
         for name, uuid_value in COMPONENT_UUIDS.items():

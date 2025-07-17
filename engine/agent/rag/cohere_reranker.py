@@ -3,7 +3,7 @@ from typing import Optional
 
 import cohere
 
-from engine.agent.agent import ComponentAttributes, SourceChunk
+from engine.agent.data_structures import SourceChunk, ComponentAttributes
 from engine.agent.rag.reranker import Reranker
 from engine.trace.trace_manager import TraceManager
 from settings import settings

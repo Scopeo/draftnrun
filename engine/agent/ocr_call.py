@@ -3,7 +3,8 @@ from typing import Optional
 from openinference.semconv.trace import SpanAttributes
 from opentelemetry.trace import get_current_span
 
-from engine.agent.agent import Agent, AgentPayload, ChatMessage, ComponentAttributes, ToolDescription
+from engine.agent.data_structures import AgentPayload, ChatMessage, ComponentAttributes, ToolDescription
+from engine.agent.agent import Agent
 from engine.llm_services.llm_service import OCRService
 from engine.trace.trace_manager import TraceManager
 from engine.trace.serializer import serialize_to_json
@@ -26,7 +27,7 @@ class OCRCall(Agent):
         self._ocr_service = ocr_service
         self._file_content = file_content
 
-    async def _run_without_trace(self, *input_payloads: AgentPayload | dict) -> AgentPayload:
+    async def _run_without_io_trace(self, *input_payloads: AgentPayload | dict) -> AgentPayload:
 
         for payload in input_payloads:
             payload_json = (

@@ -8,8 +8,8 @@ from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttribu
 from openai.types.chat import ChatCompletionMessageToolCall
 from e2b_code_interpreter import AsyncSandbox
 
-from engine.agent.agent import (
-    Agent,
+from engine.agent.agent import Agent
+from engine.agent.data_structures import (
     AgentPayload,
     ComponentAttributes,
     ToolDescription,
@@ -152,10 +152,11 @@ class ReActAgent(Agent):
                 tool_outputs[tool_call_id] = tool_output
         return tool_outputs, tools_to_process
 
-    async def _run_without_trace(self, *inputs: AgentPayload | dict, **kwargs) -> AgentPayload:
+    async def _run_without_io_trace(self, *inputs: AgentPayload | dict, **kwargs) -> AgentPayload:
         """Runs ReActAgent. Only one input is allowed."""
         original_agent_input = inputs[0]
         if not isinstance(original_agent_input, AgentPayload):
+
             original_agent_input["messages"] = original_agent_input[self.input_data_field_for_messages_history]
             original_agent_input = AgentPayload(**original_agent_input)
         system_message = next((msg for msg in original_agent_input.messages if msg.role == "system"), None)
@@ -261,18 +262,16 @@ class ReActAgent(Agent):
                 message=(f"Number of successful tool outputs: {successful_output_count}. " f"Running the agent again.")
             )
             self._current_iteration += 1
-            return await self._run_without_trace(agent_input)
-        else:  # This should not happen if the "tool_choice" parameter works correctly on the LLM service
-            self.log_trace_event(message=(f"Reached the maximum number of iterations ({self._max_iterations}). "))
-            messages = [
-                ChatMessage(
-                    role="assistant",
-                    content=DEFAULT_FALLBACK_REACT_ANSWER,
-                )
-            ]
+            return await self._run_without_io_trace(agent_input)
+        else:
+            LOGGER.error(
+                f"Reached the maximum number of iterations ({self._max_iterations}) and still asks for tools."
+                " This should not happen."
+            )
+
             await self._cleanup_shared_sandbox()
             return AgentPayload(
-                messages=messages,
+                messages=[ChatMessage(role="assistant", content=DEFAULT_FALLBACK_REACT_ANSWER)],
                 is_final=False,
             )
 

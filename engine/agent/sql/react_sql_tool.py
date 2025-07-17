@@ -1,6 +1,6 @@
 from typing import Optional
 
-from engine.agent.agent import ComponentAttributes, ToolDescription
+from engine.agent.data_structures import ToolDescription, ComponentAttributes
 from engine.agent.react_function_calling import ReActAgent
 from engine.agent.sql.run_sql_query_tool import RunSQLQueryTool
 from engine.llm_services.llm_service import CompletionService
