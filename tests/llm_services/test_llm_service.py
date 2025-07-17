@@ -54,7 +54,7 @@ async def test_completion_service_async():
 
 
 def test_completion_service_constrained_complete():
-    completion_service = CompletionService(trace_manager=MagicMock(), provider="openai", model_name="gpt-4o-mini")
+    completion_service = CompletionService(trace_manager=MagicMock(), provider="openai", model_name="gpt-4.1-mini")
     text = "Hello, world!"
 
     response = completion_service.constrained_complete_with_pydantic(text, ResponseFormat)
@@ -81,7 +81,7 @@ def test_completion_service_constrained_complete():
 
 @pytest.mark.asyncio
 async def test_completion_service_constrained_complete_async():
-    completion_service = CompletionService(trace_manager=MagicMock(), provider="openai", model_name="gpt-4o-mini")
+    completion_service = CompletionService(trace_manager=MagicMock(), provider="openai", model_name="gpt-4.1-mini")
     text = "Hello, world!"
 
     response = await completion_service.constrained_complete_with_pydantic_async(text, ResponseFormat)

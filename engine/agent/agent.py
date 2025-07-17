@@ -1,6 +1,5 @@
 import asyncio
 import logging
-import json
 from abc import ABC, abstractmethod
 from typing import Optional, Any
 from enum import StrEnum
@@ -15,6 +14,7 @@ from tenacity import RetryError
 
 from engine.agent.utils import convert_data_for_trace_manager_display
 from engine.trace.trace_manager import TraceManager
+from engine.trace.serializer import serialize_to_json
 from engine.prometheus_metric import track_calls
 
 LOGGER = logging.getLogger(__name__)
@@ -190,7 +190,7 @@ class Agent(ABC):
                     {
                         SpanAttributes.TOOL_NAME: self.tool_description.name,
                         SpanAttributes.TOOL_DESCRIPTION: self.tool_description.description,
-                        SpanAttributes.TOOL_PARAMETERS: json.dumps(kwargs),
+                        SpanAttributes.TOOL_PARAMETERS: serialize_to_json(kwargs),
                     }
                 )
             try:
