@@ -715,18 +715,7 @@ class QdrantService:
         collection_name: str,
         query_filter: Optional[str] = None,
     ) -> bool:
-        """
-        Synchronize a DataFrame with a Qdrant collection.
-        The DataFrame should have the same schema as the Qdrant collection.
-        The function will update existing points and add new points to the collection.
 
-        Args:
-            df (pd.DataFrame): The DataFrame to synchronize with the collection.
-            collection_name (str): The name of the collection to sync with.
-
-        Returns:
-            bool: True if the synchronization was successful, False otherwise.
-        """
         if query_filter:
             old_df = self.get_collection_data(collection_name, query_filter=query_filter)
             ids_to_delete = set(old_df[self.default_schema.chunk_id_field])
