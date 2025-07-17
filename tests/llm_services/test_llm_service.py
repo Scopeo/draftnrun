@@ -4,6 +4,7 @@ from pydantic import BaseModel
 
 from engine.llm_services.llm_service import CompletionService, EmbeddingService
 from engine.llm_services.constrained_output_models import OutputFormatModel
+from engine.trace.span_context import set_tracing_span
 
 
 class ResponseFormat(BaseModel):
@@ -12,6 +13,9 @@ class ResponseFormat(BaseModel):
 
 
 def test_completion_service():
+    # Set up tracing span context for the test
+    set_tracing_span(project_id="test_project", organization_id="test_org", organization_llm_providers=["openai"])
+
     completion_service = CompletionService(trace_manager=MagicMock(), provider="openai", model_name="gpt-4.1-mini")
     assert completion_service._provider == "openai"
     assert completion_service._model_name == "gpt-4.1-mini"
@@ -26,6 +30,9 @@ def test_completion_service():
 
 
 def test_completion_service_constrained_complete():
+    # Set up tracing span context for the test
+    set_tracing_span(project_id="test_project", organization_id="test_org", organization_llm_providers=["openai"])
+
     completion_service = CompletionService(trace_manager=MagicMock(), provider="openai", model_name="gpt-4.1-mini")
     text = "Hello, world!"
 
@@ -52,6 +59,9 @@ def test_completion_service_constrained_complete():
 
 
 def test_embedding_service():
+    # Set up tracing span context for the test
+    set_tracing_span(project_id="test_project", organization_id="test_org", organization_llm_providers=["openai"])
+
     embedding_service = EmbeddingService(
         trace_manager=MagicMock(), provider="openai", model_name="text-embedding-3-large"
     )

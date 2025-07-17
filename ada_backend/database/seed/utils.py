@@ -57,6 +57,7 @@ COMPONENT_UUIDS: dict[str, UUID] = {
     "input": UUID("01357c0b-bc99-44ce-a435-995acc5e2544"),
     "filter": UUID("02468c0b-bc99-44ce-a435-995acc5e2545"),
     "python_code_interpreter_e2b": UUID("e2b00000-0000-1111-2222-333333333333"),
+    "terminal_command_e2b": UUID("e2b10000-1111-2222-3333-444444444444"),
 }
 
 FULL_CAPACITY_COMPLETION_MODELS = [

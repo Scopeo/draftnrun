@@ -62,23 +62,19 @@ def test_execute_simple_python_code(e2b_tool, e2b_api_key):
 
     # Check that the execution was successful
     assert "error" in result_data
-    assert "logs" in result_data
+    assert "stdout" in result_data
+    assert "stderr" in result_data
     assert "results" in result_data
 
     # Check that there's no error
     assert result_data["error"] is None
 
-    # Parse the logs JSON string
-    logs = json.loads(result_data["logs"])
-    assert "stdout" in logs
-    assert "stderr" in logs
-
     # Check stdout contains our print statement
-    assert "Hello, World!" in logs["stdout"][0]
+    assert "Hello, World!" in result_data["stdout"][0]
 
     # Check the result is 42
     assert len(result_data["results"]) > 0
-    assert result_data["results"][0]["text"] == "42"
+    assert result_data["results"][0].text == "42"
 
 
 def test_execute_python_code_with_imports(e2b_tool, e2b_api_key):
@@ -101,25 +97,21 @@ result
     result_data = e2b_tool.execute_python_code(python_code)
 
     assert "error" in result_data
-    assert "logs" in result_data
+    assert "stdout" in result_data
+    assert "stderr" in result_data
     assert "results" in result_data
     assert result_data["error"] is None
 
-    # Parse the logs JSON string
-    logs = json.loads(result_data["logs"])
-    assert "stdout" in logs
-    assert "stderr" in logs
-
     # Check stdout contains our print statements
-    assert "Circle area:" in logs["stdout"][0]
-    assert "Current date:" in logs["stdout"][0]
+    assert "Circle area:" in result_data["stdout"][0]
+    assert "Current date:" in result_data["stdout"][0]
 
     # Check the result is a dictionary
     assert len(result_data["results"]) > 0
     result_obj = result_data["results"][0]
-    assert "json" in result_obj
-    assert "area" in result_obj["json"]
-    assert "date" in result_obj["json"]
+    assert hasattr(result_obj, "json") and result_obj.json is not None
+    assert "area" in result_obj.json
+    assert "date" in result_obj.json
 
 
 def test_execute_python_code_with_error(e2b_tool, e2b_api_key):
@@ -133,18 +125,16 @@ result = x / y  # This will raise a ZeroDivisionError
     result_data = e2b_tool.execute_python_code(python_code)
 
     assert "error" in result_data
-    assert "logs" in result_data
+    assert "stdout" in result_data
+    assert "stderr" in result_data
     assert "results" in result_data
 
     # Check that there is an error
     assert result_data["error"] is not None
 
-    # Parse the error JSON
-    error_data = json.loads(result_data["error"])
-    assert "name" in error_data
-    assert "value" in error_data
-    assert error_data["name"] == "ZeroDivisionError"
-    assert "division by zero" in error_data["value"]
+    # The error is a string, not JSON
+    assert isinstance(result_data["error"], str)
+    assert "ZeroDivisionError" in result_data["error"] or "division by zero" in result_data["error"]
 
 
 def test_execute_python_code_with_file_operations(e2b_tool, e2b_api_key):
@@ -170,24 +160,20 @@ files = os.listdir('.')
     result_data = e2b_tool.execute_python_code(python_code)
 
     assert "error" in result_data
-    assert "logs" in result_data
+    assert "stdout" in result_data
+    assert "stderr" in result_data
     assert "results" in result_data
     assert result_data["error"] is None
 
-    # Parse the logs JSON string
-    logs = json.loads(result_data["logs"])
-    assert "stdout" in logs
-    assert "stderr" in logs
-
     # Check stdout contains our print statement
-    assert "File content: Hello from E2B sandbox!" in logs["stdout"][0]
+    assert "File content: Hello from E2B sandbox!" in result_data["stdout"][0]
 
     # Check the result contains the expected data
     assert len(result_data["results"]) > 0
     result_obj = result_data["results"][0]
-    assert "json" in result_obj
-    assert result_obj["json"]["content"] == "Hello from E2B sandbox!"
-    assert "test_file.txt" in result_obj["json"]["files"]
+    assert hasattr(result_obj, "json") and result_obj.json is not None
+    assert result_obj.json["content"] == "Hello from E2B sandbox!"
+    assert "test_file.txt" in result_obj.json["files"]
 
 
 def test_execute_python_code_with_data_processing(e2b_tool, e2b_api_key):
@@ -218,25 +204,21 @@ print(f"Even numbers: {even_numbers}")
     result_data = e2b_tool.execute_python_code(python_code)
 
     assert "error" in result_data
-    assert "logs" in result_data
+    assert "stdout" in result_data
+    assert "stderr" in result_data
     assert "results" in result_data
     assert result_data["error"] is None
 
-    # Parse the logs JSON string
-    logs = json.loads(result_data["logs"])
-    assert "stdout" in logs
-    assert "stderr" in logs
-
     # Check stdout contains our print statements
-    assert "Total: 55" in logs["stdout"][0]
-    assert "Average: 5.5" in logs["stdout"][0]
-    assert "Even numbers: [2, 4, 6, 8, 10]" in logs["stdout"][0]
+    assert "Total: 55" in result_data["stdout"][0]
+    assert "Average: 5.5" in result_data["stdout"][0]
+    assert "Even numbers: [2, 4, 6, 8, 10]" in result_data["stdout"][0]
 
     # Check the result contains the expected data
     assert len(result_data["results"]) > 0
     result_obj = result_data["results"][0]
-    assert "json" in result_obj
-    result_data_obj = result_obj["json"]
+    assert hasattr(result_obj, "json") and result_obj.json is not None
+    result_data_obj = result_obj.json
     assert result_data_obj["total"] == 55
     assert result_data_obj["average"] == 5.5
     assert result_data_obj["count"] == 10
@@ -508,22 +490,17 @@ async def test_run_without_trace_simple_code(e2b_tool, e2b_api_key):
     # Parse the content
     content = result.messages[0].content
 
-    # The content is a JSON string that contains another JSON string
-    # First parse the outer JSON
+    # The content is a JSON string
     execution_data = json.loads(content)
 
-    # If execution_data is still a string, parse it again
-    if isinstance(execution_data, str):
-        execution_data = json.loads(execution_data)
-
     assert "error" in execution_data
-    assert "logs" in execution_data
+    assert "stdout" in execution_data
+    assert "stderr" in execution_data
     assert "results" in execution_data
     assert execution_data["error"] is None
 
-    # Parse the logs JSON string
-    logs = json.loads(execution_data["logs"])
-    assert "Async test" in logs["stdout"][0]
+    # Check stdout
+    assert "Async test" in execution_data["stdout"][0]
 
     # Check the result
     assert len(execution_data["results"]) > 0
@@ -531,7 +508,7 @@ async def test_run_without_trace_simple_code(e2b_tool, e2b_api_key):
 
     # Check artifacts
     assert "execution_result" in result.artifacts
-    # The execution result is now stored as a dict in artifacts
+    # The execution result is stored as a dict in artifacts
     artifacts_execution_data = result.artifacts["execution_result"]
     assert artifacts_execution_data == execution_data
 
@@ -576,22 +553,17 @@ json.dumps(result)
     # Parse the content
     content = result.messages[0].content
 
-    # The content is a JSON string that contains another JSON string
-    # First parse the outer JSON
+    # The content is a JSON string
     execution_data = json.loads(content)
 
-    # If execution_data is still a string, parse it again
-    if isinstance(execution_data, str):
-        execution_data = json.loads(execution_data)
-
     assert "error" in execution_data
-    assert "logs" in execution_data
+    assert "stdout" in execution_data
+    assert "stderr" in execution_data
     assert "results" in execution_data
     assert execution_data["error"] is None
 
-    # Parse the logs JSON string
-    logs = json.loads(execution_data["logs"])
-    assert "Processed 5 numbers" in logs["stdout"][0]
+    # Check stdout
+    assert "Processed 5 numbers" in execution_data["stdout"][0]
 
     # Check the result
     assert len(execution_data["results"]) > 0
@@ -607,20 +579,19 @@ json.dumps(result)
     assert result_data["statistics"]["count"] == 5
 
 
-def test_missing_api_key():
+def test_missing_api_key(monkeypatch):
     """Test that the tool raises an error when E2B API key is not configured."""
     # Mock settings to return None for E2B_API_KEY
-    with pytest.MonkeyPatch().context() as m:
-        m.setattr("settings.settings.E2B_API_KEY", None)
+    monkeypatch.setattr("settings.settings.E2B_API_KEY", None)
 
-        tool = PythonCodeInterpreterE2BTool(
-            trace_manager=MagicMock(spec=TraceManager),
-            component_instance_name="test_no_api_key",
-        )
+    tool = PythonCodeInterpreterE2BTool(
+        trace_manager=MagicMock(spec=TraceManager),
+        component_instance_name="test_no_api_key",
+    )
 
-        # Should raise ValueError when no API key is available
-        with pytest.raises(ValueError, match="E2B API key not configured"):
-            tool.execute_python_code("print('test')")
+    # Should raise ValueError when no API key is available
+    with pytest.raises(ValueError, match="E2B API key not configured"):
+        tool.execute_python_code("print('test')")
 
 
 def test_sandbox_timeout_configuration():
