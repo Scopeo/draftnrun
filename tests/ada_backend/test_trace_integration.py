@@ -36,13 +36,13 @@ class TestTraceIntegration:
 
         try:
             exporter = SQLSpanExporter()
-            assert exporter.engine is not None
-            assert exporter.Session is not None
+            assert exporter.session is not None
 
-            # Test that we can create a session
-            session = exporter._get_fresh_session()
-            assert session is not None
-            session.close()
+            # Test that we can use the session
+            from sqlalchemy import text
+
+            result = exporter.session.execute(text("SELECT 1"))
+            assert result.scalar() == 1
 
         except Exception as e:
             pytest.fail(f"Failed to initialize exporter with real database: {e}")
@@ -82,8 +82,9 @@ class TestTraceIntegration:
 
         try:
             # Test tracer setup
-            tracer = setup_tracer("integration-test-project")
+            tracer, tracer_provider = setup_tracer("integration-test-project")
             assert tracer is not None
+            assert tracer_provider is not None
 
             # Test creating a span
             with tracer.start_as_current_span("manager_integration_test") as span:
@@ -192,32 +193,6 @@ class TestTraceIntegration:
 
         except Exception as e:
             pytest.fail(f"Failed to test missing timestamps logging: {e}")
-
-    def test_connection_pool_integration(self):
-        """Test connection pool behavior with the actual ada_traces database."""
-        if not settings.TRACES_DB_URL:
-            pytest.skip("TRACES_DB_URL not configured")
-
-        try:
-            exporter = SQLSpanExporter()
-
-            # Test multiple sessions
-            sessions = []
-            for i in range(5):
-                session = exporter._get_fresh_session()
-                sessions.append(session)
-
-            # All sessions should be different objects
-            assert len(set(sessions)) == 5
-
-            # Close all sessions
-            for session in sessions:
-                session.close()
-
-            exporter.shutdown()
-
-        except Exception as e:
-            pytest.fail(f"Failed to test connection pool with real database: {e}")
 
     def test_partial_failure_logs_and_continues(self):
         """Test that exporter logs errors for bad spans but continues exporting good spans."""

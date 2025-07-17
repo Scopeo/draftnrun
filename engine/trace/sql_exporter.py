@@ -59,42 +59,14 @@ def convert_to_list(obj: Any) -> list[str] | None:
 
 class SQLSpanExporter(SpanExporter):
     def __init__(self):
-        # Don't create session here - create fresh session for each export
-        self.engine = None
-        self.Session = None
-        self._setup_engine()
+        self.session = get_session_trace()
 
-    def _setup_engine(self):
-        """Setup database engine and session factory."""
-        if not settings.TRACES_DB_URL:
-            raise ValueError("TRACES_DB_URL is not set")
-
-        # Optimize connection pool for tracing workload
-        self.engine = create_engine(
-            settings.TRACES_DB_URL,
-            echo=False,
-            # Connection pool optimization
-            pool_size=5,  # Keep 5 connections ready
-            max_overflow=10,  # Allow up to 10 additional connections
-            pool_timeout=30,  # Wait 30s for available connection
-            pool_recycle=3600,  # Recycle connections every hour
-            pool_pre_ping=True,  # Verify connections before use
-        )
-        self.Session = sessionmaker(bind=self.engine)
-        LOGGER.info("SQLSpanExporter initialized with connection pool")
-
-    def _get_fresh_session(self):
-        """Get a fresh database session."""
-        if not self.Session:
-            self._setup_engine()
-        return self.Session()
-
-    def get_org_info_from_ancestors(self, session, parent_id: str) -> tuple[str, str] | None:
+    def get_org_info_from_ancestors(self, parent_id: str) -> tuple[str, str] | None:
         """Get org_id and org_llm_providers from ancestors of the span."""
         try:
             while parent_id:
                 try:
-                    row = session.execute(
+                    row = self.session.execute(
                         select(models.Span.attributes, models.Span.parent_id).where(models.Span.span_id == parent_id)
                     ).first()
                     if not row:
@@ -152,9 +124,6 @@ class SQLSpanExporter(SpanExporter):
 
         LOGGER.info(f"Exporting {len(spans)} spans to SQL database")
 
-        # Use a fresh session for each export operation
-        session = self._get_fresh_session()
-
         try:
             # Process spans
             for i, span in enumerate(spans):
@@ -179,7 +148,7 @@ class SQLSpanExporter(SpanExporter):
 
                     # Get cumulative counts from children
                     if accumulation := (
-                        session.execute(
+                        self.session.execute(
                             select(
                                 func.sum(models.Span.cumulative_error_count),
                                 func.sum(models.Span.cumulative_llm_token_count_prompt),
@@ -257,7 +226,7 @@ class SQLSpanExporter(SpanExporter):
                                     child, models.Span.span_id == child.c.parent_id
                                 )
                             )
-                            session.execute(
+                            self.session.execute(
                                 update(models.Span)
                                 .where(models.Span.id.in_(select(ancestors.c.id)))
                                 .values(
@@ -273,7 +242,7 @@ class SQLSpanExporter(SpanExporter):
                         except SQLAlchemyError as e:
                             LOGGER.warning(f"Failed to update ancestors for span {span_row.span_id}: {e}")
 
-                    session.add(span_row)
+                    self.session.add(span_row)
 
                 except Exception as e:
                     self._handle_span_processing_error(span, e, "span creation")
@@ -282,7 +251,7 @@ class SQLSpanExporter(SpanExporter):
 
             # Commit all span operations
             LOGGER.debug("Committing span operations to database")
-            session.commit()
+            self.session.commit()
             LOGGER.info(f"Successfully committed {len(spans)} spans to database")
 
             # Process organization usage
@@ -295,7 +264,7 @@ class SQLSpanExporter(SpanExporter):
                     org_llm_providers = convert_to_list(span.attributes.get("organization_llm_providers"))
 
                     if not org_id:
-                        org_id, org_llm_providers = self.get_org_info_from_ancestors(session, json_span["parent_id"])
+                        org_id, org_llm_providers = self.get_org_info_from_ancestors(json_span["parent_id"])
                     token_prompt = int(span.attributes.get(SpanAttributes.LLM_TOKEN_COUNT_PROMPT) or 0)
                     token_completion = int(span.attributes.get(SpanAttributes.LLM_TOKEN_COUNT_COMPLETION) or 0)
                     total_tokens = token_prompt + token_completion
@@ -314,24 +283,24 @@ class SQLSpanExporter(SpanExporter):
                 LOGGER.debug(f"Updating organization usage for {len(org_token_counts)} organizations")
                 for org_id, tokens in org_token_counts.items():
                     try:
-                        result = session.execute(
+                        result = self.session.execute(
                             select(models.OrganizationUsage).where(models.OrganizationUsage.organization_id == org_id)
                         ).first()
 
                         if result:
-                            session.execute(
+                            self.session.execute(
                                 update(models.OrganizationUsage)
                                 .where(models.OrganizationUsage.organization_id == org_id)
                                 .values(total_tokens=models.OrganizationUsage.total_tokens + tokens)
                             )
                         else:
-                            session.add(models.OrganizationUsage(organization_id=org_id, total_tokens=tokens))
+                            self.session.add(models.OrganizationUsage(organization_id=org_id, total_tokens=tokens))
                     except SQLAlchemyError as e:
                         LOGGER.error(f"Failed to update organization usage for org {org_id}: {e}")
                         continue
 
                 # Commit organization usage updates
-                session.commit()
+                self.session.commit()
                 LOGGER.info(f"Successfully updated organization usage for {len(org_token_counts)} organizations")
 
             return SpanExportResult.SUCCESS
@@ -345,7 +314,7 @@ class SQLSpanExporter(SpanExporter):
             LOGGER.error(f"Traceback: {traceback.format_exc()}")
 
             try:
-                session.rollback()
+                self.session.rollback()
                 LOGGER.info("Successfully rolled back database transaction")
             except Exception as rollback_error:
                 LOGGER.error(f"Failed to rollback transaction: {rollback_error}")
@@ -358,25 +327,17 @@ class SQLSpanExporter(SpanExporter):
             LOGGER.error(f"Traceback: {traceback.format_exc()}")
 
             try:
-                session.rollback()
+                self.session.rollback()
                 LOGGER.info("Successfully rolled back database transaction")
             except Exception as rollback_error:
                 LOGGER.error(f"Failed to rollback transaction: {rollback_error}")
 
             return SpanExportResult.FAILURE
 
-        finally:
-            try:
-                session.close()
-                LOGGER.debug("Database session closed")
-            except Exception as e:
-                LOGGER.error(f"Error closing session: {e}")
-
     def shutdown(self):
         """Clean up resources."""
         try:
-            if self.engine:
-                self.engine.dispose()
-                LOGGER.info("SQLSpanExporter engine disposed")
+            self.session.close()
+            LOGGER.info("SQLSpanExporter session closed")
         except Exception as e:
             LOGGER.error(f"Error during shutdown: {e}")

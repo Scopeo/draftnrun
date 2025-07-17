@@ -25,15 +25,8 @@ def setup_tracer(
     )
 
     tracer_provider = trace_sdk.TracerProvider(resource=resource)
-
-    # Add error handling for SQL exporter initialization
-    try:
-        sql_exporter = SQLSpanExporter()
-        tracer_provider.add_span_processor(BatchSpanProcessor(sql_exporter))
-        LOGGER.info(f"SQL exporter initialized for project: {project_name}")
-    except Exception as e:
-        LOGGER.error(f"Failed to initialize SQL exporter: {e}")
-        # Continue without database persistence
+    sql_exporter = SQLSpanExporter()
+    tracer_provider.add_span_processor(BatchSpanProcessor(sql_exporter))
 
     tracer = tracer_provider.get_tracer(__name__)
 
