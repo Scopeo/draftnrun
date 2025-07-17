@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from ada_backend.database import models as db
 from ada_backend.database.seed.seed_ai_agent import seed_ai_agent_components
+from ada_backend.database.seed.seed_categories import seed_categories
 from ada_backend.database.seed.seed_db_service import seed_db_service_components
 from ada_backend.database.seed.seed_input import seed_input_components
 from ada_backend.database.seed.seed_filter import seed_filter_components
@@ -35,6 +36,7 @@ def seed_db(session: Session):
     Seed the database with initial data.
     """
     try:
+        seed_categories(session)
         # First seed the available components
         seed_tool_description(session)
         seed_db_service_components(session)
