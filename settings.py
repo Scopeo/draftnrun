@@ -127,6 +127,9 @@ class BaseConfig(BaseSettings):
     # Observability stack feature flag
     ENABLE_OBSERVABILITY_STACK: bool = False
 
+    # Number of pages to detect document type
+    NUMBER_OF_PAGES_TO_DETECT_DOCUMENT_TYPE: Optional[int] = 5
+
     @model_validator(mode="after")
     @classmethod
     def sync_db_settings(cls, values):
