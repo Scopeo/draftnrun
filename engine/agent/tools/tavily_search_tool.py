@@ -9,6 +9,7 @@ from engine.agent.agent import (
     Agent,
     ChatMessage,
     AgentPayload,
+    ComponentAttributes,
     ToolDescription,
     SourceChunk,
     SourcedResponse,
@@ -62,7 +63,7 @@ class TavilyApiTool(Agent):
         self,
         completion_service: CompletionService,
         trace_manager: TraceManager,
-        component_instance_name: str,
+        component_attributes: ComponentAttributes,
         tool_description: ToolDescription = TAVILY_TOOL_DESCRIPTION,
         tavily_api_key: str = settings.TAVILY_API_KEY,
         synthesizer: Optional[Synthesizer] = None,
@@ -70,7 +71,7 @@ class TavilyApiTool(Agent):
         super().__init__(
             trace_manager=trace_manager,
             tool_description=tool_description,
-            component_instance_name=component_instance_name,
+            component_attributes=component_attributes,
         )
         self.trace_manager = trace_manager
         self.tavily_client = TavilyClient(api_key=tavily_api_key)

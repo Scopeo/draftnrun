@@ -4,6 +4,7 @@ import json
 from abc import ABC, abstractmethod
 from typing import Optional, Any
 from enum import StrEnum
+from uuid import UUID
 
 from openai.types.chat import ChatCompletionMessageToolCall
 from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttributes
@@ -101,6 +102,11 @@ class ToolDescription(BaseModel):
         return self.openai_format.get("function", {}).get("parameters", {})
 
 
+class ComponentAttributes(BaseModel):
+    component_instance_name: str
+    component_instance_id: Optional[UUID] = None
+
+
 class Agent(ABC):
     TRACE_SPAN_KIND: str = OpenInferenceSpanKindValues.AGENT.value
 
@@ -108,12 +114,12 @@ class Agent(ABC):
         self,
         trace_manager: TraceManager,
         tool_description: ToolDescription,
-        component_instance_name: str,
+        component_attributes: ComponentAttributes,
         **kwargs,
     ):
         self.trace_manager = trace_manager
         self.tool_description = tool_description
-        self.component_instance_name = component_instance_name
+        self.component_attributes = component_attributes
 
         self._trace_attributes: dict[str, Any] = {}
         self._trace_events: list[str] = []
@@ -169,13 +175,14 @@ class Agent(ABC):
         Returns:
             AgentOutput: The output of the agent. Only one output it's allowed.
         """
-        span_name = self.component_instance_name
+        span_name = self.component_attributes.component_instance_name
         with self.trace_manager.start_span(span_name) as span:
             trace_input = convert_data_for_trace_manager_display(inputs[0], AgentPayload)
             span.set_attributes(
                 {
                     SpanAttributes.OPENINFERENCE_SPAN_KIND: self.TRACE_SPAN_KIND,
                     SpanAttributes.INPUT_VALUE: trace_input,
+                    "component_instance_id": str(self.component_attributes.component_instance_id),
                 }
             )
             if self.tool_description.is_tool:

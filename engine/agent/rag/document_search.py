@@ -4,7 +4,7 @@ from typing import Optional
 from opentelemetry import trace as trace_api
 from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttributes
 
-from engine.agent.agent import SourceChunk
+from engine.agent.agent import ComponentAttributes, SourceChunk
 from engine.trace.trace_manager import TraceManager
 from engine.storage_service.db_service import DBService
 from engine.agent.utils import fuzzy_matching
@@ -26,7 +26,7 @@ class DocumentSearch:
         document_name_column: str = "document_name",
         content_document_column: str = "document_content",
         fuzzy_threshold: int = 80,
-        component_instance_name: Optional[str] = None,
+        component_attributes: Optional[ComponentAttributes] = None,
     ):
         self.trace_manager = trace_manager
         self.db_service = db_service
@@ -35,7 +35,9 @@ class DocumentSearch:
         self.document_name_column = document_name_column
         self.content_document_column = content_document_column
         self.fuzzy_threshold = fuzzy_threshold
-        self.component_instance_name = component_instance_name or f"{self.__class__.__name__}"
+        self.component_attributes = component_attributes or ComponentAttributes(
+            component_instance_name=self.__class__.__name__
+        )
 
     def get_documents_names(self) -> list[str]:
         query = f"SELECT DISTINCT {self.document_name_column} FROM {self.schema_name}.{self.table_name}"
@@ -88,12 +90,13 @@ class DocumentSearch:
         self,
         documents_name: list[str],
     ) -> list[SourceChunk]:
-        with self.trace_manager.start_span(self.__class__.__name__) as span:
+        with self.trace_manager.start_span(self.component_attributes.component_instance_name) as span:
             documents_chunks = self._get_documents_without_trace(documents_name)
             span.set_attributes(
                 {
                     SpanAttributes.OPENINFERENCE_SPAN_KIND: OpenInferenceSpanKindValues.RETRIEVER.value,
                     SpanAttributes.INPUT_VALUE: documents_name,
+                    "component_instance_id": str(self.component_attributes.component_instance_id),
                 }
             )
 

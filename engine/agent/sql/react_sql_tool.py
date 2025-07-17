@@ -1,6 +1,7 @@
 from typing import Optional
+from uuid import UUID
 
-from engine.agent.agent import ToolDescription
+from engine.agent.agent import ComponentAttributes, ToolDescription
 from engine.agent.react_function_calling import ReActAgent
 from engine.agent.sql.run_sql_query_tool import RunSQLQueryTool
 from engine.llm_services.llm_service import CompletionService
@@ -55,7 +56,7 @@ class ReactSQLAgent(ReActAgent):
         self,
         trace_manager: TraceManager,
         completion_service: CompletionService,
-        component_instance_name: str,
+        component_attributes: ComponentAttributes,
         db_service: DBService,
         tool_description: ToolDescription = DEFAULT_REACT_SQL_TOOL_DESCRIPTION,
         db_schema_name: Optional[str] = None,
@@ -79,10 +80,10 @@ class ReactSQLAgent(ReActAgent):
         super().__init__(
             trace_manager=trace_manager,
             tool_description=tool_description,
-            component_instance_name=component_instance_name,
+            component_attributes=component_attributes,
             completion_service=completion_service,
             initial_prompt=initial_prompt,
-            agent_tools=[RunSQLQueryTool(trace_manager, db_service, component_instance_name="Run SQL Query Tool")],
+            agent_tools=[RunSQLQueryTool(trace_manager, db_service, component_attributes=component_attributes)],
         )
 
         self._db_service = db_service

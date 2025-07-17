@@ -5,7 +5,7 @@ import threading
 import pandas as pd
 from snowflake.connector.pandas_tools import write_pandas
 
-from engine.agent.agent import SourceChunk
+from engine.agent.agent import ComponentAttributes, SourceChunk
 from engine.storage_service.db_service import DBService
 from engine.storage_service.db_utils import DBDefinition, check_columns_matching_between_data_and_database_table
 from engine.storage_service.snowflake_service.snowflake_utils import (
@@ -26,9 +26,9 @@ class SnowflakeService(DBService):
         database_name: str,
         warehouse: str = "AIRBYTE_WAREHOUSE",
         role_to_use: str = "AIRBYTE_ROLE",
-        component_instance_name: Optional[str] = None,
+        component_attributes: Optional[ComponentAttributes] = None,
     ):
-        super().__init__(dialect="snowflake sql", component_instance_name=component_instance_name)
+        super().__init__(dialect="snowflake sql", component_attributes=component_attributes)
         self.database_name = database_name
         self.connector = connect_to_snowflake()
         LOGGER.info(

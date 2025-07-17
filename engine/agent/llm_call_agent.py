@@ -4,7 +4,7 @@ from typing import Optional
 from openinference.semconv.trace import SpanAttributes
 from opentelemetry.trace import get_current_span
 
-from engine.agent.agent import Agent, AgentPayload, ChatMessage, ToolDescription
+from engine.agent.agent import Agent, AgentPayload, ChatMessage, ComponentAttributes, ToolDescription
 from engine.agent.utils import extract_vars_in_text_template, parse_openai_message_format
 from engine.llm_services.llm_service import CompletionService
 from engine.trace.trace_manager import TraceManager
@@ -16,7 +16,7 @@ class LLMCallAgent(Agent):
         trace_manager: TraceManager,
         completion_service: CompletionService,
         tool_description: ToolDescription,
-        component_instance_name: str,
+        component_attributes: ComponentAttributes,
         prompt_template: str,
         file_content: Optional[str] = None,
         output_format: Optional[dict[str] | None] = None,
@@ -24,7 +24,7 @@ class LLMCallAgent(Agent):
         super().__init__(
             trace_manager=trace_manager,
             tool_description=tool_description,
-            component_instance_name=component_instance_name,
+            component_attributes=component_attributes,
         )
         self._completion_service = completion_service
         self._prompt_template = prompt_template

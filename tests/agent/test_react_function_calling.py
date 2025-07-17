@@ -5,7 +5,7 @@ from types import SimpleNamespace
 import pytest
 
 from engine.agent.react_function_calling import ReActAgent, INITIAL_PROMPT, DEFAULT_FALLBACK_REACT_ANSWER
-from engine.agent.agent import AgentPayload, ToolDescription, ChatMessage
+from engine.agent.agent import AgentPayload, ComponentAttributes, ToolDescription, ChatMessage
 from engine.trace.trace_manager import TraceManager
 from engine.llm_services.llm_service import CompletionService
 
@@ -66,7 +66,10 @@ def agent_input():
 def react_agent(mock_agent, mock_trace_manager, mock_tool_description, mock_llm_service):
     return ReActAgent(
         completion_service=mock_llm_service,
-        component_instance_name="Test React Agent",
+        component_attributes=ComponentAttributes(
+            component_name="Test React Agent",
+            component_instance_id="test_react_agent_instance_id",
+        ),
         agent_tools=[mock_agent],
         trace_manager=mock_trace_manager,
         tool_description=mock_tool_description,
@@ -169,12 +172,15 @@ def test_react_agent_without_tools(mock_trace_manager, mock_tool_description, mo
     """Test that ReActAgent can be instantiated without tools."""
     react_agent = ReActAgent(
         completion_service=mock_llm_service,
-        component_instance_name="Test React Agent Without Tools",
+        component_attributes=ComponentAttributes(
+            component_name="Test React Agent Without Tools",
+            component_instance_id="test_react_agent_without_tools_instance_id",
+        ),
         trace_manager=mock_trace_manager,
         tool_description=mock_tool_description,
     )
 
     assert react_agent.agent_tools == []
-    assert react_agent.component_instance_name == "Test React Agent Without Tools"
+    assert react_agent.component_attributes.component_instance_name == "Test React Agent Without Tools"
     assert react_agent._max_iterations == 3
     assert react_agent.initial_prompt == INITIAL_PROMPT

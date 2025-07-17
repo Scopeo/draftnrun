@@ -8,6 +8,7 @@ from engine.agent.agent import (
     Agent,
     AgentPayload,
     ChatMessage,
+    ComponentAttributes,
     ToolDescription,
 )
 
@@ -100,14 +101,14 @@ class DocumentEnhancedLLMCallAgent(Agent):
     def __init__(
         self,
         trace_manager: TraceManager,
-        component_instance_name: str,
+        component_attributes: ComponentAttributes,
         tool_description: ToolDescription,
         synthesizer: Synthesizer,
         document_search: DocumentSearch,
     ) -> None:
         super().__init__(
             trace_manager=trace_manager,
-            component_instance_name=component_instance_name,
+            component_attributes=component_attributes,
             tool_description=tool_description,
             synthesizer=synthesizer,
         )

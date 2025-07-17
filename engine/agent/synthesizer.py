@@ -8,7 +8,7 @@ from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttribu
 from engine.agent.synthesizer_prompts import get_base_synthetizer_prompt_template
 from engine.llm_services.llm_service import CompletionService
 from engine.agent.build_context import build_context_from_source_chunks
-from engine.agent.agent import SourceChunk, SourcedResponse
+from engine.agent.agent import ComponentAttributes, SourceChunk, SourcedResponse
 from engine.trace.trace_manager import TraceManager
 from engine.agent.utils_prompt import fill_prompt_template_with_dictionary
 
@@ -25,15 +25,15 @@ class Synthesizer:
         trace_manager: TraceManager,
         prompt_template: str = get_base_synthetizer_prompt_template(),
         response_format: BaseModel = SynthesizerResponse,
-        component_instance_name: Optional[str] = None,
+        component_attributes: Optional[ComponentAttributes] = None,
     ):
         self._prompt_template = prompt_template
         self._completion_service = completion_service
         self.response_format = response_format
         self.trace_manager = trace_manager
-        if not component_instance_name:
-            component_instance_name = f"{self.__class__.__name__}"
-        self.component_instance_name = component_instance_name
+        self.component_attributes = component_attributes or ComponentAttributes(
+            component_name=self.__class__.__name__,
+        )
 
     def get_response(
         self, chunks: list[SourceChunk], query_str: str, optional_contexts: Optional[dict]
@@ -44,16 +44,17 @@ class Synthesizer:
             llm_metadata_keys=chunks[0].metadata.keys() if chunks else [],
         )
 
-        with self.trace_manager.start_span(self.component_instance_name) as span:
+        with self.trace_manager.start_span(self.component_attributes.component_instance_name) as span:
             input_dict = {"context_str": context_str, "query_str": query_str, **optional_contexts}
             input_str = fill_prompt_template_with_dictionary(
-                input_dict, self._prompt_template, component_name=self.component_instance_name
+                input_dict, self._prompt_template, component_name=self.component_attributes.component_instance_name
             )
             span.set_attributes(
                 {
                     SpanAttributes.OPENINFERENCE_SPAN_KIND: OpenInferenceSpanKindValues.LLM.value,
                     SpanAttributes.INPUT_VALUE: input_str,
                     SpanAttributes.LLM_MODEL_NAME: self._completion_service._model_name,
+                    "component_instance_id": str(self.component_attributes.component_instance_id),
                 }
             )
             response = self._completion_service.constrained_complete_with_pydantic(

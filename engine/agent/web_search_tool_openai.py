@@ -3,7 +3,7 @@ from typing import Optional
 from openinference.semconv.trace import SpanAttributes
 from opentelemetry.trace import get_current_span
 
-from engine.agent.agent import Agent, AgentPayload, ChatMessage, ToolDescription
+from engine.agent.agent import Agent, AgentPayload, ChatMessage, ComponentAttributes, ToolDescription
 from engine.llm_services.llm_service import WebSearchService
 from engine.trace.trace_manager import TraceManager
 
@@ -26,13 +26,13 @@ class WebSearchOpenAITool(Agent):
         self,
         web_service: WebSearchService,
         trace_manager: TraceManager,
-        component_instance_name: str,
+        component_attributes: ComponentAttributes,
         tool_description: ToolDescription = DEFAULT_WEB_SEARCH_OPENAI_TOOL_DESCRIPTION,
     ):
         super().__init__(
             trace_manager=trace_manager,
             tool_description=tool_description,
-            component_instance_name=component_instance_name,
+            component_attributes=component_attributes,
         )
         self._web_service = web_service
 

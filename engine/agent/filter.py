@@ -5,7 +5,7 @@ from opentelemetry import trace as trace_api
 from openinference.semconv.trace import SpanAttributes, OpenInferenceSpanKindValues
 from jsonschema_pydantic import jsonschema_to_pydantic
 
-from engine.agent.agent import ToolDescription, AgentPayload, ChatMessage
+from engine.agent.agent import ComponentAttributes, ToolDescription, AgentPayload, ChatMessage
 from engine.trace.trace_manager import TraceManager
 from engine.agent.utils import load_str_to_json
 
@@ -29,12 +29,12 @@ class Filter:
         self,
         trace_manager: TraceManager,
         tool_description: ToolDescription,
-        component_instance_name: str,
+        component_attributes: ComponentAttributes,
         filtering_json_schema: str,
     ):
         self.trace_manager = trace_manager
         self.tool_description = tool_description
-        self.component_instance_name = component_instance_name
+        self.component_attributes = component_attributes
         self.filtering_json_schema = load_str_to_json(filtering_json_schema)
         self.output_model = jsonschema_to_pydantic(self.filtering_json_schema)
 
@@ -55,7 +55,7 @@ class Filter:
 
         result = AgentPayload(messages=messages, error=error, artifacts=artifacts, is_final=is_final)
 
-        with self.trace_manager.start_span(self.component_instance_name) as span:
+        with self.trace_manager.start_span(self.component_attributes.component_instance_name) as span:
             span.set_attributes(
                 {
                     SpanAttributes.OPENINFERENCE_SPAN_KIND: OpenInferenceSpanKindValues.UNKNOWN.value,

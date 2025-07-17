@@ -8,6 +8,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.sql.type_api import TypeEngine
 import pandas as pd
 
+from engine.agent.agent import ComponentAttributes
 from engine.storage_service.db_service import DBService
 from engine.storage_service.db_utils import DBDefinition, check_columns_matching_between_data_and_database_table
 
@@ -31,8 +32,8 @@ DEFAULT_MAPPING = {"CURRENT_TIMESTAMP": sqlalchemy.func.current_timestamp()}
 
 
 class SQLLocalService(DBService):
-    def __init__(self, engine_url: str, component_instance_name: Optional[str] = None):
-        super().__init__(component_instance_name=component_instance_name)
+    def __init__(self, engine_url: str, component_attributes: Optional[ComponentAttributes] = None):
+        super().__init__(component_attributes=component_attributes)
         self.engine = create_engine(engine_url)
         self.metadata = MetaData()
         self.metadata.reflect(bind=self.engine)

@@ -3,7 +3,7 @@ import logging
 from typing import Optional
 import json
 
-from engine.agent.agent import SourceChunk, SourcedResponse
+from engine.agent.agent import ComponentAttributes, SourceChunk, SourcedResponse
 
 LOGGER = logging.getLogger(__name__)
 
@@ -15,9 +15,15 @@ DOCUMENT_ID_FIELD = "document_title"
 
 
 class Formatter:
-    def __init__(self, add_sources: bool = True, component_instance_name: Optional[str] = None):
+    def __init__(
+        self,
+        add_sources: bool = True,
+        component_attributes: Optional[ComponentAttributes] = None,
+    ):
         self._add_sources = add_sources
-        self.component_instance_name = component_instance_name or f"{self.__class__.__name__}"
+        self.component_attributes = component_attributes or ComponentAttributes(
+            component_instance_name=self.__class__.__name__
+        )
 
     def format(self, sourced_response: SourcedResponse) -> str:
         if not sourced_response.sources:

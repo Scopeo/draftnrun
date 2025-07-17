@@ -5,7 +5,7 @@ from typing import Optional
 from opentelemetry import trace as trace_api
 from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttributes, RerankerAttributes
 
-from engine.agent.agent import SourceChunk
+from engine.agent.agent import ComponentAttributes, SourceChunk
 from engine.trace.trace_manager import TraceManager
 
 
@@ -14,24 +14,28 @@ class Reranker(ABC):
         self,
         trace_manager: TraceManager,
         model: str,
-        component_instance_name: Optional[str] = None,
+        component_attributes: Optional[ComponentAttributes] = None,
     ):
         self.trace_manager = trace_manager
         self._model = model
-        self.component_instance_name = component_instance_name or f"{self.__class__.__name__}"
+        self.component_attributes = component_attributes or ComponentAttributes(
+            component_name=self.__class__.__name__,
+            component_instance_id=None,
+        )
 
     @abstractmethod
     def _rerank_without_trace(self, query, chunks: list[SourceChunk]) -> list[SourceChunk]:
         pass
 
     def rerank(self, query, chunks: list[SourceChunk]):
-        with self.trace_manager.start_span(self.component_instance_name) as span:
+        with self.trace_manager.start_span(self.component_attributes.component_instance_name) as span:
             reranker_chunks = self._rerank_without_trace(query, chunks)
             span.set_attributes(
                 {
                     SpanAttributes.OPENINFERENCE_SPAN_KIND: OpenInferenceSpanKindValues.RERANKER.value,
                     RerankerAttributes.RERANKER_QUERY: query,
                     RerankerAttributes.RERANKER_MODEL_NAME: self._model,
+                    "component_instance_id": str(self.component_attributes.component_instance_id),
                 }
             )
 
