@@ -149,7 +149,7 @@ class Worker:
                 f"import sys; sys.path.append('{os.path.dirname(ada_backend_path)}'); "
                 f"from {module_path} import ingestion_main; "
                 f"ingestion_main("
-                f"source_name='{source_name}', "
+                f"source_name={repr(source_name)}, "
                 f"organization_id='{organization_id}', "
                 f"task_id='{task_id}', "
                 f"source_type='{source_type}', "
