@@ -128,7 +128,7 @@ class BaseConfig(BaseSettings):
     ENABLE_OBSERVABILITY_STACK: bool = False
 
     # Number of pages to detect document type
-    NUMBER_OF_PAGES_TO_DETECT_DOCUMENT_TYPE: int = 5
+    NUMBER_OF_PAGES_TO_DETECT_DOCUMENT_TYPE: Optional[int] = 5
 
     @model_validator(mode="after")
     @classmethod
