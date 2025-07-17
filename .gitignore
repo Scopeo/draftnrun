@@ -52,6 +52,7 @@ company_context.yaml
 conversational-interface.yaml
 agent-config.yaml
 observability_config.yaml
+custom_models.json
 
 # oauth
 ada-ingestion-system/.env
