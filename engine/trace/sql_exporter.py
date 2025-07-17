@@ -84,12 +84,12 @@ class SQLSpanExporter(SpanExporter):
         for span in spans:
             cumulative_error_count = int(span.status.status_code is StatusCode.ERROR)
             try:
-                cumulative_llm_token_count_prompt = int(span.attributes.get(SpanAttributes.LLM_TOKEN_COUNT_PROMPT))
+                cumulative_llm_token_count_prompt = int(span.attributes.get(SpanAttributes.LLM_TOKEN_COUNT_PROMPT, 0))
             except BaseException:
                 cumulative_llm_token_count_prompt = 0
             try:
                 cumulative_llm_token_count_completion = int(
-                    span.attributes.get(SpanAttributes.LLM_TOKEN_COUNT_COMPLETION)
+                    span.attributes.get(SpanAttributes.LLM_TOKEN_COUNT_COMPLETION, 0)
                 )
             except BaseException:
                 cumulative_llm_token_count_completion = 0

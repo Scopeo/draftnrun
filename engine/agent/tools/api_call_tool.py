@@ -6,8 +6,8 @@ from typing import Optional, Dict, Any
 import requests
 from openinference.semconv.trace import OpenInferenceSpanKindValues
 
-from engine.agent.agent import (
-    Agent,
+from engine.agent.agent import Agent
+from engine.agent.data_structures import (
     ChatMessage,
     AgentPayload,
     ToolDescription,
@@ -119,7 +119,7 @@ class APICallTool(Agent):
                 "success": False,
             }
 
-    async def _run_without_trace(
+    async def _run_without_io_trace(
         self,
         *inputs: AgentPayload,
         **kwargs: Any,
@@ -134,7 +134,7 @@ class APICallTool(Agent):
             content = f"API call failed: {api_response.get('error', 'Unknown error')}"
 
         return AgentPayload(
-            messages=[ChatMessage(role="assistant", content=content)],
+            full_content=[ChatMessage(role="assistant", content=content)],
             artifacts={"api_response": api_response},
             is_final=False,
         )

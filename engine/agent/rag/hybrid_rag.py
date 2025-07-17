@@ -3,7 +3,7 @@ from typing import Optional
 
 from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttributes
 
-from engine.agent.agent import (
+from engine.agent.data_structures import (
     ChatMessage,
     AgentPayload,
     SourceChunk,
@@ -56,7 +56,7 @@ class HybridRAG(RAG):
         self._filtering_condition = filtering_condition
         self._formatter = formatter
 
-    async def _run_without_trace(
+    async def _run_without_io_trace(
         self,
         agent_input: AgentPayload,
         query_text: Optional[str] = None,
@@ -106,7 +106,7 @@ class HybridRAG(RAG):
             )
 
         return AgentPayload(
-            messages=[ChatMessage(role="assistant", content=synthesized_response.response)],
+            full_content=[ChatMessage(role="assistant", content=synthesized_response.response)],
             artifacts=(
                 {"image_id": images_to_show_user, "sources": synthesized_response.sources}
                 if images_to_show_user

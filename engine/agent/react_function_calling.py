@@ -7,8 +7,8 @@ from opentelemetry import trace as trace_api
 from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttributes
 from openai.types.chat import ChatCompletionMessageToolCall
 
-from engine.agent.agent import (
-    Agent,
+from engine.agent.agent import Agent
+from engine.agent.data_structures import (
     AgentPayload,
     ToolDescription,
     ChatMessage,
@@ -121,7 +121,7 @@ class ReActAgent(Agent):
 
         return tool_outputs, tools_to_process
 
-    async def _run_without_trace(self, *inputs: AgentPayload | dict, **kwargs) -> AgentPayload:
+    async def _run_without_io_trace(self, *inputs: AgentPayload | dict, **kwargs) -> AgentPayload:
         """Runs ReActAgent. Only one input is allowed."""
         original_agent_input = inputs[0]
         if not isinstance(original_agent_input, AgentPayload):
@@ -184,7 +184,7 @@ class ReActAgent(Agent):
                 else:
                     LOGGER.debug("No images found in the response.")
                 return AgentPayload(
-                    messages=[ChatMessage(role="assistant", content=chat_response.choices[0].message.content)],
+                    full_content=[ChatMessage(role="assistant", content=chat_response.choices[0].message.content)],
                     is_final=True,
                     artifacts=artifacts,
                 )
@@ -234,20 +234,14 @@ class ReActAgent(Agent):
                 message=(f"Number of successful tool outputs: {successful_output_count}. " f"Running the agent again.")
             )
             self._current_iteration += 1
-            return await self._run_without_trace(agent_input)
+            return await self._run_without_io_trace(agent_input)
         else:  # This should not happen if the "tool_choice" parameter works correctly on the LLM service
             LOGGER.error(
                 f"Reached the maximum number of iterations ({self._max_iterations}) and still asks for tools."
                 " This should not happen."
             )
-            messages = [
-                ChatMessage(
-                    role="assistant",
-                    content=DEFAULT_FALLBACK_REACT_ANSWER,
-                )
-            ]
             return AgentPayload(
-                messages=messages,
+                full_content=[ChatMessage(role="assistant", content=DEFAULT_FALLBACK_REACT_ANSWER)],
                 is_final=False,
             )
 

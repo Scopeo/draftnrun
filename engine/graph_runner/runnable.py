@@ -1,7 +1,7 @@
 from typing import Protocol, runtime_checkable
 
 
-from engine.agent.agent import ToolDescription, AgentPayload
+from engine.agent.data_structures import ToolDescription, AgentPayload
 
 
 @runtime_checkable

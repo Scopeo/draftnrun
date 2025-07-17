@@ -3,6 +3,8 @@ from enum import StrEnum
 
 from engine.agent.inputs_outputs.input import Input
 from engine.agent.filter import Filter
+from engine.agent.splitter import Splitter
+from engine.agent.merger import Merger
 from engine.agent.llm_call_agent import LLMCallAgent
 from engine.agent.sql.react_sql_tool import ReactSQLAgent
 from engine.agent.sql.run_sql_query_tool import RunSQLQueryTool
@@ -77,6 +79,8 @@ class SupportedEntityType(StrEnum):
     DOCUMENT_REACT_LOADER_AGENT = "Document AI Agent"
     INPUT = "API Input"
     FILTER = "Filter"
+    SPLITTER = "Splitter"
+    MERGER = "Merger"
 
 
 class FactoryRegistry:
@@ -382,6 +386,20 @@ def create_factory_registry() -> FactoryRegistry:
         name=SupportedEntityType.FILTER,
         factory=AgentFactory(
             entity_class=Filter,
+        ),
+    )
+
+    registry.register(
+        name=SupportedEntityType.SPLITTER,
+        factory=AgentFactory(
+            entity_class=Splitter,
+        ),
+    )
+
+    registry.register(
+        name=SupportedEntityType.MERGER,
+        factory=AgentFactory(
+            entity_class=Merger,
         ),
     )
 

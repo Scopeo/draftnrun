@@ -5,6 +5,8 @@ import logging
 
 from fuzzywuzzy import fuzz, process
 
+from engine.agent.data_structures import AgentPayload, SplitPayload
+
 
 LOGGER = logging.getLogger(__name__)
 
@@ -48,39 +50,26 @@ def extract_vars_in_text_template(prompt_template: str) -> list[str]:
     return [fname for _, fname, _, _ in string.Formatter().parse(prompt_template) if fname]
 
 
-def convert_data_for_trace_manager_display(input_data, type_of_input):
-    if isinstance(input_data, dict):
-        trace_input = json.dumps(input_data)
-        return trace_input
-    elif isinstance(input_data, type_of_input):
-        trace_input = input_data.last_message.content
-        return trace_input
+def convert_data_for_trace_manager_display(*input_data):
+    # Si on a un seul argument, on le traite directement
+    if len(input_data) == 1:
+        single_input = input_data[0]
+        if isinstance(single_input, dict):
+            trace_input = json.dumps(single_input)
+            return trace_input
+        elif isinstance(single_input, AgentPayload):
+            trace_input = single_input.content
+            return trace_input
+        elif isinstance(single_input, SplitPayload):
+            trace_input = single_input.content
+            return trace_input
+        else:
+            LOGGER.error(f"Error with the {single_input} for trace display")
+            raise ValueError(f"Error with the {single_input} for trace display")
     else:
-        LOGGER.error(f"Error with the {input_data} for trace display")
-        raise ValueError(f"Error with the {input_data} for trace display")
-
-
-def parse_openai_message_format(message: Union[str, list]) -> tuple[str, list[dict]]:
-    if isinstance(message, str):
-        return message, []
-
-    text_content = ""
-    files_content = []
-
-    if isinstance(message, list):
-        for item in message:
-            if isinstance(item, dict):
-                if "text" in item:
-                    text_content += item["text"]
-                if "file" in item:
-                    files_content.append(
-                        {
-                            "type": "file",
-                            "file": item["file"],
-                        }
-                    )
-
-    return text_content, files_content
+        # Cas où on a plusieurs arguments
+        trace_input = "\n".join([convert_data_for_trace_manager_display(item) for item in input_data])
+        return trace_input
 
 
 def load_str_to_json(str_to_parse: str) -> dict:
