@@ -5,7 +5,7 @@ from uuid import uuid4
 
 from engine.qdrant_service import QdrantCollectionSchema, QdrantService
 from engine.llm_services.llm_service import EmbeddingService
-from engine.agent.agent import SourceChunk
+from engine.agent.data_structures import SourceChunk
 from engine.agent.utils import format_qdrant_filter
 from tests.mocks.trace_manager import MockTraceManager
 

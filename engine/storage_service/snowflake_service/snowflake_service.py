@@ -5,7 +5,7 @@ import threading
 import pandas as pd
 from snowflake.connector.pandas_tools import write_pandas
 
-from engine.agent.agent import ComponentAttributes, SourceChunk
+from engine.agent.data_structures import SourceChunk, ComponentAttributes
 from engine.storage_service.db_service import DBService
 from engine.storage_service.db_utils import DBDefinition, check_columns_matching_between_data_and_database_table
 from engine.storage_service.snowflake_service.snowflake_utils import (

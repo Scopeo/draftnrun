@@ -3,11 +3,13 @@ from typing import Optional
 from openinference.semconv.trace import SpanAttributes
 from opentelemetry.trace import get_current_span
 
-from engine.agent.agent import Agent, AgentPayload, ChatMessage, ComponentAttributes, ToolDescription
-from engine.agent.utils import extract_vars_in_text_template, parse_openai_message_format
+from engine.agent.agent import Agent
+from engine.agent.data_structures import AgentPayload, ChatMessage, ToolDescription, ComponentAttributes
+from engine.agent.utils import extract_vars_in_text_template
 from engine.llm_services.llm_service import CompletionService
 from engine.trace.trace_manager import TraceManager
 from engine.trace.serializer import serialize_to_json
+
 
 SUPPORTED_PROVIDER = "openai"
 
@@ -33,7 +35,7 @@ class LLMCallAgent(Agent):
         self._file_content = file_content
         self.output_format = output_format
 
-    async def _run_without_trace(self, *input_payloads: AgentPayload | dict) -> AgentPayload:
+    async def _run_without_io_trace(self, *input_payloads: AgentPayload) -> AgentPayload:
         prompt_vars = extract_vars_in_text_template(self._prompt_template)
         input_replacements = {}
         files_content = []
@@ -45,17 +47,11 @@ class LLMCallAgent(Agent):
                 if isinstance(payload, AgentPayload)
                 else payload
             )
-            if (
-                "messages" in payload_json
-                and payload_json["messages"]
-                and "content" in payload_json["messages"][-1]
-                and payload_json["messages"][-1]["content"]
-            ):
-                text_content, payload_files_content = parse_openai_message_format(
-                    payload_json["messages"][-1]["content"]
-                )
-                input_replacements["input"] += text_content
-                files_content.extend(payload_files_content)
+            text_content = payload.content
+            files_in_messages = payload.files_in_messages
+            input_replacements["input"] += text_content
+            for file in files_in_messages:
+                files_content.append({"type": "file", "file": file})
 
         for prompt_var in prompt_vars:
             for payload in input_payloads:
@@ -110,5 +106,5 @@ class LLMCallAgent(Agent):
                 messages=[{"role": "user", "content": content}],
             )
         return AgentPayload(
-            messages=[ChatMessage(role="assistant", content=response)],
+            full_content=[ChatMessage(role="assistant", content=response)],
         )

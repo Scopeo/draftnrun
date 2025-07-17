@@ -3,9 +3,10 @@ import pandas as pd
 from opentelemetry import trace as trace_api
 from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttributes
 
-from engine.agent.agent import ComponentAttributes, TermDefinition
+from engine.agent.data_structures import TermDefinition, ComponentAttributes
 from engine.trace.trace_manager import TraceManager
 from engine.agent.utils import fuzzy_matching
+
 
 NUMBER_CHUNKS_TO_DISPLAY_TRACE = 30
 VOCABULARY_CONTEXT_PROMPT_KEY = "retrieved_definitions"

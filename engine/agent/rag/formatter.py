@@ -3,7 +3,8 @@ import logging
 from typing import Optional
 import json
 
-from engine.agent.agent import ComponentAttributes, SourceChunk, SourcedResponse
+from engine.agent.data_structures import SourceChunk, SourcedResponse, ComponentAttributes
+
 
 LOGGER = logging.getLogger(__name__)
 

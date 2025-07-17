@@ -5,7 +5,7 @@ from pydantic import BaseModel, ConfigDict
 
 from ada_backend.schemas.integration_schema import GraphIntegrationSchema
 from ada_backend.schemas.parameter_schema import PipelineParameterSchema
-from engine.agent.agent import ToolDescription
+from engine.agent.data_structures import ToolDescription
 
 
 class ComponentInstanceSchema(BaseModel):
