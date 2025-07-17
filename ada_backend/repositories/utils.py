@@ -5,7 +5,7 @@ from ada_backend.database.models import BasicParameter, ComponentParameterDefini
 from ada_backend.database.seed.utils import COMPONENT_UUIDS
 
 
-def create_input_component(session, name: str = "Input") -> ComponentInstance:
+def create_input_component(session, name: str = "API Input") -> ComponentInstance:
     """Creates a new input component instance"""
     # First get or create the input component
     input_component = session.query(Component).filter(Component.id == COMPONENT_UUIDS["input"]).first()
