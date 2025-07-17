@@ -3,7 +3,8 @@ from typing import Optional
 from openinference.semconv.trace import SpanAttributes
 from opentelemetry.trace import get_current_span
 
-from engine.agent.agent import Agent, AgentPayload, ChatMessage, ToolDescription
+from engine.agent.agent import Agent
+from engine.agent.data_structures import AgentPayload, ChatMessage, ToolDescription
 from engine.llm_services.llm_service import WebSearchService
 from engine.trace.trace_manager import TraceManager
 
@@ -36,7 +37,7 @@ class WebSearchOpenAITool(Agent):
         )
         self._web_service = web_service
 
-    async def _run_without_trace(
+    async def _run_without_io_trace(
         self,
         *inputs: AgentPayload,
         query: Optional[str] = None,
@@ -51,4 +52,4 @@ class WebSearchOpenAITool(Agent):
             }
         )
         output = self._web_service.web_search(query_str)
-        return AgentPayload(messages=[ChatMessage(role="assistant", content=output)])
+        return AgentPayload(full_content=[ChatMessage(role="assistant", content=output)])

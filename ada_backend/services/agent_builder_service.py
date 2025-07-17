@@ -5,7 +5,7 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from ada_backend.repositories.organization_repository import get_organization_secrets_from_project_id
-from engine.agent.agent import ToolDescription
+from engine.agent.data_structures import ToolDescription
 from ada_backend.database.models import ComponentInstance
 from ada_backend.repositories.component_repository import (
     get_component_instance_by_id,

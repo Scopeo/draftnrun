@@ -10,7 +10,7 @@ from openinference.semconv.trace import SpanAttributes
 
 from engine.llm_services.utils import check_usage
 from engine.trace.trace_manager import TraceManager
-from engine.agent.agent import ToolDescription
+from engine.agent.data_structures import ToolDescription
 from engine.agent.utils import load_str_to_json
 from engine.llm_services.constrained_output_models import OutputFormatModel
 from settings import settings

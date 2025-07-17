@@ -3,8 +3,8 @@ from typing import Optional
 
 from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttributes
 
-from engine.agent.agent import (
-    Agent,
+from engine.agent.agent import Agent
+from engine.agent.data_structures import (
     ChatMessage,
     AgentPayload,
     ToolDescription,
@@ -53,7 +53,7 @@ class RAG(Agent):
         self._vocabulary_search = vocabulary_search
         self.input_data_field_for_messages_history = input_data_field_for_messages_history
 
-    async def _run_without_trace(
+    async def _run_without_io_trace(
         self,
         *inputs: dict | AgentPayload,
         query_text: Optional[str] = None,
@@ -99,7 +99,7 @@ class RAG(Agent):
             )
 
         return AgentPayload(
-            messages=[ChatMessage(role="assistant", content=sourced_response.response)],
+            full_content=[ChatMessage(role="assistant", content=sourced_response.response)],
             is_final=sourced_response.is_successful,
             artifacts={"sources": sourced_response.sources},
         )

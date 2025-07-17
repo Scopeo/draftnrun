@@ -4,7 +4,7 @@ from engine.agent.document_enhanced_llm_call import DocumentEnhancedLLMCallAgent
 from engine.agent.react_function_calling import ReActAgent
 
 
-from engine.agent.agent import (
+from engine.agent.data_structures import (
     ToolDescription,
 )
 from engine.trace.trace_manager import TraceManager

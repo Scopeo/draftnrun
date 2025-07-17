@@ -1,5 +1,5 @@
 from engine.agent.rag.formatter import Formatter
-from engine.agent.agent import SourcedResponse
+from engine.agent.data_structures import SourcedResponse
 
 
 # 1. Test Basic SourceChunk Citations

@@ -5,8 +5,8 @@ from typing import Optional
 from tavily import TavilyClient
 from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttributes
 
-from engine.agent.agent import (
-    Agent,
+from engine.agent.agent import Agent
+from engine.agent.data_structures import (
     ChatMessage,
     AgentPayload,
     ToolDescription,
@@ -100,7 +100,7 @@ class TavilyApiTool(Agent):
             for result in results
         ]
 
-    async def _run_without_trace(
+    async def _run_without_io_trace(
         self,
         *inputs: AgentPayload,
         query: str,
@@ -137,10 +137,10 @@ class TavilyApiTool(Agent):
         if self._synthesizer.response_format is SourcedResponse:
             response = Formatter(add_sources=True).format(response)
             return AgentPayload(
-                messages=[ChatMessage(role="assistant", content=response.response)],
+                full_content=[ChatMessage(role="assistant", content=response.response)],
                 artifacts={"sources": response.sources},
                 is_final=response.is_successful,
             )
         else:
             response = Formatter().format(response)
-            return AgentPayload(messages=[ChatMessage(role="assistant", content=response.response)])
+            return AgentPayload(full_content=[ChatMessage(role="assistant", content=response.response)])
