@@ -31,10 +31,11 @@ from settings import settings
 LOGGER = logging.getLogger(__name__)
 
 # TODO: add the selection at the user level via Front
-VISION_COMPLETION_SERVICE = get_first_available_multimodal_custom_llm()
-
-if VISION_COMPLETION_SERVICE is not None:
+if settings.INGESTION_VIA_CUSTOM_MODEL:
+    VISION_COMPLETION_SERVICE = get_first_available_multimodal_custom_llm()
     FALLBACK_VISION_LLM_SERVICE = VISION_COMPLETION_SERVICE
+    if VISION_COMPLETION_SERVICE is None:
+        raise ValueError("No multimodal custom LLM found. Please set up a custom model for ingestion.")
 else:
     VISION_COMPLETION_SERVICE = VisionService(
         provider="google",
@@ -48,8 +49,11 @@ else:
     )
 
 # TODO: add the selection at the user level via Front
-EMBEDDING_SERVICE = get_first_available_embeddings_custom_llm()
-if EMBEDDING_SERVICE is None:
+if settings.INGESTION_VIA_CUSTOM_MODEL:
+    EMBEDDING_SERVICE = get_first_available_embeddings_custom_llm()
+    if EMBEDDING_SERVICE is None:
+        raise ValueError("No custom embedding model found. Please set up a custom model for ingestion.")
+else:
     EMBEDDING_SERVICE = EmbeddingService(
         provider="openai",
         model_name="text-embedding-3-large",
