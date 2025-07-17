@@ -4,7 +4,7 @@ from unittest.mock import MagicMock
 
 from engine.agent.llm_call_agent import LLMCallAgent
 from engine.agent.utils import load_str_to_json
-from engine.agent.agent import AgentPayload
+from engine.agent.agent import AgentPayload, ComponentAttributes
 from engine.llm_services.utils import chat_completion_to_response
 
 
@@ -53,7 +53,9 @@ def llm_call_with_output_format():
     trace_manager = MagicMock()
     llm_service = MagicMock()
     tool_description = MagicMock()
-    component_instance_name = "test_component"
+    component_attributes = ComponentAttributes(
+        component_instance_name="test_component",
+    )
     prompt_template = "{input}"
     output_format = load_str_to_json(
         """{
@@ -90,7 +92,7 @@ def llm_call_with_output_format():
         trace_manager,
         llm_service,
         tool_description,
-        component_instance_name,
+        component_attributes,
         prompt_template,
         output_format=output_format,
     )

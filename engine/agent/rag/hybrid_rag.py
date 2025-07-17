@@ -6,6 +6,7 @@ from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttribu
 from engine.agent.agent import (
     ChatMessage,
     AgentPayload,
+    ComponentAttributes,
     SourceChunk,
     ToolDescription,
 )
@@ -38,7 +39,7 @@ class HybridRAG(RAG):
         reranker: Reranker,
         hybrid_synthesizer: HybridSynthesizer,
         relevant_chunk_selector: RelevantChunkSelector,
-        component_instance_name: str = "Hybrid RAG",
+        component_attributes: Optional[ComponentAttributes] = None,
         filtering_condition: str = "OR",
         formatter: Optional[Formatter] = None,
     ) -> None:
@@ -48,7 +49,7 @@ class HybridRAG(RAG):
             synthesizer=synthesizer,
             retriever=retriever,
             reranker=reranker,
-            component_instance_name=component_instance_name,
+            component_attributes=component_attributes,
         )
         self._synthesizer = synthesizer
         self._hybrid_synthesizer = hybrid_synthesizer

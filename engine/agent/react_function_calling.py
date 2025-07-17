@@ -10,6 +10,7 @@ from openai.types.chat import ChatCompletionMessageToolCall
 from engine.agent.agent import (
     Agent,
     AgentPayload,
+    ComponentAttributes,
     ToolDescription,
     ChatMessage,
 )
@@ -35,7 +36,7 @@ class ReActAgent(Agent):
         completion_service: CompletionService,
         trace_manager: TraceManager,
         tool_description: ToolDescription,
-        component_instance_name: str,
+        component_attributes: ComponentAttributes,
         agent_tools: Optional[list[Runnable] | Runnable] = None,
         run_tools_in_parallel: bool = True,
         initial_prompt: str = INITIAL_PROMPT,
@@ -49,7 +50,7 @@ class ReActAgent(Agent):
         super().__init__(
             trace_manager=trace_manager,
             tool_description=tool_description,
-            component_instance_name=component_instance_name,
+            component_attributes=component_attributes,
         )
         self.run_tools_in_parallel = run_tools_in_parallel
         self.running_tool_way = "parallel" if self.run_tools_in_parallel else "series"
@@ -137,7 +138,7 @@ class ReActAgent(Agent):
                     content=fill_prompt_template_with_dictionary(
                         original_agent_input.model_dump(),
                         self.initial_prompt,
-                        self.component_instance_name,
+                        self.component_attributes.component_instance_name,
                     ),
                 ),
             )

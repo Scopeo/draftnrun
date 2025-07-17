@@ -8,7 +8,7 @@ from engine.agent.tools.python_code_interpreter_e2b_tool import (
     PythonCodeInterpreterE2BTool,
     E2B_PYTHONCODE_INTERPRETER_TOOL_DESCRIPTION,
 )
-from engine.agent.agent import AgentPayload, ChatMessage
+from engine.agent.agent import AgentPayload, ChatMessage, ComponentAttributes
 from engine.trace.trace_manager import TraceManager
 
 
@@ -22,7 +22,9 @@ def e2b_tool(mock_trace_manager):
     """Create an E2B Python code interpreter tool instance."""
     return PythonCodeInterpreterE2BTool(
         trace_manager=mock_trace_manager,
-        component_instance_name="test_e2b_tool",
+        component_attributes=ComponentAttributes(
+            component_instance_name="test_e2b_tool",
+        ),
         timeout=30,
     )
 
@@ -38,7 +40,7 @@ def e2b_api_key():
 
 def test_tool_initialization(e2b_tool):
     """Test that the tool initializes correctly."""
-    assert e2b_tool.component_instance_name == "test_e2b_tool"
+    assert e2b_tool.component_attributes.component_instance_name == "test_e2b_tool"
     assert e2b_tool.sandbox_timeout == 30
     assert e2b_tool.tool_description == E2B_PYTHONCODE_INTERPRETER_TOOL_DESCRIPTION
     assert e2b_tool.tool_description.name == "python_code_interpreter"
@@ -615,7 +617,9 @@ def test_missing_api_key():
 
         tool = PythonCodeInterpreterE2BTool(
             trace_manager=MagicMock(spec=TraceManager),
-            component_instance_name="test_no_api_key",
+            component_attributes=ComponentAttributes(
+                component_instance_name="test_no_api_key",
+            ),
         )
 
         # Should raise ValueError when no API key is available
@@ -627,7 +631,9 @@ def test_sandbox_timeout_configuration():
     """Test that the tool respects the sandbox timeout configuration."""
     tool = PythonCodeInterpreterE2BTool(
         trace_manager=MagicMock(spec=TraceManager),
-        component_instance_name="test_timeout",
+        component_attributes=ComponentAttributes(
+            component_instance_name="test_timeout",
+        ),
         timeout=10,
     )
 

@@ -10,6 +10,7 @@ from engine.agent.agent import (
     Agent,
     ChatMessage,
     AgentPayload,
+    ComponentAttributes,
     ToolDescription,
 )
 from engine.trace.trace_manager import TraceManager
@@ -39,7 +40,7 @@ class APICallTool(Agent):
     def __init__(
         self,
         trace_manager: TraceManager,
-        component_instance_name: str,
+        component_attributes: ComponentAttributes,
         endpoint: str,
         method: str = "GET",
         headers: Optional[Dict[str, str]] = None,
@@ -50,7 +51,7 @@ class APICallTool(Agent):
         super().__init__(
             trace_manager=trace_manager,
             tool_description=tool_description,
-            component_instance_name=component_instance_name,
+            component_attributes=component_attributes,
         )
         self.trace_manager = trace_manager
         self.endpoint = endpoint

@@ -4,7 +4,7 @@ import pytest
 from requests.exceptions import RequestException
 
 from engine.agent.tools.api_call_tool import APICallTool, API_CALL_TOOL_DESCRIPTION
-from engine.agent.agent import AgentPayload, ChatMessage
+from engine.agent.agent import AgentPayload, ChatMessage, ComponentAttributes
 from engine.trace.trace_manager import TraceManager
 
 
@@ -17,7 +17,7 @@ def mock_trace_manager():
 def api_tool(mock_trace_manager):
     return APICallTool(
         trace_manager=mock_trace_manager,
-        component_instance_name="test_api_tool",
+        component_attributes=ComponentAttributes(component_instance_name="test_api_tool"),
         endpoint="https://api.example.com/test",
         method="GET",
         headers={"Content-Type": "application/json", "Authorization": "Bearer test_token"},
@@ -137,7 +137,9 @@ def test_make_api_call_post_with_empty_params(mock_request, mock_trace_manager, 
     # Test POST with no parameters (should still send empty JSON)
     api_tool = APICallTool(
         trace_manager=mock_trace_manager,
-        component_instance_name="test_api_tool",
+        component_attributes=ComponentAttributes(
+            component_instance_name="test_api_tool",
+        ),
         endpoint="https://api.example.com/test",
         method="POST",
         headers={"Content-Type": "application/json"},
@@ -164,7 +166,9 @@ def test_make_api_call_get_with_empty_params(mock_request, mock_trace_manager, m
     # Test GET with no parameters (should not send params)
     api_tool = APICallTool(
         trace_manager=mock_trace_manager,
-        component_instance_name="test_api_tool",
+        component_attributes=ComponentAttributes(
+            component_instance_name="test_api_tool",
+        ),
         endpoint="https://api.example.com/test",
         method="GET",
         headers={"Content-Type": "application/json"},

@@ -1,6 +1,6 @@
 from typing import Optional
 
-from engine.agent.agent import Agent, AgentPayload, ChatMessage, ToolDescription
+from engine.agent.agent import Agent, AgentPayload, ChatMessage, ComponentAttributes, ToolDescription
 from engine.storage_service.db_service import DBService
 from engine.trace.trace_manager import TraceManager
 
@@ -23,13 +23,13 @@ class RunSQLQueryTool(Agent):
         self,
         trace_manager: TraceManager,
         db_service: DBService,
-        component_instance_name: str,
+        component_attributes: ComponentAttributes,
         tool_description: Optional[ToolDescription] = DEFAULT_RUN_SQL_QUERY_TOOL_DESCRIPTION,
     ):
         super().__init__(
             trace_manager=trace_manager,
             tool_description=tool_description,
-            component_instance_name=component_instance_name,
+            component_attributes=component_attributes,
         )
         self._db_service = db_service
 

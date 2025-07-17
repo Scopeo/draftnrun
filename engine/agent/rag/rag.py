@@ -7,6 +7,7 @@ from engine.agent.agent import (
     Agent,
     ChatMessage,
     AgentPayload,
+    ComponentAttributes,
     ToolDescription,
 )
 from engine.agent.rag.reranker import Reranker
@@ -33,16 +34,18 @@ class RAG(Agent):
         tool_description: ToolDescription,
         retriever: Retriever,
         synthesizer: Synthesizer,
-        component_instance_name: str = "RAG",
+        component_attributes: Optional[ComponentAttributes] = None,
         reranker: Optional["Reranker"] = None,
         formatter: Optional[Formatter] = None,
         vocabulary_search: Optional[VocabularySearch] = None,
         input_data_field_for_messages_history: str = "messages",
     ) -> None:
+        if component_attributes is None:
+            component_attributes = ComponentAttributes(component_instance_name=self.__class__.__name__)
         super().__init__(
             trace_manager=trace_manager,
             tool_description=tool_description,
-            component_instance_name=component_instance_name,
+            component_attributes=component_attributes,
         )
         self._retriever = retriever
         self._synthesizer = synthesizer

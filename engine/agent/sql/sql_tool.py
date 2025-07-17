@@ -2,7 +2,7 @@ from pathlib import Path
 import logging
 from typing import Optional
 
-from engine.agent.agent import Agent, ChatMessage, AgentPayload, ToolDescription
+from engine.agent.agent import Agent, ChatMessage, AgentPayload, ComponentAttributes, ToolDescription
 from engine.llm_services.llm_service import CompletionService
 from engine.storage_service.db_service import DBService
 from engine.trace.trace_manager import TraceManager
@@ -76,7 +76,7 @@ class SQLTool(Agent):
         trace_manager: TraceManager,
         completion_service: CompletionService,
         db_service: DBService,
-        component_instance_name: str = "SQL Tool",
+        component_attributes: ComponentAttributes,
         include_tables: Optional[list[str]] = None,
         additional_db_description: Optional[str] = None,
         tool_description: Optional[ToolDescription] = DEFAULT_SQL_TOOL_DESCRIPTION,
@@ -87,7 +87,7 @@ class SQLTool(Agent):
         super().__init__(
             trace_manager=trace_manager,
             tool_description=tool_description,
-            component_instance_name=component_instance_name,
+            component_attributes=component_attributes,
         )
         self._db_service = db_service
         self._include_tables = include_tables
