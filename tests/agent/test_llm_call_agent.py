@@ -147,13 +147,13 @@ def test_agent_input_combinations(agent, input_payload, expected_file, request):
     agent_instance = request.getfixturevalue(agent)
     payload_instance = request.getfixturevalue(input_payload)
 
-    response = asyncio.run(agent_instance._run_without_trace(payload_instance))
+    response = asyncio.run(agent_instance._run_without_io_trace(payload_instance))
 
-    assert QUESTION in response.messages[0].content or QUESTION in response.messages[0].content[0]["text"]
-    if isinstance(response.messages[0].content, list):
+    assert QUESTION in response.full_content[0].content or QUESTION in response.full_content[0].content[0]["text"]
+    if isinstance(response.full_content[0].content, list):
         if expected_file:
-            assert expected_file == response.messages[0].content[1]["file"]["filename"]
+            assert expected_file == response.full_content[0].content[1]["file"]["filename"]
     else:
-        assert isinstance(response.messages[0].content, str) or (
-            isinstance(response.messages[0].content, list) and len(response.messages[0].content) == 1
+        assert isinstance(response.full_content[0].content, str) or (
+            isinstance(response.full_content[0].content, list) and len(response.full_content[0].content) == 1
         )

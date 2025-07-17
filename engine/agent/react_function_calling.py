@@ -7,8 +7,8 @@ from opentelemetry import trace as trace_api
 from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttributes
 from openai.types.chat import ChatCompletionMessageToolCall
 
-from engine.agent.agent import (
-    Agent,
+from engine.agent.agent import Agent
+from engine.agent.data_structures import (
     AgentPayload,
     ToolDescription,
     ChatMessage,
@@ -121,16 +121,16 @@ class ReActAgent(Agent):
 
         return tool_outputs, tools_to_process
 
-    async def _run_without_trace(self, *inputs: AgentPayload | dict, **kwargs) -> AgentPayload:
+    async def _run_without_io_trace(self, *inputs: AgentPayload | dict, **kwargs) -> AgentPayload:
         """Runs ReActAgent. Only one input is allowed."""
         original_agent_input = inputs[0]
         if not isinstance(original_agent_input, AgentPayload):
             # TODO : Will be suppressed when AgentPayload will be suppressed
-            original_agent_input["messages"] = original_agent_input[self.input_data_field_for_messages_history]
+            original_agent_input["full_content"] = original_agent_input[self.input_data_field_for_messages_history]
             original_agent_input = AgentPayload(**original_agent_input)
-        system_message = next((msg for msg in original_agent_input.messages if msg.role == "system"), None)
+        system_message = next((msg for msg in original_agent_input.full_content if msg.role == "system"), None)
         if system_message is None:
-            original_agent_input.messages.insert(
+            original_agent_input.full_content.insert(
                 0,
                 ChatMessage(
                     role="system",
@@ -144,12 +144,12 @@ class ReActAgent(Agent):
         else:
             # Some React derived agents are tools of React agents, hence we need
             # to replace the system message by the initial prompt
-            original_agent_input.messages[0] = ChatMessage(
+            original_agent_input.full_content[0] = ChatMessage(
                 role="system",
                 content=self.initial_prompt,
             )
         agent_input = original_agent_input.model_copy(deep=True)
-        history_messages_handled = self._memory_handling.get_truncated_messages_history(agent_input.messages)
+        history_messages_handled = self._memory_handling.get_truncated_messages_history(agent_input.full_content)
         tool_choice = "auto" if self._current_iteration < self._max_iterations else "none"
         with self.trace_manager.start_span("Agentic reflexion") as span:
             llm_input_messages = [msg.model_dump() for msg in history_messages_handled]
@@ -184,7 +184,7 @@ class ReActAgent(Agent):
                 else:
                     LOGGER.debug("No images found in the response.")
                 return AgentPayload(
-                    messages=[ChatMessage(role="assistant", content=chat_response.choices[0].message.content)],
+                    full_content=[ChatMessage(role="assistant", content=chat_response.choices[0].message.content)],
                     is_final=True,
                     artifacts=artifacts,
                 )
@@ -196,7 +196,7 @@ class ReActAgent(Agent):
         )
 
         # Only add the tool calls we actually processed to the message history
-        agent_input.messages.append(
+        agent_input.full_content.append(
             ChatMessage(
                 role="assistant",
                 content=None,
@@ -205,10 +205,10 @@ class ReActAgent(Agent):
         )
 
         # Add the tool outputs to the chat history
-        agent_input.messages.extend(
+        agent_input.full_content.extend(
             ChatMessage(
                 role="tool",
-                content=agent_output.last_message.content,
+                content=agent_output.content,
                 tool_call_id=tool_call_id,
             )
             for tool_call_id, agent_output in agent_outputs.items()
@@ -234,20 +234,14 @@ class ReActAgent(Agent):
                 message=(f"Number of successful tool outputs: {successful_output_count}. " f"Running the agent again.")
             )
             self._current_iteration += 1
-            return await self._run_without_trace(agent_input)
+            return await self._run_without_io_trace(agent_input)
         else:  # This should not happen if the "tool_choice" parameter works correctly on the LLM service
             LOGGER.error(
                 f"Reached the maximum number of iterations ({self._max_iterations}) and still asks for tools."
                 " This should not happen."
             )
-            messages = [
-                ChatMessage(
-                    role="assistant",
-                    content=DEFAULT_FALLBACK_REACT_ANSWER,
-                )
-            ]
             return AgentPayload(
-                messages=messages,
+                full_content=[ChatMessage(role="assistant", content=DEFAULT_FALLBACK_REACT_ANSWER)],
                 is_final=False,
             )
 

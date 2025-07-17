@@ -7,7 +7,7 @@ import networkx as nx
 from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttributes
 from opentelemetry import trace as trace_api
 
-from engine.agent.agent import AgentPayload, ChatMessage
+from engine.agent.data_structures import AgentPayload, ChatMessage, SplitPayload
 from engine.agent.utils import convert_data_for_trace_manager_display
 from engine.graph_runner.runnable import Runnable
 from engine.trace.trace_manager import TraceManager
@@ -27,7 +27,7 @@ class Task:
 
     pending_deps: int
     state: TaskState = TaskState.NOT_READY
-    result: Optional[AgentPayload] = None
+    result: Optional[AgentPayload | SplitPayload] = None
 
     def decrement_pending_deps(self):
         """Decrement pending dependencies, marking the task as ready
@@ -42,7 +42,7 @@ class Task:
         if self.pending_deps == 0:
             self.state = TaskState.READY
 
-    def complete(self, result: AgentPayload):
+    def complete(self, result: AgentPayload | SplitPayload):
         """Mark the task as completed with a result."""
         if self.state != TaskState.READY:
             raise ValueError("Cannot complete a non-ready task")
@@ -58,8 +58,8 @@ def _merge_agent_outputs(agent_outputs: list[AgentPayload]) -> AgentPayload:
 
     message = ""
     for i, output in enumerate(agent_outputs, start=1):
-        message += f"Result from agent {i}:\n{output.last_message.content}\n\n"
-    return AgentPayload(messages=[ChatMessage(role="assistant", content=message)])
+        message += f"Result from agent {i}:\n{output.content}\n\n"
+    return AgentPayload(full_content=[ChatMessage(role="assistant", content=message)])
 
 
 class GraphRunner:
@@ -85,7 +85,16 @@ class GraphRunner:
 
         self._validate_graph()
 
-    def _initialize_execution(self, input_data: dict) -> None:
+    def _add_virtual_input_node(self):
+        """Add a virtual input node and connect it to all start nodes."""
+        self.graph.add_node(self._input_node_id)
+        for start_node in self.start_nodes:
+            self.graph.add_edge(
+                self._input_node_id,
+                start_node,
+            )
+
+    def _initialize_execution(self, *inputs: AgentPayload | SplitPayload) -> None:
         """Initialize the execution state including dependencies and input data."""
         LOGGER.debug("Initializing dependency counts")
         for node_id in self.graph.nodes():
@@ -95,7 +104,7 @@ class GraphRunner:
         LOGGER.debug("Initializing input node")
         self.tasks[self._input_node_id] = Task(
             pending_deps=0,
-            result=input_data,
+            result=[*inputs],
             state=TaskState.COMPLETED,
         )
 
@@ -113,23 +122,17 @@ class GraphRunner:
 
     async def run(self, *inputs: AgentPayload | dict, **kwargs) -> AgentPayload | dict:
         """Run the graph."""
-        input_data = inputs[0]
-
-        # Isolate trace if this is a root execution
         is_root_execution = kwargs.pop("is_root_execution", False)
-
         with self.trace_manager.start_span("Workflow", isolate_context=is_root_execution) as span:
-            trace_input = convert_data_for_trace_manager_display(input_data, AgentPayload)
+            trace_input = convert_data_for_trace_manager_display(*inputs)
             span.set_attributes(
                 {
                     SpanAttributes.OPENINFERENCE_SPAN_KIND: self.TRACE_SPAN_KIND,
                     SpanAttributes.INPUT_VALUE: trace_input,
                 }
             )
-            final_output = await self._run_without_trace(input_data, **kwargs)
-            # TODO: Update trace when AgentInput/Output is refactored
-            trace_input = convert_data_for_trace_manager_display(input_data, AgentPayload)
-            trace_output = convert_data_for_trace_manager_display(final_output, AgentPayload)
+            final_output = await self._run_without_io_trace(*inputs, **kwargs)
+            trace_output = convert_data_for_trace_manager_display(final_output)
             span.set_attributes(
                 {
                     SpanAttributes.OUTPUT_VALUE: trace_output,
@@ -139,9 +142,8 @@ class GraphRunner:
 
             return final_output
 
-    async def _run_without_trace(self, *inputs: AgentPayload | dict, **kwargs) -> AgentPayload | dict:
-        input_data = inputs[0]
-        self._initialize_execution(input_data)
+    async def _run_without_io_trace(self, *inputs: AgentPayload | dict, **kwargs) -> AgentPayload | dict:
+        self._initialize_execution(*inputs)
         while node_id := self._next_task():
             task = self.tasks[node_id]
             assert task.state == TaskState.READY, f"Node '{node_id}' is not ready"
@@ -149,7 +151,21 @@ class GraphRunner:
             input_list = self._gather_inputs(node_id)
 
             runnable = self.runnables[node_id]
-            result = await runnable.run(*tuple(input_list))
+            is_merger = runnable.__class__.__name__ == "Merger"
+            if is_merger or not any(isinstance(input, SplitPayload) for input in input_list):
+                # many to one or one to one
+                result = await runnable.run(*input_list)
+            else:
+                # many to many or one to many
+                result = []
+                zipped_input_list = self._zip_split_payloads(input_list)
+                for input_tuple in zipped_input_list:
+                    sub_result = await runnable.run(*input_tuple)
+                    if isinstance(sub_result, SplitPayload):
+                        raise ValueError("Splitters cannot be nested.")
+                    else:
+                        result.append(sub_result)
+                result = SplitPayload(agent_payloads=result)
 
             LOGGER.debug(f"Node '{node_id}' completed execution with result: {result}")
             task.complete(result)
@@ -162,14 +178,25 @@ class GraphRunner:
         final_output = self._collect_outputs()
         return final_output
 
-    def _add_virtual_input_node(self):
-        """Add a virtual input node and connect it to all start nodes."""
-        self.graph.add_node(self._input_node_id)
-        for start_node in self.start_nodes:
-            self.graph.add_edge(
-                self._input_node_id,
-                start_node,
-            )
+    def _zip_split_payloads(self, input_list: list[AgentPayload | SplitPayload]) -> list[AgentPayload]:
+        """Zip split payloads into a single list of list of AgentPayloads."""
+        split_len = 0
+        for input_payload in input_list:
+            if isinstance(input_payload, SplitPayload):
+                split_len = len(input_payload.agent_payloads)
+                break
+        if split_len == 0:
+            return input_list
+        zipped_input_list = []
+        for k in range(split_len):
+            input_tuple = []
+            for input_payload in input_list:
+                if isinstance(input_payload, SplitPayload):
+                    input_tuple.append(input_payload.agent_payloads[k])
+                else:
+                    input_tuple.append(input_payload)
+            zipped_input_list.append(tuple(input_tuple))
+        return zipped_input_list
 
     # NOTE: Our current AgentInput/Output loses the message history
     # TODO: Fix this after AgentInput/Output is refactored

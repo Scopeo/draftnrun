@@ -6,8 +6,8 @@ from e2b_code_interpreter import Sandbox
 from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttributes
 from opentelemetry.trace import get_current_span
 
-from engine.agent.agent import (
-    Agent,
+from engine.agent.agent import Agent
+from engine.agent.data_structures import (
     ChatMessage,
     AgentPayload,
     ToolDescription,
@@ -84,7 +84,7 @@ class PythonCodeInterpreterE2BTool(Agent):
                 sandbox.kill()
         return json.loads(execution.to_json())
 
-    async def _run_without_trace(
+    async def _run_without_io_trace(
         self,
         *inputs: AgentPayload,
         **kwargs: Any,
@@ -108,7 +108,7 @@ class PythonCodeInterpreterE2BTool(Agent):
             content += f"\n\n[{len(images)} image(s) generated and included in artifacts]"
 
         return AgentPayload(
-            messages=[ChatMessage(role="assistant", content=content)],
+            full_content=[ChatMessage(role="assistant", content=content)],
             artifacts=artifacts,
             is_final=False,
         )

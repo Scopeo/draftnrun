@@ -8,7 +8,7 @@ from engine.agent.tools.python_code_interpreter_e2b_tool import (
     PythonCodeInterpreterE2BTool,
     E2B_PYTHONCODE_INTERPRETER_TOOL_DESCRIPTION,
 )
-from engine.agent.agent import AgentPayload, ChatMessage
+from engine.agent.data_structures import AgentPayload, ChatMessage
 from engine.trace.trace_manager import TraceManager
 
 
@@ -376,8 +376,8 @@ result
 
 
 @pytest.mark.anyio
-async def test_run_without_trace_with_single_image(e2b_tool, e2b_api_key):
-    """Test the async _run_without_trace method with image generation."""
+async def test_run_without_io_trace_with_single_image(e2b_tool, e2b_api_key):
+    """Test the async _run_without_io_trace method with image generation."""
     python_code = """
 import matplotlib.pyplot as plt
 import numpy as np
@@ -394,12 +394,12 @@ plt.show()
 print("Async image test completed!")
 """
 
-    result = await e2b_tool._run_without_trace(python_code=python_code)
+    result = await e2b_tool._run_without_io_trace(python_code=python_code)
 
     assert isinstance(result, AgentPayload)
-    assert len(result.messages) == 1
-    assert isinstance(result.messages[0], ChatMessage)
-    assert result.messages[0].role == "assistant"
+    assert len(result.full_content) == 1
+    assert isinstance(result.full_content[0], ChatMessage)
+    assert result.full_content[0].role == "assistant"
 
     # Check that execution_result is in artifacts
     assert "execution_result" in result.artifacts
@@ -422,13 +422,13 @@ print("Async image test completed!")
         pytest.fail("Image data in artifacts is not valid base64")
 
     # Check that the response message mentions the image
-    content = result.messages[0].content
+    content = result.full_content[0].content
     assert "[1 image(s) generated and included in artifacts]" in content
 
 
 @pytest.mark.anyio
-async def test_run_without_trace_with_multiple_images(e2b_tool, e2b_api_key):
-    """Test the async _run_without_trace method with multiple image generation."""
+async def test_run_without_io_trace_with_multiple_images(e2b_tool, e2b_api_key):
+    """Test the async _run_without_io_trace method with multiple image generation."""
     python_code = """
 import matplotlib.pyplot as plt
 import numpy as np
@@ -445,10 +445,10 @@ for i, func in enumerate([np.sin, np.cos]):
 print("Two async plots generated!")
 """
 
-    result = await e2b_tool._run_without_trace(python_code=python_code)
+    result = await e2b_tool._run_without_io_trace(python_code=python_code)
 
     assert isinstance(result, AgentPayload)
-    assert len(result.messages) == 1
+    assert len(result.full_content) == 1
 
     # Check that images are in artifacts
     assert "images" in result.artifacts
@@ -468,19 +468,19 @@ print("Two async plots generated!")
             pytest.fail(f"Image {i+1} data in artifacts is not valid base64")
 
     # Check that the response message mentions the correct number of images
-    content = result.messages[0].content
+    content = result.full_content[0].content
     assert "[2 image(s) generated and included in artifacts]" in content
 
 
 @pytest.mark.anyio
-async def test_run_without_trace_no_images(e2b_tool, e2b_api_key):
-    """Test the async _run_without_trace method with no image generation."""
+async def test_run_without_io_trace_no_images(e2b_tool, e2b_api_key):
+    """Test the async _run_without_io_trace method with no image generation."""
     python_code = "print('No images here!'); result = {'value': 42}; result"
 
-    result = await e2b_tool._run_without_trace(python_code=python_code)
+    result = await e2b_tool._run_without_io_trace(python_code=python_code)
 
     assert isinstance(result, AgentPayload)
-    assert len(result.messages) == 1
+    assert len(result.full_content) == 1
 
     # Check that execution_result is in artifacts
     assert "execution_result" in result.artifacts
@@ -489,24 +489,24 @@ async def test_run_without_trace_no_images(e2b_tool, e2b_api_key):
     assert "images" not in result.artifacts
 
     # Check that the response message doesn't mention images
-    content = result.messages[0].content
+    content = result.full_content[0].content
     assert "image(s) generated" not in content
 
 
 @pytest.mark.anyio
-async def test_run_without_trace_simple_code(e2b_tool, e2b_api_key):
-    """Test the async _run_without_trace method with simple code."""
+async def test_run_without_io_trace_simple_code(e2b_tool, e2b_api_key):
+    """Test the async _run_without_io_trace method with simple code."""
     python_code = "print('Async test'); 2 + 2"
 
-    result = await e2b_tool._run_without_trace(python_code=python_code)
+    result = await e2b_tool._run_without_io_trace(python_code=python_code)
 
     assert isinstance(result, AgentPayload)
-    assert len(result.messages) == 1
-    assert isinstance(result.messages[0], ChatMessage)
-    assert result.messages[0].role == "assistant"
+    assert len(result.full_content) == 1
+    assert isinstance(result.full_content[0], ChatMessage)
+    assert result.full_content[0].role == "assistant"
 
     # Parse the content
-    content = result.messages[0].content
+    content = result.full_content[0].content
 
     # The content is a JSON string that contains another JSON string
     # First parse the outer JSON
@@ -537,8 +537,8 @@ async def test_run_without_trace_simple_code(e2b_tool, e2b_api_key):
 
 
 @pytest.mark.anyio
-async def test_run_without_trace_complex_code(e2b_tool, e2b_api_key):
-    """Test the async _run_without_trace method with complex code."""
+async def test_run_without_io_trace_complex_code(e2b_tool, e2b_api_key):
+    """Test the async _run_without_io_trace method with complex code."""
     python_code = """
 import json
 import random
@@ -567,14 +567,14 @@ print(f"Processed {len(data['numbers'])} numbers")
 json.dumps(result)
 """
 
-    result = await e2b_tool._run_without_trace(python_code=python_code)
+    result = await e2b_tool._run_without_io_trace(python_code=python_code)
 
     assert isinstance(result, AgentPayload)
-    assert len(result.messages) == 1
-    assert result.messages[0].role == "assistant"
+    assert len(result.full_content) == 1
+    assert result.full_content[0].role == "assistant"
 
     # Parse the content
-    content = result.messages[0].content
+    content = result.full_content[0].content
 
     # The content is a JSON string that contains another JSON string
     # First parse the outer JSON

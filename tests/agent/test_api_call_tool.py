@@ -4,7 +4,7 @@ import pytest
 from requests.exceptions import RequestException
 
 from engine.agent.tools.api_call_tool import APICallTool, API_CALL_TOOL_DESCRIPTION
-from engine.agent.agent import AgentPayload, ChatMessage
+from engine.agent.data_structures import AgentPayload, ChatMessage
 from engine.trace.trace_manager import TraceManager
 
 
@@ -214,8 +214,8 @@ def test_make_api_call_non_json_response(mock_request, api_tool):
 
 
 @pytest.mark.anyio
-async def test_run_without_trace_with_dynamic_params(api_tool):
-    agent_input = AgentPayload(messages=[ChatMessage(role="user", content="test")])
+async def test_run_without_io_trace_with_dynamic_params(api_tool):
+    agent_input = AgentPayload(full_content=[ChatMessage(role="user", content="test")])
     dynamic_params = {"query": "test", "page": 1, "filter": "active"}
 
     with patch.object(api_tool, "make_api_call") as mock_make_api_call:
@@ -226,27 +226,27 @@ async def test_run_without_trace_with_dynamic_params(api_tool):
             "success": True,
         }
 
-        result = await api_tool._run_without_trace(agent_input, **dynamic_params)
+        result = await api_tool._run_without_io_trace(agent_input, **dynamic_params)
 
         assert isinstance(result, AgentPayload)
-        assert len(result.messages) == 1
-        assert result.messages[0].role == "assistant"
-        assert "result" in result.messages[0].content
+        assert len(result.full_content) == 1
+        assert result.full_content[0].role == "assistant"
+        assert "result" in result.full_content[0].content
         assert result.artifacts["api_response"]["success"] is True
         mock_make_api_call.assert_called_once_with(**dynamic_params)
 
 
 @pytest.mark.anyio
-async def test_run_without_trace_error(api_tool):
-    agent_input = AgentPayload(messages=[ChatMessage(role="user", content="test")])
+async def test_run_without_io_trace_error(api_tool):
+    agent_input = AgentPayload(full_content=[ChatMessage(role="user", content="test")])
 
     with patch.object(api_tool, "make_api_call") as mock_make_api_call:
         mock_make_api_call.return_value = {"status_code": 500, "error": "Internal Server Error", "success": False}
 
-        result = await api_tool._run_without_trace(agent_input)
+        result = await api_tool._run_without_io_trace(agent_input)
 
         assert isinstance(result, AgentPayload)
-        assert len(result.messages) == 1
-        assert result.messages[0].role == "assistant"
-        assert "API call failed" in result.messages[0].content
+        assert len(result.full_content) == 1
+        assert result.full_content[0].role == "assistant"
+        assert "API call failed" in result.full_content[0].content
         assert result.artifacts["api_response"]["success"] is False

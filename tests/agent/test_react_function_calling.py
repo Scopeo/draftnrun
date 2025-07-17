@@ -5,7 +5,7 @@ from types import SimpleNamespace
 import pytest
 
 from engine.agent.react_function_calling import ReActAgent, INITIAL_PROMPT, DEFAULT_FALLBACK_REACT_ANSWER
-from engine.agent.agent import AgentPayload, ToolDescription, ChatMessage
+from engine.agent.data_structures import AgentPayload, ToolDescription, ChatMessage
 from engine.trace.trace_manager import TraceManager
 from engine.llm_services.llm_service import CompletionService
 
@@ -59,7 +59,7 @@ def mock_llm_service():
 
 @pytest.fixture
 def agent_input():
-    return AgentPayload(messages=[ChatMessage(role="user", content="Test message")])
+    return AgentPayload(full_content=[ChatMessage(role="user", content="Test message")])
 
 
 @pytest.fixture
@@ -104,7 +104,7 @@ def test_run_with_tool_calls(agent_calls_mock, get_span_mock, react_agent, agent
         choices=[MagicMock(message=mock_response_message, tool_calls=[mock_tool_call])]
     )
     mock_agent.run.return_value = AgentPayload(
-        messages=[ChatMessage(role="assistant", content="Tool response")], is_final=True
+        full_content=[ChatMessage(role="assistant", content="Tool response")], is_final=True
     )
 
     output = react_agent.run_sync(agent_input)
@@ -122,8 +122,8 @@ def test_initial_prompt_insertion(agent_calls_mock, get_span_mock, react_agent, 
     agent_calls_mock.labels.return_value = counter_mock
 
     react_agent.run_sync(agent_input)
-    assert agent_input.messages[0].role == "system"
-    assert agent_input.messages[0].content == INITIAL_PROMPT
+    assert agent_input.full_content[0].role == "system"
+    assert agent_input.full_content[0].content == INITIAL_PROMPT
 
 
 @patch("engine.prometheus_metric.get_tracing_span")
@@ -156,7 +156,7 @@ def test_max_iterations(agent_calls_mock, get_span_mock, react_agent, agent_inpu
 
     react_agent._max_iterations = 1
     mock_agent.run.return_value = AgentPayload(
-        messages=[ChatMessage(role="assistant", content="Tool response")], is_final=False
+        full_content=[ChatMessage(role="assistant", content="Tool response")], is_final=False
     )
 
     output = react_agent.run_sync(agent_input)

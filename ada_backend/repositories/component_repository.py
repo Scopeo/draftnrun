@@ -9,7 +9,7 @@ from ada_backend.database import models as db
 from ada_backend.database.models import ParameterType, UIComponent
 from ada_backend.schemas.components_schema import ComponentWithParametersDTO, SubComponentParamSchema
 from ada_backend.schemas.parameter_schema import ComponentParamDefDTO
-from engine.agent.agent import ToolDescription
+from engine.agent.data_structures import ToolDescription
 
 LOGGER = logging.getLogger(__name__)
 

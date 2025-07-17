@@ -2,12 +2,12 @@ import pytest
 from unittest.mock import MagicMock, patch
 
 from llama_index.llms.openai import OpenAI
-from engine.agent.agent import SourceChunk
+from engine.agent.data_structures import SourceChunk
 from engine.agent.rag.retriever import Retriever
 from engine.agent.synthesizer import Synthesizer
 from engine.agent.rag.vocabulary_search import VocabularySearch
 from engine.llm_services.llm_service import CompletionService
-from engine.agent.agent import AgentPayload, ChatMessage
+from engine.agent.data_structures import AgentPayload, ChatMessage
 from engine.agent.rag.rag import RAG
 from tests.mocks.trace_manager import MockTraceManager
 
@@ -76,7 +76,7 @@ def mock_synthesizer():
 
 @pytest.fixture
 def message_to_process():
-    return AgentPayload(messages=[ChatMessage(role="user", content="Hello, world!")])
+    return AgentPayload(full_content=[ChatMessage(role="user", content="Hello, world!")])
 
 
 @patch.object(OpenAI, "complete")
@@ -147,7 +147,7 @@ def test_vocabulary_rag_run(
         tool_description=MagicMock(),
     )
     message_to_process = AgentPayload(
-        messages=[ChatMessage(role="user", content="What is the definition of term1 and term2?")]
+        full_content=[ChatMessage(role="user", content="What is the definition of term1 and term2?")]
     )
     output = rag.run_sync(message_to_process)
     results = [
