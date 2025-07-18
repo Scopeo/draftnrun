@@ -245,7 +245,6 @@ async def create_chunks_from_document(
         google_llm_service=google_llm_service,
         openai_llm_service=openai_llm_service,
         image_content_list=images_content_list[:number_of_pages_to_detect_document_type],
-        response_format=FileType,
     )
     if pdf_type == PDFType.landscape or file_type.is_converted_from_powerpoint:
         LOGGER.info("Processing PDF in landscape mode...")
@@ -282,48 +281,52 @@ async def create_chunks_from_document(
                 response_format=TableOfContent,
             )
         except Exception as e:
-            LOGGER.warning(f"Error extracting table of content: {e}")
+            LOGGER.error(f"Error extracting table of content: {e}")
             extracted_table_of_content = TableOfContent(sections=[])
 
         if extracted_table_of_content and extracted_table_of_content.sections != []:
-            chunking_by_section = extracted_table_of_content.sections != []
-        if chunking_by_section:
-            section_hierarchy = _build_section_hierarchy(
-                sections=extracted_table_of_content.sections,
-                level=1,
-            )
-            markdown = await _get_markdown_from_sections(
-                sections_tree=section_hierarchy,
-                google_llm_service=google_llm_service,
-                openai_llm_service=openai_llm_service,
-                images_content_list=images_content_list,
-            )
-            chunks = _create_chunks_from_markdown(
-                extracted_text=markdown,
-                extracted_table_of_content=extracted_table_of_content,
-                document=document,
-            )
-        else:
-            for i, img_base64 in enumerate(_pdf_to_images(pdf_content=content_to_process, zoom=zoom)):
-                document.metadata["page_number"] = i + 1
-                extracted_text = await _extract_text_from_pages_as_images(
-                    prompt=PDF_CONTENT_EXTRACTION_PROMPT,
+            try:
+                section_hierarchy = _build_section_hierarchy(
+                    sections=extracted_table_of_content.sections,
+                    level=1,
+                )
+                markdown = _get_markdown_from_sections(
+                    sections_tree=section_hierarchy,
                     google_llm_service=google_llm_service,
                     openai_llm_service=openai_llm_service,
-                    image_content_list=[img_base64],
+                    images_content_list=images_content_list,
                 )
-
-                chunk = FileChunk(
-                    chunk_id=f"{document.file_name}_{i + 1}",
-                    file_id=document.file_name,
-                    content=extracted_text,
-                    last_edited_ts=document.last_edited_ts,
-                    document_title=document.file_name,
-                    bounding_boxes=[],
-                    url=document.url,
-                    metadata=document.metadata,
+                chunks = _create_chunks_from_markdown(
+                    extracted_text=markdown,
+                    extracted_table_of_content=extracted_table_of_content,
+                    document=document,
                 )
+            except Exception as e:
+                LOGGER.error(
+                    f"Error trying to get markdown content with table of content: {e}. "
+                    "Falling back to page-by-page processing."
+                )
+                # Fall back to page-by-page processing
+                for i, img_base64 in enumerate(_pdf_to_images(pdf_content=content_to_process, zoom=zoom)):
+                    document.metadata["page_number"] = i + 1
+                    extracted_text = _extract_text_from_pages_as_images(
+                        prompt=PDF_CONTENT_EXTRACTION_PROMPT,
+                        google_llm_service=google_llm_service,
+                        openai_llm_service=openai_llm_service,
+                        image_content_list=[img_base64],
+                    )
 
-                chunks.append(chunk)
+                    chunk = FileChunk(
+                        chunk_id=f"{document.file_name}_{i + 1}",
+                        file_id=document.file_name,
+                        content=extracted_text,
+                        last_edited_ts=document.last_edited_ts,
+                        document_title=document.file_name,
+                        bounding_boxes=[],
+                        url=document.url,
+                        metadata=document.metadata,
+                    )
+
+                    chunks.append(chunk)
 
     return chunks
