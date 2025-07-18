@@ -1,6 +1,7 @@
 from uuid import UUID
 from typing import Optional
 import logging
+from datetime import datetime
 
 from sqlalchemy.orm import Session
 
@@ -34,6 +35,24 @@ def get_data_source_by_org_id(
         .filter(
             db.DataSource.id == source_id,
             db.DataSource.organization_id == organization_id,
+        )
+        .first()
+    )
+
+
+def get_data_source_by_name_and_org(
+    session_sql_alchemy: Session,
+    organization_id: UUID,
+    source_name: str,
+) -> Optional[db.DataSource]:
+    """Retrieve a source by its name and organization id"""
+    if isinstance(organization_id, str):
+        organization_id = UUID(organization_id)
+    return (
+        session_sql_alchemy.query(db.DataSource)
+        .filter(
+            db.DataSource.organization_id == organization_id,
+            db.DataSource.name == source_name,
         )
         .first()
     )
@@ -109,6 +128,7 @@ def upsert_source(
         existing_source.database_table_name = database_table_name
         existing_source.qdrant_collection_name = qdrant_collection_name
         existing_source.qdrant_schema = qdrant_schema
+        existing_source.last_ingestion_time = datetime.utcnow()
     session_sql_alchemy.commit()
 
 
@@ -122,3 +142,34 @@ def delete_source(
         db.DataSource.organization_id == organization_id, db.DataSource.id == source_id
     ).delete()
     session_sql_alchemy.commit()
+
+
+def check_source_name_exists(
+    session_sql_alchemy: Session,
+    organization_id: UUID,
+    source_name: str,
+) -> bool:
+    """
+    Check if a source with the given name already exists for the organization.
+
+    Args:
+        session_sql_alchemy (Session): SQLAlchemy session
+        organization_id (UUID): Organization ID
+        source_name (str): Source name to check
+
+    Returns:
+        bool: True if a source with the same name exists, False otherwise
+    """
+    if isinstance(organization_id, str):
+        organization_id = UUID(organization_id)
+
+    existing_source = (
+        session_sql_alchemy.query(db.DataSource)
+        .filter(
+            db.DataSource.organization_id == organization_id,
+            db.DataSource.name == source_name,
+        )
+        .first()
+    )
+
+    return existing_source is not None

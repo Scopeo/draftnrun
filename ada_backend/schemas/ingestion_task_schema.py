@@ -57,5 +57,19 @@ class IngestionTaskQueue(IngestionTask):
     source_attributes: SourceAttributes
 
 
+class UpdateIngestionTaskRequest(BaseModel):
+    """Schema for updating ingestion tasks with new files/folders for existing sources"""
+
+    source_id: UUID
+    source_type: db.SourceType
+    status: db.TaskStatus
+    source_attributes: SourceAttributes
+
+    model_config = ConfigDict(
+        from_attributes=True,
+        json_encoders={UUID: str},
+    )
+
+
 class S3UploadedInformation(BaseModel):
     s3_path_file: str

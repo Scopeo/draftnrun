@@ -7,9 +7,11 @@ from sqlalchemy.orm import Session
 from ada_backend.repositories.source_repository import (
     create_source,
     delete_source,
+    get_data_source_by_id,
     get_data_source_by_org_id,
     get_sources,
     upsert_source,
+    check_source_name_exists,
 )
 from ada_backend.schemas.source_schema import (
     DataSourceSchema,
@@ -62,6 +64,29 @@ def get_sources_by_organization(
         raise ValueError(f"Failed to get sources: {str(e)}") from e
 
 
+def check_source_name_exists_for_organization(
+    session: Session,
+    organization_id: UUID,
+    source_name: str,
+) -> bool:
+    """
+    Check if a source with the given name already exists for the organization.
+
+    Args:
+        session (Session): SQLAlchemy session
+        organization_id (UUID): Organization ID
+        source_name (str): Source name to check
+
+    Returns:
+        bool: True if a source with the same name exists, False otherwise
+    """
+    try:
+        return check_source_name_exists(session, organization_id, source_name)
+    except Exception as e:
+        LOGGER.error(f"Error in check_source_name_exists_for_organization: {str(e)}")
+        raise ValueError(f"Error in checking source name: {str(e)}") from e
+
+
 def create_source_by_organization(
     session: Session,
     organization_id: UUID,
@@ -75,7 +100,7 @@ def create_source_by_organization(
         organization_id (UUID): ID of the organization
         source_data (DataSourceSchema): Source data to create
     Returns:
-        None
+        UUID: The ID of the created source
     """
     try:
         source_id = create_source(
@@ -96,6 +121,49 @@ def create_source_by_organization(
     except Exception as e:
         LOGGER.error(f"Error in create_source_by_organization: {str(e)}")
         raise ValueError(f"Failed to create source: {str(e)}") from e
+
+
+def update_source_by_id(
+    session: Session,
+    source_id: UUID,
+    source_data: DataSourceSchema,
+) -> None:
+    """
+    Update an existing source by its ID.
+
+    Args:
+        session (Session): SQLAlchemy session
+        source_id (UUID): ID of the source to update
+        source_data (DataSourceSchema): Source data to update
+
+    Returns:
+        None
+    """
+    try:
+        # First get the source to find its organization_id
+        existing_source = get_data_source_by_id(session, source_id)
+        if not existing_source:
+            raise ValueError(f"Source with ID {source_id} not found")
+
+        # Use the existing upsert_source function
+        upsert_source(
+            session,
+            existing_source.organization_id,
+            source_id,
+            source_data.name,
+            source_data.type,
+            source_data.database_table_name,
+            source_data.database_schema,
+            source_data.qdrant_collection_name,
+            source_data.qdrant_schema,
+            source_data.embedding_model_reference,
+        )
+
+        LOGGER.info(f"Source {source_data.name} updated with ID {source_id}")
+
+    except Exception as e:
+        LOGGER.error(f"Error in update_source_by_id: {str(e)}")
+        raise ValueError(f"Failed to update source: {str(e)}") from e
 
 
 def upsert_source_by_organization(
