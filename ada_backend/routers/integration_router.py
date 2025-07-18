@@ -14,14 +14,14 @@ from ada_backend.routers.auth_router import (
 from ada_backend.schemas.integration_schema import CreateProjectIntegrationSchema, IntegrationSecretResponse
 from ada_backend.services.integration_sevice import add_integration_secrets_service
 
-router = APIRouter(prefix="/project", tags=["Integration"])
+router = APIRouter(prefix="/project", tags=["Integrations"])
 
 
 @router.put(
     "/{project_id}/integration/{integration_id}",
     response_model=IntegrationSecretResponse,
     summary="Add or update integration secret",
-    tags=["Integration"],
+    tags=["Integrations"],
 )
 async def add_integration_secrets(
     project_id: UUID,
