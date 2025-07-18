@@ -24,6 +24,7 @@ from ada_backend.schemas.ingestion_task_schema import (
     IngestionTaskResponse,
 )
 
+
 router = APIRouter(prefix="/ingestion_task", tags=["Ingestion Task"])
 
 
@@ -56,7 +57,7 @@ def create_organization_task(
         raise HTTPException(status_code=400, detail="User ID not found")
     try:
         # Create the ingestion task
-        task_id = create_ingestion_task_by_organization(session, organization_id, ingestion_task_data)
+        task_id = create_ingestion_task_by_organization(session, user.id, organization_id, ingestion_task_data)
         return task_id
     except Exception as e:
         raise HTTPException(status_code=500, detail="Internal Server Error") from e

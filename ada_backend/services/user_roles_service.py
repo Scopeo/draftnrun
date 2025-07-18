@@ -3,6 +3,7 @@ from uuid import UUID
 import httpx
 
 from ada_backend.schemas.auth_schema import SupabaseUser, OrganizationAccess
+from ada_backend.segment_analytics import identify_user_access_org
 from settings import settings
 
 
@@ -55,6 +56,7 @@ async def get_user_access_to_organization(
     """
     endpoint = f"{settings.SUPABASE_PROJECT_URL}/functions/v1/check-org-access"
     result = await _get_user_access(endpoint, user.token, "org_id", str(organization_id))
+    identify_user_access_org(user.id, user.email, organization_id)
 
     if "error" in result:
         raise ValueError(result["message"])

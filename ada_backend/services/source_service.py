@@ -20,6 +20,7 @@ from engine.qdrant_service import QdrantCollectionSchema, QdrantService
 from engine.storage_service.local_service import SQLLocalService
 from settings import settings
 
+
 LOGGER = logging.getLogger(__name__)
 
 
@@ -70,6 +71,7 @@ def create_source_by_organization(
     Create a new source for an organization.
     Args:
         session (Session): SQLAlchemy session
+        user_id (str): ID of the user creating the source
         organization_id (UUID): ID of the organization
         source_data (DataSourceSchema): Source data to create
     Returns:

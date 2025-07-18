@@ -7,6 +7,7 @@ import pandas as pd
 
 from ada_backend.schemas.monitor_schema import KPI, KPISResponse, TraceKPIS
 from engine.trace.sql_exporter import get_session_trace
+from ada_backend.segment_analytics import track_project_monitoring_loaded
 
 
 LOGGER = logging.getLogger(__name__)
@@ -74,9 +75,10 @@ def get_trace_metrics(project_id: UUID, duration_days: int) -> TraceKPIS:
     )
 
 
-def get_monitoring_kpis_by_project(project_id: UUID, duration_days: int) -> KPISResponse:
+def get_monitoring_kpis_by_project(user_id: UUID, project_id: UUID, duration_days: int) -> KPISResponse:
     trace_kpis = get_trace_metrics(project_id, duration_days)
     LOGGER.info(f"Trace metrics for project {project_id} and duration {duration_days} days retrieved successfully.")
+    track_project_monitoring_loaded(user_id, project_id)
     return KPISResponse(
         kpis=[
             KPI(

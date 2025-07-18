@@ -55,6 +55,9 @@ class BaseConfig(BaseSettings):
     TAVILY_API_KEY: Optional[str] = None
     E2B_API_KEY: Optional[str] = None
 
+    SEGMENT_API_KEY: Optional[str] = None
+    ENV: Optional[str] = None
+
     @property
     def custom_models(self) -> dict[str, dict[str, Any]]:
         if not CUSTOM_MODELS_JSON_PATH.exists():
