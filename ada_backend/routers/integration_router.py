@@ -8,8 +8,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from ada_backend.database.setup_db import get_db
 from ada_backend.schemas.auth_schema import SupabaseUser
 from ada_backend.routers.auth_router import (
-    user_has_access_to_organization_dependency,
     UserRights,
+    user_has_access_to_project_dependency,
 )
 from ada_backend.schemas.integration_schema import CreateProjectIntegrationSchema, IntegrationSecretResponse
 from ada_backend.services.integration_sevice import add_integration_secrets_service
@@ -28,7 +28,7 @@ async def add_integration_secrets(
     integration_id: UUID,
     create_project_integration: CreateProjectIntegrationSchema,
     user: Annotated[
-        SupabaseUser, Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.WRITER.value))
+        SupabaseUser, Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.WRITER.value))
     ],
     sqlalchemy_db_session: Session = Depends(get_db),
 ) -> IntegrationSecretResponse:
