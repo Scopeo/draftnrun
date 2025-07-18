@@ -71,10 +71,10 @@ class RAG(Agent):
         if content is None:
             raise ValueError("No content provided for the RAG tool.")
         formatted_filters = format_qdrant_filter(filters, FILTERING_CONDITION_WITH_METADATA_QDRANT)
-        chunks = self._retriever.get_chunks(query_text=content, filters=formatted_filters)
+        chunks = await self._retriever.get_chunks(query_text=content, filters=formatted_filters)
 
         if self._reranker is not None:
-            chunks = self._reranker.rerank(query=content, chunks=chunks)
+            chunks = await self._reranker.rerank(query=content, chunks=chunks)
 
         vocabulary_context = {}
         if self._vocabulary_search is not None:
@@ -85,7 +85,7 @@ class RAG(Agent):
                 )
             }
 
-        sourced_response = self._synthesizer.get_response(
+        sourced_response = await self._synthesizer.get_response(
             query_str=content,
             chunks=chunks,
             optional_contexts=vocabulary_context,

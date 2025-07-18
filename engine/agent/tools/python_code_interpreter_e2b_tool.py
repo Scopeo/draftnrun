@@ -2,7 +2,7 @@ import logging
 import json
 from typing import Any, Optional
 
-from e2b_code_interpreter import Sandbox
+from e2b_code_interpreter import AsyncSandbox
 from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttributes
 from opentelemetry.trace import get_current_span
 
@@ -70,19 +70,22 @@ class PythonCodeInterpreterE2BTool(Agent):
 
         return images
 
-    def execute_python_code(self, python_code: str, shared_sandbox: Optional[Sandbox] = None) -> dict:
+    async def execute_python_code(self, python_code: str, shared_sandbox: Optional[AsyncSandbox] = None) -> dict:
         """Execute Python code in E2B sandbox and return the result."""
         if not self.e2b_api_key:
             raise ValueError("E2B API key not configured")
-        sandbox = shared_sandbox if shared_sandbox else Sandbox(api_key=self.e2b_api_key)
+
+        sandbox = shared_sandbox
+        if not sandbox:
+            sandbox = await AsyncSandbox.create(api_key=self.e2b_api_key)
         try:
-            execution = sandbox.run_code(python_code, timeout=self.sandbox_timeout)
+            execution = await sandbox.run_code(code=python_code, timeout=self.sandbox_timeout)
         except Exception as e:
             LOGGER.error(f"E2B sandbox execution failed: {str(e)}")
             raise e
         finally:
             if not shared_sandbox:
-                sandbox.kill()
+                await sandbox.kill()
         return json.loads(execution.to_json())
 
     async def _run_without_trace(
@@ -99,7 +102,7 @@ class PythonCodeInterpreterE2BTool(Agent):
             }
         )
 
-        execution_result_dict = self.execute_python_code(**kwargs)
+        execution_result_dict = await self.execute_python_code(**kwargs)
         content = json.dumps(execution_result_dict, indent=2)
 
         images = self._extract_images_from_results(execution_result_dict)

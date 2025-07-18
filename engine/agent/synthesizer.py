@@ -35,7 +35,7 @@ class Synthesizer:
             component_instance_name=self.__class__.__name__,
         )
 
-    def get_response(
+    async def get_response(
         self, chunks: list[SourceChunk], query_str: str, optional_contexts: Optional[dict]
     ) -> SourcedResponse:
 
@@ -57,7 +57,7 @@ class Synthesizer:
                     "component_instance_id": str(self.component_attributes.component_instance_id),
                 }
             )
-            response = self._completion_service.constrained_complete_with_pydantic(
+            response = await self._completion_service.constrained_complete_with_pydantic_async(
                 messages=input_str,
                 response_format=self.response_format,
             )

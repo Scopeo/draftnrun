@@ -1,5 +1,5 @@
 import json
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, patch, AsyncMock
 from types import SimpleNamespace
 
 import pytest
@@ -53,7 +53,7 @@ def mock_llm_service():
     )
     choice = SimpleNamespace(message=message)
     response = SimpleNamespace(choices=[choice])
-    mock_llm_service.function_call.return_value = response
+    mock_llm_service.function_call_async = AsyncMock(return_value=response)
     return mock_llm_service
 
 
@@ -100,8 +100,8 @@ def test_run_with_tool_calls(agent_calls_mock, get_span_mock, react_agent, agent
     mock_tool_call.function = mock_tool_call_function
     mock_response_message = ChatMessage(role="assistant", content="Tool response")
 
-    mock_llm_service.function_call.return_value = MagicMock(
-        choices=[MagicMock(message=mock_response_message, tool_calls=[mock_tool_call])]
+    mock_llm_service.function_call_async = AsyncMock(
+        return_value=MagicMock(choices=[MagicMock(message=mock_response_message, tool_calls=[mock_tool_call])])
     )
     mock_agent.run.return_value = AgentPayload(
         messages=[ChatMessage(role="assistant", content="Tool response")], is_final=True
@@ -112,6 +112,71 @@ def test_run_with_tool_calls(agent_calls_mock, get_span_mock, react_agent, agent
     assert output.last_message.role == "assistant"
     assert output.last_message.content == "Tool response"
     assert output.is_final
+
+
+@patch("engine.prometheus_metric.get_tracing_span")
+@patch("engine.prometheus_metric.agent_calls")
+def test_run_with_tool_calls_no_shortcut(
+    agent_calls_mock, get_span_mock, react_agent, agent_input, mock_agent, mock_llm_service
+):
+    get_span_mock.return_value.project_id = "1234"
+    counter_mock = MagicMock()
+    agent_calls_mock.labels.return_value = counter_mock
+
+    # Disable tool shortcuts to test the full iteration logic
+    react_agent._allow_tool_shortcuts = False
+
+    mock_agent.run.return_value = AgentPayload(
+        messages=[ChatMessage(role="assistant", content="Tool response")], is_final=True
+    )
+
+    # Mock the LLM service to return different responses for each call
+    # First call: with tool calls, second call: final response
+    first_response = MagicMock()
+    first_response.choices = [
+        MagicMock(
+            message=MagicMock(
+                content=None,
+                tool_calls=[MagicMock()],
+                model_dump=lambda: {"role": "assistant", "content": None, "tool_calls": [{"id": "1"}]},
+            )
+        )
+    ]
+
+    second_response = MagicMock()
+    second_response.choices = [
+        MagicMock(
+            message=MagicMock(
+                content="Final response",
+                tool_calls=[],
+                model_dump=lambda: {"role": "assistant", "content": "Final response", "tool_calls": []},
+            )
+        )
+    ]
+
+    mock_llm_service.function_call_async = AsyncMock(side_effect=[first_response, second_response])
+
+    # Mock the tool call processing to simulate successful tool execution
+    with patch.object(react_agent, "_process_tool_calls") as mock_process:
+        mock_process.return_value = (
+            {"1": AgentPayload(messages=[ChatMessage(role="assistant", content="Tool response")], is_final=True)},
+            [
+                {
+                    "id": "1",
+                    "function": {"name": "test_tool", "arguments": json.dumps({"test_property": "Test value"})},
+                    "type": "function",
+                }
+            ],
+        )
+
+        output = react_agent.run_sync(agent_input)
+
+    # Should get the final response from the second iteration
+    assert output.last_message.role == "assistant"
+    assert output.last_message.content == "Final response"
+    assert output.is_final
+    # Verify that function_call_async was called twice (once for tool calls, once for final response)
+    assert react_agent._completion_service.function_call_async.call_count == 2
 
 
 @patch("engine.prometheus_metric.get_tracing_span")
@@ -152,7 +217,7 @@ def test_max_iterations(agent_calls_mock, get_span_mock, react_agent, agent_inpu
     )
     choice = SimpleNamespace(message=message)
     response = SimpleNamespace(choices=[choice])
-    mock_llm_service.function_call.return_value = response
+    mock_llm_service.function_call_async = AsyncMock(return_value=response)
 
     react_agent._max_iterations = 1
     mock_agent.run.return_value = AgentPayload(

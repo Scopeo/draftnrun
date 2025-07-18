@@ -67,12 +67,12 @@ class HybridRAG(RAG):
         if content is None:
             raise ValueError("No content provided for the RAG tool.")
         formatted_filters = format_qdrant_filter(filters, self._filtering_condition)
-        chunks = self._retriever.get_chunks(query_text=content, filters=formatted_filters)
+        chunks = await self._retriever.get_chunks(query_text=content, filters=formatted_filters)
 
         if self._reranker is not None:
             chunks = self._reranker.rerank(query=content, chunks=chunks)
 
-        relevant_chunks = self._relevant_chunk_selector.get_response(
+        relevant_chunks = await self._relevant_chunk_selector.get_response(
             chunks=chunks,
             question=content,
         )
@@ -80,7 +80,7 @@ class HybridRAG(RAG):
             sources=chunks,
             chunk_selection_response=relevant_chunks,
         )
-        responses_hybrid_synthesizer = process_image_responses(
+        responses_hybrid_synthesizer = await process_image_responses(
             relevant_image_sources=relevant_image_sources,
             hybrid_synthesizer=self._hybrid_synthesizer,
             query_str=content,
@@ -91,7 +91,7 @@ class HybridRAG(RAG):
             useful_answers_images=responses_hybrid_synthesizer,
         )
 
-        synthesized_response = self._synthesizer.get_response(
+        synthesized_response = await self._synthesizer.get_response(
             chunks=text_image_sources_for_synthesizer,
             query_str=content,
         )
@@ -147,7 +147,7 @@ def process_relevant_sources(
     return relevant_image_sources, relevant_text_sources
 
 
-def process_image_responses(
+async def process_image_responses(
     relevant_image_sources: list[SourceChunk],
     hybrid_synthesizer: HybridSynthesizer,
     query_str: str,
@@ -156,7 +156,7 @@ def process_image_responses(
     for image_source in relevant_image_sources:
         image_ids = image_source.metadata.get("image_ids", [])
         for image_id in image_ids:
-            response = hybrid_synthesizer.get_response(
+            response = await hybrid_synthesizer.get_response(
                 image_id=image_id,
                 chunks=[image_source],
                 query_str=query_str,
