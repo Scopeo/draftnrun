@@ -42,6 +42,7 @@ def get_graph_service(
         component_instances_with_definitions.append(
             get_component_instance(
                 session,
+                project_id,
                 component_node.id,
                 is_start_node=component_node.is_start_node,
             )

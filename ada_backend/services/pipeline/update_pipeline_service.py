@@ -4,9 +4,8 @@ from logging import getLogger
 
 from sqlalchemy.orm import Session
 
-from ada_backend.repositories.integration_repository import upsert_component_integration
 from ada_backend.repositories.organization_repository import get_organization_secrets_from_project_id
-from ada_backend.schemas.pipeline.base import UpdateComponentInstanceSchema
+from ada_backend.schemas.pipeline.base import ComponentInstanceSchema
 from ada_backend.database import models as db
 from ada_backend.repositories.component_repository import (
     get_component_parameter_definition_by_component_id,
@@ -23,7 +22,7 @@ LOGGER = getLogger(__name__)
 
 def create_or_update_component_instance(
     session: Session,
-    instance_data: UpdateComponentInstanceSchema,
+    instance_data: ComponentInstanceSchema,
     project_id: UUID,
 ) -> UUID:
     """Creates or updates a component instance with its parameters"""
@@ -48,15 +47,6 @@ def create_or_update_component_instance(
         id_=instance_data.id,  # Pass the ID if provided, None otherwise
     )
     instance_id = component_instance.id
-    if instance_data.integration:
-        upsert_component_integration(
-            session,
-            instance_id,
-            instance_data.integration.integration_id,
-            instance_data.integration.access_token,
-            instance_data.integration.refresh_token,
-            instance_data.integration.expires_at,
-        )
 
     component_name = component_instance.component.name
 

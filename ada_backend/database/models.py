@@ -196,15 +196,16 @@ class Integration(Base):
     service = mapped_column(String, nullable=False)
 
 
-class ComponentIntegration(Base):
-    __tablename__ = "component_integrations"
+class ProjectIntegration(Base):
+    __tablename__ = "project_integrations"
 
     id = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    component_instance_id = mapped_column(UUID(as_uuid=True), ForeignKey("component_instances.id"))
+    project_id = mapped_column(UUID(as_uuid=True), ForeignKey("projects.id"))
     integration_id = mapped_column(UUID(as_uuid=True), ForeignKey("integrations.id"))
     encrypted_access_token = mapped_column(String)
     encrypted_refresh_token = mapped_column(String)
-    expires_at = mapped_column(DateTime(timezone=True))
+    expires_in = mapped_column(Integer)
+    token_last_updated = mapped_column(DateTime(timezone=True))
 
     def set_access_token(self, access_token: str) -> None:
         """Encrypts and sets the access token."""

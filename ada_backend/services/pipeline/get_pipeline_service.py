@@ -2,7 +2,9 @@ from uuid import UUID
 from logging import getLogger
 from sqlalchemy.orm import Session
 
+from ada_backend.repositories.integration_repository import get_project_integration
 from ada_backend.schemas.components_schema import SubComponentParamSchema
+from ada_backend.schemas.integration_schema import GraphIntegrationSchema
 from ada_backend.schemas.parameter_schema import PipelineParameterReadSchema
 from ada_backend.services.agent_builder_service import _get_tool_description
 from ada_backend.repositories.component_repository import (
@@ -21,6 +23,7 @@ LOGGER = getLogger(__name__)
 
 def get_component_instance(
     session: Session,
+    project_id: UUID,
     component_instance_id: UUID,
     is_start_node: bool = False,
 ) -> ComponentInstanceReadSchema:
@@ -41,6 +44,9 @@ def get_component_instance(
         raise ValueError(f"Component {component_instance.component_id} not found")
     subcomponent_params = get_subcomponent_param_def_by_component_id(session, component_instance.component_id)
     tool_parameter = get_tool_parameter_by_component_id(session, component_instance.component_id)
+
+    if component.integration_id:
+        project_integration = get_project_integration(session, project_id)
 
     return ComponentInstanceReadSchema(
         id=component_instance_id,
@@ -77,6 +83,14 @@ def get_component_instance(
             )
             for param in parameters
         ],
+        integration=(
+            GraphIntegrationSchema(
+                integration_id=project_integration.integration_id,
+                secret_id=project_integration.secret_id,
+            )
+            if component.integration_id
+            else None
+        ),
     )
 
 

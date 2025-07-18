@@ -29,12 +29,12 @@ class ComponentUseInfoSchema(BaseModel):
     function_callable: bool = False
     can_use_function_calling: bool = False
     release_stage: str = db.ReleaseStage.BETA
-    integration: Optional[IntegrationSchema] = None
     tool_parameter_name: Optional[str] = None
     subcomponents_info: list[SubComponentParamSchema]
 
 
 class ComponentWithParametersDTO(ComponentUseInfoSchema, ComponentDTO):
+    integration: Optional[IntegrationSchema] = None
     parameters: List[ComponentParamDefDTO]
 
 

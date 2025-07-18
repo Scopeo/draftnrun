@@ -1,3 +1,5 @@
+from datetime import datetime
+from typing import Optional
 from pydantic import BaseModel
 from uuid import UUID
 
@@ -8,8 +10,18 @@ class IntegrationSchema(BaseModel):
     service: str
 
 
-class CreateComponentIntegrationSchema(BaseModel):
+class GraphIntegrationSchema(IntegrationSchema):
+    secret_id: UUID
+
+
+class CreateProjectIntegrationSchema(BaseModel):
     integration_id: UUID
     access_token: str
-    refresh_token: str
-    expires_at: str
+    refresh_token: Optional[str] = None
+    expires_in: Optional[int] = None
+    token_last_updated: Optional[datetime] = None
+
+
+class IntegrationSecretResponse(BaseModel):
+    integration_id: UUID
+    secret_id: UUID

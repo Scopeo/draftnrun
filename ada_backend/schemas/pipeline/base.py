@@ -3,7 +3,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict
 
-from ada_backend.schemas.integration_schema import CreateComponentIntegrationSchema
+from ada_backend.schemas.integration_schema import GraphIntegrationSchema
 from ada_backend.schemas.parameter_schema import PipelineParameterSchema
 from engine.agent.agent import ToolDescription
 
@@ -20,10 +20,7 @@ class ComponentInstanceSchema(BaseModel):
     component_id: UUID
     parameters: list[PipelineParameterSchema]
     tool_description: Optional[ToolDescription] = None
-
-
-class UpdateComponentInstanceSchema(ComponentInstanceSchema):
-    integration: Optional[CreateComponentIntegrationSchema] = None
+    integration: Optional[GraphIntegrationSchema] = None
 
 
 class ComponentRelationshipSchema(BaseModel):

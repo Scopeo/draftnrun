@@ -3,7 +3,7 @@ from uuid import UUID
 
 from pydantic import BaseModel
 
-from ada_backend.schemas.pipeline.base import ComponentRelationshipSchema, UpdateComponentInstanceSchema
+from ada_backend.schemas.pipeline.base import ComponentRelationshipSchema, ComponentInstanceSchema
 from ada_backend.schemas.pipeline.get_pipeline_schema import ComponentInstanceReadSchema
 
 
@@ -27,7 +27,7 @@ class GraphGetResponse(BaseModel):
 class GraphUpdateSchema(BaseModel):
     """Complete pipeline definition"""
 
-    component_instances: list[UpdateComponentInstanceSchema]
+    component_instances: list[ComponentInstanceSchema]
     relationships: list[ComponentRelationshipSchema]
     edges: list[EdgeSchema]
 

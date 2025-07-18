@@ -39,6 +39,7 @@ class GmailSender(Agent):
         self,
         trace_manager: TraceManager,
         component_instance_name: str,
+        integration: str,
         send_as_draft: bool = True,
         tool_description: ToolDescription = GMAIL_SENDER_TOOL_DESCRIPTION,
     ):

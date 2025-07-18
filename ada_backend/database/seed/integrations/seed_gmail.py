@@ -45,7 +45,7 @@ def seed_gmail_components(session: Session):
                 label="Send as Draft",
                 description="If checked, the email will be saved as a draft instead of being sent immediately.",
             ).model_dump(exclude_unset=True, exclude_none=True),
-        ),
+        )
     ]
 
     upsert_components_parameter_definitions(session, gmail_sender_parameter_definitions)
