@@ -4,6 +4,7 @@ from uuid import UUID
 
 from sqlalchemy.orm import Session
 
+from ada_backend.repositories.integration_repository import get_component_instance_integration_relationship
 from ada_backend.repositories.organization_repository import get_organization_secrets_from_project_id
 from engine.agent.agent import ComponentAttributes, ToolDescription
 from ada_backend.database.models import ComponentInstance
@@ -112,6 +113,12 @@ def instantiate_component(
         project_id=project_id,
     )
     LOGGER.debug(f"{input_params=}\n")
+
+    integration_relationship = get_component_instance_integration_relationship(
+        session=session, component_instance_id=component_instance_id
+    )
+    if integration_relationship:
+        input_params["secret_integration_id"] = integration_relationship.secret_integration_id
 
     # Resolve sub-components
     sub_components = get_component_sub_components(session, component_instance_id)

@@ -3,6 +3,7 @@ from uuid import UUID
 
 from pydantic import BaseModel
 
+from ada_backend.schemas.integration_schema import IntegrationSchema
 from ada_backend.schemas.parameter_schema import ComponentParamDefDTO
 from ada_backend.database import models as db
 
@@ -33,6 +34,7 @@ class ComponentUseInfoSchema(BaseModel):
 
 
 class ComponentWithParametersDTO(ComponentUseInfoSchema, ComponentDTO):
+    integration: Optional[IntegrationSchema] = None
     parameters: List[ComponentParamDefDTO]
 
 

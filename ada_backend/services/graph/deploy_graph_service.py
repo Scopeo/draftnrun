@@ -23,6 +23,7 @@ from ada_backend.repositories.graph_runner_repository import (
     insert_graph_runner,
     upsert_component_node,
 )
+from ada_backend.schemas.integration_schema import GraphIntegrationSchema
 from ada_backend.schemas.parameter_schema import PipelineParameterSchema
 from ada_backend.schemas.pipeline.base import ComponentInstanceSchema
 from ada_backend.schemas.pipeline.graph_schema import GraphDeployResponse
@@ -56,7 +57,9 @@ def copy_component_instance(
             PipelineParameterSchema(name=parameter.name, value=parameter.value, order=parameter.order)
             for parameter in component_instance.parameters
         ],
+        integration=component_instance.integration,
     )
+    print("new_composant_instance", new_composant_instance)
     return create_or_update_component_instance(session, new_composant_instance, project_id)
 
 
@@ -79,6 +82,7 @@ def clone_graph_runner(
     old_relationships = []
     for component_node in graph_nodes:
         # Copy the component instance into a new component instance
+        print("component_node", component_node)
         new_instance_id = copy_component_instance(
             session,
             component_instance_id_to_copy=component_node.component_instance_id,

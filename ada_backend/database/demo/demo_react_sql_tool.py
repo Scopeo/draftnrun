@@ -1,9 +1,9 @@
 from uuid import UUID, uuid4
 
 from ada_backend.schemas.pipeline.base import (
-    ComponentInstanceSchema,
     ComponentRelationshipSchema,
     PipelineParameterSchema,
+    ComponentInstanceSchema,
 )
 from ada_backend.schemas.pipeline.graph_schema import GraphUpdateSchema
 from ada_backend.services.registry import COMPLETION_MODEL_IN_DB

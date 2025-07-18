@@ -11,8 +11,10 @@ import logging
 from sqlalchemy.orm import Session
 
 from ada_backend.database import models as db
+from ada_backend.database.seed.integrations.seed_integration import seed_integrations
 from ada_backend.database.seed.seed_ai_agent import seed_ai_agent_components
 from ada_backend.database.seed.seed_db_service import seed_db_service_components
+from ada_backend.database.seed.integrations.seed_gmail import seed_gmail_components
 from ada_backend.database.seed.seed_input import seed_input_components
 from ada_backend.database.seed.seed_filter import seed_filter_components
 from ada_backend.database.seed.seed_llm_call import seed_llm_call_components
@@ -35,6 +37,7 @@ def seed_db(session: Session):
     Seed the database with initial data.
     """
     try:
+        seed_integrations(session)
         # First seed the available components
         seed_tool_description(session)
         seed_db_service_components(session)
@@ -50,6 +53,7 @@ def seed_db(session: Session):
         seed_web_search_components(session)
         seed_input_components(session)
         seed_filter_components(session)
+        seed_gmail_components(session)
 
         # Verify components exist
         for name, uuid_value in COMPONENT_UUIDS.items():

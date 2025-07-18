@@ -16,6 +16,7 @@ from engine.agent.sql.react_sql_tool import DEFAULT_REACT_SQL_TOOL_DESCRIPTION
 from engine.agent.sql.run_sql_query_tool import DEFAULT_RUN_SQL_QUERY_TOOL_DESCRIPTION
 from engine.agent.web_search_tool_openai import DEFAULT_WEB_SEARCH_OPENAI_TOOL_DESCRIPTION
 from engine.agent.tools.python_code_interpreter_e2b_tool import E2B_PYTHONCODE_INTERPRETER_TOOL_DESCRIPTION
+from engine.integrations.gmail_sender import GMAIL_SENDER_TOOL_DESCRIPTION
 
 
 TOOL_DESCRIPTION_UUIDS = {
@@ -31,6 +32,7 @@ TOOL_DESCRIPTION_UUIDS = {
     "default_input_tool_description": UUID("5be22376-7d08-486b-a004-b495bae58f77"),
     "default_filter_tool_description": UUID("6cf33487-8e19-597c-b115-c5a6cbf69a88"),
     "python_code_interpreter_e2b_tool_description": UUID("e2b11111-2222-3333-4444-555555555555"),
+    "gmail_sender_tool_description": UUID("c1d3aca1-5187-40c6-a350-e3b28b15c802"),
 }
 
 
@@ -77,6 +79,10 @@ def seed_tool_description(session: Session):
         id=TOOL_DESCRIPTION_UUIDS["python_code_interpreter_e2b_tool_description"],
         **E2B_PYTHONCODE_INTERPRETER_TOOL_DESCRIPTION.model_dump(),
     )
+    gmail_sender_tool_description = db.ToolDescription(
+        id=TOOL_DESCRIPTION_UUIDS["gmail_sender_tool_description"],
+        **GMAIL_SENDER_TOOL_DESCRIPTION.model_dump(),
+    )
     upsert_tool_descriptions(
         session=session,
         tool_descriptions=[
@@ -92,5 +98,6 @@ def seed_tool_description(session: Session):
             default_input_tool_description,
             default_filter_tool_description,
             python_code_interpreter_e2b_tool_description,
+            gmail_sender_tool_description,
         ],
     )
