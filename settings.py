@@ -121,10 +121,8 @@ class BaseConfig(BaseSettings):
     S3_REGION_NAME: Optional[str] = None
 
     # Ingestion parameters
-    # Number of pages to detect document type
     NUMBER_OF_PAGES_TO_DETECT_DOCUMENT_TYPE: Optional[int] = 5
     PAGE_RESOLUTION_ZOOM: Optional[float] = 3.0
-    ENFORCE_PAGE_BY_PAGE_INGESTION: Optional[bool] = False
     INGESTION_VIA_CUSTOM_MODEL: Optional[bool] = False
 
     # Google OAuth configuration
