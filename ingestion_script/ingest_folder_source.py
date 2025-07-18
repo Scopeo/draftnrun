@@ -19,25 +19,46 @@ from engine.storage_service.db_service import DBService
 from engine.storage_service.db_utils import PROCESSED_DATETIME_FIELD, DBColumn, DBDefinition, create_db_if_not_exists
 from engine.storage_service.local_service import SQLLocalService
 from engine.trace.trace_manager import TraceManager
-from ingestion_script.utils import create_source, get_sanitize_names, update_ingestion_task
+from ingestion_script.utils import (
+    create_source,
+    get_sanitize_names,
+    update_ingestion_task,
+    get_first_available_embeddings_custom_llm,
+    get_first_available_multimodal_custom_llm,
+)
 from settings import settings
 
 LOGGER = logging.getLogger(__name__)
-GOOGLE_COMPLETION_SERVICE = VisionService(
-    provider="google",
-    model_name="gemini-2.0-flash-exp",
-    trace_manager=TraceManager(project_name="ingestion"),
-)
-OPENAI_COMPLETION_SERVICE = VisionService(
-    provider="openai",
-    model_name="gpt-4.1-mini",
-    trace_manager=TraceManager(project_name="ingestion"),
-)
-EMBEDDING_SERVICE = EmbeddingService(
-    provider="openai",
-    model_name="text-embedding-3-large",
-    trace_manager=TraceManager(project_name="ingestion"),
-)
+
+# TODO: add the selection at the user level via Front
+if settings.INGESTION_VIA_CUSTOM_MODEL:
+    VISION_COMPLETION_SERVICE = get_first_available_multimodal_custom_llm()
+    FALLBACK_VISION_LLM_SERVICE = VISION_COMPLETION_SERVICE
+    if VISION_COMPLETION_SERVICE is None:
+        raise ValueError("No multimodal custom LLM found. Please set up a custom model for ingestion.")
+else:
+    VISION_COMPLETION_SERVICE = VisionService(
+        provider="google",
+        model_name="gemini-2.0-flash-exp",
+        trace_manager=TraceManager(project_name="ingestion"),
+    )
+    FALLBACK_VISION_LLM_SERVICE = VisionService(
+        provider="openai",
+        model_name="gpt-4.1-mini",
+        trace_manager=TraceManager(project_name="ingestion"),
+    )
+
+# TODO: add the selection at the user level via Front
+if settings.INGESTION_VIA_CUSTOM_MODEL:
+    EMBEDDING_SERVICE = get_first_available_embeddings_custom_llm()
+    if EMBEDDING_SERVICE is None:
+        raise ValueError("No custom embedding model found. Please set up a custom model for ingestion.")
+else:
+    EMBEDDING_SERVICE = EmbeddingService(
+        provider="openai",
+        model_name="text-embedding-3-large",
+        trace_manager=TraceManager(project_name="ingestion"),
+    )
 
 ID_COLUMN_NAME = "chunk_id"
 TIMESTAMP_COLUMN_NAME = "last_edited_ts"
@@ -198,8 +219,8 @@ def _ingest_folder_source(
         )
     try:
         document_chunk_mapping = document_chunking_mapping(
-            vision_ingestion_service=GOOGLE_COMPLETION_SERVICE,
-            llm_service=OPENAI_COMPLETION_SERVICE,
+            vision_ingestion_service=VISION_COMPLETION_SERVICE,
+            llm_service=FALLBACK_VISION_LLM_SERVICE,
             get_file_content_func=folder_manager.get_file_content,
             chunk_size=chunk_size,
         )
@@ -230,7 +251,7 @@ def _ingest_folder_source(
             chunks_df = get_chunks_dataframe_from_doc(
                 document,
                 document_chunk_mapping,
-                llm_service=OPENAI_COMPLETION_SERVICE,
+                llm_service=FALLBACK_VISION_LLM_SERVICE,
                 add_doc_description_to_chunks=add_doc_description_to_chunks,
                 documents_summary_func=document_summary_func,
                 add_summary_in_chunks_func=add_summary_in_chunks_func,
