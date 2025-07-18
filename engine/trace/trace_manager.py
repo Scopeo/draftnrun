@@ -10,14 +10,13 @@ from opentelemetry.sdk import trace as trace_sdk
 from engine.trace.sql_exporter import SQLSpanExporter
 from engine.trace.span_context import get_tracing_span
 
-
 LOGGER = logging.getLogger(__name__)
 
 
 def setup_tracer(
     project_name: str,
 ) -> tuple[trace_api.Tracer, trace_sdk.TracerProvider]:
-    """Setup a tracer with the given project name and collector endpoint."""
+    """Set up a tracer with the given project name and collector endpoint."""
 
     resource = Resource(
         attributes={
