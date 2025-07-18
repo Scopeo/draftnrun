@@ -6,7 +6,7 @@ from ada_backend.repositories.integration_repository import upsert_project_integ
 from ada_backend.schemas.integration_schema import CreateProjectIntegrationSchema, IntegrationSecretResponse
 
 
-def add_integration_secrets_service(
+async def add_or_update_integration_secrets_service(
     session: Session,
     project_id: UUID,
     integration_id: UUID,

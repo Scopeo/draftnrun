@@ -51,6 +51,26 @@ class ProjectEnvironmentBinding(EnhancedModelView, model=db.ProjectEnvironmentBi
     form_excluded_columns = ["created_at", "updated_at"]
 
 
+class IntegrationAdmin(EnhancedModelView, model=db.Integration):
+    category = AdminCategory.PROJECTS
+    icon = "fas fa-plug"
+    column_list = ["id", "name", "service"]
+
+
+class ProjectIntegrationAdmin(EnhancedModelView, model=db.ProjectIntegration):
+    category = AdminCategory.PROJECTS
+    icon = "fas fa-plug"
+    column_list = [
+        "id",
+        "project",
+        "integration",
+        "encrypted_access_token",
+        "encrypted_refresh_token",
+        "expires_in",
+        "token_last_updated",
+    ]
+
+
 class OrganizationSecretAdmin(EnhancedModelView, model=db.OrganizationSecret):
     category = AdminCategory.PROJECTS
     icon = "fas fa-key"
@@ -355,6 +375,8 @@ def setup_admin(app: FastAPI):
     admin.add_view(ProjectEnvironmentBinding)
     admin.add_view(OrganizationSecretAdmin)
     admin.add_view(ApiKeyAdmin)
+    admin.add_view(ProjectIntegrationAdmin)
+    admin.add_view(IntegrationAdmin)
 
     admin.add_view(GraphRunnerAdmin)
     admin.add_view(ComponentAdmin)
