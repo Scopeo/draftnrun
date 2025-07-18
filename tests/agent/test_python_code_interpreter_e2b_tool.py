@@ -3,6 +3,7 @@ import json
 import os
 import base64
 from unittest.mock import MagicMock
+import pytest_asyncio
 
 from engine.agent.tools.python_code_interpreter_e2b_tool import (
     PythonCodeInterpreterE2BTool,
@@ -17,16 +18,21 @@ def mock_trace_manager():
     return MagicMock(spec=TraceManager)
 
 
-@pytest.fixture
-def e2b_tool(mock_trace_manager):
-    """Create an E2B Python code interpreter tool instance."""
-    return PythonCodeInterpreterE2BTool(
+@pytest_asyncio.fixture
+async def e2b_tool(mock_trace_manager):
+    """Create an E2B Python code interpreter tool instance with proper async cleanup."""
+    tool = PythonCodeInterpreterE2BTool(
         trace_manager=mock_trace_manager,
         component_attributes=ComponentAttributes(
             component_instance_name="test_e2b_tool",
         ),
         timeout=30,
     )
+    yield tool
+    # Cleanup: ensure any lingering HTTP connections are closed
+    # The E2B library should handle this, but we'll give it a moment to complete
+    import asyncio
+    await asyncio.sleep(0.1)
 
 
 @pytest.fixture
