@@ -57,18 +57,25 @@ class IntegrationAdmin(EnhancedModelView, model=db.Integration):
     column_list = ["id", "name", "service"]
 
 
-class ProjectIntegrationAdmin(EnhancedModelView, model=db.ProjectIntegration):
+class SecretIntegrationAdmin(EnhancedModelView, model=db.SecretIntegration):
     category = AdminCategory.PROJECTS
     icon = "fas fa-plug"
     column_list = [
         "id",
-        "project",
         "integration",
         "encrypted_access_token",
         "encrypted_refresh_token",
         "expires_in",
         "token_last_updated",
     ]
+
+
+class IntegrationComponentInstanceRelationshipAdmin(
+    EnhancedModelView, model=db.IntegrationComponentInstanceRelationship
+):
+    category = AdminCategory.COMPONENTS
+    icon = "fas fa-plug"
+    column_list = ["id", "secret_integration", "component_instance", "created_at", "updated_at"]
 
 
 class OrganizationSecretAdmin(EnhancedModelView, model=db.OrganizationSecret):
@@ -375,8 +382,9 @@ def setup_admin(app: FastAPI):
     admin.add_view(ProjectEnvironmentBinding)
     admin.add_view(OrganizationSecretAdmin)
     admin.add_view(ApiKeyAdmin)
-    admin.add_view(ProjectIntegrationAdmin)
+    admin.add_view(SecretIntegrationAdmin)
     admin.add_view(IntegrationAdmin)
+    admin.add_view(IntegrationComponentInstanceRelationshipAdmin)
 
     admin.add_view(GraphRunnerAdmin)
     admin.add_view(ComponentAdmin)

@@ -196,16 +196,20 @@ class Integration(Base):
     service = mapped_column(String, nullable=False)
 
 
-class ProjectIntegration(Base):
-    __tablename__ = "project_integrations"
+class SecretIntegration(Base):
+    __tablename__ = "secret_integrations"
 
     id = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    project_id = mapped_column(UUID(as_uuid=True), ForeignKey("projects.id"))
     integration_id = mapped_column(UUID(as_uuid=True), ForeignKey("integrations.id"))
     encrypted_access_token = mapped_column(String)
     encrypted_refresh_token = mapped_column(String)
     expires_in = mapped_column(Integer)
     token_last_updated = mapped_column(DateTime(timezone=True))
+
+    secret_integration_component_instances = relationship(
+        "IntegrationComponentInstanceRelationship",
+        back_populates="secret_integration",
+    )
 
     def set_access_token(self, access_token: str) -> None:
         """Encrypts and sets the access token."""
@@ -220,6 +224,27 @@ class ProjectIntegration(Base):
 
     def get_refresh_token(self) -> str:
         return CIPHER.decrypt(self.encrypted_refresh_token.encode()).decode()
+
+
+class IntegrationComponentInstanceRelationship(Base):
+    __tablename__ = "integration_component_instance_relationships"
+
+    id = mapped_column(UUID(as_uuid=True), primary_key=True, index=True, default=uuid.uuid4)
+    secret_integration_id = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("secret_integrations.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    component_instance_id = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("component_instances.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    created_at = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    secret_integration = relationship("SecretIntegration")
+    component_instance = relationship("ComponentInstance")
 
 
 class GraphRunner(Base):
@@ -333,6 +358,11 @@ class ComponentInstance(Base):
         "ComponentSubInput",
         foreign_keys="ComponentSubInput.child_component_instance_id",
         back_populates="child_component_instance",
+        cascade="all, delete-orphan",
+    )
+    relationships = relationship(
+        "IntegrationComponentInstanceRelationship",
+        back_populates="component_instance",
         cascade="all, delete-orphan",
     )
 

@@ -39,18 +39,14 @@ class GmailSender(Agent):
         self,
         trace_manager: TraceManager,
         component_instance_name: str,
-        integration: str,
+        secret_integration_id: str,
         send_as_draft: bool = True,
         tool_description: ToolDescription = GMAIL_SENDER_TOOL_DESCRIPTION,
     ):
         super().__init__(
             trace_manager, tool_description=tool_description, component_instance_name=component_instance_name
         )
-        JSON_PATH = "data/client_secret_gmail.json"
-        SCOPES = ["https://www.googleapis.com/auth/gmail.compose", "https://www.googleapis.com/auth/gmail.modify"]
-        flow = InstalledAppFlow.from_client_secrets_file(JSON_PATH, SCOPES)
-        creds = flow.run_local_server(port=0)
-        self.gmail_credentials = creds
+        self.secret_integration_id = secret_integration_id
         self.send_as_draft = send_as_draft
 
     def gmail_create_draft(self, email_subject: str, email_body: str):

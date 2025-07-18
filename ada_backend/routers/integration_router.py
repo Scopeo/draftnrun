@@ -24,7 +24,6 @@ router = APIRouter(prefix="/project", tags=["Integrations"])
     tags=["Integrations"],
 )
 async def add_or_update_integration_secrets(
-    project_id: UUID,
     integration_id: UUID,
     create_project_integration: CreateProjectIntegrationSchema,
     user: Annotated[
@@ -38,7 +37,6 @@ async def add_or_update_integration_secrets(
     try:
         return await add_or_update_integration_secrets_service(
             session=sqlalchemy_db_session,
-            project_id=project_id,
             integration_id=integration_id,
             create_project_integration=create_project_integration,
         )
