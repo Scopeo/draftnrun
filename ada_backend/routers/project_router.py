@@ -38,6 +38,7 @@ from ada_backend.services.project_service import (
     update_project_service,
 )
 from ada_backend.services.trace_service import get_trace_by_project
+from ada_backend.segment_analytics import track_observability_loaded, track_monitoring_loaded
 
 
 LOGGER = logging.getLogger(__name__)
@@ -206,6 +207,7 @@ async def get_project_trace(
         raise HTTPException(status_code=400, detail="User ID not found")
     try:
         response = get_trace_by_project(project_id, duration)
+        track_observability_loaded(user.id, project_id)
         return response
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
@@ -223,6 +225,7 @@ async def get_project_monitoring_kpi(
         raise HTTPException(status_code=400, detail="User ID not found")
     try:
         response = get_monitoring_kpis_by_project(project_id, duration)
+        track_monitoring_loaded(user.id, project_id)
         return response
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e

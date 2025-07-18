@@ -40,7 +40,7 @@ def get_secret_keys(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
-        raise HTTPException(status_code=500, detail="Internal Server Error") from e
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.put(
@@ -65,7 +65,7 @@ async def add_or_update_secret_to_organization(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
-        raise HTTPException(status_code=500, detail="Internal Server Error") from e
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.delete(
@@ -89,4 +89,4 @@ def delete_secret_from_organization(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
-        raise HTTPException(status_code=500, detail="Internal Server Error") from e
+        raise HTTPException(status_code=500, detail=str(e)) from e
