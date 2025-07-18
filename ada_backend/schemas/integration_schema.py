@@ -15,7 +15,6 @@ class GraphIntegrationSchema(IntegrationSchema):
 
 
 class CreateProjectIntegrationSchema(BaseModel):
-    integration_id: UUID
     access_token: str
     refresh_token: Optional[str] = None
     expires_in: Optional[int] = None
