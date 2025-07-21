@@ -3,6 +3,7 @@ from typing import Optional, Any
 from dataclasses import dataclass
 import uuid
 from datetime import datetime
+import re
 
 import requests
 import httpx
@@ -1054,8 +1055,6 @@ class QdrantService:
 
         df = pd.DataFrame(rows)
         if query_filter and not df.empty:
-            import re
-
             converted_query_filter = re.sub(r"(?<![!><])=(?!=)", "==", query_filter)
             df = df.query(converted_query_filter)
         return df
@@ -1179,7 +1178,7 @@ class QdrantService:
         self,
         df: pd.DataFrame,
         collection_name: str,
-        query_filter: Optional[str] = "",
+        query_filter: Optional[str] = None,
     ) -> bool:
 
         if query_filter:
