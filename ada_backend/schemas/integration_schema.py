@@ -11,7 +11,7 @@ class IntegrationSchema(BaseModel):
 
 
 class GraphIntegrationSchema(IntegrationSchema):
-    secret_id: UUID
+    secret_id: Optional[UUID] = None
 
 
 class CreateProjectIntegrationSchema(BaseModel):

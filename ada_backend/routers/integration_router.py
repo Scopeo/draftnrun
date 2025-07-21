@@ -11,7 +11,7 @@ from ada_backend.routers.auth_router import (
     user_has_access_to_project_dependency,
 )
 from ada_backend.schemas.integration_schema import CreateProjectIntegrationSchema, IntegrationSecretResponse
-from ada_backend.services.integration_sevice import add_integration_secrets_service
+from ada_backend.services.integration_service import add_integration_secrets_service
 
 router = APIRouter(prefix="/project", tags=["Integrations"])
 

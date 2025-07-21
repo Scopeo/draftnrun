@@ -28,9 +28,34 @@ GMAIL_SENDER_TOOL_DESCRIPTION = ToolDescription(
             "type": "string",
             "description": "The body of the email to be sent.",
         },
+        "email_recipients": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": (
+                "List of email addresses to send the email to. "
+                "If not provided, the email will be saved as a draft without recipients."
+            ),
+        },
     },
     required_tool_properties=["mail_subject", "mail_body"],
 )
+
+
+def create_mail_message(
+    subject: str,
+    body: str,
+    sender_email_address: str,
+    recipients: Optional[list[str]] = None,
+) -> dict:
+    """Creates an EmailMessage object with the given subject, body, and recipients."""
+    message = EmailMessage()
+    message.set_content(body)
+    message["Subject"] = subject
+    message["From"] = sender_email_address
+    if recipients:
+        message["To"] = ", ".join(recipients)
+    encoded_message = base64.urlsafe_b64encode(message.as_bytes()).decode()
+    return {"message": {"raw": encoded_message}}
 
 
 class GmailSender(Agent):
@@ -63,47 +88,59 @@ class GmailSender(Agent):
 
         self.email_address = get_google_user_email(access_token)
 
-    def gmail_create_draft(self, email_subject: str, email_body: str):
+    def gmail_create_draft(self, email_subject: str, email_body: str, email_recipients: Optional[list[str]] = None):
         try:
-
-            message = EmailMessage()
-            message.set_content(email_body)
-            message["To"] = "natacha.humeau@gmail.com"
-            message["From"] = self.email_address
-            message["Subject"] = email_subject
-            encoded_message = base64.urlsafe_b64encode(message.as_bytes()).decode()
-            create_message = {"message": {"raw": encoded_message}}
-
+            create_message = create_mail_message(
+                subject=email_subject,
+                body=email_body,
+                sender_email_address=self.email_address,
+                recipients=email_recipients,
+            )
             draft = self.service.users().drafts().create(userId="me", body=create_message).execute()
             LOGGER.debug(f'Draft id: {draft["id"]}\nDraft message: {draft["message"]}')
 
         except HttpError as error:
             LOGGER.error(f"An error occurred: {error}")
             draft = None
-
         return draft
 
+    def gmail_send_email(self, email_subject: str, email_body: str, email_recipients: Optional[list[str]] = None):
+        try:
+            create_message = create_mail_message(
+                subject=email_subject,
+                body=email_body,
+                sender_email_address=self.email_address,
+                recipients=email_recipients,
+            )
+            sent_message = self.service.users().messages().send(userId="me", body=create_message).execute()
+            LOGGER.debug(f"Message sent successfully: {sent_message}")
+        except HttpError as error:
+            LOGGER.error(f"An error occurred while sending the email: {error}")
+            raise RuntimeError(f"Failed to send email: {error}")
+        return sent_message
+
     async def _run_without_trace(
-        self, *inputs: AgentPayload, mail_subject: Optional[str] = None, mail_body: Optional[str] = None
+        self,
+        *inputs: AgentPayload,
+        mail_subject: Optional[str] = None,
+        mail_body: Optional[str] = None,
+        email_recipients: Optional[list[str]] = None,
     ) -> AgentPayload:
         if not mail_subject or not mail_body:
             raise ValueError("Both email_subject and email_body must be provided")
-        if self.send_as_draft:
+        span = get_current_span()
+        span.set_attributes(
+            {
+                SpanAttributes.INPUT_VALUE: f"Subject: {mail_subject}\n Body: {mail_body}",
+            }
+        )
+        if self.send_as_draft or email_recipients is None:
             LOGGER.info("Creating draft email")
-            span = get_current_span()
-            span.set_attributes(
-                {
-                    SpanAttributes.INPUT_VALUE: f"Subject: {mail_subject}\n Body: {mail_body}",
-                }
-            )
-            draft = self.gmail_create_draft(mail_subject, mail_body)
+            draft = self.gmail_create_draft(mail_subject, mail_body, email_recipients)
             if not draft:
                 raise RuntimeError("Failed to create draft email")
             output_message = f"Draft created successfully with ID: {draft['id']}"
         else:
-            LOGGER.info("Sending email directly")
-            # Here you would implement the logic to send the email directly
-            # For now, we will simulate a successful send operation
-            draft = {"id": "simulated_email_id", "message": {"raw": "simulated_raw_message"}}
-            output_message = f"Email sent successfully with ID: {draft['id']}"
+            send_message = self.gmail_send_email(mail_subject, mail_body, email_recipients)
+            output_message = f"Email sent successfully with ID: {send_message['id']}"
         return AgentPayload(messages=[ChatMessage(role="assistant", content=output_message)])

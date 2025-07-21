@@ -38,6 +38,21 @@ def get_integration_secret(
     return session.query(db.SecretIntegration).filter(db.SecretIntegration.id == integration_secret_id).first()
 
 
+def get_integration_from_component(
+    session: Session,
+    component_id: UUID,
+) -> db.Integration:
+    return (
+        session.query(db.Integration)
+        .join(db.Component, db.Integration.id == db.Component.integration_id)
+        .filter(
+            db.Component.id == component_id,
+            db.Component.integration_id.isnot(None),
+        )
+        .first()
+    )
+
+
 def insert_secret_integration(
     session: Session,
     integration_id: UUID,

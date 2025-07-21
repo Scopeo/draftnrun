@@ -4,7 +4,10 @@ from uuid import UUID
 
 from sqlalchemy.orm import Session
 
-from ada_backend.repositories.integration_repository import get_component_instance_integration_relationship
+from ada_backend.repositories.integration_repository import (
+    get_integration_from_component,
+    get_component_instance_integration_relationship,
+)
 from ada_backend.repositories.organization_repository import get_organization_secrets_from_project_id
 from engine.agent.agent import ComponentAttributes, ToolDescription
 from ada_backend.database.models import ComponentInstance
@@ -114,11 +117,21 @@ def instantiate_component(
     )
     LOGGER.debug(f"{input_params=}\n")
 
-    integration_relationship = get_component_instance_integration_relationship(
-        session=session, component_instance_id=component_instance_id
-    )
-    if integration_relationship:
-        input_params["secret_integration_id"] = integration_relationship.secret_integration_id
+    component_integration = get_integration_from_component(session, component_instance.component_id)
+
+    if component_integration:
+        # If the component has an integration, we need to fetch the secret integration ID
+        # from the component instance's integration relationship
+        LOGGER.debug(f"Component {component_name} has an integration. Fetching integration relationship.\n")
+        integration_relationship = get_component_instance_integration_relationship(
+            session=session, component_instance_id=component_instance_id
+        )
+        if integration_relationship:
+            input_params["secret_integration_id"] = integration_relationship.secret_integration_id
+        else:
+            raise ValueError(
+                f"Please add integration {component_integration.name}:{component_integration.service} for component instance {component_instance.name}"
+            )
 
     # Resolve sub-components
     sub_components = get_component_sub_components(session, component_instance_id)

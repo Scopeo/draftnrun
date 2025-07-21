@@ -41,15 +41,13 @@ def get_google_user_email(access_token: str) -> str:
 
     if resp.ok:
         user_info = resp.json()
-        print(user_info)
         return user_info.get("email")
     else:
         raise ValueError(f"Failed to fetch user info: {resp.status_code} {resp.text}")
 
 
 def refresh_oauth_token(refresh_token: str, client_id: str, client_secret: str) -> tuple[str, str]:
-    url = "https://www.googleapis.com/oauth2/v3/token"
-    print("refresh_token", refresh_token)
+    url = "https://oauth2.googleapis.com/token"
     payload = {
         "client_id": client_id,
         "client_secret": client_secret,
@@ -57,7 +55,6 @@ def refresh_oauth_token(refresh_token: str, client_id: str, client_secret: str) 
         "grant_type": "refresh_token",
     }
     resp = requests.post(url, data=payload)
-    print("resp", resp)
     if resp.ok:
         tokens = resp.json()
         return tokens.get("access_token"), tokens.get("refresh_token")
