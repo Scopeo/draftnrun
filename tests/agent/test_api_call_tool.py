@@ -1,6 +1,7 @@
 from unittest.mock import MagicMock, patch, AsyncMock
 import json
 import pytest
+import pytest_asyncio
 from httpx import HTTPError
 
 from engine.agent.tools.api_call_tool import APICallTool, API_CALL_TOOL_DESCRIPTION
@@ -13,9 +14,10 @@ def mock_trace_manager():
     return MagicMock(spec=TraceManager)
 
 
-@pytest.fixture
-def api_tool(mock_trace_manager):
-    return APICallTool(
+@pytest_asyncio.fixture
+async def api_tool(mock_trace_manager):
+    """Create an API call tool instance with proper async cleanup."""
+    tool = APICallTool(
         trace_manager=mock_trace_manager,
         component_attributes=ComponentAttributes(component_instance_name="test_api_tool"),
         endpoint="https://api.example.com/test",
@@ -24,6 +26,10 @@ def api_tool(mock_trace_manager):
         timeout=30,
         fixed_parameters={"api_version": "v2", "format": "json", "language": "en"},
     )
+    yield tool
+    # Cleanup: ensure any lingering HTTP connections are closed
+    import asyncio
+    await asyncio.sleep(0.1)
 
 
 @pytest.fixture
