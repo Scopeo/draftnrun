@@ -1018,7 +1018,6 @@ class QdrantService:
         collections = response.get("result", {}).get("collections", [])
         return [collection["name"] for collection in collections]
 
-
     def get_collection_data(
         self,
         collection_name: str,
@@ -1099,7 +1098,6 @@ class QdrantService:
         if query_filter:
             df = df.query(query_filter)
         return df
-
 
     def sync_df_with_collection(
         self,
