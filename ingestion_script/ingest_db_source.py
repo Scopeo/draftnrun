@@ -169,7 +169,7 @@ def upload_db_source(
         collection_name=qdrant_collection_name,
         db_service=db_service,
         qdrant_service=qdrant_service,
-        query_filter=query_filter,
+        query_filter=None,  # Don't apply filter to ingestion DB - data is already filtered
     )
 
 

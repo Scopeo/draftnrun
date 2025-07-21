@@ -1053,7 +1053,7 @@ class QdrantService:
             rows.append(row)
 
         df = pd.DataFrame(rows)
-        if query_filter:
+        if query_filter and not df.empty:
             import re
 
             converted_query_filter = re.sub(r"(?<![!><])=(?!=)", "==", query_filter)
@@ -1095,7 +1095,7 @@ class QdrantService:
             rows.append(row)
 
         df = pd.DataFrame(rows)
-        if query_filter:
+        if query_filter and not df.empty:
             df = df.query(query_filter)
         return df
 
@@ -1107,15 +1107,16 @@ class QdrantService:
     ) -> bool:
 
         if query_filter:
-            old_df = self.get_collection_data(collection_name, query_filter=query_filter)
-            ids_to_delete = set(old_df[self.default_schema.chunk_id_field])
-            if len(ids_to_delete) > 0:
-                self.delete_chunks(
-                    point_ids=list(ids_to_delete),
-                    id_field=self.default_schema.chunk_id_field,
-                    collection_name=collection_name,
-                )
-                LOGGER.info(f"Deleted {len(ids_to_delete)} chunks from Qdrant")
+            if self.collection_exists(collection_name):
+                old_df = self.get_collection_data(collection_name, query_filter=query_filter)
+                ids_to_delete = set(old_df[self.default_schema.chunk_id_field])
+                if len(ids_to_delete) > 0:
+                    self.delete_chunks(
+                        point_ids=list(ids_to_delete),
+                        id_field=self.default_schema.chunk_id_field,
+                        collection_name=collection_name,
+                    )
+                    LOGGER.info(f"Deleted {len(ids_to_delete)} chunks from Qdrant")
 
             self.add_chunks(df.to_dict(orient="records"), collection_name)
             LOGGER.info(f"Added {len(df)} chunks to Qdrant")
@@ -1182,23 +1183,23 @@ class QdrantService:
     ) -> bool:
 
         if query_filter:
-            old_df = await self.get_collection_data_async(collection_name, query_filter=query_filter)
-            ids_to_delete = set(old_df[self.default_schema.chunk_id_field])
-            if len(ids_to_delete) > 0:
-                self.delete_chunks(
-                    point_ids=list(ids_to_delete),
-                    id_field=self.default_schema.chunk_id_field,
-                    collection_name=collection_name,
-                )
-                LOGGER.info(f"Deleted {len(ids_to_delete)} chunks from Qdrant")
-
-            self.add_chunks(df.to_dict(orient="records"), collection_name)
+            if await self.collection_exists_async(collection_name):
+                old_df = await self.get_collection_data_async(collection_name, query_filter=query_filter)
+                ids_to_delete = set(old_df[self.default_schema.chunk_id_field])
+                if len(ids_to_delete) > 0:
+                    await self.delete_chunks_async(
+                        point_ids=list(ids_to_delete),
+                        id_field=self.default_schema.chunk_id_field,
+                        collection_name=collection_name,
+                    )
+                    LOGGER.info(f"Deleted {len(ids_to_delete)} chunks from Qdrant")
+            await self.add_chunks_async(df.to_dict(orient="records"), collection_name)
             LOGGER.info(f"Added {len(df)} chunks to Qdrant")
             return True
 
         old_df = await self.get_collection_data_async(collection_name)
         if old_df.empty:
-            self.add_chunks(df.to_dict(orient="records"), collection_name)
+            await self.add_chunks_async(df.to_dict(orient="records"), collection_name)
             LOGGER.info(f"Qdrant collection is empty. Added {len(df)} chunks to Qdrant")
             return True
 
