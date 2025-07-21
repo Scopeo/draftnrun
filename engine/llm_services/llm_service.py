@@ -8,7 +8,7 @@ from pydantic import BaseModel
 from opentelemetry.trace import get_current_span
 from openinference.semconv.trace import SpanAttributes
 
-from engine.llm_services.utils import check_usage
+from engine.llm_services.utils import check_usage, clean_messages_for_mistral
 from engine.trace.trace_manager import TraceManager
 from engine.agent.agent import ToolDescription
 from engine.agent.utils import load_str_to_json
@@ -71,6 +71,9 @@ class LLMService(ABC):
                 case "google":
                     self._api_key = settings.GOOGLE_API_KEY
                     self._base_url = settings.GOOGLE_BASE_URL
+                case "mistral":
+                    self._api_key = settings.MISTRAL_API_KEY
+                    self._base_url = "https://api.mistral.ai/v1"
                 case _:
                     self._api_key = settings.custom_models.get(self._provider).get("api_key")
                     self._base_url = settings.custom_models.get(self._provider).get("base_url")
@@ -317,7 +320,9 @@ class CompletionService(LLMService):
                     }
                 )
                 return response.output_parsed
-            case "cerebras" | "google":  # all providers using only json schema for structured output go here
+            case (
+                "cerebras" | "google" | "mistral"
+            ):  # all providers using only json schema for structured output go here
                 import openai
 
                 client = openai.OpenAI(api_key=self._api_key, base_url=self._base_url)
@@ -390,7 +395,9 @@ class CompletionService(LLMService):
                 )
                 return response.output_parsed
 
-            case "cerebras":  # all providers using only json schema for structured output go here
+            case (
+                "cerebras" | "mistral" | "google"
+            ):  # all providers using only json schema for structured output go here
                 import openai
 
                 client = openai.AsyncOpenAI(api_key=self._api_key, base_url=self._base_url)
@@ -463,7 +470,7 @@ class CompletionService(LLMService):
                     }
                 )
                 return response.output_text
-            case "cerebras" | "google":  # all the providers that are using openai chat completion go here
+            case "cerebras" | "google" | "mistral":  # all the providers that are using openai chat completion go here
                 import openai
 
                 schema = response_format.get("schema", {})
@@ -540,7 +547,7 @@ class CompletionService(LLMService):
                     }
                 )
                 return response.output_text
-            case "cerebras" | "google":  # all the providers that are using openai chat completion go here
+            case "cerebras" | "google" | "mistral":  # all the providers that are using openai chat completion go here
                 import openai
 
                 schema = response_format.get("schema", {})
@@ -605,6 +612,29 @@ class CompletionService(LLMService):
                     tool_choice=tool_choice,
                 )
                 print(response)
+                span.set_attributes(
+                    {
+                        SpanAttributes.LLM_TOKEN_COUNT_COMPLETION: response.usage.completion_tokens,
+                        SpanAttributes.LLM_TOKEN_COUNT_PROMPT: response.usage.prompt_tokens,
+                        SpanAttributes.LLM_TOKEN_COUNT_TOTAL: response.usage.total_tokens,
+                    }
+                )
+                return response
+            case "mistral":
+                import openai
+
+                # Clean messages for Mistral's stricter API requirements
+                cleaned_messages = clean_messages_for_mistral(messages)
+
+                client = openai.OpenAI(api_key=self._api_key, base_url=self._base_url)
+                response = client.chat.completions.create(
+                    model=self._model_name,
+                    messages=cleaned_messages,
+                    tools=openai_tools,
+                    temperature=self._temperature,
+                    stream=stream,
+                    tool_choice=tool_choice,
+                )
                 span.set_attributes(
                     {
                         SpanAttributes.LLM_TOKEN_COUNT_COMPLETION: response.usage.completion_tokens,
@@ -685,6 +715,32 @@ class CompletionService(LLMService):
                 response = await client.chat.completions.create(
                     model=self._model_name,
                     messages=messages,
+                    tools=openai_tools,
+                    temperature=self._temperature,
+                    stream=stream,
+                    tool_choice=tool_choice,
+                )
+                span.set_attributes(
+                    {
+                        SpanAttributes.LLM_TOKEN_COUNT_COMPLETION: response.usage.completion_tokens,
+                        SpanAttributes.LLM_TOKEN_COUNT_PROMPT: response.usage.prompt_tokens,
+                        SpanAttributes.LLM_TOKEN_COUNT_TOTAL: response.usage.total_tokens,
+                    }
+                )
+                return response
+            case "mistral":
+                import openai
+
+                # Clean messages for Mistral's stricter API requirements
+                cleaned_messages = clean_messages_for_mistral(messages)
+
+                client = openai.AsyncOpenAI(
+                    api_key=self._api_key,
+                    base_url=self._base_url,
+                )
+                response = await client.chat.completions.create(
+                    model=self._model_name,
+                    messages=cleaned_messages,
                     tools=openai_tools,
                     temperature=self._temperature,
                     stream=stream,
@@ -935,3 +991,36 @@ class VisionService(LLMService):
                 }
             )
             return chat_response.choices[0].message.content
+
+
+class OCRService(LLMService):
+    def __init__(
+        self,
+        trace_manager: TraceManager,
+        provider: str = "mistral",
+        model_name: str = "mistral-ocr-latest",
+        api_key: Optional[str] = None,
+        base_url: Optional[str] = None,
+    ):
+        super().__init__(trace_manager, provider, model_name, api_key, base_url)
+
+    def get_ocr_text(self, pdf_content: bytes) -> str:
+        match self._provider:
+            case "mistral":
+                import base64
+                import mistralai
+
+                pdf_base64 = base64.b64encode(pdf_content).decode("utf-8")
+                client = mistralai.Mistral(api_key=self._api_key)
+                ocr_response = client.ocr.process(
+                    model="mistral-ocr-latest",
+                    document={"type": "document_url", "document_url": f"data:application/pdf;base64,{pdf_base64}"},
+                    include_image_base64=True,
+                )
+                full_document_markdown = ""
+                for page in ocr_response.pages:
+                    full_document_markdown += page.markdown
+                return full_document_markdown
+
+            case _:
+                raise ValueError(f"Invalid provider: {self._provider}")

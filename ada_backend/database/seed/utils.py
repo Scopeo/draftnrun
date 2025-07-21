@@ -84,8 +84,9 @@ OPTIONS_COMPLETION_MODELS = FULL_CAPACITY_COMPLETION_MODELS + [
     # Mistral
     SelectOption(value="mistral:mistral-small-2506", label="Mistral Small"),
     # Mistral
-    # SelectOption(value="mistral:mistral-large", label="Mistral Large"),
-    # SelectOption(value="mistral:mistral-small-3", label="Mistral Small 3"),
+    SelectOption(value="mistral:mistral-large-2411", label="Mistral Large"),
+    SelectOption(value="mistral:mistral-medium-2505", label="Mistral Medium"),
+    SelectOption(value="mistral:mistral-small-2506", label="Mistral Small"),
     # Anthropic (Claude) TODO: Add Anthropic (Claude)
     # SelectOption(value="anthropic:claude-3.7-sonnet", label="Claude 3.7 Sonnet"),
     # SelectOption(value="anthropic:claude-3.5-sonnet", label="Claude 3.5 Sonnet"),
