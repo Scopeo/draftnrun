@@ -62,7 +62,7 @@ def get_projects_by_organization_endpoint(
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
     try:
-        return get_projects_by_organization(session, organization_id)
+        return get_projects_by_organization(session, organization_id, user.id)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
@@ -120,7 +120,7 @@ def update_project_endpoint(
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
     try:
-        return update_project_service(session, project_id, project)
+        return update_project_service(session, user.id, project_id, project)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
@@ -140,7 +140,7 @@ def create_project_endpoint(
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
     try:
-        return create_project(session, organization_id, project)
+        return create_project(session, user.id, organization_id, project)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
@@ -205,7 +205,7 @@ async def get_project_trace(
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
     try:
-        response = get_trace_by_project(project_id, duration)
+        response = get_trace_by_project(user.id, project_id, duration)
         return response
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
@@ -222,7 +222,7 @@ async def get_project_monitoring_kpi(
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
     try:
-        response = get_monitoring_kpis_by_project(project_id, duration)
+        response = get_monitoring_kpis_by_project(user.id, project_id, duration)
         return response
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e

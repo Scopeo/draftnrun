@@ -29,6 +29,7 @@ from ada_backend.schemas.project_schema import (
     ProjectCreateSchema,
 )
 from ada_backend.services.graph.delete_graph_service import delete_graph_runner_service
+from ada_backend.segment_analytics import track_project_created, track_project_saved, track_user_get_project_list
 
 
 LOGGER = getLogger(__name__)
@@ -39,7 +40,13 @@ def get_project_service(session: Session, project_id: UUID) -> ProjectWithGraphR
     return project_with_detail
 
 
-def get_projects_by_organization(session: Session, organization_id: UUID) -> list[ProjectResponse]:
+def get_projects_by_organization(
+    session: Session,
+    organization_id: UUID,
+    user_id: UUID = None,
+) -> list[ProjectResponse]:
+    if user_id:
+        track_user_get_project_list(user_id, organization_id)
     projects = get_projects_by_organization_service(session, organization_id)
     return [
         ProjectResponse(
@@ -67,6 +74,7 @@ def delete_project_service(session: Session, project_id: UUID) -> ProjectDeleteR
 
 def create_project(
     session: Session,
+    user_id: UUID,
     organization_id: UUID,
     project_schema: ProjectCreateSchema,
 ) -> ProjectWithGraphRunnersSchema:
@@ -105,6 +113,7 @@ def create_project(
         env=EnvType.DRAFT,
     )
     LOGGER.info(f"Created draft graph runner with ID {graph_runner_id} for project {project.id}")
+    track_project_created(user_id, organization_id, project.id, project.name)
     return ProjectWithGraphRunnersSchema(
         project_id=project.id,
         project_name=project.name,
@@ -122,7 +131,12 @@ def create_project(
     )
 
 
-def update_project_service(session: Session, project_id: UUID, project_schema: ProjectUpdateSchema) -> ProjectSchema:
+def update_project_service(
+    session: Session,
+    user_id: UUID,
+    project_id: UUID,
+    project_schema: ProjectUpdateSchema,
+) -> ProjectSchema:
     update_project(
         session=session,
         project_id=project_id,
@@ -130,6 +144,7 @@ def update_project_service(session: Session, project_id: UUID, project_schema: P
         description=project_schema.description,
         companion_image_url=project_schema.companion_image_url,
     )
+    track_project_saved(user_id, project_id)
     return ProjectSchema(
         project_id=project_id, project_name=project_schema.project_name, description=project_schema.description
     )

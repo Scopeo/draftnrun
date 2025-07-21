@@ -75,6 +75,7 @@ async def update_project_pipeline(
             graph_project=project_graph,
             graph_runner_id=graph_runner_id,
             project_id=project_id,
+            user_id=user.id,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e

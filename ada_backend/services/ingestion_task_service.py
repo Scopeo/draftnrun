@@ -16,6 +16,8 @@ from ada_backend.schemas.ingestion_task_schema import (
     IngestionTaskResponse,
 )
 from ada_backend.utils.redis_client import push_ingestion_task
+from ada_backend.segment_analytics import track_ingestion_task_created
+
 
 LOGGER = logging.getLogger(__name__)
 
@@ -46,6 +48,7 @@ def get_ingestion_task_by_organization_id(
 
 def create_ingestion_task_by_organization(
     session: Session,
+    user_id: UUID,
     organization_id: UUID,
     ingestion_task_data: IngestionTaskQueue,
 ) -> UUID:
@@ -58,6 +61,7 @@ def create_ingestion_task_by_organization(
             ingestion_task_data.source_type,
             ingestion_task_data.status,
         )
+        track_ingestion_task_created(user_id, organization_id, task_id)
 
         LOGGER.info(f"Task created in database with ID {task_id}")
 
