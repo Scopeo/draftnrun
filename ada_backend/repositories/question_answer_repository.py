@@ -5,7 +5,7 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 
-from engine.evaluations.models import QuestionsAnswers
+from ada_backend.database.models import QuestionsAnswers
 from ada_backend.schemas.question_answer_schema import QuestionAnswerCreate
 
 LOGGER = logging.getLogger(__name__)
