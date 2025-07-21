@@ -54,6 +54,7 @@ COMPONENT_UUIDS: dict[str, UUID] = {
     "document_search": UUID("79399392-25ba-4cea-9f25-2738765dc329"),
     "document_enhanced_llm_call_agent": UUID("6460b304-640c-4468-abd3-67bbff6902d4"),
     "document_react_loader_agent": UUID("1c2fdf5b-4a8d-4788-acb6-86b00124c7ce"),
+    "ocr_agent": UUID("a3b4c5d6-e7f8-9012-3456-789abcdef012"),
     "input": UUID("01357c0b-bc99-44ce-a435-995acc5e2544"),
     "filter": UUID("02468c0b-bc99-44ce-a435-995acc5e2545"),
     "python_code_runner": UUID("e2b00000-0000-1111-2222-333333333333"),
@@ -294,6 +295,51 @@ def build_web_service_config_definitions(
                             SelectOption(value="openai:gpt-4.1-mini", label="GPT-4.1 Mini"),
                             SelectOption(value="openai:gpt-4o", label="GPT-4o"),
                             SelectOption(value="openai:gpt-4o-mini", label="GPT-4o Mini"),
+                        ],
+                        label="Model Name",
+                    ).model_dump(exclude_unset=True, exclude_none=True),
+                )
+            )
+        if param.param_name == "api_key":
+            definitions.append(
+                db.ComponentParameterDefinition(
+                    id=param.param_id,
+                    component_id=component_id,
+                    name="api_key",
+                    type=ParameterType.LLM_API_KEY,
+                    nullable=True,
+                )
+            )
+    return definitions
+
+
+def build_ocr_service_config_definitions(
+    component_id: UUID,
+    params_to_seed: list[ParameterLLMConfig],
+) -> list[db.ComponentParameterDefinition]:
+    """
+    Simple helper function to avoid code duplication.
+    params_to_seed is a list of parameters to seed for the given component.
+    options: [
+        "completion_model",
+        "api_key",
+    ]
+    """
+    definitions: list[db.ComponentParameterDefinition] = []
+    for param in params_to_seed:
+        if param.param_name == COMPLETION_MODEL_IN_DB:
+            definitions.append(
+                db.ComponentParameterDefinition(
+                    id=param.param_id,
+                    component_id=component_id,
+                    name=COMPLETION_MODEL_IN_DB,
+                    type=ParameterType.STRING,
+                    nullable=False,
+                    default="mistral:mistral-ocr-latest",
+                    ui_component=UIComponent.SELECT,
+                    ui_component_properties=UIComponentProperties(
+                        options=[
+                            SelectOption(value="mistral:mistral-ocr-latest", label="Mistral OCR"),
                         ],
                         label="Model Name",
                     ).model_dump(exclude_unset=True, exclude_none=True),

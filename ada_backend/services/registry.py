@@ -24,6 +24,7 @@ from engine.agent.tools.python_code_runner import PythonCodeRunner
 from engine.agent.tools.terminal_command_runner import TerminalCommandRunner
 from engine.agent.document_enhanced_llm_call import DocumentEnhancedLLMCallAgent
 from engine.agent.document_react_loader import DocumentReactLoaderAgent
+from engine.agent.ocr_agent import OCRAgent
 from engine.agent.rag.document_search import DocumentSearch
 from engine.storage_service.local_service import SQLLocalService
 from engine.storage_service.snowflake_service.snowflake_service import SnowflakeService
@@ -37,6 +38,7 @@ from ada_backend.services.entity_factory import (
     build_qdrant_service_processor,
     compose_processors,
     build_web_service_processor,
+    build_ocr_service_processor,
 )
 
 COMPLETION_MODEL_IN_DB = "completion_model"
@@ -77,6 +79,7 @@ class SupportedEntityType(StrEnum):
     RUN_SQL_QUERY_TOOL = "RunSQLQueryTool"
     DOCUMENT_ENHANCED_LLM_CALL = "Document Enhanced LLM Agent"
     DOCUMENT_REACT_LOADER_AGENT = "Document AI Agent"
+    OCR_AGENT = "OCR Agent"
     INPUT = "API Input"
     FILTER = "Filter"
 
@@ -375,6 +378,23 @@ def create_factory_registry() -> FactoryRegistry:
             entity_class=DocumentReactLoaderAgent,
             parameter_processors=[
                 completion_service_processor,
+            ],
+        ),
+    )
+    registry.register(
+        name=SupportedEntityType.OCR_AGENT,
+        factory=AgentFactory(
+            entity_class=OCRAgent,
+            parameter_processors=[
+                compose_processors(
+                    build_param_name_translator(
+                        {
+                            # Name from DB -> Name in processor
+                            "api_key": "llm_api_key",
+                        }
+                    ),
+                    build_ocr_service_processor(),
+                ),
             ],
         ),
     )

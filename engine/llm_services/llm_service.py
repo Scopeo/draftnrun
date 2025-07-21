@@ -1004,17 +1004,15 @@ class OCRService(LLMService):
     ):
         super().__init__(trace_manager, provider, model_name, api_key, base_url)
 
-    def get_ocr_text(self, pdf_content: bytes) -> str:
+    def get_ocr_text(self, pdf_content: str) -> str:
         match self._provider:
             case "mistral":
-                import base64
                 import mistralai
 
-                pdf_base64 = base64.b64encode(pdf_content).decode("utf-8")
                 client = mistralai.Mistral(api_key=self._api_key)
                 ocr_response = client.ocr.process(
                     model="mistral-ocr-latest",
-                    document={"type": "document_url", "document_url": f"data:application/pdf;base64,{pdf_base64}"},
+                    document={"type": "document_url", "document_url": f"data:application/pdf;base64,{pdf_content}"},
                     include_image_base64=True,
                 )
                 full_document_markdown = ""
@@ -1024,3 +1022,19 @@ class OCRService(LLMService):
 
             case _:
                 raise ValueError(f"Invalid provider: {self._provider}")
+
+    async def get_ocr_text_async(self, pdf_content: str) -> str:
+        match self._provider:
+            case "mistral":
+                import mistralai
+
+                client = mistralai.Mistral(api_key=self._api_key)
+                ocr_response = client.ocr.process(
+                    model="mistral-ocr-latest",
+                    document={"type": "document_url", "document_url": f"{pdf_content}"},
+                    include_image_base64=True,
+                )
+                full_document_markdown = ""
+                for page in ocr_response.pages:
+                    full_document_markdown += page.markdown
+                return full_document_markdown
