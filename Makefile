@@ -138,33 +138,3 @@ trace-db-history:
 trace-db-current:
 	@echo "Checking current migration"
 	@$(TRACE_ALEMBIC_CMD) current
-
-# -------------------------------------------
-# Evaluations Database Migrations (Alembic)
-# -------------------------------------------
-EVALUATIONS_ALEMBIC_CMD = uv run alembic -c engine/evaluations/alembic.ini
-
-.PHONY: evaluations-db-revision
-evaluations-db-revision:
-	@echo "Creating a new migration"
-	@$(EVALUATIONS_ALEMBIC_CMD) revision --autogenerate -m "$(message)"
-
-.PHONY: evaluations-db-upgrade
-evaluations-db-upgrade:
-	@echo "Applying migrations"
-	@$(EVALUATIONS_ALEMBIC_CMD) upgrade head
-
-.PHONY: evaluations-db-downgrade
-evaluations-db-downgrade:
-	@echo "Reverting last migration"
-	@$(EVALUATIONS_ALEMBIC_CMD) downgrade -1
-
-.PHONY: evaluations-db-history
-evaluations-db-history:
-	@echo "Showing migration history"
-	@$(EVALUATIONS_ALEMBIC_CMD) history
-
-.PHONY: evaluations-db-current
-evaluations-db-current:
-	@echo "Checking current migration"
-	@$(EVALUATIONS_ALEMBIC_CMD) current
