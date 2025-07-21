@@ -68,7 +68,7 @@ FULL_CAPACITY_COMPLETION_MODELS = [
     SelectOption(value="openai:gpt-4o-mini", label="GPT-4o Mini"),
     # Cerebras
     SelectOption(value="cerebras:llama-3.3-70b", label="Llama 3.3 70B (Cerebras)"),
-    SelectOption(value="cerebras:qwen-3-235b", label="Qwen 3 235B (Cerebras)"),
+    SelectOption(value="cerebras:qwen-3-235b-a22b", label="Qwen 3 235B (Cerebras)"),
 ]
 
 OPTIONS_COMPLETION_MODELS = FULL_CAPACITY_COMPLETION_MODELS + [
