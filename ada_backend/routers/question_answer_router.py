@@ -1,6 +1,7 @@
 from typing import Annotated, List
 from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy.orm import Session
 
 from ada_backend.schemas.auth_schema import SupabaseUser
 from ada_backend.schemas.question_answer_schema import (
@@ -20,9 +21,9 @@ from ada_backend.services.question_answer_service import (
     delete_question_answer_service,
     get_question_answer_by_id_service,
     get_questions_answers_by_organization_and_project_service,
-    get_questions_answers_simple_service,
     update_question_answer_service,
 )
+from ada_backend.database.setup_db import get_db
 
 router = APIRouter(prefix="/question-answers", tags=["Question Answers"])
 
@@ -41,6 +42,7 @@ def get_questions_answers_by_organization_and_project_endpoint(
     ],
     page: int = Query(1, ge=1, description="Page number (1-based)"),
     size: int = Query(100, ge=1, le=1000, description="Number of items per page"),
+    session: Session = Depends(get_db),
 ) -> List[QuestionAnswerResponse]:
     """
     Get all question-answer entries for an organization and project with pagination.
@@ -52,37 +54,9 @@ def get_questions_answers_by_organization_and_project_endpoint(
         raise HTTPException(status_code=400, detail="User ID not found")
 
     try:
-        return get_questions_answers_by_organization_and_project_service(organization_id, project_id, page, size)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
-    except Exception as e:
-        raise HTTPException(status_code=500, detail="Internal Server Error") from e
-
-
-@router.get(
-    "/{organization_id}/projects/{project_id}/all",
-    response_model=List[QuestionAnswerResponse],
-    summary="Get All Question-Answer Entries by Organization and Project",
-)
-def get_all_questions_answers_endpoint(
-    organization_id: UUID,
-    project_id: UUID,
-    user: Annotated[
-        SupabaseUser,
-        Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.READER.value)),
-    ],
-) -> List[QuestionAnswerResponse]:
-    """
-    Get all question-answer entries for an organization and project without pagination.
-
-    This endpoint returns all question-answer pairs for a project in a simple list format.
-    Use this when you need all data without pagination metadata.
-    """
-    if not user.id:
-        raise HTTPException(status_code=400, detail="User ID not found")
-
-    try:
-        return get_questions_answers_simple_service(organization_id, project_id)
+        return get_questions_answers_by_organization_and_project_service(
+            session, organization_id, project_id, page, size
+        )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
@@ -102,6 +76,7 @@ def get_question_answer_by_id_endpoint(
         SupabaseUser,
         Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.READER.value)),
     ],
+    session: Session = Depends(get_db),
 ) -> QuestionAnswerResponse:
     """
     Get a specific question-answer entry by ID.
@@ -113,7 +88,7 @@ def get_question_answer_by_id_endpoint(
         raise HTTPException(status_code=400, detail="User ID not found")
 
     try:
-        return get_question_answer_by_id_service(question_answer_id, organization_id, project_id)
+        return get_question_answer_by_id_service(session, question_answer_id, organization_id, project_id)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
     except Exception as e:
@@ -133,6 +108,7 @@ def create_question_answer_endpoint(
         SupabaseUser,
         Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.USER.value)),
     ],
+    session: Session = Depends(get_db),
 ) -> QuestionAnswerResponse:
     """
     Create a new question-answer entry.
@@ -144,7 +120,7 @@ def create_question_answer_endpoint(
         raise HTTPException(status_code=400, detail="User ID not found")
 
     try:
-        return create_question_answer_service(organization_id, project_id, question_answer_data)
+        return create_question_answer_service(session, organization_id, project_id, question_answer_data)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
@@ -164,6 +140,7 @@ def create_questions_answers_endpoint(
         SupabaseUser,
         Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.USER.value)),
     ],
+    session: Session = Depends(get_db),
 ) -> QuestionAnswerResponseList:
     """
     Create multiple question-answer entries.
@@ -176,7 +153,7 @@ def create_questions_answers_endpoint(
         raise HTTPException(status_code=400, detail="User ID not found")
 
     try:
-        return create_questions_answers_service(organization_id, project_id, questions_answers_data)
+        return create_questions_answers_service(session, organization_id, project_id, questions_answers_data)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
@@ -197,6 +174,7 @@ def update_question_answer_endpoint(
         SupabaseUser,
         Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.USER.value)),
     ],
+    session: Session = Depends(get_db),
 ) -> QuestionAnswerResponse:
     """
     Update an existing question-answer entry.
@@ -208,7 +186,9 @@ def update_question_answer_endpoint(
         raise HTTPException(status_code=400, detail="User ID not found")
 
     try:
-        return update_question_answer_service(question_answer_id, organization_id, project_id, question_answer_data)
+        return update_question_answer_service(
+            session, question_answer_id, organization_id, project_id, question_answer_data
+        )
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
     except Exception as e:
@@ -227,6 +207,7 @@ def delete_question_answer_endpoint(
         SupabaseUser,
         Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.USER.value)),
     ],
+    session: Session = Depends(get_db),
 ) -> dict:
     """
     Delete a question-answer entry.
@@ -238,7 +219,7 @@ def delete_question_answer_endpoint(
         raise HTTPException(status_code=400, detail="User ID not found")
 
     try:
-        delete_question_answer_service(question_answer_id, organization_id, project_id)
+        delete_question_answer_service(session, question_answer_id, organization_id, project_id)
         return {"message": f"Question-answer entry {question_answer_id} deleted successfully"}
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
