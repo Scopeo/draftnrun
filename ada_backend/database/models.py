@@ -105,6 +105,7 @@ class TaskStatus(StrEnum):
 
     PENDING = "pending"
     IN_PROGRESS = "in_progress"
+    UPDATING = "updating_existing_source"
     COMPLETED = "completed"
     FAILED = "failed"
 
