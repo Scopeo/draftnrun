@@ -23,7 +23,6 @@ from ada_backend.repositories.graph_runner_repository import (
     insert_graph_runner,
     upsert_component_node,
 )
-from ada_backend.schemas.integration_schema import GraphIntegrationSchema
 from ada_backend.schemas.parameter_schema import PipelineParameterSchema
 from ada_backend.schemas.pipeline.base import ComponentInstanceSchema
 from ada_backend.schemas.pipeline.graph_schema import GraphDeployResponse

@@ -60,7 +60,11 @@ def insert_secret_integration(
 
 
 def update_integration_secret(
-    session: Session, integration_secret_id: UUID, access_token: str, refresh_token: str, token_last_updated: datetime
+    session: Session,
+    integration_secret_id: UUID,
+    access_token: str,
+    refresh_token: str,
+    token_last_updated: datetime,
 ) -> None:
     integration_secret = get_integration_secret(session, integration_secret_id)
     if integration_secret:
@@ -122,7 +126,8 @@ def delete_linked_integration(
             )
             if secret_integration:
                 LOGGER.info(
-                    f"Deleting secret integration {secret_integration_id} as it is no longer linked to any component instance."
+                    f"Deleting secret integration {secret_integration_id} as it is no longer "
+                    "linked to any component instance."
                 )
                 session.delete(secret_integration)
                 session.commit()
