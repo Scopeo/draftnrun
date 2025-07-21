@@ -226,9 +226,6 @@ jobs:
 
             echo "👁️ Re-setup the traces database"
             make trace-db-upgrade
-            
-            echo "👁️ Re-setup the evaluations database"
-            make evaluations-db-upgrade
 
             echo "===> Running database migrations"
             make db-upgrade

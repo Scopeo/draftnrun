@@ -875,7 +875,6 @@ class SourceAttributes(Base):
     def __str__(self):
         return f"SourceAttributes(source_id={self.source_id})"
 
-
 class CronJob(Base):
     """
     Represents a scheduled cron job for an organization.
@@ -935,3 +934,21 @@ class CronRun(Base):
 
     def __str__(self):
         return f"CronRun(cron_id={self.cron_id}, status={self.status}, scheduled_for={self.scheduled_for})"
+
+class QuestionsAnswers(Base):
+    __tablename__ = "questions_answers"
+    __table_args__ = {"schema": "evaluations"}  # Specify the evaluations schema
+
+    id = mapped_column(UUID(as_uuid=True), primary_key=True, index=True, server_default=func.gen_random_uuid())
+
+    organization_id = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
+    project_id = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
+
+    created_at = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    question = mapped_column(String, nullable=False)
+    groundtruth = mapped_column(String, nullable=False)
+
+    def __str__(self):
+        return f"QuestionsAnswers(id={self.id})"

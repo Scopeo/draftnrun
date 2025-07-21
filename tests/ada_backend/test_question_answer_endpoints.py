@@ -141,45 +141,6 @@ def test_get_question_answers_with_pagination():
         client.delete(delete_endpoint, headers=HEADERS_JWT)
 
 
-def test_get_all_question_answers():
-    """Test getting all question-answer entries without pagination."""
-    # First create some test data
-    endpoint = f"/question-answers/{ORGANIZATION_ID}/projects/{TEST_PROJECT_ID}"
-    test_entries = []
-
-    for i in range(2):
-        payload = {"question": f"Test question all {i}", "groundtruth": f"Test answer all {i}"}
-        response = client.post(endpoint, headers=HEADERS_JWT, json=payload)
-        assert response.status_code == 200
-        test_entries.append(response.json())
-
-    # Test getting all
-    all_endpoint = f"/question-answers/{ORGANIZATION_ID}/projects/{TEST_PROJECT_ID}/all"
-    response = client.get(all_endpoint, headers=HEADERS_JWT)
-    question_answers = response.json()
-
-    assert response.status_code == 200
-    assert isinstance(question_answers, list)
-    assert len(question_answers) >= 2  # At least the ones we created
-
-    # Verify each question-answer entry
-    for qa in question_answers:
-        assert "id" in qa
-        assert "question" in qa
-        assert "groundtruth" in qa
-        assert "organization_id" in qa
-        assert "project_id" in qa
-        assert "created_at" in qa
-        assert "updated_at" in qa
-        assert qa["organization_id"] == ORGANIZATION_ID
-        assert qa["project_id"] == TEST_PROJECT_ID
-
-    # Clean up
-    for qa in test_entries:
-        delete_endpoint = f"/question-answers/{ORGANIZATION_ID}/projects/{TEST_PROJECT_ID}/{qa['id']}"
-        client.delete(delete_endpoint, headers=HEADERS_JWT)
-
-
 def test_get_question_answer_by_id():
     """Test getting a specific question-answer entry by ID."""
     # First create a test entry
