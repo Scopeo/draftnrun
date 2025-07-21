@@ -141,8 +141,8 @@ def _build_section_hierarchy(sections, level=1, ancestors=None) -> List[Sections
             section
             for i, section in enumerate(sections)
             if i > current_index
-            and section.level > level
-            and (section.page_number < next_page or (section.page_number == next_page and section.level > level))
+               and section.level > level
+               and (section.page_number < next_page or (section.page_number == next_page and section.level > level))
         ]
 
         if page_span > 5 and nested_sections:
@@ -203,7 +203,7 @@ def _create_chunks_from_markdown(
     extracted_text: str,
     extracted_table_of_content: TableOfContent,
     document: FileDocument,
-) -> FileChunk:
+) -> list[FileChunk]:  # Fixed return type annotation
     markdown_chunks = parse_markdown_to_chunks(file_content=extracted_text, file_name=document.file_name)
     page_numbers = set()
     chunks = []
@@ -226,6 +226,72 @@ def _create_chunks_from_markdown(
     return chunks
 
 
+def _create_chunk_from_text(
+    document: FileDocument,
+    extracted_text: str,
+    page_number: int,
+) -> FileChunk:
+    """Helper function to create a single chunk from extracted text."""
+    document.metadata["page_number"] = page_number
+    return FileChunk(
+        chunk_id=f"{document.file_name}_{page_number}",
+        file_id=document.file_name,
+        content=extracted_text,
+        last_edited_ts=document.last_edited_ts,
+        document_title=document.file_name,
+        bounding_boxes=[],
+        url=document.url,
+        metadata=document.metadata,
+    )
+
+
+def _process_pages_individually(
+    document: FileDocument,
+    content_to_process: bytes,
+    google_llm_service: VisionService,
+    openai_llm_service: VisionService,
+    prompt: str,
+    zoom: float,
+) -> list[FileChunk]:
+    """Process PDF pages individually and return chunks."""
+    chunks = []
+    for i, img_base64 in enumerate(_pdf_to_images(pdf_content=content_to_process, zoom=zoom)):
+        extracted_text = _extract_text_from_pages_as_images(
+            prompt=prompt,
+            google_llm_service=google_llm_service,
+            openai_llm_service=openai_llm_service,
+            image_content_list=[img_base64],
+        )
+        chunk = _create_chunk_from_text(document, extracted_text, i + 1)
+        chunks.append(chunk)
+    return chunks
+
+
+def _process_with_table_of_contents(
+    document: FileDocument,
+    extracted_table_of_content: TableOfContent,
+    google_llm_service: VisionService,
+    openai_llm_service: VisionService,
+    images_content_list: list[bytes],
+) -> list[FileChunk]:
+    """Process PDF using table of contents structure."""
+    section_hierarchy = _build_section_hierarchy(
+        sections=extracted_table_of_content.sections,
+        level=1,
+    )
+    markdown = _get_markdown_from_sections(
+        sections_tree=section_hierarchy,
+        google_llm_service=google_llm_service,
+        openai_llm_service=openai_llm_service,
+        images_content_list=images_content_list,
+    )
+    return _create_chunks_from_markdown(
+        extracted_text=markdown,
+        extracted_table_of_content=extracted_table_of_content,
+        document=document,
+    )
+
+
 async def create_chunks_from_document(
     document: FileDocument,
     get_file_content: Callable[[FileDocument], str],
@@ -236,7 +302,6 @@ async def create_chunks_from_document(
     zoom: float = settings.PAGE_RESOLUTION_ZOOM,
     **kwargs,
 ) -> list[FileChunk]:
-    chunks = []
     content_to_process = get_file_content(document.id)
     pdf_type, total_pages = _get_pdf_orientation_from_content(content_to_process)
     images_content_list = [img_base64 for img_base64 in _pdf_to_images(pdf_content=content_to_process, zoom=zoom)]
@@ -246,32 +311,24 @@ async def create_chunks_from_document(
         openai_llm_service=openai_llm_service,
         image_content_list=images_content_list[:number_of_pages_to_detect_document_type],
     )
+
+    # Handle landscape PDFs or PowerPoint conversions
     if pdf_type == PDFType.landscape or file_type.is_converted_from_powerpoint:
         LOGGER.info("Processing PDF in landscape mode...")
-        for i, img_base64 in enumerate(_pdf_to_images(pdf_content=content_to_process, zoom=zoom)):
-            document.metadata["page_number"] = i + 1
-            extracted_text = await _extract_text_from_pages_as_images(
-                prompt=PPTX_CONTENT_EXTRACTION_PROMPT,
-                google_llm_service=google_llm_service,
-                openai_llm_service=openai_llm_service,
-                image_content_list=[img_base64],
-            )
+        return _process_pages_individually(
+            document=document,
+            content_to_process=content_to_process,
+            google_llm_service=google_llm_service,
+            openai_llm_service=openai_llm_service,
+            prompt=PPTX_CONTENT_EXTRACTION_PROMPT,
+            zoom=zoom,
+        )
 
-            chunk = FileChunk(
-                chunk_id=f"{document.file_name}_{i + 1}",
-                file_id=document.file_name,
-                content=extracted_text,
-                last_edited_ts=document.last_edited_ts,
-                document_title=document.file_name,
-                bounding_boxes=[],
-                url=document.url,
-                metadata=document.metadata,
-            )
-
-            chunks.append(chunk)
-    elif pdf_type == PDFType.portrait and file_type.is_native_pdf:
+    # Handle portrait native PDFs
+    if pdf_type == PDFType.portrait and file_type.is_native_pdf:
         LOGGER.info("Processing PDF in portrait mode...")
 
+        # Try to extract table of contents
         try:
             extracted_table_of_content = await _extract_text_from_pages_as_images(
                 prompt=PDF_TABLE_OF_CONTENT_EXTRACTION_PROMPT,
@@ -284,49 +341,43 @@ async def create_chunks_from_document(
             LOGGER.error(f"Error extracting table of content: {e}")
             extracted_table_of_content = TableOfContent(sections=[])
 
-        if extracted_table_of_content and extracted_table_of_content.sections != []:
+        # Use TOC-based processing if available, otherwise fall back to page-by-page
+        if extracted_table_of_content and extracted_table_of_content.sections:
             try:
-                section_hierarchy = _build_section_hierarchy(
-                    sections=extracted_table_of_content.sections,
-                    level=1,
-                )
-                markdown = _get_markdown_from_sections(
-                    sections_tree=section_hierarchy,
+                return _process_with_table_of_contents(
+                    document=document,
+                    extracted_table_of_content=extracted_table_of_content,
                     google_llm_service=google_llm_service,
                     openai_llm_service=openai_llm_service,
                     images_content_list=images_content_list,
                 )
-                chunks = _create_chunks_from_markdown(
-                    extracted_text=markdown,
-                    extracted_table_of_content=extracted_table_of_content,
-                    document=document,
-                )
             except Exception as e:
                 LOGGER.error(
-                    f"Error trying to get markdown content with table of content: {e}. "
-                    "Falling back to page-by-page processing."
+                    f"Error processing with table of contents: {e}. " "Falling back to page-by-page processing."
                 )
-                # Fall back to page-by-page processing
-                for i, img_base64 in enumerate(_pdf_to_images(pdf_content=content_to_process, zoom=zoom)):
-                    document.metadata["page_number"] = i + 1
-                    extracted_text = _extract_text_from_pages_as_images(
-                        prompt=PDF_CONTENT_EXTRACTION_PROMPT,
-                        google_llm_service=google_llm_service,
-                        openai_llm_service=openai_llm_service,
-                        image_content_list=[img_base64],
-                    )
+        else:
+            LOGGER.info("Table of contents is empty. Falling back to page-by-page processing.")
 
-                    chunk = FileChunk(
-                        chunk_id=f"{document.file_name}_{i + 1}",
-                        file_id=document.file_name,
-                        content=extracted_text,
-                        last_edited_ts=document.last_edited_ts,
-                        document_title=document.file_name,
-                        bounding_boxes=[],
-                        url=document.url,
-                        metadata=document.metadata,
-                    )
+        # Fallback to page-by-page processing
+        return _process_pages_individually(
+            document=document,
+            content_to_process=content_to_process,
+            google_llm_service=google_llm_service,
+            openai_llm_service=openai_llm_service,
+            prompt=PDF_CONTENT_EXTRACTION_PROMPT,
+            zoom=zoom,
+        )
 
-                    chunks.append(chunk)
-
-    return chunks
+    # Fallback for any other cases
+    LOGGER.warning(
+        f"Unexpected PDF type combination: {pdf_type}, "
+        f"native={file_type.is_native_pdf}, ppt={file_type.is_converted_from_powerpoint}"
+    )
+    return _process_pages_individually(
+        document=document,
+        content_to_process=content_to_process,
+        google_llm_service=google_llm_service,
+        openai_llm_service=openai_llm_service,
+        prompt=PDF_CONTENT_EXTRACTION_PROMPT,
+        zoom=zoom,
+    )
