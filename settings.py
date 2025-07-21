@@ -122,6 +122,10 @@ class BaseConfig(BaseSettings):
     S3_BUCKET_NAME: Optional[str] = None
     S3_REGION_NAME: Optional[str] = None
 
+    # Google OAuth configuration
+    GOOGLE_CLIENT_ID: Optional[str] = None
+    GOOGLE_CLIENT_SECRET: Optional[str] = None
+
     @model_validator(mode="after")
     @classmethod
     def sync_db_settings(cls, values):

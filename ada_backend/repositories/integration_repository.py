@@ -1,10 +1,14 @@
 from datetime import datetime
 from uuid import UUID
 from typing import Optional
+import logging
 
 from sqlalchemy.orm import Session
 
 from ada_backend.database import models as db
+
+
+LOGGER = logging.getLogger(__name__)
 
 
 def get_integration(
@@ -27,7 +31,14 @@ def get_component_instance_integration_relationship(
     )
 
 
-def upsert_secret_integration(
+def get_integration_secret(
+    session: Session,
+    integration_secret_id: UUID,
+) -> Optional[db.SecretIntegration]:
+    return session.query(db.SecretIntegration).filter(db.SecretIntegration.id == integration_secret_id).first()
+
+
+def insert_secret_integration(
     session: Session,
     integration_id: UUID,
     access_token: str,
@@ -35,29 +46,7 @@ def upsert_secret_integration(
     expires_in: Optional[int] = None,
     token_last_updated: Optional[datetime] = None,
 ) -> db.SecretIntegration:
-    """
-    Upserts a secret integration into the database.
-    If it exists and has the same attributes, it will be skipped.
-    If it exists but has different attributes, it will be updated.
-    If it does not exist, it will be inserted.
-    """
-    existing_integration = (
-        session.query(db.SecretIntegration)
-        .filter(
-            db.SecretIntegration.integration_id == integration_id,
-        )
-        .first()
-    )
 
-    if existing_integration:
-        existing_integration.expires_in = expires_in
-        existing_integration.token_last_updated = token_last_updated
-        existing_integration.set_access_token(access_token)
-        existing_integration.set_refresh_token(refresh_token)
-        session.commit()
-        return existing_integration
-
-    # Insert new integration
     new_integration = db.SecretIntegration(
         integration_id=integration_id,
         expires_in=expires_in,
@@ -68,6 +57,17 @@ def upsert_secret_integration(
     session.add(new_integration)
     session.commit()
     return new_integration
+
+
+def update_integration_secret(
+    session: Session, integration_secret_id: UUID, access_token: str, refresh_token: str, token_last_updated: datetime
+) -> None:
+    integration_secret = get_integration_secret(session, integration_secret_id)
+    if integration_secret:
+        integration_secret.set_access_token(access_token)
+        integration_secret.set_refresh_token(refresh_token)
+        integration_secret.token_last_updated = token_last_updated
+        session.commit()
 
 
 def upsert_component_instance_integration(
@@ -97,3 +97,32 @@ def upsert_component_instance_integration(
     session.add(new_relationship)
     session.commit()
     return new_relationship
+
+
+def delete_linked_integration(
+    session: Session,
+    component_instance_id: UUID,
+) -> None:
+    """
+    Deletes the linked integration for a component instance.
+    If the integration is not used by any other component instance, it will also delete the secret integration.
+    """
+    relationship = get_component_instance_integration_relationship(session, component_instance_id)
+    if relationship:
+        secret_integration_id = relationship.secret_integration_id
+        session.delete(relationship)
+        session.commit()
+        if (
+            session.query(db.IntegrationComponentInstanceRelationship)
+            .filter(db.IntegrationComponentInstanceRelationship.id == secret_integration_id)
+            .count()
+        ) == 0:
+            secret_integration = (
+                session.query(db.SecretIntegration).filter(db.SecretIntegration.id == secret_integration_id).first()
+            )
+            if secret_integration:
+                LOGGER.info(
+                    f"Deleting secret integration {secret_integration_id} as it is no longer linked to any component instance."
+                )
+                session.delete(secret_integration)
+                session.commit()

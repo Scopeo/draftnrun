@@ -12,7 +12,7 @@ from ada_backend.routers.auth_router import (
     user_has_access_to_project_dependency,
 )
 from ada_backend.schemas.integration_schema import CreateProjectIntegrationSchema, IntegrationSecretResponse
-from ada_backend.services.integration_sevice import add_or_update_integration_secrets_service
+from ada_backend.services.integration_sevice import add_integration_secrets_service
 
 router = APIRouter(prefix="/project", tags=["Integrations"])
 
@@ -20,10 +20,10 @@ router = APIRouter(prefix="/project", tags=["Integrations"])
 @router.put(
     "/{project_id}/integration/{integration_id}",
     response_model=IntegrationSecretResponse,
-    summary="Add or update integration secret",
+    summary="Add integration secret",
     tags=["Integrations"],
 )
-async def add_or_update_integration_secrets(
+async def add_integration_secrets(
     integration_id: UUID,
     create_project_integration: CreateProjectIntegrationSchema,
     user: Annotated[
@@ -35,7 +35,7 @@ async def add_or_update_integration_secrets(
         raise HTTPException(status_code=400, detail="User ID not found")
 
     try:
-        return await add_or_update_integration_secrets_service(
+        return await add_integration_secrets_service(
             session=sqlalchemy_db_session,
             integration_id=integration_id,
             create_project_integration=create_project_integration,

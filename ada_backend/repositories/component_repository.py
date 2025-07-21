@@ -7,7 +7,11 @@ from sqlalchemy.orm import Session
 
 from ada_backend.database import models as db
 from ada_backend.database.models import ParameterType, UIComponent
-from ada_backend.repositories.integration_repository import get_integration
+from ada_backend.repositories.integration_repository import (
+    delete_linked_integration,
+    get_component_instance_integration_relationship,
+    get_integration,
+)
 from ada_backend.schemas.components_schema import ComponentWithParametersDTO, SubComponentParamSchema
 from ada_backend.schemas.integration_schema import IntegrationSchema
 from ada_backend.schemas.parameter_schema import ComponentParamDefDTO
@@ -578,6 +582,8 @@ def delete_component_instances(
 
     instances = query.all()
     for instance in instances:
+        if get_component_instance_integration_relationship(session, instance.id):
+            delete_linked_integration(session, instance.id)
         session.delete(instance)  # Triggers ORM cascade
 
     session.commit()

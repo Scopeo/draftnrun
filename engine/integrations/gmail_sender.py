@@ -3,15 +3,16 @@ import logging
 from email.message import EmailMessage
 from typing import Optional
 
-from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttributes
-from google_auth_oauthlib.flow import InstalledAppFlow
 from opentelemetry.trace import get_current_span
 
+from ada_backend.database.setup_db import get_db
 from engine.agent.agent import AgentPayload, ChatMessage, ToolDescription
 from engine.agent.agent import Agent
+from engine.integrations.utils import get_gmail_sender_service, get_google_user_email, get_oauth_access_token
 from engine.trace.trace_manager import TraceManager
+from settings import settings
 
 LOGGER = logging.getLogger(__name__)
 
@@ -42,26 +43,36 @@ class GmailSender(Agent):
         secret_integration_id: str,
         send_as_draft: bool = True,
         tool_description: ToolDescription = GMAIL_SENDER_TOOL_DESCRIPTION,
+        google_client_id: Optional[str] = None,
+        google_client_secret: Optional[str] = None,
     ):
         super().__init__(
             trace_manager, tool_description=tool_description, component_instance_name=component_instance_name
         )
-        self.secret_integration_id = secret_integration_id
+        if not google_client_id:
+            google_client_id = settings.GOOGLE_CLIENT_ID
+        if not google_client_secret:
+            google_client_secret = settings.GOOGLE_CLIENT_SECRET
+
+        session = next(get_db())
+        access_token = get_oauth_access_token(session, secret_integration_id, google_client_id, google_client_secret)
+        self.service = get_gmail_sender_service(access_token)
         self.send_as_draft = send_as_draft
+
+        self.email_address = get_google_user_email(access_token)
 
     def gmail_create_draft(self, email_subject: str, email_body: str):
         try:
-            service = build("gmail", "v1", credentials=self.gmail_credentials)
 
             message = EmailMessage()
             message.set_content(email_body)
             message["To"] = "natacha.humeau@gmail.com"
-            message["From"] = "natacha@draftnrun.com"
+            message["From"] = self.email_address
             message["Subject"] = email_subject
             encoded_message = base64.urlsafe_b64encode(message.as_bytes()).decode()
             create_message = {"message": {"raw": encoded_message}}
 
-            draft = service.users().drafts().create(userId="me", body=create_message).execute()
+            draft = self.service.users().drafts().create(userId="me", body=create_message).execute()
             LOGGER.debug(f'Draft id: {draft["id"]}\nDraft message: {draft["message"]}')
 
         except HttpError as error:
