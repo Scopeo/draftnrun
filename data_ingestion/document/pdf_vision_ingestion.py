@@ -203,7 +203,7 @@ def _create_chunks_from_markdown(
     extracted_text: str,
     extracted_table_of_content: TableOfContent,
     document: FileDocument,
-) -> list[FileChunk]:  # Fixed return type annotation
+) -> list[FileChunk]:
     markdown_chunks = parse_markdown_to_chunks(file_content=extracted_text, file_name=document.file_name)
     page_numbers = set()
     chunks = []
@@ -239,7 +239,7 @@ def _create_chunk_from_text(
         content=extracted_text,
         last_edited_ts=document.last_edited_ts,
         document_title=document.file_name,
-        bounding_boxes=[],
+        bounding_boxes=None,
         url=document.url,
         metadata=document.metadata,
     )
