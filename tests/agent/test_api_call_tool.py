@@ -27,10 +27,26 @@ async def api_tool(mock_trace_manager):
         fixed_parameters={"api_version": "v2", "format": "json", "language": "en"},
     )
     yield tool
+<<<<<<< HEAD
     # Cleanup: ensure any lingering HTTP connections are closed
     import asyncio
 
     await asyncio.sleep(0.1)
+=======
+
+    # Targeted async cleanup for race condition prevention
+    try:
+        import asyncio
+        import gc
+
+        # Small delay and cleanup to prevent race conditions
+        await asyncio.sleep(0.001)  # Minimal delay
+        gc.collect()
+
+    except Exception:
+        # Fail silently in cleanup to avoid hiding test failures
+        pass
+>>>>>>> 2a95175 (Proper clean up of async tests for API call tool test)
 
 
 @pytest.fixture
@@ -216,17 +232,34 @@ async def test_make_api_call_get_with_empty_params(mock_client_class, mock_trace
 
 
 @pytest.mark.anyio
-@patch("httpx.AsyncClient")
-async def test_make_api_call_error_handling(mock_client_class, api_tool):
-    mock_client = AsyncMock()
-    mock_client.request.side_effect = HTTPError("API Error")
-    mock_client_class.return_value.__aenter__.return_value = mock_client
+async def test_make_api_call_error_handling(api_tool):
+    """Test error handling with proper async context manager mocking to prevent race conditions."""
 
-    result = await api_tool.make_api_call()
+    # Use a more targeted patch that completely isolates HTTP operations
+    with patch("httpx.AsyncClient") as mock_client_class:
+        # Create isolated mocks to prevent any real HTTP connections
+        mock_client = AsyncMock()
+        mock_client.request.side_effect = HTTPError("API Error")
 
-    assert result["success"] is False
-    assert result["error"] == "API Error"
-    assert result["status_code"] is None
+        # Create a proper async context manager mock that handles cleanup
+        mock_context_manager = AsyncMock()
+        mock_context_manager.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_context_manager.__aexit__ = AsyncMock(return_value=None)
+
+        # Ensure our controlled mock is returned
+        mock_client_class.return_value = mock_context_manager
+
+        # Execute the test
+        result = await api_tool.make_api_call()
+
+        # Verify results
+        assert result["success"] is False
+        assert result["error"] == "API Error"
+        assert result["status_code"] is None
+
+        # Verify proper context manager usage
+        mock_context_manager.__aenter__.assert_called_once()
+        mock_context_manager.__aexit__.assert_called_once()
 
 
 @pytest.mark.anyio
