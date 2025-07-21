@@ -8,7 +8,7 @@ from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttribu
 from opentelemetry.trace import get_current_span
 
 from ada_backend.database.setup_db import get_db
-from engine.agent.agent import AgentPayload, ChatMessage, ToolDescription
+from engine.agent.agent import AgentPayload, ChatMessage, ComponentAttributes, ToolDescription
 from engine.agent.agent import Agent
 from engine.integrations.utils import get_gmail_sender_service, get_google_user_email, get_oauth_access_token
 from engine.trace.trace_manager import TraceManager
@@ -39,7 +39,7 @@ class GmailSender(Agent):
     def __init__(
         self,
         trace_manager: TraceManager,
-        component_instance_name: str,
+        component_attributes: ComponentAttributes,
         secret_integration_id: str,
         send_as_draft: bool = True,
         tool_description: ToolDescription = GMAIL_SENDER_TOOL_DESCRIPTION,
@@ -47,7 +47,9 @@ class GmailSender(Agent):
         google_client_secret: Optional[str] = None,
     ):
         super().__init__(
-            trace_manager, tool_description=tool_description, component_instance_name=component_instance_name
+            trace_manager,
+            tool_description=tool_description,
+            component_attributes=component_attributes,
         )
         if not google_client_id:
             google_client_id = settings.GOOGLE_CLIENT_ID
