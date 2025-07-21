@@ -8,6 +8,7 @@ from engine.agent.agent import (
     Agent,
     AgentPayload,
     ChatMessage,
+    ComponentAttributes,
     ToolDescription,
 )
 
@@ -100,14 +101,14 @@ class DocumentEnhancedLLMCallAgent(Agent):
     def __init__(
         self,
         trace_manager: TraceManager,
-        component_instance_name: str,
+        component_attributes: ComponentAttributes,
         tool_description: ToolDescription,
         synthesizer: Synthesizer,
         document_search: DocumentSearch,
     ) -> None:
         super().__init__(
             trace_manager=trace_manager,
-            component_instance_name=component_instance_name,
+            component_attributes=component_attributes,
             tool_description=tool_description,
             synthesizer=synthesizer,
         )
@@ -141,7 +142,7 @@ class DocumentEnhancedLLMCallAgent(Agent):
             raise ValueError("No document names provided for the DocumentEnhancedLLMcall tool.")
         documents_chunks = self._document_search.get_documents(documents_name=document_names)
 
-        response = self._synthesizer.get_response(
+        response = await self._synthesizer.get_response(
             chunks=documents_chunks,
             query_str=content,
         )

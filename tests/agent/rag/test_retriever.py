@@ -1,4 +1,4 @@
-from unittest.mock import Mock
+from unittest.mock import Mock, AsyncMock
 
 import pytest
 
@@ -22,6 +22,8 @@ def mock_qdrant_service():
     mock_embedding_service = Mock(spec=EmbeddingService)
     mock_embedding_service._model_name = "test_model"
     mock_qdrant_service._embedding_service = mock_embedding_service
+    # Set up the async method with proper AsyncMock
+    mock_qdrant_service.retrieve_similar_chunks_async = AsyncMock()
     return mock_qdrant_service
 
 
@@ -35,19 +37,20 @@ def retriever(mock_trace_manager, mock_qdrant_service):
     )
 
 
-def test_get_chunks_(retriever, mock_qdrant_service):
-    mock_qdrant_service.retrieve_similar_chunks.return_value = [
+@pytest.mark.asyncio
+async def test_get_chunks_(retriever, mock_qdrant_service):
+    mock_qdrant_service.retrieve_similar_chunks_async.return_value = [
         SourceChunk(content="chunk1", name="1", document_name="1", url="url1", metadata={"key": "value"}),
         SourceChunk(content="chunk2", name="2", document_name="2", url="url2", metadata={"key": "value"}),
     ]
     query_text = "test query"
 
-    chunks = retriever.get_chunks(query_text=query_text)
+    chunks = await retriever.get_chunks(query_text=query_text)
 
     assert len(chunks) == 2
     assert chunks[0].content == "chunk1"
     assert chunks[1].content == "chunk2"
-    mock_qdrant_service.retrieve_similar_chunks.assert_called_once_with(
+    mock_qdrant_service.retrieve_similar_chunks_async.assert_called_once_with(
         query_text=query_text,
         collection_name="test_collection",
         limit=TEST_MAX_RETRIEVED_CHUNKS,

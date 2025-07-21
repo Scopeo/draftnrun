@@ -3,7 +3,7 @@ from typing import Optional
 
 import cohere
 
-from engine.agent.agent import SourceChunk
+from engine.agent.agent import ComponentAttributes, SourceChunk
 from engine.agent.rag.reranker import Reranker
 from engine.trace.trace_manager import TraceManager
 from settings import settings
@@ -19,21 +19,24 @@ class CohereReranker(Reranker):
         cohere_model: str = "rerank-multilingual-v3.0",
         num_doc_reranked: int = 5,
         score_threshold: float = 0.0,
-        component_instance_name: Optional[str] = None,
+        component_attributes: Optional[ComponentAttributes] = None,
     ):
-        super().__init__(trace_manager, model=cohere_model, component_instance_name=component_instance_name)
+        super().__init__(
+            trace_manager,
+            model=cohere_model,
+            component_attributes=component_attributes,
+        )
         if cohere_api_key is None:
             cohere_api_key = settings.COHERE_API_KEY
-        self._cohere_client = cohere.ClientV2(cohere_api_key)
+        self._async_cohere_client = cohere.AsyncClientV2(cohere_api_key)
         self._num_doc_reranked = num_doc_reranked
         self._score_threshold = score_threshold
-        self.component_instance_name = component_instance_name or f"{self.__class__.__name__}"
 
-    def _rerank_without_trace(self, query, chunks: list[SourceChunk]) -> list[SourceChunk]:
+    async def _rerank_without_trace(self, query, chunks: list[SourceChunk]) -> list[SourceChunk]:
         if not chunks:
             LOGGER.warning("No documents to rerank. The chunks list is empty.")
             return []
-        response = self._cohere_client.rerank(
+        response = await self._async_cohere_client.rerank(
             model=self._model,
             query=query,
             documents=[chunk.content for chunk in chunks],

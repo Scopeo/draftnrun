@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from ada_backend.repositories.integration_repository import get_component_instance_integration_relationship
 from ada_backend.repositories.organization_repository import get_organization_secrets_from_project_id
-from engine.agent.agent import ToolDescription
+from engine.agent.agent import ComponentAttributes, ToolDescription
 from ada_backend.database.models import ComponentInstance
 from ada_backend.repositories.component_repository import (
     get_component_instance_by_id,
@@ -168,7 +168,10 @@ def instantiate_component(
     if tool_description:
         input_params["tool_description"] = tool_description
     LOGGER.debug(f"Tool description: {tool_description}\n")
-    input_params["component_instance_name"] = component_instance.name
+    input_params["component_attributes"] = ComponentAttributes(
+        component_instance_name=component_instance.name,
+        component_instance_id=component_instance.id,
+    )
     # Instantiate the component using its factory
     LOGGER.debug(f"Trying to create component: {component_name} with input params: {input_params}\n")
     try:

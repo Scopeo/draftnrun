@@ -15,6 +15,7 @@ from data_ingestion.document.prompts_vision_ingestion import (
     PROMPT_DETERMINE_FILE_TYPE,
 )
 from data_ingestion.markdown.tree_chunker import parse_markdown_to_chunks
+from settings import settings
 
 LOGGER = logging.getLogger(__name__)
 OPENAI_MODEL_NAME = "gpt-4o"
@@ -230,6 +231,8 @@ def create_chunks_from_document(
     google_llm_service: VisionService,
     openai_llm_service: VisionService,
     zoom: float = 3.0,
+    # TODO: Fix when we handle via frontend
+    number_of_pages_to_detect_document_type: int = settings.NUMBER_OF_PAGES_TO_DETECT_DOCUMENT_TYPE,
     **kwargs,
 ) -> list[FileChunk]:
     chunks = []
@@ -240,7 +243,7 @@ def create_chunks_from_document(
         prompt=PROMPT_DETERMINE_FILE_TYPE,
         google_llm_service=google_llm_service,
         openai_llm_service=openai_llm_service,
-        image_content_list=images_content_list,
+        image_content_list=images_content_list[:number_of_pages_to_detect_document_type],
         response_format=FileType,
     )
     if pdf_type == PDFType.landscape or file_type.is_converted_from_powerpoint:
@@ -269,14 +272,19 @@ def create_chunks_from_document(
     elif pdf_type == PDFType.portrait and file_type.is_native_pdf:
         LOGGER.info("Processing PDF in portrait mode...")
 
-        extracted_table_of_content = _extract_text_from_pages_as_images(
-            prompt=PDF_TABLE_OF_CONTENT_EXTRACTION_PROMPT,
-            google_llm_service=google_llm_service,
-            openai_llm_service=openai_llm_service,
-            image_content_list=images_content_list,
-            response_format=TableOfContent,
-        )
-        if extracted_table_of_content.sections != []:
+        try:
+            extracted_table_of_content = _extract_text_from_pages_as_images(
+                prompt=PDF_TABLE_OF_CONTENT_EXTRACTION_PROMPT,
+                google_llm_service=google_llm_service,
+                openai_llm_service=openai_llm_service,
+                image_content_list=images_content_list,
+                response_format=TableOfContent,
+            )
+        except Exception as e:
+            LOGGER.warning(f"Error extracting table of content: {e}")
+            extracted_table_of_content = TableOfContent(sections=[])
+
+        if extracted_table_of_content and extracted_table_of_content.sections != []:
             section_hierarchy = _build_section_hierarchy(
                 sections=extracted_table_of_content.sections,
                 level=1,

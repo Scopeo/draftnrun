@@ -6,7 +6,7 @@ from engine.agent.synthesizer import Synthesizer
 from engine.llm_services.llm_service import CompletionService
 from engine.trace.trace_manager import TraceManager
 from engine.agent.build_context import build_context_from_source_chunks
-from engine.agent.agent import SourceChunk, SourcedResponse
+from engine.agent.agent import ComponentAttributes, SourceChunk, SourcedResponse
 
 
 class ResponseLLM(BaseModel):
@@ -32,13 +32,13 @@ class HybridSynthesizer(Synthesizer):
         trace_manager: TraceManager,
         prompt_template: str = get_hybrid_synthetizer_prompt_template(),
         response_format: BaseModel = ResponseLLM,
-        component_instance_name: Optional[str] = None,
+        component_attributes: Optional[ComponentAttributes] = None,
     ):
-        super().__init__(completion_service, trace_manager, component_instance_name=component_instance_name)
+        super().__init__(completion_service, trace_manager, component_attributes=component_attributes)
         self._prompt_template = prompt_template
         self.response_format = response_format
 
-    def get_response(
+    async def get_response(
         self,
         image_id: str,
         chunks: list[SourceChunk],
@@ -51,7 +51,7 @@ class HybridSynthesizer(Synthesizer):
         with open(image_id, "rb") as image_file:
             encoded_image = image_file.read()
 
-        response_using_image = self._completion_service.get_image_description(
+        response_using_image = await self._completion_service.get_image_description_async(
             image_content_list=[encoded_image],
             text_prompt=self._prompt_template.format(
                 image_id=image_id,

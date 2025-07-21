@@ -16,7 +16,7 @@ from ada_backend.database.seed.seed_tool_description import TOOL_DESCRIPTION_UUI
 from ada_backend.database.seed.utils import (
     COMPONENT_UUIDS,
     ParameterLLMConfig,
-    build_completion_service_config_definitions,
+    build_function_calling_service_config_definitions,
 )
 from ada_backend.services.registry import COMPLETION_MODEL_IN_DB
 
@@ -25,7 +25,10 @@ def seed_ai_agent_components(session: Session):
     base_ai_agent = db.Component(
         id=COMPONENT_UUIDS["base_ai_agent"],
         name="AI Agent",
-        description="LLM call with tools access capacity",
+        description=(
+            "AI operator provided with tools."
+            " LLM calls will choose next action step by step until it decides to provide a response."
+        ),
         is_agent=True,
         function_callable=True,
         can_use_function_calling=True,
@@ -51,19 +54,6 @@ def seed_ai_agent_components(session: Session):
                 is_advanced=False,
             ),
             db.ComponentParameterDefinition(
-                id=UUID("c22c1ce8-993f-4b6e-bccc-e70b8e87d04a"),
-                component_id=base_ai_agent.id,
-                name="run_tools_in_parallel",
-                type=ParameterType.BOOLEAN,
-                nullable=False,
-                default="True",
-                ui_component=UIComponent.CHECKBOX,
-                ui_component_properties=UIComponentProperties(label="Run Tools in Parallel").model_dump(
-                    exclude_unset=True, exclude_none=True
-                ),
-                is_advanced=True,
-            ),
-            db.ComponentParameterDefinition(
                 id=UUID("3f8aa317-215a-4075-80ba-efca2a3d83ca"),
                 component_id=base_ai_agent.id,
                 name="allow_tool_shortcuts",
@@ -82,10 +72,10 @@ def seed_ai_agent_components(session: Session):
                 name="max_iterations",
                 type=ParameterType.INTEGER,
                 nullable=True,
-                default="3",
+                default="10",
                 ui_component=UIComponent.SLIDER,
                 ui_component_properties=UIComponentProperties(
-                    min=1, max=10, step=1, marks=True, label="Maximum Iterations"
+                    min=1, max=50, step=1, marks=True, label="Maximum Iterations"
                 ).model_dump(exclude_unset=True, exclude_none=True),
                 is_advanced=True,
             ),
@@ -95,21 +85,22 @@ def seed_ai_agent_components(session: Session):
                 name="initial_prompt",
                 type=ParameterType.STRING,
                 nullable=True,
+                default=(
+                    "Act as a helpful assistant. "
+                    "You can use tools to answer questions,"
+                    " but you can also answer directly if you have enough information."
+                ),
                 ui_component=UIComponent.TEXTAREA,
                 ui_component_properties=UIComponentProperties(
-                    label="Initial Prompt",
-                    placeholder=(
-                        "Act as a helpful assistant. "
-                        "You can use tools to answer questions,"
-                        " but you can also answer directly if you have enough information."
-                    ),
+                    label="System Prompt",
                     description=(
-                        "This prompt will be used to initialize the agent's memory and set its behavior."
+                        "This prompt will be used to initialize the agent and set its behavior."
                         " It can be used to provide context or instructions for the agent."
                         " It will be used as the first message of the conversation in the agent's memory."
-                        " You can use it to set the agent's personality, "
+                        " You can use it to set the agent's personality, role,"
                         "or to provide specific instructions on how to handle certain types of questions."
-                        " The interaction you have with the agent is going to be added after this first message."
+                        " The conversation you have with the agent (or your single message)"
+                        " is going to be added after this first message."
                     ),
                 ).model_dump(exclude_unset=True, exclude_none=True),
             ),
@@ -128,20 +119,6 @@ def seed_ai_agent_components(session: Session):
                 is_advanced=True,
             ),
             db.ComponentParameterDefinition(
-                id=UUID("997b9875-f71f-4876-93c1-7d37025c3541"),
-                component_id=base_ai_agent.id,
-                name="fallback_react_answer",
-                type=ParameterType.STRING,
-                nullable=False,
-                default="I'm sorry, I couldn't find a solution to your problem.",
-                ui_component=UIComponent.TEXTAREA,
-                ui_component_properties=UIComponentProperties(
-                    label="Fallback Answer",
-                    placeholder="The default answer the agent will give " "if it fails to answer by calling his tools",
-                ).model_dump(exclude_unset=True, exclude_none=True),
-                is_advanced=True,
-            ),
-            db.ComponentParameterDefinition(
                 id=UUID("4ca78b43-4484-4a9d-bdab-e6dbdaff6da1"),
                 component_id=base_ai_agent.id,
                 name="first_history_messages",
@@ -150,7 +127,18 @@ def seed_ai_agent_components(session: Session):
                 default="1",
                 ui_component=UIComponent.SLIDER,
                 ui_component_properties=UIComponentProperties(
-                    min=1, max=50, step=1, marks=True, label="Maximum number of old messages to keep in memory."
+                    min=1,
+                    max=50,
+                    step=1,
+                    marks=True,
+                    label="Conversation start",
+                    description=(
+                        "The number of messages to keep in memory from the beginning of the conversation.\n"
+                        "To avoid to big conversations, that causes performance loss, we advice not"
+                        " to keep too many messages in the memory.\n"
+                        "This parameter sets the number of messages to keep in memory at the beginning"
+                        " of the conversation (including the system prompt)."
+                    ),
                 ).model_dump(exclude_unset=True, exclude_none=True),
                 is_advanced=True,
             ),
@@ -163,11 +151,22 @@ def seed_ai_agent_components(session: Session):
                 default="50",
                 ui_component=UIComponent.SLIDER,
                 ui_component_properties=UIComponentProperties(
-                    min=2, max=100, step=1, marks=True, label="Maximum number of recent messages to keep in memory."
+                    min=2,
+                    max=100,
+                    step=1,
+                    marks=True,
+                    label="Conversation end",
+                    description=(
+                        "The number of messages to keep in memory from the end of the conversation.\n"
+                        "To avoid to big conversations, that causes performance loss, we advice not"
+                        " to keep too many messages in the memory.\n"
+                        "This parameter sets the number of messages to keep in memory at the end"
+                        " of the conversation."
+                    ),
                 ).model_dump(exclude_unset=True, exclude_none=True),
                 is_advanced=True,
             ),
-            *build_completion_service_config_definitions(
+            *build_function_calling_service_config_definitions(
                 component_id=base_ai_agent.id,
                 params_to_seed=[
                     ParameterLLMConfig(

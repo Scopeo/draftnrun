@@ -5,6 +5,7 @@ from engine.agent.react_function_calling import ReActAgent
 
 
 from engine.agent.agent import (
+    ComponentAttributes,
     ToolDescription,
 )
 from engine.trace.trace_manager import TraceManager
@@ -25,7 +26,6 @@ INITIAL_PROMPT = (
     "Here is a description in an ascii tree of the documents available: \n\n"
     "{documents_tree}\n\n"
 )
-DEFAULT_FALLBACK_REACT_ANSWER = "I'm sorry, I couldn't find load the document you seemed to have requested"
 
 
 def get_document_react_loader_tool_description() -> ToolDescription:
@@ -51,7 +51,7 @@ class DocumentReactLoaderAgent(ReActAgent):
         self,
         llm_service: LLMService,
         trace_manager: TraceManager,
-        component_instance_name: str,
+        component_attributes: ComponentAttributes,
         document_enhanced_llm_call_agent: DocumentEnhancedLLMCallAgent,
         prompt: str = INITIAL_PROMPT,
         tool_description: ToolDescription = get_document_react_loader_tool_description(),
@@ -61,7 +61,7 @@ class DocumentReactLoaderAgent(ReActAgent):
         super().__init__(
             llm_service=llm_service,
             trace_manager=trace_manager,
-            component_instance_name=component_instance_name,
+            component_attributes=component_attributes,
             tool_description=tool_description,
             initial_prompt=initial_prompt,
             agent_tools=[document_enhanced_llm_call_agent],

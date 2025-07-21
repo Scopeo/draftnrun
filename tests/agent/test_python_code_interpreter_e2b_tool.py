@@ -3,12 +3,13 @@ import json
 import os
 import base64
 from unittest.mock import MagicMock
+import pytest_asyncio
 
 from engine.agent.tools.python_code_interpreter_e2b_tool import (
     PythonCodeInterpreterE2BTool,
     E2B_PYTHONCODE_INTERPRETER_TOOL_DESCRIPTION,
 )
-from engine.agent.agent import AgentPayload, ChatMessage
+from engine.agent.agent import AgentPayload, ChatMessage, ComponentAttributes
 from engine.trace.trace_manager import TraceManager
 
 
@@ -17,14 +18,21 @@ def mock_trace_manager():
     return MagicMock(spec=TraceManager)
 
 
-@pytest.fixture
-def e2b_tool(mock_trace_manager):
-    """Create an E2B Python code interpreter tool instance."""
-    return PythonCodeInterpreterE2BTool(
+@pytest_asyncio.fixture
+async def e2b_tool(mock_trace_manager):
+    """Create an E2B Python code interpreter tool instance with proper async cleanup."""
+    tool = PythonCodeInterpreterE2BTool(
         trace_manager=mock_trace_manager,
-        component_instance_name="test_e2b_tool",
+        component_attributes=ComponentAttributes(
+            component_instance_name="test_e2b_tool",
+        ),
         timeout=30,
     )
+    yield tool
+    # Cleanup: ensure any lingering HTTP connections are closed
+    # The E2B library should handle this, but we'll give it a moment to complete
+    import asyncio
+    await asyncio.sleep(0.1)
 
 
 @pytest.fixture
@@ -38,7 +46,7 @@ def e2b_api_key():
 
 def test_tool_initialization(e2b_tool):
     """Test that the tool initializes correctly."""
-    assert e2b_tool.component_instance_name == "test_e2b_tool"
+    assert e2b_tool.component_attributes.component_instance_name == "test_e2b_tool"
     assert e2b_tool.sandbox_timeout == 30
     assert e2b_tool.tool_description == E2B_PYTHONCODE_INTERPRETER_TOOL_DESCRIPTION
     assert e2b_tool.tool_description.name == "python_code_interpreter"
@@ -54,11 +62,12 @@ def test_tool_description_structure():
     assert "python_code" in desc.required_tool_properties
 
 
-def test_execute_simple_python_code(e2b_tool, e2b_api_key):
+@pytest.mark.anyio
+async def test_execute_simple_python_code(e2b_tool, e2b_api_key):
     """Test executing simple Python code that returns a value."""
     python_code = "print('Hello, World!'); x = 42; x"
 
-    result_data = e2b_tool.execute_python_code(python_code)
+    result_data = await e2b_tool.execute_python_code(python_code)
 
     # Check that the execution was successful
     assert "error" in result_data
@@ -81,7 +90,8 @@ def test_execute_simple_python_code(e2b_tool, e2b_api_key):
     assert result_data["results"][0]["text"] == "42"
 
 
-def test_execute_python_code_with_imports(e2b_tool, e2b_api_key):
+@pytest.mark.anyio
+async def test_execute_python_code_with_imports(e2b_tool, e2b_api_key):
     """Test executing Python code that uses standard library imports."""
     python_code = """
 import math
@@ -98,7 +108,7 @@ result = {"area": area, "date": current_time}
 result
 """
 
-    result_data = e2b_tool.execute_python_code(python_code)
+    result_data = await e2b_tool.execute_python_code(python_code)
 
     assert "error" in result_data
     assert "logs" in result_data
@@ -122,7 +132,8 @@ result
     assert "date" in result_obj["json"]
 
 
-def test_execute_python_code_with_error(e2b_tool, e2b_api_key):
+@pytest.mark.anyio
+async def test_execute_python_code_with_error(e2b_tool, e2b_api_key):
     """Test executing Python code that raises an error."""
     python_code = """
 x = 10
@@ -130,7 +141,7 @@ y = 0
 result = x / y  # This will raise a ZeroDivisionError
 """
 
-    result_data = e2b_tool.execute_python_code(python_code)
+    result_data = await e2b_tool.execute_python_code(python_code)
 
     assert "error" in result_data
     assert "logs" in result_data
@@ -147,7 +158,8 @@ result = x / y  # This will raise a ZeroDivisionError
     assert "division by zero" in error_data["value"]
 
 
-def test_execute_python_code_with_file_operations(e2b_tool, e2b_api_key):
+@pytest.mark.anyio
+async def test_execute_python_code_with_file_operations(e2b_tool, e2b_api_key):
     """Test executing Python code that performs file operations."""
     python_code = """
 # Create a file and write to it
@@ -167,7 +179,7 @@ files = os.listdir('.')
 {"content": content, "files": files}
 """
 
-    result_data = e2b_tool.execute_python_code(python_code)
+    result_data = await e2b_tool.execute_python_code(python_code)
 
     assert "error" in result_data
     assert "logs" in result_data
@@ -190,7 +202,8 @@ files = os.listdir('.')
     assert "test_file.txt" in result_obj["json"]["files"]
 
 
-def test_execute_python_code_with_data_processing(e2b_tool, e2b_api_key):
+@pytest.mark.anyio
+async def test_execute_python_code_with_data_processing(e2b_tool, e2b_api_key):
     """Test executing Python code that processes data."""
     python_code = """
 # Create some sample data
@@ -215,7 +228,7 @@ print(f"Even numbers: {even_numbers}")
 }
 """
 
-    result_data = e2b_tool.execute_python_code(python_code)
+    result_data = await e2b_tool.execute_python_code(python_code)
 
     assert "error" in result_data
     assert "logs" in result_data
@@ -243,7 +256,8 @@ print(f"Even numbers: {even_numbers}")
     assert result_data_obj["even_numbers"] == [2, 4, 6, 8, 10]
 
 
-def test_execute_python_code_with_single_image(e2b_tool, e2b_api_key):
+@pytest.mark.anyio
+async def test_execute_python_code_with_single_image(e2b_tool, e2b_api_key):
     """Test executing Python code that generates a single matplotlib plot."""
     python_code = """
 import matplotlib.pyplot as plt
@@ -264,7 +278,7 @@ plt.show()
 print("Single plot generated!")
 """
 
-    result_data = e2b_tool.execute_python_code(python_code)
+    result_data = await e2b_tool.execute_python_code(python_code)
 
     # Check that execution was successful
     assert result_data["error"] is None
@@ -288,7 +302,8 @@ print("Single plot generated!")
         pytest.fail("Image data is not valid base64")
 
 
-def test_execute_python_code_with_multiple_images(e2b_tool, e2b_api_key):
+@pytest.mark.anyio
+async def test_execute_python_code_with_multiple_images(e2b_tool, e2b_api_key):
     """Test executing Python code that generates multiple matplotlib plots."""
     python_code = """
 import matplotlib.pyplot as plt
@@ -321,7 +336,7 @@ plt.show()
 print("Three plots generated!")
 """
 
-    result_data = e2b_tool.execute_python_code(python_code)
+    result_data = await e2b_tool.execute_python_code(python_code)
 
     # Check that execution was successful
     assert result_data["error"] is None
@@ -345,7 +360,8 @@ print("Three plots generated!")
             pytest.fail(f"Image {i+1} data is not valid base64")
 
 
-def test_execute_python_code_with_no_images(e2b_tool, e2b_api_key):
+@pytest.mark.anyio
+async def test_execute_python_code_with_no_images(e2b_tool, e2b_api_key):
     """Test executing Python code that doesn't generate any images."""
     python_code = """
 import numpy as np
@@ -363,7 +379,7 @@ print("Calculations completed!")
 result
 """
 
-    result_data = e2b_tool.execute_python_code(python_code)
+    result_data = await e2b_tool.execute_python_code(python_code)
 
     # Check that execution was successful
     assert result_data["error"] is None
@@ -607,7 +623,8 @@ json.dumps(result)
     assert result_data["statistics"]["count"] == 5
 
 
-def test_missing_api_key():
+@pytest.mark.anyio
+async def test_missing_api_key():
     """Test that the tool raises an error when E2B API key is not configured."""
     # Mock settings to return None for E2B_API_KEY
     with pytest.MonkeyPatch().context() as m:
@@ -615,19 +632,23 @@ def test_missing_api_key():
 
         tool = PythonCodeInterpreterE2BTool(
             trace_manager=MagicMock(spec=TraceManager),
-            component_instance_name="test_no_api_key",
+            component_attributes=ComponentAttributes(
+                component_instance_name="test_no_api_key",
+            ),
         )
 
         # Should raise ValueError when no API key is available
         with pytest.raises(ValueError, match="E2B API key not configured"):
-            tool.execute_python_code("print('test')")
+            await tool.execute_python_code("print('test')")
 
 
 def test_sandbox_timeout_configuration():
     """Test that the tool respects the sandbox timeout configuration."""
     tool = PythonCodeInterpreterE2BTool(
         trace_manager=MagicMock(spec=TraceManager),
-        component_instance_name="test_timeout",
+        component_attributes=ComponentAttributes(
+            component_instance_name="test_timeout",
+        ),
         timeout=10,
     )
 

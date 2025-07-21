@@ -205,6 +205,13 @@ class BasicParameterAdmin(EnhancedModelView, model=db.BasicParameter):
         "organization_secret",
         "order",
     ]
+    column_filters = [
+        "parameter_definition.name",
+    ]
+
+    column_searchable_list = [
+        "parameter_definition.name",
+    ]
 
 
 class ComponentSubInputAdmin(EnhancedModelView, model=db.ComponentSubInput):

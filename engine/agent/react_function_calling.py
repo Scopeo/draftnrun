@@ -10,6 +10,7 @@ from openai.types.chat import ChatCompletionMessageToolCall
 from engine.agent.agent import (
     Agent,
     AgentPayload,
+    ComponentAttributes,
     ToolDescription,
     ChatMessage,
 )
@@ -26,7 +27,7 @@ INITIAL_PROMPT = (
     "Don't make assumptions about what values to plug into functions. Ask for "
     "clarification if a user request is ambiguous. "
 )
-DEFAULT_FALLBACK_REACT_ANSWER = "I'm sorry, I couldn't find a solution to your problem."
+DEFAULT_FALLBACK_REACT_ANSWER = "I couldn't find a solution to your problem."
 
 
 class ReActAgent(Agent):
@@ -35,11 +36,10 @@ class ReActAgent(Agent):
         completion_service: CompletionService,
         trace_manager: TraceManager,
         tool_description: ToolDescription,
-        component_instance_name: str,
+        component_attributes: ComponentAttributes,
         agent_tools: Optional[list[Runnable] | Runnable] = None,
         run_tools_in_parallel: bool = True,
         initial_prompt: str = INITIAL_PROMPT,
-        fallback_react_answer: str = DEFAULT_FALLBACK_REACT_ANSWER,
         max_iterations: int = 3,
         max_tools_per_iteration: Optional[int] = 4,
         input_data_field_for_messages_history: str = "messages",
@@ -50,7 +50,7 @@ class ReActAgent(Agent):
         super().__init__(
             trace_manager=trace_manager,
             tool_description=tool_description,
-            component_instance_name=component_instance_name,
+            component_attributes=component_attributes,
         )
         self.run_tools_in_parallel = run_tools_in_parallel
         self.running_tool_way = "parallel" if self.run_tools_in_parallel else "series"
@@ -59,7 +59,6 @@ class ReActAgent(Agent):
         else:
             self.agent_tools = agent_tools if isinstance(agent_tools, list) else [agent_tools]
         self.initial_prompt = initial_prompt
-        self.fallback_react_answer = fallback_react_answer
         self._first_history_messages = first_history_messages
         self._last_history_messages = last_history_messages
         self._memory_handling = HistoryMessageHandler(self._first_history_messages, self._last_history_messages)
@@ -139,7 +138,7 @@ class ReActAgent(Agent):
                     content=fill_prompt_template_with_dictionary(
                         original_agent_input.model_dump(),
                         self.initial_prompt,
-                        self.component_instance_name,
+                        self.component_attributes.component_instance_name,
                     ),
                 ),
             )
@@ -162,7 +161,7 @@ class ReActAgent(Agent):
                     SpanAttributes.LLM_MODEL_NAME: self._completion_service._model_name,
                 }
             )
-            chat_response = self._completion_service.function_call(
+            chat_response = await self._completion_service.function_call_async(
                 messages=llm_input_messages,
                 tools=[agent.tool_description for agent in self.agent_tools],
                 tool_choice=tool_choice,
@@ -238,14 +237,18 @@ class ReActAgent(Agent):
             self._current_iteration += 1
             return await self._run_without_trace(agent_input)
         else:  # This should not happen if the "tool_choice" parameter works correctly on the LLM service
-            self.log_trace_event(
-                message=(
-                    f"Reached the maximum number of iterations ({self._max_iterations}). "
-                    f"Returning the fallback answer: {self.fallback_react_answer}"
-                )
+            LOGGER.error(
+                f"Reached the maximum number of iterations ({self._max_iterations}) and still asks for tools."
+                " This should not happen."
             )
+            messages = [
+                ChatMessage(
+                    role="assistant",
+                    content=DEFAULT_FALLBACK_REACT_ANSWER,
+                )
+            ]
             return AgentPayload(
-                messages=[ChatMessage(role="assistant", content=self.fallback_react_answer)],
+                messages=messages,
                 is_final=False,
             )
 

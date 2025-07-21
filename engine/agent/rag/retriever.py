@@ -4,7 +4,7 @@ import json
 from opentelemetry import trace as trace_api
 from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttributes
 
-from engine.agent.agent import SourceChunk
+from engine.agent.agent import ComponentAttributes, SourceChunk
 from engine.qdrant_service import QdrantService
 from engine.trace.trace_manager import TraceManager
 
@@ -21,7 +21,7 @@ class Retriever:
         default_penalty_rate: Optional[float] = None,
         metadata_date_key: Optional[str] = None,
         max_retrieved_chunks_after_penalty: Optional[int] = None,
-        component_instance_name: Optional[str] = None,
+        component_attributes: Optional[ComponentAttributes] = None,
     ):
         self.trace_manager = trace_manager
         self.collection_name = collection_name
@@ -32,14 +32,16 @@ class Retriever:
         self.default_penalty_rate = default_penalty_rate
         self.metadata_date_key = metadata_date_key
         self.max_retrieved_chunks_after_penalty = max_retrieved_chunks_after_penalty
-        self.component_instance_name = component_instance_name or f"{self.__class__.__name__}"
+        self.component_attributes = component_attributes or ComponentAttributes(
+            component_instance_name=self.__class__.__name__
+        )
 
-    def _get_chunks_without_trace(
+    async def _get_chunks_without_trace(
         self,
         query_text: str,
         filters: Optional[dict] = None,
     ) -> list[SourceChunk]:
-        chunks = self._vectorestore_service.retrieve_similar_chunks(
+        chunks = await self._vectorestore_service.retrieve_similar_chunks_async(
             query_text=query_text,
             collection_name=self.collection_name,
             limit=self._max_retrieved_chunks,
@@ -53,13 +55,13 @@ class Retriever:
 
         return chunks
 
-    def get_chunks(
+    async def get_chunks(
         self,
         query_text: str,
         filters: Optional[dict] = None,
     ) -> list[SourceChunk]:
-        with self.trace_manager.start_span(self.component_instance_name) as span:
-            chunks = self._get_chunks_without_trace(
+        with self.trace_manager.start_span(self.component_attributes.component_instance_name) as span:
+            chunks = await self._get_chunks_without_trace(
                 query_text,
                 filters,
             )
@@ -68,6 +70,7 @@ class Retriever:
                     SpanAttributes.OPENINFERENCE_SPAN_KIND: OpenInferenceSpanKindValues.RETRIEVER.value,
                     SpanAttributes.EMBEDDING_MODEL_NAME: self._vectorestore_service._embedding_service._model_name,
                     SpanAttributes.INPUT_VALUE: query_text,
+                    "component_instance_id": str(self.component_attributes.component_instance_id),
                 }
             )
 

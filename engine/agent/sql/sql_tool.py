@@ -2,7 +2,7 @@ from pathlib import Path
 import logging
 from typing import Optional
 
-from engine.agent.agent import Agent, ChatMessage, AgentPayload, ToolDescription
+from engine.agent.agent import Agent, ChatMessage, AgentPayload, ComponentAttributes, ToolDescription
 from engine.llm_services.llm_service import CompletionService
 from engine.storage_service.db_service import DBService
 from engine.trace.trace_manager import TraceManager
@@ -76,7 +76,7 @@ class SQLTool(Agent):
         trace_manager: TraceManager,
         completion_service: CompletionService,
         db_service: DBService,
-        component_instance_name: str = "SQL Tool",
+        component_attributes: ComponentAttributes,
         include_tables: Optional[list[str]] = None,
         additional_db_description: Optional[str] = None,
         tool_description: Optional[ToolDescription] = DEFAULT_SQL_TOOL_DESCRIPTION,
@@ -87,7 +87,7 @@ class SQLTool(Agent):
         super().__init__(
             trace_manager=trace_manager,
             tool_description=tool_description,
-            component_instance_name=component_instance_name,
+            component_attributes=component_attributes,
         )
         self._db_service = db_service
         self._include_tables = include_tables
@@ -107,7 +107,9 @@ class SQLTool(Agent):
         if self._additional_db_description:
             schema += self._additional_db_description
         input_prompt = self._text_to_sql_prompt.format(query_str=query_str, schema=schema, dialect=self._dialect)
-        generate_sql_query = self._completion_service.complete(messages=[{"role": "user", "content": input_prompt}])
+        generate_sql_query = await self._completion_service.complete_async(
+            messages=[{"role": "user", "content": input_prompt}]
+        )
 
         sql_query = generate_sql_query
         sql_output = self._db_service.run_query(sql_query).to_markdown(index=False)
@@ -117,7 +119,7 @@ class SQLTool(Agent):
             synthetize_prompt = self.synthesize_sql_prompt.format(
                 query_str=query_str, sql_query=sql_query, sql_answer=sql_output
             )
-            synthetize_answer = self._completion_service.complete(
+            synthetize_answer = await self._completion_service.complete_async(
                 messages=[{"role": "assistant", "content": synthetize_prompt}]
             )
             output_message = synthetize_answer

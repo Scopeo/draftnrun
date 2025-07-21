@@ -76,7 +76,7 @@ class SupportedEntityType(StrEnum):
     RUN_SQL_QUERY_TOOL = "RunSQLQueryTool"
     DOCUMENT_ENHANCED_LLM_CALL = "Document Enhanced LLM Agent"
     DOCUMENT_REACT_LOADER_AGENT = "Document AI Agent"
-    INPUT = "Input"
+    INPUT = "API Input"
     FILTER = "Filter"
 
     # Integrations

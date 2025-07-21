@@ -7,6 +7,7 @@ from engine.agent.agent import (
     Agent,
     ChatMessage,
     AgentPayload,
+    ComponentAttributes,
     ToolDescription,
 )
 from engine.agent.rag.reranker import Reranker
@@ -33,16 +34,18 @@ class RAG(Agent):
         tool_description: ToolDescription,
         retriever: Retriever,
         synthesizer: Synthesizer,
-        component_instance_name: str = "RAG",
+        component_attributes: Optional[ComponentAttributes] = None,
         reranker: Optional["Reranker"] = None,
         formatter: Optional[Formatter] = None,
         vocabulary_search: Optional[VocabularySearch] = None,
         input_data_field_for_messages_history: str = "messages",
     ) -> None:
+        if component_attributes is None:
+            component_attributes = ComponentAttributes(component_instance_name=self.__class__.__name__)
         super().__init__(
             trace_manager=trace_manager,
             tool_description=tool_description,
-            component_instance_name=component_instance_name,
+            component_attributes=component_attributes,
         )
         self._retriever = retriever
         self._synthesizer = synthesizer
@@ -68,10 +71,10 @@ class RAG(Agent):
         if content is None:
             raise ValueError("No content provided for the RAG tool.")
         formatted_filters = format_qdrant_filter(filters, FILTERING_CONDITION_WITH_METADATA_QDRANT)
-        chunks = self._retriever.get_chunks(query_text=content, filters=formatted_filters)
+        chunks = await self._retriever.get_chunks(query_text=content, filters=formatted_filters)
 
         if self._reranker is not None:
-            chunks = self._reranker.rerank(query=content, chunks=chunks)
+            chunks = await self._reranker.rerank(query=content, chunks=chunks)
 
         vocabulary_context = {}
         if self._vocabulary_search is not None:
@@ -82,7 +85,7 @@ class RAG(Agent):
                 )
             }
 
-        sourced_response = self._synthesizer.get_response(
+        sourced_response = await self._synthesizer.get_response(
             query_str=content,
             chunks=chunks,
             optional_contexts=vocabulary_context,

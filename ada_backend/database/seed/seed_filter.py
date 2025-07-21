@@ -95,9 +95,7 @@ def seed_filter_components(session: Session):
                 default=json.dumps(DEFAULT_OUTPUT_FORMAT, indent=4),
                 ui_component=UIComponent.TEXTAREA,
                 ui_component_properties=UIComponentProperties(
-                    label="""An example of your filter schema""",
-                    placeholder="A schema for filtering the final response. Must be a correct "
-                    "json schema that defines the structure of the expected output.",
+                    label="""Filtering schema to apply""",
                     description="Describe here the schema for filtering the final workflow response."
                     " Must be a correct json schema. The output will be validated against this schema"
                     " and filtered to only include the specified fields.",

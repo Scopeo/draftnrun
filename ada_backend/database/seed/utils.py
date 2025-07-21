@@ -1,4 +1,5 @@
 from uuid import UUID
+from typing import Optional
 
 from pydantic import BaseModel
 
@@ -6,6 +7,27 @@ from ada_backend.database.models import ParameterType, SelectOption, UIComponent
 from ada_backend.database import models as db
 from ada_backend.services.registry import COMPLETION_MODEL_IN_DB, EMBEDDING_MODEL_IN_DB
 from settings import settings
+
+
+def add_custom_llm_model(
+    custom_models: dict[str, dict[str, str]],
+    model_type: str,
+    model_capacity: Optional[str] = None,
+) -> list[SelectOption]:
+    list_model_options = []
+    for provider, provider_info in custom_models.items():
+        models = provider_info.get(model_type)
+        for model in models:
+            if model_capacity is None or model.get(model_capacity):
+                model_name = model.get("model_name")
+                custom_llm_reference = f"{provider}:{model_name}"
+                list_model_options.append(
+                    SelectOption(
+                        value=custom_llm_reference,
+                        label=model_name,
+                    )
+                )
+    return list_model_options
 
 
 # Define UUIDs for components and instances
@@ -38,52 +60,46 @@ COMPONENT_UUIDS: dict[str, UUID] = {
     "gmail_sender": UUID("af96bb40-c9ea-4851-a663-f0e64363fcb2"),
 }
 
-OPTIONS_COMPLETION_MODELS = [
+FULL_CAPACITY_COMPLETION_MODELS = [
     # OpenAI
     SelectOption(value="openai:gpt-4.1", label="GPT-4.1"),
     SelectOption(value="openai:gpt-4.1-mini", label="GPT-4.1 Mini"),
     SelectOption(value="openai:gpt-4.1-nano", label="GPT-4.1 Nano"),
     SelectOption(value="openai:gpt-4o", label="GPT-4o"),
     SelectOption(value="openai:gpt-4o-mini", label="GPT-4o Mini"),
-    # TODO add new llm service for resoning models
-    # SelectOption(value="openai:o4-mini-2025-04-16", label="GPT-4o4 Mini"),
-    # SelectOption(value="openai:o3-2025-04-16", label="GPT-4o3"),
-    # TODO: Add models once they work using llm_service
+    # Cerebras
+    SelectOption(value="cerebras:llama-3.3-70b", label="Llama 3.3 70B (Cerebras)"),
+    SelectOption(value="cerebras:qwen-3-235b-a22b", label="Qwen 3 235B (Cerebras)"),
+]
+
+OPTIONS_COMPLETION_MODELS = FULL_CAPACITY_COMPLETION_MODELS + [
     # Google (Gemini)
-    # SelectOption(value="google:gemini-2.5-pro-preview-06-05", label="Gemini 2.5 Pro"),
-    # SelectOption(value="google:gemini-2.5-flash-preview-05-20", label="Gemini 2.5 Flash"),
-    # SelectOption(value="google:gemini-2.0-flash", label="Gemini 2.0 Flash"),
-    # SelectOption(value="google:gemini-2.0-flash-lite", label="Gemini 2.0 Flash lite"),
+    SelectOption(value="google:gemini-2.5-pro-preview-06-05", label="Gemini 2.5 Pro"),
+    SelectOption(value="google:gemini-2.5-flash-preview-05-20", label="Gemini 2.5 Flash"),
+    SelectOption(value="google:gemini-2.0-flash", label="Gemini 2.0 Flash"),
+    SelectOption(value="google:gemini-2.0-flash-lite", label="Gemini 2.0 Flash lite"),
     # Mistral
     # SelectOption(value="mistral:mistral-large", label="Mistral Large"),
     # SelectOption(value="mistral:mistral-small-3", label="Mistral Small 3"),
-    # # Anthropic (Claude) TODO: Add Anthropic (Claude)
+    # Anthropic (Claude) TODO: Add Anthropic (Claude)
     # SelectOption(value="anthropic:claude-3.7-sonnet", label="Claude 3.7 Sonnet"),
     # SelectOption(value="anthropic:claude-3.5-sonnet", label="Claude 3.5 Sonnet"),
     # SelectOption(value="anthropic:claude-3.5-haiku", label="Claude 3.5 Haiku"),
 ]
+OPTIONS_COMPLETION_MODELS.extend(
+    add_custom_llm_model(settings.custom_models, "completion_models", "constrained_completion_with_pydantic")
+)
+
+OPTIONS_FUNCTION_CALLING_MODELS = FULL_CAPACITY_COMPLETION_MODELS
+OPTIONS_FUNCTION_CALLING_MODELS.extend(
+    add_custom_llm_model(settings.custom_models, "completion_models", "function_calling")
+)
 
 OPTIONS_EMBEDDING_MODELS = [
     # OpenAI
     SelectOption(value="openai:text-embedding-3-large", label="Text Embedding 3 Large"),
 ]
-
-
-def add_custom_llm_model(list_model_options: list[SelectOption], custom_llm_models: dict[str, dict[str, str]]):
-    for provider, model_info in custom_llm_models.items():
-        model_names = model_info.get("model_name")
-        for model_name in model_names:
-            custom_llm_reference = f"{provider}:{model_name}"
-            list_model_options.append(
-                SelectOption(
-                    value=custom_llm_reference,
-                    label=model_name,
-                )
-            )
-
-
-add_custom_llm_model(OPTIONS_COMPLETION_MODELS, settings.custom_llm_models)
-add_custom_llm_model(OPTIONS_EMBEDDING_MODELS, settings.custom_embedding_models)
+OPTIONS_EMBEDDING_MODELS.extend(add_custom_llm_model(settings.custom_models, "embedding_models"))
 
 
 class ParameterLLMConfig(BaseModel):
@@ -118,6 +134,61 @@ def build_completion_service_config_definitions(
                     ui_component=UIComponent.SELECT,
                     ui_component_properties=UIComponentProperties(
                         options=OPTIONS_COMPLETION_MODELS,
+                        label="Model Name",
+                    ).model_dump(exclude_unset=True, exclude_none=True),
+                )
+            )
+        if param.param_name == "temperature":
+            definitions.append(
+                db.ComponentParameterDefinition(
+                    id=param.param_id,
+                    component_id=component_id,
+                    name="temperature",
+                    type=ParameterType.FLOAT,
+                    nullable=False,
+                    default="1.0",
+                )
+            )
+        if param.param_name == "api_key":
+            definitions.append(
+                db.ComponentParameterDefinition(
+                    id=param.param_id,
+                    component_id=component_id,
+                    name="api_key",
+                    type=ParameterType.LLM_API_KEY,
+                    nullable=True,
+                )
+            )
+    return definitions
+
+
+def build_function_calling_service_config_definitions(
+    component_id: UUID,
+    params_to_seed: list[ParameterLLMConfig],
+) -> list[db.ComponentParameterDefinition]:
+    """
+    Simple helper function to avoid code duplication.
+    params_to_seed is a list of parameters to seed for the given component.
+    options: [
+        "completion_model",
+        "temperature",
+        "api_key",
+    ]
+    """
+    definitions: list[db.ComponentParameterDefinition] = []
+    for param in params_to_seed:
+        if param.param_name == COMPLETION_MODEL_IN_DB:
+            definitions.append(
+                db.ComponentParameterDefinition(
+                    id=param.param_id,
+                    component_id=component_id,
+                    name=COMPLETION_MODEL_IN_DB,
+                    type=ParameterType.STRING,
+                    nullable=False,
+                    default="openai:gpt-4.1-mini",
+                    ui_component=UIComponent.SELECT,
+                    ui_component_properties=UIComponentProperties(
+                        options=OPTIONS_FUNCTION_CALLING_MODELS,
                         label="Model Name",
                     ).model_dump(exclude_unset=True, exclude_none=True),
                 )
@@ -219,7 +290,6 @@ def build_web_service_config_definitions(
                             # OpenAI
                             SelectOption(value="openai:gpt-4.1", label="GPT-4.1"),
                             SelectOption(value="openai:gpt-4.1-mini", label="GPT-4.1 Mini"),
-                            SelectOption(value="openai:gpt-4.1-nano", label="GPT-4.1 Nano"),
                             SelectOption(value="openai:gpt-4o", label="GPT-4o"),
                             SelectOption(value="openai:gpt-4o-mini", label="GPT-4o Mini"),
                         ],
