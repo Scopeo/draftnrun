@@ -78,6 +78,7 @@ class LLMCallAgent(Agent):
         text_content = self._prompt_template.format(**input_replacements)
 
         if len(files_content) > 0:
+            # TODO: Add support for other providers
             if self._completion_service._provider != "openai":
                 raise ValueError(f"File content is not supported for provider '{self._completion_service._provider}'.")
             content = [
