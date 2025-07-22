@@ -40,23 +40,6 @@ def seed_ocr_call_components(session: Session):
     upsert_components_parameter_definitions(
         session=session,
         component_parameter_definitions=[
-            db.ComponentParameterDefinition(
-                id=UUID("b1c2d3e4-f5a6-7890-1234-56789abcdef0"),
-                component_id=ocr_call.id,
-                name="file_content",
-                type=ParameterType.STRING,
-                nullable=True,
-                ui_component=UIComponent.TEXTFIELD,
-                ui_component_properties=UIComponentProperties(
-                    label="File Content Reference",
-                    placeholder="{file_content}",
-                    description=(
-                        "Reference the output key from the previous component that contains the file content. "
-                        "Use the placeholder {file_content} to dynamically insert this content. "
-                        "The curly braces {} with the keyword are required for proper substitution."
-                    ),
-                ).model_dump(exclude_unset=True, exclude_none=True),
-            ),
             *build_ocr_service_config_definitions(
                 component_id=ocr_call.id,
                 params_to_seed=[
