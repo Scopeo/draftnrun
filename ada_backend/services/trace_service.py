@@ -10,6 +10,8 @@ from ada_backend.schemas.trace_schema import TraceSpan, TokenUsage
 from ada_backend.services.metrics.utils import query_trace_duration
 from engine.trace import models
 from engine.trace.sql_exporter import get_session_trace
+from ada_backend.segment_analytics import track_project_observability_loaded
+
 
 LOGGER = logging.getLogger(__name__)
 
@@ -135,8 +137,9 @@ def build_span_trees(df: pd.DataFrame) -> List[TraceSpan]:
     return trace_trees
 
 
-def get_trace_by_project(project_id: UUID, duration: int) -> List[TraceSpan]:
+def get_trace_by_project(user_id: UUID, project_id: UUID, duration: int) -> List[TraceSpan]:
     df = query_trace_duration(project_id, duration)
+    track_project_observability_loaded(user_id, project_id)
     return build_span_trees(df)
 
 
