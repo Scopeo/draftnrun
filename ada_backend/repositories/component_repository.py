@@ -286,7 +286,7 @@ def get_all_components_with_parameters(
                         name=param.name,
                         type=param.type,
                         nullable=param.nullable,
-                        default=param.default,
+                        default=param.get_default(),
                         ui_component=param.ui_component,
                         ui_component_properties=param.ui_component_properties,
                         is_advanced=param.is_advanced,

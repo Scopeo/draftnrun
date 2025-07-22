@@ -152,6 +152,33 @@ class UIComponentProperties(BaseModel):
     type: Optional[str] = Field(None, description="Set to 'password' for password fields")
 
 
+def cast_value(
+    parameter_type: ParameterType,
+    unresolved_value: str,
+) -> str | int | float | bool | dict:
+    if parameter_type == ParameterType.STRING:
+        return unresolved_value
+    elif parameter_type == ParameterType.INTEGER:
+        return int(unresolved_value)
+    elif parameter_type == ParameterType.FLOAT:
+        return float(unresolved_value)
+    elif parameter_type == ParameterType.BOOLEAN:
+        return unresolved_value.lower() in ("true", "1")
+    elif parameter_type == ParameterType.JSON:
+        if unresolved_value == "None":
+            return None
+        return json.loads(unresolved_value)
+    elif parameter_type == ParameterType.LLM_API_KEY:
+        return unresolved_value
+    elif parameter_type == ParameterType.COMPONENT:
+        raise ValueError("Parameter type COMPONENT is not supported for BasicParameters")
+    elif parameter_type == ParameterType.DATA_SOURCE:
+        # data_source is a JSON object that contains id and name of the source
+        return json.loads(unresolved_value)
+    else:
+        raise ValueError(f"Unsupported value type: {parameter_type}")
+
+
 # --- Models ---
 class Component(Base):
     """
@@ -291,6 +318,9 @@ class ComponentParameterDefinition(Base):
     child_components = relationship(
         "ComponentParameterChildRelationship", back_populates="component_parameter_definition"
     )
+
+    def get_default(self):
+        return cast_value(self.type, self.default)
 
     def __str__(self):
         return f"CompParamDef(name={self.name}, type={self.type}, is_advanced={self.is_advanced})"
@@ -449,34 +479,7 @@ class BasicParameter(Base):
         unresolved_value = self.value
         if self.organization_secret:
             unresolved_value = self.organization_secret.get_secret()
-        return self._cast_value(unresolved_value)
-
-    def _cast_value(
-        self,
-        unresolved_value: str,
-    ) -> str | int | float | bool | dict:
-        parameter_type = self.parameter_definition.type
-        if parameter_type == ParameterType.STRING:
-            return unresolved_value
-        elif parameter_type == ParameterType.INTEGER:
-            return int(unresolved_value)
-        elif parameter_type == ParameterType.FLOAT:
-            return float(unresolved_value)
-        elif parameter_type == ParameterType.BOOLEAN:
-            return unresolved_value.lower() in ("true", "1")
-        elif parameter_type == ParameterType.JSON:
-            if unresolved_value == "None":
-                return None
-            return json.loads(unresolved_value)
-        elif parameter_type == ParameterType.LLM_API_KEY:
-            return unresolved_value
-        elif parameter_type == ParameterType.COMPONENT:
-            raise ValueError("Parameter type COMPONENT is not supported for BasicParameters")
-        elif parameter_type == ParameterType.DATA_SOURCE:
-            # data_source is a JSON object that contains id and name of the source
-            return json.loads(unresolved_value)
-        else:
-            raise ValueError(f"Unsupported value type: {parameter_type}")
+        return cast_value(self.parameter_definition.type, unresolved_value)
 
     def __str__(self):
         value_display = (
