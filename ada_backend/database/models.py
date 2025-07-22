@@ -164,17 +164,14 @@ def cast_value(
         return float(unresolved_value)
     elif parameter_type == ParameterType.BOOLEAN:
         return unresolved_value.lower() in ("true", "1")
-    elif parameter_type == ParameterType.JSON:
-        if unresolved_value == "None":
+    elif parameter_type == ParameterType.JSON or parameter_type == ParameterType.DATA_SOURCE:
+        if unresolved_value == "None" or unresolved_value is None:
             return None
         return json.loads(unresolved_value)
     elif parameter_type == ParameterType.LLM_API_KEY:
         return unresolved_value
     elif parameter_type == ParameterType.COMPONENT:
         raise ValueError("Parameter type COMPONENT is not supported for BasicParameters")
-    elif parameter_type == ParameterType.DATA_SOURCE:
-        # data_source is a JSON object that contains id and name of the source
-        return json.loads(unresolved_value)
     else:
         raise ValueError(f"Unsupported value type: {parameter_type}")
 
