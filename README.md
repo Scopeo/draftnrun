@@ -98,6 +98,18 @@ By default, boto3 will use the amazon s3 endpoint.
 In general, if you want to modify the credentials for any of those services,
 update the Docker Compose file accordingly.
 
+### Service Configuration
+
+Service configurations are in the `config/` folder. Some files are templates that get processed with environment variables from `credentials.env`. Templates use gomplate - install with `brew install gomplate` (macOS) or from https://github.com/hairyhenderson/gomplate/releases (Linux).
+
+**Important**: Always run the render script before starting services to ensure consistency:
+
+```bash
+./scripts/render_configs.sh
+```
+
+This generates the `generated-config/` folder that Docker containers use.
+
 To launch the services, navigate to the `services` folder and run:
 
 ```bash
@@ -388,13 +400,16 @@ ADA_URL=http://localhost:8000
 ```
 
 #### Google OAuth Setup
+
 To enable Google login, set these in your credentials.env:
 
 ```env
 GOOGLE_CLIENT_ID=your-google-client-id
 GOOGLE_CLIENT_SECRET=your-google-client-secret
 ```
+
 How to get them:
+
 - Go to Google Cloud Console.
 - Create OAuth 2.0 credentials (type: Web application).
 - Add your app’s redirect URI (e.g. https://yourdomain.com/auth/google/callback).
@@ -469,127 +484,125 @@ Our observability stack consists of:
 
 This setup provides both **operational monitoring** (for DevOps) and **user-facing analytics** (for business insights).
 
+### Environment Variables
+
+The observability stack uses two types of variables:
+
+**Backend connection variables** (what the backend uses to connect to observability services):
+
+```env
+# Backend connects to these endpoints
+TEMPO_ENDPOINT=http://localhost:4318/v1/traces
+PROMETHEUS_SERVER_URL=http://localhost:9090
+GRAFANA_URL=http://localhost:3000
+ENABLE_OBSERVABILITY_STACK=true
+```
+
+**Service configuration variables** (for service configuration):
+
+```env
+# Grafana datasource configuration
+GRAFANA_PROMETHEUS_HOST=prometheus
+GRAFANA_PROMETHEUS_PORT=9090
+GRAFANA_TEMPO_HOST=tempo
+GRAFANA_TEMPO_PORT=3200
+
+# Grafana security
+GF_SECURITY_ADMIN_USER=admin
+GF_SECURITY_ADMIN_PASSWORD=admin
+
+# Prometheus target configuration
+PROMETHEUS_TARGET_BACKEND_HOST=host.docker.internal
+PROMETHEUS_TARGET_BACKEND_HTTP_PORT=8000
+PROMETHEUS_TARGET_BACKEND_AGENTS_PORT=9100
+```
+
+**For production**: Update the URLs in backend connection variables to point to your remote services.
+
 ### Enabling/Disabling Observability
 
-Control the observability stack with a single environment variable:
+You can enable or disable the observability stack with a single environment variable:
 
 ```env
-ENABLE_OBSERVABILITY_STACK=true   # Enable (requires observability stack running)
-ENABLE_OBSERVABILITY_STACK=false  # Disable (backend runs standalone)
+ENABLE_OBSERVABILITY_STACK=true   # Default: enabled
+ENABLE_OBSERVABILITY_STACK=false  # Disable instrumentation
 ```
 
-When disabled, the backend runs without external observability dependencies. User-facing analytics still work normally.
+When disabled, the backend runs normally without sending metrics or traces.
 
-### Quick Start - Observability Only
+### Starting Observability Stack
 
-If you only need the observability stack (without databases), run:
+Run the render script and launch the observability services:
 
 ```bash
+./scripts/render_configs.sh
 cd services
-docker compose up -d prometheus tempo grafana
+docker compose up -d prometheus grafana
 ```
 
-### Deployment Options
+Visit:
 
-#### 1. **Local Development** (Default)
-
-Perfect for development and testing:
-
-```bash
-cd services
-docker compose up -d prometheus tempo grafana
-```
-
-Access points:
-
-- **Grafana Dashboard**: http://localhost:3000
-- **Prometheus Metrics**: http://localhost:9090
-- **FastAPI Metrics**: http://localhost:8000/metrics
-
-#### 2. **Same-Machine Production** (Recommended for quick deployment)
-
-Deploy observability stack on the same server as your backend:
-
-**Security Setup** (Important!):
-
-```env
-# In credentials.env - CHANGE THESE VALUES!
-GRAFANA_ADMIN_USER=your-username
-GRAFANA_ADMIN_PASSWORD=your-secure-password
-
-# Keep localhost URLs for same-machine deployment
-TEMPO_ENDPOINT=http://localhost:4318/v1/traces
-PROMETHEUS_URL=http://localhost:9090
-GRAFANA_URL=http://localhost:3000
-```
-
-```bash
-cd services
-ln -s ../credentials.env .env
-docker compose up -d prometheus tempo grafana
-```
-
-**⚠️ Important:** The symlink `services/.env` → `credentials.env` is needed to correctly setup values from `credentials.env` for variable interpolation in `docker-compose.yml`.
-
-**🔒 Security Note**: Grafana is now secured with login authentication. Set strong credentials in `credentials.env`.
-
-#### 3. **Separate Infrastructure** (Enterprise setup)
-
-Deploy observability on dedicated servers/cluster:
-
-```env
-# In credentials.env - Point to your monitoring infrastructure
-TEMPO_ENDPOINT=https://tempo.your-domain.com/v1/traces
-PROMETHEUS_URL=https://prometheus.your-domain.com
-GRAFANA_URL=https://grafana.your-domain.com
-GRAFANA_ADMIN_USER=admin
-GRAFANA_ADMIN_PASSWORD=secure-password
-```
-
-No code changes needed - just update environment variables!
+- Grafana: [http://localhost:3000](http://localhost:3000) (admin/admin if using default values)
+- Prometheus: [http://localhost:9090](http://localhost:9090)
 
 ### Testing Your Setup
 
-1. **Health Check**: Run the observability test script
+Use the provided scripts to validate metrics and tracing:
 
-   ```bash
-   ./scripts/test_observability_stack.sh
-   ```
-
-2. **Load Testing**: Generate metrics with realistic traffic
-
-   ```bash
-   uv run python -m scripts.load_testing --users 10 --duration 60
-   ```
-
-3. **Dashboard Access**:
-   - Login to Grafana at your configured URL
-   - View "FastAPI Performance Dashboard"
-   - Monitor real-time metrics during load tests
-
-### Health Check Script
-
-Use the observability health check script to verify all components are connected and working:
+Health check:
 
 ```bash
 ./scripts/test_observability_stack.sh
 ```
 
-This script automatically tests:
-
-- ✅ **FastAPI**: Backend connectivity and metrics generation
-- ✅ **Prometheus**: Server health and target scraping status
-- ✅ **Tempo**: Tracing backend and trace collection
-- ✅ **Grafana**: Dashboard health and API connectivity
-- ✅ **Metrics Integration**: End-to-end data flow verification
-
-**For production environments**, set environment variables to test remote infrastructure:
+Load testing:
 
 ```bash
-PROMETHEUS_HOST=prometheus.your-domain.com \
-GRAFANA_HOST=grafana.your-domain.com \
+uv run python -m scripts.load_testing --users 10 --duration 60
+```
+
+Then open Grafana and check the FastAPI Performance Dashboard or explore Prometheus targets to verify everything is flowing correctly.
+
+For production, just update the environment variables and re-run the render script.
+
+### Quick Start
+
+1. **Generate configurations**:
+
+```bash
+./scripts/render_configs.sh
+```
+
+2. **Start services**:
+
+```bash
+cd services
+docker compose up -d prometheus grafana
+```
+
+3. **Access dashboards**:
+   - **Grafana**: http://localhost:3000 (admin/admin)
+   - **Prometheus**: http://localhost:9090
+
+**For production**: Update variables in `credentials.env` and regenerate configurations.
+
+### Testing Your Setup
+
+**Health check**:
+
+```bash
 ./scripts/test_observability_stack.sh
 ```
+
+This script will check if the components are correctly connected (FastAPI Backend, Prometheus, Tempo, Grafana)
+
+**Load testing** (generates realistic metrics):
+
+```bash
+uv run python -m scripts.load_testing --users 10 --duration 60
+```
+
+**Dashboard access**: Login to Grafana and view "FastAPI Performance Dashboard".
 
 ## Developer Guide
 

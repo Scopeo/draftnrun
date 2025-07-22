@@ -36,7 +36,7 @@ def calculate_prometheus_step(duration_days: int, target_points: int = 200) -> s
 
 
 def query_prometheus_agent_calls(project_id: UUID, start_time: str, end_time: str, step: str) -> dict:
-    url = f"{settings.PROMETHEUS_URL}/api/v1/query_range"
+    url = f"{settings.PROMETHEUS_SERVER_URL}/api/v1/query_range"
     params = {
         "query": f'agent_calls_total{{project_id="{project_id}"}}',
         "start": start_time,

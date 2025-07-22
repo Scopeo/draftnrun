@@ -4,6 +4,7 @@
 .coverage
 .pytest_cache
 .idea
+.cursor
 
 # virtual-env
 venv
@@ -16,6 +17,7 @@ azure_files
 docstore
 images/*
 monitoring
+generated-config
 *.db
 pipeline.json
 *.csv

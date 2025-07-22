@@ -54,9 +54,15 @@ services:
       - ../config/qdrant/production.yaml:/qdrant/config/production.yaml
 
   prometheus:
-    image: prom/prometheus
+    image: prom/prometheus:latest
+    env_file:
+      - ../credentials.env
+    environment:
+      - PROMETHEUS_TARGET_BACKEND_HOST=${PROMETHEUS_TARGET_BACKEND_HOST:-host.docker.internal}
+      - PROMETHEUS_TARGET_BACKEND_HTTP_PORT=${PROMETHEUS_TARGET_BACKEND_HTTP_PORT:-8000}
+      - PROMETHEUS_TARGET_BACKEND_AGENTS_PORT=${PROMETHEUS_TARGET_BACKEND_AGENTS_PORT:-9100}
     volumes:
-      - ../config/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ../generated-config/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
       - prometheus_data:/prometheus
     networks:
       - localprom
@@ -145,13 +151,13 @@ services:
     depends_on:
       - seaweedfs-filer
     container_name: seaweedfs-s3
-    
+
   tempo:
     image: grafana/tempo:latest
     user: "root"
     command: ["-config.file=/etc/tempo.yaml"]
     volumes:
-      - ./../config/tempo.yaml:/etc/tempo.yaml
+      - ../generated-config/tempo.yaml:/etc/tempo.yaml
       - tempo_data:/tmp/tempo
     networks:
       - localprom
@@ -160,12 +166,12 @@ services:
       - "4318:4318" # OTLP HTTP
 
   grafana:
-    build:
-      context: ../config/grafana
-      dockerfile: Dockerfile
+    image: grafana/grafana:latest
     env_file:
       - ../credentials.env
     volumes:
+      - ../generated-config/grafana/provisioning:/etc/grafana/provisioning
+      - ../generated-config/grafana/dashboards:/etc/grafana/dashboards
       - grafana_data:/var/lib/grafana
     environment:
       # Grafana configuration
