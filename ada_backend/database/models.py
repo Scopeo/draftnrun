@@ -468,6 +468,8 @@ class BasicParameter(Base):
             if unresolved_value == "None":
                 return None
             return json.loads(unresolved_value)
+        elif parameter_type == ParameterType.LLM_API_KEY:
+            return unresolved_value
         elif parameter_type == ParameterType.COMPONENT:
             raise ValueError("Parameter type COMPONENT is not supported for BasicParameters")
         elif parameter_type == ParameterType.DATA_SOURCE:

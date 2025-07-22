@@ -154,7 +154,7 @@ def get_instance_parameters_with_definition(
     return [
         InstanceParameterWithDefinition(
             name=param_def.name,
-            value=param.value,
+            value=param.get_value(),
             type=param_def.type,
             nullable=param_def.nullable,
             default=param_def.default,
