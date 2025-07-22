@@ -190,6 +190,15 @@ def create_factory_registry() -> FactoryRegistry:
         ),
         build_web_service_processor(),
     )
+    ocr_service_processor = compose_processors(
+        build_param_name_translator(
+            {
+                COMPLETION_MODEL_IN_DB: "completion_model",
+                "api_key": "llm_api_key",
+            }
+        ),
+        build_ocr_service_processor(),
+    )
 
     # Register components
     registry.register(
@@ -295,6 +304,15 @@ def create_factory_registry() -> FactoryRegistry:
         ),
     )
     registry.register(
+        name=SupportedEntityType.OCR_CALL,
+        factory=AgentFactory(
+            entity_class=OCRCall,
+            parameter_processors=[
+                ocr_service_processor,
+            ],
+        ),
+    )
+    registry.register(
         name=SupportedEntityType.RAG_AGENT,
         factory=AgentFactory(
             entity_class=RAG,
@@ -378,22 +396,6 @@ def create_factory_registry() -> FactoryRegistry:
             entity_class=DocumentReactLoaderAgent,
             parameter_processors=[
                 completion_service_processor,
-            ],
-        ),
-    )
-    registry.register(
-        name=SupportedEntityType.OCR_CALL,
-        factory=AgentFactory(
-            entity_class=OCRCall,
-            parameter_processors=[
-                compose_processors(
-                    build_param_name_translator(
-                        {
-                            "api_key": "llm_api_key",
-                        }
-                    ),
-                    build_ocr_service_processor(),
-                ),
             ],
         ),
     )

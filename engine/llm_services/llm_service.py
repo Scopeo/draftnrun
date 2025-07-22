@@ -8,7 +8,10 @@ from pydantic import BaseModel
 from opentelemetry.trace import get_current_span
 from openinference.semconv.trace import SpanAttributes
 
-from engine.llm_services.utils import check_usage, make_messages_compatible_for_mistral
+from engine.llm_services.utils import (
+    check_usage,
+    make_messages_compatible_for_mistral,
+)
 from engine.trace.trace_manager import TraceManager
 from engine.agent.agent import ToolDescription
 from engine.agent.utils import load_str_to_json
@@ -627,7 +630,7 @@ class CompletionService(LLMService):
                 )
                 return response.choices[0].message.content
             case _:
-                raise ValueError(f"Invalid provider: {self._provider}")
+                raise ValueError(f"Invalid provider for constrained complete with json schema: {self._provider}")
 
     @with_usage_check
     def function_call(
@@ -657,7 +660,6 @@ class CompletionService(LLMService):
                     stream=stream,
                     tool_choice=tool_choice,
                 )
-                print(response)
                 span.set_attributes(
                     {
                         SpanAttributes.LLM_TOKEN_COUNT_COMPLETION: response.usage.completion_tokens,
@@ -688,30 +690,7 @@ class CompletionService(LLMService):
                     }
                 )
                 return response
-            case "cerebras":  # all the providers that are using openai chat completion go here
-                import openai
-
-                client = openai.OpenAI(
-                    api_key=self._api_key,
-                    base_url=self._base_url,
-                )
-                response = client.chat.completions.create(
-                    model=self._model_name,
-                    messages=messages,
-                    tools=openai_tools,
-                    temperature=self._temperature,
-                    stream=stream,
-                    tool_choice=tool_choice,
-                )
-                span.set_attributes(
-                    {
-                        SpanAttributes.LLM_TOKEN_COUNT_COMPLETION: response.usage.completion_tokens,
-                        SpanAttributes.LLM_TOKEN_COUNT_PROMPT: response.usage.prompt_tokens,
-                        SpanAttributes.LLM_TOKEN_COUNT_TOTAL: response.usage.total_tokens,
-                    }
-                )
-                return response
-            case _:
+            case _:  # all the providers that are using openai chat completion go here
                 import openai
 
                 client = openai.OpenAI(
@@ -751,7 +730,7 @@ class CompletionService(LLMService):
         span = get_current_span()
         span.set_attributes({SpanAttributes.LLM_INVOCATION_PARAMETERS: json.dumps({"temperature": self._temperature})})
         match self._provider:
-            case "openai":
+            case "openai" | "google":
                 import openai
 
                 if self._api_key is None:
@@ -777,7 +756,7 @@ class CompletionService(LLMService):
                 import openai
 
                 # Clean messages for Mistral's stricter API requirements
-                cleaned_messages = make_messages_compatible_for_mistral(messages)
+                mistral_compatible_messages = make_messages_compatible_for_mistral(messages)
 
                 client = openai.AsyncOpenAI(
                     api_key=self._api_key,
@@ -785,7 +764,7 @@ class CompletionService(LLMService):
                 )
                 response = await client.chat.completions.create(
                     model=self._model_name,
-                    messages=cleaned_messages,
+                    messages=mistral_compatible_messages,
                     tools=openai_tools,
                     temperature=self._temperature,
                     stream=stream,
@@ -1083,3 +1062,5 @@ class OCRService(LLMService):
                 for page in ocr_response.pages:
                     full_document_markdown += page.markdown
                 return full_document_markdown
+            case _:
+                raise ValueError(f"Invalid provider for OCR: {self._provider}")
