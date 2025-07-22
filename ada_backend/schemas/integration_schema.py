@@ -6,8 +6,8 @@ from uuid import UUID
 
 class IntegrationSchema(BaseModel):
     id: UUID
-    name: Optional[str] = None
-    service: Optional[str] = None
+    name: str
+    service: str
 
 
 class GraphIntegrationSchema(IntegrationSchema):

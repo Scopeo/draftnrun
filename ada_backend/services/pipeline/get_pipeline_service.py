@@ -51,6 +51,7 @@ def get_component_instance(
         component_instance_integration = get_component_instance_integration_relationship(
             session, component_instance.id
         )
+        integration = get_integration(session, component.integration_id)
 
     return ComponentInstanceReadSchema(
         id=component_instance_id,
@@ -90,6 +91,8 @@ def get_component_instance(
         integration=(
             GraphIntegrationSchema(
                 id=component.integration_id,
+                name=integration.name if integration else None,
+                service=integration.service if integration else None,
                 secret_id=component_instance_integration.secret_integration_id,
             )
             if component.integration_id
