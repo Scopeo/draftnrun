@@ -54,6 +54,7 @@ def llm_call_with_output_format():
     trace_manager = MagicMock()
 
     llm_service = MagicMock()
+    llm_service._provider = "openai"  # Set the provider to openai to support file content
     llm_service.constrained_complete_with_json_schema_async = AsyncMock(
         return_value='{"location": "Miami", "unit": "F", "value": 85}'
     )
