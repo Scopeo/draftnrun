@@ -1,5 +1,6 @@
 import json
 import logging
+import asyncio
 from functools import wraps
 from typing import Optional
 from abc import ABC
@@ -96,42 +97,7 @@ class EmbeddingService(LLMService):
         super().__init__(trace_manager, provider, model_name, api_key, base_url)
 
     def embed_text(self, text: str) -> list[float]:
-        span = get_current_span()
-        match self._provider:
-            case "openai":
-                import openai
-
-                client = openai.OpenAI(api_key=self._api_key)
-                response = client.embeddings.create(
-                    model=self._model_name,
-                    input=text,
-                )
-                span.set_attributes(
-                    {
-                        SpanAttributes.LLM_TOKEN_COUNT_PROMPT: response.usage.prompt_tokens,
-                        SpanAttributes.LLM_TOKEN_COUNT_TOTAL: response.usage.total_tokens,
-                    }
-                )
-                return response.data
-
-            case _:
-                import openai
-
-                client = openai.OpenAI(
-                    api_key=self._api_key,
-                    base_url=self._base_url,
-                )
-                response = client.embeddings.create(
-                    model=self._model_name,
-                    input=text,
-                )
-                span.set_attributes(
-                    {
-                        SpanAttributes.LLM_TOKEN_COUNT_PROMPT: response.usage.prompt_tokens,
-                        SpanAttributes.LLM_TOKEN_COUNT_TOTAL: response.usage.total_tokens,
-                    }
-                )
-                return response.data
+        return asyncio.run(self.embed_text_async(text))
 
     async def embed_text_async(self, text: str) -> list[float]:
         span = get_current_span()
@@ -194,50 +160,7 @@ class CompletionService(LLMService):
         messages: list[dict] | str,
         stream: bool = False,
     ) -> str:
-        span = get_current_span()
-        span.set_attributes({SpanAttributes.LLM_INVOCATION_PARAMETERS: json.dumps({"temperature": self._temperature})})
-        match self._provider:
-            case "openai":
-                import openai
-
-                messages = chat_completion_to_response(messages)
-                client = openai.OpenAI(api_key=self._api_key)
-                response = client.responses.create(
-                    model=self._model_name,
-                    input=messages,
-                    temperature=self._temperature,
-                    stream=stream,
-                )
-                span.set_attributes(
-                    {
-                        SpanAttributes.LLM_TOKEN_COUNT_COMPLETION: response.usage.output_tokens,
-                        SpanAttributes.LLM_TOKEN_COUNT_PROMPT: response.usage.input_tokens,
-                        SpanAttributes.LLM_TOKEN_COUNT_TOTAL: response.usage.total_tokens,
-                    }
-                )
-                return response.output_text
-
-            case _:  # all the providers that are using openai chat completion go here
-                import openai
-
-                client = openai.OpenAI(
-                    api_key=self._api_key,
-                    base_url=self._base_url,
-                )
-                response = client.chat.completions.create(
-                    model=self._model_name,
-                    messages=messages,
-                    temperature=self._temperature,
-                    stream=stream,
-                )
-                span.set_attributes(
-                    {
-                        SpanAttributes.LLM_TOKEN_COUNT_COMPLETION: response.usage.completion_tokens,
-                        SpanAttributes.LLM_TOKEN_COUNT_PROMPT: response.usage.prompt_tokens,
-                        SpanAttributes.LLM_TOKEN_COUNT_TOTAL: response.usage.total_tokens,
-                    }
-                )
-                return response.choices[0].message.content
+        return asyncio.run(self.complete_async(messages, stream))
 
     @with_async_usage_check
     async def complete_async(
@@ -808,27 +731,7 @@ class WebSearchService(LLMService):
 
     @with_usage_check
     def web_search(self, query: str) -> str:
-        span = get_current_span()
-        match self._provider:
-            case "openai":
-                import openai
-
-                client = openai.OpenAI(api_key=self._api_key)
-                response = client.responses.create(
-                    model=self._model_name,
-                    input=query,
-                    tools=[{"type": "web_search_preview"}],
-                )
-                span.set_attributes(
-                    {
-                        SpanAttributes.LLM_TOKEN_COUNT_COMPLETION: response.usage.output_tokens,
-                        SpanAttributes.LLM_TOKEN_COUNT_PROMPT: response.usage.input_tokens,
-                        SpanAttributes.LLM_TOKEN_COUNT_TOTAL: response.usage.total_tokens,
-                    }
-                )
-                return response.output_text
-            case _:
-                raise ValueError(f"Invalid provider: {self._provider}")
+        return asyncio.run(self.web_search_async(query))
 
     @with_async_usage_check
     async def web_search_async(self, query: str) -> str:
