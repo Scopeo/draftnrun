@@ -20,10 +20,10 @@ from ada_backend.database.seed.utils import (
 from ada_backend.services.registry import COMPLETION_MODEL_IN_DB
 
 
-def seed_ocr_agent_components(session: Session):
-    ocr_agent = db.Component(
-        id=COMPONENT_UUIDS["ocr_agent"],
-        name="OCR Agent",
+def seed_ocr_call_components(session: Session):
+    ocr_call = db.Component(
+        id=COMPONENT_UUIDS["ocr_call"],
+        name="OCR Call",
         description="Extract text from PDF files using OCR (Optical Character Recognition)",
         is_agent=True,
         function_callable=True,
@@ -33,7 +33,7 @@ def seed_ocr_agent_components(session: Session):
     upsert_components(
         session=session,
         components=[
-            ocr_agent,
+            ocr_call,
         ],
     )
 
@@ -42,7 +42,7 @@ def seed_ocr_agent_components(session: Session):
         component_parameter_definitions=[
             db.ComponentParameterDefinition(
                 id=UUID("b1c2d3e4-f5a6-7890-1234-56789abcdef0"),
-                component_id=ocr_agent.id,
+                component_id=ocr_call.id,
                 name="file_content",
                 type=ParameterType.STRING,
                 nullable=True,
@@ -58,7 +58,7 @@ def seed_ocr_agent_components(session: Session):
                 ).model_dump(exclude_unset=True, exclude_none=True),
             ),
             *build_ocr_service_config_definitions(
-                component_id=ocr_agent.id,
+                component_id=ocr_call.id,
                 params_to_seed=[
                     ParameterLLMConfig(
                         param_name=COMPLETION_MODEL_IN_DB,

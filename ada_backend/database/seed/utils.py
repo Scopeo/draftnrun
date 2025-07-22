@@ -54,7 +54,7 @@ COMPONENT_UUIDS: dict[str, UUID] = {
     "document_search": UUID("79399392-25ba-4cea-9f25-2738765dc329"),
     "document_enhanced_llm_call_agent": UUID("6460b304-640c-4468-abd3-67bbff6902d4"),
     "document_react_loader_agent": UUID("1c2fdf5b-4a8d-4788-acb6-86b00124c7ce"),
-    "ocr_agent": UUID("a3b4c5d6-e7f8-9012-3456-789abcdef012"),
+    "ocr_call": UUID("a3b4c5d6-e7f8-9012-3456-789abcdef012"),
     "input": UUID("01357c0b-bc99-44ce-a435-995acc5e2544"),
     "filter": UUID("02468c0b-bc99-44ce-a435-995acc5e2545"),
     "python_code_runner": UUID("e2b00000-0000-1111-2222-333333333333"),
@@ -77,13 +77,13 @@ FULL_CAPACITY_COMPLETION_MODELS = [
     SelectOption(value="google:gemini-2.0-flash", label="Gemini 2.0 Flash"),
     SelectOption(value="google:gemini-2.0-flash-lite", label="Gemini 2.0 Flash lite"),
     # Mistral
-    SelectOption(value="mistral:mistral-large-2411", label="Mistral Large"),
-    SelectOption(value="mistral:mistral-medium-2505", label="Mistral Medium"),
+    SelectOption(value="mistral:mistral-large-latest", label="Mistral Large 2411"),
+    SelectOption(value="mistral:mistral-medium-latest", label="Mistral Medium 2505"),
 ]
 
 OPTIONS_COMPLETION_MODELS = FULL_CAPACITY_COMPLETION_MODELS + [
     # Mistral
-    SelectOption(value="mistral:mistral-small-2506", label="Mistral Small"),
+    SelectOption(value="mistral:mistral-small-latest", label="Mistral Small 2506"),
     # Anthropic (Claude) TODO: Add Anthropic (Claude)
     # SelectOption(value="anthropic:claude-3.7-sonnet", label="Claude 3.7 Sonnet"),
     # SelectOption(value="anthropic:claude-3.5-sonnet", label="Claude 3.5 Sonnet"),
@@ -339,7 +339,7 @@ def build_ocr_service_config_definitions(
                     ui_component=UIComponent.SELECT,
                     ui_component_properties=UIComponentProperties(
                         options=[
-                            SelectOption(value="mistral:mistral-ocr-latest", label="Mistral OCR"),
+                            SelectOption(value="mistral:mistral-ocr-latest", label="Mistral OCR 2505"),
                         ],
                         label="Model Name",
                     ).model_dump(exclude_unset=True, exclude_none=True),

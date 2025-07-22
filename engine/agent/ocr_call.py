@@ -8,7 +8,7 @@ from engine.llm_services.llm_service import OCRService
 from engine.trace.trace_manager import TraceManager
 
 
-class OCRAgent(Agent):
+class OCRCall(Agent):
     def __init__(
         self,
         trace_manager: TraceManager,

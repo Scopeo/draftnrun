@@ -41,9 +41,10 @@ def chat_completion_to_response(
     return response_messages
 
 
-def clean_messages_for_mistral(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def make_messages_compatible_for_mistral(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """
-    Clean messages for Mistral API by removing tool-related fields from message types that don't support them.
+    Make messages compatible for Mistral API by removing tool-related
+    fields from message types that don't support them.
 
     Mistral only allows:
     - tool_calls in assistant messages
@@ -52,25 +53,25 @@ def clean_messages_for_mistral(messages: list[dict[str, Any]]) -> list[dict[str,
     if not isinstance(messages, list):
         return messages
 
-    cleaned_messages = []
+    mistral_compatible_messages = []
     for message in messages:
-        cleaned_message = message.copy()
+        mistral_compatible_message = message.copy()
         role = message.get("role")
 
         # Remove tool_calls from non-assistant messages
-        if role != "assistant" and "tool_calls" in cleaned_message:
-            del cleaned_message["tool_calls"]
+        if role != "assistant" and "tool_calls" in mistral_compatible_message:
+            del mistral_compatible_message["tool_calls"]
 
         # Remove tool_call_id from non-tool messages
-        if role != "tool" and "tool_call_id" in cleaned_message:
-            del cleaned_message["tool_call_id"]
+        if role != "tool" and "tool_call_id" in mistral_compatible_message:
+            del mistral_compatible_message["tool_call_id"]
 
         # Remove None values to avoid sending empty fields
-        cleaned_message = {k: v for k, v in cleaned_message.items() if v is not None}
+        mistral_compatible_message = {k: v for k, v in mistral_compatible_message.items() if v is not None}
 
-        cleaned_messages.append(cleaned_message)
+        mistral_compatible_messages.append(mistral_compatible_message)
 
-    return cleaned_messages
+    return mistral_compatible_messages
 
 
 class LLMKeyLimitExceededError(Exception):

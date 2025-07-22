@@ -25,7 +25,7 @@ from ada_backend.database.seed.seed_api_call_tool import seed_api_call_component
 from ada_backend.database.seed.seed_python_code_runner import seed_python_code_runner_components
 from ada_backend.database.seed.seed_terminal_command_runner import seed_terminal_command_runner_components
 from ada_backend.database.seed.seed_web_search import seed_web_search_components
-from ada_backend.database.seed.seed_ocr_agent import seed_ocr_agent_components
+from ada_backend.database.seed.seed_ocr_call import seed_ocr_call_components
 from ada_backend.database.seed.seed_tool_description import seed_tool_description
 from ada_backend.database.seed.utils import COMPONENT_UUIDS
 
@@ -51,7 +51,7 @@ def seed_db(session: Session):
         seed_react_sql_components(session)
         seed_smart_rag_components(session)
         seed_web_search_components(session)
-        seed_ocr_agent_components(session)
+        seed_ocr_call_components(session)
         seed_input_components(session)
         seed_filter_components(session)
 
