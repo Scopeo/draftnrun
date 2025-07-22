@@ -46,7 +46,7 @@ def get_google_user_email(access_token: str) -> str:
         raise ValueError(f"Failed to fetch user info: {resp.status_code} {resp.text}")
 
 
-def refresh_oauth_token(refresh_token: str, client_id: str, client_secret: str) -> tuple[str, str]:
+def refresh_oauth_token(refresh_token: str, client_id: str, client_secret: str) -> tuple[str, str, datetime]:
     url = "https://oauth2.googleapis.com/token"
     payload = {
         "client_id": client_id,
@@ -56,8 +56,9 @@ def refresh_oauth_token(refresh_token: str, client_id: str, client_secret: str) 
     }
     resp = requests.post(url, data=payload)
     if resp.ok:
+        creation_timestamp = datetime.now(timezone.utc)
         tokens = resp.json()
-        return tokens.get("access_token"), tokens.get("refresh_token")
+        return tokens.get("access_token"), tokens.get("refresh_token"), creation_timestamp
     else:
         raise ValueError(f"Failed to refresh token: {resp.status_code} {resp.text}")
 
@@ -67,17 +68,25 @@ def get_oauth_access_token(
     integration_secret_id: UUID,
     google_client_id: str,
     google_client_secret: str,
-) -> None:
+) -> str:
 
     integration_secret = get_integration_secret(session, integration_secret_id)
     if integration_secret:
         # If the token is expired or needs to be refreshed
         if needs_new_token(integration_secret):
             refresh_token = integration_secret.get_refresh_token()
-            new_access_token, new_refresh_token = refresh_oauth_token(
+            new_access_token, new_refresh_token, creation_timestamp = refresh_oauth_token(
                 refresh_token, google_client_id, google_client_secret
             )
-            update_integration_secret(session, integration_secret.id, new_access_token, new_refresh_token)
+            update_integration_secret(
+                session,
+                integration_secret.id,
+                new_access_token,
+                new_refresh_token,
+                token_last_updated=creation_timestamp,
+            )
             return new_access_token
         else:
             return integration_secret.get_access_token()
+    else:
+        raise ValueError(f"Integration secret with ID {integration_secret_id} not found.")
