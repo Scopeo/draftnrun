@@ -6,6 +6,7 @@ from opentelemetry.trace import get_current_span
 from engine.agent.agent import Agent, AgentPayload, ChatMessage, ComponentAttributes, ToolDescription
 from engine.llm_services.llm_service import OCRService
 from engine.trace.trace_manager import TraceManager
+from engine.trace.serializer import serialize_to_json
 
 
 class OCRCall(Agent):
@@ -37,10 +38,16 @@ class OCRCall(Agent):
             span = get_current_span()
             span.set_attributes(
                 {
+                    SpanAttributes.INPUT_VALUE: serialize_to_json(payload_json),
                     SpanAttributes.LLM_MODEL_NAME: self._ocr_service._model_name,
                 }
             )
             response = await self._ocr_service.get_ocr_text_async(payload_json)
+            span.set_attributes(
+                {
+                    SpanAttributes.OUTPUT_VALUE: serialize_to_json(response),
+                }
+            )
             return AgentPayload(
                 messages=[ChatMessage(role="assistant", content=response)],
             )

@@ -1,12 +1,51 @@
 import json
 import string
-from typing import Union
+from typing import Union, Any
 import logging
 
 from fuzzywuzzy import fuzz, process
 
 
 LOGGER = logging.getLogger(__name__)
+BASE64_CHARS = set("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=")
+MAX_DISPLAY_CHARS = 10
+MIN_LENGTH = 500
+
+
+def _is_likely_base64(s: str) -> bool:
+    """Lightning fast base64 detection using set operations."""
+    length = len(s)
+
+    # Quick length checks
+    if length < MIN_LENGTH or length % 4 != 0:
+        return False
+
+    # Check for valid base64 characters (fast set lookup)
+    # Handle padding separately
+    content = s.rstrip("=")
+    if not content or not all(c in BASE64_CHARS for c in content):
+        return False
+
+    # Check padding is only at the end (max 2 '=' chars)
+    padding_count = length - len(content)
+    return padding_count <= 2
+
+
+def shorten_base64_string(obj: Any) -> Any:
+    if isinstance(obj, str):
+        # Check for data URL format first
+        if obj.startswith("data:") and ";base64," in obj:
+            prefix, base64_content = obj.split(";base64,", 1)
+            if _is_likely_base64(base64_content) and len(base64_content) > MAX_DISPLAY_CHARS * 2:
+                shortened_base64 = f"{base64_content[:MAX_DISPLAY_CHARS]}...{base64_content[-MAX_DISPLAY_CHARS:]}"
+                return f"{prefix};base64,{shortened_base64}"
+            return obj
+
+        # Handle raw base64 strings
+        elif _is_likely_base64(obj) and len(obj) > MAX_DISPLAY_CHARS * 2:
+            return f"{obj[:MAX_DISPLAY_CHARS]}...{obj[-MAX_DISPLAY_CHARS:]}"
+
+        return obj
 
 
 def fuzzy_matching(query: str, list_of_entities: list[str], fuzzy_matching_candidates: int = 10):
@@ -46,18 +85,6 @@ def format_qdrant_filter(filters: dict[str, Union[list[str], str]] | None, filte
 
 def extract_vars_in_text_template(prompt_template: str) -> list[str]:
     return [fname for _, fname, _, _ in string.Formatter().parse(prompt_template) if fname]
-
-
-def convert_data_for_trace_manager_display(input_data, type_of_input):
-    if isinstance(input_data, dict):
-        trace_input = json.dumps(input_data, indent=2)
-        return trace_input
-    elif isinstance(input_data, type_of_input):
-        trace_input = input_data.last_message.content
-        return trace_input
-    else:
-        LOGGER.error(f"Error with the {input_data} for trace display")
-        raise ValueError(f"Error with the {input_data} for trace display")
 
 
 def parse_openai_message_format(message: Union[str, list]) -> tuple[str, list[dict]]:

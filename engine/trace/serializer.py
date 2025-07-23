@@ -1,6 +1,8 @@
 import json
 from typing import Any, Optional
 
+from engine.agent.utils import shorten_base64_string
+
 
 # TODO : when observability will handle json display, change the default indent to 0
 def serialize_to_json(obj: Any, indent: int = 2) -> str:
@@ -38,7 +40,9 @@ def _serialize_object(obj: Any, visited: Optional[set] = None) -> Any:
 
     if obj is None:
         return None
-    elif isinstance(obj, (str, int, float, bool)):
+    elif isinstance(obj, str):
+        return shorten_base64_string(obj)
+    elif isinstance(obj, (int, float, bool)):
         return obj
     elif isinstance(obj, (list, tuple, set)):
         return [_serialize_object(item, visited) for item in obj]

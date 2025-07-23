@@ -12,7 +12,6 @@ from opentelemetry.util.types import Attributes
 from pydantic import BaseModel, Field
 from tenacity import RetryError
 
-from engine.agent.utils import convert_data_for_trace_manager_display
 from engine.trace.trace_manager import TraceManager
 from engine.trace.serializer import serialize_to_json
 from engine.prometheus_metric import track_calls
@@ -177,11 +176,10 @@ class Agent(ABC):
         """
         span_name = self.component_attributes.component_instance_name
         with self.trace_manager.start_span(span_name) as span:
-            trace_input = convert_data_for_trace_manager_display(inputs[0], AgentPayload)
             span.set_attributes(
                 {
                     SpanAttributes.OPENINFERENCE_SPAN_KIND: self.TRACE_SPAN_KIND,
-                    SpanAttributes.INPUT_VALUE: trace_input,
+                    SpanAttributes.INPUT_VALUE: serialize_to_json(inputs[0]),
                     "component_instance_id": str(self.component_attributes.component_instance_id),
                 }
             )

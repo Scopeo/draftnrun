@@ -118,7 +118,7 @@ def make_mistral_ocr_compatible(payload_json: dict) -> list[dict]:
             ):
                 return {
                     "type": "document_url",
-                    "document_url": f"data:application/pdf;base64,{content_item['file']['file_data']}",
+                    "document_url": content_item["file"]["file_data"],
                 }
             elif (
                 isinstance(content_item, dict)
