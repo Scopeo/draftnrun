@@ -9,8 +9,8 @@ import numpy as np
 
 from ada_backend.schemas.trace_schema import TraceSpan, TokenUsage
 from ada_backend.services.metrics.utils import query_trace_duration, query_trace_messages
-from engine.trace import models
-from engine.trace.sql_exporter import get_session_trace, parse_str_or_dict
+from engine.trace import models as db
+from engine.trace.sql_exporter import get_session_trace
 from ada_backend.segment_analytics import track_project_observability_loaded
 
 
@@ -98,7 +98,7 @@ def get_trace_by_project(user_id: UUID, project_id: UUID, duration: int) -> List
 
 def get_token_usage(organization_id: UUID) -> TokenUsage:
     session = get_session_trace()
-    token_usage = session.query(models.OrganizationUsage).filter_by(organization_id=str(organization_id)).first()
+    token_usage = session.query(db.OrganizationUsage).filter_by(organization_id=str(organization_id)).first()
     if not token_usage:
         return TokenUsage(organization_id=str(organization_id), total_tokens=0)
     return TokenUsage(organization_id=token_usage.organization_id, total_tokens=token_usage.total_tokens)
