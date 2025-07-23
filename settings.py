@@ -39,6 +39,7 @@ def load_yaml(file_path: Path) -> Dict[str, Any]:
 class BaseConfig(BaseSettings):
     OPENAI_API_KEY: Optional[str] = None
     MISTRAL_API_KEY: Optional[str] = None
+    MISTRAL_BASE_URL: Optional[str] = "https://api.mistral.ai/v1"
     GOOGLE_API_KEY: Optional[str] = None
     GOOGLE_BASE_URL: Optional[str] = None
     CEREBRAS_API_KEY: Optional[str] = None

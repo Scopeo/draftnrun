@@ -77,7 +77,7 @@ class LLMService(ABC):
                     self._base_url = settings.GOOGLE_BASE_URL
                 case "mistral":
                     self._api_key = settings.MISTRAL_API_KEY
-                    self._base_url = "https://api.mistral.ai/v1"
+                    self._base_url = settings.MISTRAL_BASE_URL
                 case _:
                     self._api_key = settings.custom_models.get(self._provider).get("api_key")
                     self._base_url = settings.custom_models.get(self._provider).get("base_url")
