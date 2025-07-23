@@ -1043,6 +1043,7 @@ class OCRService(LLMService):
                     document=mistral_compatible_messages,
                     include_image_base64=True,
                 )
+                # TODO: have a better way to show the response
                 return ocr_response.model_dump_json()
 
             case _:
@@ -1063,6 +1064,7 @@ class OCRService(LLMService):
                     document=mistral_compatible_messages,
                     include_image_base64=True,
                 )
+                # TODO: have a better way to show the response
                 return ocr_response.model_dump_json()
             case _:
                 raise ValueError(f"Invalid provider for OCR: {self._provider}")
