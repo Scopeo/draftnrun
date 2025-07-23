@@ -1,5 +1,6 @@
 import json
 import logging
+import asyncio
 from functools import wraps
 from typing import Optional
 from abc import ABC
@@ -89,42 +90,7 @@ class EmbeddingService(LLMService):
         super().__init__(trace_manager, provider, model_name, api_key, base_url)
 
     def embed_text(self, text: str) -> list[float]:
-        span = get_current_span()
-        match self._provider:
-            case "openai":
-                import openai
-
-                client = openai.OpenAI(api_key=self._api_key)
-                response = client.embeddings.create(
-                    model=self._model_name,
-                    input=text,
-                )
-                span.set_attributes(
-                    {
-                        SpanAttributes.LLM_TOKEN_COUNT_PROMPT: response.usage.prompt_tokens,
-                        SpanAttributes.LLM_TOKEN_COUNT_TOTAL: response.usage.total_tokens,
-                    }
-                )
-                return response.data
-
-            case _:
-                import openai
-
-                client = openai.OpenAI(
-                    api_key=self._api_key,
-                    base_url=self._base_url,
-                )
-                response = client.embeddings.create(
-                    model=self._model_name,
-                    input=text,
-                )
-                span.set_attributes(
-                    {
-                        SpanAttributes.LLM_TOKEN_COUNT_PROMPT: response.usage.prompt_tokens,
-                        SpanAttributes.LLM_TOKEN_COUNT_TOTAL: response.usage.total_tokens,
-                    }
-                )
-                return response.data
+        return asyncio.run(self.embed_text_async(text))
 
     async def embed_text_async(self, text: str) -> list[float]:
         span = get_current_span()
@@ -187,50 +153,7 @@ class CompletionService(LLMService):
         messages: list[dict] | str,
         stream: bool = False,
     ) -> str:
-        span = get_current_span()
-        span.set_attributes({SpanAttributes.LLM_INVOCATION_PARAMETERS: json.dumps({"temperature": self._temperature})})
-        match self._provider:
-            case "openai":
-                import openai
-
-                messages = chat_completion_to_response(messages)
-                client = openai.OpenAI(api_key=self._api_key)
-                response = client.responses.create(
-                    model=self._model_name,
-                    input=messages,
-                    temperature=self._temperature,
-                    stream=stream,
-                )
-                span.set_attributes(
-                    {
-                        SpanAttributes.LLM_TOKEN_COUNT_COMPLETION: response.usage.output_tokens,
-                        SpanAttributes.LLM_TOKEN_COUNT_PROMPT: response.usage.input_tokens,
-                        SpanAttributes.LLM_TOKEN_COUNT_TOTAL: response.usage.total_tokens,
-                    }
-                )
-                return response.output_text
-
-            case _:  # all the providers that are using openai chat completion go here
-                import openai
-
-                client = openai.OpenAI(
-                    api_key=self._api_key,
-                    base_url=self._base_url,
-                )
-                response = client.chat.completions.create(
-                    model=self._model_name,
-                    messages=messages,
-                    temperature=self._temperature,
-                    stream=stream,
-                )
-                span.set_attributes(
-                    {
-                        SpanAttributes.LLM_TOKEN_COUNT_COMPLETION: response.usage.completion_tokens,
-                        SpanAttributes.LLM_TOKEN_COUNT_PROMPT: response.usage.prompt_tokens,
-                        SpanAttributes.LLM_TOKEN_COUNT_TOTAL: response.usage.total_tokens,
-                    }
-                )
-                return response.choices[0].message.content
+        return asyncio.run(self.complete_async(messages, stream))
 
     @with_async_usage_check
     async def complete_async(
@@ -291,66 +214,7 @@ class CompletionService(LLMService):
         response_format: BaseModel,
         stream: bool = False,
     ) -> BaseModel:
-        kwargs = {
-            "input": messages,
-            "model": self._model_name,
-            "temperature": self._temperature,
-            "stream": stream,
-        }
-
-        kwargs["text_format"] = response_format
-
-        span = get_current_span()
-        span.set_attributes({SpanAttributes.LLM_INVOCATION_PARAMETERS: json.dumps({"temperature": self._temperature})})
-        match self._provider:
-            case "openai":
-                import openai
-
-                client = openai.OpenAI(api_key=self._api_key)
-                messages = chat_completion_to_response(messages)
-                response = client.responses.parse(**kwargs)
-                span.set_attributes(
-                    {
-                        SpanAttributes.LLM_TOKEN_COUNT_COMPLETION: response.usage.output_tokens,
-                        SpanAttributes.LLM_TOKEN_COUNT_PROMPT: response.usage.input_tokens,
-                        SpanAttributes.LLM_TOKEN_COUNT_TOTAL: response.usage.total_tokens,
-                    }
-                )
-                return response.output_parsed
-            case "cerebras":  # all providers using only json schema for structured output go here
-                import openai
-
-                client = openai.OpenAI(api_key=self._api_key, base_url=self._base_url)
-
-                response_format_schema = {
-                    "type": "json_schema",
-                    "json_schema": {
-                        "name": response_format.__name__,
-                        "schema": response_format.model_json_schema(),
-                        "strict": True,
-                    },
-                }
-                if isinstance(messages, str):
-                    messages = [{"role": "user", "content": messages}]
-
-                response = client.chat.completions.create(
-                    model=self._model_name,
-                    messages=messages,
-                    temperature=self._temperature,
-                    stream=stream,
-                    response_format=response_format_schema,
-                )
-                span.set_attributes(
-                    {
-                        SpanAttributes.LLM_TOKEN_COUNT_COMPLETION: response.usage.completion_tokens,
-                        SpanAttributes.LLM_TOKEN_COUNT_PROMPT: response.usage.prompt_tokens,
-                        SpanAttributes.LLM_TOKEN_COUNT_TOTAL: response.usage.total_tokens,
-                    }
-                )
-                response_dict = json.loads(response.choices[0].message.content)
-                return response_format(**response_dict)
-            case _:
-                raise ValueError(f"Invalid provider for constrained complete with pydantic: {self._provider}")
+        return asyncio.run(self.constrained_complete_with_pydantic_async(messages, response_format, stream))
 
     @with_async_usage_check
     async def constrained_complete_with_pydantic_async(
@@ -433,71 +297,7 @@ class CompletionService(LLMService):
         response_format: str,
         stream: bool = False,
     ) -> str:
-        kwargs = {
-            "input": messages,
-            "model": self._model_name,
-            "temperature": self._temperature,
-            "stream": stream,
-        }
-        response_format = load_str_to_json(response_format)
-        # validate with the basemodel OutputFormatModel
-        response_format["strict"] = True
-        response_format["type"] = "json_schema"
-        response_format = OutputFormatModel(**response_format).model_dump(exclude_none=True, exclude_unset=True)
-        kwargs["text"] = {"format": response_format}
-
-        span = get_current_span()
-        span.set_attributes({SpanAttributes.LLM_INVOCATION_PARAMETERS: json.dumps({"temperature": self._temperature})})
-        match self._provider:
-            case "openai":
-                import openai
-
-                client = openai.OpenAI(api_key=self._api_key)
-                messages = chat_completion_to_response(messages)
-                response = client.responses.parse(**kwargs)
-                span.set_attributes(
-                    {
-                        SpanAttributes.LLM_TOKEN_COUNT_COMPLETION: response.usage.output_tokens,
-                        SpanAttributes.LLM_TOKEN_COUNT_PROMPT: response.usage.input_tokens,
-                        SpanAttributes.LLM_TOKEN_COUNT_TOTAL: response.usage.total_tokens,
-                    }
-                )
-                return response.output_text
-            case "cerebras" | "google":  # all the providers that are using openai chat completion go here
-                import openai
-
-                schema = response_format.get("schema", {})
-                name = response_format.get("name", "response")
-
-                response_format = {
-                    "type": "json_schema",
-                    "json_schema": {
-                        "name": name,
-                        "schema": schema,
-                    },
-                }
-
-                client = openai.OpenAI(
-                    api_key=self._api_key,
-                    base_url=self._base_url,
-                )
-                response = client.chat.completions.create(
-                    model=self._model_name,
-                    messages=messages,
-                    temperature=self._temperature,
-                    stream=stream,
-                    response_format=response_format,
-                )
-                span.set_attributes(
-                    {
-                        SpanAttributes.LLM_TOKEN_COUNT_COMPLETION: response.usage.completion_tokens,
-                        SpanAttributes.LLM_TOKEN_COUNT_PROMPT: response.usage.prompt_tokens,
-                        SpanAttributes.LLM_TOKEN_COUNT_TOTAL: response.usage.total_tokens,
-                    }
-                )
-                return response.choices[0].message.content
-            case _:
-                raise ValueError(f"Invalid provider for constrained complete with json schema: {self._provider}")
+        return asyncio.run(self.constrained_complete_with_json_schema_async(messages, response_format, stream))
 
     @with_async_usage_check
     async def constrained_complete_with_json_schema_async(
@@ -584,80 +384,7 @@ class CompletionService(LLMService):
         tools: Optional[list[ToolDescription]] = None,
         tool_choice: str = "auto",
     ) -> ChatCompletion:
-        if tools is None:
-            tools = []
-
-        openai_tools = [tool.openai_format for tool in tools]
-
-        span = get_current_span()
-        span.set_attributes({SpanAttributes.LLM_INVOCATION_PARAMETERS: json.dumps({"temperature": self._temperature})})
-        match self._provider:
-            case "openai":
-                import openai
-
-                client = openai.OpenAI(api_key=self._api_key)
-                response = client.chat.completions.create(
-                    model=self._model_name,
-                    messages=messages,
-                    tools=openai_tools,
-                    temperature=self._temperature,
-                    stream=stream,
-                    tool_choice=tool_choice,
-                )
-                span.set_attributes(
-                    {
-                        SpanAttributes.LLM_TOKEN_COUNT_COMPLETION: response.usage.completion_tokens,
-                        SpanAttributes.LLM_TOKEN_COUNT_PROMPT: response.usage.prompt_tokens,
-                        SpanAttributes.LLM_TOKEN_COUNT_TOTAL: response.usage.total_tokens,
-                    }
-                )
-                return response
-            case "cerebras":  # all the providers that are using openai chat completion go here
-                import openai
-
-                client = openai.OpenAI(
-                    api_key=self._api_key,
-                    base_url=self._base_url,
-                )
-                response = client.chat.completions.create(
-                    model=self._model_name,
-                    messages=messages,
-                    tools=openai_tools,
-                    temperature=self._temperature,
-                    stream=stream,
-                    tool_choice=tool_choice,
-                )
-                span.set_attributes(
-                    {
-                        SpanAttributes.LLM_TOKEN_COUNT_COMPLETION: response.usage.completion_tokens,
-                        SpanAttributes.LLM_TOKEN_COUNT_PROMPT: response.usage.prompt_tokens,
-                        SpanAttributes.LLM_TOKEN_COUNT_TOTAL: response.usage.total_tokens,
-                    }
-                )
-                return response
-            case _:
-                import openai
-
-                client = openai.OpenAI(
-                    api_key=self._api_key,
-                    base_url=self._base_url,
-                )
-                response = client.chat.completions.create(
-                    model=self._model_name,
-                    messages=messages,
-                    tools=openai_tools,
-                    temperature=self._temperature,
-                    stream=stream,
-                    tool_choice=tool_choice,
-                )
-                span.set_attributes(
-                    {
-                        SpanAttributes.LLM_TOKEN_COUNT_COMPLETION: response.usage.completion_tokens,
-                        SpanAttributes.LLM_TOKEN_COUNT_PROMPT: response.usage.prompt_tokens,
-                        SpanAttributes.LLM_TOKEN_COUNT_TOTAL: response.usage.total_tokens,
-                    }
-                )
-                return response
+        return asyncio.run(self.function_call_async(messages, stream, tools, tool_choice))
 
     @with_async_usage_check
     async def function_call_async(
@@ -735,27 +462,7 @@ class WebSearchService(LLMService):
 
     @with_usage_check
     def web_search(self, query: str) -> str:
-        span = get_current_span()
-        match self._provider:
-            case "openai":
-                import openai
-
-                client = openai.OpenAI(api_key=self._api_key)
-                response = client.responses.create(
-                    model=self._model_name,
-                    input=query,
-                    tools=[{"type": "web_search_preview"}],
-                )
-                span.set_attributes(
-                    {
-                        SpanAttributes.LLM_TOKEN_COUNT_COMPLETION: response.usage.output_tokens,
-                        SpanAttributes.LLM_TOKEN_COUNT_PROMPT: response.usage.input_tokens,
-                        SpanAttributes.LLM_TOKEN_COUNT_TOTAL: response.usage.total_tokens,
-                    }
-                )
-                return response.output_text
-            case _:
-                raise ValueError(f"Invalid provider: {self._provider}")
+        return asyncio.run(self.web_search_async(query))
 
     @with_async_usage_check
     async def web_search_async(self, query: str) -> str:
@@ -821,56 +528,7 @@ class VisionService(LLMService):
         text_prompt: str,
         response_format: Optional[BaseModel] = None,
     ) -> str | BaseModel:
-        client = None
-        span = get_current_span()
-        span.set_attributes({SpanAttributes.LLM_INVOCATION_PARAMETERS: json.dumps({"temperature": self._temperature})})
-        match self._provider:
-            case "openai":
-                import openai
-
-                client = openai.OpenAI(api_key=self._api_key)
-            case "google":
-                import openai
-
-                client = openai.OpenAI(api_key=self._api_key, base_url=self._base_url)
-        content = [{"type": "text", "text": text_prompt}]
-        content.extend(self._format_image_content(image_content_list))
-        messages = [
-            {
-                "role": "user",
-                "content": content,
-            }
-        ]
-        if response_format is not None:
-
-            chat_response = client.beta.chat.completions.parse(
-                messages=messages,
-                model=self._model_name,
-                temperature=self._temperature,
-                response_format=response_format,
-            )
-            span.set_attributes(
-                {
-                    SpanAttributes.LLM_TOKEN_COUNT_COMPLETION: chat_response.usage.completion_tokens,
-                    SpanAttributes.LLM_TOKEN_COUNT_PROMPT: chat_response.usage.prompt_tokens,
-                    SpanAttributes.LLM_TOKEN_COUNT_TOTAL: chat_response.usage.total_tokens,
-                }
-            )
-            return chat_response.choices[0].message.parsed
-        else:
-            chat_response = client.chat.completions.create(
-                messages=messages,
-                model=self._model_name,
-                temperature=self._temperature,
-            )
-            span.set_attributes(
-                {
-                    SpanAttributes.LLM_TOKEN_COUNT_COMPLETION: chat_response.usage.completion_tokens,
-                    SpanAttributes.LLM_TOKEN_COUNT_PROMPT: chat_response.usage.prompt_tokens,
-                    SpanAttributes.LLM_TOKEN_COUNT_TOTAL: chat_response.usage.total_tokens,
-                }
-            )
-            return chat_response.choices[0].message.content
+        return asyncio.run(self.get_image_description_async(image_content_list, text_prompt, response_format))
 
     @with_async_usage_check
     async def get_image_description_async(
