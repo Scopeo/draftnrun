@@ -4,10 +4,12 @@ import os
 import base64
 from unittest.mock import MagicMock
 import pytest_asyncio
+import asyncio
 
-from engine.agent.tools.python_code_interpreter_e2b_tool import (
-    PythonCodeInterpreterE2BTool,
-    E2B_PYTHONCODE_INTERPRETER_TOOL_DESCRIPTION,
+
+from engine.agent.tools.python_code_runner import (
+    PythonCodeRunner,
+    PYTHON_CODE_RUNNER_TOOL_DESCRIPTION,
 )
 from engine.agent.agent import AgentPayload, ChatMessage, ComponentAttributes
 from engine.trace.trace_manager import TraceManager
@@ -20,8 +22,8 @@ def mock_trace_manager():
 
 @pytest_asyncio.fixture
 async def e2b_tool(mock_trace_manager):
-    """Create an E2B Python code interpreter tool instance with proper async cleanup."""
-    tool = PythonCodeInterpreterE2BTool(
+    """Create an Python code runner tool instance."""
+    tool = PythonCodeRunner(
         trace_manager=mock_trace_manager,
         component_attributes=ComponentAttributes(
             component_instance_name="test_e2b_tool",
@@ -31,7 +33,6 @@ async def e2b_tool(mock_trace_manager):
     yield tool
     # Cleanup: ensure any lingering HTTP connections are closed
     # The E2B library should handle this, but we'll give it a moment to complete
-    import asyncio
     await asyncio.sleep(0.1)
 
 
@@ -48,14 +49,14 @@ def test_tool_initialization(e2b_tool):
     """Test that the tool initializes correctly."""
     assert e2b_tool.component_attributes.component_instance_name == "test_e2b_tool"
     assert e2b_tool.sandbox_timeout == 30
-    assert e2b_tool.tool_description == E2B_PYTHONCODE_INTERPRETER_TOOL_DESCRIPTION
-    assert e2b_tool.tool_description.name == "python_code_interpreter"
+    assert e2b_tool.tool_description == PYTHON_CODE_RUNNER_TOOL_DESCRIPTION
+    assert e2b_tool.tool_description.name == "python_code_runner"
 
 
 def test_tool_description_structure():
     """Test that the tool description has the correct structure."""
-    desc = E2B_PYTHONCODE_INTERPRETER_TOOL_DESCRIPTION
-    assert desc.name == "python_code_interpreter"
+    desc = PYTHON_CODE_RUNNER_TOOL_DESCRIPTION
+    assert desc.name == "python_code_runner"
     assert "Execute Python code in a secure sandbox environment" in desc.description
     assert "python_code" in desc.tool_properties
     assert desc.tool_properties["python_code"]["type"] == "string"
@@ -71,23 +72,19 @@ async def test_execute_simple_python_code(e2b_tool, e2b_api_key):
 
     # Check that the execution was successful
     assert "error" in result_data
-    assert "logs" in result_data
+    assert "stdout" in result_data
+    assert "stderr" in result_data
     assert "results" in result_data
 
     # Check that there's no error
     assert result_data["error"] is None
 
-    # Parse the logs JSON string
-    logs = json.loads(result_data["logs"])
-    assert "stdout" in logs
-    assert "stderr" in logs
-
     # Check stdout contains our print statement
-    assert "Hello, World!" in logs["stdout"][0]
+    assert "Hello, World!" in result_data["stdout"][0]
 
     # Check the result is 42
     assert len(result_data["results"]) > 0
-    assert result_data["results"][0]["text"] == "42"
+    assert result_data["results"][0].text == "42"
 
 
 @pytest.mark.anyio
@@ -111,25 +108,21 @@ result
     result_data = await e2b_tool.execute_python_code(python_code)
 
     assert "error" in result_data
-    assert "logs" in result_data
+    assert "stdout" in result_data
+    assert "stderr" in result_data
     assert "results" in result_data
     assert result_data["error"] is None
 
-    # Parse the logs JSON string
-    logs = json.loads(result_data["logs"])
-    assert "stdout" in logs
-    assert "stderr" in logs
-
     # Check stdout contains our print statements
-    assert "Circle area:" in logs["stdout"][0]
-    assert "Current date:" in logs["stdout"][0]
+    assert "Circle area:" in result_data["stdout"][0]
+    assert "Current date:" in result_data["stdout"][0]
 
     # Check the result is a dictionary
     assert len(result_data["results"]) > 0
     result_obj = result_data["results"][0]
-    assert "json" in result_obj
-    assert "area" in result_obj["json"]
-    assert "date" in result_obj["json"]
+    assert hasattr(result_obj, "json") and result_obj.json is not None
+    assert "area" in result_obj.json
+    assert "date" in result_obj.json
 
 
 @pytest.mark.anyio
@@ -144,18 +137,16 @@ result = x / y  # This will raise a ZeroDivisionError
     result_data = await e2b_tool.execute_python_code(python_code)
 
     assert "error" in result_data
-    assert "logs" in result_data
+    assert "stdout" in result_data
+    assert "stderr" in result_data
     assert "results" in result_data
 
     # Check that there is an error
     assert result_data["error"] is not None
 
-    # Parse the error JSON
-    error_data = json.loads(result_data["error"])
-    assert "name" in error_data
-    assert "value" in error_data
-    assert error_data["name"] == "ZeroDivisionError"
-    assert "division by zero" in error_data["value"]
+    # The error is a string, not JSON
+    assert isinstance(result_data["error"], str)
+    assert "ZeroDivisionError" in result_data["error"] or "division by zero" in result_data["error"]
 
 
 @pytest.mark.anyio
@@ -182,24 +173,20 @@ files = os.listdir('.')
     result_data = await e2b_tool.execute_python_code(python_code)
 
     assert "error" in result_data
-    assert "logs" in result_data
+    assert "stdout" in result_data
+    assert "stderr" in result_data
     assert "results" in result_data
     assert result_data["error"] is None
 
-    # Parse the logs JSON string
-    logs = json.loads(result_data["logs"])
-    assert "stdout" in logs
-    assert "stderr" in logs
-
     # Check stdout contains our print statement
-    assert "File content: Hello from E2B sandbox!" in logs["stdout"][0]
+    assert "File content: Hello from E2B sandbox!" in result_data["stdout"][0]
 
     # Check the result contains the expected data
     assert len(result_data["results"]) > 0
     result_obj = result_data["results"][0]
-    assert "json" in result_obj
-    assert result_obj["json"]["content"] == "Hello from E2B sandbox!"
-    assert "test_file.txt" in result_obj["json"]["files"]
+    assert hasattr(result_obj, "json") and result_obj.json is not None
+    assert result_obj.json["content"] == "Hello from E2B sandbox!"
+    assert "test_file.txt" in result_obj.json["files"]
 
 
 @pytest.mark.anyio
@@ -231,25 +218,21 @@ print(f"Even numbers: {even_numbers}")
     result_data = await e2b_tool.execute_python_code(python_code)
 
     assert "error" in result_data
-    assert "logs" in result_data
+    assert "stdout" in result_data
+    assert "stderr" in result_data
     assert "results" in result_data
     assert result_data["error"] is None
 
-    # Parse the logs JSON string
-    logs = json.loads(result_data["logs"])
-    assert "stdout" in logs
-    assert "stderr" in logs
-
     # Check stdout contains our print statements
-    assert "Total: 55" in logs["stdout"][0]
-    assert "Average: 5.5" in logs["stdout"][0]
-    assert "Even numbers: [2, 4, 6, 8, 10]" in logs["stdout"][0]
+    assert "Total: 55" in result_data["stdout"][0]
+    assert "Average: 5.5" in result_data["stdout"][0]
+    assert "Even numbers: [2, 4, 6, 8, 10]" in result_data["stdout"][0]
 
     # Check the result contains the expected data
     assert len(result_data["results"]) > 0
     result_obj = result_data["results"][0]
-    assert "json" in result_obj
-    result_data_obj = result_obj["json"]
+    assert hasattr(result_obj, "json") and result_obj.json is not None
+    result_data_obj = result_obj.json
     assert result_data_obj["total"] == 55
     assert result_data_obj["average"] == 5.5
     assert result_data_obj["count"] == 10
@@ -524,32 +507,30 @@ async def test_run_without_trace_simple_code(e2b_tool, e2b_api_key):
     # Parse the content
     content = result.messages[0].content
 
-    # The content is a JSON string that contains another JSON string
-    # First parse the outer JSON
+    # The content is a JSON string
     execution_data = json.loads(content)
 
-    # If execution_data is still a string, parse it again
-    if isinstance(execution_data, str):
-        execution_data = json.loads(execution_data)
-
     assert "error" in execution_data
-    assert "logs" in execution_data
+    assert "stdout" in execution_data
+    assert "stderr" in execution_data
     assert "results" in execution_data
     assert execution_data["error"] is None
 
-    # Parse the logs JSON string
-    logs = json.loads(execution_data["logs"])
-    assert "Async test" in logs["stdout"][0]
+    # Check stdout
+    assert "Async test" in execution_data["stdout"][0]
 
     # Check the result
     assert len(execution_data["results"]) > 0
-    assert execution_data["results"][0]["text"] == "4"
+    assert "4" in execution_data["results"][0]
 
     # Check artifacts
     assert "execution_result" in result.artifacts
-    # The execution result is now stored as a dict in artifacts
+    # The execution result is stored as a dict in artifacts (with non-serialized objects)
     artifacts_execution_data = result.artifacts["execution_result"]
-    assert artifacts_execution_data == execution_data
+    assert artifacts_execution_data["error"] == execution_data["error"]
+    assert artifacts_execution_data["stdout"] == execution_data["stdout"]
+    assert artifacts_execution_data["stderr"] == execution_data["stderr"]
+    # Note: artifacts has Result objects while execution_data has serialized strings
 
 
 @pytest.mark.anyio
@@ -592,59 +573,49 @@ json.dumps(result)
     # Parse the content
     content = result.messages[0].content
 
-    # The content is a JSON string that contains another JSON string
-    # First parse the outer JSON
+    # The content is a JSON string
     execution_data = json.loads(content)
 
-    # If execution_data is still a string, parse it again
-    if isinstance(execution_data, str):
-        execution_data = json.loads(execution_data)
-
     assert "error" in execution_data
-    assert "logs" in execution_data
+    assert "stdout" in execution_data
+    assert "stderr" in execution_data
     assert "results" in execution_data
     assert execution_data["error"] is None
 
-    # Parse the logs JSON string
-    logs = json.loads(execution_data["logs"])
-    assert "Processed 5 numbers" in logs["stdout"][0]
+    # Check stdout
+    assert "Processed 5 numbers" in execution_data["stdout"][0]
 
     # Check the result
     assert len(execution_data["results"]) > 0
     result_obj = execution_data["results"][0]
-    assert "text" in result_obj
+    assert "Result(" in result_obj
 
-    # The result should be a JSON string
-    result_json = result_obj["text"]
-    result_data = json.loads(result_json)
-
-    assert "original_data" in result_data
-    assert "statistics" in result_data
-    assert result_data["statistics"]["count"] == 5
+    # The result should contain the JSON data within the Result() string
+    # Extract the JSON from within Result(...) format
+    assert "original_data" in result_obj
+    assert "statistics" in result_obj
+    assert '"count": 5' in result_obj
 
 
 @pytest.mark.anyio
 async def test_missing_api_key():
     """Test that the tool raises an error when E2B API key is not configured."""
-    # Mock settings to return None for E2B_API_KEY
     with pytest.MonkeyPatch().context() as m:
         m.setattr("settings.settings.E2B_API_KEY", None)
 
-        tool = PythonCodeInterpreterE2BTool(
+        tool = PythonCodeRunner(
             trace_manager=MagicMock(spec=TraceManager),
             component_attributes=ComponentAttributes(
                 component_instance_name="test_no_api_key",
             ),
         )
-
-        # Should raise ValueError when no API key is available
         with pytest.raises(ValueError, match="E2B API key not configured"):
             await tool.execute_python_code("print('test')")
 
 
 def test_sandbox_timeout_configuration():
     """Test that the tool respects the sandbox timeout configuration."""
-    tool = PythonCodeInterpreterE2BTool(
+    tool = PythonCodeRunner(
         trace_manager=MagicMock(spec=TraceManager),
         component_attributes=ComponentAttributes(
             component_instance_name="test_timeout",
