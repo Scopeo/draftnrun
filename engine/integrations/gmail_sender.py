@@ -81,6 +81,7 @@ class GmailSender(Agent):
         if not google_client_secret:
             google_client_secret = settings.GOOGLE_CLIENT_SECRET
 
+        # TODO: move the logic to fetch the access token to outside the agent
         session = next(get_db())
         access_token = get_oauth_access_token(session, secret_integration_id, google_client_id, google_client_secret)
         self.service = get_gmail_sender_service(access_token)
