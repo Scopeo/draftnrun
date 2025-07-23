@@ -83,16 +83,10 @@ class SQLSpanExporter(SpanExporter):
         LOGGER.info(f"Exporting {len(spans)} spans to SQL database")
         for span in spans:
             cumulative_error_count = int(span.status.status_code is StatusCode.ERROR)
-            try:
-                cumulative_llm_token_count_prompt = int(span.attributes.get(SpanAttributes.LLM_TOKEN_COUNT_PROMPT))
-            except BaseException:
-                cumulative_llm_token_count_prompt = 0
-            try:
-                cumulative_llm_token_count_completion = int(
-                    span.attributes.get(SpanAttributes.LLM_TOKEN_COUNT_COMPLETION)
-                )
-            except BaseException:
-                cumulative_llm_token_count_completion = 0
+            cumulative_llm_token_count_prompt = int(span.attributes.get(SpanAttributes.LLM_TOKEN_COUNT_PROMPT, 0))
+            cumulative_llm_token_count_completion = int(
+                span.attributes.get(SpanAttributes.LLM_TOKEN_COUNT_COMPLETION, 0)
+            )
 
             json_span = json.loads(span.to_json())
 

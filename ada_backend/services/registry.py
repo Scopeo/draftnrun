@@ -20,7 +20,8 @@ from engine.agent.rag.vocabulary_search import VocabularySearch
 from engine.agent.tools.tavily_search_tool import TavilyApiTool
 from engine.agent.web_search_tool_openai import WebSearchOpenAITool
 from engine.agent.tools.api_call_tool import APICallTool
-from engine.agent.tools.python_code_interpreter_e2b_tool import PythonCodeInterpreterE2BTool
+from engine.agent.tools.python_code_runner import PythonCodeRunner
+from engine.agent.tools.terminal_command_runner import TerminalCommandRunner
 from engine.agent.document_enhanced_llm_call import DocumentEnhancedLLMCallAgent
 from engine.agent.document_react_loader import DocumentReactLoaderAgent
 from engine.agent.rag.document_search import DocumentSearch
@@ -68,7 +69,8 @@ class SupportedEntityType(StrEnum):
     OPENAI_WEB_SEARCH_AGENT = "Internet Search with OpenAI"
     API_CALL_TOOL = "API Call"
 
-    PYTHON_CODE_INTERPRETER_E2B_TOOL = "Python Code Interpreter E2B"
+    PYTHON_CODE_RUNNER_TOOL = "Python Code Runner"
+    TERMINAL_COMMAND_RUNNER_TOOL = "Terminal Command Runner"
     SQL_TOOL = "SQLTool"
     LLM_CALL_AGENT = "LLM Call"
     REACT_SQL_AGENT = "Database Query Agent"
@@ -326,9 +328,15 @@ def create_factory_registry() -> FactoryRegistry:
         ),
     )
     registry.register(
-        name=SupportedEntityType.PYTHON_CODE_INTERPRETER_E2B_TOOL,
+        name=SupportedEntityType.PYTHON_CODE_RUNNER_TOOL,
         factory=AgentFactory(
-            entity_class=PythonCodeInterpreterE2BTool,
+            entity_class=PythonCodeRunner,
+        ),
+    )
+    registry.register(
+        name=SupportedEntityType.TERMINAL_COMMAND_RUNNER_TOOL,
+        factory=AgentFactory(
+            entity_class=TerminalCommandRunner,
         ),
     )
     registry.register(

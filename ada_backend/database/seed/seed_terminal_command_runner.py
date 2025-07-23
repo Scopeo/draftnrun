@@ -17,38 +17,38 @@ from ada_backend.database.seed.seed_tool_description import TOOL_DESCRIPTION_UUI
 from ada_backend.database import models as db
 
 
-def seed_python_code_e2b_components(session: Session):
-    e2b_component = Component(
-        id=COMPONENT_UUIDS["python_code_interpreter_e2b"],
-        name="Python Code Interpreter E2B",
-        description="Execute Python code in a secure sandbox environment.",
+def seed_terminal_command_runner_components(session: Session):
+    terminal_command_runner_component = Component(
+        id=COMPONENT_UUIDS["terminal_command_runner"],
+        name="Terminal Command Runner",
+        description="Execute terminal commands in a secure sandbox environment.",
         is_agent=False,
         function_callable=True,
         can_use_function_calling=False,
         release_stage=db.ReleaseStage.BETA,
-        default_tool_description_id=TOOL_DESCRIPTION_UUIDS["python_code_interpreter_e2b_tool_description"],
+        default_tool_description_id=TOOL_DESCRIPTION_UUIDS["terminal_command_runner_tool_description"],
     )
-    upsert_components(session, [e2b_component])
+    upsert_components(session, [terminal_command_runner_component])
 
-    e2b_parameter_definitions = [
+    terminal_command_runner_parameter_definitions = [
         ComponentParameterDefinition(
-            id=UUID("e2b00002-2222-3333-4444-555555555555"),
-            component_id=e2b_component.id,
+            id=UUID("e2b10001-1111-2222-3333-444444444444"),
+            component_id=terminal_command_runner_component.id,
             name="timeout",
             type=ParameterType.INTEGER,
             nullable=False,
-            default=300,
+            default=60,
             ui_component=UIComponent.SLIDER,
             ui_component_properties=UIComponentProperties(
-                label="Sandbox Timeout (seconds)",
-                min=60,
-                max=1800,
-                step=60,
-                placeholder="300",
-                description="Maximum time the sandbox can stay alive. Default is 300 seconds (5 minutes).",
+                label="Command Timeout (seconds)",
+                min=10,
+                max=600,
+                step=10,
+                placeholder="60",
+                description="Maximum time for command execution. Default is 60 seconds.",
             ).model_dump(exclude_unset=True, exclude_none=True),
             is_advanced=True,
         ),
     ]
 
-    upsert_components_parameter_definitions(session, e2b_parameter_definitions)
+    upsert_components_parameter_definitions(session, terminal_command_runner_parameter_definitions)

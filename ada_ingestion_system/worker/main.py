@@ -96,7 +96,7 @@ class Worker:
                     return
 
             # Prepare the Python command to run the script
-            python_cmd = "python"  # Use the system Python interpreter
+            python_cmd = "python"  # Use the system Python runner
             # TODO: Find alternative (start)
             # Create a custom environment with required variables
             env = os.environ.copy()

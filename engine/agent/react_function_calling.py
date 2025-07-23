@@ -6,6 +6,7 @@ from typing import Optional
 from opentelemetry import trace as trace_api
 from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttributes
 from openai.types.chat import ChatCompletionMessageToolCall
+from e2b_code_interpreter import AsyncSandbox
 
 from engine.agent.agent import (
     Agent,
@@ -19,6 +20,10 @@ from engine.agent.history_message_handling import HistoryMessageHandler
 from engine.trace.trace_manager import TraceManager
 from engine.llm_services.llm_service import CompletionService
 from engine.agent.utils_prompt import fill_prompt_template_with_dictionary
+from engine.agent.tools.python_code_runner import PYTHON_CODE_RUNNER_TOOL_DESCRIPTION
+from engine.agent.tools.terminal_command_runner import TERMINAL_COMMAND_RUNNER_TOOL_DESCRIPTION
+from engine.trace.serializer import serialize_to_json
+from settings import settings
 
 
 LOGGER = logging.getLogger(__name__)
@@ -28,6 +33,7 @@ INITIAL_PROMPT = (
     "clarification if a user request is ambiguous. "
 )
 DEFAULT_FALLBACK_REACT_ANSWER = "I couldn't find a solution to your problem."
+CODE_RUNNER_TOOLS = [PYTHON_CODE_RUNNER_TOOL_DESCRIPTION.name, TERMINAL_COMMAND_RUNNER_TOOL_DESCRIPTION.name]
 
 
 class ReActAgent(Agent):
@@ -53,7 +59,6 @@ class ReActAgent(Agent):
             component_attributes=component_attributes,
         )
         self.run_tools_in_parallel = run_tools_in_parallel
-        self.running_tool_way = "parallel" if self.run_tools_in_parallel else "series"
         if agent_tools is None:
             self.agent_tools = []
         else:
@@ -68,6 +73,27 @@ class ReActAgent(Agent):
         self._completion_service = completion_service
         self.input_data_field_for_messages_history = input_data_field_for_messages_history
         self._allow_tool_shortcuts = allow_tool_shortcuts
+        self._shared_sandbox: Optional[AsyncSandbox] = None
+        self._e2b_api_key = getattr(settings, "E2B_API_KEY", None)
+
+    # TODO: investigate if we can decouple the sandbox from the agent
+    async def _ensure_shared_sandbox(self) -> AsyncSandbox:
+        """Create and return a shared sandbox, validating API key first."""
+        if not self._shared_sandbox:
+            if not self._e2b_api_key:
+                raise ValueError("E2B API key not configured")
+            self._shared_sandbox = await AsyncSandbox.create(api_key=self._e2b_api_key)
+        return self._shared_sandbox
+
+    async def _cleanup_shared_sandbox(self) -> None:
+        """Safely clean up the shared sandbox."""
+        if self._shared_sandbox:
+            try:
+                await self._shared_sandbox.kill()
+            except Exception as e:
+                LOGGER.error(f"Failed to kill shared sandbox: {e}")
+            finally:
+                self._shared_sandbox = None
 
     async def _run_tool_call(
         self, *original_agent_inputs: AgentPayload, tool_call: ChatCompletionMessageToolCall
@@ -80,7 +106,13 @@ class ReActAgent(Agent):
         tool_to_use: Runnable = next(
             tool for tool in self.agent_tools if tool.tool_description.name == tool_function_name
         )
-        tool_output = await tool_to_use.run(*original_agent_inputs, **tool_arguments)
+        if tool_function_name in CODE_RUNNER_TOOLS:
+            tool_arguments["shared_sandbox"] = await self._ensure_shared_sandbox()
+        try:
+            tool_output = await tool_to_use.run(*original_agent_inputs, **tool_arguments)
+        except Exception as e:
+            LOGGER.error(f"Error running tool {tool_function_name}: {e}")
+            tool_output = AgentPayload(error=str(e))
         return tool_call_id, tool_output
 
     async def _process_tool_calls(
@@ -99,7 +131,6 @@ class ReActAgent(Agent):
         # Get the subset of tool calls we'll actually process
         tools_to_process = tool_calls[:max_tools]
 
-        # Process the allowed number of tools
         if self.run_tools_in_parallel:
             tasks = [
                 self._run_tool_call(
@@ -119,14 +150,12 @@ class ReActAgent(Agent):
                     tool_call=tool_call,
                 )
                 tool_outputs[tool_call_id] = tool_output
-
         return tool_outputs, tools_to_process
 
     async def _run_without_trace(self, *inputs: AgentPayload | dict, **kwargs) -> AgentPayload:
         """Runs ReActAgent. Only one input is allowed."""
         original_agent_input = inputs[0]
         if not isinstance(original_agent_input, AgentPayload):
-            # TODO : Will be suppressed when AgentPayload will be suppressed
             original_agent_input["messages"] = original_agent_input[self.input_data_field_for_messages_history]
             original_agent_input = AgentPayload(**original_agent_input)
         system_message = next((msg for msg in original_agent_input.messages if msg.role == "system"), None)
@@ -184,19 +213,18 @@ class ReActAgent(Agent):
                     artifacts["images"] = imgs
                 else:
                     LOGGER.debug("No images found in the response.")
+                await self._cleanup_shared_sandbox()
                 return AgentPayload(
                     messages=[ChatMessage(role="assistant", content=chat_response.choices[0].message.content)],
                     is_final=True,
                     artifacts=artifacts,
                 )
 
-        # Process only the subset of tool calls that we want to execute
         agent_outputs, processed_tool_calls = await self._process_tool_calls(
             original_agent_input,
             tool_calls=all_tool_calls,
         )
 
-        # Only add the tool calls we actually processed to the message history
         agent_input.messages.append(
             ChatMessage(
                 role="assistant",
@@ -204,16 +232,14 @@ class ReActAgent(Agent):
                 tool_calls=processed_tool_calls,
             )
         )
-
-        # Add the tool outputs to the chat history
-        agent_input.messages.extend(
-            ChatMessage(
-                role="tool",
-                content=agent_output.last_message.content,
-                tool_call_id=tool_call_id,
+        for tool_call_id, agent_output in agent_outputs.items():
+            agent_input.messages.append(
+                ChatMessage(
+                    role="tool",
+                    content=serialize_to_json(agent_output),
+                    tool_call_id=tool_call_id,
+                )
             )
-            for tool_call_id, agent_output in agent_outputs.items()
-        )
 
         # If there's 0 or more than 1 final outputs, run the agent again
         successful_output_count = sum(agent_output.is_final for agent_output in agent_outputs.values())
@@ -224,10 +250,10 @@ class ReActAgent(Agent):
                     f"iterations. Returning the final output."
                 )
             )
-
             final_output: AgentPayload = next(
                 agent_output for agent_output in agent_outputs.values() if agent_output.is_final
             )
+            await self._cleanup_shared_sandbox()
             return final_output
 
         elif self._current_iteration < self._max_iterations:
@@ -237,16 +263,14 @@ class ReActAgent(Agent):
             self._current_iteration += 1
             return await self._run_without_trace(agent_input)
         else:  # This should not happen if the "tool_choice" parameter works correctly on the LLM service
-            LOGGER.error(
-                f"Reached the maximum number of iterations ({self._max_iterations}) and still asks for tools."
-                " This should not happen."
-            )
+            self.log_trace_event(message=(f"Reached the maximum number of iterations ({self._max_iterations}). "))
             messages = [
                 ChatMessage(
                     role="assistant",
                     content=DEFAULT_FALLBACK_REACT_ANSWER,
                 )
             ]
+            await self._cleanup_shared_sandbox()
             return AgentPayload(
                 messages=messages,
                 is_final=False,
@@ -262,16 +286,14 @@ def get_dummy_ai_agent_description() -> ToolDescription:
     )
 
 
-# TODO: handle other formats than png
 def get_images_from_message(messages: list[ChatMessage]) -> list[str]:
     if messages:
         message = messages[-1]
         if message.content and "}" in message.content:
-            json_end = message.content.rfind("}") + 1
             try:
-                json_content = json.loads(message.content[:json_end])
-                if "results" in json_content:
-                    imgs = [result["png"] for result in json_content["results"] if "png" in result]
+                json_content = json.loads(message.content)
+                if "artifacts" in json_content and "images" in json_content["artifacts"]:
+                    imgs = json_content["artifacts"]["images"]
                 else:
                     imgs = []
             except (

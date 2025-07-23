@@ -1,5 +1,4 @@
 import logging
-import json
 from typing import Any, Optional
 
 from e2b_code_interpreter import AsyncSandbox
@@ -13,14 +12,15 @@ from engine.agent.agent import (
     ComponentAttributes,
     ToolDescription,
 )
+from engine.trace.serializer import serialize_to_json
 from engine.trace.trace_manager import TraceManager
 from settings import settings
 
 
 LOGGER = logging.getLogger(__name__)
 
-E2B_PYTHONCODE_INTERPRETER_TOOL_DESCRIPTION = ToolDescription(
-    name="python_code_interpreter",
+PYTHON_CODE_RUNNER_TOOL_DESCRIPTION = ToolDescription(
+    name="python_code_runner",
     description=(
         "Execute Python code in a secure sandbox environment. "
         "Returns the execution result including stdout, stderr, generated files, and images."
@@ -35,14 +35,14 @@ E2B_PYTHONCODE_INTERPRETER_TOOL_DESCRIPTION = ToolDescription(
 )
 
 
-class PythonCodeInterpreterE2BTool(Agent):
+class PythonCodeRunner(Agent):
     TRACE_SPAN_KIND = OpenInferenceSpanKindValues.TOOL.value
 
     def __init__(
         self,
         trace_manager: TraceManager,
         component_attributes: ComponentAttributes,
-        tool_description: ToolDescription = E2B_PYTHONCODE_INTERPRETER_TOOL_DESCRIPTION,
+        tool_description: ToolDescription = PYTHON_CODE_RUNNER_TOOL_DESCRIPTION,
         timeout: int = 60,
     ) -> None:
         super().__init__(
@@ -60,13 +60,10 @@ class PythonCodeInterpreterE2BTool(Agent):
         results = execution_result.get("results", [])
 
         for result in results:
-            if isinstance(result, dict):
-                # Check for image properties directly on result objects
-                # E2B automatically detects matplotlib plots and adds them as base64 encoded images
-                for image_format in ["png", "jpg", "jpeg", "svg"]:
-                    if image_format in result and result[image_format]:
-                        # The image is already base64 encoded according to E2B docs
-                        images.append(result[image_format])
+            for image_format in ["png", "jpg", "jpeg", "svg", "gif", "webp"]:
+                image_data = getattr(result, image_format, None)
+                if image_data:
+                    images.append(image_data)
 
         return images
 
@@ -79,14 +76,31 @@ class PythonCodeInterpreterE2BTool(Agent):
         if not sandbox:
             sandbox = await AsyncSandbox.create(api_key=self.e2b_api_key)
         try:
+            LOGGER.info("Executing Python code in E2B sandbox")
             execution = await sandbox.run_code(code=python_code, timeout=self.sandbox_timeout)
+            result = {
+                "results": execution.results if hasattr(execution, "results") else [],
+                "stdout": (
+                    execution.logs.stdout if hasattr(execution, "logs") and hasattr(execution.logs, "stdout") else []
+                ),
+                "stderr": (
+                    execution.logs.stderr if hasattr(execution, "logs") and hasattr(execution.logs, "stderr") else []
+                ),
+                "error": str(execution.error) if hasattr(execution, "error") and execution.error else None,
+                "execution_count": getattr(execution, "execution_count", 1),
+            }
         except Exception as e:
             LOGGER.error(f"E2B sandbox execution failed: {str(e)}")
-            raise e
+            result = {
+                "results": [],
+                "stdout": [],
+                "stderr": [],
+                "error": str(e),
+            }
         finally:
             if not shared_sandbox:
                 await sandbox.kill()
-        return json.loads(execution.to_json())
+        return result
 
     async def _run_without_trace(
         self,
@@ -94,7 +108,7 @@ class PythonCodeInterpreterE2BTool(Agent):
         **kwargs: Any,
     ) -> AgentPayload:
         span = get_current_span()
-        trace_input = str(kwargs["python_code"])
+        trace_input = str(kwargs.get("python_code", ""))
         span.set_attributes(
             {
                 SpanAttributes.OPENINFERENCE_SPAN_KIND: self.TRACE_SPAN_KIND,
@@ -102,8 +116,11 @@ class PythonCodeInterpreterE2BTool(Agent):
             }
         )
 
-        execution_result_dict = await self.execute_python_code(**kwargs)
-        content = json.dumps(execution_result_dict, indent=2)
+        python_code = kwargs["python_code"]
+        shared_sandbox = kwargs.get("shared_sandbox")
+
+        execution_result_dict = await self.execute_python_code(python_code=python_code, shared_sandbox=shared_sandbox)
+        content = serialize_to_json(execution_result_dict)
 
         images = self._extract_images_from_results(execution_result_dict)
         artifacts = {"execution_result": execution_result_dict}
@@ -114,5 +131,6 @@ class PythonCodeInterpreterE2BTool(Agent):
         return AgentPayload(
             messages=[ChatMessage(role="assistant", content=content)],
             artifacts=artifacts,
+            error=execution_result_dict.get("error", None),
             is_final=False,
         )
