@@ -18,7 +18,7 @@ from ada_backend.repositories.graph_runner_repository import (
     insert_graph_runner_and_bind_to_project,
     upsert_component_node,
 )
-from ada_backend.schemas.pipeline.graph_schema import GraphUpdateResponse, GraphUpdateSchema
+from ada_backend.schemas.pipeline.graph_schema import ComponentCheckSchema, GraphUpdateResponse, GraphUpdateSchema
 from ada_backend.services.agent_runner_service import get_agent_for_project
 from ada_backend.services.graph.delete_graph_service import delete_component_instances_from_nodes
 from ada_backend.services.pipeline.update_pipeline_service import create_or_update_component_instance
@@ -41,6 +41,8 @@ async def update_graph_service(
     Creates or updates a complete graph runner including all component instances,
     their parameters, and relationships.
     """
+    save = False
+    component_checks = []
     if not graph_runner_exists(session, graph_runner_id):
         LOGGER.info("Creating new graph")
         env = env if env else EnvType.DRAFT
@@ -118,11 +120,26 @@ async def update_graph_service(
         delete_node(session, node_id)
     LOGGER.info("Deleted nodes: {}".format(len(nodes_to_delete)))
 
-    await get_agent_for_project(
-        session,
-        project_id=project_id,
-        graph_runner_id=graph_runner_id,
-    )
+    save = True
     if user_id:
         track_project_saved(user_id, project_id)
-    return GraphUpdateResponse(graph_id=graph_runner_id)
+
+    try:
+        await get_agent_for_project(
+            session,
+            project_id=project_id,
+            graph_runner_id=graph_runner_id,
+        )
+    except Exception as e:
+        LOGGER.error(f"Error occurred while getting agent for project: {e}")
+        component_checks.append(
+            ComponentCheckSchema(
+                instance_id=graph_runner_id,
+                component_id=None,
+                status="error",
+                message=str(e),
+                issues=None,
+            )
+        )
+
+    return GraphUpdateResponse(graph_id=graph_runner_id, save=save, component_checks=component_checks)

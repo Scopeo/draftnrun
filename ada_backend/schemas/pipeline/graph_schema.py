@@ -40,8 +40,25 @@ class GraphUpdateSchema(BaseModel):
     edges: list[EdgeSchema]
 
 
+class ValidationIssueSchema(BaseModel):
+    type: str
+    field: str
+    message: str
+    severity: str
+
+
+class ComponentCheckSchema(BaseModel):
+    instance_id: UUID
+    component_id: UUID
+    status: str
+    message: Optional[str] = None
+    issues: list[ValidationIssueSchema] | None = None
+
+
 class GraphUpdateResponse(BaseModel):
     graph_id: UUID
+    save: bool
+    component_checks: list[ComponentCheckSchema] | None = None
 
 
 class ComponentNodeDTO(BaseModel):
