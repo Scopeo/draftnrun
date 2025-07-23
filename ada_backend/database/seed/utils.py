@@ -57,6 +57,7 @@ COMPONENT_UUIDS: dict[str, UUID] = {
     "ocr_call": UUID("a3b4c5d6-e7f8-9012-3456-789abcdef012"),
     "input": UUID("01357c0b-bc99-44ce-a435-995acc5e2544"),
     "filter": UUID("02468c0b-bc99-44ce-a435-995acc5e2545"),
+    "gmail_sender": UUID("af96bb40-c9ea-4851-a663-f0e64363fcb2"),
     "python_code_runner": UUID("e2b00000-0000-1111-2222-333333333333"),
     "terminal_command_runner": UUID("e2b10000-1111-2222-3333-444444444444"),
 }

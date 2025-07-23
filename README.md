@@ -387,6 +387,21 @@ ADA_DB_URL=postgresql://postgres:ada_password@localhost:5432/ada_backend
 ADA_URL=http://localhost:8000
 ```
 
+#### Google OAuth Setup
+To enable Google login, set these in your credentials.env:
+
+```env
+GOOGLE_CLIENT_ID=your-google-client-id
+GOOGLE_CLIENT_SECRET=your-google-client-secret
+```
+How to get them:
+- Go to Google Cloud Console.
+- Create OAuth 2.0 credentials (type: Web application).
+- Add your app’s redirect URI (e.g. https://yourdomain.com/auth/google/callback).
+- Copy the Client ID and Client Secret and paste them above.
+
+Make sure the redirect URI matches what you configure in Google and your app. Do not commit these secrets to version control.
+
 ### Set up the database for backend and ingestion
 
 Ensure Postgres is running.

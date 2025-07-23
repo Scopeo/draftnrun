@@ -7,7 +7,13 @@ from sqlalchemy.orm import Session
 
 from ada_backend.database import models as db
 from ada_backend.database.models import ParameterType, UIComponent
+from ada_backend.repositories.integration_repository import (
+    delete_linked_integration,
+    get_component_instance_integration_relationship,
+    get_integration,
+)
 from ada_backend.schemas.components_schema import ComponentWithParametersDTO, SubComponentParamSchema
+from ada_backend.schemas.integration_schema import IntegrationSchema
 from ada_backend.schemas.parameter_schema import ComponentParamDefDTO
 from engine.agent.agent import ToolDescription
 
@@ -148,7 +154,7 @@ def get_instance_parameters_with_definition(
     return [
         InstanceParameterWithDefinition(
             name=param_def.name,
-            value=param.value,
+            value=param.get_value(),
             type=param_def.type,
             nullable=param_def.nullable,
             default=param_def.default,
@@ -280,7 +286,7 @@ def get_all_components_with_parameters(
                         name=param.name,
                         type=param.type,
                         nullable=param.nullable,
-                        default=param.default,
+                        default=param.get_default(),
                         ui_component=param.ui_component,
                         ui_component_properties=param.ui_component_properties,
                         is_advanced=param.is_advanced,
@@ -299,6 +305,8 @@ def get_all_components_with_parameters(
             if default_tool_description_db
             else None
         )
+        if component.integration_id:
+            integration = get_integration(session, component.integration_id)
         # Create ComponentWithParametersDTO
         result.append(
             ComponentWithParametersDTO(
@@ -306,6 +314,15 @@ def get_all_components_with_parameters(
                 name=component.name,
                 description=component.description,
                 is_agent=component.is_agent,
+                integration=(
+                    IntegrationSchema(
+                        id=integration.id,
+                        name=integration.name,
+                        service=integration.service,
+                    )
+                    if component.integration_id
+                    else None
+                ),
                 tool_parameter_name=tool_param_name,
                 function_callable=component.function_callable,
                 release_stage=component.release_stage,
@@ -565,6 +582,8 @@ def delete_component_instances(
 
     instances = query.all()
     for instance in instances:
+        if get_component_instance_integration_relationship(session, instance.id):
+            delete_linked_integration(session, instance.id)
         session.delete(instance)  # Triggers ORM cascade
 
     session.commit()

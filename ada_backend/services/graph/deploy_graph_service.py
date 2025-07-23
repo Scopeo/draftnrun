@@ -56,6 +56,7 @@ def copy_component_instance(
             PipelineParameterSchema(name=parameter.name, value=parameter.value, order=parameter.order)
             for parameter in component_instance.parameters
         ],
+        integration=component_instance.integration,
     )
     return create_or_update_component_instance(session, new_composant_instance, project_id)
 

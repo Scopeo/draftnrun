@@ -152,6 +152,30 @@ class UIComponentProperties(BaseModel):
     type: Optional[str] = Field(None, description="Set to 'password' for password fields")
 
 
+def cast_value(
+    parameter_type: ParameterType,
+    unresolved_value: str,
+) -> str | int | float | bool | dict:
+    if parameter_type == ParameterType.STRING:
+        return unresolved_value
+    elif parameter_type == ParameterType.INTEGER:
+        return int(unresolved_value)
+    elif parameter_type == ParameterType.FLOAT:
+        return float(unresolved_value)
+    elif parameter_type == ParameterType.BOOLEAN:
+        return unresolved_value.lower() in ("true", "1")
+    elif parameter_type == ParameterType.JSON or parameter_type == ParameterType.DATA_SOURCE:
+        if unresolved_value == "None" or unresolved_value is None:
+            return None
+        return json.loads(unresolved_value)
+    elif parameter_type == ParameterType.LLM_API_KEY:
+        return unresolved_value
+    elif parameter_type == ParameterType.COMPONENT:
+        raise ValueError("Parameter type COMPONENT is not supported for BasicParameters")
+    else:
+        raise ValueError(f"Unsupported value type: {parameter_type}")
+
+
 # --- Models ---
 class Component(Base):
     """
@@ -165,6 +189,7 @@ class Component(Base):
     name = mapped_column(String, unique=True, nullable=False)
     description = mapped_column(Text, nullable=True)
     is_agent = mapped_column(Boolean, nullable=False, default=False)
+    integration_id = mapped_column(UUID(as_uuid=True), ForeignKey("integrations.id"), nullable=True)
     created_at = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     function_callable = mapped_column(Boolean, nullable=False, default=False)
@@ -185,6 +210,65 @@ class Component(Base):
 
     def __str__(self):
         return f"Component({self.name})"
+
+
+class Integration(Base):
+    __tablename__ = "integrations"
+
+    id = mapped_column(UUID(as_uuid=True), primary_key=True)
+    name = mapped_column(String, nullable=False)
+    service = mapped_column(String, nullable=False)
+
+
+class SecretIntegration(Base):
+    __tablename__ = "secret_integrations"
+
+    id = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    integration_id = mapped_column(UUID(as_uuid=True), ForeignKey("integrations.id"))
+    encrypted_access_token = mapped_column(String)
+    encrypted_refresh_token = mapped_column(String)
+    expires_in = mapped_column(Integer)
+    token_last_updated = mapped_column(DateTime(timezone=True))
+
+    secret_integration_component_instances = relationship(
+        "IntegrationComponentInstanceRelationship",
+        back_populates="secret_integration",
+    )
+
+    def set_access_token(self, access_token: str) -> None:
+        """Encrypts and sets the access token."""
+        self.encrypted_access_token = CIPHER.encrypt(access_token.encode()).decode()
+
+    def set_refresh_token(self, refresh_token: str) -> None:
+        """Encrypts and sets the refresh token."""
+        self.encrypted_refresh_token = CIPHER.encrypt(refresh_token.encode()).decode()
+
+    def get_access_token(self) -> str:
+        return CIPHER.decrypt(self.encrypted_access_token.encode()).decode()
+
+    def get_refresh_token(self) -> str:
+        return CIPHER.decrypt(self.encrypted_refresh_token.encode()).decode()
+
+
+class IntegrationComponentInstanceRelationship(Base):
+    __tablename__ = "integration_component_instance_relationships"
+
+    id = mapped_column(UUID(as_uuid=True), primary_key=True, index=True, default=uuid.uuid4)
+    secret_integration_id = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("secret_integrations.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    component_instance_id = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("component_instances.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    created_at = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    secret_integration = relationship("SecretIntegration")
+    component_instance = relationship("ComponentInstance")
 
 
 class GraphRunner(Base):
@@ -231,6 +315,9 @@ class ComponentParameterDefinition(Base):
     child_components = relationship(
         "ComponentParameterChildRelationship", back_populates="component_parameter_definition"
     )
+
+    def get_default(self):
+        return cast_value(self.type, self.default)
 
     def __str__(self):
         return f"CompParamDef(name={self.name}, type={self.type}, is_advanced={self.is_advanced})"
@@ -298,6 +385,11 @@ class ComponentInstance(Base):
         "ComponentSubInput",
         foreign_keys="ComponentSubInput.child_component_instance_id",
         back_populates="child_component_instance",
+        cascade="all, delete-orphan",
+    )
+    relationships = relationship(
+        "IntegrationComponentInstanceRelationship",
+        back_populates="component_instance",
         cascade="all, delete-orphan",
     )
 
@@ -384,32 +476,7 @@ class BasicParameter(Base):
         unresolved_value = self.value
         if self.organization_secret:
             unresolved_value = self.organization_secret.get_secret()
-        return self._cast_value(unresolved_value)
-
-    def _cast_value(
-        self,
-        unresolved_value: str,
-    ) -> str | int | float | bool | dict:
-        parameter_type = self.parameter_definition.type
-        if parameter_type == ParameterType.STRING:
-            return unresolved_value
-        elif parameter_type == ParameterType.INTEGER:
-            return int(unresolved_value)
-        elif parameter_type == ParameterType.FLOAT:
-            return float(unresolved_value)
-        elif parameter_type == ParameterType.BOOLEAN:
-            return unresolved_value.lower() in ("true", "1")
-        elif parameter_type == ParameterType.JSON:
-            if unresolved_value == "None":
-                return None
-            return json.loads(unresolved_value)
-        elif parameter_type == ParameterType.COMPONENT:
-            raise ValueError("Parameter type COMPONENT is not supported for BasicParameters")
-        elif parameter_type == ParameterType.DATA_SOURCE:
-            # data_source is a JSON object that contains id and name of the source
-            return json.loads(unresolved_value)
-        else:
-            raise ValueError(f"Unsupported value type: {parameter_type}")
+        return cast_value(self.parameter_definition.type, unresolved_value)
 
     def __str__(self):
         value_display = (

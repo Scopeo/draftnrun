@@ -4,8 +4,8 @@ import json
 from ada_backend.database import models as db
 from ada_backend.schemas.parameter_schema import PipelineParameterSchema
 from ada_backend.schemas.pipeline.base import (
-    ComponentInstanceSchema,
     ComponentRelationshipSchema,
+    ComponentInstanceSchema,
 )
 from ada_backend.schemas.pipeline.graph_schema import EdgeSchema, GraphUpdateSchema
 from engine.agent.agent import ToolDescription

@@ -8,6 +8,7 @@ from ada_backend.admin.admin import setup_admin
 from ada_backend.instrumentation import setup_performance_instrumentation
 from ada_backend.routers.project_router import router as project_router
 from ada_backend.routers.template_router import router as template_router
+from ada_backend.routers.integration_router import router as integration_router
 from ada_backend.routers.auth_router import router as auth_router
 from ada_backend.routers.source_router import router as source_router
 from ada_backend.routers.ingestion_task_router import router as ingestion_task_router
@@ -51,6 +52,10 @@ app = FastAPI(
             "deletion, and management of project settings",
         },
         {
+            "name": "Integrations",
+            "description": "Endpoints for managing integrations with external services",
+        },
+        {
             "name": "Templates",
             "description": "Endpoints for managing templates, including "
             "retrieving production templates and creating new templates",
@@ -90,6 +95,7 @@ setup_admin(app)
 app.include_router(auth_router)
 app.include_router(org_router)
 app.include_router(project_router)
+app.include_router(integration_router)
 app.include_router(template_router)
 app.include_router(source_router)
 app.include_router(ingestion_task_router)

@@ -4,6 +4,10 @@ from logging import getLogger
 
 from sqlalchemy.orm import Session
 
+from ada_backend.repositories.integration_repository import (
+    delete_linked_integration,
+    upsert_component_instance_integration,
+)
 from ada_backend.repositories.organization_repository import get_organization_secrets_from_project_id
 from ada_backend.schemas.pipeline.base import ComponentInstanceSchema
 from ada_backend.database import models as db
@@ -47,6 +51,15 @@ def create_or_update_component_instance(
         id_=instance_data.id,  # Pass the ID if provided, None otherwise
     )
     instance_id = component_instance.id
+
+    if instance_data.integration and instance_data.integration.secret_id:
+        upsert_component_instance_integration(session, instance_id, instance_data.integration.secret_id)
+    elif instance_data.integration:
+        LOGGER.warning(
+            f"Integration provided for component instance {instance_id} but no secret ID found. "
+            "Deleting existing integration relationship."
+        )
+        delete_linked_integration(session, instance_id)
 
     component_name = component_instance.component.name
 

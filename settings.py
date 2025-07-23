@@ -121,6 +121,10 @@ class BaseConfig(BaseSettings):
     S3_BUCKET_NAME: Optional[str] = None
     S3_REGION_NAME: Optional[str] = None
 
+    # Google OAuth configuration
+    GOOGLE_CLIENT_ID: Optional[str] = None
+    GOOGLE_CLIENT_SECRET: Optional[str] = None
+
     # Observability stack endpoints
     TEMPO_ENDPOINT: str = "http://localhost:4318/v1/traces"
     PROMETHEUS_URL: str = "http://localhost:9090"

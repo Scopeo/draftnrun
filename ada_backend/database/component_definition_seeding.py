@@ -138,3 +138,30 @@ def upsert_tool_descriptions(
             session.add(tool_description)
             LOGGER.info(f"Tool description {tool_description.name} inserted.")
     session.commit()
+
+
+def upsert_integrations(session: Session, integrations: list[db.Integration]) -> None:
+    """
+    Upserts integrations in the database.
+    If an integration already exists and has same attributes, it will be skipped.
+    If it exists but has different attributes, it will be updated.
+    If it does not exist, it will be inserted.
+    """
+    for integration in integrations:
+        existing_integration = (
+            session.query(db.Integration)
+            .filter(
+                db.Integration.id == integration.id,
+            )
+            .first()
+        )
+        if existing_integration:
+            if models_are_equal(existing_integration, integration):
+                LOGGER.info(f"Integration {integration.name} did not change, skipping.")
+            else:
+                update_model_fields(existing_integration, integration)
+                LOGGER.info(f"Integration {integration.name} updated.")
+        else:
+            session.add(integration)
+            LOGGER.info(f"Integration {integration.name} inserted.")
+    session.commit()

@@ -28,5 +28,4 @@ def get_all_components(
     try:
         return get_all_components_endpoint(session)
     except Exception as e:
-        print(e)
         raise HTTPException(status_code=500, detail="Internal Server Error") from e
