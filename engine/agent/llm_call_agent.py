@@ -9,6 +9,8 @@ from engine.agent.utils import extract_vars_in_text_template, parse_openai_messa
 from engine.llm_services.llm_service import CompletionService
 from engine.trace.trace_manager import TraceManager
 
+SUPPORTED_PROVIDER = "openai"
+
 
 class LLMCallAgent(Agent):
     def __init__(
@@ -79,7 +81,7 @@ class LLMCallAgent(Agent):
 
         if len(files_content) > 0:
             # TODO: Add support for other providers
-            if self._completion_service._provider != "openai":
+            if self._completion_service._provider != SUPPORTED_PROVIDER:
                 raise ValueError(f"File content is not supported for provider '{self._completion_service._provider}'.")
             content = [
                 {

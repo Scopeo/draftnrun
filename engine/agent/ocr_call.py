@@ -25,32 +25,6 @@ class OCRCall(Agent):
         self._ocr_service = ocr_service
         self._file_content = file_content
 
-    def _find_file_data(self, payload_json: dict) -> Optional[str]:
-
-        if "messages" not in payload_json or not payload_json["messages"]:
-            return None
-
-        for message in reversed(payload_json["messages"]):
-            if not isinstance(message, dict) or "content" not in message:
-                continue
-
-            content = message["content"]
-            if not content:
-                continue
-
-            payload_json["messages"][-1]["content"] = content if isinstance(content, list) else [content]
-
-            for content_item in payload_json["messages"][-1]["content"]:
-                if (
-                    isinstance(content_item, dict)
-                    and "file" in content_item
-                    and isinstance(content_item["file"], dict)
-                    and "file_data" in content_item["file"]
-                ):
-                    return content_item["file"]["file_data"]
-
-        return None
-
     async def _run_without_trace(self, *input_payloads: AgentPayload | dict) -> AgentPayload:
 
         for payload in input_payloads:
@@ -60,18 +34,13 @@ class OCRCall(Agent):
                 else payload
             )
 
-            file_data = self._find_file_data(payload_json)
-
-            if file_data:
-                span = get_current_span()
-                span.set_attributes(
-                    {
-                        SpanAttributes.LLM_MODEL_NAME: self._ocr_service._model_name,
-                    }
-                )
-                response = await self._ocr_service.get_ocr_text_async(file_data)
-                return AgentPayload(
-                    messages=[ChatMessage(role="assistant", content=response)],
-                )
-            else:
-                raise ValueError("No file data found for OCR processing. Provide file for OCR processing.")
+            span = get_current_span()
+            span.set_attributes(
+                {
+                    SpanAttributes.LLM_MODEL_NAME: self._ocr_service._model_name,
+                }
+            )
+            response = await self._ocr_service.get_ocr_text_async(payload_json)
+            return AgentPayload(
+                messages=[ChatMessage(role="assistant", content=response)],
+            )

@@ -2,11 +2,6 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from ada_backend.database import models as db
-from ada_backend.database.models import (
-    ParameterType,
-    UIComponent,
-    UIComponentProperties,
-)
 from ada_backend.database.component_definition_seeding import (
     upsert_components,
     upsert_components_parameter_definitions,

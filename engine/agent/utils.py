@@ -50,7 +50,7 @@ def extract_vars_in_text_template(prompt_template: str) -> list[str]:
 
 def convert_data_for_trace_manager_display(input_data, type_of_input):
     if isinstance(input_data, dict):
-        trace_input = json.dumps(input_data)
+        trace_input = json.dumps(input_data, indent=2)
         return trace_input
     elif isinstance(input_data, type_of_input):
         trace_input = input_data.last_message.content

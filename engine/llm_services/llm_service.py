@@ -11,6 +11,7 @@ from openinference.semconv.trace import SpanAttributes
 from engine.llm_services.utils import (
     check_usage,
     make_messages_compatible_for_mistral,
+    make_mistral_ocr_compatible,
 )
 from engine.trace.trace_manager import TraceManager
 from engine.agent.agent import ToolDescription
@@ -755,7 +756,6 @@ class CompletionService(LLMService):
             case "mistral":
                 import openai
 
-                # Clean messages for Mistral's stricter API requirements
                 mistral_compatible_messages = make_messages_compatible_for_mistral(messages)
 
                 client = openai.AsyncOpenAI(
@@ -1028,39 +1028,41 @@ class OCRService(LLMService):
     ):
         super().__init__(trace_manager, provider, model_name, api_key, base_url)
 
-    def get_ocr_text(self, pdf_content: str) -> str:
+    def get_ocr_text(self, messages: list[dict]) -> str:
+
         match self._provider:
             case "mistral":
                 import mistralai
 
                 client = mistralai.Mistral(api_key=self._api_key)
+                mistral_compatible_messages = make_mistral_ocr_compatible(messages)
+                if mistral_compatible_messages is None:
+                    raise ValueError("No OCR compatible messages found")
                 ocr_response = client.ocr.process(
                     model="mistral-ocr-latest",
-                    document={"type": "document_url", "document_url": f"data:application/pdf;base64,{pdf_content}"},
+                    document=mistral_compatible_messages,
                     include_image_base64=True,
                 )
-                full_document_markdown = ""
-                for page in ocr_response.pages:
-                    full_document_markdown += page.markdown
-                return full_document_markdown
+                return ocr_response.model_dump_json()
 
             case _:
                 raise ValueError(f"Invalid provider for OCR: {self._provider}")
 
-    async def get_ocr_text_async(self, pdf_content: str) -> str:
+    async def get_ocr_text_async(self, messages: list[dict]) -> str:
+
         match self._provider:
             case "mistral":
                 import mistralai
 
                 client = mistralai.Mistral(api_key=self._api_key)
+                mistral_compatible_messages = make_mistral_ocr_compatible(messages)
+                if mistral_compatible_messages is None:
+                    raise ValueError("No OCR compatible messages found")
                 ocr_response = client.ocr.process(
                     model="mistral-ocr-latest",
-                    document={"type": "document_url", "document_url": f"{pdf_content}"},
+                    document=mistral_compatible_messages,
                     include_image_base64=True,
                 )
-                full_document_markdown = ""
-                for page in ocr_response.pages:
-                    full_document_markdown += page.markdown
-                return full_document_markdown
+                return ocr_response.model_dump_json()
             case _:
                 raise ValueError(f"Invalid provider for OCR: {self._provider}")
