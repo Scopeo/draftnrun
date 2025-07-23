@@ -130,7 +130,8 @@ def instantiate_component(
             input_params["secret_integration_id"] = integration_relationship.secret_integration_id
         else:
             raise ValueError(
-                f"Please add integration {component_integration.name}:{component_integration.service} for component instance {component_instance.name}"
+                f"Please add integration {component_integration.name}:{component_integration.service} "
+                f"for component instance {component_instance.name}"
             )
 
     # Resolve sub-components
