@@ -238,7 +238,7 @@ def get_tool_parameter_by_component_id(
 
 def get_all_components_with_parameters(
     session: Session,
-    release_stage: Optional[ReleaseStage] = None,
+    allowed_stages: Optional[List[ReleaseStage]] = None,
 ) -> List[ComponentWithParametersDTO]:
     """
     Retrieves all components and their parameter definitions from the database.
@@ -247,17 +247,16 @@ def get_all_components_with_parameters(
 
     Args:
         session (Session): SQLAlchemy session.
-        release_stage (Optional[ReleaseStage]): Optional release stage filter.
+        allowed_stages (Optional[List[ReleaseStage]]): Optional release stage filter.
 
     Returns:
         List[ComponentWithParametersDTO]: A list of DTOs containing components,
         their tools (component parameters) and other parameter definitions.
     """
-    # Get all components
-    if release_stage:
-        components = session.query(db.Component).filter(db.Component.release_stage == release_stage).all()
+    if allowed_stages:
+
+        components = session.query(db.Component).filter(db.Component.release_stage.in_(allowed_stages)).all()
     else:
-        LOGGER.info("No release stage specified, retrieving all components.")
         components = session.query(db.Component).all()
 
     # For each component, get its parameter definitions and build result
