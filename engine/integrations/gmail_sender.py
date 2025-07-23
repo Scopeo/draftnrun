@@ -41,7 +41,7 @@ GMAIL_SENDER_TOOL_DESCRIPTION = ToolDescription(
 )
 
 
-def create_mail_message(
+def create_raw_mail_message(
     subject: str,
     body: str,
     sender_email_address: str,
@@ -55,7 +55,7 @@ def create_mail_message(
     if recipients:
         message["To"] = ", ".join(recipients)
     encoded_message = base64.urlsafe_b64encode(message.as_bytes()).decode()
-    return {"message": {"raw": encoded_message}}
+    return {"raw": encoded_message}
 
 
 class GmailSender(Agent):
@@ -90,13 +90,13 @@ class GmailSender(Agent):
 
     def gmail_create_draft(self, email_subject: str, email_body: str, email_recipients: Optional[list[str]] = None):
         try:
-            create_message = create_mail_message(
+            raw_email_message = create_raw_mail_message(
                 subject=email_subject,
                 body=email_body,
                 sender_email_address=self.email_address,
                 recipients=email_recipients,
             )
-            draft = self.service.users().drafts().create(userId="me", body=create_message).execute()
+            draft = self.service.users().drafts().create(userId="me", body={"message": raw_email_message}).execute()
             LOGGER.debug(f'Draft id: {draft["id"]}\nDraft message: {draft["message"]}')
 
         except HttpError as error:
@@ -106,7 +106,7 @@ class GmailSender(Agent):
 
     def gmail_send_email(self, email_subject: str, email_body: str, email_recipients: Optional[list[str]] = None):
         try:
-            create_message = create_mail_message(
+            create_message = create_raw_mail_message(
                 subject=email_subject,
                 body=email_body,
                 sender_email_address=self.email_address,
