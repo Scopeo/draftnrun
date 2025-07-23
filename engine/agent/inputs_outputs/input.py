@@ -1,4 +1,3 @@
-import json
 import logging
 
 from opentelemetry import trace as trace_api
@@ -7,6 +6,7 @@ from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttribu
 from engine.agent.agent import ComponentAttributes, ToolDescription
 from engine.trace.trace_manager import TraceManager
 from engine.agent.utils import load_str_to_json
+from engine.trace.serializer import serialize_to_json
 
 LOGGER = logging.getLogger(__name__)
 
@@ -43,8 +43,8 @@ class Input:
             span.set_attributes(
                 {
                     SpanAttributes.OPENINFERENCE_SPAN_KIND: OpenInferenceSpanKindValues.UNKNOWN.value,
-                    SpanAttributes.INPUT_VALUE: json.dumps(input_data),
-                    SpanAttributes.OUTPUT_VALUE: json.dumps(filtered_input),
+                    SpanAttributes.INPUT_VALUE: serialize_to_json(input_data),
+                    SpanAttributes.OUTPUT_VALUE: serialize_to_json(filtered_input),
                     "component_instance_id": str(self.component_attributes.component_instance_id),
                 }
             )

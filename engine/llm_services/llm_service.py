@@ -8,7 +8,11 @@ from pydantic import BaseModel
 from opentelemetry.trace import get_current_span
 from openinference.semconv.trace import SpanAttributes
 
-from engine.llm_services.utils import check_usage
+from engine.llm_services.utils import (
+    check_usage,
+    make_messages_compatible_for_mistral,
+    make_mistral_ocr_compatible,
+)
 from engine.trace.trace_manager import TraceManager
 from engine.agent.agent import ToolDescription
 from engine.agent.utils import load_str_to_json
@@ -71,6 +75,9 @@ class LLMService(ABC):
                 case "google":
                     self._api_key = settings.GOOGLE_API_KEY
                     self._base_url = settings.GOOGLE_BASE_URL
+                case "mistral":
+                    self._api_key = settings.MISTRAL_API_KEY
+                    self._base_url = settings.MISTRAL_BASE_URL
                 case _:
                     self._api_key = settings.custom_models.get(self._provider).get("api_key")
                     self._base_url = settings.custom_models.get(self._provider).get("base_url")
@@ -317,7 +324,7 @@ class CompletionService(LLMService):
                     }
                 )
                 return response.output_parsed
-            case "cerebras":  # all providers using only json schema for structured output go here
+            case "cerebras" | "google":  # all providers using only json schema for structured output go here
                 import openai
 
                 client = openai.OpenAI(api_key=self._api_key, base_url=self._base_url)
@@ -349,6 +356,28 @@ class CompletionService(LLMService):
                 )
                 response_dict = json.loads(response.choices[0].message.content)
                 return response_format(**response_dict)
+
+            case "mistral":
+                import mistralai
+
+                client = mistralai.Mistral(api_key=self._api_key)
+                if isinstance(messages, str):
+                    messages = [{"role": "user", "content": messages}]
+                response = client.chat.parse(
+                    model=self._model_name,
+                    messages=messages,
+                    temperature=self._temperature,
+                    response_format=response_format,
+                )
+                span.set_attributes(
+                    {
+                        SpanAttributes.LLM_TOKEN_COUNT_COMPLETION: response.usage.completion_tokens,
+                        SpanAttributes.LLM_TOKEN_COUNT_PROMPT: response.usage.prompt_tokens,
+                        SpanAttributes.LLM_TOKEN_COUNT_TOTAL: response.usage.total_tokens,
+                    }
+                )
+                return response.choices[0].message.parsed
+
             case _:
                 raise ValueError(f"Invalid provider for constrained complete with pydantic: {self._provider}")
 
@@ -361,16 +390,6 @@ class CompletionService(LLMService):
         tools: Optional[list[ToolDescription]] = None,
         tool_choice: str = "auto",
     ) -> BaseModel:
-        messages = chat_completion_to_response(messages)
-        kwargs = {
-            "input": messages,
-            "model": self._model_name,
-            "temperature": self._temperature,
-            "stream": stream,
-        }
-
-        kwargs["text_format"] = response_format
-
         span = get_current_span()
         span.set_attributes({SpanAttributes.LLM_INVOCATION_PARAMETERS: json.dumps({"temperature": self._temperature})})
         match self._provider:
@@ -379,6 +398,17 @@ class CompletionService(LLMService):
 
                 if self._api_key is None:
                     self._api_key = settings.OPENAI_API_KEY
+
+                # Transform messages for OpenAI response API
+                messages = chat_completion_to_response(messages)
+                kwargs = {
+                    "input": messages,
+                    "model": self._model_name,
+                    "temperature": self._temperature,
+                    "stream": stream,
+                    "text_format": response_format,
+                }
+
                 client = openai.AsyncOpenAI(api_key=self._api_key)
                 response = await client.responses.parse(**kwargs)
                 span.set_attributes(
@@ -390,7 +420,7 @@ class CompletionService(LLMService):
                 )
                 return response.output_parsed
 
-            case "cerebras":  # all providers using only json schema for structured output go here
+            case "cerebras" | "google":  # all providers using only json schema for structured output go here
                 import openai
 
                 client = openai.AsyncOpenAI(api_key=self._api_key, base_url=self._base_url)
@@ -422,6 +452,27 @@ class CompletionService(LLMService):
                 )
                 response_dict = json.loads(response.choices[0].message.content)
                 return response_format(**response_dict)
+            case "mistral":
+                import mistralai
+
+                client = mistralai.Mistral(api_key=self._api_key)
+                # Convert messages format if needed
+                if isinstance(messages, str):
+                    messages = [{"role": "user", "content": messages}]
+                response = client.chat.parse(
+                    model=self._model_name,
+                    messages=messages,
+                    temperature=self._temperature,
+                    response_format=response_format,
+                )
+                span.set_attributes(
+                    {
+                        SpanAttributes.LLM_TOKEN_COUNT_COMPLETION: response.usage.completion_tokens,
+                        SpanAttributes.LLM_TOKEN_COUNT_PROMPT: response.usage.prompt_tokens,
+                        SpanAttributes.LLM_TOKEN_COUNT_TOTAL: response.usage.total_tokens,
+                    }
+                )
+                return response.choices[0].message.parsed
 
             case _:
                 raise ValueError(f"Invalid provider: {self._provider}")
@@ -463,7 +514,7 @@ class CompletionService(LLMService):
                     }
                 )
                 return response.output_text
-            case "cerebras" | "google":  # all the providers that are using openai chat completion go here
+            case "cerebras" | "google" | "mistral":  # all the providers that are using openai chat completion go here
                 import openai
 
                 schema = response_format.get("schema", {})
@@ -508,19 +559,11 @@ class CompletionService(LLMService):
         tools: Optional[list[ToolDescription]] = None,
         tool_choice: str = "auto",
     ) -> str:
-        kwargs = {
-            "input": messages,
-            "model": self._model_name,
-            "temperature": self._temperature,
-            "stream": stream,
-        }
-        messages = chat_completion_to_response(messages)
         response_format = load_str_to_json(response_format)
         # validate with the basemodel OutputFormatModel
         response_format["strict"] = True
         response_format["type"] = "json_schema"
         response_format = OutputFormatModel(**response_format).model_dump(exclude_none=True, exclude_unset=True)
-        kwargs["text"] = {"format": response_format}
 
         span = get_current_span()
         span.set_attributes({SpanAttributes.LLM_INVOCATION_PARAMETERS: json.dumps({"temperature": self._temperature})})
@@ -530,6 +573,17 @@ class CompletionService(LLMService):
 
                 if self._api_key is None:
                     self._api_key = settings.OPENAI_API_KEY
+
+                # Transform messages for OpenAI response API
+                messages = chat_completion_to_response(messages)
+                kwargs = {
+                    "input": messages,
+                    "model": self._model_name,
+                    "temperature": self._temperature,
+                    "stream": stream,
+                    "text": {"format": response_format},
+                }
+
                 client = openai.AsyncOpenAI(api_key=self._api_key)
                 response = await client.responses.parse(**kwargs)
                 span.set_attributes(
@@ -540,7 +594,7 @@ class CompletionService(LLMService):
                     }
                 )
                 return response.output_text
-            case "cerebras" | "google":  # all the providers that are using openai chat completion go here
+            case "cerebras" | "google" | "mistral":  # all the providers that are using openai chat completion go here
                 import openai
 
                 schema = response_format.get("schema", {})
@@ -553,6 +607,9 @@ class CompletionService(LLMService):
                         "schema": schema,
                     },
                 }
+
+                if isinstance(messages, str):
+                    messages = [{"role": "user", "content": messages}]
 
                 client = openai.AsyncOpenAI(
                     api_key=self._api_key,
@@ -574,7 +631,7 @@ class CompletionService(LLMService):
                 )
                 return response.choices[0].message.content
             case _:
-                raise ValueError(f"Invalid provider: {self._provider}")
+                raise ValueError(f"Invalid provider for constrained complete with json schema: {self._provider}")
 
     @with_usage_check
     def function_call(
@@ -592,10 +649,10 @@ class CompletionService(LLMService):
         span = get_current_span()
         span.set_attributes({SpanAttributes.LLM_INVOCATION_PARAMETERS: json.dumps({"temperature": self._temperature})})
         match self._provider:
-            case "openai":
+            case "openai" | "google":
                 import openai
 
-                client = openai.OpenAI(api_key=self._api_key)
+                client = openai.OpenAI(api_key=self._api_key, base_url=self._base_url)
                 response = client.chat.completions.create(
                     model=self._model_name,
                     messages=messages,
@@ -612,16 +669,15 @@ class CompletionService(LLMService):
                     }
                 )
                 return response
-            case "cerebras":  # all the providers that are using openai chat completion go here
+            case "mistral":
                 import openai
 
-                client = openai.OpenAI(
-                    api_key=self._api_key,
-                    base_url=self._base_url,
-                )
+                mistral_compatible_messages = make_messages_compatible_for_mistral(messages)
+
+                client = openai.OpenAI(api_key=self._api_key, base_url=self._base_url)
                 response = client.chat.completions.create(
                     model=self._model_name,
-                    messages=messages,
+                    messages=mistral_compatible_messages,
                     tools=openai_tools,
                     temperature=self._temperature,
                     stream=stream,
@@ -635,7 +691,7 @@ class CompletionService(LLMService):
                     }
                 )
                 return response
-            case _:
+            case _:  # all the providers that are using openai chat completion go here
                 import openai
 
                 client = openai.OpenAI(
@@ -675,7 +731,7 @@ class CompletionService(LLMService):
         span = get_current_span()
         span.set_attributes({SpanAttributes.LLM_INVOCATION_PARAMETERS: json.dumps({"temperature": self._temperature})})
         match self._provider:
-            case "openai":
+            case "openai" | "google":
                 import openai
 
                 if self._api_key is None:
@@ -684,6 +740,31 @@ class CompletionService(LLMService):
                 response = await client.chat.completions.create(
                     model=self._model_name,
                     messages=messages,
+                    tools=openai_tools,
+                    temperature=self._temperature,
+                    stream=stream,
+                    tool_choice=tool_choice,
+                )
+                span.set_attributes(
+                    {
+                        SpanAttributes.LLM_TOKEN_COUNT_COMPLETION: response.usage.completion_tokens,
+                        SpanAttributes.LLM_TOKEN_COUNT_PROMPT: response.usage.prompt_tokens,
+                        SpanAttributes.LLM_TOKEN_COUNT_TOTAL: response.usage.total_tokens,
+                    }
+                )
+                return response
+            case "mistral":
+                import openai
+
+                mistral_compatible_messages = make_messages_compatible_for_mistral(messages)
+
+                client = openai.AsyncOpenAI(
+                    api_key=self._api_key,
+                    base_url=self._base_url,
+                )
+                response = await client.chat.completions.create(
+                    model=self._model_name,
+                    messages=mistral_compatible_messages,
                     tools=openai_tools,
                     temperature=self._temperature,
                     stream=stream,
@@ -934,3 +1015,56 @@ class VisionService(LLMService):
                 }
             )
             return chat_response.choices[0].message.content
+
+
+class OCRService(LLMService):
+    def __init__(
+        self,
+        trace_manager: TraceManager,
+        provider: str = "mistral",
+        model_name: str = "mistral-ocr-latest",
+        api_key: Optional[str] = None,
+        base_url: Optional[str] = None,
+    ):
+        super().__init__(trace_manager, provider, model_name, api_key, base_url)
+
+    def get_ocr_text(self, messages: list[dict]) -> str:
+
+        match self._provider:
+            case "mistral":
+                import mistralai
+
+                client = mistralai.Mistral(api_key=self._api_key)
+                mistral_compatible_messages = make_mistral_ocr_compatible(messages)
+                if mistral_compatible_messages is None:
+                    raise ValueError("No OCR compatible messages found")
+                ocr_response = client.ocr.process(
+                    model="mistral-ocr-latest",
+                    document=mistral_compatible_messages,
+                    include_image_base64=True,
+                )
+                # TODO: have a better way to show the response
+                return ocr_response.model_dump_json()
+
+            case _:
+                raise ValueError(f"Invalid provider for OCR: {self._provider}")
+
+    async def get_ocr_text_async(self, messages: list[dict]) -> str:
+
+        match self._provider:
+            case "mistral":
+                import mistralai
+
+                client = mistralai.Mistral(api_key=self._api_key)
+                mistral_compatible_messages = make_mistral_ocr_compatible(messages)
+                if mistral_compatible_messages is None:
+                    raise ValueError("No OCR compatible messages found")
+                ocr_response = client.ocr.process(
+                    model="mistral-ocr-latest",
+                    document=mistral_compatible_messages,
+                    include_image_base64=True,
+                )
+                # TODO: have a better way to show the response
+                return ocr_response.model_dump_json()
+            case _:
+                raise ValueError(f"Invalid provider for OCR: {self._provider}")

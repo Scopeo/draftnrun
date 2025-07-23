@@ -1,4 +1,3 @@
-import json
 from typing import Optional
 
 from openinference.semconv.trace import SpanAttributes
@@ -8,6 +7,9 @@ from engine.agent.agent import Agent, AgentPayload, ChatMessage, ComponentAttrib
 from engine.agent.utils import extract_vars_in_text_template, parse_openai_message_format
 from engine.llm_services.llm_service import CompletionService
 from engine.trace.trace_manager import TraceManager
+from engine.trace.serializer import serialize_to_json
+
+SUPPORTED_PROVIDER = "openai"
 
 
 class LLMCallAgent(Agent):
@@ -78,6 +80,9 @@ class LLMCallAgent(Agent):
         text_content = self._prompt_template.format(**input_replacements)
 
         if len(files_content) > 0:
+            # TODO: Add support for other providers
+            if self._completion_service._provider != SUPPORTED_PROVIDER:
+                raise ValueError(f"File content is not supported for provider '{self._completion_service._provider}'.")
             content = [
                 {
                     "type": "text",
@@ -91,7 +96,7 @@ class LLMCallAgent(Agent):
         span = get_current_span()
         span.set_attributes(
             {
-                SpanAttributes.INPUT_VALUE: json.dumps([{"role": "user", "content": content}]),
+                SpanAttributes.INPUT_VALUE: serialize_to_json([{"role": "user", "content": content}]),
                 SpanAttributes.LLM_MODEL_NAME: self._completion_service._model_name,
             }
         )

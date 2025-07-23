@@ -8,9 +8,9 @@ from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttribu
 from opentelemetry import trace as trace_api
 
 from engine.agent.agent import AgentPayload, ChatMessage
-from engine.agent.utils import convert_data_for_trace_manager_display
 from engine.graph_runner.runnable import Runnable
 from engine.trace.trace_manager import TraceManager
+from engine.trace.serializer import serialize_to_json
 
 LOGGER = logging.getLogger(__name__)
 
@@ -119,7 +119,7 @@ class GraphRunner:
         is_root_execution = kwargs.pop("is_root_execution", False)
 
         with self.trace_manager.start_span("Workflow", isolate_context=is_root_execution) as span:
-            trace_input = convert_data_for_trace_manager_display(input_data, AgentPayload)
+            trace_input = serialize_to_json(input_data)
             span.set_attributes(
                 {
                     SpanAttributes.OPENINFERENCE_SPAN_KIND: self.TRACE_SPAN_KIND,
@@ -128,8 +128,7 @@ class GraphRunner:
             )
             final_output = await self._run_without_trace(input_data, **kwargs)
             # TODO: Update trace when AgentInput/Output is refactored
-            trace_input = convert_data_for_trace_manager_display(input_data, AgentPayload)
-            trace_output = convert_data_for_trace_manager_display(final_output, AgentPayload)
+            trace_output = serialize_to_json(final_output)
             span.set_attributes(
                 {
                     SpanAttributes.OUTPUT_VALUE: trace_output,
