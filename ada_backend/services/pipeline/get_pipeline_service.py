@@ -93,7 +93,9 @@ def get_component_instance(
                 id=component.integration_id,
                 name=integration.name if integration else None,
                 service=integration.service if integration else None,
-                secret_id=component_instance_integration.secret_integration_id,
+                secret_id=(
+                    component_instance_integration.secret_integration_id if component_instance_integration else None
+                ),
             )
             if component.integration_id
             else None
