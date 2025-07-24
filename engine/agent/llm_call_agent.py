@@ -9,7 +9,8 @@ from engine.llm_services.llm_service import CompletionService
 from engine.trace.trace_manager import TraceManager
 from engine.trace.serializer import serialize_to_json
 
-SUPPORTED_PROVIDER = "openai"
+FILE_SUPPORTED_PROVIDERS = ["openai"]
+IMAGE_SUPPORTED_PROVIDERS = ["openai", "google"]
 
 
 class LLMCallAgent(Agent):
@@ -53,7 +54,7 @@ class LLMCallAgent(Agent):
                 and payload_json["messages"][-1]["content"]
             ):
                 text_content, payload_files_content, payload_images_content = parse_openai_message_format(
-                    payload_json["messages"][-1]["content"]
+                    payload_json["messages"][-1]["content"], self._completion_service._provider
                 )
                 input_replacements["input"] += text_content
                 files_content.extend(payload_files_content)
@@ -83,7 +84,7 @@ class LLMCallAgent(Agent):
 
         if len(files_content) > 0:
             # TODO: Add support for other providers
-            if self._completion_service._provider != SUPPORTED_PROVIDER:
+            if self._completion_service._provider not in FILE_SUPPORTED_PROVIDERS:
                 raise ValueError(f"File content is not supported for provider '{self._completion_service._provider}'.")
             content = [
                 {
@@ -97,7 +98,7 @@ class LLMCallAgent(Agent):
 
         if len(images_content) > 0:
             # TODO: Add support for other providers
-            if self._completion_service._provider != SUPPORTED_PROVIDER:
+            if self._completion_service._provider not in IMAGE_SUPPORTED_PROVIDERS:
                 raise ValueError(
                     f"Image content is not supported for provider '{self._completion_service._provider}'."
                 )
