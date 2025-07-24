@@ -9,9 +9,11 @@ from ada_backend.database.models import (
     ParameterType,
 )
 from ada_backend.database.component_definition_seeding import (
+    upsert_component_categories,
     upsert_components,
     upsert_components_parameter_definitions,
 )
+from ada_backend.database.seed.seed_categories import CATEGORY_UUIDS
 from ada_backend.database.seed.utils import COMPONENT_UUIDS
 from ada_backend.database.seed.seed_tool_description import TOOL_DESCRIPTION_UUIDS
 from ada_backend.database import models as db
@@ -52,3 +54,8 @@ def seed_python_code_runner_components(session: Session):
     ]
 
     upsert_components_parameter_definitions(session, python_code_runner_parameter_definitions)
+    upsert_component_categories(
+        session=session,
+        component_id=python_code_runner_component.id,
+        category_ids=[CATEGORY_UUIDS["action"]],
+    )
