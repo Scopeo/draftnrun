@@ -207,6 +207,11 @@ class Component(Base):
         back_populates="component",
     )
     child_definitions = relationship("ComponentParameterChildRelationship", back_populates="child_component")
+    categories = relationship(
+        "ComponentCategory",
+        back_populates="component",
+        cascade="all, delete-orphan",
+    )
 
     def __str__(self):
         return f"Component({self.name})"
@@ -283,6 +288,12 @@ class Category(Base):
     description = mapped_column(Text, nullable=True)
     created_at = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    components = relationship(
+        "ComponentCategory",
+        back_populates="category",
+        cascade="all, delete-orphan",
+    )
 
     def __str__(self):
         return f"Category({self.name})"

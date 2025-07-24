@@ -151,6 +151,24 @@ class ComponentAdmin(EnhancedModelView, model=db.Component):
     column_searchable_list = ["name", "description"]
 
 
+class ComponentCategoryAdmin(EnhancedModelView, model=db.ComponentCategory):
+    category = AdminCategory.COMPONENTS
+    icon = "fas fa-tags"
+    column_list = ["id", "component", "category", "created_at", "updated_at"]
+    form_columns = ["component", "category"]
+
+    column_searchable_list = [
+        "category.name",
+    ]
+
+
+class CategoryAdmin(EnhancedModelView, model=db.Category):
+    category = AdminCategory.COMPONENTS
+    icon = "fas fa-tags"
+    column_list = ["id", "name", "description", "created_at", "updated_at"]
+    form_columns = ["name", "description"]
+
+
 class GraphRunnerAdmin(EnhancedModelView, model=db.GraphRunner):
     category = AdminCategory.COMPONENTS
     icon = "fas fa-cubes"
@@ -395,6 +413,8 @@ def setup_admin(app: FastAPI):
 
     admin.add_view(GraphRunnerAdmin)
     admin.add_view(ComponentAdmin)
+    admin.add_view(CategoryAdmin)
+    admin.add_view(ComponentCategoryAdmin)
     admin.add_view(GraphRunnerNodeAdmin)
     admin.add_view(GraphRunnerEdgeAdmin)
     admin.add_view(ComponentParameterDefinitionAdmin)

@@ -10,9 +10,11 @@ from ada_backend.database.models import (
     UIComponentProperties,
 )
 from ada_backend.database.component_definition_seeding import (
+    upsert_component_categories,
     upsert_components,
     upsert_components_parameter_definitions,
 )
+from ada_backend.database.seed.seed_categories import CATEGORY_UUIDS
 from ada_backend.database.seed.seed_tool_description import TOOL_DESCRIPTION_UUIDS
 from ada_backend.database.seed.utils import COMPONENT_UUIDS
 
@@ -56,4 +58,9 @@ def seed_input_components(session: Session):
                 ).model_dump(exclude_unset=True, exclude_none=True),
             ),
         ],
+    )
+    upsert_component_categories(
+        session=session,
+        component_id=input.id,
+        category_ids=[CATEGORY_UUIDS["trigger"]],
     )

@@ -1,13 +1,14 @@
 from ada_backend.database.component_definition_seeding import upsert_categories
 import ada_backend.database.models as db
+from uuid import UUID
 
 
 CATEGORY_UUIDS = {
-    "trigger": "3312c1ff-a559-4824-a15f-01780a9bf7c2",
-    "action": "2066b69c-c771-4c05-9788-8790a701c4e0",
-    "query": "2cf1a375-4a05-4e36-adef-f0c72e897dbf",
-    "processing": "802ccf36-cb93-4a91-a57a-24e65f2feee4",
-    "logical": "a0d88f3f-12da-4b65-9879-ea89fc280395",
+    "trigger": UUID("3312c1ff-a559-4824-a15f-01780a9bf7c2"),
+    "action": UUID("2066b69c-c771-4c05-9788-8790a701c4e0"),
+    "query": UUID("2cf1a375-4a05-4e36-adef-f0c72e897dbf"),
+    "processing": UUID("802ccf36-cb93-4a91-a57a-24e65f2feee4"),
+    "logical": UUID("a0d88f3f-12da-4b65-9879-ea89fc280395"),
 }
 
 
