@@ -9,10 +9,12 @@ from ada_backend.database.models import (
     UIComponentProperties,
 )
 from ada_backend.database.component_definition_seeding import (
+    upsert_component_categories,
     upsert_components,
     upsert_components_parameter_child_relationships,
     upsert_components_parameter_definitions,
 )
+from ada_backend.database.seed.seed_categories import CATEGORY_UUIDS
 from ada_backend.database.seed.seed_tool_description import TOOL_DESCRIPTION_UUIDS
 from ada_backend.database.seed.utils import (
     COMPONENT_UUIDS,
@@ -124,4 +126,9 @@ def seed_react_sql_components(session: Session):
                 ],
             ),
         ],
+    )
+    upsert_component_categories(
+        session=session,
+        component_id=react_sql_agent.id,
+        category_ids=[CATEGORY_UUIDS["query"]],
     )

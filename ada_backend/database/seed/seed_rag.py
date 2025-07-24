@@ -11,10 +11,12 @@ from ada_backend.database.models import (
     SelectOption,
 )
 from ada_backend.database.component_definition_seeding import (
+    upsert_component_categories,
     upsert_components,
     upsert_components_parameter_child_relationships,
     upsert_components_parameter_definitions,
 )
+from ada_backend.database.seed.seed_categories import CATEGORY_UUIDS
 from ada_backend.database.seed.seed_tool_description import TOOL_DESCRIPTION_UUIDS
 from ada_backend.database.seed.utils import (
     COMPONENT_UUIDS,
@@ -186,6 +188,8 @@ def seed_rag_components(session: Session):
             ),
         ],
     )
+
+    upsert_component_categories(session=session, component_id=rag_agent.id, category_ids=[CATEGORY_UUIDS["query"]])
     # Hybrid RAG
     hybrid_rag_retriever_param = db.ComponentParameterDefinition(
         id=UUID("7d4bb3fd-9188-4b40-82de-bb85c7e8f08a"),
