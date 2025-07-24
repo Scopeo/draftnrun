@@ -77,6 +77,7 @@ def get_component_instance(
         ],
         parameters=[
             PipelineParameterReadSchema(
+                id=param.id,
                 name=param.name,
                 value=param.value,
                 type=param.type,

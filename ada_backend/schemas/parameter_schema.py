@@ -11,6 +11,7 @@ class ParameterBase(BaseModel):
 
 
 class ParameterDefinition(ParameterBase):
+    id: UUID
     type: ParameterType
     nullable: bool = False
     default: Optional[str | int | float | bool | dict] = None

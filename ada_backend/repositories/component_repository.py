@@ -22,6 +22,7 @@ LOGGER = logging.getLogger(__name__)
 
 @dataclass
 class InstanceParameterWithDefinition:
+    id: UUID
     name: str
     value: str
     type: ParameterType
@@ -153,6 +154,7 @@ def get_instance_parameters_with_definition(
 
     return [
         InstanceParameterWithDefinition(
+            id=param_def.id,
             name=param_def.name,
             value=param.get_value(),
             type=param_def.type,
