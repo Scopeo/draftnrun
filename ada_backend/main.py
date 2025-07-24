@@ -16,7 +16,7 @@ from ada_backend.routers.ingestion_task_router import router as ingestion_task_r
 from ada_backend.routers.components_router import router as components_router
 from ada_backend.routers.graph_router import router as graph_router
 from ada_backend.routers.s3_files_router import router as s3_files_router
-from ada_backend.routers.question_answer_router import router as question_answer_router
+from ada_backend.routers.quality_assurance_router import router as quality_assurance_router
 from ada_backend.graphql.schema import graphql_router
 from ada_backend.routers.organization_router import router as org_router
 from engine.trace.trace_context import set_trace_manager
@@ -84,8 +84,8 @@ app = FastAPI(
             "description": "Endpoints for managing ingestion tasks for organization sources",
         },
         {
-            "name": "Question Answers",
-            "description": "Endpoints for managing question-answer pairs for evaluation purposes",
+            "name": "Input Groundtruth",
+            "description": "Endpoints for managing input-groundtruth pairs for quality assurance purposes",
         },
     ],
 )
@@ -108,7 +108,7 @@ app.include_router(ingestion_task_router)
 app.include_router(s3_files_router)
 app.include_router(components_router)
 app.include_router(graph_router)
-app.include_router(question_answer_router)
+app.include_router(quality_assurance_router)
 app.include_router(graphql_router, prefix="/graphql")
 
 app.add_middleware(RequestContextMiddleware)
