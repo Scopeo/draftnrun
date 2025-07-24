@@ -31,6 +31,7 @@ class ComponentUseInfoSchema(BaseModel):
     release_stage: str = db.ReleaseStage.BETA
     tool_parameter_name: Optional[str] = None
     subcomponents_info: list[SubComponentParamSchema]
+    categories: List[str] = []
 
 
 class ComponentWithParametersDTO(ComponentUseInfoSchema, ComponentDTO):
