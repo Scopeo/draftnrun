@@ -107,20 +107,21 @@ def parse_openai_message_format(message: Union[str, list], provider: str) -> tup
                             "file": item["file"],
                         }
                     )
-                if "image_url" in item and provider == "openai":
-                    images_content.append(
-                        {
-                            "type": "image_url",
-                            "image_url": item["image_url"]["url"],
-                        }
-                    )
-                if "image_url" in item and provider == "google":
-                    images_content.append(
-                        {
-                            "type": "image_url",
-                            "image_url": item["image_url"],
-                        }
-                    )
+                if "image_url" in item:
+                    if provider == "openai":
+                        images_content.append(
+                            {
+                                "type": "image_url",
+                                "image_url": item["image_url"]["url"],
+                            }
+                        )
+                    else:
+                        images_content.append(
+                            {
+                                "type": "image_url",
+                                "image_url": item["image_url"],
+                            }
+                        )
 
     return text_content, files_content, images_content
 
