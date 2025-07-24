@@ -5,7 +5,7 @@ import logging
 import pandas as pd
 
 from ada_backend.schemas.monitor_schema import OccurenceQuestionsList
-from engine.agent.agent import AgentPayload
+from engine.agent.data_structures import AgentPayload
 from engine.llm_services.llm_service import CompletionService
 from engine.storage_service.db_service import DBService
 from engine.storage_service.db_utils import DBDefinition, DBColumn
@@ -60,7 +60,7 @@ async def monitor_questions(db_service: DBService, project_id: UUID, agent_input
     table_name = "questions_occurences"
 
     previous_questions = await get_previous_questions(db_service, project_id, table_name)
-    query = PROMPT.format(questions_list=previous_questions, question=agent_input.last_message.content)
+    query = PROMPT.format(questions_list=previous_questions, question=agent_input.content)
 
     answer = await llm_service.constrained_complete_with_pydantic_async(
         messages=query, response_format=OccurenceQuestionsList

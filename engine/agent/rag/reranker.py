@@ -5,7 +5,7 @@ from typing import Optional
 from opentelemetry import trace as trace_api
 from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttributes, RerankerAttributes
 
-from engine.agent.agent import ComponentAttributes, SourceChunk
+from engine.agent.data_structures import SourceChunk, ComponentAttributes
 from engine.trace.trace_manager import TraceManager
 
 
