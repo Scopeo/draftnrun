@@ -11,8 +11,8 @@ LOGGER = logging.getLogger(__name__)
 
 STAGE_HIERARCHY = {
     ReleaseStage.INTERNAL: [ReleaseStage.INTERNAL, ReleaseStage.EARLY_ACCESS, ReleaseStage.BETA, ReleaseStage.PUBLIC],
-    ReleaseStage.EARLY_ACCESS: [ReleaseStage.EARLY_ACCESS, ReleaseStage.BETA, ReleaseStage.PUBLIC],
-    ReleaseStage.BETA: [ReleaseStage.BETA, ReleaseStage.PUBLIC],
+    ReleaseStage.BETA: [ReleaseStage.BETA, ReleaseStage.EARLY_ACCESS, ReleaseStage.PUBLIC],
+    ReleaseStage.EARLY_ACCESS: [ReleaseStage.EARLY_ACCESS, ReleaseStage.PUBLIC],
     ReleaseStage.PUBLIC: [ReleaseStage.PUBLIC],
 }
 
