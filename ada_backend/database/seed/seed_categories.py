@@ -18,7 +18,8 @@ def seed_categories(session):
             id=CATEGORY_UUIDS["trigger"],
             name="Trigger",
             description=(
-                "A component whose purpose is to detect an event or condition and signal the system to start a process. "
+                "A component whose purpose is to detect an event or condition and "
+                "signal the system to start a process. "
                 "It monitors or listens for something to happen.\n"
                 "Examples:\n"
                 "- A file is created.\n"
@@ -31,7 +32,8 @@ def seed_categories(session):
             name="Action",
             description=(
                 "A component that performs a specific operation in response to a command."
-                "It is an executable, isolated task that changes the system’s state or interacts with the environment.\n"
+                "It is an executable, isolated task that changes the system’s "
+                "state or interacts with the environment.\n"
                 "Examples:\n"
                 "- Sending an email.\n"
                 "- Writing data to a database."
@@ -41,7 +43,8 @@ def seed_categories(session):
             id=CATEGORY_UUIDS["query"],
             name="Query",
             description=(
-                "A component that retrieves information from a data source, usually specifying criteria or filters.\n"
+                "A component that retrieves information from a data source, "
+                "usually specifying criteria or filters.\n"
                 "Examples:\n"
                 "- Fetch all users older than 18.\n"
                 "- Get the latest weather data.\n"
