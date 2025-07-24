@@ -37,6 +37,7 @@ class LLMCallAgent(Agent):
         prompt_vars = extract_vars_in_text_template(self._prompt_template)
         input_replacements = {}
         files_content = []
+        images_content = []
 
         input_replacements["input"] = ""
         for payload in input_payloads:
@@ -51,11 +52,12 @@ class LLMCallAgent(Agent):
                 and "content" in payload_json["messages"][-1]
                 and payload_json["messages"][-1]["content"]
             ):
-                text_content, payload_files_content = parse_openai_message_format(
+                text_content, payload_files_content, payload_images_content = parse_openai_message_format(
                     payload_json["messages"][-1]["content"]
                 )
                 input_replacements["input"] += text_content
                 files_content.extend(payload_files_content)
+                images_content.extend(payload_images_content)
 
         for prompt_var in prompt_vars:
             for payload in input_payloads:
@@ -89,6 +91,22 @@ class LLMCallAgent(Agent):
                     "text": text_content,
                 },
                 *files_content,
+            ]
+        else:
+            content = text_content
+
+        if len(images_content) > 0:
+            # TODO: Add support for other providers
+            if self._completion_service._provider != SUPPORTED_PROVIDER:
+                raise ValueError(
+                    f"Image content is not supported for provider '{self._completion_service._provider}'."
+                )
+            content = [
+                {
+                    "type": "text",
+                    "text": text_content,
+                },
+                *images_content,
             ]
         else:
             content = text_content
