@@ -82,31 +82,22 @@ class LLMCallAgent(Agent):
 
         text_content = self._prompt_template.format(**input_replacements)
 
-        if len(files_content) > 0:
-            # TODO: Add support for other providers
-            if self._completion_service._provider not in FILE_SUPPORTED_PROVIDERS:
-                raise ValueError(f"File content is not supported for provider '{self._completion_service._provider}'.")
+        # Check for file support
+        if len(files_content) > 0 and self._completion_service._provider not in FILE_SUPPORTED_PROVIDERS:
+            raise ValueError(f"File content is not supported for provider '{self._completion_service._provider}'.")
+
+        # Check for image support
+        if len(images_content) > 0 and self._completion_service._provider not in IMAGE_SUPPORTED_PROVIDERS:
+            raise ValueError(f"Image content is not supported for provider '{self._completion_service._provider}'.")
+
+        # Build content based on what's present
+        if len(files_content) > 0 or len(images_content) > 0:
             content = [
                 {
                     "type": "text",
                     "text": text_content,
                 },
                 *files_content,
-            ]
-        else:
-            content = text_content
-
-        if len(images_content) > 0:
-            # TODO: Add support for other providers
-            if self._completion_service._provider not in IMAGE_SUPPORTED_PROVIDERS:
-                raise ValueError(
-                    f"Image content is not supported for provider '{self._completion_service._provider}'."
-                )
-            content = [
-                {
-                    "type": "text",
-                    "text": text_content,
-                },
                 *images_content,
             ]
         else:
