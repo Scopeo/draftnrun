@@ -91,6 +91,7 @@ class DBService(ABC):
         timestamp_column_name: Optional[str] = None,
         append_mode: bool = True,
         query_filter: Optional[str] = None,
+        timestamp_filter: Optional[str] = None,
     ) -> None:
         """
         Update a table on Database with a new DataFrame.
@@ -110,6 +111,7 @@ class DBService(ABC):
             )
             self.insert_df_to_table(df=new_df, table_name=table_name, schema_name=schema_name)
         else:  # Update existing table
+            # Query for timestamp comparison (can be filtered)
             query = (
                 f"SELECT {id_column_name}, {timestamp_column_name} FROM {target_table_name}"
                 if timestamp_column_name
@@ -117,17 +119,34 @@ class DBService(ABC):
             )
             if query_filter:
                 query += f" WHERE {query_filter}"
+            if timestamp_filter:
+                if query_filter:
+                    query += f" AND {timestamp_column_name} {timestamp_filter}"
+                else:
+                    query += f" WHERE {timestamp_column_name} {timestamp_filter}"
             query += ";"
             old_df = self._fetch_sql_query_as_dataframe(query)
             old_df = convert_to_correct_pandas_type(old_df, id_column_name, table_definition)
 
+            # Separate query for existence check (without timestamp filter)
+            existence_query = f"SELECT {id_column_name} FROM {target_table_name}"
+            if query_filter:
+                existence_query += f" WHERE {query_filter}"
+            existence_query += ";"
+            existing_ids_df = self._fetch_sql_query_as_dataframe(existence_query)
+            existing_ids_df = convert_to_correct_pandas_type(existing_ids_df, id_column_name, table_definition)
+
             common_df = new_df.merge(old_df, on=id_column_name, how="inner")
             if timestamp_column_name:
-                ids_to_update = set(
-                    common_df[common_df[timestamp_column_name + "_x"] > common_df[timestamp_column_name + "_y"]][
-                        id_column_name
-                    ]
-                )
+                if timestamp_filter:
+                    ids_to_update = set(common_df[id_column_name])
+                else:
+                    ids_to_update = set(
+                        common_df[common_df[timestamp_column_name + "_x"] > common_df[timestamp_column_name + "_y"]][
+                            id_column_name
+                        ]
+                    )
+                print("ids_to_update", ids_to_update)
             else:
                 ids_to_update = set(common_df[id_column_name])
             LOGGER.info(f"Found {len(ids_to_update)} rows to update in the table")
@@ -142,7 +161,8 @@ class DBService(ABC):
                 schema_name=schema_name,
             )
 
-            new_df["exists"] = new_df[id_column_name].isin(old_df[id_column_name].values)
+            # Use all existing IDs for existence check, not just timestamp-filtered ones
+            new_df["exists"] = new_df[id_column_name].isin(existing_ids_df[id_column_name].values)
             LOGGER.info(f"Found {new_df['exists'][new_df['exists']].sum()} existing rows in the table")
             new_data = new_df[~new_df["exists"]].copy()
             new_data.drop(columns=["exists"], inplace=True)

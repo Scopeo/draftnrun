@@ -156,6 +156,7 @@ def ingestion_main(
                 chunk_overlap=chunk_overlap,
                 update_existing=update_existing,
                 query_filter=source_attributes.get("query_filter"),
+                timestamp_filter=source_attributes.get("timestamp_filter"),
             )
         except Exception as e:
             LOGGER.error(f"Error during database ingestion: {str(e)}")

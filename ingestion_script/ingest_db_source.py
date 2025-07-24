@@ -134,6 +134,7 @@ def upload_db_source(
     chunk_overlap: int = 0,
     update_existing: bool = False,
     query_filter: Optional[str] = None,
+    timestamp_filter: Optional[str] = None,
 ):
     df = get_db_source(
         db_url=source_db_url,
@@ -158,9 +159,10 @@ def upload_db_source(
         table_definition=db_definition,
         id_column_name=chunk_id_column_name,
         timestamp_column_name=timestamp_column_name,
-        append_mode=not update_existing,
+        append_mode=update_existing,
         schema_name=storage_schema_name,
         query_filter=query_filter,
+        timestamp_filter=timestamp_filter,
     )
     LOGGER.info(f"Updated table '{storage_table_name}' in schema '{storage_schema_name}' with {len(df)} rows.")
     sync_chunks_to_qdrant(
@@ -169,7 +171,7 @@ def upload_db_source(
         collection_name=qdrant_collection_name,
         db_service=db_service,
         qdrant_service=qdrant_service,
-        query_filter=None,  # Don't apply filter to ingestion DB - data is already filtered
+        timestamp_filter=timestamp_filter,
     )
 
 
@@ -189,6 +191,7 @@ def ingestion_database(
     chunk_overlap: int = 0,
     update_existing: bool = False,
     query_filter: Optional[str] = None,
+    timestamp_filter: Optional[str] = None,
 ) -> None:
     chunk_id_column_name = "chunk_id"
     chunk_column_name = "content"
@@ -235,5 +238,6 @@ def ingestion_database(
             chunk_size=chunk_size,
             chunk_overlap=chunk_overlap,
             query_filter=query_filter,
+            timestamp_filter=timestamp_filter,
         ),
     )

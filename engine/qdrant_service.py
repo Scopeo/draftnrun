@@ -1022,7 +1022,6 @@ class QdrantService:
     def get_collection_data(
         self,
         collection_name: str,
-        query_filter: Optional[str] = None,
     ) -> pd.DataFrame:
 
         if not self.collection_exists(collection_name):
@@ -1053,16 +1052,11 @@ class QdrantService:
                     row[field] = payload.get(field)
             rows.append(row)
 
-        df = pd.DataFrame(rows)
-        if query_filter and not df.empty:
-            converted_query_filter = re.sub(r"(?<![!><])=(?!=)", "==", query_filter)
-            df = df.query(converted_query_filter)
-        return df
+        return pd.DataFrame(rows)
 
     async def get_collection_data_async(
         self,
         collection_name: str,
-        query_filter: Optional[str] = "",
     ) -> pd.DataFrame:
 
         if not await self.collection_exists_async(collection_name):
@@ -1093,49 +1087,44 @@ class QdrantService:
                     row[field] = payload.get(field)
             rows.append(row)
 
-        df = pd.DataFrame(rows)
-        if query_filter and not df.empty:
-            df = df.query(query_filter)
-        return df
+        return pd.DataFrame(rows)
 
     def sync_df_with_collection(
         self,
         df: pd.DataFrame,
         collection_name: str,
-        query_filter: Optional[str] = None,
+        timestamp_filter: Optional[str] = None,
     ) -> bool:
 
-        if query_filter:
-            if self.collection_exists(collection_name):
-                old_df = self.get_collection_data(collection_name, query_filter=query_filter)
-                ids_to_delete = set(old_df[self.default_schema.chunk_id_field])
-                if len(ids_to_delete) > 0:
-                    self.delete_chunks(
-                        point_ids=list(ids_to_delete),
-                        id_field=self.default_schema.chunk_id_field,
-                        collection_name=collection_name,
-                    )
-                    LOGGER.info(f"Deleted {len(ids_to_delete)} chunks from Qdrant")
+        # Create index on timestamp field if needed for filtering
+        if timestamp_filter and self.default_schema.last_edited_ts_field:
+            self.create_index_if_needed(collection_name, self.default_schema.last_edited_ts_field)
 
-            self.add_chunks(df.to_dict(orient="records"), collection_name)
-            LOGGER.info(f"Added {len(df)} chunks to Qdrant")
-            return True
+        # Get all existing data for existence check
+        all_existing_df = self.get_collection_data(collection_name)
 
-        old_df = self.get_collection_data(collection_name)
-        if old_df.empty:
+        if all_existing_df.empty:
             self.add_chunks(df.to_dict(orient="records"), collection_name)
             LOGGER.info(f"Qdrant collection is empty. Added {len(df)} chunks to Qdrant")
             return True
 
+        # If timestamp filter is provided, filter existing data for comparison
+        if timestamp_filter and self.default_schema.last_edited_ts_field:
+            timestamp_condition = f"{self.default_schema.last_edited_ts_field} {timestamp_filter}"
+            converted_filter = re.sub(r"(?<![!><])=(?!=)", "==", timestamp_condition)
+            filtered_df = all_existing_df.query(converted_filter) if not all_existing_df.empty else all_existing_df
+        else:
+            filtered_df = all_existing_df
+
         incoming_ids = set(df[self.default_schema.chunk_id_field])
-        existing_ids = set(old_df[self.default_schema.chunk_id_field])
-        ids_to_delete = existing_ids - incoming_ids
-        new_ids_to_add = incoming_ids - existing_ids
+        existing_ids = set(all_existing_df[self.default_schema.chunk_id_field])  # Use all existing for existence check
+        new_ids_to_add = incoming_ids - existing_ids  # Check against all existing
 
-        # merge the two dataframes to get the dataframes to update
-        common_df = df.merge(old_df, on=self.default_schema.chunk_id_field, how="inner")
+        # merge with appropriate data for timestamp comparison
+        common_df = df.merge(filtered_df, on=self.default_schema.chunk_id_field, how="inner")
 
-        if self.default_schema.last_edited_ts_field:
+        if self.default_schema.last_edited_ts_field and not timestamp_filter:
+            # Only do timestamp comparison if no timestamp filter is applied
             ids_to_update = set(
                 common_df[
                     common_df[self.default_schema.last_edited_ts_field + "_x"]
@@ -1143,9 +1132,10 @@ class QdrantService:
                 ][self.default_schema.chunk_id_field]
             )
         else:
+            # If timestamp filter is applied, update all matching records
             ids_to_update = set(common_df[self.default_schema.chunk_id_field])
 
-        ids_to_delete = ids_to_delete.union(ids_to_update)
+        ids_to_delete = ids_to_update  # Only delete records that will be updated
         ids_to_upsert = new_ids_to_add.union(ids_to_update)
 
         if len(ids_to_delete) > 0:
@@ -1154,63 +1144,68 @@ class QdrantService:
                 id_field=self.default_schema.chunk_id_field,
                 collection_name=collection_name,
             )
-            LOGGER.info(f"Deleted {len(ids_to_delete)} chunks from Qdrant")
+            print(f"✓ Deleted {len(ids_to_delete)} outdated chunks from Qdrant")
         if len(ids_to_upsert) > 0:
             chunks_to_upsert = df[df[self.default_schema.chunk_id_field].isin(ids_to_upsert)]
             list_payloads = chunks_to_upsert.to_dict(orient="records")
             self.add_chunks(list_payloads, collection_name)
             LOGGER.info(f"Upserted {len(ids_to_upsert)} chunks to Qdrant")
 
-        n_points = self.count_points(collection_name)
-        if n_points != len(df):
-            LOGGER.error(
-                (
-                    f"Sync failed : number of points in Qdrant ({n_points}) is not equal to the "
-                    f"number of points in the dataframe ({len(df)})"
+        # Validation: only check full sync if no timestamp filter is applied
+        if not timestamp_filter:
+            n_points = self.count_points(collection_name)
+            if n_points != len(df):
+                LOGGER.error(
+                    (
+                        f"Sync failed : number of points in Qdrant ({n_points}) is not equal to the "
+                        f"number of points in the dataframe ({len(df)})"
+                    )
                 )
-            )
-            return False
+                return False
+            else:
+                LOGGER.info(f"Sync successful : number of points in Qdrant is {n_points}")
         else:
-            LOGGER.info(f"Sync successful : number of points in Qdrant is {n_points}")
-            return True
+            n_points = self.count_points(collection_name)
+            LOGGER.info(f"Partial sync completed : Qdrant now has {n_points} total points")
+
+        return True
 
     async def sync_df_with_collection_async(
         self,
         df: pd.DataFrame,
         collection_name: str,
-        query_filter: Optional[str] = None,
+        timestamp_filter: Optional[str] = None,
     ) -> bool:
 
-        if query_filter:
-            if await self.collection_exists_async(collection_name):
-                old_df = await self.get_collection_data_async(collection_name, query_filter=query_filter)
-                ids_to_delete = set(old_df[self.default_schema.chunk_id_field])
-                if len(ids_to_delete) > 0:
-                    await self.delete_chunks_async(
-                        point_ids=list(ids_to_delete),
-                        id_field=self.default_schema.chunk_id_field,
-                        collection_name=collection_name,
-                    )
-                    LOGGER.info(f"Deleted {len(ids_to_delete)} chunks from Qdrant")
-            await self.add_chunks_async(df.to_dict(orient="records"), collection_name)
-            LOGGER.info(f"Added {len(df)} chunks to Qdrant")
-            return True
+        # Create index on timestamp field if needed for filtering
+        if timestamp_filter and self.default_schema.last_edited_ts_field:
+            await self.create_index_if_needed_async(collection_name, self.default_schema.last_edited_ts_field)
 
-        old_df = await self.get_collection_data_async(collection_name)
-        if old_df.empty:
+        # Get all existing data for existence check
+        all_existing_df = await self.get_collection_data_async(collection_name)
+
+        if all_existing_df.empty:
             await self.add_chunks_async(df.to_dict(orient="records"), collection_name)
             LOGGER.info(f"Qdrant collection is empty. Added {len(df)} chunks to Qdrant")
             return True
 
+        # If timestamp filter is provided, filter existing data for comparison
+        if timestamp_filter and self.default_schema.last_edited_ts_field:
+            timestamp_condition = f"{self.default_schema.last_edited_ts_field} {timestamp_filter}"
+            converted_filter = re.sub(r"(?<![!><])=(?!=)", "==", timestamp_condition)
+            filtered_df = all_existing_df.query(converted_filter) if not all_existing_df.empty else all_existing_df
+        else:
+            filtered_df = all_existing_df
+
         incoming_ids = set(df[self.default_schema.chunk_id_field])
-        existing_ids = set(old_df[self.default_schema.chunk_id_field])
-        ids_to_delete = existing_ids - incoming_ids
-        new_ids_to_add = incoming_ids - existing_ids
+        existing_ids = set(all_existing_df[self.default_schema.chunk_id_field])  # Use all existing for existence check
+        new_ids_to_add = incoming_ids - existing_ids  # Check against all existing
 
-        # merge the two dataframes to get the dataframes to update
-        common_df = df.merge(old_df, on=self.default_schema.chunk_id_field, how="inner")
+        # merge with appropriate data for timestamp comparison
+        common_df = df.merge(filtered_df, on=self.default_schema.chunk_id_field, how="inner")
 
-        if self.default_schema.last_edited_ts_field:
+        if self.default_schema.last_edited_ts_field and not timestamp_filter:
+            # Only do timestamp comparison if no timestamp filter is applied
             ids_to_update = set(
                 common_df[
                     common_df[self.default_schema.last_edited_ts_field + "_x"]
@@ -1218,9 +1213,10 @@ class QdrantService:
                 ][self.default_schema.chunk_id_field]
             )
         else:
+            # If timestamp filter is applied, update all matching records
             ids_to_update = set(common_df[self.default_schema.chunk_id_field])
 
-        ids_to_delete = ids_to_delete.union(ids_to_update)
+        ids_to_delete = ids_to_update  # Only delete records that will be updated
         ids_to_upsert = new_ids_to_add.union(ids_to_update)
 
         if len(ids_to_delete) > 0:
@@ -1236,15 +1232,21 @@ class QdrantService:
             await self.add_chunks_async(list_payloads, collection_name)
             LOGGER.info(f"Upserted {len(ids_to_upsert)} chunks to Qdrant")
 
-        n_points = await self.count_points_async(collection_name)
-        if n_points != len(df):
-            LOGGER.error(
-                (
-                    f"Sync failed : number of points in Qdrant ({n_points}) is not equal to the "
-                    f"number of points in the dataframe ({len(df)})"
+        # Validation: only check full sync if no timestamp filter is applied
+        if not timestamp_filter:
+            n_points = await self.count_points_async(collection_name)
+            if n_points != len(df):
+                LOGGER.error(
+                    (
+                        f"Sync failed : number of points in Qdrant ({n_points}) is not equal to the "
+                        f"number of points in the dataframe ({len(df)})"
+                    )
                 )
-            )
-            return False
+                return False
+            else:
+                LOGGER.info(f"Sync successful : number of points in Qdrant is {n_points}")
         else:
-            LOGGER.info(f"Sync successful : number of points in Qdrant is {n_points}")
-            return True
+            n_points = await self.count_points_async(collection_name)
+            LOGGER.info(f"Partial sync completed : Qdrant now has {n_points} total points")
+
+        return True
