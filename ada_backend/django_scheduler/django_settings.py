@@ -1,4 +1,3 @@
-from ada_backend.django_settings import django_settings
 from settings import settings
 
 # Override database settings to use the scheduled_workflows schema
@@ -24,30 +23,67 @@ INSTALLED_APPS = [
 ]
 
 # Timezone settings
-USE_TZ = django_settings.USE_TZ
-TIME_ZONE = django_settings.TIME_ZONE
-USE_DEPRECATED_PYTZ = django_settings.USE_DEPRECATED_PYTZ
+USE_TZ = True
+TIME_ZONE = "UTC"
+USE_DEPRECATED_PYTZ = False
 
 # Secret key (required by Django)
-SECRET_KEY = django_settings.SECRET_KEY
+SECRET_KEY = "django-celery-beat-minimal-config"
 
 # Debug settings
-DEBUG = django_settings.DEBUG
+DEBUG = False
 
 # Database settings
-DATABASE_OPTIONS = django_settings.DATABASE_OPTIONS
+DATABASE_OPTIONS = {}
 
 # Middleware (minimal required)
-MIDDLEWARE = django_settings.MIDDLEWARE
+MIDDLEWARE = [
+    "django.middleware.security.SecurityMiddleware",
+    "django.contrib.sessions.middleware.SessionMiddleware",
+    "django.middleware.common.CommonMiddleware",
+    "django.middleware.csrf.CsrfViewMiddleware",
+    "django.contrib.auth.middleware.AuthenticationMiddleware",
+]
 
 # Cache settings (using database as cache)
-CACHES = django_settings.CACHES
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.db.DatabaseCache",
+        "LOCATION": "django_cache",
+    }
+}
 
 # Logging configuration
-LOGGING = django_settings.LOGGING
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+        },
+    },
+    "root": {
+        "handlers": ["console"],
+        "level": "INFO",
+    },
+}
 
 # Templates configuration
-TEMPLATES = django_settings.TEMPLATES
+TEMPLATES = [
+    {
+        "BACKEND": "django.template.backends.django.DjangoTemplates",
+        "DIRS": [],
+        "APP_DIRS": True,
+        "OPTIONS": {
+            "context_processors": [
+                "django.template.context_processors.debug",
+                "django.template.context_processors.request",
+                "django.contrib.auth.context_processors.auth",
+                "django.contrib.messages.context_processors.messages",
+            ],
+        },
+    },
+]
 
 
 class SchemaRouter:
@@ -67,7 +103,7 @@ class SchemaRouter:
         return None
 
 
-DATABASE_ROUTERS = ["ada_backend.django_scheduler.settings.SchemaRouter"]
+DATABASE_ROUTERS = ["ada_backend.django_scheduler.django_settings.SchemaRouter"]
 
 # Force table creation in schema by setting table prefix
 TABLE_PREFIX = "scheduled_workflows."

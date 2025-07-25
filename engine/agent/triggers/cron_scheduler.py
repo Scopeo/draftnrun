@@ -18,7 +18,7 @@ TIMEZONE_OPTIONS = get_timezone_options()
 DEFAULT_CRON_SCHEDULER_DESCRIPTION = ToolDescription(
     name="Cron_Scheduler",
     description="Schedules workflow execution based on cron expressions. "
-                "Triggers the workflow automatically at specified times.",
+    "Triggers the workflow automatically at specified times.",
     tool_properties={
         "cron_expression": {
             "type": "string",
@@ -32,7 +32,7 @@ DEFAULT_CRON_SCHEDULER_DESCRIPTION = ToolDescription(
         "timezone": {
             "type": "string",
             "description": "Timezone for schedule execution. Select your local timezone "
-                           "to ensure schedules run at the correct time.",
+            "to ensure schedules run at the correct time.",
             "ui_component": "SELECT",
             "ui_component_properties": {
                 "options": [

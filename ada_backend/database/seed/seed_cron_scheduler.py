@@ -38,7 +38,7 @@ def seed_cron_scheduler_components(session: Session):
         id=COMPONENT_UUIDS["cron_scheduler"],
         name="Cron Scheduler",  # Must match SupportedEntityType.CRON_SCHEDULER
         description="Schedules workflow execution based on cron expressions. Triggers the workflow "
-                    "automatically at specified times.",
+        "automatically at specified times.",
         is_agent=True,
         function_callable=False,
         can_use_function_calling=False,

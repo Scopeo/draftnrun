@@ -113,7 +113,7 @@ def register_schedule_direct(
             "utc_cron": utc_cron,
             "method": "direct_configuration",
             "message": f"Schedule '{schedule_name}' registered directly: "
-                       f"{original_description} ({timezone_label}) -> {utc_description} (UTC)",
+            f"{original_description} ({timezone_label}) -> {utc_description} (UTC)",
         }
 
     except Exception as e:

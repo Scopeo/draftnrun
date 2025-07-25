@@ -13,9 +13,6 @@ from uuid import UUID
 from datetime import datetime, timezone
 
 from sqlalchemy.orm import Session
-import django
-from django_celery_beat.models import CrontabSchedule, PeriodicTask, PeriodicTasks
-from django.conf import settings as django_settings
 
 from ada_backend.database.models import EnvType
 from ada_backend.repositories.env_repository import get_env_relationship_by_graph_runner_id
@@ -29,15 +26,29 @@ from ada_backend.services.cron_api_key_service import (
 from engine.agent.triggers.utils import convert_cron_to_utc
 from ada_backend.database.models import ComponentInstance, Component, GraphRunnerNode, ProjectEnvironmentBinding
 
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'ada_backend.django_scheduler.settings')
-
-if not django_settings.configured:
-    django.setup()
-
 LOGGER = logging.getLogger(__name__)
 
 # System user ID for cron operations (placeholder - should be a real system user in production)
 SYSTEM_USER_ID = UUID("00000000-0000-0000-0000-000000000001")
+
+
+def _configure_django():
+    """Configure Django for django-celery-beat operations."""
+    import django
+    from django.conf import settings as django_settings
+
+    os.environ.setdefault("DJANGO_SETTINGS_MODULE", "ada_backend.django_scheduler.django_settings")
+
+    if not django_settings.configured:
+        django.setup()
+
+
+def _get_django_models():
+    """Get Django models after ensuring Django is configured."""
+    _configure_django()
+    from django_celery_beat.models import CrontabSchedule, PeriodicTask, PeriodicTasks
+
+    return CrontabSchedule, PeriodicTask, PeriodicTasks
 
 
 def generate_schedule_name(project_id: UUID, graph_runner_id: UUID, scheduler_id: UUID) -> str:
@@ -55,7 +66,7 @@ def generate_schedule_name(project_id: UUID, graph_runner_id: UUID, scheduler_id
     return f"schedule_{str(project_id)[:8]}_{str(graph_runner_id)[:8]}_{str(scheduler_id)[:8]}"
 
 
-def create_or_update_crontab_schedule(cron_expression: str, timezone: str = "UTC") -> CrontabSchedule:
+def create_or_update_crontab_schedule(cron_expression: str, timezone: str = "UTC") -> Any:
     """
     Create or get existing crontab schedule in django-celery-beat format.
 
@@ -66,6 +77,7 @@ def create_or_update_crontab_schedule(cron_expression: str, timezone: str = "UTC
     Returns:
         CrontabSchedule instance
     """
+    CrontabSchedule, _, _ = _get_django_models()
     # Parse cron expression
     parts = cron_expression.split()
     if len(parts) != 5:
@@ -105,6 +117,8 @@ def update_periodic_tasks_changed():
     """
     Update the periodic tasks changed timestamp to trigger Celery Beat to reload schedules.
     """
+    _, _, PeriodicTasks = _get_django_models()
+
     # Get or create the periodic tasks record
     periodic_tasks, created = PeriodicTasks.objects.get_or_create(ident=1)
 
@@ -157,6 +171,8 @@ def create_periodic_task_for_scheduler(
     Returns:
         Dict with creation result
     """
+    _, PeriodicTask, _ = _get_django_models()
+
     try:
         # Validate and convert cron expression to UTC
         conversion_result = convert_cron_to_utc(cron_expression, timezone_str)
@@ -328,6 +344,8 @@ def cleanup_schedules_for_graph(
     Returns:
         Dict with cleanup results
     """
+    CrontabSchedule, PeriodicTask, _ = _get_django_models()
+
     LOGGER.info(f"Cleaning up schedules for graph {graph_runner_id}")
 
     removed_schedules = []
@@ -439,6 +457,8 @@ def get_schedules_for_project(session: Session, project_id: UUID) -> Dict[str, A
     Returns:
         Dict with schedule information
     """
+    _, PeriodicTask, _ = _get_django_models()
+
     project_schedules = []
 
     try:
@@ -661,6 +681,8 @@ def cleanup_schedules_for_project(session: Session, project_id: UUID, cleanup_ap
     Returns:
         Dict with cleanup results
     """
+    CrontabSchedule, PeriodicTask, _ = _get_django_models()
+
     LOGGER.info(f"Cleaning up all schedules for project {project_id}")
 
     try:

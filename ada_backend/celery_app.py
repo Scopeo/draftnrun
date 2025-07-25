@@ -10,7 +10,7 @@ from django.conf import settings as django_settings
 from settings import settings
 
 # Configure Django for django-celery-beat
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'ada_backend.django_scheduler.settings')
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "ada_backend.django_scheduler.django_settings")
 
 if not django_settings.configured:
     django.setup()
