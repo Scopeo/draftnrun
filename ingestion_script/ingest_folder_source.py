@@ -77,13 +77,25 @@ def sync_chunks_to_qdrant(
     db_service: DBService,
     qdrant_service: QdrantService,
     timestamp_filter: Optional[str] = None,
+    timestamp_column_name: Optional[str] = None,
+    query_filter: Optional[str] = None,
 ) -> None:
-    chunks_df = db_service.get_table_df(table_name, schema_name=table_schema)
+    chunks_df = db_service.get_table_df(
+        table_name,
+        schema_name=table_schema,
+        timestamp_filter=timestamp_filter,
+        timestamp_column_name=timestamp_column_name,
+        query_filter=query_filter,
+    )
     LOGGER.info(f"Syncing chunks to Qdrant collection {collection_name} with {len(chunks_df)} rows")
     if not qdrant_service.collection_exists(collection_name):
         qdrant_service.create_collection(collection_name)
     qdrant_service.sync_df_with_collection(
-        df=chunks_df, collection_name=collection_name, timestamp_filter=timestamp_filter
+        df=chunks_df,
+        collection_name=collection_name,
+        timestamp_filter=timestamp_filter,
+        timestamp_column_name=timestamp_column_name,
+        query_filter=query_filter,
     )
 
 
