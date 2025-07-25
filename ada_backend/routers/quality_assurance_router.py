@@ -20,9 +20,10 @@ from ada_backend.schemas.quality_assurance_schema import (
     VersionByProjectCreateList,
     VersionByProjectResponse,
     VersionByProjectListResponse,
+    VersionDeleteList,
 )
 from ada_backend.routers.auth_router import (
-    user_has_access_to_organization_dependency,
+    user_has_access_to_project_dependency,
     UserRights,
 )
 from ada_backend.services.quality_assurance_service import (
@@ -37,6 +38,7 @@ from ada_backend.services.quality_assurance_service import (
     get_datasets_by_project_service,
     create_project_versions_service,
     get_project_versions_service,
+    delete_project_versions_service,
 )
 from ada_backend.database.setup_db import get_db
 
@@ -48,13 +50,13 @@ router = APIRouter(tags=["QualityAssurance"])
     "/projects/{project_id}/qa/datasets",
     response_model=List[DatasetResponse],
     summary="Get Datasets by Project",
-    tags=["QualityAssurance"],
+    tags=["Quality Assurance"],
 )
 def get_datasets_by_project_endpoint(
     project_id: UUID,
     user: Annotated[
         SupabaseUser,
-        Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.USER.value)),
+        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.USER.value)),
     ],
     session: Session = Depends(get_db),
 ) -> List[DatasetResponse]:
@@ -79,14 +81,14 @@ def get_datasets_by_project_endpoint(
     "/projects/{project_id}/qa/datasets",
     response_model=DatasetListResponse,
     summary="Create Datasets",
-    tags=["QualityAssurance"],
+    tags=["Qualit Assurance"],
 )
 def create_dataset_endpoint(
     project_id: UUID,
     dataset_data: DatasetCreateList,
     user: Annotated[
         SupabaseUser,
-        Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.USER.value)),
+        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.USER.value)),
     ],
     session: Session = Depends(get_db),
 ) -> DatasetListResponse:
@@ -107,18 +109,18 @@ def create_dataset_endpoint(
         raise HTTPException(status_code=500, detail="Internal Server Error") from e
 
 
-@router.put(
+@router.patch(
     "/projects/{project_id}/qa/datasets",
     response_model=DatasetListResponse,
     summary="Update Datasets",
-    tags=["QualityAssurance"],
+    tags=["Quality Assurance"],
 )
 def update_dataset_endpoint(
     project_id: UUID,
     dataset_data: DatasetUpdateList,
     user: Annotated[
         SupabaseUser,
-        Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.USER.value)),
+        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.USER.value)),
     ],
     session: Session = Depends(get_db),
 ) -> DatasetListResponse:
@@ -142,14 +144,14 @@ def update_dataset_endpoint(
 @router.delete(
     "/projects/{project_id}/qa/datasets",
     summary="Delete Datasets",
-    tags=["QualityAssurance"],
+    tags=["Quality Assurance"],
 )
 def delete_dataset_endpoint(
     project_id: UUID,
     delete_data: DatasetDeleteList,
     user: Annotated[
         SupabaseUser,
-        Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.USER.value)),
+        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.USER.value)),
     ],
     session: Session = Depends(get_db),
 ) -> dict:
@@ -176,13 +178,13 @@ def delete_dataset_endpoint(
     "/projects/{project_id}/qa/versions",
     response_model=List[VersionByProjectResponse],
     summary="Get Project Versions",
-    tags=["QualityAssurance"],
+    tags=["Quality Assurance"],
 )
 def get_project_versions_endpoint(
     project_id: UUID,
     user: Annotated[
         SupabaseUser,
-        Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.USER.value)),
+        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.USER.value)),
     ],
     session: Session = Depends(get_db),
 ) -> List[VersionByProjectResponse]:
@@ -207,14 +209,14 @@ def get_project_versions_endpoint(
     "/projects/{project_id}/qa/versions",
     response_model=VersionByProjectListResponse,
     summary="Create Project Versions",
-    tags=["QualityAssurance"],
+    tags=["Quality Assurance"],
 )
 def create_project_version_endpoint(
     project_id: UUID,
     version_data: VersionByProjectCreateList,
     user: Annotated[
         SupabaseUser,
-        Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.USER.value)),
+        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.USER.value)),
     ],
     session: Session = Depends(get_db),
 ) -> VersionByProjectListResponse:
@@ -235,18 +237,51 @@ def create_project_version_endpoint(
         raise HTTPException(status_code=500, detail="Internal Server Error") from e
 
 
+@router.delete(
+    "/projects/{project_id}/qa/versions",
+    summary="Delete Project Versions",
+    tags=["Quality Assurance"],
+)
+def delete_project_version_endpoint(
+    project_id: UUID,
+    delete_data: VersionDeleteList,
+    user: Annotated[
+        SupabaseUser,
+        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.USER.value)),
+    ],
+    session: Session = Depends(get_db),
+) -> dict:
+    """
+    Delete project versions.
+
+    This endpoint allows users to delete multiple project versions at once.
+    This action cannot be undone.
+    """
+    if not user.id:
+        raise HTTPException(status_code=400, detail="User ID not found")
+
+    try:
+        deleted_count = delete_project_versions_service(session, project_id, delete_data)
+        return {"message": f"Deleted {deleted_count} project versions successfully"}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Internal Server Error") from e
+
+
 # Input Groundtruth endpoints
 @router.get(
-    "/projects/qa/{dataset_id}",
+    "/projects/{project_id}/qa/{dataset_id}",
     response_model=List[InputGroundtruthWithVersionResponse],
     summary="Get Input-Groundtruth Entries by Dataset with Version Outputs",
-    tags=["QualityAssurance"],
+    tags=["Quality Assurance"],
 )
 def get_inputs_groundtruths_by_dataset_endpoint(
+    project_id: UUID,
     dataset_id: UUID,
     user: Annotated[
         SupabaseUser,
-        Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.USER.value)),
+        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.USER.value)),
     ],
     session: Session = Depends(get_db),
     version_id: UUID = Query(None, description="Version ID to filter by (optional)"),
@@ -258,7 +293,7 @@ def get_inputs_groundtruths_by_dataset_endpoint(
 
     This endpoint allows users to retrieve input-groundtruth pairs specific to a dataset
     for quality assurance purposes. The data is paginated to handle large datasets efficiently.
-    
+
     If a version_id is specified, it will filter the results to show outputs for that specific version.
     If no version_id is specified, it will show all input-groundtruth entries with their associated outputs.
     Output and version fields will be null if no matching version output is found.
@@ -275,17 +310,18 @@ def get_inputs_groundtruths_by_dataset_endpoint(
 
 
 @router.post(
-    "/projects/qa/{dataset_id}",
+    "/projects/{project_id}/qa/{dataset_id}",
     response_model=InputGroundtruthResponseList,
     summary="Create Input-Groundtruth Entries",
-    tags=["QualityAssurance"],
+    tags=["Quality Assurance"],
 )
 def create_input_groundtruth_endpoint(
+    project_id: UUID,
     dataset_id: UUID,
     input_groundtruth_data: InputGroundtruthCreateList,
     user: Annotated[
         SupabaseUser,
-        Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.USER.value)),
+        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.USER.value)),
     ],
     session: Session = Depends(get_db),
 ) -> InputGroundtruthResponseList:
@@ -306,18 +342,19 @@ def create_input_groundtruth_endpoint(
         raise HTTPException(status_code=500, detail="Internal Server Error") from e
 
 
-@router.put(
-    "/projects/qa/{dataset_id}",
+@router.patch(
+    "/projects/{project_id}/qa/{dataset_id}",
     response_model=InputGroundtruthResponseList,
     summary="Update Input-Groundtruth Entries",
-    tags=["QualityAssurance"],
+    tags=["Quality Assurance"],
 )
 def update_input_groundtruth_endpoint(
+    project_id: UUID,
     dataset_id: UUID,
     input_groundtruth_data: InputGroundtruthUpdateList,
     user: Annotated[
         SupabaseUser,
-        Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.USER.value)),
+        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.USER.value)),
     ],
     session: Session = Depends(get_db),
 ) -> InputGroundtruthResponseList:
@@ -339,16 +376,17 @@ def update_input_groundtruth_endpoint(
 
 
 @router.delete(
-    "/projects/qa/{dataset_id}",
+    "/projects/{project_id}/qa/{dataset_id}",
     summary="Delete Input-Groundtruth Entries",
-    tags=["QualityAssurance"],
+    tags=["Quality Assurance"],
 )
 def delete_input_groundtruth_endpoint(
+    project_id: UUID,
     dataset_id: UUID,
     delete_data: InputGroundtruthDeleteList,
     user: Annotated[
         SupabaseUser,
-        Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.USER.value)),
+        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.USER.value)),
     ],
     session: Session = Depends(get_db),
 ) -> dict:
@@ -375,7 +413,7 @@ def delete_input_groundtruth_endpoint(
     "/projects/{project_id}/qa/{dataset_id}/run",
     response_model=QARunResponse,
     summary="Run QA Process on Dataset Inputs",
-    tags=["QualityAssurance"],
+    tags=["Quality Assurance"],
 )
 async def run_qa_endpoint(
     project_id: UUID,
@@ -383,7 +421,7 @@ async def run_qa_endpoint(
     run_request: QARunRequest,
     user: Annotated[
         SupabaseUser,
-        Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.USER.value)),
+        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.USER.value)),
     ],
     session: Session = Depends(get_db),
 ) -> QARunResponse:
@@ -393,7 +431,7 @@ async def run_qa_endpoint(
     This endpoint allows users to run a project on specific input entries from a dataset.
     The project will be executed using the DRAFT environment by default.
     Results are stored in the VersionOutput table with the specified version_id.
-    
+
     The input and output fields are stored as strings but can be easily cast to JSON
     for function processing when needed.
     """
