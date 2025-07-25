@@ -28,6 +28,9 @@ def chat_completion_to_response(
                         content.update(content["file"])
                         del content["file"]
                     content["type"] = f"{prefix}{content['type']}"
+                elif "type" in content and content["type"] == "image_url":
+                    # For image_url, convert to input_image format expected by response API
+                    content["type"] = f"{prefix}image"
         elif "content" in message and isinstance(message["content"], str):
             continue
         else:
