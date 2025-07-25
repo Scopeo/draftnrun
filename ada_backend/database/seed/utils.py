@@ -6,7 +6,17 @@ from pydantic import BaseModel
 from ada_backend.database.models import ParameterType, SelectOption, UIComponent, UIComponentProperties
 from ada_backend.database import models as db
 from ada_backend.services.registry import COMPLETION_MODEL_IN_DB, EMBEDDING_MODEL_IN_DB
+from ada_backend.database.seed.supported_models import FULL_CAPACITY_COMPLETION_MODELS as SUPPORTED_MODELS
 from settings import settings
+
+
+def convert_models_to_select_options(models: list[dict[str, str]]) -> list[SelectOption]:
+    """Convert model dictionaries to SelectOption objects"""
+    select_options = []
+    for model_dict in models:
+        for label, value in model_dict.items():
+            select_options.append(SelectOption(value=value, label=label))
+    return select_options
 
 
 def add_custom_llm_model(
@@ -62,25 +72,7 @@ COMPONENT_UUIDS: dict[str, UUID] = {
     "terminal_command_runner": UUID("e2b10000-1111-2222-3333-444444444444"),
 }
 
-FULL_CAPACITY_COMPLETION_MODELS = [
-    # OpenAI
-    SelectOption(value="openai:gpt-4.1", label="GPT-4.1"),
-    SelectOption(value="openai:gpt-4.1-mini", label="GPT-4.1 Mini"),
-    SelectOption(value="openai:gpt-4.1-nano", label="GPT-4.1 Nano"),
-    SelectOption(value="openai:gpt-4o", label="GPT-4o"),
-    SelectOption(value="openai:gpt-4o-mini", label="GPT-4o Mini"),
-    # Cerebras
-    SelectOption(value="cerebras:llama-3.3-70b", label="Llama 3.3 70B (Cerebras)"),
-    SelectOption(value="cerebras:qwen-3-235b-a22b", label="Qwen 3 235B (Cerebras)"),
-    # Google (Gemini)
-    SelectOption(value="google:gemini-2.5-pro-preview-06-05", label="Gemini 2.5 Pro"),
-    SelectOption(value="google:gemini-2.5-flash-preview-05-20", label="Gemini 2.5 Flash"),
-    SelectOption(value="google:gemini-2.0-flash", label="Gemini 2.0 Flash"),
-    SelectOption(value="google:gemini-2.0-flash-lite", label="Gemini 2.0 Flash lite"),
-    # Mistral
-    SelectOption(value="mistral:mistral-large-latest", label="Mistral Large 2411"),
-    SelectOption(value="mistral:mistral-medium-latest", label="Mistral Medium 2505"),
-]
+FULL_CAPACITY_COMPLETION_MODELS = convert_models_to_select_options(SUPPORTED_MODELS)
 
 OPTIONS_COMPLETION_MODELS = FULL_CAPACITY_COMPLETION_MODELS + [
     # Anthropic (Claude) TODO: Add Anthropic (Claude)

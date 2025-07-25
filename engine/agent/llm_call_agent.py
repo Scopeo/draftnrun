@@ -8,9 +8,7 @@ from engine.agent.utils import extract_vars_in_text_template, parse_openai_messa
 from engine.llm_services.llm_service import CompletionService
 from engine.trace.trace_manager import TraceManager
 from engine.trace.serializer import serialize_to_json
-
-FILE_SUPPORTED_PROVIDERS = ["openai"]
-IMAGE_SUPPORTED_PROVIDERS = ["openai", "google"]
+from ada_backend.database.seed.supported_models import FILE_SUPPORTED_MODELS, IMAGE_SUPPORTED_MODELS
 
 
 class LLMCallAgent(Agent):
@@ -83,11 +81,25 @@ class LLMCallAgent(Agent):
         text_content = self._prompt_template.format(**input_replacements)
 
         # Check for file support
-        if len(files_content) > 0 and self._completion_service._provider not in FILE_SUPPORTED_PROVIDERS:
+        file_supported_references = [
+            model_reference for model_dict in FILE_SUPPORTED_MODELS for model_reference in model_dict.values()
+        ]
+        if (
+            len(files_content) > 0
+            and f"{self._completion_service._provider}:{self._completion_service._model_name}"
+            not in file_supported_references
+        ):
             raise ValueError(f"File content is not supported for provider '{self._completion_service._provider}'.")
 
         # Check for image support
-        if len(images_content) > 0 and self._completion_service._provider not in IMAGE_SUPPORTED_PROVIDERS:
+        image_supported_references = [
+            model_reference for model_dict in IMAGE_SUPPORTED_MODELS for model_reference in model_dict.values()
+        ]
+        if (
+            len(images_content) > 0
+            and f"{self._completion_service._provider}:{self._completion_service._model_name}"
+            not in image_supported_references
+        ):
             raise ValueError(f"Image content is not supported for provider '{self._completion_service._provider}'.")
 
         # Build content based on what's present
