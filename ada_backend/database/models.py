@@ -686,7 +686,20 @@ class ApiKey(Base):
     revoker_user_id = mapped_column(UUID(as_uuid=True), nullable=True, index=True)
     created_at = mapped_column(DateTime(timezone=True), server_default=func.now())
 
+    # Encrypted raw API key for cron jobs (only set for cron API keys)
+    encrypted_raw_key = mapped_column(String, nullable=True)
+
     project = relationship("Project", back_populates="api_keys")
+
+    def set_raw_key(self, raw_key: str) -> None:
+        """Encrypts and stores the raw API key (for cron jobs only)."""
+        self.encrypted_raw_key = CIPHER.encrypt(raw_key.encode()).decode()
+
+    def get_raw_key(self) -> Optional[str]:
+        """Decrypts and returns the raw API key (for cron jobs only)."""
+        if not self.encrypted_raw_key:
+            return None
+        return CIPHER.decrypt(self.encrypted_raw_key.encode()).decode()
 
 
 class IngestionTask(Base):

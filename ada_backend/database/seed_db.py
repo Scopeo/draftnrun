@@ -29,6 +29,7 @@ from ada_backend.database.seed.seed_terminal_command_runner import seed_terminal
 from ada_backend.database.seed.seed_web_search import seed_web_search_components
 from ada_backend.database.seed.seed_ocr_call import seed_ocr_call_components
 from ada_backend.database.seed.seed_tool_description import seed_tool_description
+from ada_backend.database.seed.seed_cron_scheduler import seed_cron_scheduler_components
 from ada_backend.database.seed.utils import COMPONENT_UUIDS
 
 LOGGER = logging.getLogger(__name__)
@@ -58,6 +59,7 @@ def seed_db(session: Session):
         seed_input_components(session)
         seed_filter_components(session)
         seed_gmail_components(session)
+        seed_cron_scheduler_components(session)
 
         # Verify components exist
         for name, uuid_value in COMPONENT_UUIDS.items():

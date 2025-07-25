@@ -27,6 +27,7 @@ from engine.agent.document_react_loader import DocumentReactLoaderAgent
 from engine.agent.ocr_call import OCRCall
 from engine.agent.rag.document_search import DocumentSearch
 from engine.integrations.gmail_sender import GmailSender
+from engine.agent.triggers.cron_scheduler import CronScheduler
 from engine.storage_service.local_service import SQLLocalService
 from engine.storage_service.snowflake_service.snowflake_service import SnowflakeService
 from ada_backend.services.entity_factory import (
@@ -83,6 +84,7 @@ class SupportedEntityType(StrEnum):
     OCR_CALL = "OCR Call"
     INPUT = "API Input"
     FILTER = "Filter"
+    CRON_SCHEDULER = "Cron Scheduler"
 
     # Integrations
     GMAIL_SENDER = "Gmail Sender"
@@ -422,6 +424,13 @@ def create_factory_registry() -> FactoryRegistry:
         name=SupportedEntityType.GMAIL_SENDER,
         factory=AgentFactory(
             entity_class=GmailSender,
+        ),
+    )
+
+    registry.register(
+        name=SupportedEntityType.CRON_SCHEDULER,
+        factory=AgentFactory(
+            entity_class=CronScheduler,
         ),
     )
 

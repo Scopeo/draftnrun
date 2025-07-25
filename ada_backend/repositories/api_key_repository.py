@@ -48,6 +48,11 @@ def get_api_keys_by_project_id(session: Session, project_id: UUID) -> list[db.Ap
     )
 
 
+def get_api_key_by_id(session: Session, key_id: UUID) -> Optional[db.ApiKey]:
+    """Retrieves an API key by its ID."""
+    return session.query(db.ApiKey).filter(db.ApiKey.id == key_id).first()
+
+
 def deactivate_api_key(session: Session, key_id: UUID, revoker_user_id: UUID) -> UUID:
     """Deactivates an API key by setting is_active to False, returns the key id."""
     api_key_entry = session.query(db.ApiKey).filter(db.ApiKey.id == key_id).first()

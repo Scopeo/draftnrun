@@ -3,8 +3,9 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 import networkx as nx
 
-from ada_backend.database.models import EnvType, OrgSecretType
+from ada_backend.database.models import EnvType, OrgSecretType, ComponentInstance
 from ada_backend.repositories.edge_repository import get_edges
+from ada_backend.repositories.component_repository import get_instance_parameters_with_definition
 from ada_backend.schemas.project_schema import ChatResponse
 from ada_backend.services.agent_builder_service import instantiate_component
 from engine.graph_runner.graph_runner import GraphRunner
@@ -20,6 +21,7 @@ from ada_backend.repositories.organization_repository import get_organization_se
 from engine.graph_runner.runnable import Runnable
 from engine.trace.trace_context import get_trace_manager
 from engine.trace.span_context import set_tracing_span
+from ada_backend.database.seed.utils import COMPONENT_UUIDS
 
 
 def get_organization_llm_providers(session: Session, organization_id: UUID) -> list[str]:
@@ -138,3 +140,55 @@ async def run_agent(
     return ChatResponse(
         message=agent_output.last_message.content, artifacts=agent_output.artifacts, error=agent_output.error
     )
+
+
+def find_cron_scheduler_components(session: Session, graph_runner_id: UUID) -> list[ComponentInstance]:
+    """
+    Find all CRON_SCHEDULER components in a graph runner.
+
+    Args:
+        session: Database session
+        graph_runner_id: Graph runner UUID
+
+    Returns:
+        List of CRON_SCHEDULER component instances
+    """
+    cron_scheduler_component_id = COMPONENT_UUIDS["cron_scheduler"]
+
+    # Get all component nodes in the graph
+    component_nodes = get_component_nodes(session, graph_runner_id)
+
+    # Find CRON_SCHEDULER components
+    cron_schedulers = []
+    for node in component_nodes:
+        # Get the component instance
+        component_instance = (
+            session.query(ComponentInstance).filter(ComponentInstance.id == node.component_instance_id).first()
+        )
+
+        if component_instance and component_instance.component_id == cron_scheduler_component_id:
+            cron_schedulers.append(component_instance)
+
+    return cron_schedulers
+
+
+def get_component_params(session: Session, component_instance_id: UUID) -> dict[str, any]:
+    """
+    Get parameters for a component instance.
+
+    Args:
+        session: Database session
+        component_instance_id: Component instance UUID
+
+    Returns:
+        Dictionary of parameter names to values
+    """
+    params = {}
+
+    # Get component parameters with definitions
+    component_params = get_instance_parameters_with_definition(session, component_instance_id)
+
+    for param in component_params:
+        params[param.name] = param.value
+
+    return params

@@ -7,6 +7,10 @@ help:
 	@echo "format: Format the code using Black."
 	@echo "quality-check: Check the code quality using flake8 and Black."
 	@echo "pre-push: Run tests and quality checks before pushing code."
+	@echo "run-celery-worker: Start the Celery worker for background tasks."
+	@echo "run-celery-beat: Start the Celery beat scheduler for cron jobs."
+	@echo "run-celery-worker-debug: Start the Celery worker in debug mode."
+	@echo "run-celery-beat-debug: Start the Celery beat scheduler in debug mode."
 
 # -------------------------------------------
 # Development and Running
@@ -62,6 +66,29 @@ get-supabase-token:
 	@uv run python -m ada_backend.scripts.get_supabase_token --username $(username) --password $(password)
 
 # -------------------------------------------
+# Celery Commands
+# -------------------------------------------
+.PHONY: run-celery-worker
+run-celery-worker:
+	@echo "Starting Celery worker"
+	@uv run celery -A ada_backend.celery_app worker --loglevel=info
+
+.PHONY: run-celery-beat
+run-celery-beat:
+	@echo "Starting Celery beat scheduler"
+	@uv run celery -A ada_backend.celery_app beat --loglevel=info
+
+.PHONY: run-celery-worker-debug
+run-celery-worker-debug:
+	@echo "Starting Celery worker in debug mode"
+	@uv run celery -A ada_backend.celery_app worker --loglevel=debug
+
+.PHONY: run-celery-beat-debug
+run-celery-beat-debug:
+	@echo "Starting Celery beat scheduler in debug mode"
+	@uv run celery -A ada_backend.celery_app beat --loglevel=debug
+
+# -------------------------------------------
 # Database Migrations (Alembic)
 # -------------------------------------------
 ALEMBIC_CMD = uv run alembic -c ada_backend/database/alembic.ini
@@ -108,6 +135,29 @@ db-reset:
 	@docker exec -it ada_postgres psql -U ada_user -d postgres -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = 'ada_backend' AND pid <> pg_backend_pid();"
 	@docker exec -it ada_postgres psql -U ada_user -d postgres -c "DROP DATABASE IF EXISTS ada_backend;" && docker exec -it ada_postgres psql -U ada_user -d postgres -c "CREATE DATABASE ada_backend;"
 
+# -------------------------------------------
+# Django Scheduler Migrations
+# -------------------------------------------
+
+.PHONY: django-beat-migrate
+django-beat-migrate:
+	@echo "Running Django Beat migrations in scheduled_workflows schema"
+	@uv run python ada_backend/django_scheduler/manage.py migrate_beat_schema
+
+.PHONY: django-beat-makemigrations
+django-beat-makemigrations:
+	@echo "Creating Django Beat migrations"
+	@uv run python ada_backend/django_scheduler/manage.py makemigrations
+
+.PHONY: django-beat-showmigrations
+django-beat-showmigrations:
+	@echo "Showing Django Beat migration status"
+	@uv run python ada_backend/django_scheduler/manage.py showmigrations
+
+.PHONY: django-beat-shell
+django-beat-shell:
+	@echo "Opening Django Beat shell"
+	@uv run python ada_backend/django_scheduler/manage.py shell
 
 # -------------------------------------------
 # Trace Database Migrations (Alembic)
