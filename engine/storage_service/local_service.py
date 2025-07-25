@@ -11,6 +11,7 @@ import pandas as pd
 from engine.agent.agent import ComponentAttributes
 from engine.storage_service.db_service import DBService
 from engine.storage_service.db_utils import DBDefinition, check_columns_matching_between_data_and_database_table
+from engine.storage_service.db_utils import PROCESSED_DATETIME_FIELD
 
 LOGGER = logging.getLogger(__name__)
 
@@ -134,10 +135,17 @@ class SQLLocalService(DBService):
         self,
         table_name: str,
         schema_name: Optional[str] = None,
+        query_filter: Optional[str] = None,
+        timestamp_filter: Optional[str] = None,
+        timestamp_column_name: Optional[str] = None,
     ) -> pd.DataFrame:
         table = self.get_table(table_name, schema_name)
         with self.Session() as session:
             stmt = sqlalchemy.select(table)
+            if query_filter:
+                stmt = sqlalchemy.select(table).where(text(query_filter))
+            if timestamp_filter and timestamp_column_name:
+                stmt = stmt.where(text(f"{timestamp_column_name} {timestamp_filter}"))
             result = session.execute(stmt)
             return pd.DataFrame(result.fetchall(), columns=result.keys())
 
@@ -176,7 +184,11 @@ class SQLLocalService(DBService):
             ).scalar_one_or_none()
 
             if existing_record:
-                stmt = sqlalchemy.update(table).where(table.c[id_column_name] == id).values(**values)
+                # For updates, explicitly set _processed_datetime to current timestamp
+                update_values = values.copy()
+                if PROCESSED_DATETIME_FIELD in [col.name for col in table.columns]:
+                    update_values[PROCESSED_DATETIME_FIELD] = sqlalchemy.func.current_timestamp()
+                stmt = sqlalchemy.update(table).where(table.c[id_column_name] == id).values(**update_values)
                 session.execute(stmt)
             else:
                 to_insert = {id_column_name: id, **values}
@@ -266,11 +278,16 @@ class SQLLocalService(DBService):
                 session.execute(temp_table.insert(), df.to_dict(orient="records"))
                 session.commit()
 
-            update_stmt = (
-                table.update()
-                .where(table.c[id_column] == temp_table.c[id_column])
-                .values({col.name: temp_table.c[col.name] for col in table.columns})
-            )
+            # Exclude _processed_datetime field from the temp table values, but set it explicitly to current timestamp
+            columns_to_update = {
+                col.name: temp_table.c[col.name] for col in table.columns if col.name != PROCESSED_DATETIME_FIELD
+            }
+
+            # Explicitly set _processed_datetime to current timestamp for updates
+            if PROCESSED_DATETIME_FIELD in [col.name for col in table.columns]:
+                columns_to_update[PROCESSED_DATETIME_FIELD] = sqlalchemy.func.current_timestamp()
+
+            update_stmt = table.update().where(table.c[id_column] == temp_table.c[id_column]).values(columns_to_update)
 
             with self.Session() as session:
                 session.execute(update_stmt)
