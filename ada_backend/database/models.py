@@ -605,7 +605,7 @@ class Project(Base):
         cascade="all, delete-orphan",
     )
     envs = relationship("ProjectEnvironmentBinding", back_populates="project")
-    
+
     # Quality Assurance relationships
     datasets = relationship("DatasetProject", back_populates="project", cascade="all, delete-orphan")
     versions = relationship("VersionByProject", back_populates="project", cascade="all, delete-orphan")
@@ -748,7 +748,12 @@ class InputGroundtruth(Base):
 
     id = mapped_column(UUID(as_uuid=True), primary_key=True, index=True, server_default=func.gen_random_uuid())
 
-    dataset_id = mapped_column(UUID(as_uuid=True), ForeignKey("quality_assurance.dataset_project.id", ondelete="CASCADE"), nullable=False, index=True)
+    dataset_id = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("quality_assurance.dataset_project.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
 
     created_at = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
@@ -766,10 +771,12 @@ class InputGroundtruth(Base):
 
 class DatasetProject(Base):
     __tablename__ = "dataset_project"
-    __table_args__ = {"schema": "quality_assurance"} 
+    __table_args__ = {"schema": "quality_assurance"}
 
     id = mapped_column(UUID(as_uuid=True), primary_key=True, index=True, server_default=func.gen_random_uuid())
-    project_id = mapped_column(UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True)
+    project_id = mapped_column(
+        UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True
+    )
     dataset_name = mapped_column(String, nullable=False)
     created_at = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
@@ -787,7 +794,9 @@ class VersionByProject(Base):
     __table_args__ = {"schema": "quality_assurance"}
 
     id = mapped_column(UUID(as_uuid=True), primary_key=True, index=True, server_default=func.gen_random_uuid())
-    project_id = mapped_column(UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True)
+    project_id = mapped_column(
+        UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True
+    )
     version = mapped_column(String, nullable=False)
     created_at = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
@@ -805,9 +814,19 @@ class VersionOutput(Base):
     __table_args__ = {"schema": "quality_assurance"}
 
     id = mapped_column(UUID(as_uuid=True), primary_key=True, index=True, server_default=func.gen_random_uuid())
-    input_id = mapped_column(UUID(as_uuid=True), ForeignKey("quality_assurance.input_groundtruth.id", ondelete="CASCADE"), nullable=False, index=True)
+    input_id = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("quality_assurance.input_groundtruth.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
     output = mapped_column(String, nullable=False)
-    version_id = mapped_column(UUID(as_uuid=True), ForeignKey("quality_assurance.version_by_project.id", ondelete="CASCADE"), nullable=False, index=True)
+    version_id = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("quality_assurance.version_by_project.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
     created_at = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 

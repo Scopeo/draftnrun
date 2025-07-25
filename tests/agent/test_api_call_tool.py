@@ -27,13 +27,6 @@ async def api_tool(mock_trace_manager):
         fixed_parameters={"api_version": "v2", "format": "json", "language": "en"},
     )
     yield tool
-<<<<<<< HEAD
-    # Cleanup: ensure any lingering HTTP connections are closed
-    import asyncio
-
-    await asyncio.sleep(0.1)
-=======
-
     # Targeted async cleanup for race condition prevention
     try:
         import asyncio
@@ -46,7 +39,6 @@ async def api_tool(mock_trace_manager):
     except Exception:
         # Fail silently in cleanup to avoid hiding test failures
         pass
->>>>>>> 2a95175 (Proper clean up of async tests for API call tool test)
 
 
 @pytest.fixture

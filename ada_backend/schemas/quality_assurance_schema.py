@@ -4,6 +4,13 @@ from uuid import UUID
 from pydantic import BaseModel
 
 
+class InputGroundtruthCreate(BaseModel):
+    """Schema for creating a new input-groundtruth entry."""
+
+    input: str
+    groundtruth: Optional[str] = None
+
+
 class InputGroundtruthWithVersionResponse(BaseModel):
     """Schema for input-groundtruth response with version output data."""
 
@@ -62,7 +69,7 @@ class QARunResponse(BaseModel):
 class InputGroundtruthCreateList(BaseModel):
     """Schema for creating multiple input-groundtruth entries."""
 
-    inputs_groundtruths: List[dict]  # Simplified to use dict instead of InputGroundtruthCreate
+    inputs_groundtruths: List[InputGroundtruthCreate]
 
 
 class InputGroundtruthUpdateWithId(BaseModel):
@@ -85,10 +92,24 @@ class InputGroundtruthDeleteList(BaseModel):
     input_groundtruth_ids: List[UUID]
 
 
+class InputGroundtruthResponse(BaseModel):
+    """Schema for input-groundtruth response."""
+
+    id: UUID
+    dataset_id: UUID
+    input: str
+    groundtruth: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
 class InputGroundtruthResponseList(BaseModel):
     """Schema for multiple input-groundtruth responses."""
 
-    inputs_groundtruths: List[dict]  # Simplified to use dict instead of InputGroundtruthResponse
+    inputs_groundtruths: List[InputGroundtruthResponse]
 
 
 # Dataset schemas
@@ -160,3 +181,9 @@ class VersionByProjectListResponse(BaseModel):
     """Schema for multiple project version responses."""
 
     versions: List[VersionByProjectResponse]
+
+
+class VersionDeleteList(BaseModel):
+    """Schema for deleting multiple project versions."""
+
+    version_ids: List[UUID]
