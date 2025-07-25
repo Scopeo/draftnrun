@@ -172,6 +172,8 @@ def upload_db_source(
         db_service=db_service,
         qdrant_service=qdrant_service,
         timestamp_filter=timestamp_filter,
+        timestamp_column_name=timestamp_column_name,
+        query_filter=query_filter,
     )
 
 

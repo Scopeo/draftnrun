@@ -692,64 +692,196 @@ class QdrantService:
         namespace = uuid.NAMESPACE_DNS
         return str(uuid.uuid5(namespace, string_id))
 
+    def _build_timestamp_filter(
+        self,
+        timestamp_filter: str,
+        timestamp_column_name: str,
+    ) -> Optional[dict]:
+
+        if not timestamp_filter or not timestamp_column_name:
+            return None
+
+        # Parse the filter string to extract operator and value
+        pattern = r'([><=!]+)\s*["\']?([^"\']+)["\']?'
+        match = re.match(pattern, timestamp_filter.strip())
+
+        if not match:
+            LOGGER.warning(f"Invalid timestamp filter format: {timestamp_filter}")
+            return None
+
+        operator, value = match.groups()
+        value = value.strip()
+
+        # Convert operators to Qdrant range operators
+        if operator in [">=", "ge"]:
+            return {"key": timestamp_column_name, "range": {"gte": value}}
+        elif operator in [">", "gt"]:
+            return {"key": timestamp_column_name, "range": {"gt": value}}
+        elif operator in ["<=", "le"]:
+            return {"key": timestamp_column_name, "range": {"lte": value}}
+        elif operator in ["<", "lt"]:
+            return {"key": timestamp_column_name, "range": {"lt": value}}
+        elif operator in ["=", "==", "eq"]:
+            # For exact match, use match instead of range
+            return {"key": timestamp_column_name, "match": {"value": value}}
+        else:
+            LOGGER.warning(f"Unsupported timestamp operator: {operator}")
+            return None
+
+    def _build_query_filter(self, query_filter: str) -> Optional[dict]:
+
+        if not query_filter:
+            return None
+
+        # Parse field-value pairs like: field="value" or field=value
+        pattern = r'(\w+)\s*([=!]+)\s*["\']?([^"\']+)["\']?'
+        match = re.match(pattern, query_filter.strip())
+
+        if not match:
+            LOGGER.warning(f"Invalid query filter format: {query_filter}")
+            return None
+
+        field_name, operator, value = match.groups()
+        value = value.strip()
+
+        # Convert operators to Qdrant match operators
+        if operator in ["=", "=="]:
+            return {"key": field_name, "match": {"value": value}}
+        elif operator in ["!=", "<>"]:
+            return {"must_not": [{"key": field_name, "match": {"value": value}}]}
+        else:
+            LOGGER.warning(f"Unsupported query operator: {operator}")
+            return None
+
+    def _combine_filters(
+        self,
+        base_filter: Optional[dict],
+        additional_filters: list[dict],
+    ) -> Optional[dict]:
+
+        valid_filters = [f for f in additional_filters if f is not None]
+
+        # If no filters at all, return None
+        if not valid_filters and not base_filter:
+            return None
+
+        # If only base filter, ensure it's properly structured
+        if not valid_filters:
+            if base_filter:
+                # Check if it's already properly structured
+                if "must" in base_filter or "must_not" in base_filter:
+                    return base_filter
+                else:
+                    # Wrap bare condition in proper structure
+                    return {"must": [base_filter]}
+            return None
+
+        # If only additional filters and no base filter
+        if not base_filter:
+            if len(valid_filters) == 1:
+                single_filter = valid_filters[0]
+                # Check if it's already properly structured
+                if "must" in single_filter or "must_not" in single_filter:
+                    return single_filter
+                else:
+                    # Wrap bare condition in proper structure
+                    return {"must": [single_filter]}
+            # Multiple additional filters will be handled below
+
+        # Collect all conditions that need to be combined
+        must_conditions = []
+        must_not_conditions = []
+
+        # Process base filter
+        if base_filter:
+            # Handle string filters (convert them to proper query filters)
+            if isinstance(base_filter, str):
+                parsed_base = self._build_query_filter(base_filter)
+                if parsed_base:
+                    if "must" in parsed_base:
+                        must_conditions.extend(parsed_base["must"])
+                    elif "must_not" in parsed_base:
+                        must_not_conditions.extend(parsed_base["must_not"])
+                    else:
+                        must_conditions.append(parsed_base)
+            elif isinstance(base_filter, dict):
+                if "must" in base_filter:
+                    must_conditions.extend(base_filter["must"])
+                elif "must_not" in base_filter:
+                    must_not_conditions.extend(base_filter["must_not"])
+                else:
+                    # Base filter is a single condition
+                    must_conditions.append(base_filter)
+
+        # Process additional filters
+        for filter_dict in valid_filters:
+            # Skip string filters that weren't properly parsed
+            if isinstance(filter_dict, str):
+                LOGGER.warning(f"Skipping unparsed string filter: {filter_dict}")
+                continue
+
+            if isinstance(filter_dict, dict):
+                if "must" in filter_dict:
+                    must_conditions.extend(filter_dict["must"])
+                elif "must_not" in filter_dict:
+                    must_not_conditions.extend(filter_dict["must_not"])
+                else:
+                    # Single condition filter
+                    must_conditions.append(filter_dict)
+
+        # Build the combined filter - always use proper Qdrant structure
+        combined_filter = {}
+        if must_conditions:
+            combined_filter["must"] = must_conditions
+        if must_not_conditions:
+            combined_filter["must_not"] = must_not_conditions
+
+        return combined_filter if combined_filter else None
+
+    def _build_combined_filter(
+        self,
+        base_filter: Optional[dict] = None,
+        query_filter: Optional[str] = None,
+        timestamp_filter: Optional[str] = None,
+        timestamp_column_name: Optional[str] = None,
+    ) -> Optional[dict]:
+
+        additional_filters = []
+
+        if query_filter:
+            query_dict = self._build_query_filter(query_filter)
+            if query_dict:
+                additional_filters.append(query_dict)
+
+        if timestamp_filter and timestamp_column_name:
+            timestamp_dict = self._build_timestamp_filter(timestamp_filter, timestamp_column_name)
+            if timestamp_dict:
+                additional_filters.append(timestamp_dict)
+
+        return self._combine_filters(base_filter, additional_filters)
+
     def get_points(
         self,
         collection_name: str,
         filter: Optional[dict] = None,
+        query_filter: Optional[str] = None,
+        timestamp_filter: Optional[str] = None,
+        timestamp_column_name: Optional[str] = None,
     ) -> list[dict]:
-        """
-        Search for vectors in the Qdrant collection using a filter.
-        Refer to the Qdrant API documentation for more details:
-        https://api.qdrant.tech/api-reference/search/points
 
-        Args:
-            filter (Optional[dict]): A filter to apply to the search query.
-            Example: if you want the vectors with a field matching in a list of values,
-            you can use:
-            "filter": {
-                    "must": [
-                        {
-                            "key": "city",
-                            "match": {
-                            "value": "London"
-                            }
-                        },
-                        {
-                            "key": "pib",
-                            "match": {
-                            "value": 100
-                            }
-                        }
-                    ]
-                    }
-            must is the equivalent of AND. Every condition must be true.
-            Here,
-            "filter": {
-                    "should": [
-                        {
-                            "key": "city",
-                            "match": {
-                            "value": "London"
-                            }
-                        },
-                        {
-                            "key": "pib",
-                            "match": {
-                            "value": 100
-                            }
-                        }
-                    ]
-                    }
-            should is the equivalent of OR. At least one condition must be true.
-            collection_name (str): The name of the collection to search in.
+        combined_filter = self._build_combined_filter(filter, query_filter, timestamp_filter, timestamp_column_name)
 
-        Returns:
-            list[str]: A list of vector IDs from the search results.
-        """
         payload = {
-            "filter": filter,
+            "filter": combined_filter,
             "offset": None,
-            "limit": max(self.count_points(filter=filter, collection_name=collection_name), 1),
+            "limit": max(
+                self.count_points(
+                    filter=combined_filter,
+                    collection_name=collection_name,
+                    timestamp_column_name=timestamp_column_name,
+                ),
+                1,
+            ),
         }
         response = self._send_request(
             method="POST", endpoint=f"collections/{collection_name}/points/scroll?wait=true", payload=payload
@@ -760,15 +892,24 @@ class QdrantService:
         self,
         collection_name: str,
         filter: Optional[dict] = None,
+        query_filter: Optional[str] = None,
+        timestamp_filter: Optional[str] = None,
+        timestamp_column_name: Optional[str] = None,
     ) -> list[dict]:
-        """
-        Async version of get_points.
-        Search for vectors in the Qdrant collection using a filter.
-        """
+
+        combined_filter = self._build_combined_filter(filter, query_filter, timestamp_filter, timestamp_column_name)
+
         payload = {
-            "filter": filter,
+            "filter": combined_filter,
             "offset": None,
-            "limit": max(await self.count_points_async(filter=filter, collection_name=collection_name), 1),
+            "limit": max(
+                await self.count_points_async(
+                    filter=combined_filter,
+                    collection_name=collection_name,
+                    timestamp_column_name=timestamp_column_name,
+                ),
+                1,
+            ),
         }
         response = await self._send_request_async(
             method="POST", endpoint=f"collections/{collection_name}/points/scroll?wait=true", payload=payload
@@ -870,20 +1011,18 @@ class QdrantService:
         self,
         collection_name: str,
         filter: Optional[dict] = None,
+        query_filter: Optional[str] = None,
+        timestamp_filter: Optional[str] = None,
+        timestamp_column_name: Optional[str] = None,
     ) -> int:
-        """
-        Count the number of points in the Qdrant collection.
 
-        Args:
-            collection_name (str): The name of the collection to count points in.
-            filter (Optional[dict]): A filter to apply to the points (optional).
-
-        Returns:
-            int: The number of points in the collection.
-        """
         if not self.collection_exists(collection_name):
             raise ValueError(f"Collection {collection_name} does not exist.")
-        payload = {"filter": filter} if filter else {}
+
+        combined_filter = self._build_combined_filter(filter, query_filter, timestamp_filter, timestamp_column_name)
+
+        payload = {"filter": combined_filter} if combined_filter else {}
+
         response = self._send_request(
             method="POST", endpoint=f"collections/{collection_name}/points/count", payload=payload
         )
@@ -893,11 +1032,17 @@ class QdrantService:
         self,
         collection_name: str,
         filter: Optional[dict] = None,
+        query_filter: Optional[str] = None,
+        timestamp_filter: Optional[str] = None,
+        timestamp_column_name: Optional[str] = None,
     ) -> int:
-        """Async version of count_points."""
         if not await self.collection_exists_async(collection_name):
             raise ValueError(f"Collection {collection_name} does not exist.")
-        payload = {"filter": filter} if filter else {}
+
+        combined_filter = self._build_combined_filter(filter, query_filter, timestamp_filter, timestamp_column_name)
+
+        payload = {"filter": combined_filter} if combined_filter else {}
+
         response = await self._send_request_async(
             method="POST", endpoint=f"collections/{collection_name}/points/count", payload=payload
         )
@@ -1022,13 +1167,25 @@ class QdrantService:
     def get_collection_data(
         self,
         collection_name: str,
+        query_filter: Optional[str] = None,
+        timestamp_filter: Optional[str] = None,
+        timestamp_column_name: Optional[str] = None,
     ) -> pd.DataFrame:
 
         if not self.collection_exists(collection_name):
             raise ValueError(f"Collection {collection_name} does not exist.")
 
         schema = self._get_schema(collection_name)
-        all_points = self.get_points(collection_name=collection_name)
+        if schema.metadata_fields_to_keep:
+            for metadata_field in schema.metadata_fields_to_keep:
+                self.create_index_if_needed(collection_name, index_name=metadata_field)
+
+        all_points = self.get_points(
+            collection_name=collection_name,
+            query_filter=query_filter,
+            timestamp_filter=timestamp_filter,
+            timestamp_column_name=timestamp_column_name,
+        )
 
         rows = []
         for point in all_points:
@@ -1057,13 +1214,25 @@ class QdrantService:
     async def get_collection_data_async(
         self,
         collection_name: str,
+        query_filter: Optional[str] = None,
+        timestamp_filter: Optional[str] = None,
+        timestamp_column_name: Optional[str] = None,
     ) -> pd.DataFrame:
 
         if not await self.collection_exists_async(collection_name):
             raise ValueError(f"Collection {collection_name} does not exist.")
 
         schema = self._get_schema(collection_name)
-        all_points = await self.get_points_async(collection_name=collection_name)
+        if schema.metadata_fields_to_keep:
+            for metadata_field in schema.metadata_fields_to_keep:
+                await self.create_index_if_needed_async(collection_name, index_name=metadata_field)
+
+        all_points = await self.get_points_async(
+            collection_name=collection_name,
+            query_filter=query_filter,
+            timestamp_filter=timestamp_filter,
+            timestamp_column_name=timestamp_column_name,
+        )
 
         rows = []
         for point in all_points:
@@ -1093,38 +1262,27 @@ class QdrantService:
         self,
         df: pd.DataFrame,
         collection_name: str,
+        query_filter: Optional[str] = None,
         timestamp_filter: Optional[str] = None,
+        timestamp_column_name: Optional[str] = None,
     ) -> bool:
 
-        # Create index on timestamp field if needed for filtering
-        if timestamp_filter and self.default_schema.last_edited_ts_field:
-            self.create_index_if_needed(collection_name, self.default_schema.last_edited_ts_field)
-
-        # Get all existing data for existence check
-        all_existing_df = self.get_collection_data(collection_name)
-
-        if all_existing_df.empty:
+        old_df = self.get_collection_data(collection_name, query_filter, timestamp_filter, timestamp_column_name)
+        if old_df.empty:
             self.add_chunks(df.to_dict(orient="records"), collection_name)
             LOGGER.info(f"Qdrant collection is empty. Added {len(df)} chunks to Qdrant")
             return True
 
-        # If timestamp filter is provided, filter existing data for comparison
-        if timestamp_filter and self.default_schema.last_edited_ts_field:
-            timestamp_condition = f"{self.default_schema.last_edited_ts_field} {timestamp_filter}"
-            converted_filter = re.sub(r"(?<![!><])=(?!=)", "==", timestamp_condition)
-            filtered_df = all_existing_df.query(converted_filter) if not all_existing_df.empty else all_existing_df
-        else:
-            filtered_df = all_existing_df
-
         incoming_ids = set(df[self.default_schema.chunk_id_field])
-        existing_ids = set(all_existing_df[self.default_schema.chunk_id_field])  # Use all existing for existence check
-        new_ids_to_add = incoming_ids - existing_ids  # Check against all existing
+        existing_ids = set(old_df[self.default_schema.chunk_id_field])
+        ids_to_delete = existing_ids - incoming_ids
+        new_ids_to_add = incoming_ids - existing_ids
 
-        # merge with appropriate data for timestamp comparison
-        common_df = df.merge(filtered_df, on=self.default_schema.chunk_id_field, how="inner")
+        common_df = df.merge(old_df, on=self.default_schema.chunk_id_field, how="inner")
 
-        if self.default_schema.last_edited_ts_field and not timestamp_filter:
-            # Only do timestamp comparison if no timestamp filter is applied
+        if query_filter or timestamp_filter:
+            ids_to_update = set(common_df[self.default_schema.chunk_id_field])
+        elif self.default_schema.last_edited_ts_field:
             ids_to_update = set(
                 common_df[
                     common_df[self.default_schema.last_edited_ts_field + "_x"]
@@ -1132,10 +1290,9 @@ class QdrantService:
                 ][self.default_schema.chunk_id_field]
             )
         else:
-            # If timestamp filter is applied, update all matching records
             ids_to_update = set(common_df[self.default_schema.chunk_id_field])
 
-        ids_to_delete = ids_to_update  # Only delete records that will be updated
+        ids_to_delete = ids_to_delete.union(ids_to_update)
         ids_to_upsert = new_ids_to_add.union(ids_to_update)
 
         if len(ids_to_delete) > 0:
@@ -1144,68 +1301,57 @@ class QdrantService:
                 id_field=self.default_schema.chunk_id_field,
                 collection_name=collection_name,
             )
-            print(f"✓ Deleted {len(ids_to_delete)} outdated chunks from Qdrant")
+            LOGGER.info(f"Deleted {len(ids_to_delete)} chunks from Qdrant")
         if len(ids_to_upsert) > 0:
             chunks_to_upsert = df[df[self.default_schema.chunk_id_field].isin(ids_to_upsert)]
             list_payloads = chunks_to_upsert.to_dict(orient="records")
             self.add_chunks(list_payloads, collection_name)
             LOGGER.info(f"Upserted {len(ids_to_upsert)} chunks to Qdrant")
 
-        # Validation: only check full sync if no timestamp filter is applied
-        if not timestamp_filter:
-            n_points = self.count_points(collection_name)
-            if n_points != len(df):
-                LOGGER.error(
-                    (
-                        f"Sync failed : number of points in Qdrant ({n_points}) is not equal to the "
-                        f"number of points in the dataframe ({len(df)})"
-                    )
+        n_points = self.count_points(
+            collection_name=collection_name,
+            query_filter=query_filter,
+            timestamp_filter=timestamp_filter,
+            timestamp_column_name=timestamp_column_name,
+        )
+        if n_points != len(df):
+            LOGGER.error(
+                (
+                    f"Sync failed : number of points in Qdrant ({n_points}) is not equal to the "
+                    f"number of points in the dataframe ({len(df)})"
                 )
-                return False
-            else:
-                LOGGER.info(f"Sync successful : number of points in Qdrant is {n_points}")
+            )
+            return False
         else:
-            n_points = self.count_points(collection_name)
-            LOGGER.info(f"Partial sync completed : Qdrant now has {n_points} total points")
-
-        return True
+            LOGGER.info(f"Sync successful : number of points in Qdrant is {n_points}")
+            return True
 
     async def sync_df_with_collection_async(
         self,
         df: pd.DataFrame,
         collection_name: str,
+        query_filter: Optional[str] = None,
         timestamp_filter: Optional[str] = None,
+        timestamp_column_name: Optional[str] = None,
     ) -> bool:
-
-        # Create index on timestamp field if needed for filtering
-        if timestamp_filter and self.default_schema.last_edited_ts_field:
-            await self.create_index_if_needed_async(collection_name, self.default_schema.last_edited_ts_field)
-
-        # Get all existing data for existence check
-        all_existing_df = await self.get_collection_data_async(collection_name)
-
-        if all_existing_df.empty:
+        old_df = await self.get_collection_data_async(
+            collection_name, query_filter, timestamp_filter, timestamp_column_name
+        )
+        if old_df.empty:
             await self.add_chunks_async(df.to_dict(orient="records"), collection_name)
             LOGGER.info(f"Qdrant collection is empty. Added {len(df)} chunks to Qdrant")
             return True
 
-        # If timestamp filter is provided, filter existing data for comparison
-        if timestamp_filter and self.default_schema.last_edited_ts_field:
-            timestamp_condition = f"{self.default_schema.last_edited_ts_field} {timestamp_filter}"
-            converted_filter = re.sub(r"(?<![!><])=(?!=)", "==", timestamp_condition)
-            filtered_df = all_existing_df.query(converted_filter) if not all_existing_df.empty else all_existing_df
-        else:
-            filtered_df = all_existing_df
-
         incoming_ids = set(df[self.default_schema.chunk_id_field])
-        existing_ids = set(all_existing_df[self.default_schema.chunk_id_field])  # Use all existing for existence check
-        new_ids_to_add = incoming_ids - existing_ids  # Check against all existing
+        existing_ids = set(old_df[self.default_schema.chunk_id_field])
+        ids_to_delete = existing_ids - incoming_ids
+        new_ids_to_add = incoming_ids - existing_ids
 
-        # merge with appropriate data for timestamp comparison
-        common_df = df.merge(filtered_df, on=self.default_schema.chunk_id_field, how="inner")
+        common_df = df.merge(old_df, on=self.default_schema.chunk_id_field, how="inner")
 
-        if self.default_schema.last_edited_ts_field and not timestamp_filter:
-            # Only do timestamp comparison if no timestamp filter is applied
+        if query_filter or timestamp_filter:
+            ids_to_update = set(common_df[self.default_schema.chunk_id_field])
+        elif self.default_schema.last_edited_ts_field:
             ids_to_update = set(
                 common_df[
                     common_df[self.default_schema.last_edited_ts_field + "_x"]
@@ -1213,10 +1359,9 @@ class QdrantService:
                 ][self.default_schema.chunk_id_field]
             )
         else:
-            # If timestamp filter is applied, update all matching records
             ids_to_update = set(common_df[self.default_schema.chunk_id_field])
 
-        ids_to_delete = ids_to_update  # Only delete records that will be updated
+        ids_to_delete = ids_to_delete.union(ids_to_update)
         ids_to_upsert = new_ids_to_add.union(ids_to_update)
 
         if len(ids_to_delete) > 0:
@@ -1232,21 +1377,20 @@ class QdrantService:
             await self.add_chunks_async(list_payloads, collection_name)
             LOGGER.info(f"Upserted {len(ids_to_upsert)} chunks to Qdrant")
 
-        # Validation: only check full sync if no timestamp filter is applied
-        if not timestamp_filter:
-            n_points = await self.count_points_async(collection_name)
-            if n_points != len(df):
-                LOGGER.error(
-                    (
-                        f"Sync failed : number of points in Qdrant ({n_points}) is not equal to the "
-                        f"number of points in the dataframe ({len(df)})"
-                    )
+        n_points = await self.count_points_async(
+            collection_name=collection_name,
+            query_filter=query_filter,
+            timestamp_filter=timestamp_filter,
+            timestamp_column_name=timestamp_column_name,
+        )
+        if n_points != len(df):
+            LOGGER.error(
+                (
+                    f"Sync failed : number of points in Qdrant ({n_points}) is not equal to the "
+                    f"number of points in the dataframe ({len(df)})"
                 )
-                return False
-            else:
-                LOGGER.info(f"Sync successful : number of points in Qdrant is {n_points}")
+            )
+            return False
         else:
-            n_points = await self.count_points_async(collection_name)
-            LOGGER.info(f"Partial sync completed : Qdrant now has {n_points} total points")
-
-        return True
+            LOGGER.info(f"Sync successful : number of points in Qdrant is {n_points}")
+            return True
