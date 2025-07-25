@@ -35,8 +35,6 @@ async def e2b_tool(mock_trace_manager):
     yield tool
     # Cleanup: ensure any lingering HTTP connections are closed
 
-    import asyncio
-
     await asyncio.sleep(0.1)
 
 

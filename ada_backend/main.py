@@ -90,8 +90,8 @@ app = FastAPI(
             "description": "Endpoints for managing ingestion tasks for organization sources",
         },
         {
-            "name": "Input Groundtruth",
-            "description": "Endpoints for managing input-groundtruth pairs for quality assurance purposes",
+            "name": "Quality Assurance",
+            "description": "Endpoints for managing quality assurance datasets, versions and inputs per project",
         },
     ],
 )
