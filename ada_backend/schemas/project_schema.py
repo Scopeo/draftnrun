@@ -1,4 +1,4 @@
-from typing import Any, List, Optional
+from typing import Any, List, Optional, Dict
 from uuid import UUID
 from pydantic import BaseModel, Field
 
@@ -47,3 +47,6 @@ class ChatResponse(BaseModel):
 class ProjectDeleteResponse(BaseModel):
     project_id: UUID
     graph_runner_ids: list[UUID] = Field(default_factory=list)
+    cleanup_results: Optional[Dict[str, Any]] = Field(
+        default=None, description="Results of scheduled tasks and API key cleanup"
+    )

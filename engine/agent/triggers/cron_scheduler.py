@@ -1,17 +1,11 @@
-"""
-CRON_SCHEDULER Component for Draft'n Run.
-Allows users to schedule workflows using cron expressions.
-"""
-
 import logging
 from datetime import datetime
 from typing import Optional
 
 from engine.agent.triggers.utils import (
-    validate_cron_expression, 
-    validate_and_describe_cron, 
+    validate_cron_expression,
     validate_timezone,
-    get_timezone_options
+    get_timezone_options,
 )
 
 from engine.agent.agent import Agent, AgentPayload, ChatMessage, ComponentAttributes, ToolDescription
@@ -19,12 +13,12 @@ from engine.trace.trace_manager import TraceManager
 
 LOGGER = logging.getLogger(__name__)
 
-# Get timezone options for the component definition
 TIMEZONE_OPTIONS = get_timezone_options()
 
 DEFAULT_CRON_SCHEDULER_DESCRIPTION = ToolDescription(
     name="Cron_Scheduler",
-    description="Schedules workflow execution based on cron expressions. Triggers the workflow automatically at specified times.",
+    description="Schedules workflow execution based on cron expressions. "
+                "Triggers the workflow automatically at specified times.",
     tool_properties={
         "cron_expression": {
             "type": "string",
@@ -32,12 +26,13 @@ DEFAULT_CRON_SCHEDULER_DESCRIPTION = ToolDescription(
             "ui_component": "TEXTFIELD",
             "ui_component_properties": {
                 "placeholder": "0 9 * * *",
-                "description": "Format: minute hour day month day_of_week"
-            }
+                "description": "Format: minute hour day month day_of_week",
+            },
         },
         "timezone": {
             "type": "string",
-            "description": "Timezone for schedule execution. Select your local timezone to ensure schedules run at the correct time.",
+            "description": "Timezone for schedule execution. Select your local timezone "
+                           "to ensure schedules run at the correct time.",
             "ui_component": "SELECT",
             "ui_component_properties": {
                 "options": [
@@ -45,16 +40,14 @@ DEFAULT_CRON_SCHEDULER_DESCRIPTION = ToolDescription(
                     for region, options in TIMEZONE_OPTIONS.items()
                     for option in options
                 ],
-                "description": "Choose your timezone to ensure schedules run at the correct local time"
-            }
+                "description": "Choose your timezone to ensure schedules run at the correct local time",
+            },
         },
         "enabled": {
             "type": "boolean",
-            "description": "Whether the schedule is active",
-            "ui_component": "SWITCH",
-            "ui_component_properties": {
-                "description": "Enable or disable this schedule"
-            }
+            "description": "Enable deployment in production",
+            "ui_component": "CHECKBOX",
+            "ui_component_properties": {"description": "Check this box to enable automatic deployment in production"},
         },
     },
     required_tool_properties=["cron_expression", "timezone"],
@@ -85,7 +78,7 @@ class CronScheduler(Agent):
             component_attributes=component_attributes,
             **kwargs,
         )
-        
+
         # Handle parameters that might come as single-element lists from database
         if isinstance(cron_expression, list) and len(cron_expression) == 1:
             cron_expression = cron_expression[0]
@@ -93,27 +86,23 @@ class CronScheduler(Agent):
             timezone = timezone[0]
         if isinstance(enabled, list) and len(enabled) == 1:
             enabled = enabled[0]
-        
+
         # Validate timezone
         timezone_validation = validate_timezone(timezone)
         if timezone_validation["status"] != "SUCCESS":
-            LOGGER.warning(f"Invalid timezone '{timezone}': {timezone_validation['error']}. Using UTC as fallback.")
-            self.timezone = "UTC"
-            self.timezone_label = "UTC (Coordinated Universal Time)"
-        else:
-            self.timezone = timezone
-            self.timezone_label = timezone_validation["label"]
-        
+            raise ValueError(f"Invalid timezone '{timezone}': {timezone_validation['error']}")
+
+        self.timezone = timezone
+        self.timezone_label = timezone_validation["label"]
+
         # Validate cron expression
         cron_validation = validate_cron_expression(cron_expression)
         if cron_validation["status"] != "SUCCESS":
-            LOGGER.warning(f"Invalid cron expression '{cron_expression}': {cron_validation['error']}. Using default.")
-            self.cron_expression = "0 9 * * *"
-            self.cron_readable_description = "At 09:00 AM"
-        else:
-            self.cron_expression = cron_expression
-            self.cron_readable_description = cron_validation["description"]
-        
+            raise ValueError(f"Invalid cron expression '{cron_expression}': {cron_validation['error']}")
+
+        self.cron_expression = cron_expression
+        self.cron_readable_description = cron_validation["description"]
+
         self.enabled = enabled
 
         LOGGER.info(f"CRON_SCHEDULER initialized: {self.cron_readable_description} in {self.timezone_label}")

@@ -60,6 +60,7 @@ COMPONENT_UUIDS: dict[str, UUID] = {
     "gmail_sender": UUID("af96bb40-c9ea-4851-a663-f0e64363fcb2"),
     "python_code_runner": UUID("e2b00000-0000-1111-2222-333333333333"),
     "terminal_command_runner": UUID("e2b10000-1111-2222-3333-444444444444"),
+    "cron_scheduler": UUID("c20a1001-c000-4000-a000-c40a1001c000"),
 }
 
 FULL_CAPACITY_COMPLETION_MODELS = [

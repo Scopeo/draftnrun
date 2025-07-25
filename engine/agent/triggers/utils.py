@@ -8,7 +8,6 @@ from cron_converter import Cron
 LOGGER = logging.getLogger(__name__)
 
 
-
 # Comprehensive timezone options for CRON_SCHEDULER component
 TIMEZONE_OPTIONS = {
     "UTC & GMT": [
@@ -60,6 +59,7 @@ TIMEZONE_OPTIONS = {
     ],
 }
 
+
 def get_timezone_options() -> Dict[str, List[Dict[str, str]]]:
     return TIMEZONE_OPTIONS
 
@@ -80,10 +80,8 @@ def validate_timezone(timezone_str: str) -> Dict[str, Any]:
         offset_str = f"{offset:+.1f}h"
 
         label = next(
-            (opt["label"]
-             for region in TIMEZONE_OPTIONS.values()
-             for opt in region if opt["value"] == timezone_str),
-            timezone_str
+            (opt["label"] for region in TIMEZONE_OPTIONS.values() for opt in region if opt["value"] == timezone_str),
+            timezone_str,
         )
 
         return {
@@ -105,9 +103,9 @@ def _generate_cron_description(cron_expression: str) -> str:
     parts = cron_expression.split()
     if len(parts) != 5:
         return f"Cron: {cron_expression}"
-    
+
     minute, hour, day, month, day_of_week = parts
-    
+
     # Simple patterns
     if minute == "0" and hour != "*" and day == "*" and month == "*" and day_of_week == "*":
         return f"Daily at {hour.zfill(2)}:00"
@@ -132,10 +130,9 @@ def validate_cron_expression(cron_expression: str) -> Dict[str, Any]:
     # Generate a simple description since cron-converter doesn't have description() method
     description = _generate_cron_description(cron_expression)
     parts = cron.to_list()
-    components = dict(zip(
-        ["minute", "hour", "day", "month", "day_of_week"],
-        [" ".join(str(p) for p in part) for part in parts]
-    ))
+    components = dict(
+        zip(["minute", "hour", "day", "month", "day_of_week"], [" ".join(str(p) for p in part) for part in parts])
+    )
 
     return {
         "status": "SUCCESS",
@@ -161,7 +158,7 @@ def convert_cron_to_utc(cron_expression: str, user_timezone: str) -> Dict[str, A
                 "utc_cron": cron_expression,
                 "original_description": v["description"],
                 "utc_description": v["description"],
-                "timezone_offset": "UTC (no conversion needed)"
+                "timezone_offset": "UTC (no conversion needed)",
             }
 
         try:

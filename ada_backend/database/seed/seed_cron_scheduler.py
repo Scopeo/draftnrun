@@ -22,32 +22,30 @@ def seed_cron_scheduler_components(session: Session):
     """
     Seed the CRON_SCHEDULER component with its parameter definitions.
     """
-    
+
     # Import timezone options from the component's utils
-        
+
     timezone_options_dict = get_timezone_options()
-    
+
     # Flatten the timezone options into a single list for the database
     timezone_options = []
     for _, options in timezone_options_dict.items():
         for option in options:
-            timezone_options.append(SelectOption(
-                value=option["value"],
-                label=option["label"]
-            ))
+            timezone_options.append(SelectOption(value=option["value"], label=option["label"]))
 
     # Create the CRON_SCHEDULER component
     cron_scheduler = db.Component(
         id=COMPONENT_UUIDS["cron_scheduler"],
         name="Cron Scheduler",  # Must match SupportedEntityType.CRON_SCHEDULER
-        description="Schedules workflow execution based on cron expressions. Triggers the workflow automatically at specified times.",
+        description="Schedules workflow execution based on cron expressions. Triggers the workflow "
+                    "automatically at specified times.",
         is_agent=True,
         function_callable=False,
         can_use_function_calling=False,
         release_stage=db.ReleaseStage.PUBLIC,
         default_tool_description_id=TOOL_DESCRIPTION_UUIDS["cron_scheduler_tool_description"],
     )
-    
+
     upsert_components(
         session=session,
         components=[cron_scheduler],
@@ -63,9 +61,8 @@ def seed_cron_scheduler_components(session: Session):
         default="0 9 * * *",  # Daily at 9 AM
         ui_component=UIComponent.TEXTFIELD,
         ui_component_properties=UIComponentProperties(
-            placeholder="0 9 * * *",
-            description="Format: minute hour day month day_of_week"
-        ).model_dump(),
+            label="Cron Expression", placeholder="0 9 * * *", description="Format: minute hour day month day_of_week"
+        ).model_dump(exclude_unset=True, exclude_none=True),
         order=1,
     )
 
@@ -78,9 +75,10 @@ def seed_cron_scheduler_components(session: Session):
         default="UTC",
         ui_component=UIComponent.SELECT,
         ui_component_properties=UIComponentProperties(
+            label="Timezone",
             options=timezone_options,
-            description="Choose your timezone to ensure schedules run at the correct local time"
-        ).model_dump(),
+            description="Choose your timezone to ensure schedules run at the correct local time",
+        ).model_dump(exclude_unset=True, exclude_none=True),
         order=2,
     )
 
@@ -91,10 +89,11 @@ def seed_cron_scheduler_components(session: Session):
         type=ParameterType.BOOLEAN,
         nullable=False,
         default="true",  # Enabled by default as requested
-        ui_component=UIComponent.SWITCH,
+        ui_component=UIComponent.CHECKBOX,
         ui_component_properties=UIComponentProperties(
-            description="Enable or disable this schedule"
-        ).model_dump(),
+            label="Enable deployment in production",
+            description="Check this box to enable automatic deployment in production",
+        ).model_dump(exclude_unset=True, exclude_none=True),
         order=3,
     )
 
@@ -105,4 +104,4 @@ def seed_cron_scheduler_components(session: Session):
             timezone_param,
             enabled_param,
         ],
-    ) 
+    )

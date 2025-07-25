@@ -28,6 +28,7 @@ from ada_backend.schemas.pipeline.base import ComponentInstanceSchema
 from ada_backend.schemas.pipeline.graph_schema import GraphDeployResponse
 from ada_backend.services.pipeline.get_pipeline_service import get_component_instance, get_relationships
 from ada_backend.services.pipeline.update_pipeline_service import create_or_update_component_instance
+from ada_backend.services.schedule_service import handle_scheduling_on_deployment
 
 LOGGER = logging.getLogger(__name__)
 
@@ -186,9 +187,24 @@ def deploy_graph_service(session: Session, graph_runner_id: UUID, project_id: UU
     update_graph_runner_env(session, graph_runner_id, env=EnvType.PRODUCTION)
     LOGGER.info(f"Updated graph runner {graph_runner_id} to production")
 
+    # Handle cron scheduling for the new production graph
+    schedule_results = None
+    try:
+        schedule_results = handle_scheduling_on_deployment(
+            session=session,
+            graph_runner_id=graph_runner_id,
+            project_id=project_id,
+            previous_production_graph_id=previous_production_graph.id if previous_production_graph else None,
+        )
+        LOGGER.info(f"Cron scheduling results: {schedule_results}")
+    except Exception as e:
+        LOGGER.error(f"Failed to handle cron scheduling during deployment: {str(e)}", exc_info=True)
+        # Don't fail the deployment if scheduling fails, just log the error
+
     return GraphDeployResponse(
         project_id=project_id,
         draft_graph_runner_id=new_graph_runner_id,
         prod_graph_runner_id=graph_runner_id,
         previous_prod_graph_runner_id=previous_production_graph.id if previous_production_graph else None,
+        schedule_info=schedule_results,
     )

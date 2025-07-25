@@ -1,9 +1,3 @@
-"""
-Direct schedule management service for Draft'n Run.
-Handles schedule management through direct Beat configuration modification.
-No Redis dependency for management operations - immediate effect.
-"""
-
 import logging
 from typing import Dict, Any, Optional
 from datetime import datetime
@@ -25,7 +19,7 @@ def register_schedule_direct(
 ) -> Dict[str, Any]:
     """
     Register a new scheduled workflow directly in Beat configuration.
-    
+
     Args:
         schedule_name: Unique name for the schedule
         cron_expression: Cron expression for scheduling (in user timezone)
@@ -33,11 +27,13 @@ def register_schedule_direct(
         graph_runner_id: UUID string of the graph runner
         timezone: Timezone for schedule execution
         schedule_id: Optional UUID string for tracking
-        
+
     Returns:
         dict: Registration result with status
     """
-    LOGGER.info(f"Registering schedule directly: {schedule_name} with cron '{cron_expression}' in timezone '{timezone}'")
+    LOGGER.info(
+        f"Registering schedule directly: {schedule_name} with cron '{cron_expression}' in timezone '{timezone}'"
+    )
 
     try:
         # Validate timezone first
@@ -46,26 +42,22 @@ def register_schedule_direct(
             return {
                 "status": "FAILED",
                 "schedule_name": schedule_name,
-                "error": f"Invalid timezone: {timezone_validation['error']}"
+                "error": f"Invalid timezone: {timezone_validation['error']}",
             }
-        
+
         timezone_label = timezone_validation["label"]
         LOGGER.info(f"Using timezone: {timezone_label}")
 
         # Convert cron expression from user timezone to UTC
         conversion_result = convert_cron_to_utc(cron_expression, timezone)
         if conversion_result["status"] != "SUCCESS":
-            return {
-                "status": "FAILED",
-                "schedule_name": schedule_name,
-                "error": conversion_result["error"]
-            }
-        
+            return {"status": "FAILED", "schedule_name": schedule_name, "error": conversion_result["error"]}
+
         utc_cron = conversion_result["utc_cron"]
         original_description = conversion_result["original_description"]
         utc_description = conversion_result["utc_description"]
         timezone_offset = conversion_result["timezone_offset"]
-        
+
         LOGGER.info(f"Timezone conversion: {cron_expression} ({timezone_label}) -> {utc_cron} (UTC)")
         LOGGER.info(f"Schedule description: {original_description} -> {utc_description}")
 
@@ -75,7 +67,7 @@ def register_schedule_direct(
             return {
                 "status": "FAILED",
                 "schedule_name": schedule_name,
-                "error": f"Invalid UTC cron expression: {validation_result['error']}"
+                "error": f"Invalid UTC cron expression: {validation_result['error']}",
             }
 
         # Parse the UTC cron expression components for Celery
@@ -84,9 +76,9 @@ def register_schedule_direct(
             return {
                 "status": "FAILED",
                 "schedule_name": schedule_name,
-                "error": f"Invalid cron format: {utc_cron} (expected 5 parts)"
+                "error": f"Invalid cron format: {utc_cron} (expected 5 parts)",
             }
-        
+
         minute, hour, day, month, day_of_week = utc_parts
 
         # Create crontab schedule with proper UTC cron components
@@ -109,7 +101,7 @@ def register_schedule_direct(
         LOGGER.info(f"Successfully registered schedule directly: {schedule_name}")
         LOGGER.info(f"Original: {original_description} ({timezone_label})")
         LOGGER.info(f"UTC Schedule: {utc_description} (UTC)")
-        
+
         return {
             "status": "SUCCESS",
             "schedule_name": schedule_name,
@@ -120,7 +112,8 @@ def register_schedule_direct(
             "original_cron": cron_expression,
             "utc_cron": utc_cron,
             "method": "direct_configuration",
-            "message": f"Schedule '{schedule_name}' registered directly: {original_description} ({timezone_label}) -> {utc_description} (UTC)",
+            "message": f"Schedule '{schedule_name}' registered directly: "
+                       f"{original_description} ({timezone_label}) -> {utc_description} (UTC)",
         }
 
     except Exception as e:
@@ -132,10 +125,10 @@ def register_schedule_direct(
 def unregister_schedule_direct(schedule_name: str) -> Dict[str, Any]:
     """
     Unregister a scheduled workflow directly from Beat configuration.
-    
+
     Args:
         schedule_name: Name of the schedule to remove
-        
+
     Returns:
         dict: Unregistration result with status
     """
@@ -177,7 +170,7 @@ def update_schedule_direct(
 ) -> Dict[str, Any]:
     """
     Update an existing scheduled workflow directly.
-    
+
     Args:
         schedule_name: Name of the schedule to update
         cron_expression: New cron expression (in user timezone)
@@ -185,7 +178,7 @@ def update_schedule_direct(
         graph_runner_id: UUID string of the graph runner
         timezone: Timezone for schedule execution
         schedule_id: Optional UUID string for tracking
-        
+
     Returns:
         dict: Update result with status
     """
@@ -222,7 +215,7 @@ def update_schedule_direct(
 def list_schedules_direct() -> Dict[str, Any]:
     """
     List all registered scheduled workflows directly from Beat configuration.
-    
+
     Returns:
         dict: List of schedules with status
     """
@@ -243,12 +236,7 @@ def list_schedules_direct() -> Dict[str, Any]:
                 )
 
         LOGGER.info(f"Found {len(schedules)} registered schedules")
-        return {
-            "status": "SUCCESS", 
-            "schedules": schedules, 
-            "count": len(schedules),
-            "method": "direct_configuration"
-        }
+        return {"status": "SUCCESS", "schedules": schedules, "count": len(schedules), "method": "direct_configuration"}
 
     except Exception as e:
         error_msg = f"Failed to list schedules directly: {str(e)}"
@@ -259,7 +247,7 @@ def list_schedules_direct() -> Dict[str, Any]:
 def health_check_schedules_direct() -> Dict[str, Any]:
     """
     Health check for the scheduling system using direct access.
-    
+
     Returns:
         dict: Health check result with detailed component status
     """
@@ -271,11 +259,11 @@ def health_check_schedules_direct() -> Dict[str, Any]:
         worker_count = 0
         queue_active = False
         active_queues = {}
-        
+
         try:
             inspector = celery_app.control.inspect()
             active_queues = inspector.active_queues() or {}
-            
+
             # Check if scheduled_workflows queue is active
             if active_queues:
                 worker_count = len(active_queues)
@@ -332,7 +320,7 @@ def health_check_schedules_direct() -> Dict[str, Any]:
         error_msg = f"Direct health check failed: {str(e)}"
         LOGGER.error(error_msg, exc_info=True)
         return {
-            "status": "UNHEALTHY", 
+            "status": "UNHEALTHY",
             "error": error_msg,
             "components": {
                 "redis_accessible": False,
@@ -346,5 +334,5 @@ def health_check_schedules_direct() -> Dict[str, Any]:
                 "registered_schedules": 0,
                 "active_queues": [],
             },
-            "method": "direct_configuration"
-        } 
+            "method": "direct_configuration",
+        }

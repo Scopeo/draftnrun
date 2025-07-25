@@ -56,6 +56,8 @@ dependencies = [
     "prometheus-fastapi-instrumentator>=7.1.0",
     "pytest-asyncio>=0.23.8",
     "segment-analytics-python>=2.3.3",
+    "celery>=5.5.3",
+    "django-celery-beat>=2.8.1",
 ]
 [dependency-groups]
 dev = [
