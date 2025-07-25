@@ -80,12 +80,56 @@ ensure_directory() {
 
 
 
+# Parse command line arguments
+parse_arguments() {
+    CONFIG_DIR=""
+    OUTPUT_DIR=""
+    ENV_FILE=""
+    
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            --config-dir)
+                CONFIG_DIR="$2"
+                shift 2
+                ;;
+            --output-dir)
+                OUTPUT_DIR="$2"
+                shift 2
+                ;;
+            --env-file)
+                ENV_FILE="$2"
+                shift 2
+                ;;
+            -h|--help)
+                echo "Usage: $0 [OPTIONS]"
+                echo ""
+                echo "Options:"
+                echo "  --config-dir DIR     Directory with templates (default: PROJECT_ROOT/config)"
+                echo "  --output-dir DIR     Output directory (default: PROJECT_ROOT/generated-config)"
+                echo "  --env-file FILE      Environment file to load (default: PROJECT_ROOT/credentials.env)"
+                echo "  -h, --help          Show this help message"
+                echo ""
+                echo "Examples:"
+                echo "  $0                                    # Use defaults"
+                echo "  $0 --output-dir custom-output/        # Custom output only"
+                echo "  $0 --config-dir ../config --output-dir ./output --env-file .env"
+                exit 0
+                ;;
+            *)
+                print_error "Unknown option: $1"
+                echo "Use -h or --help for usage information"
+                exit 1
+                ;;
+        esac
+    done
+}
+
 # Load environment variables from credentials.env
 load_environment() {
     local credentials_file="$1"
     
     if [[ -f "$credentials_file" ]]; then
-        print_info "Loading environment variables from credentials.env..."
+        print_info "Loading environment variables from $credentials_file..."
         while IFS='=' read -r key value; do
             if [[ ! "$key" =~ ^# ]] && [[ -n "$key" ]]; then
                 export "$key=$value"
@@ -93,7 +137,7 @@ load_environment() {
         done < "$credentials_file"
         print_success "Environment variables loaded"
     else
-        print_warning "credentials.env not found, using default values"
+        print_warning "$credentials_file not found, using default values"
     fi
 }
 
@@ -120,23 +164,30 @@ main() {
     
     SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
     PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
-    CONFIG_DIR="$PROJECT_ROOT/config"
-    GENERATED_DIR="$PROJECT_ROOT/generated-config"
+    
+    # Parse command line arguments
+    parse_arguments "$@"
+    
+    # Set defaults if not provided
+    CONFIG_DIR="${CONFIG_DIR:-$PROJECT_ROOT/config}"
+    OUTPUT_DIR="${OUTPUT_DIR:-$PROJECT_ROOT/generated-config}"
+    ENV_FILE="${ENV_FILE:-$PROJECT_ROOT/credentials.env}"
     
     check_gomplate
-    load_environment "$PROJECT_ROOT/credentials.env"
+    load_environment "$ENV_FILE"
     
     print_info "Project root: $PROJECT_ROOT"
     print_info "Config directory: $CONFIG_DIR"
-    print_info "Generated directory: $GENERATED_DIR"
+    print_info "Output directory: $OUTPUT_DIR"
+    print_info "Environment file: $ENV_FILE"
     
-    rm -rf "$GENERATED_DIR"/*
-    ensure_directory "$GENERATED_DIR"
-    copy_static_files "$CONFIG_DIR" "$GENERATED_DIR"
-    process_templates "$CONFIG_DIR" "$GENERATED_DIR"
+    rm -rf "$OUTPUT_DIR"/*
+    ensure_directory "$OUTPUT_DIR"
+    copy_static_files "$CONFIG_DIR" "$OUTPUT_DIR"
+    process_templates "$CONFIG_DIR" "$OUTPUT_DIR"
     
     print_success "Configuration rendering completed!"
-    print_info "Generated files are in: $GENERATED_DIR"
+    print_info "Generated files are in: $OUTPUT_DIR"
 }
 
 # Run main function
