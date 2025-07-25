@@ -127,7 +127,7 @@ class BaseConfig(BaseSettings):
 
     # Observability stack endpoints
     TEMPO_ENDPOINT: str = "http://localhost:4318/v1/traces"
-    PROMETHEUS_URL: str = "http://localhost:9090"
+    PROMETHEUS_SERVER_URL: str = "http://localhost:9090"
     GRAFANA_URL: str = "http://localhost:3000"
     GF_SECURITY_ADMIN_USER: Optional[str] = None
     GF_SECURITY_ADMIN_PASSWORD: Optional[str] = None
