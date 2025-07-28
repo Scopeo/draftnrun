@@ -18,9 +18,8 @@ def seed_categories(session):
             id=CATEGORY_UUIDS["trigger"],
             name="Trigger",
             description=(
-                "A component whose purpose is to detect an event or condition and "
-                "signal the system to start a process. "
-                "It monitors or listens for something to happen.\n"
+                "A component whose purpose is to to start a run of the workflow. "
+                "It can be linked to an external event, a schedule, a condition...\n"
                 "Examples:\n"
                 "- A file is created.\n"
                 "- A message is received.\n"
@@ -31,9 +30,7 @@ def seed_categories(session):
             id=CATEGORY_UUIDS["action"],
             name="Action",
             description=(
-                "A component that performs a specific operation in response to a command."
-                "It is an executable, isolated task that changes the system’s "
-                "state or interacts with the environment.\n"
+                "A component that performs an operation that has an effect on the external world.\n"
                 "Examples:\n"
                 "- Sending an email.\n"
                 "- Writing data to a database."
@@ -43,8 +40,8 @@ def seed_categories(session):
             id=CATEGORY_UUIDS["query"],
             name="Query",
             description=(
-                "A component that retrieves information from a data source, "
-                "usually specifying criteria or filters.\n"
+                "A component that retrieves information from the external world "
+                "or from a data source.\n"
                 "Examples:\n"
                 "- Fetch all users older than 18.\n"
                 "- Get the latest weather data.\n"
@@ -55,9 +52,8 @@ def seed_categories(session):
             id=CATEGORY_UUIDS["processing"],
             name="Processing",
             description=(
-                "A component that transforms, calculates, or manipulates data to generate "
-                "new information or prepare it for other steps."
-                "It performs computations and intermediate work on the data.\n"
+                "A component that transforms the data taken as input. "
+                "It can calculate, reformat, clean, filter, join...\n"
                 "Examples:\n"
                 "- Data filtering.\n"
                 "- Converting file formats."
@@ -67,11 +63,8 @@ def seed_categories(session):
             id=CATEGORY_UUIDS["logical"],
             name="Logical",
             description=(
-                "A component that evaluates conditions or makes decisions based on rules or inputs. "
-                "It controls the flow of the process by introducing logic and branching.\n"
-                "Role in the system:\n"
-                "- Implements conditional logic or rules.\n"
-                "- Helps direct the workflow into different paths.\n"
+                "A component that implements the logic of the workflow. "
+                "Conditions, loops, switchs...\n"
                 "Examples:\n"
                 "- 'If-else' block.\n"
                 "- Checking if a payment was successful.\n"

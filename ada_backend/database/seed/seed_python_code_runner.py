@@ -57,5 +57,5 @@ def seed_python_code_runner_components(session: Session):
     upsert_component_categories(
         session=session,
         component_id=python_code_runner_component.id,
-        category_ids=[CATEGORY_UUIDS["action"]],
+        category_ids=[CATEGORY_UUIDS["action"], CATEGORY_UUIDS["processing"]],
     )
