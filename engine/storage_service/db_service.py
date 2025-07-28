@@ -49,7 +49,7 @@ class DBService(ABC):
         self,
         table_name: str,
         schema_name: Optional[str] = None,
-        combined_filter: Optional[str] = None,
+        sql_query_filter: Optional[str] = None,
     ) -> pd.DataFrame:
         pass
 
@@ -81,22 +81,6 @@ class DBService(ABC):
     ) -> None:
         pass
 
-    def build_combined_sql_filter(
-        self,
-        query_filter: Optional[str],
-        timestamp_filter: Optional[str],
-        timestamp_column_name: Optional[str],
-    ) -> Optional[str]:
-        """Combine query_filter and timestamp_filter into a single SQL WHERE clause."""
-        filters = []
-        if query_filter:
-            filters.append(f"({query_filter})")
-        if timestamp_filter and timestamp_column_name:
-            filters.append(f"({timestamp_column_name} {timestamp_filter})")
-        if filters:
-            return " AND ".join(filters)
-        return None
-
     def update_table(
         self,
         new_df: pd.DataFrame,
@@ -106,7 +90,7 @@ class DBService(ABC):
         schema_name: Optional[str] = None,
         timestamp_column_name: Optional[str] = None,
         append_mode: bool = True,
-        combined_filter: Optional[str] = None,
+        sql_query_filter: Optional[str] = None,
     ) -> None:
         """
         Update a table on Database with a new DataFrame.
@@ -131,15 +115,13 @@ class DBService(ABC):
                 if timestamp_column_name
                 else f"SELECT {id_column_name} FROM {target_table_name}"
             )
-            final_query = f"{query} WHERE {combined_filter};" if combined_filter else f"{query};"
+            final_query = f"{query} WHERE {sql_query_filter};" if sql_query_filter else f"{query};"
             old_df = self._fetch_sql_query_as_dataframe(final_query)
             old_df = convert_to_correct_pandas_type(old_df, id_column_name, table_definition)
 
             common_df = new_df.merge(old_df, on=id_column_name, how="inner")
 
-            if combined_filter:
-                ids_to_update = set(common_df[id_column_name])
-            elif timestamp_column_name:
+            if timestamp_column_name and not sql_query_filter:
                 ids_to_update = set(
                     common_df[common_df[timestamp_column_name + "_x"] > common_df[timestamp_column_name + "_y"]][
                         id_column_name

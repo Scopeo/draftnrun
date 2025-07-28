@@ -1,5 +1,6 @@
 import logging
 import inspect
+from typing import Optional
 
 import requests
 
@@ -199,3 +200,19 @@ def upload_source(
         ingestion_task=ingestion_task,
     )
     LOGGER.info(f"Successfully ingested {source_name} source for organization {organization_id}")
+
+
+def build_combined_sql_filter(
+    query_filter: Optional[str],
+    timestamp_filter: Optional[str],
+    timestamp_column_name: Optional[str],
+) -> Optional[str]:
+    """Combine query_filter and timestamp_filter into a single SQL WHERE clause."""
+    filters = []
+    if query_filter:
+        filters.append(f"({query_filter})")
+    if timestamp_filter and timestamp_column_name:
+        filters.append(f"({timestamp_column_name} {timestamp_filter})")
+    if filters:
+        return " AND ".join(filters)
+    return None

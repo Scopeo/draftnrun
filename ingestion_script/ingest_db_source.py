@@ -16,7 +16,7 @@ from engine.storage_service.db_utils import (
 from engine.storage_service.local_service import SQLLocalService
 from ingestion_script.ingest_folder_source import sync_chunks_to_qdrant
 from ada_backend.database import models as db
-from ingestion_script.utils import upload_source
+from ingestion_script.utils import upload_source, build_combined_sql_filter
 
 LOGGER = logging.getLogger(__name__)
 
@@ -65,13 +65,13 @@ def get_db_source(
     url_column_name: Optional[str] = None,
     chunk_size: int = 1024,
     chunk_overlap: int = 0,
-    combined_filter: Optional[str] = None,
+    sql_query_filter: Optional[str] = None,
 ) -> pd.DataFrame:
     sql_local_service = SQLLocalService(engine_url=db_url)
     df = sql_local_service.get_table_df(
         table_name=table_name,
         schema_name=source_schema_name,
-        combined_filter=combined_filter,
+        sql_query_filter=sql_query_filter,
     )
     if df.empty:
         raise ValueError(f"The table '{table_name}' is empty. No data to ingest.")
@@ -138,7 +138,12 @@ def upload_db_source(
     query_filter: Optional[str] = None,
     timestamp_filter: Optional[str] = None,
 ):
-    combined_filter_sql = db_service.build_combined_sql_filter(
+    combined_filter_sql = build_combined_sql_filter(
+        query_filter=query_filter,
+        timestamp_filter=timestamp_filter,
+        timestamp_column_name=timestamp_column_name,
+    )
+    combined_filter_qdrant = qdrant_service._build_combined_filter(
         query_filter=query_filter,
         timestamp_filter=timestamp_filter,
         timestamp_column_name=timestamp_column_name,
@@ -158,7 +163,7 @@ def upload_db_source(
         url_column_name=url_column_name,
         chunk_size=chunk_size,
         chunk_overlap=chunk_overlap,
-        combined_filter=combined_filter_sql,
+        sql_query_filter=combined_filter_sql,
     )
 
     db_service.update_table(
@@ -169,7 +174,7 @@ def upload_db_source(
         timestamp_column_name=timestamp_column_name,
         append_mode=update_existing,
         schema_name=storage_schema_name,
-        combined_filter=combined_filter_sql,
+        sql_query_filter=combined_filter_sql,
     )
     LOGGER.info(f"Updated table '{storage_table_name}' in schema '{storage_schema_name}' with {len(df)} rows.")
     sync_chunks_to_qdrant(
@@ -178,10 +183,8 @@ def upload_db_source(
         collection_name=qdrant_collection_name,
         db_service=db_service,
         qdrant_service=qdrant_service,
-        combined_filter_sql=combined_filter_sql,
-        query_filter=query_filter,
-        timestamp_filter=timestamp_filter,
-        timestamp_column_name=timestamp_column_name,
+        sql_query_filter=combined_filter_sql,
+        query_filter_qdrant=combined_filter_qdrant,
     )
 
 

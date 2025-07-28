@@ -863,22 +863,16 @@ class QdrantService:
     def get_points(
         self,
         collection_name: str,
-        filter: Optional[dict] = None,
-        query_filter: Optional[str] = None,
-        timestamp_filter: Optional[str] = None,
-        timestamp_column_name: Optional[str] = None,
+        filter: Optional[str] = None,
     ) -> list[dict]:
 
-        combined_filter = self._build_combined_filter(filter, query_filter, timestamp_filter, timestamp_column_name)
-
         payload = {
-            "filter": combined_filter,
+            "filter": filter,
             "offset": None,
             "limit": max(
                 self.count_points(
-                    filter=combined_filter,
+                    filter=filter,
                     collection_name=collection_name,
-                    timestamp_column_name=timestamp_column_name,
                 ),
                 1,
             ),
@@ -891,22 +885,16 @@ class QdrantService:
     async def get_points_async(
         self,
         collection_name: str,
-        filter: Optional[dict] = None,
-        query_filter: Optional[str] = None,
-        timestamp_filter: Optional[str] = None,
-        timestamp_column_name: Optional[str] = None,
+        filter: Optional[str] = None,
     ) -> list[dict]:
 
-        combined_filter = self._build_combined_filter(filter, query_filter, timestamp_filter, timestamp_column_name)
-
         payload = {
-            "filter": combined_filter,
+            "filter": filter,
             "offset": None,
             "limit": max(
                 await self.count_points_async(
-                    filter=combined_filter,
+                    filter=filter,
                     collection_name=collection_name,
-                    timestamp_column_name=timestamp_column_name,
                 ),
                 1,
             ),
@@ -1010,18 +998,12 @@ class QdrantService:
     def count_points(
         self,
         collection_name: str,
-        filter: Optional[dict] = None,
-        query_filter: Optional[str] = None,
-        timestamp_filter: Optional[str] = None,
-        timestamp_column_name: Optional[str] = None,
+        filter: Optional[str] = None,
     ) -> int:
 
         if not self.collection_exists(collection_name):
             raise ValueError(f"Collection {collection_name} does not exist.")
-
-        combined_filter = self._build_combined_filter(filter, query_filter, timestamp_filter, timestamp_column_name)
-
-        payload = {"filter": combined_filter} if combined_filter else {}
+        payload = {"filter": filter} if filter else {}
 
         response = self._send_request(
             method="POST", endpoint=f"collections/{collection_name}/points/count", payload=payload
@@ -1031,17 +1013,12 @@ class QdrantService:
     async def count_points_async(
         self,
         collection_name: str,
-        filter: Optional[dict] = None,
-        query_filter: Optional[str] = None,
-        timestamp_filter: Optional[str] = None,
-        timestamp_column_name: Optional[str] = None,
+        filter: Optional[str] = None,
     ) -> int:
         if not await self.collection_exists_async(collection_name):
             raise ValueError(f"Collection {collection_name} does not exist.")
 
-        combined_filter = self._build_combined_filter(filter, query_filter, timestamp_filter, timestamp_column_name)
-
-        payload = {"filter": combined_filter} if combined_filter else {}
+        payload = {"filter": filter} if filter else {}
 
         response = await self._send_request_async(
             method="POST", endpoint=f"collections/{collection_name}/points/count", payload=payload
@@ -1167,9 +1144,7 @@ class QdrantService:
     def get_collection_data(
         self,
         collection_name: str,
-        query_filter: Optional[str] = None,
-        timestamp_filter: Optional[str] = None,
-        timestamp_column_name: Optional[str] = None,
+        query_filter_qdrant: Optional[str] = None,
     ) -> pd.DataFrame:
 
         if not self.collection_exists(collection_name):
@@ -1182,9 +1157,7 @@ class QdrantService:
 
         all_points = self.get_points(
             collection_name=collection_name,
-            query_filter=query_filter,
-            timestamp_filter=timestamp_filter,
-            timestamp_column_name=timestamp_column_name,
+            filter=query_filter_qdrant,
         )
 
         rows = []
@@ -1214,9 +1187,7 @@ class QdrantService:
     async def get_collection_data_async(
         self,
         collection_name: str,
-        query_filter: Optional[str] = None,
-        timestamp_filter: Optional[str] = None,
-        timestamp_column_name: Optional[str] = None,
+        query_filter_qdrant: Optional[str] = None,
     ) -> pd.DataFrame:
 
         if not await self.collection_exists_async(collection_name):
@@ -1229,9 +1200,7 @@ class QdrantService:
 
         all_points = await self.get_points_async(
             collection_name=collection_name,
-            query_filter=query_filter,
-            timestamp_filter=timestamp_filter,
-            timestamp_column_name=timestamp_column_name,
+            filter=query_filter_qdrant,
         )
 
         rows = []
@@ -1262,12 +1231,10 @@ class QdrantService:
         self,
         df: pd.DataFrame,
         collection_name: str,
-        query_filter: Optional[str] = None,
-        timestamp_filter: Optional[str] = None,
-        timestamp_column_name: Optional[str] = None,
+        query_filter_qdrant: Optional[str] = None,
     ) -> bool:
 
-        old_df = self.get_collection_data(collection_name, query_filter, timestamp_filter, timestamp_column_name)
+        old_df = self.get_collection_data(collection_name, query_filter_qdrant)
         if old_df.empty:
             self.add_chunks(df.to_dict(orient="records"), collection_name)
             LOGGER.info(f"Qdrant collection is empty. Added {len(df)} chunks to Qdrant")
@@ -1280,7 +1247,7 @@ class QdrantService:
 
         common_df = df.merge(old_df, on=self.default_schema.chunk_id_field, how="inner")
 
-        if query_filter or timestamp_filter:
+        if query_filter_qdrant:
             ids_to_update = set(common_df[self.default_schema.chunk_id_field])
         elif self.default_schema.last_edited_ts_field:
             ids_to_update = set(
@@ -1310,9 +1277,7 @@ class QdrantService:
 
         n_points = self.count_points(
             collection_name=collection_name,
-            query_filter=query_filter,
-            timestamp_filter=timestamp_filter,
-            timestamp_column_name=timestamp_column_name,
+            filter=query_filter_qdrant,
         )
         if n_points != len(df):
             LOGGER.error(
@@ -1330,13 +1295,9 @@ class QdrantService:
         self,
         df: pd.DataFrame,
         collection_name: str,
-        query_filter: Optional[str] = None,
-        timestamp_filter: Optional[str] = None,
-        timestamp_column_name: Optional[str] = None,
+        query_filter_qdrant: Optional[str] = None,
     ) -> bool:
-        old_df = await self.get_collection_data_async(
-            collection_name, query_filter, timestamp_filter, timestamp_column_name
-        )
+        old_df = await self.get_collection_data_async(collection_name, query_filter_qdrant)
         if old_df.empty:
             await self.add_chunks_async(df.to_dict(orient="records"), collection_name)
             LOGGER.info(f"Qdrant collection is empty. Added {len(df)} chunks to Qdrant")
@@ -1349,7 +1310,7 @@ class QdrantService:
 
         common_df = df.merge(old_df, on=self.default_schema.chunk_id_field, how="inner")
 
-        if query_filter or timestamp_filter:
+        if query_filter_qdrant:
             ids_to_update = set(common_df[self.default_schema.chunk_id_field])
         elif self.default_schema.last_edited_ts_field:
             ids_to_update = set(
@@ -1379,9 +1340,7 @@ class QdrantService:
 
         n_points = await self.count_points_async(
             collection_name=collection_name,
-            query_filter=query_filter,
-            timestamp_filter=timestamp_filter,
-            timestamp_column_name=timestamp_column_name,
+            filter=query_filter_qdrant,
         )
         if n_points != len(df):
             LOGGER.error(

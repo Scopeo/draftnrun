@@ -145,13 +145,13 @@ class SQLLocalService(DBService):
         self,
         table_name: str,
         schema_name: Optional[str] = None,
-        combined_filter: Optional[str] = None,
+        sql_query_filter: Optional[str] = None,
     ) -> pd.DataFrame:
         table = self.get_table(table_name, schema_name)
         with self.Session() as session:
             stmt = sqlalchemy.select(table)
-            if combined_filter:
-                stmt = stmt.where(text(combined_filter))
+            if sql_query_filter:
+                stmt = stmt.where(text(sql_query_filter))
             result = session.execute(stmt)
             return pd.DataFrame(result.fetchall(), columns=result.keys())
 
