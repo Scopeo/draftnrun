@@ -396,9 +396,6 @@ class CompletionService(LLMService):
             case "openai":
                 import openai
 
-                if self._api_key is None:
-                    self._api_key = settings.OPENAI_API_KEY
-
                 # Transform messages for OpenAI response API
                 messages = chat_completion_to_response(messages)
                 kwargs = {
@@ -571,9 +568,6 @@ class CompletionService(LLMService):
             case "openai":
                 import openai
 
-                if self._api_key is None:
-                    self._api_key = settings.OPENAI_API_KEY
-
                 # Transform messages for OpenAI response API
                 messages = chat_completion_to_response(messages)
                 kwargs = {
@@ -734,9 +728,7 @@ class CompletionService(LLMService):
             case "openai" | "google":
                 import openai
 
-                if self._api_key is None:
-                    self._api_key = settings.OPENAI_API_KEY
-                client = openai.AsyncOpenAI(api_key=self._api_key)
+                client = openai.AsyncOpenAI(api_key=self._api_key, base_url=self._base_url)
                 response = await client.chat.completions.create(
                     model=self._model_name,
                     messages=messages,
@@ -845,8 +837,6 @@ class WebSearchService(LLMService):
             case "openai":
                 import openai
 
-                if self._api_key is None:
-                    self._api_key = settings.OPENAI_API_KEY
                 client = openai.AsyncOpenAI(api_key=self._api_key)
                 response = await client.responses.create(
                     model=self._model_name,
@@ -906,11 +896,7 @@ class VisionService(LLMService):
         span = get_current_span()
         span.set_attributes({SpanAttributes.LLM_INVOCATION_PARAMETERS: json.dumps({"temperature": self._temperature})})
         match self._provider:
-            case "openai":
-                import openai
-
-                client = openai.OpenAI(api_key=self._api_key)
-            case "google":
+            case "openai" | "google":
                 import openai
 
                 client = openai.OpenAI(api_key=self._api_key, base_url=self._base_url)
@@ -964,19 +950,10 @@ class VisionService(LLMService):
         span = get_current_span()
         span.set_attributes({SpanAttributes.LLM_INVOCATION_PARAMETERS: json.dumps({"temperature": self._temperature})})
         match self._provider:
-            case "openai":
+            case "openai" | "google":
                 import openai
 
-                if self._api_key is None:
-                    self._api_key = settings.OPENAI_API_KEY
-                client = openai.AsyncOpenAI(api_key=self._api_key)
-            case "google":
-                import openai
-
-                if self._api_key is None:
-                    self._api_key = settings.GOOGLE_API_KEY
-
-                client = openai.AsyncOpenAI(api_key=self._api_key, base_url=settings.GOOGLE_BASE_URL)
+                client = openai.AsyncOpenAI(api_key=self._api_key, base_url=self._base_url)
         content = [{"type": "text", "text": text_prompt}]
         content.extend(self._format_image_content(image_content_list))
         messages = [
