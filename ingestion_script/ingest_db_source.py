@@ -65,11 +65,13 @@ def get_db_source(
     url_column_name: Optional[str] = None,
     chunk_size: int = 1024,
     chunk_overlap: int = 0,
-    query_filter: Optional[str] = None,
+    combined_filter: Optional[str] = None,
 ) -> pd.DataFrame:
     sql_local_service = SQLLocalService(engine_url=db_url)
     df = sql_local_service.get_table_df(
-        table_name=table_name, schema_name=source_schema_name, query_filter=query_filter
+        table_name=table_name,
+        schema_name=source_schema_name,
+        combined_filter=combined_filter,
     )
     if df.empty:
         raise ValueError(f"The table '{table_name}' is empty. No data to ingest.")
@@ -136,6 +138,12 @@ def upload_db_source(
     query_filter: Optional[str] = None,
     timestamp_filter: Optional[str] = None,
 ):
+    combined_filter_sql = db_service.build_combined_sql_filter(
+        query_filter=query_filter,
+        timestamp_filter=timestamp_filter,
+        timestamp_column_name=timestamp_column_name,
+    )
+
     df = get_db_source(
         db_url=source_db_url,
         table_name=source_table_name,
@@ -150,7 +158,7 @@ def upload_db_source(
         url_column_name=url_column_name,
         chunk_size=chunk_size,
         chunk_overlap=chunk_overlap,
-        query_filter=query_filter,
+        combined_filter=combined_filter_sql,
     )
 
     db_service.update_table(
@@ -161,8 +169,7 @@ def upload_db_source(
         timestamp_column_name=timestamp_column_name,
         append_mode=update_existing,
         schema_name=storage_schema_name,
-        query_filter=query_filter,
-        timestamp_filter=timestamp_filter,
+        combined_filter=combined_filter_sql,
     )
     LOGGER.info(f"Updated table '{storage_table_name}' in schema '{storage_schema_name}' with {len(df)} rows.")
     sync_chunks_to_qdrant(
@@ -171,9 +178,10 @@ def upload_db_source(
         collection_name=qdrant_collection_name,
         db_service=db_service,
         qdrant_service=qdrant_service,
+        combined_filter_sql=combined_filter_sql,
+        query_filter=query_filter,
         timestamp_filter=timestamp_filter,
         timestamp_column_name=timestamp_column_name,
-        query_filter=query_filter,
     )
 
 

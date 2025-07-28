@@ -49,7 +49,7 @@ class DBService(ABC):
         self,
         table_name: str,
         schema_name: Optional[str] = None,
-        query_filter: Optional[str] = None,
+        combined_filter: Optional[str] = None,
     ) -> pd.DataFrame:
         pass
 
@@ -81,6 +81,22 @@ class DBService(ABC):
     ) -> None:
         pass
 
+    def build_combined_sql_filter(
+        self,
+        query_filter: Optional[str],
+        timestamp_filter: Optional[str],
+        timestamp_column_name: Optional[str],
+    ) -> Optional[str]:
+        """Combine query_filter and timestamp_filter into a single SQL WHERE clause."""
+        filters = []
+        if query_filter:
+            filters.append(f"({query_filter})")
+        if timestamp_filter and timestamp_column_name:
+            filters.append(f"({timestamp_column_name} {timestamp_filter})")
+        if filters:
+            return " AND ".join(filters)
+        return None
+
     def update_table(
         self,
         new_df: pd.DataFrame,
@@ -90,8 +106,7 @@ class DBService(ABC):
         schema_name: Optional[str] = None,
         timestamp_column_name: Optional[str] = None,
         append_mode: bool = True,
-        query_filter: Optional[str] = None,
-        timestamp_filter: Optional[str] = None,
+        combined_filter: Optional[str] = None,
     ) -> None:
         """
         Update a table on Database with a new DataFrame.
@@ -110,37 +125,21 @@ class DBService(ABC):
                 schema_name=schema_name,
             )
             self.insert_df_to_table(df=new_df, table_name=table_name, schema_name=schema_name)
-        else:  # Update existing table
-            # Get all existing data with just query_filter for existence check
-            base_query = (
+        else:
+            query = (
                 f"SELECT {id_column_name}, {timestamp_column_name} FROM {target_table_name}"
                 if timestamp_column_name
                 else f"SELECT {id_column_name} FROM {target_table_name}"
             )
-
-            if query_filter:
-                base_query += f" WHERE {query_filter}"
-            base_query += ";"
-
-            existing_df = self._fetch_sql_query_as_dataframe(base_query)
-            existing_df = convert_to_correct_pandas_type(existing_df, id_column_name, table_definition)
-
-            # For timestamp comparison, apply additional timestamp filter if provided
-            if timestamp_filter and timestamp_column_name:
-                filtered_query = base_query[:-1]  # Remove semicolon
-                timestamp_condition = f" AND {timestamp_column_name} {timestamp_filter}"
-                if query_filter:
-                    filtered_query += timestamp_condition
-                else:
-                    filtered_query += f" WHERE {timestamp_column_name} {timestamp_filter}"
-                filtered_query += ";"
-                old_df = self._fetch_sql_query_as_dataframe(filtered_query)
-                old_df = convert_to_correct_pandas_type(old_df, id_column_name, table_definition)
-            else:
-                old_df = existing_df
+            final_query = f"{query} WHERE {combined_filter};" if combined_filter else f"{query};"
+            old_df = self._fetch_sql_query_as_dataframe(final_query)
+            old_df = convert_to_correct_pandas_type(old_df, id_column_name, table_definition)
 
             common_df = new_df.merge(old_df, on=id_column_name, how="inner")
-            if timestamp_column_name and not timestamp_filter:
+
+            if combined_filter:
+                ids_to_update = set(common_df[id_column_name])
+            elif timestamp_column_name:
                 ids_to_update = set(
                     common_df[common_df[timestamp_column_name + "_x"] > common_df[timestamp_column_name + "_y"]][
                         id_column_name
@@ -148,6 +147,7 @@ class DBService(ABC):
                 )
             else:
                 ids_to_update = set(common_df[id_column_name])
+
             LOGGER.info(f"Found {len(ids_to_update)} rows to update in the table")
             updated_data = new_df[new_df[id_column_name].isin(ids_to_update)].copy()
             for col in updated_data.select_dtypes(include=["datetime64[ns]"]):
@@ -160,7 +160,7 @@ class DBService(ABC):
                 schema_name=schema_name,
             )
 
-            new_df["exists"] = new_df[id_column_name].isin(existing_df[id_column_name].values)
+            new_df["exists"] = new_df[id_column_name].isin(old_df[id_column_name].values)
             LOGGER.info(f"Found {new_df['exists'][new_df['exists']].sum()} existing rows in the table")
             new_data = new_df[~new_df["exists"]].copy()
             new_data.drop(columns=["exists"], inplace=True)
@@ -172,7 +172,7 @@ class DBService(ABC):
                 ids_to_delete = filtered_existing_ids - new_ids_in_scope
 
                 LOGGER.info(f"Found {len(ids_to_delete)} rows to delete in the filtered scope")
-                if len(ids_to_delete) > 0:
+                if ids_to_delete:
                     self.delete_rows_from_table(
                         table_name=table_name,
                         ids=list(ids_to_delete),

@@ -1,6 +1,6 @@
 import logging
 from pathlib import Path
-from typing import Optional, Type
+from typing import Optional, Type, Dict, Any
 
 import sqlalchemy
 from sqlalchemy import MetaData, text, create_engine
@@ -55,6 +55,16 @@ class SQLLocalService(DBService):
         table_name = table_name.lower()
         inspector = sqlalchemy.inspect(self.engine)
         return inspector.has_table(table_name, schema=schema_name)
+
+    def add_processed_datetime_if_exists(
+        self,
+        table: sqlalchemy.Table,
+        update_values: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        column_names = [col.name for col in table.columns]
+        if PROCESSED_DATETIME_FIELD in column_names:
+            update_values[PROCESSED_DATETIME_FIELD] = sqlalchemy.func.current_timestamp()
+        return update_values
 
     @staticmethod
     def convert_table_definition_to_sqlalchemy(
@@ -135,17 +145,13 @@ class SQLLocalService(DBService):
         self,
         table_name: str,
         schema_name: Optional[str] = None,
-        query_filter: Optional[str] = None,
-        timestamp_filter: Optional[str] = None,
-        timestamp_column_name: Optional[str] = None,
+        combined_filter: Optional[str] = None,
     ) -> pd.DataFrame:
         table = self.get_table(table_name, schema_name)
         with self.Session() as session:
             stmt = sqlalchemy.select(table)
-            if query_filter:
-                stmt = sqlalchemy.select(table).where(text(query_filter))
-            if timestamp_filter and timestamp_column_name:
-                stmt = stmt.where(text(f"{timestamp_column_name} {timestamp_filter}"))
+            if combined_filter:
+                stmt = stmt.where(text(combined_filter))
             result = session.execute(stmt)
             return pd.DataFrame(result.fetchall(), columns=result.keys())
 
@@ -186,8 +192,7 @@ class SQLLocalService(DBService):
             if existing_record:
                 # For updates, explicitly set _processed_datetime to current timestamp
                 update_values = values.copy()
-                if PROCESSED_DATETIME_FIELD in [col.name for col in table.columns]:
-                    update_values[PROCESSED_DATETIME_FIELD] = sqlalchemy.func.current_timestamp()
+                update_values = self.add_processed_datetime_if_exists(table, update_values)
                 stmt = sqlalchemy.update(table).where(table.c[id_column_name] == id).values(**update_values)
                 session.execute(stmt)
             else:
@@ -283,9 +288,7 @@ class SQLLocalService(DBService):
                 col.name: temp_table.c[col.name] for col in table.columns if col.name != PROCESSED_DATETIME_FIELD
             }
 
-            # Explicitly set _processed_datetime to current timestamp for updates
-            if PROCESSED_DATETIME_FIELD in [col.name for col in table.columns]:
-                columns_to_update[PROCESSED_DATETIME_FIELD] = sqlalchemy.func.current_timestamp()
+            columns_to_update = self.add_processed_datetime_if_exists(table, columns_to_update)
 
             update_stmt = table.update().where(table.c[id_column] == temp_table.c[id_column]).values(columns_to_update)
 
