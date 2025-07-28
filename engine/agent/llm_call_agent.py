@@ -85,7 +85,7 @@ class LLMCallAgent(Agent):
 
         # Check for file support
         file_supported_references = [
-            model_reference for model_reference in get_models_by_capability(ModelCapability.FILE)
+            model_reference["reference"] for model_reference in get_models_by_capability(ModelCapability.FILE)
         ]
         if (
             len(files_content) > 0
@@ -96,7 +96,7 @@ class LLMCallAgent(Agent):
 
         # Check for image support
         image_supported_references = [
-            model_reference for model_reference in get_models_by_capability(ModelCapability.IMAGE)
+            model_reference["reference"] for model_reference in get_models_by_capability(ModelCapability.IMAGE)
         ]
         if (
             len(images_content) > 0

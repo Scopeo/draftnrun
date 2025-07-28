@@ -102,6 +102,7 @@ def llm_call_with_file_content():
     trace_manager = MagicMock()
     llm_service = MagicMock()
     llm_service._provider = "openai"  # Set the provider to openai to support file content
+    llm_service._model_name = "gpt-4.1-mini"  # Set a model that supports files
 
     # Use AsyncMock for the async methods
     llm_service.complete_async = AsyncMock(side_effect=complete_side_effect)
@@ -128,6 +129,7 @@ def llm_call_without_file_content():
     trace_manager = MagicMock()
     llm_service = MagicMock()
     llm_service._provider = "openai"  # Set the provider to openai to support file content
+    llm_service._model_name = "gpt-4.1-mini"  # Set a model that supports files
 
     # Use AsyncMock for the async methods
     llm_service.complete_async = AsyncMock(side_effect=complete_side_effect)
