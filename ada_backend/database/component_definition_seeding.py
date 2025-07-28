@@ -226,7 +226,6 @@ def upsert_component_categories(session: Session, component_id: str, category_id
             .first()
         )
         session.delete(component_category)
-        print(f"Component {component_id} removed from category {category_id}.")
         category_name = session.query(db.Category).filter(db.Category.id == category_id).first().name
         LOGGER.info(f"Component {component_id} removed from category {category_name}.")
 

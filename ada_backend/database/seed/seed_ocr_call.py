@@ -55,5 +55,5 @@ def seed_ocr_call_components(session: Session):
     upsert_component_categories(
         session=session,
         component_id=ocr_call.id,
-        category_ids=[CATEGORY_UUIDS["action"]],
+        category_ids=[CATEGORY_UUIDS["processing"]],
     )
