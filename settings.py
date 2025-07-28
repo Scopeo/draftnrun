@@ -125,6 +125,9 @@ class BaseConfig(BaseSettings):
     GOOGLE_CLIENT_ID: Optional[str] = None
     GOOGLE_CLIENT_SECRET: Optional[str] = None
 
+    # Slack configuration
+    SLACK_BOT_TOKEN: Optional[str] = None
+
     # Observability stack endpoints
     TEMPO_ENDPOINT: str = "http://localhost:4318/v1/traces"
     PROMETHEUS_URL: str = "http://localhost:9090"

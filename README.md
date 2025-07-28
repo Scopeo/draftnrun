@@ -388,19 +388,40 @@ ADA_URL=http://localhost:8000
 ```
 
 #### Google OAuth Setup
+
 To enable Google login, set these in your credentials.env:
 
 ```env
 GOOGLE_CLIENT_ID=your-google-client-id
 GOOGLE_CLIENT_SECRET=your-google-client-secret
 ```
+
 How to get them:
+
 - Go to Google Cloud Console.
 - Create OAuth 2.0 credentials (type: Web application).
-- Add your app’s redirect URI (e.g. https://yourdomain.com/auth/google/callback).
+- Add your app's redirect URI (e.g. https://yourdomain.com/auth/google/callback).
 - Copy the Client ID and Client Secret and paste them above.
 
 Make sure the redirect URI matches what you configure in Google and your app. Do not commit these secrets to version control.
+
+#### Slack Bot Setup
+
+To enable Slack messaging, set this in your credentials.env:
+
+```env
+SLACK_BOT_TOKEN=xoxb-your-slack-bot-token
+```
+
+How to get it:
+
+- Go to [Slack API Apps page](https://api.slack.com/apps).
+- Create a new app or use an existing one.
+- Go to "OAuth & Permissions" and add bot token scopes:
+  - `chat:write` - Send messages to channels
+  - `channels:read` - Read channel information
+- Install the app to your workspace.
+- Copy the "Bot User OAuth Token" (starts with `xoxb-`) and paste it above.
 
 ### Set up the database for backend and ingestion
 
