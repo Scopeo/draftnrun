@@ -40,7 +40,7 @@ TOOL_DESCRIPTION_UUIDS = {
     "terminal_command_runner_tool_description": UUID("e2b11112-2222-3333-4444-555555555555"),
     "default_llm_call_tool_description": UUID("b91d418d-a67f-40b9-9266-b01ca202747d"),
     "default_pdf_generation_tool_description": UUID("e2b11113-2222-3333-4444-555555555555"),
-    "linkup_tool_description": UUID("d2e3f456-789a-bcde-f012-3456789abcde"),
+    "linkup_search_tool_description": UUID("d2e3f456-789a-bcde-f012-3456789abcde"),
 }
 
 
@@ -104,8 +104,8 @@ def seed_tool_description(session: Session):
         id=TOOL_DESCRIPTION_UUIDS["default_pdf_generation_tool_description"],
         **DEFAULT_PDF_GENERATION_TOOL_DESCRIPTION.model_dump(),
     )
-    linkup_tool_description = db.ToolDescription(
-        id=TOOL_DESCRIPTION_UUIDS["linkup_tool_description"],
+    linkup_search_tool_description = db.ToolDescription(
+        id=TOOL_DESCRIPTION_UUIDS["linkup_search_tool_description"],
         **LINKUP_TOOL_DESCRIPTION.model_dump(),
     )
     upsert_tool_descriptions(
@@ -127,6 +127,6 @@ def seed_tool_description(session: Session):
             terminal_command_runner_tool_description,
             default_llm_call_tool_description,
             pdf_generation_tool_description,
-            linkup_tool_description,
+            linkup_search_tool_description,
         ],
     )
