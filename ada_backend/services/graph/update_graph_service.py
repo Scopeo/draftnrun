@@ -117,11 +117,20 @@ async def update_graph_service(
         delete_node(session, node_id)
     LOGGER.info("Deleted nodes: {}".format(len(nodes_to_delete)))
 
-    await get_agent_for_project(
-        session,
-        project_id=project_id,
-        graph_runner_id=graph_runner_id,
-    )
+    # TEMPORARY: Add error logging for component instantiation
+    try:
+        await get_agent_for_project(
+            session,
+            project_id=project_id,
+            graph_runner_id=graph_runner_id,
+        )
+    except Exception as e:
+        import traceback
+
+        full_traceback = traceback.format_exc()
+        LOGGER.error(f"FULL TRACEBACK in get_agent_for_project:\n{full_traceback}")
+        LOGGER.error(f"Project ID: {project_id}, Graph Runner ID: {graph_runner_id}")
+        raise
     if user_id:
         track_project_saved(user_id, project_id)
     return GraphUpdateResponse(graph_id=graph_runner_id)
