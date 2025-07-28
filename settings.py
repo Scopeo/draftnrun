@@ -54,6 +54,7 @@ class BaseConfig(BaseSettings):
     QDRANT_API_KEY: Optional[str] = None
 
     TAVILY_API_KEY: Optional[str] = None
+    LINKUP_API_KEY: Optional[str] = None
     E2B_API_KEY: Optional[str] = None
 
     SEGMENT_API_KEY: Optional[str] = None
