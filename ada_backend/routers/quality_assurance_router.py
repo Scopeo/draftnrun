@@ -81,7 +81,7 @@ def get_datasets_by_project_endpoint(
     "/projects/{project_id}/qa/datasets",
     response_model=DatasetListResponse,
     summary="Create Datasets",
-    tags=["Qualit Assurance"],
+    tags=["Quality Assurance"],
 )
 def create_dataset_endpoint(
     project_id: UUID,
