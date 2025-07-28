@@ -46,7 +46,7 @@ def _configure_django():
 def _get_django_models():
     """Get Django models after ensuring Django is configured."""
     _configure_django()
-    from django_celery_beat.models import CrontabSchedule, PeriodicTask, PeriodicTasks
+    from ada_backend.django_scheduler.models import CrontabSchedule, PeriodicTask, PeriodicTasks
 
     return CrontabSchedule, PeriodicTask, PeriodicTasks
 

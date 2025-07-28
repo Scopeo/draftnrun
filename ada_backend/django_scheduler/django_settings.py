@@ -1,6 +1,6 @@
 from settings import settings
 
-# Override database settings to use the scheduled_workflows schema
+# Standard database settings (using public schema)
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.postgresql",
@@ -9,16 +9,15 @@ DATABASES = {
         "PASSWORD": settings.ADA_DB_PASSWORD,
         "HOST": settings.ADA_DB_HOST,
         "PORT": settings.ADA_DB_PORT,
-        "OPTIONS": {"options": "-c search_path=scheduled_workflows,public"},
     }
 }
 
-# Add our custom app to INSTALLED_APPS
+# Standard django-celery-beat setup
 INSTALLED_APPS = [
     "django.contrib.auth",
     "django.contrib.contenttypes",
     "django.contrib.sessions",
-    "django_celery_beat",
+    "django_celery_beat",  # Standard django-celery-beat
     "ada_backend.django_scheduler",  # Our custom app with management commands
 ]
 
@@ -36,7 +35,7 @@ DEBUG = False
 # Database settings
 DATABASE_OPTIONS = {}
 
-# Middleware (minimal required)
+# Middleware (standard)
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
@@ -65,6 +64,13 @@ LOGGING = {
     "root": {
         "handlers": ["console"],
         "level": "INFO",
+    },
+    # Suppress model warnings
+    "loggers": {
+        "django.db.models": {
+            "handlers": ["console"],
+            "level": "ERROR",  # Only show errors, not warnings
+        },
     },
 }
 

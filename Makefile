@@ -11,6 +11,20 @@ help:
 	@echo "run-celery-beat: Start the Celery beat scheduler for cron jobs."
 	@echo "run-celery-worker-debug: Start the Celery worker in debug mode."
 	@echo "run-celery-beat-debug: Start the Celery beat scheduler in debug mode."
+	@echo ""
+	@echo "Database Commands:"
+	@echo "  db-upgrade: Apply database migrations"
+	@echo "  db-downgrade: Revert last migration"
+	@echo "  db-current: Check current migration"
+	@echo "  db-history: Show migration history"
+	@echo ""
+	@echo "Cron Database Commands (Alembic-like):"
+	@echo "  cron-db-upgrade: Apply all pending migrations"
+	@echo "  cron-db-downgrade: Revert to previous migration"
+	@echo "  cron-db-downgrade-to target=XXX: Revert to specific migration"
+	@echo "  cron-db-status: Show migration status"
+	@echo "  cron-db-current: Show current migration version"
+	@echo "  Note: Migration files are created manually for custom models"
 
 # -------------------------------------------
 # Development and Running
@@ -136,28 +150,33 @@ db-reset:
 	@docker exec -it ada_postgres psql -U ada_user -d postgres -c "DROP DATABASE IF EXISTS ada_backend;" && docker exec -it ada_postgres psql -U ada_user -d postgres -c "CREATE DATABASE ada_backend;"
 
 # -------------------------------------------
-# Django Scheduler Migrations
+# Django Scheduler Migrations for CRON Jobs
 # -------------------------------------------
 
-.PHONY: django-beat-migrate
-django-beat-migrate:
-	@echo "Running Django Beat migrations in scheduled_workflows schema"
-	@uv run python ada_backend/django_scheduler/manage.py migrate_beat_schema
+.PHONY: cron-db-upgrade
+cron-db-upgrade:
+	@echo "Applying Django Beat migrations"
+	@uv run python ada_backend/django_scheduler/manage.py migrate_cron upgrade
 
-.PHONY: django-beat-makemigrations
-django-beat-makemigrations:
-	@echo "Creating Django Beat migrations"
-	@uv run python ada_backend/django_scheduler/manage.py makemigrations
+.PHONY: cron-db-downgrade
+cron-db-downgrade:
+	@echo "Reverting last Django Beat migration"
+	@uv run python ada_backend/django_scheduler/manage.py migrate_cron downgrade
 
-.PHONY: django-beat-showmigrations
-django-beat-showmigrations:
+.PHONY: cron-db-downgrade-to
+cron-db-downgrade-to:
+	@echo "Reverting Django Beat migration to $(target)"
+	@uv run python ada_backend/django_scheduler/manage.py migrate_cron downgrade --target=$(target)
+
+.PHONY: cron-db-status
+cron-db-status:
 	@echo "Showing Django Beat migration status"
-	@uv run python ada_backend/django_scheduler/manage.py showmigrations
+	@uv run python ada_backend/django_scheduler/manage.py migrate_cron status
 
-.PHONY: django-beat-shell
-django-beat-shell:
-	@echo "Opening Django Beat shell"
-	@uv run python ada_backend/django_scheduler/manage.py shell
+.PHONY: cron-db-current
+cron-db-current:
+	@echo "Current Django Beat migration version"
+	@uv run python ada_backend/django_scheduler/manage.py migrate_cron current
 
 # -------------------------------------------
 # Trace Database Migrations (Alembic)
