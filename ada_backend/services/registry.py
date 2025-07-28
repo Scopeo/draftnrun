@@ -27,6 +27,7 @@ from engine.agent.document_react_loader import DocumentReactLoaderAgent
 from engine.agent.ocr_call import OCRCall
 from engine.agent.rag.document_search import DocumentSearch
 from engine.integrations.gmail_sender import GmailSender
+from engine.agent.tools.linkup_tool import LinkupSearchTool
 from engine.storage_service.local_service import SQLLocalService
 from engine.storage_service.snowflake_service.snowflake_service import SnowflakeService
 from ada_backend.services.entity_factory import (
@@ -86,6 +87,9 @@ class SupportedEntityType(StrEnum):
 
     # Integrations
     GMAIL_SENDER = "Gmail Sender"
+    
+    # Tools
+    LINKUP_SEARCH_TOOL = "Linkup Search Tool"
 
 
 class FactoryRegistry:
@@ -422,6 +426,13 @@ def create_factory_registry() -> FactoryRegistry:
         name=SupportedEntityType.GMAIL_SENDER,
         factory=AgentFactory(
             entity_class=GmailSender,
+        ),
+    )
+
+    registry.register(
+        name=SupportedEntityType.LINKUP_SEARCH_TOOL,
+        factory=AgentFactory(
+            entity_class=LinkupSearchTool,
         ),
     )
 
