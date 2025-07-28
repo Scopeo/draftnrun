@@ -58,6 +58,7 @@ dependencies = [
     "segment-analytics-python>=2.3.3",
     "markdown2>=2.5.4",
     "weasyprint>=66.0",
+    "slack-sdk>=3.27.0,<4",
 ]
 [dependency-groups]
 dev = [
