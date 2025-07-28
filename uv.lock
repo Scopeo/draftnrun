@@ -16,6 +16,7 @@ dependencies = [
     { name = "anytree" },
     { name = "boto3" },
     { name = "celery" },
+    { name = "cron-converter" },
     { name = "django-celery-beat" },
     { name = "e2b" },
     { name = "e2b-code-interpreter" },
@@ -118,6 +119,7 @@ requires-dist = [
     { name = "anytree", specifier = "==2.12.1" },
     { name = "boto3", specifier = ">=1.38.4,<2" },
     { name = "celery", specifier = ">=5.5.3" },
+    { name = "cron-converter", specifier = ">=1.2.2" },
     { name = "django-celery-beat", specifier = ">=2.8.1" },
     { name = "e2b", specifier = ">=1.0.0,<2.0.0" },
     { name = "e2b-code-interpreter", specifier = ">=1.5.1,<1.6" },
@@ -812,6 +814,18 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/60/07/a6d2342cd80a5be9f0eeab115bc5ebb3917b4a64c2953534273cf9bc7ae6/coverage-7.9.1-cp311-cp311-win_arm64.whl", hash = "sha256:6ad935f0016be24c0e97fc8c40c465f9c4b85cbbe6eac48934c0dc4d2568321e", size = 213869, upload-time = "2025-06-13T13:01:09.345Z" },
     { url = "https://files.pythonhosted.org/packages/3e/e5/c723545c3fd3204ebde3b4cc4b927dce709d3b6dc577754bb57f63ca4a4a/coverage-7.9.1-pp39.pp310.pp311-none-any.whl", hash = "sha256:db0f04118d1db74db6c9e1cb1898532c7dcc220f1d2718f058601f7c3f499514", size = 204009, upload-time = "2025-06-13T13:02:25.787Z" },
     { url = "https://files.pythonhosted.org/packages/08/b8/7ddd1e8ba9701dea08ce22029917140e6f66a859427406579fd8d0ca7274/coverage-7.9.1-py3-none-any.whl", hash = "sha256:66b974b145aa189516b6bf2d8423e888b742517d37872f6ee4c5be0073bd9a3c", size = 204000, upload-time = "2025-06-13T13:02:27.173Z" },
+]
+
+[[package]]
+name = "cron-converter"
+version = "1.2.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "python-dateutil" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/c7/b9/744734ae853c43f8b71510402e0ab0106ba96a741113f9e26e89fde40736/cron_converter-1.2.2.tar.gz", hash = "sha256:b987525ddf7d5ad28286620622f00dde61c73833d1f05c332a26c389a9c512c3", size = 14509, upload-time = "2025-07-21T09:25:00.01Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/62/f8/1698a37dd13fc120a96a062c10dba11cade6ebb71b68a14ee177032b4b61/cron_converter-1.2.2-py3-none-any.whl", hash = "sha256:a31c71223cc71f07f9af2533af50c4cf1b910a85a730dd06a00aed053ea250fe", size = 13434, upload-time = "2025-07-21T09:24:58.638Z" },
 ]
 
 [[package]]
