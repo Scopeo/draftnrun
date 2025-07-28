@@ -123,6 +123,7 @@ async def update_graph_service(
         project_id=project_id,
         graph_runner_id=graph_runner_id,
     )
+
     if user_id:
         track_project_saved(user_id, project_id)
     return GraphUpdateResponse(graph_id=graph_runner_id)

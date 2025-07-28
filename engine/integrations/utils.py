@@ -15,6 +15,11 @@ LOGGER = logging.getLogger(__name__)
 
 
 def needs_new_token(integration_secret: db.SecretIntegration) -> bool:
+    # Non-expiring tokens (Slack): refresh token is None, expires_in is None
+    if integration_secret.get_refresh_token() is None and integration_secret.expires_in is None:
+        return False  # Token doesn't expire, no need to refresh
+
+    # Expiring tokens (Gmail): check expiration
     if integration_secret.token_last_updated is None or integration_secret.expires_in is None:
         # If we don't know the current token or expiration, assume we need a new one
         return True
@@ -75,6 +80,10 @@ def get_oauth_access_token(
         # If the token is expired or needs to be refreshed
         if needs_new_token(integration_secret):
             refresh_token = integration_secret.get_refresh_token()
+            if refresh_token is None:
+                raise ValueError(
+                    "Token needs refresh but no refresh token available (non-expiring token misconfigured)"
+                )
             new_access_token, creation_timestamp = refresh_oauth_token(
                 refresh_token, google_client_id, google_client_secret
             )

@@ -9,12 +9,14 @@
 # virtual-env
 venv
 .venv/
+.cursor/
 
 # data
 data
 vectorstore
 azure_files
 docstore
+generated-config/
 images/*
 monitoring
 *.db

@@ -78,6 +78,7 @@ COMPONENT_UUIDS: dict[str, UUID] = {
     "input": UUID("01357c0b-bc99-44ce-a435-995acc5e2544"),
     "filter": UUID("02468c0b-bc99-44ce-a435-995acc5e2545"),
     "gmail_sender": UUID("af96bb40-c9ea-4851-a663-f0e64363fcb2"),
+    "slack_sender": UUID("b0a7cc51-d0fb-5962-b774-f1f75474dc3a"),
     "python_code_runner": UUID("e2b00000-0000-1111-2222-333333333333"),
     "terminal_command_runner": UUID("e2b10000-1111-2222-3333-444444444444"),
     "pdf_generation": UUID("428baac0-0c5f-4374-b2de-8075218082b4"),
