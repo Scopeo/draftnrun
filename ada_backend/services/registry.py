@@ -30,6 +30,7 @@ from engine.agent.rag.document_search import DocumentSearch
 from engine.agent.graph_runner_block import GraphRunnerBlock
 from engine.agent.chunk_processor import ChunkProcessor
 from engine.integrations.gmail_sender import GmailSender
+from engine.integrations.linkup_service import LinkupService
 from engine.storage_service.local_service import SQLLocalService
 from engine.storage_service.snowflake_service.snowflake_service import SnowflakeService
 from ada_backend.services.entity_factory import (
@@ -97,6 +98,7 @@ class SupportedEntityType(StrEnum):
 
     # Integrations
     GMAIL_SENDER = "Gmail Sender"
+    LINKUP_SERVICE = "Linkup Service"
 
 
 class FactoryRegistry:
@@ -462,6 +464,13 @@ def create_factory_registry() -> FactoryRegistry:
         name=SupportedEntityType.GMAIL_SENDER,
         factory=AgentFactory(
             entity_class=GmailSender,
+        ),
+    )
+
+    registry.register(
+        name=SupportedEntityType.LINKUP_SERVICE,
+        factory=AgentFactory(
+            entity_class=LinkupService,
         ),
     )
 

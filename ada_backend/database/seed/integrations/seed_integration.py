@@ -7,6 +7,7 @@ from ada_backend.database.component_definition_seeding import upsert_integration
 
 INTEGRATION_UUIDS = {
     "gmail_sender": UUID("91bb788b-45de-4bbf-86d4-3149fc804b30"),
+    "linkup_service": UUID("a1b2c3d4-e5f6-7890-1234-56789abcdef0"),
 }
 
 
@@ -16,4 +17,9 @@ def seed_integrations(session: Session):
         name="google",
         service="gmail sender",
     )
-    upsert_integrations(session, [gmail_sender_integration])
+    linkup_service_integration = db.Integration(
+        id=INTEGRATION_UUIDS["linkup_service"],
+        name="linkup",
+        service="linkup service",
+    )
+    upsert_integrations(session, [gmail_sender_integration, linkup_service_integration])
