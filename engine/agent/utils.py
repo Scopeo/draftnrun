@@ -87,12 +87,13 @@ def extract_vars_in_text_template(prompt_template: str) -> list[str]:
     return [fname for _, fname, _, _ in string.Formatter().parse(prompt_template) if fname]
 
 
-def parse_openai_message_format(message: Union[str, list]) -> tuple[str, list[dict]]:
+def parse_openai_message_format(message: Union[str, list], provider: str) -> tuple[str, list[dict], list[dict]]:
     if isinstance(message, str):
-        return message, []
+        return message, [], []
 
     text_content = ""
     files_content = []
+    images_content = []
 
     if isinstance(message, list):
         for item in message:
@@ -106,8 +107,23 @@ def parse_openai_message_format(message: Union[str, list]) -> tuple[str, list[di
                             "file": item["file"],
                         }
                     )
+                if "image_url" in item:
+                    if provider == "openai":
+                        images_content.append(
+                            {
+                                "type": "image_url",
+                                "image_url": item["image_url"]["url"],
+                            }
+                        )
+                    else:
+                        images_content.append(
+                            {
+                                "type": "image_url",
+                                "image_url": item["image_url"],
+                            }
+                        )
 
-    return text_content, files_content
+    return text_content, files_content, images_content
 
 
 def load_str_to_json(str_to_parse: str) -> dict:

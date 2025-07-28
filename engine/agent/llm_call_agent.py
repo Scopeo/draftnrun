@@ -8,8 +8,10 @@ from engine.agent.utils import extract_vars_in_text_template, parse_openai_messa
 from engine.llm_services.llm_service import CompletionService
 from engine.trace.trace_manager import TraceManager
 from engine.trace.serializer import serialize_to_json
-
-SUPPORTED_PROVIDER = "openai"
+from ada_backend.database.seed.supported_models import (
+    get_models_by_capability,
+    ModelCapability,
+)
 
 
 class LLMCallAgent(Agent):
@@ -37,6 +39,7 @@ class LLMCallAgent(Agent):
         prompt_vars = extract_vars_in_text_template(self._prompt_template)
         input_replacements = {}
         files_content = []
+        images_content = []
 
         input_replacements["input"] = ""
         for payload in input_payloads:
@@ -51,11 +54,12 @@ class LLMCallAgent(Agent):
                 and "content" in payload_json["messages"][-1]
                 and payload_json["messages"][-1]["content"]
             ):
-                text_content, payload_files_content = parse_openai_message_format(
-                    payload_json["messages"][-1]["content"]
+                text_content, payload_files_content, payload_images_content = parse_openai_message_format(
+                    payload_json["messages"][-1]["content"], self._completion_service._provider
                 )
                 input_replacements["input"] += text_content
                 files_content.extend(payload_files_content)
+                images_content.extend(payload_images_content)
 
         for prompt_var in prompt_vars:
             for payload in input_payloads:
@@ -79,16 +83,37 @@ class LLMCallAgent(Agent):
 
         text_content = self._prompt_template.format(**input_replacements)
 
-        if len(files_content) > 0:
-            # TODO: Add support for other providers
-            if self._completion_service._provider != SUPPORTED_PROVIDER:
-                raise ValueError(f"File content is not supported for provider '{self._completion_service._provider}'.")
+        # Check for file support
+        file_supported_references = [
+            model_reference["reference"] for model_reference in get_models_by_capability(ModelCapability.FILE)
+        ]
+        if (
+            len(files_content) > 0
+            and f"{self._completion_service._provider}:{self._completion_service._model_name}"
+            not in file_supported_references
+        ):
+            raise ValueError(f"File content is not supported for provider '{self._completion_service._provider}'.")
+
+        # Check for image support
+        image_supported_references = [
+            model_reference["reference"] for model_reference in get_models_by_capability(ModelCapability.IMAGE)
+        ]
+        if (
+            len(images_content) > 0
+            and f"{self._completion_service._provider}:{self._completion_service._model_name}"
+            not in image_supported_references
+        ):
+            raise ValueError(f"Image content is not supported for provider '{self._completion_service._provider}'.")
+
+        # Build content based on what's present
+        if len(files_content) > 0 or len(images_content) > 0:
             content = [
                 {
                     "type": "text",
                     "text": text_content,
                 },
                 *files_content,
+                *images_content,
             ]
         else:
             content = text_content

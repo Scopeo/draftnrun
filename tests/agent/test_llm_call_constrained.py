@@ -55,6 +55,7 @@ def llm_call_with_output_format():
 
     llm_service = MagicMock()
     llm_service._provider = "openai"  # Set the provider to openai to support file content
+    llm_service._model_name = "gpt-4.1-mini"  # Set a model that supports files
     llm_service.constrained_complete_with_json_schema_async = AsyncMock(
         return_value='{"location": "Miami", "unit": "F", "value": 85}'
     )
