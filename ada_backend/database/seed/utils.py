@@ -6,7 +6,10 @@ from pydantic import BaseModel
 from ada_backend.database.models import ParameterType, SelectOption, UIComponent, UIComponentProperties
 from ada_backend.database import models as db
 from ada_backend.services.registry import COMPLETION_MODEL_IN_DB, EMBEDDING_MODEL_IN_DB
-from ada_backend.database.seed.supported_models import FULL_CAPACITY_COMPLETION_MODELS as SUPPORTED_MODELS
+from ada_backend.database.seed.supported_models import (
+    get_models_by_capability,
+    ModelCapability,
+)
 from settings import settings
 
 
@@ -72,28 +75,40 @@ COMPONENT_UUIDS: dict[str, UUID] = {
     "terminal_command_runner": UUID("e2b10000-1111-2222-3333-444444444444"),
 }
 
-FULL_CAPACITY_COMPLETION_MODELS = convert_models_to_select_options(SUPPORTED_MODELS)
-
-OPTIONS_COMPLETION_MODELS = FULL_CAPACITY_COMPLETION_MODELS + [
-    # Anthropic (Claude) TODO: Add Anthropic (Claude)
-    # SelectOption(value="anthropic:claude-3.7-sonnet", label="Claude 3.7 Sonnet"),
-    # SelectOption(value="anthropic:claude-3.5-sonnet", label="Claude 3.5 Sonnet"),
-    # SelectOption(value="anthropic:claude-3.5-haiku", label="Claude 3.5 Haiku"),
+# Get models by capability and convert to select options
+COMPLETION_MODELS = [
+    SelectOption(value=model["reference"], label=model["name"])
+    for model in get_models_by_capability(ModelCapability.COMPLETION)
 ]
-OPTIONS_COMPLETION_MODELS.extend(
+
+FUNCTION_CALLING_MODELS = [
+    SelectOption(value=model["reference"], label=model["name"])
+    for model in get_models_by_capability(ModelCapability.FUNCTION_CALLING)
+]
+
+EMBEDDING_MODELS = [
+    SelectOption(value=model["reference"], label=model["name"])
+    for model in get_models_by_capability(ModelCapability.EMBEDDING)
+]
+
+WEB_SEARCH_MODELS = [
+    SelectOption(value=model["reference"], label=model["name"])
+    for model in get_models_by_capability(ModelCapability.WEB_SEARCH)
+]
+
+OCR_MODELS = [
+    SelectOption(value=model["reference"], label=model["name"])
+    for model in get_models_by_capability(ModelCapability.OCR)
+]
+
+COMPLETION_MODELS.extend(
     add_custom_llm_model(settings.custom_models, "completion_models", "constrained_completion_with_pydantic")
 )
-
-OPTIONS_FUNCTION_CALLING_MODELS = FULL_CAPACITY_COMPLETION_MODELS
-OPTIONS_FUNCTION_CALLING_MODELS.extend(
+FUNCTION_CALLING_MODELS.extend(
     add_custom_llm_model(settings.custom_models, "completion_models", "function_calling")
 )
 
-OPTIONS_EMBEDDING_MODELS = [
-    # OpenAI
-    SelectOption(value="openai:text-embedding-3-large", label="Text Embedding 3 Large"),
-]
-OPTIONS_EMBEDDING_MODELS.extend(add_custom_llm_model(settings.custom_models, "embedding_models"))
+EMBEDDING_MODELS.extend(add_custom_llm_model(settings.custom_models, "embedding_models"))
 
 
 class ParameterLLMConfig(BaseModel):
@@ -124,10 +139,10 @@ def build_completion_service_config_definitions(
                     name=COMPLETION_MODEL_IN_DB,
                     type=ParameterType.STRING,
                     nullable=False,
-                    default="openai:gpt-4.1-mini",
+                    default=COMPLETION_MODELS[0].value,
                     ui_component=UIComponent.SELECT,
                     ui_component_properties=UIComponentProperties(
-                        options=OPTIONS_COMPLETION_MODELS,
+                        options=COMPLETION_MODELS,
                         label="Model Name",
                     ).model_dump(exclude_unset=True, exclude_none=True),
                 )
@@ -179,10 +194,10 @@ def build_function_calling_service_config_definitions(
                     name=COMPLETION_MODEL_IN_DB,
                     type=ParameterType.STRING,
                     nullable=False,
-                    default="openai:gpt-4.1-mini",
+                    default=FUNCTION_CALLING_MODELS[0].value,
                     ui_component=UIComponent.SELECT,
                     ui_component_properties=UIComponentProperties(
-                        options=OPTIONS_FUNCTION_CALLING_MODELS,
+                        options=FUNCTION_CALLING_MODELS,
                         label="Model Name",
                     ).model_dump(exclude_unset=True, exclude_none=True),
                 )
@@ -233,10 +248,10 @@ def build_embedding_service_config_definitions(
                     name=EMBEDDING_MODEL_IN_DB,
                     type=ParameterType.STRING,
                     nullable=False,
-                    default="openai:text-embedding-3-large",
+                    default=EMBEDDING_MODELS[0].value,
                     ui_component=UIComponent.SELECT,
                     ui_component_properties=UIComponentProperties(
-                        options=OPTIONS_EMBEDDING_MODELS,
+                        options=EMBEDDING_MODELS,
                         label="Embedding Model Name",
                     ).model_dump(exclude_unset=True, exclude_none=True),
                 )
@@ -277,16 +292,10 @@ def build_web_service_config_definitions(
                     name=COMPLETION_MODEL_IN_DB,
                     type=ParameterType.STRING,
                     nullable=False,
-                    default="openai:gpt-4.1-mini",
+                    default=WEB_SEARCH_MODELS[0].value,
                     ui_component=UIComponent.SELECT,
                     ui_component_properties=UIComponentProperties(
-                        options=[
-                            # OpenAI
-                            SelectOption(value="openai:gpt-4.1", label="GPT-4.1"),
-                            SelectOption(value="openai:gpt-4.1-mini", label="GPT-4.1 Mini"),
-                            SelectOption(value="openai:gpt-4o", label="GPT-4o"),
-                            SelectOption(value="openai:gpt-4o-mini", label="GPT-4o Mini"),
-                        ],
+                        options=WEB_SEARCH_MODELS,
                         label="Model Name",
                     ).model_dump(exclude_unset=True, exclude_none=True),
                 )
@@ -326,12 +335,10 @@ def build_ocr_service_config_definitions(
                     name=COMPLETION_MODEL_IN_DB,
                     type=ParameterType.STRING,
                     nullable=False,
-                    default="mistral:mistral-ocr-latest",
+                    default=OCR_MODELS[0].value,
                     ui_component=UIComponent.SELECT,
                     ui_component_properties=UIComponentProperties(
-                        options=[
-                            SelectOption(value="mistral:mistral-ocr-latest", label="Mistral OCR 2505"),
-                        ],
+                        options=OCR_MODELS,
                         label="Model Name",
                     ).model_dump(exclude_unset=True, exclude_none=True),
                 )

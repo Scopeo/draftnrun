@@ -8,7 +8,10 @@ from engine.agent.utils import extract_vars_in_text_template, parse_openai_messa
 from engine.llm_services.llm_service import CompletionService
 from engine.trace.trace_manager import TraceManager
 from engine.trace.serializer import serialize_to_json
-from ada_backend.database.seed.supported_models import FILE_SUPPORTED_MODELS, IMAGE_SUPPORTED_MODELS
+from ada_backend.database.seed.supported_models import (
+    get_models_by_capability,
+    ModelCapability,
+)
 
 
 class LLMCallAgent(Agent):
@@ -82,7 +85,7 @@ class LLMCallAgent(Agent):
 
         # Check for file support
         file_supported_references = [
-            model_reference for model_dict in FILE_SUPPORTED_MODELS for model_reference in model_dict.values()
+            model_reference for model_reference in get_models_by_capability(ModelCapability.FILE)
         ]
         if (
             len(files_content) > 0
@@ -93,7 +96,7 @@ class LLMCallAgent(Agent):
 
         # Check for image support
         image_supported_references = [
-            model_reference for model_dict in IMAGE_SUPPORTED_MODELS for model_reference in model_dict.values()
+            model_reference for model_reference in get_models_by_capability(ModelCapability.IMAGE)
         ]
         if (
             len(images_content) > 0
