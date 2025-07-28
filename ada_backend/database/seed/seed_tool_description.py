@@ -18,7 +18,7 @@ from engine.agent.web_search_tool_openai import DEFAULT_WEB_SEARCH_OPENAI_TOOL_D
 from engine.integrations.gmail_sender import GMAIL_SENDER_TOOL_DESCRIPTION
 from engine.agent.tools.python_code_runner import PYTHON_CODE_RUNNER_TOOL_DESCRIPTION
 from engine.agent.tools.terminal_command_runner import TERMINAL_COMMAND_RUNNER_TOOL_DESCRIPTION
-from engine.integrations.linkup_service import LINKUP_TOOL_DESCRIPTION
+from engine.agent.tools.linkup_tool import LINKUP_TOOL_DESCRIPTION
 
 
 TOOL_DESCRIPTION_UUIDS = {
@@ -36,7 +36,7 @@ TOOL_DESCRIPTION_UUIDS = {
     "gmail_sender_tool_description": UUID("c1d3aca1-5187-40c6-a350-e3b28b15c802"),
     "python_code_runner_tool_description": UUID("e2b11111-2222-3333-4444-555555555555"),
     "terminal_command_runner_tool_description": UUID("e2b11112-2222-3333-4444-555555555555"),
-    "linkup_tool_description": UUID("d2e3f456-789a-bcde-f012-3456789abcde"),
+    "linkup_search_tool_description": UUID("d2e3f456-789a-bcde-f012-3456789abcde"),
 }
 
 
@@ -91,8 +91,8 @@ def seed_tool_description(session: Session):
         id=TOOL_DESCRIPTION_UUIDS["gmail_sender_tool_description"],
         **GMAIL_SENDER_TOOL_DESCRIPTION.model_dump(),
     )
-    linkup_tool_description = db.ToolDescription(
-        id=TOOL_DESCRIPTION_UUIDS["linkup_tool_description"],
+    linkup_search_tool_description = db.ToolDescription(
+        id=TOOL_DESCRIPTION_UUIDS["linkup_search_tool_description"],
         **LINKUP_TOOL_DESCRIPTION.model_dump(),
     )
     upsert_tool_descriptions(
@@ -112,6 +112,6 @@ def seed_tool_description(session: Session):
             gmail_sender_tool_description,
             python_code_runner_tool_description,
             terminal_command_runner_tool_description,
-            linkup_tool_description,
+            linkup_search_tool_description,
         ],
     )
