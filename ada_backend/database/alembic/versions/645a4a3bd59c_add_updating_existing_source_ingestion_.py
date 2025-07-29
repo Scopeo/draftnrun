@@ -1,8 +1,8 @@
-"""Add_Updating_existing_source_ingestion_task_status
+"""add_updating_existing_source_ingestion_status
 
-Revision ID: f7e0c94411dd
-Revises: 80118747a315
-Create Date: 2025-07-17 17:48:51.968117
+Revision ID: 645a4a3bd59c
+Revises: 0d0db05d4dac
+Create Date: 2025-07-29 14:16:35.166906
 
 """
 
@@ -12,8 +12,8 @@ from alembic import op
 
 
 # revision identifiers, used by Alembic.
-revision: str = "f7e0c94411dd"
-down_revision: Union[str, None] = "80118747a315"
+revision: str = "645a4a3bd59c"
+down_revision: Union[str, None] = "0d0db05d4dac"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

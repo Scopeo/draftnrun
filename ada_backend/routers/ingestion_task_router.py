@@ -102,7 +102,7 @@ def update_ingestion_task_by_source(
         raise HTTPException(status_code=400, detail="User ID not found")
 
     try:
-        task_id = update_ingestion_task_by_source_id(session, organization_id, source_id, update_request)
+        task_id = update_ingestion_task_by_source_id(session, user.id, organization_id, source_id, update_request)
         return {
             "message": "Ingestion task updated successfully",
             "task_id": str(task_id),

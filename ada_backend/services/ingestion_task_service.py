@@ -19,7 +19,7 @@ from ada_backend.schemas.ingestion_task_schema import (
     UpdateIngestionTaskRequest,
 )
 from ada_backend.utils.redis_client import push_ingestion_task
-from ada_backend.segment_analytics import track_ingestion_task_created
+from ada_backend.segment_analytics import track_ingestion_task_created, track_ingestion_task_update
 from ada_backend.database import models as db
 
 LOGGER = logging.getLogger(__name__)
@@ -143,6 +143,7 @@ def upsert_ingestion_task_by_organization_id(
 
 def update_ingestion_task_by_source_id(
     session: Session,
+    user_id: UUID,
     organization_id: UUID,
     source_id: UUID,
     update_request: UpdateIngestionTaskRequest,
@@ -161,7 +162,7 @@ def update_ingestion_task_by_source_id(
             update_request.status,  # Use the status from the request
             source_id=source_id,  # Link to existing source
         )
-
+        track_ingestion_task_update(user_id, organization_id, task_id)
         LOGGER.info(f"Task created in database with ID {task_id}")
 
         # Push to Redis queue
