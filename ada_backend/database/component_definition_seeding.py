@@ -1,4 +1,5 @@
 import logging
+from uuid import UUID
 
 from sqlalchemy.orm import Session
 
@@ -164,4 +165,80 @@ def upsert_integrations(session: Session, integrations: list[db.Integration]) ->
         else:
             session.add(integration)
             LOGGER.info(f"Integration {integration.name} inserted.")
+    session.commit()
+
+
+def upsert_categories(
+    session: Session,
+    categories: list[db.Category],
+) -> None:
+    """
+    Upserts categories in the database.
+    If a category already exists and has same attributes, it will be skipped.
+    If it exists but has different attributes, it will be updated.
+    If it does not exist, it will be inserted.
+    """
+    for category in categories:
+        existing_category = (
+            session.query(db.Category)
+            .filter(
+                db.Category.id == category.id,
+            )
+            .first()
+        )
+        if existing_category:
+            if models_are_equal(existing_category, category):
+                LOGGER.info(f"Category {category.name} did not change, skipping.")
+            else:
+                update_model_fields(existing_category, category)
+                LOGGER.info(f"Category {category.name} updated.")
+        else:
+            session.add(category)
+            LOGGER.info(f"Category {category.name} inserted.")
+    session.commit()
+
+
+def upsert_component_categories(session: Session, component_id: str, category_ids: list[UUID]) -> None:
+    """
+    Upserts component categories in the database.
+    If a component category already exists and has same attributes, it will be skipped.
+    If it exists but has different attributes, it will be updated.
+    If it does not exist, it will be inserted.
+    """
+    existing_component_categories = (
+        session.query(db.ComponentCategory)
+        .filter(
+            db.ComponentCategory.component_id == component_id,
+        )
+        .all()
+    )
+    existing_categories_set = set(
+        existing_component_category.category_id for existing_component_category in existing_component_categories
+    )
+    category_ids_to_remove = existing_categories_set - set(category_ids)
+    for category_id in category_ids_to_remove:
+        component_category = (
+            session.query(db.ComponentCategory)
+            .filter(
+                db.ComponentCategory.component_id == component_id,
+                db.ComponentCategory.category_id == category_id,
+            )
+            .first()
+        )
+        session.delete(component_category)
+        category_name = session.query(db.Category).filter(db.Category.id == category_id).first().name
+        LOGGER.info(f"Component {component_id} removed from category {category_name}.")
+
+    new_category_ids = set(category_ids) - existing_categories_set
+    if not new_category_ids:
+        LOGGER.info(f"Component {component_id} already has all categories, skipping.")
+        return
+
+    for category_id in new_category_ids:
+        category = session.query(db.Category).filter(db.Category.id == category_id).first()
+        if category:
+            new_component_category = db.ComponentCategory(component_id=component_id, category=category)
+            session.add(new_component_category)
+            LOGGER.info(f"Component {component_id} added to category {category.name}.")
+
     session.commit()
