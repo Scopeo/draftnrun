@@ -65,13 +65,14 @@ def seed_llm_call_components(session: Session):
                 nullable=True,
                 ui_component=UIComponent.TEXTFIELD,
                 ui_component_properties=UIComponentProperties(
-                    label="File content",
-                    placeholder="{file_content}",
+                    label="File content key",
+                    placeholder="file_content",
                     description=(
-                        "Reference the output key from the previous component that contains the file content. "
-                        "Use the placeholder {file_content} to dynamically insert this content. "
-                        "The curly braces {} with the keyword are required for proper substitution."
+                        "Reference the output key from the previous component that contains the file content."
                     ),
+                    multiple=True,
+                    chips=True,
+                    freeSolo=True,
                 ).model_dump(exclude_unset=True, exclude_none=True),
             ),
             db.ComponentParameterDefinition(

@@ -69,17 +69,16 @@ class LLMCallAgent(Agent):
             if prompt_var not in input_replacements:
                 input_replacements[prompt_var] = ""
 
-        file_content_vars = extract_vars_in_text_template(self._file_content) if self._file_content else []
-        for file_var in file_content_vars:
-            for payload in input_payloads:
-                if (
-                    file_var in payload_json
-                    and isinstance(payload_json[file_var], dict)
-                    and "filename" in payload_json[file_var]
-                    and "file_data" in payload_json[file_var]
-                ):
-                    files_content.append({"type": "file", "file": payload_json[file_var]})
-                    continue
+        file_var = self._file_content if self._file_content else ""
+        for payload in input_payloads:
+            if (
+                file_var in payload_json
+                and isinstance(payload_json[file_var], dict)
+                and "filename" in payload_json[file_var]
+                and "file_data" in payload_json[file_var]
+            ):
+                files_content.append({"type": "file", "file": payload_json[file_var]})
+                continue
 
         text_content = self._prompt_template.format(**input_replacements)
 

@@ -141,6 +141,9 @@ class UIComponentProperties(BaseModel):
 
     # Select/Combobox properties
     options: Optional[List[SelectOption]] = None
+    multiple: Optional[bool] = None
+    chips: Optional[bool] = None
+    freeSolo: Optional[bool] = None
 
     # Slider/Range properties
     min: Optional[float] = None
