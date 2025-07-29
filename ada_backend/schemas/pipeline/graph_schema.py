@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, Dict, Any
 from uuid import UUID
 
 from pydantic import BaseModel
@@ -56,3 +56,4 @@ class GraphDeployResponse(BaseModel):
     draft_graph_runner_id: UUID
     prod_graph_runner_id: UUID
     previous_prod_graph_runner_id: Optional[UUID] = None
+    schedule_info: Optional[Dict[str, Any]] = None

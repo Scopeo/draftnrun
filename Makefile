@@ -7,6 +7,24 @@ help:
 	@echo "format: Format the code using Black."
 	@echo "quality-check: Check the code quality using flake8 and Black."
 	@echo "pre-push: Run tests and quality checks before pushing code."
+	@echo "run-celery-worker: Start the Celery worker for background tasks."
+	@echo "run-celery-beat: Start the Celery beat scheduler for cron jobs."
+	@echo "run-celery-worker-debug: Start the Celery worker in debug mode."
+	@echo "run-celery-beat-debug: Start the Celery beat scheduler in debug mode."
+	@echo ""
+	@echo "Database Commands:"
+	@echo "  db-upgrade: Apply database migrations"
+	@echo "  db-downgrade: Revert last migration"
+	@echo "  db-current: Check current migration"
+	@echo "  db-history: Show migration history"
+	@echo ""
+	@echo "Cron Database Commands (Alembic-like):"
+	@echo "  cron-db-upgrade: Apply all pending migrations"
+	@echo "  cron-db-downgrade: Revert to previous migration"
+	@echo "  cron-db-downgrade-to target=XXX: Revert to specific migration"
+	@echo "  cron-db-status: Show migration status"
+	@echo "  cron-db-current: Show current migration version"
+	@echo "  Note: Migration files are created manually for custom models"
 
 # -------------------------------------------
 # Development and Running
@@ -62,6 +80,29 @@ get-supabase-token:
 	@uv run python -m ada_backend.scripts.get_supabase_token --username $(username) --password $(password)
 
 # -------------------------------------------
+# Celery Commands
+# -------------------------------------------
+.PHONY: run-celery-worker
+run-celery-worker:
+	@echo "Starting Celery worker"
+	@uv run celery -A ada_backend.celery_app worker --loglevel=info
+
+.PHONY: run-celery-beat
+run-celery-beat:
+	@echo "Starting Celery beat scheduler"
+	@uv run celery -A ada_backend.celery_app beat --loglevel=info
+
+.PHONY: run-celery-worker-debug
+run-celery-worker-debug:
+	@echo "Starting Celery worker in debug mode"
+	@uv run celery -A ada_backend.celery_app worker --loglevel=debug
+
+.PHONY: run-celery-beat-debug
+run-celery-beat-debug:
+	@echo "Starting Celery beat scheduler in debug mode"
+	@uv run celery -A ada_backend.celery_app beat --loglevel=debug
+
+# -------------------------------------------
 # Database Migrations (Alembic)
 # -------------------------------------------
 ALEMBIC_CMD = uv run alembic -c ada_backend/database/alembic.ini
@@ -108,6 +149,34 @@ db-reset:
 	@docker exec -it ada_postgres psql -U ada_user -d postgres -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = 'ada_backend' AND pid <> pg_backend_pid();"
 	@docker exec -it ada_postgres psql -U ada_user -d postgres -c "DROP DATABASE IF EXISTS ada_backend;" && docker exec -it ada_postgres psql -U ada_user -d postgres -c "CREATE DATABASE ada_backend;"
 
+# -------------------------------------------
+# Django Scheduler Migrations for CRON Jobs
+# -------------------------------------------
+
+.PHONY: cron-db-upgrade
+cron-db-upgrade:
+	@echo "Applying Django Beat migrations"
+	@uv run python ada_backend/django_scheduler/manage.py migrate_cron upgrade
+
+.PHONY: cron-db-downgrade
+cron-db-downgrade:
+	@echo "Reverting last Django Beat migration"
+	@uv run python ada_backend/django_scheduler/manage.py migrate_cron downgrade
+
+.PHONY: cron-db-downgrade-to
+cron-db-downgrade-to:
+	@echo "Reverting Django Beat migration to $(target)"
+	@uv run python ada_backend/django_scheduler/manage.py migrate_cron downgrade --target=$(target)
+
+.PHONY: cron-db-status
+cron-db-status:
+	@echo "Showing Django Beat migration status"
+	@uv run python ada_backend/django_scheduler/manage.py migrate_cron status
+
+.PHONY: cron-db-current
+cron-db-current:
+	@echo "Current Django Beat migration version"
+	@uv run python ada_backend/django_scheduler/manage.py migrate_cron current
 
 # -------------------------------------------
 # Trace Database Migrations (Alembic)
