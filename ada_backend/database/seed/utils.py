@@ -73,6 +73,7 @@ COMPONENT_UUIDS: dict[str, UUID] = {
     "gmail_sender": UUID("af96bb40-c9ea-4851-a663-f0e64363fcb2"),
     "python_code_runner": UUID("e2b00000-0000-1111-2222-333333333333"),
     "terminal_command_runner": UUID("e2b10000-1111-2222-3333-444444444444"),
+    "pdf_generation": UUID("428baac0-0c5f-4374-b2de-8075218082b4"),
 }
 
 # Get models by capability and convert to select options
