@@ -4,6 +4,7 @@ from dataclasses import dataclass
 import uuid
 from datetime import datetime
 import re
+from enum import Enum
 
 import requests
 import httpx
@@ -17,6 +18,12 @@ LOGGER = logging.getLogger(__name__)
 
 DEFAULT_MAX_CHUNKS = 10
 MAX_BATCH_SIZE_FOR_CHUNK_UPLOAD = 50
+
+
+class FieldSchema(Enum):
+    # TODO: add other field types when we have metadata fields types
+    KEYWORD = "keyword"
+    DATETIME = "datetime"
 
 
 @dataclass
@@ -535,19 +542,21 @@ class QdrantService:
         payload_schema = results.get("result", {}).get("payload_schema", {})
         return index_name in payload_schema
 
-    def create_index_if_needed(self, collection_name: str, index_name: str) -> None:
+    def create_index_if_needed(self, collection_name: str, index_name: str, field_schema: FieldSchema) -> None:
         if not self.check_index_exists(collection_name, index_name):
             LOGGER.info(f"Creating index '{index_name}' for collection '{collection_name}'")
             endpoint = f"/collections/{collection_name}/index"
-            payload = {"field_name": index_name, "field_schema": "keyword"}
+            payload = {"field_name": index_name, "field_schema": field_schema.value}
             self._send_request(method="PUT", endpoint=endpoint, payload=payload)
 
-    async def create_index_if_needed_async(self, collection_name: str, index_name: str) -> None:
+    async def create_index_if_needed_async(
+        self, collection_name: str, index_name: str, field_schema: FieldSchema
+    ) -> None:
         """Async version of create_index_if_needed."""
         if not await self.check_index_exists_async(collection_name, index_name):
             LOGGER.info(f"Creating index '{index_name}' for collection '{collection_name}'")
             endpoint = f"/collections/{collection_name}/index"
-            payload = {"field_name": index_name, "field_schema": "keyword"}
+            payload = {"field_name": index_name, "field_schema": field_schema.value}
             await self._send_request_async(method="PUT", endpoint=endpoint, payload=payload)
 
     def add_chunks(
@@ -567,10 +576,18 @@ class QdrantService:
             str: The status of the operation.
         """
         schema = self._get_schema(collection_name)
-        self.create_index_if_needed(collection_name, index_name=schema.chunk_id_field)
+        self.create_index_if_needed(
+            collection_name, index_name=schema.chunk_id_field, field_schema=FieldSchema.KEYWORD
+        )
         if schema.metadata_fields_to_keep:
             for metadata_field in schema.metadata_fields_to_keep:
-                self.create_index_if_needed(collection_name, index_name=metadata_field)
+                self.create_index_if_needed(
+                    collection_name, index_name=metadata_field, field_schema=FieldSchema.KEYWORD
+                )
+        if schema.last_edited_ts_field:
+            self.create_index_if_needed(
+                collection_name, index_name=schema.last_edited_ts_field, field_schema=FieldSchema.DATETIME
+            )
         for i in range(0, len(list_chunks), self._max_chunks_to_add):
             current_chunk_batch = list_chunks[i : i + self._max_chunks_to_add]
             list_embeddings = self._build_vectors([chunk[schema.content_field] for chunk in current_chunk_batch])
@@ -614,10 +631,18 @@ class QdrantService:
         Add chunks to the Qdrant collection asynchronously.
         """
         schema = self._get_schema(collection_name)
-        await self.create_index_if_needed_async(collection_name, index_name=schema.chunk_id_field)
+        await self.create_index_if_needed_async(
+            collection_name, index_name=schema.chunk_id_field, field_schema=FieldSchema.KEYWORD
+        )
         if schema.metadata_fields_to_keep:
             for metadata_field in schema.metadata_fields_to_keep:
-                await self.create_index_if_needed_async(collection_name, index_name=metadata_field)
+                await self.create_index_if_needed_async(
+                    collection_name, index_name=metadata_field, field_schema=FieldSchema.KEYWORD
+                )
+        if schema.last_edited_ts_field:
+            await self.create_index_if_needed_async(
+                collection_name, index_name=schema.last_edited_ts_field, field_schema=FieldSchema.DATETIME
+            )
         for i in range(0, len(list_chunks), self._max_chunks_to_add):
             current_chunk_batch = list_chunks[i : i + self._max_chunks_to_add]
             list_embeddings = await self._build_vectors_async(
@@ -863,7 +888,7 @@ class QdrantService:
     def get_points(
         self,
         collection_name: str,
-        filter: Optional[str] = None,
+        filter: Optional[dict] = None,
     ) -> list[dict]:
 
         payload = {
@@ -885,7 +910,7 @@ class QdrantService:
     async def get_points_async(
         self,
         collection_name: str,
-        filter: Optional[str] = None,
+        filter: Optional[dict] = None,
     ) -> list[dict]:
 
         payload = {
@@ -998,7 +1023,7 @@ class QdrantService:
     def count_points(
         self,
         collection_name: str,
-        filter: Optional[str] = None,
+        filter: Optional[dict] = None,
     ) -> int:
 
         if not self.collection_exists(collection_name):
@@ -1013,7 +1038,7 @@ class QdrantService:
     async def count_points_async(
         self,
         collection_name: str,
-        filter: Optional[str] = None,
+        filter: Optional[dict] = None,
     ) -> int:
         if not await self.collection_exists_async(collection_name):
             raise ValueError(f"Collection {collection_name} does not exist.")
@@ -1144,16 +1169,13 @@ class QdrantService:
     def get_collection_data(
         self,
         collection_name: str,
-        query_filter_qdrant: Optional[str] = None,
+        query_filter_qdrant: Optional[dict] = None,
     ) -> pd.DataFrame:
 
         if not self.collection_exists(collection_name):
             raise ValueError(f"Collection {collection_name} does not exist.")
 
         schema = self._get_schema(collection_name)
-        if schema.metadata_fields_to_keep:
-            for metadata_field in schema.metadata_fields_to_keep:
-                self.create_index_if_needed(collection_name, index_name=metadata_field)
 
         all_points = self.get_points(
             collection_name=collection_name,
@@ -1187,16 +1209,13 @@ class QdrantService:
     async def get_collection_data_async(
         self,
         collection_name: str,
-        query_filter_qdrant: Optional[str] = None,
+        query_filter_qdrant: Optional[dict] = None,
     ) -> pd.DataFrame:
 
         if not await self.collection_exists_async(collection_name):
             raise ValueError(f"Collection {collection_name} does not exist.")
 
         schema = self._get_schema(collection_name)
-        if schema.metadata_fields_to_keep:
-            for metadata_field in schema.metadata_fields_to_keep:
-                await self.create_index_if_needed_async(collection_name, index_name=metadata_field)
 
         all_points = await self.get_points_async(
             collection_name=collection_name,
@@ -1231,7 +1250,7 @@ class QdrantService:
         self,
         df: pd.DataFrame,
         collection_name: str,
-        query_filter_qdrant: Optional[str] = None,
+        query_filter_qdrant: Optional[dict] = None,
     ) -> bool:
 
         old_df = self.get_collection_data(collection_name, query_filter_qdrant)
@@ -1295,7 +1314,7 @@ class QdrantService:
         self,
         df: pd.DataFrame,
         collection_name: str,
-        query_filter_qdrant: Optional[str] = None,
+        query_filter_qdrant: Optional[dict] = None,
     ) -> bool:
         old_df = await self.get_collection_data_async(collection_name, query_filter_qdrant)
         if old_df.empty:

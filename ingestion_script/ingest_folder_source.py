@@ -77,7 +77,7 @@ def sync_chunks_to_qdrant(
     db_service: DBService,
     qdrant_service: QdrantService,
     sql_query_filter: Optional[str] = None,
-    query_filter_qdrant: Optional[str] = None,
+    query_filter_qdrant: Optional[dict] = None,
 ) -> None:
     chunks_df = db_service.get_table_df(
         table_name,
