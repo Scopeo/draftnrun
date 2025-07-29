@@ -1,4 +1,7 @@
 import logging
+import uuid
+from datetime import datetime
+from pathlib import Path
 from typing import Any
 
 
@@ -55,7 +58,14 @@ class PDFGenerationTool(Agent):
                 is_final=True,
             )
 
-        filename = "generated_document.pdf"
+        # Create temp/pdf_generation_uuid folder structure
+        uuid_suffix = str(uuid.uuid4())
+        output_dir = Path("temp") / f"pdf_generation_{uuid_suffix}"
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        # Generate filename with timestamp
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = output_dir / f"document_{timestamp}.pdf"
 
         try:
             # Convert markdown to HTML
@@ -63,14 +73,14 @@ class PDFGenerationTool(Agent):
             html = markdown2.markdown(markdown_content)
 
             # Generate PDF from HTML
-            HTML(string=html).write_pdf(filename)
+            HTML(string=html).write_pdf(str(filename))
 
             success_msg = f"PDF generated successfully: {filename}"
             LOGGER.info(success_msg)
 
             return AgentPayload(
                 messages=[ChatMessage(role="assistant", content=success_msg)],
-                artifacts={"pdf_filename": filename},
+                artifacts={"pdf_filename": str(filename)},
                 is_final=True,
             )
 
