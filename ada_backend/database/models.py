@@ -55,7 +55,6 @@ class ParameterType(StrEnum):
     DATA_SOURCE = "data_source"
     SECRETS = "secrets"
     LLM_API_KEY = "llm_api_key"
-    ARRAY = "array"
 
 
 class OrgSecretType(StrEnum):
