@@ -30,7 +30,7 @@ def seed_llm_call_components(session: Session):
         is_agent=True,
         function_callable=True,
         release_stage=db.ReleaseStage.PUBLIC,
-        default_tool_description_id=TOOL_DESCRIPTION_UUIDS["default_tool_description"],
+        default_tool_description_id=TOOL_DESCRIPTION_UUIDS["default_llm_call_tool_description"],
     )
     upsert_components(
         session=session,
