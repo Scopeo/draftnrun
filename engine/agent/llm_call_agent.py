@@ -22,7 +22,7 @@ class LLMCallAgent(Agent):
         tool_description: ToolDescription,
         component_attributes: ComponentAttributes,
         prompt_template: str,
-        file_content: Optional[str] = None,
+        file_content_key: Optional[str] = None,
         output_format: Optional[dict[str] | None] = None,
     ):
         super().__init__(
@@ -32,14 +32,17 @@ class LLMCallAgent(Agent):
         )
         self._completion_service = completion_service
         self._prompt_template = prompt_template
-        self._file_content = file_content
+        self._file_content_key = file_content_key
         self.output_format = output_format
 
-    async def _run_without_trace(self, *input_payloads: AgentPayload | dict) -> AgentPayload:
+    async def _run_without_trace(self, *input_payloads: AgentPayload | dict, **kwargs) -> AgentPayload:
         prompt_vars = extract_vars_in_text_template(self._prompt_template)
         input_replacements = {}
         files_content = []
         images_content = []
+
+        if kwargs:
+            input_payloads = [kwargs]
 
         input_replacements["input"] = ""
         for payload in input_payloads:
@@ -69,16 +72,16 @@ class LLMCallAgent(Agent):
             if prompt_var not in input_replacements:
                 input_replacements[prompt_var] = ""
 
-        file_var = self._file_content if self._file_content else ""
-        for payload in input_payloads:
-            if (
-                file_var in payload_json
-                and isinstance(payload_json[file_var], dict)
-                and "filename" in payload_json[file_var]
-                and "file_data" in payload_json[file_var]
-            ):
-                files_content.append({"type": "file", "file": payload_json[file_var]})
-                continue
+        if self._file_content_key:
+            for payload in input_payloads:
+                if (
+                    self._file_content_key in payload_json
+                    and isinstance(payload_json[self._file_content_key], dict)
+                    and "filename" in payload_json[self._file_content_key]
+                    and "file_data" in payload_json[self._file_content_key]
+                ):
+                    files_content.append({"type": "file", "file": payload_json[self._file_content_key]})
+                    continue
 
         text_content = self._prompt_template.format(**input_replacements)
 

@@ -60,7 +60,7 @@ def seed_llm_call_components(session: Session):
             db.ComponentParameterDefinition(
                 id=UUID("a12eb38c-a10e-46f8-bc31-01d3551d954c"),
                 component_id=llm_call.id,
-                name="file_content",
+                name="file_content_key",
                 type=ParameterType.STRING,
                 nullable=True,
                 ui_component=UIComponent.TEXTFIELD,
@@ -70,9 +70,6 @@ def seed_llm_call_components(session: Session):
                     description=(
                         "Reference the output key from the previous component that contains the file content."
                     ),
-                    multiple=True,
-                    chips=True,
-                    freeSolo=True,
                 ).model_dump(exclude_unset=True, exclude_none=True),
             ),
             db.ComponentParameterDefinition(
