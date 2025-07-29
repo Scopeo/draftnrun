@@ -56,6 +56,8 @@ dependencies = [
     "prometheus-fastapi-instrumentator>=7.1.0",
     "pytest-asyncio>=0.23.8",
     "segment-analytics-python>=2.3.3",
+    "markdown2>=2.5.4",
+    "weasyprint>=66.0",
 ]
 [dependency-groups]
 dev = [
