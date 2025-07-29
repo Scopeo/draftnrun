@@ -144,24 +144,22 @@ def upsert_ingestion_task_by_organization_id(
 def update_ingestion_task_by_source_id(
     session: Session,
     organization_id: UUID,
+    source_id: UUID,
     update_request: UpdateIngestionTaskRequest,
 ) -> UUID:
     """Update ingestion task for a specific source with new files/folders."""
     try:
-        # Validate that the source exists and belongs to the organization
-        # Get source information directly from data_sources table
-        data_source = get_data_source_by_org_id(session, organization_id, update_request.source_id)
+        data_source = get_data_source_by_org_id(session, organization_id, source_id)
         if not data_source:
-            raise ValueError(f"Data source {update_request.source_id} not found for organization {organization_id}")
+            raise ValueError(f"Data source {source_id} not found for organization {organization_id}")
 
-        # Create a new ingestion task already linked to the source
         task_id = create_ingestion_task(
             session,
             organization_id,
             data_source.name,  # Use the source name from the data source
             update_request.source_type,  # Use the source type from the request
             update_request.status,  # Use the status from the request
-            source_id=update_request.source_id,  # Link to existing source
+            source_id=source_id,  # Link to existing source
         )
 
         LOGGER.info(f"Task created in database with ID {task_id}")
@@ -185,13 +183,15 @@ def update_ingestion_task_by_source_id(
             update_ingestion_task(
                 session,
                 organization_id,
-                update_request.source_id,
+                source_id,
                 data_source.name,
                 update_request.source_type,
                 db.TaskStatus.FAILED,
                 task_id,
             )
             LOGGER.info(f"Updated task {task_id} status to FAILED due to Redis push failure")
+            # Still return the task_id even though Redis failed
+            return task_id
         else:
             LOGGER.info(f"Task {task_id} successfully pushed to Redis queue")
 

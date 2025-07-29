@@ -68,9 +68,7 @@ def update_ingestion_task(
             .first()
         )
         if existing_task:
-            # Update existing task
-            if source_id is not None:  # Only update if source_id is not None
-
+            if source_id is not None:
                 existing_task.source_id = source_id
             if source_name:
                 existing_task.source_name = source_name

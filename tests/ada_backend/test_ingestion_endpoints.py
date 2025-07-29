@@ -15,6 +15,7 @@ from ingestion_script.utils import get_sanitize_names
 from engine.qdrant_service import QdrantService
 from engine.storage_service.local_service import SQLLocalService
 from settings import settings
+from ada_backend.schemas.ingestion_task_schema import UpdateIngestionTaskRequest, SourceAttributes
 
 BASE_URL = "http://localhost:8000"
 ORGANIZATION_ID = "37b7d67f-8f29-4fce-8085-19dea582f605"  # umbrella organization
@@ -54,7 +55,6 @@ def test_ingest_local_folder_source():
         "source_schema_name": None,
         "metadata_column_names": None,
         "timestamp_column_name": None,
-        "is_sync_enabled": False,
     }
     database_schema, database_table_name, qdrant_collection_name = get_sanitize_names(
         source_name=test_source_name,
@@ -173,7 +173,6 @@ def test_ingestion_duplicate_source_name_error():
         "source_schema_name": None,
         "metadata_column_names": None,
         "timestamp_column_name": None,
-        "is_sync_enabled": False,
     }
 
     # First, create a source with the test name
@@ -294,7 +293,6 @@ def test_ingestion_source_update_without_duplicate():
         "source_schema_name": None,
         "metadata_column_names": None,
         "timestamp_column_name": None,
-        "is_sync_enabled": False,
     }
 
     # Upload file for first ingestion
@@ -397,14 +395,13 @@ def test_ingestion_source_update_without_duplicate():
     update_source_attributes["list_of_files_from_local_folder"][0]["s3_path"] = sanitized_file_name_2
 
     # Now use the update_by_source endpoint to update the existing source
-    update_endpoint = f"{BASE_URL}/ingestion_task/{ORGANIZATION_ID}/update_by_source"
-    update_payload = {
-        "source_id": original_source_id,
-        "source_type": db.SourceType.LOCAL,
-        "status": db.TaskStatus.PENDING,
-        "source_attributes": update_source_attributes,
-    }
-    response = requests.patch(update_endpoint, headers=HEADERS_JWT, json=update_payload)
+    update_endpoint = f"{BASE_URL}/ingestion_task/{ORGANIZATION_ID}/sources/{original_source_id}/tasks"
+    update_payload = UpdateIngestionTaskRequest(
+        source_type=db.SourceType.LOCAL,
+        status=db.TaskStatus.PENDING,
+        source_attributes=SourceAttributes(**update_source_attributes),
+    )
+    response = requests.patch(update_endpoint, headers=HEADERS_JWT, json=update_payload.model_dump())
     assert response.status_code == 200
     update_result = response.json()
     task_id_2 = update_result["task_id"]

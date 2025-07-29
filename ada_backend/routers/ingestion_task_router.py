@@ -82,9 +82,10 @@ def update_organization_task(
         raise HTTPException(status_code=500, detail="Internal Server Error") from e
 
 
-@router.patch("/{organization_id}/update_by_source", status_code=status.HTTP_200_OK)
+@router.patch("/{organization_id}/sources/{source_id}/tasks", status_code=status.HTTP_200_OK)
 def update_ingestion_task_by_source(
     organization_id: UUID,
+    source_id: UUID,
     update_request: UpdateIngestionTaskRequest,
     user: Annotated[
         SupabaseUser, Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.WRITER.value))
@@ -101,11 +102,11 @@ def update_ingestion_task_by_source(
         raise HTTPException(status_code=400, detail="User ID not found")
 
     try:
-        task_id = update_ingestion_task_by_source_id(session, organization_id, update_request)
+        task_id = update_ingestion_task_by_source_id(session, organization_id, source_id, update_request)
         return {
             "message": "Ingestion task updated successfully",
             "task_id": str(task_id),
-            "source_id": str(update_request.source_id),
+            "source_id": str(source_id),
         }
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))

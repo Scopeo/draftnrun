@@ -140,12 +140,10 @@ def update_source_by_id(
         None
     """
     try:
-        # First get the source to find its organization_id
         existing_source = get_data_source_by_id(session, source_id)
         if not existing_source:
             raise ValueError(f"Source with ID {source_id} not found")
 
-        # Use the existing upsert_source function
         upsert_source(
             session,
             existing_source.organization_id,

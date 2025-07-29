@@ -60,7 +60,6 @@ class IngestionTaskQueue(IngestionTask):
 class UpdateIngestionTaskRequest(BaseModel):
     """Schema for updating ingestion tasks with new files/folders for existing sources"""
 
-    source_id: UUID
     source_type: db.SourceType
     status: db.TaskStatus
     source_attributes: SourceAttributes

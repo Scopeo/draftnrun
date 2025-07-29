@@ -14,7 +14,6 @@ def get_data_source_by_id(
     session_sql_alchemy: Session,
     source_id: UUID,
 ) -> Optional[db.DataSource]:
-    """Retrieve a source by its id"""
     return (
         session_sql_alchemy.query(db.DataSource)
         .filter(
@@ -29,7 +28,6 @@ def get_data_source_by_org_id(
     organization_id: UUID,
     source_id: UUID,
 ) -> Optional[db.DataSource]:
-    """Retrieve a source by its id and organization id"""
     return (
         session_sql_alchemy.query(db.DataSource)
         .filter(
@@ -45,7 +43,6 @@ def get_data_source_by_name_and_org(
     organization_id: UUID,
     source_name: str,
 ) -> Optional[db.DataSource]:
-    """Retrieve a source by its name and organization id"""
     if isinstance(organization_id, str):
         organization_id = UUID(organization_id)
     return (
@@ -62,9 +59,6 @@ def get_sources(
     session_sql_alchemy: Session,
     organization_id: UUID,
 ) -> list[db.DataSource]:
-    """"""
-    if isinstance(organization_id, str):
-        organization_id = UUID(organization_id)
     query = session_sql_alchemy.query(db.DataSource).filter(db.DataSource.organization_id == organization_id)
     sources = query.all()
     return sources
@@ -108,7 +102,6 @@ def upsert_source(
     qdrant_schema: Optional[dict] = None,
     embedding_model_reference: Optional[str] = None,
 ) -> None:
-    """"""
     existing_source = (
         session_sql_alchemy.query(db.DataSource)
         .filter(
@@ -149,20 +142,6 @@ def check_source_name_exists(
     organization_id: UUID,
     source_name: str,
 ) -> bool:
-    """
-    Check if a source with the given name already exists for the organization.
-
-    Args:
-        session_sql_alchemy (Session): SQLAlchemy session
-        organization_id (UUID): Organization ID
-        source_name (str): Source name to check
-
-    Returns:
-        bool: True if a source with the same name exists, False otherwise
-    """
-    if isinstance(organization_id, str):
-        organization_id = UUID(organization_id)
-
     existing_source = (
         session_sql_alchemy.query(db.DataSource)
         .filter(
