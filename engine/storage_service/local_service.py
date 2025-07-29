@@ -56,8 +56,8 @@ class SQLLocalService(DBService):
         inspector = sqlalchemy.inspect(self.engine)
         return inspector.has_table(table_name, schema=schema_name)
 
+    @staticmethod
     def add_processed_datetime_if_exists(
-        self,
         table: sqlalchemy.Table,
         update_values: Dict[str, Any],
     ) -> Dict[str, Any]:
