@@ -141,9 +141,6 @@ class UIComponentProperties(BaseModel):
 
     # Select/Combobox properties
     options: Optional[List[SelectOption]] = None
-    multiple: Optional[bool] = False
-    chips: Optional[bool] = None
-    freeSolo: Optional[bool] = None
 
     # Slider/Range properties
     min: Optional[float] = None
@@ -167,11 +164,7 @@ def cast_value(
         return float(unresolved_value)
     elif parameter_type == ParameterType.BOOLEAN:
         return unresolved_value.lower() in ("true", "1")
-    elif (
-        parameter_type == ParameterType.JSON
-        or parameter_type == ParameterType.DATA_SOURCE
-        or parameter_type == ParameterType.ARRAY
-    ):
+    elif parameter_type == ParameterType.JSON or parameter_type == ParameterType.DATA_SOURCE:
         if unresolved_value == "None" or unresolved_value is None:
             return None
         return json.loads(unresolved_value)
