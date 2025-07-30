@@ -16,7 +16,7 @@ from engine.storage_service.db_utils import (
 from engine.storage_service.local_service import SQLLocalService
 from ingestion_script.ingest_folder_source import sync_chunks_to_qdrant
 from ada_backend.database import models as db
-from ingestion_script.utils import upload_source
+from ingestion_script.utils import upload_source, build_combined_sql_filter
 
 LOGGER = logging.getLogger(__name__)
 
@@ -65,9 +65,14 @@ def get_db_source(
     url_column_name: Optional[str] = None,
     chunk_size: int = 1024,
     chunk_overlap: int = 0,
+    sql_query_filter: Optional[str] = None,
 ) -> pd.DataFrame:
     sql_local_service = SQLLocalService(engine_url=db_url)
-    df = sql_local_service.get_table_df(table_name=table_name, schema_name=source_schema_name)
+    df = sql_local_service.get_table_df(
+        table_name=table_name,
+        schema_name=source_schema_name,
+        sql_query_filter=sql_query_filter,
+    )
     if df.empty:
         raise ValueError(f"The table '{table_name}' is empty. No data to ingest.")
 
@@ -129,8 +134,21 @@ def upload_db_source(
     url_column_name: Optional[str] = None,
     chunk_size: int = 1024,
     chunk_overlap: int = 0,
-    replace_existing: bool = False,
+    update_existing: bool = False,
+    query_filter: Optional[str] = None,
+    timestamp_filter: Optional[str] = None,
 ):
+    combined_filter_sql = build_combined_sql_filter(
+        query_filter=query_filter,
+        timestamp_filter=timestamp_filter,
+        timestamp_column_name=timestamp_column_name,
+    )
+    combined_filter_qdrant = qdrant_service._build_combined_filter(
+        query_filter=query_filter,
+        timestamp_filter=timestamp_filter,
+        timestamp_column_name=timestamp_column_name,
+    )
+
     df = get_db_source(
         db_url=source_db_url,
         table_name=source_table_name,
@@ -145,6 +163,7 @@ def upload_db_source(
         url_column_name=url_column_name,
         chunk_size=chunk_size,
         chunk_overlap=chunk_overlap,
+        sql_query_filter=combined_filter_sql,
     )
 
     db_service.update_table(
@@ -153,8 +172,9 @@ def upload_db_source(
         table_definition=db_definition,
         id_column_name=chunk_id_column_name,
         timestamp_column_name=timestamp_column_name,
-        append_mode=not replace_existing,
+        append_mode=update_existing,
         schema_name=storage_schema_name,
+        sql_query_filter=combined_filter_sql,
     )
     LOGGER.info(f"Updated table '{storage_table_name}' in schema '{storage_schema_name}' with {len(df)} rows.")
     sync_chunks_to_qdrant(
@@ -163,6 +183,8 @@ def upload_db_source(
         collection_name=qdrant_collection_name,
         db_service=db_service,
         qdrant_service=qdrant_service,
+        sql_query_filter=combined_filter_sql,
+        query_filter_qdrant=combined_filter_qdrant,
     )
 
 
@@ -180,7 +202,9 @@ def ingestion_database(
     url_column_name: Optional[str] = None,
     chunk_size: int = 1024,
     chunk_overlap: int = 0,
-    replace_existing: bool = False,
+    update_existing: bool = False,
+    query_filter: Optional[str] = None,
+    timestamp_filter: Optional[str] = None,
 ) -> None:
     chunk_id_column_name = "chunk_id"
     chunk_column_name = "content"
@@ -209,7 +233,7 @@ def ingestion_database(
         task_id,
         source_type,
         qdrant_schema,
-        replace_existing=replace_existing,
+        update_existing=update_existing,
         ingestion_function=partial(
             upload_db_source,
             db_definition=db_definition,
@@ -226,5 +250,7 @@ def ingestion_database(
             url_column_name=url_column_name,
             chunk_size=chunk_size,
             chunk_overlap=chunk_overlap,
+            query_filter=query_filter,
+            timestamp_filter=timestamp_filter,
         ),
     )

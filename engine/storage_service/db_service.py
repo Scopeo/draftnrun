@@ -45,7 +45,12 @@ class DBService(ABC):
         pass
 
     @abstractmethod
-    def get_table_df(self, table_name: str, schema_name: Optional[str] = None) -> pd.DataFrame:
+    def get_table_df(
+        self,
+        table_name: str,
+        schema_name: Optional[str] = None,
+        sql_query_filter: Optional[str] = None,
+    ) -> pd.DataFrame:
         pass
 
     @abstractmethod
@@ -85,6 +90,7 @@ class DBService(ABC):
         schema_name: Optional[str] = None,
         timestamp_column_name: Optional[str] = None,
         append_mode: bool = True,
+        sql_query_filter: Optional[str] = None,
     ) -> None:
         """
         Update a table on Database with a new DataFrame.
@@ -103,17 +109,19 @@ class DBService(ABC):
                 schema_name=schema_name,
             )
             self.insert_df_to_table(df=new_df, table_name=table_name, schema_name=schema_name)
-        else:  # Update existing table
+        else:
             query = (
-                f"SELECT {id_column_name}, {timestamp_column_name} FROM {target_table_name};"
+                f"SELECT {id_column_name}, {timestamp_column_name} FROM {target_table_name}"
                 if timestamp_column_name
-                else f"SELECT {id_column_name} FROM {target_table_name};"
+                else f"SELECT {id_column_name} FROM {target_table_name}"
             )
-            old_df = self._fetch_sql_query_as_dataframe(query)
+            final_query = f"{query} WHERE {sql_query_filter};" if sql_query_filter else f"{query};"
+            old_df = self._fetch_sql_query_as_dataframe(final_query)
             old_df = convert_to_correct_pandas_type(old_df, id_column_name, table_definition)
 
             common_df = new_df.merge(old_df, on=id_column_name, how="inner")
-            if timestamp_column_name:
+
+            if timestamp_column_name and not sql_query_filter:
                 ids_to_update = set(
                     common_df[common_df[timestamp_column_name + "_x"] > common_df[timestamp_column_name + "_y"]][
                         id_column_name
@@ -121,6 +129,7 @@ class DBService(ABC):
                 )
             else:
                 ids_to_update = set(common_df[id_column_name])
+
             LOGGER.info(f"Found {len(ids_to_update)} rows to update in the table")
             updated_data = new_df[new_df[id_column_name].isin(ids_to_update)].copy()
             for col in updated_data.select_dtypes(include=["datetime64[ns]"]):
@@ -140,9 +149,12 @@ class DBService(ABC):
             self.insert_df_to_table(new_data, table_name, schema_name=schema_name)
 
             if not append_mode:
-                ids_to_delete = set(old_df[id_column_name]) - set(new_df[id_column_name])
-                LOGGER.info(f"Found {len(ids_to_delete)} rows to delete in the table")
-                if len(ids_to_delete) > 0:
+                filtered_existing_ids = set(old_df[id_column_name]) if len(old_df) > 0 else set()
+                new_ids_in_scope = set(new_df[id_column_name])
+                ids_to_delete = filtered_existing_ids - new_ids_in_scope
+
+                LOGGER.info(f"Found {len(ids_to_delete)} rows to delete in the filtered scope")
+                if ids_to_delete:
                     self.delete_rows_from_table(
                         table_name=table_name,
                         ids=list(ids_to_delete),

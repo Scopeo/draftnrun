@@ -15,7 +15,7 @@ from ada_backend.database import models as db
 LOGGER = logging.getLogger(__name__)
 DEFAULT_CHUNK_SIZE = 1024
 DEFAULT_CHUNK_OVERLAP = 0
-DEFAULT_REPLACE_EXISTING = False
+DEFAULT_UPDATE_EXISTING = False
 
 
 def check_missing_params(
@@ -52,9 +52,9 @@ def ingestion_main(
     chunk_overlap = source_attributes.get("chunk_overlap")
     if chunk_overlap is None:
         chunk_overlap = DEFAULT_CHUNK_OVERLAP
-    replace_existing = source_attributes.get("replace_existing")
-    if replace_existing is None:
-        replace_existing = DEFAULT_REPLACE_EXISTING
+    update_existing = source_attributes.get("update_existing")
+    if update_existing is None:
+        update_existing = DEFAULT_UPDATE_EXISTING
 
     failed_ingestion_task = IngestionTaskUpdate(
         id=task_id,
@@ -154,7 +154,9 @@ def ingestion_main(
                 url_column_name=source_attributes.get("url_column_name"),
                 chunk_size=chunk_size,
                 chunk_overlap=chunk_overlap,
-                replace_existing=replace_existing,
+                update_existing=update_existing,
+                query_filter=source_attributes.get("query_filter"),
+                timestamp_filter=source_attributes.get("timestamp_filter"),
             )
         except Exception as e:
             LOGGER.error(f"Error during database ingestion: {str(e)}")
