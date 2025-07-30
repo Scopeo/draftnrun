@@ -58,9 +58,8 @@ class PDFGenerationTool(Agent):
                 is_final=True,
             )
 
-        # Create temp/pdf_generation_uuid folder structure
         uuid_suffix = str(uuid.uuid4())
-        output_dir = Path("temp") / f"pdf_generation_{uuid_suffix}"
+        output_dir = Path("temp") / f"{uuid_suffix}"
         output_dir.mkdir(parents=True, exist_ok=True)
 
         # Generate filename with timestamp
@@ -68,11 +67,7 @@ class PDFGenerationTool(Agent):
         filename = output_dir / f"document_{timestamp}.pdf"
 
         try:
-            # Convert markdown to HTML
-            print(markdown_content)
             html = markdown2.markdown(markdown_content)
-
-            # Generate PDF from HTML
             HTML(string=html).write_pdf(str(filename))
 
             success_msg = f"PDF generated successfully: {filename}"

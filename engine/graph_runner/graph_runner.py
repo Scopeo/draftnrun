@@ -2,6 +2,7 @@ import logging
 from enum import StrEnum
 from dataclasses import dataclass
 from typing import Optional
+from pathlib import Path
 
 import networkx as nx
 from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttributes
@@ -60,6 +61,32 @@ def _merge_agent_outputs(agent_outputs: list[AgentPayload]) -> AgentPayload:
     for i, output in enumerate(agent_outputs, start=1):
         message += f"Result from agent {i}:\n{output.last_message.content}\n\n"
     return AgentPayload(messages=[ChatMessage(role="assistant", content=message)])
+
+
+def delete_pdf_file_if_exists(final_output: AgentPayload | dict) -> None:
+    # Convert to dict if it's an AgentPayload object
+    if not isinstance(final_output, dict):
+        final_output = final_output.__dict__
+    artifacts = final_output.get("artifacts", {})
+    if artifacts:
+        pdf_filename = artifacts.get("pdf_filename", None)
+        if pdf_filename:
+            pdf_path = Path(pdf_filename)
+            if pdf_path.exists() and pdf_path.is_file():
+                # Delete the PDF file
+                pdf_path.unlink()
+                LOGGER.info(f"Deleted PDF file: {pdf_path}")
+
+                # Check if the parent directory is empty and remove it if so
+                parent_dir = pdf_path.parent
+                if parent_dir.exists() and parent_dir.is_dir():
+                    try:
+                        # Check if directory is empty (no files or subdirectories)
+                        if not any(parent_dir.iterdir()):
+                            parent_dir.rmdir()
+                            LOGGER.info(f"Deleted empty directory: {parent_dir}")
+                    except OSError as e:
+                        LOGGER.warning(f"Could not remove directory {parent_dir}: {e}")
 
 
 class GraphRunner:
@@ -159,6 +186,7 @@ class GraphRunner:
 
         # Collect outputs from leaf nodes
         final_output = self._collect_outputs()
+        delete_pdf_file_if_exists(final_output)
         return final_output
 
     def _add_virtual_input_node(self):
