@@ -88,7 +88,6 @@ ALL_SUPPORTED_MODELS = [
         "provider": "google",
         "capabilities": [
             ModelCapability.COMPLETION,
-            ModelCapability.FILE,
             ModelCapability.IMAGE,
             ModelCapability.CONSTRAINED_OUTPUT,
             ModelCapability.FUNCTION_CALLING,
@@ -100,7 +99,6 @@ ALL_SUPPORTED_MODELS = [
         "provider": "google",
         "capabilities": [
             ModelCapability.COMPLETION,
-            ModelCapability.FILE,
             ModelCapability.IMAGE,
             ModelCapability.CONSTRAINED_OUTPUT,
             ModelCapability.FUNCTION_CALLING,
@@ -112,7 +110,6 @@ ALL_SUPPORTED_MODELS = [
         "provider": "google",
         "capabilities": [
             ModelCapability.COMPLETION,
-            ModelCapability.FILE,
             ModelCapability.IMAGE,
             ModelCapability.CONSTRAINED_OUTPUT,
             ModelCapability.FUNCTION_CALLING,
@@ -124,7 +121,6 @@ ALL_SUPPORTED_MODELS = [
         "provider": "google",
         "capabilities": [
             ModelCapability.COMPLETION,
-            ModelCapability.FILE,
             ModelCapability.IMAGE,
             ModelCapability.CONSTRAINED_OUTPUT,
             ModelCapability.FUNCTION_CALLING,
