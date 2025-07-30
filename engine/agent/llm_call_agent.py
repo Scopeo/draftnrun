@@ -162,7 +162,9 @@ class LLMCallAgent(Agent):
         span = get_current_span()
         span.set_attributes(
             {
-                SpanAttributes.INPUT_VALUE: serialize_to_json([{"role": "user", "content": content}]),
+                SpanAttributes.INPUT_VALUE: serialize_to_json(
+                    [{"role": "user", "content": content}], shorten_string=True
+                ),
                 SpanAttributes.LLM_MODEL_NAME: self._completion_service._model_name,
             }
         )

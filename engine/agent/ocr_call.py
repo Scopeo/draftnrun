@@ -38,7 +38,7 @@ class OCRCall(Agent):
             span = get_current_span()
             span.set_attributes(
                 {
-                    SpanAttributes.INPUT_VALUE: serialize_to_json(payload_json),
+                    SpanAttributes.INPUT_VALUE: serialize_to_json(payload_json, shorten_string=True),
                     SpanAttributes.LLM_MODEL_NAME: self._ocr_service._model_name,
                 }
             )
