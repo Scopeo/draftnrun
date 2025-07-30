@@ -1,4 +1,5 @@
 import logging
+import asyncio
 from uuid import UUID
 from typing import Optional
 
@@ -79,19 +80,22 @@ def sync_chunks_to_qdrant(
     sql_query_filter: Optional[str] = None,
     query_filter_qdrant: Optional[dict] = None,
 ) -> None:
-    chunks_df = db_service.get_table_df(
-        table_name,
-        schema_name=table_schema,
-        sql_query_filter=sql_query_filter,
-    )
-    LOGGER.info(f"Syncing chunks to Qdrant collection {collection_name} with {len(chunks_df)} rows")
-    if not qdrant_service.collection_exists(collection_name):
-        qdrant_service.create_collection(collection_name)
-    qdrant_service.sync_df_with_collection(
-        df=chunks_df,
-        collection_name=collection_name,
-        query_filter_qdrant=query_filter_qdrant,
-    )
+    async def _sync_chunks():
+        chunks_df = db_service.get_table_df(
+            table_name,
+            schema_name=table_schema,
+            sql_query_filter=sql_query_filter,
+        )
+        LOGGER.info(f"Syncing chunks to Qdrant collection {collection_name} with {len(chunks_df)} rows")
+        if not await qdrant_service.collection_exists_async(collection_name):
+            await qdrant_service.create_collection_async(collection_name)
+        await qdrant_service.sync_df_with_collection_async(
+            df=chunks_df,
+            collection_name=collection_name,
+            query_filter_qdrant=query_filter_qdrant,
+        )
+    
+    return asyncio.run(_sync_chunks())
 
 
 def ingest_google_drive_source(
