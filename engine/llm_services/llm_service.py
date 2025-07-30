@@ -309,7 +309,7 @@ class CompletionService(LLMService):
                 # Convert messages format if needed
                 if isinstance(messages, str):
                     messages = [{"role": "user", "content": messages}]
-                response = client.chat.parse(
+                response = await client.chat.parse_async(
                     model=self._model_name,
                     messages=messages,
                     temperature=self._temperature,
@@ -676,7 +676,7 @@ class OCRService(LLMService):
                 mistral_compatible_messages = make_mistral_ocr_compatible(messages)
                 if mistral_compatible_messages is None:
                     raise ValueError("No OCR compatible messages found")
-                ocr_response = client.ocr.process(
+                ocr_response = await client.ocr.process_async(
                     model="mistral-ocr-latest",
                     document=mistral_compatible_messages,
                     include_image_base64=True,
