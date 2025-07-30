@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from ada_backend.database import models as db
 from ada_backend.database.component_definition_seeding import upsert_tool_descriptions
 from ada_backend.database.utils import DEFAULT_TOOL_DESCRIPTION
+from engine.agent.llm_call_agent import DEFAULT_LLM_CALL_TOOL_DESCRIPTION
 from engine.agent.tools.tavily_search_tool import TAVILY_TOOL_DESCRIPTION
 from engine.agent.tools.api_call_tool import API_CALL_TOOL_DESCRIPTION
 from engine.agent.document_enhanced_llm_call import DEFAULT_DOCUMENT_ENHANCED_LLM_CALL_TOOL_DESCRIPTION
@@ -35,6 +36,7 @@ TOOL_DESCRIPTION_UUIDS = {
     "gmail_sender_tool_description": UUID("c1d3aca1-5187-40c6-a350-e3b28b15c802"),
     "python_code_runner_tool_description": UUID("e2b11111-2222-3333-4444-555555555555"),
     "terminal_command_runner_tool_description": UUID("e2b11112-2222-3333-4444-555555555555"),
+    "default_llm_call_tool_description": UUID("b91d418d-a67f-40b9-9266-b01ca202747d"),
 }
 
 
@@ -89,6 +91,10 @@ def seed_tool_description(session: Session):
         id=TOOL_DESCRIPTION_UUIDS["gmail_sender_tool_description"],
         **GMAIL_SENDER_TOOL_DESCRIPTION.model_dump(),
     )
+    default_llm_call_tool_description = db.ToolDescription(
+        id=TOOL_DESCRIPTION_UUIDS["default_llm_call_tool_description"],
+        **DEFAULT_LLM_CALL_TOOL_DESCRIPTION.model_dump(),
+    )
     upsert_tool_descriptions(
         session=session,
         tool_descriptions=[
@@ -106,5 +112,6 @@ def seed_tool_description(session: Session):
             gmail_sender_tool_description,
             python_code_runner_tool_description,
             terminal_command_runner_tool_description,
+            default_llm_call_tool_description,
         ],
     )

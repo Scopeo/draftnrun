@@ -13,6 +13,45 @@ from ada_backend.database.seed.supported_models import (
     ModelCapability,
 )
 
+DEFAULT_LLM_CALL_TOOL_DESCRIPTION = ToolDescription(
+    name="LLM Call",
+    description="Templated LLM Call",
+    tool_properties={
+        "messages": {
+            "type": "object",
+            "description": "A single user message containing fixed text and a file.",
+            "properties": {
+                "role": {"type": "string", "const": "user"},
+                "content": {
+                    "type": "array",
+                    "description": "First item is fixed text, second is a file.",
+                    "minItems": 2,
+                    "maxItems": 2,
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "type": {"type": "string", "enum": ["text", "file"]},
+                            "text": {"type": "string"},
+                            "file": {
+                                "type": "object",
+                                "properties": {
+                                    "file_data": {
+                                        "type": "string",
+                                        "description": "Base64-encoded file content with MIME prefix.",
+                                    }
+                                },
+                            },
+                        },
+                        "required": ["type"],
+                    },
+                },
+            },
+            "required": ["role", "content"],
+        },
+    },
+    required_tool_properties=["messages"],
+)
+
 
 class LLMCallAgent(Agent):
     def __init__(
@@ -22,7 +61,7 @@ class LLMCallAgent(Agent):
         tool_description: ToolDescription,
         component_attributes: ComponentAttributes,
         prompt_template: str,
-        file_content: Optional[str] = None,
+        file_content_key: Optional[str] = None,
         output_format: Optional[dict[str] | None] = None,
     ):
         super().__init__(
@@ -32,14 +71,17 @@ class LLMCallAgent(Agent):
         )
         self._completion_service = completion_service
         self._prompt_template = prompt_template
-        self._file_content = file_content
+        self._file_content_key = file_content_key
         self.output_format = output_format
 
-    async def _run_without_trace(self, *input_payloads: AgentPayload | dict) -> AgentPayload:
+    async def _run_without_trace(self, *input_payloads: AgentPayload | dict, **kwargs) -> AgentPayload:
         prompt_vars = extract_vars_in_text_template(self._prompt_template)
         input_replacements = {}
         files_content = []
         images_content = []
+
+        if kwargs:
+            input_payloads = [kwargs]
 
         input_replacements["input"] = ""
         for payload in input_payloads:
@@ -69,16 +111,15 @@ class LLMCallAgent(Agent):
             if prompt_var not in input_replacements:
                 input_replacements[prompt_var] = ""
 
-        file_content_vars = extract_vars_in_text_template(self._file_content) if self._file_content else []
-        for file_var in file_content_vars:
+        if self._file_content_key:
             for payload in input_payloads:
                 if (
-                    file_var in payload_json
-                    and isinstance(payload_json[file_var], dict)
-                    and "filename" in payload_json[file_var]
-                    and "file_data" in payload_json[file_var]
+                    self._file_content_key in payload_json
+                    and isinstance(payload_json[self._file_content_key], dict)
+                    and "filename" in payload_json[self._file_content_key]
+                    and "file_data" in payload_json[self._file_content_key]
                 ):
-                    files_content.append({"type": "file", "file": payload_json[file_var]})
+                    files_content.append({"type": "file", "file": payload_json[self._file_content_key]})
                     continue
 
         text_content = self._prompt_template.format(**input_replacements)

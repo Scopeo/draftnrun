@@ -120,7 +120,7 @@ def llm_call_with_file_content():
         tool_description,
         component_attributes,
         prompt_template,
-        file_content=file_content,
+        file_content_key=file_content,
     )
 
 
