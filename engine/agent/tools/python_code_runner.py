@@ -120,7 +120,7 @@ class PythonCodeRunner(Agent):
         shared_sandbox = kwargs.get("shared_sandbox")
 
         execution_result_dict = await self.execute_python_code(python_code=python_code, shared_sandbox=shared_sandbox)
-        content = serialize_to_json(execution_result_dict, shorten_string=True)
+        content = serialize_to_json(execution_result_dict)
 
         images = self._extract_images_from_results(execution_result_dict)
         artifacts = {"execution_result": execution_result_dict}
