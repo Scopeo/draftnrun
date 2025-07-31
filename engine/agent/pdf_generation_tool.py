@@ -27,6 +27,32 @@ DEFAULT_PDF_GENERATION_TOOL_DESCRIPTION = ToolDescription(
 )
 
 
+def delete_pdf_file_if_exists(final_output: AgentPayload | dict) -> None:
+    # Convert to dict if it's an AgentPayload object
+    if not isinstance(final_output, dict):
+        final_output = final_output.__dict__
+    artifacts = final_output.get("artifacts", {})
+    if artifacts:
+        pdf_filename = artifacts.get("pdf_filename", None)
+        if pdf_filename:
+            pdf_path = Path(pdf_filename)
+            if pdf_path.exists() and pdf_path.is_file():
+                # Delete the PDF file
+                pdf_path.unlink()
+                LOGGER.info(f"Deleted PDF file: {pdf_path}")
+
+                # Check if the parent directory is empty and remove it if so
+                parent_dir = pdf_path.parent
+                if parent_dir.exists() and parent_dir.is_dir():
+                    try:
+                        # Check if directory is empty (no files or subdirectories)
+                        if not any(parent_dir.iterdir()):
+                            parent_dir.rmdir()
+                            LOGGER.info(f"Deleted empty directory: {parent_dir}")
+                    except OSError as e:
+                        LOGGER.warning(f"Could not remove directory {parent_dir}: {e}")
+
+
 class PDFGenerationTool(Agent):
     TRACE_SPAN_KIND = OpenInferenceSpanKindValues.TOOL.value
 
@@ -66,25 +92,14 @@ class PDFGenerationTool(Agent):
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         filename = output_dir / f"document_{timestamp}.pdf"
 
-        try:
-            html = markdown2.markdown(markdown_content)
-            HTML(string=html).write_pdf(str(filename))
+        html = markdown2.markdown(markdown_content)
+        HTML(string=html).write_pdf(str(filename))
 
-            success_msg = f"PDF generated successfully: {filename}"
-            LOGGER.info(success_msg)
+        success_msg = f"PDF generated successfully: {filename}"
+        LOGGER.info(success_msg)
 
-            return AgentPayload(
-                messages=[ChatMessage(role="assistant", content=success_msg)],
-                artifacts={"pdf_filename": str(filename)},
-                is_final=True,
-            )
-
-        except Exception as e:
-            error_msg = f"Failed to generate PDF: {str(e)}"
-            LOGGER.error(error_msg)
-
-            return AgentPayload(
-                messages=[ChatMessage(role="assistant", content=error_msg)],
-                error=error_msg,
-                is_final=True,
-            )
+        return AgentPayload(
+            messages=[ChatMessage(role="assistant", content=success_msg)],
+            artifacts={"pdf_filename": str(filename)},
+            is_final=True,
+        )

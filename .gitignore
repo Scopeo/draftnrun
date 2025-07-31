@@ -56,3 +56,6 @@ custom_models.json
 
 # oauth
 ada-ingestion-system/.env
+
+# pdfs
+temp
