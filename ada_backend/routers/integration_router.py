@@ -17,7 +17,7 @@ from ada_backend.services.integration_service import add_integration_secrets_ser
 from ada_backend.repositories.integration_repository import insert_secret_integration
 from ada_backend.database.seed.integrations.seed_integration import INTEGRATION_UUIDS
 from engine.integrations.utils import exchange_slack_oauth_code, get_slack_oauth_access_token
-from settings import get_settings
+from settings import settings
 
 router = APIRouter(prefix="/project", tags=["Integrations"])
 
@@ -86,8 +86,6 @@ async def slack_oauth_authorize(
     Raises:
         HTTPException: If Slack OAuth is not configured
     """
-    settings = get_settings()
-
     if not settings.SLACK_CLIENT_ID:
         raise HTTPException(status_code=500, detail="Slack OAuth not configured")
 
@@ -134,8 +132,6 @@ async def slack_oauth_callback(
     Raises:
         HTTPException: If state validation fails, OAuth not configured, or callback fails
     """
-    settings = get_settings()
-
     if state != str(project_id):
         raise HTTPException(status_code=400, detail="Invalid state parameter")
 
@@ -199,8 +195,6 @@ async def slack_oauth_refresh(
     Raises:
         HTTPException: If Slack OAuth is not configured or token refresh fails
     """
-    settings = get_settings()
-
     if not settings.SLACK_CLIENT_ID or not settings.SLACK_CLIENT_SECRET:
         raise HTTPException(status_code=500, detail="Slack OAuth not configured")
 
