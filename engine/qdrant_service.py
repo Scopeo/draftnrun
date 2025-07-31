@@ -377,7 +377,8 @@ class QdrantService:
             if not date:
                 penalized_score = default_penalty_rate
             else:
-                chunk_date = datetime.strptime(date, "%Y-%m-%d")
+                # TODO: Handle all cases and make general function
+                chunk_date = datetime.strptime(date, "%Y-%m-%d %H:%M:%S")
                 age = max(0, (start_of_year - chunk_date).days / 365)
                 penalty = min(age * chunk_age_penalty_rate, 5 * chunk_age_penalty_rate)
                 penalized_score = score - penalty
