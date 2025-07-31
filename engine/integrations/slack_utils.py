@@ -22,9 +22,9 @@ def handle_slack_api_errors(func):
     return wrapper
 
 
-def get_slack_client(bot_token: str) -> WebClient:
-    """Create a Slack WebClient with the provided bot token"""
-    return WebClient(token=bot_token)
+def get_slack_client(access_token: str) -> WebClient:
+    """Create a Slack WebClient with the provided OAuth access token"""
+    return WebClient(token=access_token)
 
 
 @handle_slack_api_errors
