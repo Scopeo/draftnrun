@@ -19,6 +19,48 @@ LOGGER = logging.getLogger(__name__)
 DEFAULT_MAX_CHUNKS = 10
 MAX_BATCH_SIZE_FOR_CHUNK_UPLOAD = 50
 
+# Common datetime formats to try when parsing
+DATETIME_FORMATS = [
+    "%Y-%m-%d %H:%M:%S",
+    "%Y-%m-%d %H:%M:%S.%f",
+    "%Y-%m-%dT%H:%M:%S",
+    "%Y-%m-%dT%H:%M:%S.%f",
+    "%Y-%m-%dT%H:%M:%SZ",
+    "%Y-%m-%dT%H:%M:%S.%fZ",
+    "%Y-%m-%d",
+    "%d/%m/%Y",
+    "%m/%d/%Y",
+    "%Y/%m/%d",
+    "%d-%m-%Y",
+    "%m-%d-%Y",
+    "%Y-%m-%d %H:%M",
+    "%d/%m/%Y %H:%M:%S",
+    "%m/%d/%Y %H:%M:%S",
+    "%Y/%m/%d %H:%M:%S",
+    "%d-%m-%Y %H:%M:%S",
+    "%m-%d-%Y %H:%M:%S",
+]
+
+
+def parse_datetime(date_string: str) -> Optional[datetime]:
+
+    if not date_string:
+        return None
+
+    if isinstance(date_string, datetime):
+        return date_string
+
+    # Try each format until one works
+    for fmt in DATETIME_FORMATS:
+        try:
+            return datetime.strptime(date_string, fmt)
+        except ValueError:
+            continue
+
+    # If none of the formats work, log a warning and return None
+    LOGGER.warning(f"Could not parse datetime string: {date_string}")
+    return None
+
 
 class FieldSchema(Enum):
     # TODO: add other field types when we have metadata fields types
@@ -377,11 +419,14 @@ class QdrantService:
             if not date:
                 penalized_score = default_penalty_rate
             else:
-                # TODO: Handle all cases and make general function
-                chunk_date = datetime.strptime(date, "%Y-%m-%d %H:%M:%S")
-                age = max(0, (start_of_year - chunk_date).days / 365)
-                penalty = min(age * chunk_age_penalty_rate, 5 * chunk_age_penalty_rate)
-                penalized_score = score - penalty
+                chunk_date = parse_datetime(date)
+                if chunk_date is None:
+                    # If we can't parse the date, apply default penalty
+                    penalized_score = default_penalty_rate
+                else:
+                    age = max(0, (start_of_year - chunk_date).days / 365)
+                    penalty = min(age * chunk_age_penalty_rate, 5 * chunk_age_penalty_rate)
+                    penalized_score = score - penalty
             ordered_chunks.append((vector_id, penalized_score, payload))
         ordered_chunks.sort(key=lambda x: x[1], reverse=True)
         sorted_chunks = ordered_chunks[:max_retrieved_chunks_after_penalty]
