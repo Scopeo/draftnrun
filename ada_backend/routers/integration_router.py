@@ -15,6 +15,7 @@ from ada_backend.routers.auth_router import (
 from ada_backend.schemas.integration_schema import CreateProjectIntegrationSchema, IntegrationSecretResponse
 from ada_backend.services.integration_service import add_integration_secrets_service
 from ada_backend.repositories.integration_repository import insert_secret_integration
+from ada_backend.database.seed.integrations.seed_integration import INTEGRATION_UUIDS
 from engine.integrations.utils import exchange_slack_oauth_code, get_slack_oauth_access_token
 from settings import get_settings
 
@@ -149,8 +150,6 @@ async def slack_oauth_callback(
             client_secret=settings.SLACK_CLIENT_SECRET,
             redirect_uri=redirect_uri,
         )
-
-        from ada_backend.database.seed.integrations.seed_integration import INTEGRATION_UUIDS
 
         slack_integration_id = INTEGRATION_UUIDS["slack_sender"]
 
