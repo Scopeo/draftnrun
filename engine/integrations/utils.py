@@ -94,12 +94,31 @@ def get_oauth_access_token(
 
 
 def get_slack_client(access_token: str) -> WebClient:
-    """Create a Slack WebClient with the given access token."""
+    """Create a Slack WebClient with the given access token.
+
+    Args:
+        access_token: OAuth access token for Slack API
+
+    Returns:
+        WebClient: Configured Slack WebClient instance
+    """
     return WebClient(token=access_token)
 
 
 def refresh_slack_oauth_token(refresh_token: str, client_id: str, client_secret: str) -> tuple[str, datetime]:
-    """Refresh a Slack OAuth access token using the refresh token."""
+    """Refresh a Slack OAuth access token using the refresh token.
+
+    Args:
+        refresh_token: Current refresh token
+        client_id: Slack OAuth client ID
+        client_secret: Slack OAuth client secret
+
+    Returns:
+        tuple: (new_access_token, creation_timestamp)
+
+    Raises:
+        ValueError: If token refresh fails or Slack API returns an error
+    """
     url = "https://slack.com/api/oauth.v2.access"
     payload = {
         "client_id": client_id,
@@ -125,10 +144,22 @@ def get_slack_oauth_access_token(
     slack_client_id: str,
     slack_client_secret: str,
 ) -> str:
-    """Get a valid Slack OAuth access token, refreshing if necessary."""
+    """Get a valid Slack OAuth access token, refreshing if necessary.
+
+    Args:
+        session: Database session
+        integration_secret_id: UUID of the integration secret
+        slack_client_id: Slack OAuth client ID
+        slack_client_secret: Slack OAuth client secret
+
+    Returns:
+        str: Valid access token
+
+    Raises:
+        ValueError: If integration secret not found or token refresh fails
+    """
     integration_secret = get_integration_secret(session, integration_secret_id)
     if integration_secret:
-        # If the token is expired or needs to be refreshed
         if needs_new_token(integration_secret):
             refresh_token = integration_secret.get_refresh_token()
             new_access_token, creation_timestamp = refresh_slack_oauth_token(
@@ -149,12 +180,22 @@ def get_slack_oauth_access_token(
 
 
 def exchange_slack_oauth_code(
-    code: str, 
-    client_id: str, 
-    client_secret: str,
-    redirect_uri: str
+    code: str, client_id: str, client_secret: str, redirect_uri: str
 ) -> tuple[str, str, int, datetime]:
-    """Exchange Slack OAuth authorization code for access and refresh tokens."""
+    """Exchange Slack OAuth authorization code for access and refresh tokens.
+
+    Args:
+        code: Authorization code from Slack OAuth callback
+        client_id: Slack OAuth client ID
+        client_secret: Slack OAuth client secret
+        redirect_uri: Redirect URI used in OAuth flow
+
+    Returns:
+        tuple: (access_token, refresh_token, expires_in, creation_timestamp)
+
+    Raises:
+        ValueError: If code exchange fails or Slack API returns an error
+    """
     url = "https://slack.com/api/oauth.v2.access"
     payload = {
         "client_id": client_id,
@@ -171,7 +212,7 @@ def exchange_slack_oauth_code(
                 tokens.get("access_token"),
                 tokens.get("refresh_token"),
                 tokens.get("expires_in", 0),
-                creation_timestamp
+                creation_timestamp,
             )
         else:
             raise ValueError(f"Slack API error: {tokens.get('error')}")

@@ -15,7 +15,7 @@ from ada_backend.routers.auth_router import (
 from ada_backend.schemas.integration_schema import CreateProjectIntegrationSchema, IntegrationSecretResponse
 from ada_backend.services.integration_service import add_integration_secrets_service
 from ada_backend.repositories.integration_repository import insert_secret_integration
-from engine.integrations.utils import exchange_slack_oauth_code
+from engine.integrations.utils import exchange_slack_oauth_code, get_slack_oauth_access_token
 from settings import get_settings
 
 router = APIRouter(prefix="/project", tags=["Integrations"])
@@ -35,6 +35,20 @@ async def add_integration_secrets(
     ],
     sqlalchemy_db_session: Session = Depends(get_db),
 ) -> IntegrationSecretResponse:
+    """Add integration secrets for a project.
+
+    Args:
+        integration_id: The UUID of the integration
+        create_project_integration: Integration configuration data
+        user: Authenticated user with writer access
+        sqlalchemy_db_session: Database session
+
+    Returns:
+        IntegrationSecretResponse: Created integration secret details
+
+    Raises:
+        HTTPException: If user ID not found or internal server error
+    """
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
 
@@ -48,7 +62,6 @@ async def add_integration_secrets(
         raise HTTPException(status_code=500, detail="Internal Server Error") from e
 
 
-# OAuth endpoints for Slack integration
 @router.get(
     "/oauth/slack/authorize",
     summary="Initiate Slack OAuth flow",
@@ -56,17 +69,27 @@ async def add_integration_secrets(
 )
 async def slack_oauth_authorize(
     project_id: UUID,
-    # user: Annotated[
-    #     SupabaseUser, Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.WRITER.value))
-    # ],
+    user: Annotated[
+        SupabaseUser, Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.WRITER.value))
+    ],
 ) -> RedirectResponse:
-    """Redirect user to Slack OAuth authorization page."""
+    """Redirect user to Slack OAuth authorization page.
+
+    Args:
+        project_id: The UUID of the project
+        user: Authenticated user with writer access
+
+    Returns:
+        RedirectResponse: Redirect to Slack OAuth authorization URL
+
+    Raises:
+        HTTPException: If Slack OAuth is not configured
+    """
     settings = get_settings()
 
     if not settings.SLACK_CLIENT_ID:
         raise HTTPException(status_code=500, detail="Slack OAuth not configured")
 
-    # Build the OAuth URL
     base_url = "https://slack.com/oauth/v2/authorize"
     redirect_uri = f"{settings.ADA_URL}/project/{project_id}/oauth/slack/callback"
 
@@ -74,7 +97,7 @@ async def slack_oauth_authorize(
         "client_id": settings.SLACK_CLIENT_ID,
         "scope": "chat:write,channels:read,groups:read,im:read,mpim:read",
         "redirect_uri": redirect_uri,
-        "state": str(project_id),  # Pass project_id as state for security
+        "state": str(project_id),
     }
 
     oauth_url = f"{base_url}?{urlencode(params)}"
@@ -90,15 +113,28 @@ async def slack_oauth_callback(
     project_id: UUID,
     code: str,
     state: str,
-    # user: Annotated[
-    #     SupabaseUser, Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.WRITER.value))
-    # ],
+    user: Annotated[
+        SupabaseUser, Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.WRITER.value))
+    ],
     sqlalchemy_db_session: Session = Depends(get_db),
 ) -> dict:
-    """Handle the OAuth callback from Slack and store the tokens."""
+    """Handle the OAuth callback from Slack and store the tokens.
+
+    Args:
+        project_id: The UUID of the project
+        code: Authorization code from Slack
+        state: State parameter for security validation
+        user: Authenticated user with writer access
+        sqlalchemy_db_session: Database session
+
+    Returns:
+        dict: Success response with integration secret details
+
+    Raises:
+        HTTPException: If state validation fails, OAuth not configured, or callback fails
+    """
     settings = get_settings()
 
-    # Verify state parameter matches project_id for security
     if state != str(project_id):
         raise HTTPException(status_code=400, detail="Invalid state parameter")
 
@@ -106,7 +142,6 @@ async def slack_oauth_callback(
         raise HTTPException(status_code=500, detail="Slack OAuth not configured")
 
     try:
-        # Exchange authorization code for tokens
         redirect_uri = f"{settings.ADA_URL}/project/{project_id}/oauth/slack/callback"
         access_token, refresh_token, expires_in, token_last_updated = exchange_slack_oauth_code(
             code=code,
@@ -115,13 +150,10 @@ async def slack_oauth_callback(
             redirect_uri=redirect_uri,
         )
 
-        # Get the Slack integration ID (you'll need to create this in your database)
-        # For now, we'll use a placeholder - you should get this from your integrations table
         from ada_backend.database.seed.integrations.seed_integration import INTEGRATION_UUIDS
 
         slack_integration_id = INTEGRATION_UUIDS["slack_sender"]
 
-        # Store the tokens in the database
         integration_secret = insert_secret_integration(
             session=sqlalchemy_db_session,
             integration_id=slack_integration_id,
@@ -149,21 +181,31 @@ async def slack_oauth_callback(
 async def slack_oauth_refresh(
     project_id: UUID,
     secret_integration_id: UUID,
-    # user: Annotated[
-    #     SupabaseUser, Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.WRITER.value))
-    # ],
+    user: Annotated[
+        SupabaseUser, Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.WRITER.value))
+    ],
     sqlalchemy_db_session: Session = Depends(get_db),
 ) -> dict:
-    """Manually refresh a Slack OAuth token."""
+    """Manually refresh a Slack OAuth token.
+
+    Args:
+        project_id: The UUID of the project
+        secret_integration_id: The UUID of the integration secret to refresh
+        user: Authenticated user with writer access
+        sqlalchemy_db_session: Database session
+
+    Returns:
+        dict: Success response with refreshed token details
+
+    Raises:
+        HTTPException: If Slack OAuth is not configured or token refresh fails
+    """
     settings = get_settings()
 
     if not settings.SLACK_CLIENT_ID or not settings.SLACK_CLIENT_SECRET:
         raise HTTPException(status_code=500, detail="Slack OAuth not configured")
 
     try:
-        from engine.integrations.utils import get_slack_oauth_access_token
-
-        # This will automatically refresh the token if needed
         new_access_token = get_slack_oauth_access_token(
             session=sqlalchemy_db_session,
             integration_secret_id=secret_integration_id,
