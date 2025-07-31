@@ -134,9 +134,9 @@ async def run_agent(
             input_data,
             is_root_execution=True,
         )
-        delete_pdf_file_if_exists(agent_output)
     except Exception as e:
         raise ValueError(f"Error running agent: {str(e)}") from e
+    delete_pdf_file_if_exists(agent_output)
     return ChatResponse(
         message=agent_output.last_message.content, artifacts=agent_output.artifacts, error=agent_output.error
     )
