@@ -405,13 +405,14 @@ How to get them:
 
 Make sure the redirect URI matches what you configure in Google and your app. Do not commit these secrets to version control.
 
-#### Slack OAuth Setup
+#### Slack Bot Token Setup
 
-To enable Slack messaging with OAuth, set these in your credentials.env:
+To enable Slack messaging with OAuth integration, set these in your credentials.env:
 
 ```env
-SLACK_CLIENT_ID=your-slack-client-id
-SLACK_CLIENT_SECRET=your-slack-client-secret
+SLACK_CLIENT_ID=your-slack-client-id-here
+SLACK_CLIENT_SECRET=your-slack-client-secret-here
+SLACK_SIGNING_SECRET=your-slack-signing-secret-here
 ```
 
 How to set up Slack OAuth:
@@ -419,15 +420,23 @@ How to set up Slack OAuth:
 - Go to [Slack API Apps page](https://api.slack.com/apps).
 - Create a new app or use an existing one.
 - Go to "OAuth & Permissions" and configure:
-  - **Redirect URLs**: Add your app's OAuth redirect URL (e.g., `http://localhost:3000/oauth/slack/callback`)
-  - **Scopes**: Add these bot token scopes:
+  - **Redirect URLs**: Add your callback URL: `http://localhost:8000/project/{project_id}/oauth/slack/callback`
+  - **Scopes**: Add these OAuth scopes:
     - `chat:write` - Send messages to channels
     - `channels:read` - Read channel information
-    - `channels:history` - Read message history
+    - `groups:read` - Read private channels
+    - `im:read` - Read direct messages
+    - `mpim:read` - Read group direct messages
 - Copy the **Client ID** and **Client Secret** from the "Basic Information" page.
-- Install the app to your workspace.
+- Copy the **Signing Secret** from the "Basic Information" page.
 
-**Note**: The old `SLACK_BOT_TOKEN` approach is deprecated. Use OAuth for proper integration with the database.
+**OAuth Flow**: Users will be redirected to Slack for authorization, and tokens will be automatically managed with refresh capabilities.
+
+**Legacy Bot Token** (deprecated): If you need to use the old bot token approach temporarily:
+
+```env
+SLACK_BOT_TOKEN=xoxb-your-slack-bot-token-here
+```
 
 ### Set up the database for backend and ingestion
 

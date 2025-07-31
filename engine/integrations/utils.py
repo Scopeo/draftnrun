@@ -98,25 +98,8 @@ def get_slack_client(access_token: str) -> WebClient:
     return WebClient(token=access_token)
 
 
-def get_slack_user_info(access_token: str) -> dict:
-    """Get Slack user information using the access token."""
-    url = "https://slack.com/api/auth.test"
-    headers = {"Authorization": f"Bearer {access_token}"}
-
-    resp = requests.get(url, headers=headers)
-
-    if resp.ok:
-        result = resp.json()
-        if result.get("ok"):
-            return result
-        else:
-            raise ValueError(f"Slack API error: {result.get('error')}")
-    else:
-        raise ValueError(f"Failed to fetch Slack user info: {resp.status_code} {resp.text}")
-
-
-def refresh_slack_token(refresh_token: str, client_id: str, client_secret: str) -> tuple[str, datetime]:
-    """Refresh Slack OAuth token."""
+def refresh_slack_oauth_token(refresh_token: str, client_id: str, client_secret: str) -> tuple[str, datetime]:
+    """Refresh a Slack OAuth access token using the refresh token."""
     url = "https://slack.com/api/oauth.v2.access"
     payload = {
         "client_id": client_id,
@@ -124,16 +107,14 @@ def refresh_slack_token(refresh_token: str, client_id: str, client_secret: str) 
         "refresh_token": refresh_token,
         "grant_type": "refresh_token",
     }
-
     resp = requests.post(url, data=payload)
     if resp.ok:
         creation_timestamp = datetime.now(timezone.utc)
         tokens = resp.json()
-
         if tokens.get("ok"):
             return tokens.get("access_token"), creation_timestamp
         else:
-            raise ValueError(f"Slack token refresh failed: {tokens.get('error')}")
+            raise ValueError(f"Slack API error: {tokens.get('error')}")
     else:
         raise ValueError(f"Failed to refresh Slack token: {resp.status_code} {resp.text}")
 
@@ -144,13 +125,13 @@ def get_slack_oauth_access_token(
     slack_client_id: str,
     slack_client_secret: str,
 ) -> str:
-    """Get Slack OAuth access token, refreshing if necessary."""
+    """Get a valid Slack OAuth access token, refreshing if necessary."""
     integration_secret = get_integration_secret(session, integration_secret_id)
     if integration_secret:
         # If the token is expired or needs to be refreshed
         if needs_new_token(integration_secret):
             refresh_token = integration_secret.get_refresh_token()
-            new_access_token, creation_timestamp = refresh_slack_token(
+            new_access_token, creation_timestamp = refresh_slack_oauth_token(
                 refresh_token, slack_client_id, slack_client_secret
             )
             update_integration_secret(
@@ -167,27 +148,32 @@ def get_slack_oauth_access_token(
         raise ValueError(f"Integration secret with ID {integration_secret_id} not found.")
 
 
-def exchange_slack_code_for_tokens(
-    authorization_code: str,
-    client_id: str,
+def exchange_slack_oauth_code(
+    code: str, 
+    client_id: str, 
     client_secret: str,
-    redirect_uri: str,
-) -> dict:
-    """Exchange Slack authorization code for access and refresh tokens."""
+    redirect_uri: str
+) -> tuple[str, str, int, datetime]:
+    """Exchange Slack OAuth authorization code for access and refresh tokens."""
     url = "https://slack.com/api/oauth.v2.access"
     payload = {
         "client_id": client_id,
         "client_secret": client_secret,
-        "code": authorization_code,
+        "code": code,
         "redirect_uri": redirect_uri,
     }
-
     resp = requests.post(url, data=payload)
     if resp.ok:
-        result = resp.json()
-        if result.get("ok"):
-            return result
+        creation_timestamp = datetime.now(timezone.utc)
+        tokens = resp.json()
+        if tokens.get("ok"):
+            return (
+                tokens.get("access_token"),
+                tokens.get("refresh_token"),
+                tokens.get("expires_in", 0),
+                creation_timestamp
+            )
         else:
-            raise ValueError(f"Slack OAuth exchange failed: {result.get('error')}")
+            raise ValueError(f"Slack API error: {tokens.get('error')}")
     else:
-        raise ValueError(f"Failed to exchange Slack code: {resp.status_code} {resp.text}")
+        raise ValueError(f"Failed to exchange Slack OAuth code: {resp.status_code} {resp.text}")
