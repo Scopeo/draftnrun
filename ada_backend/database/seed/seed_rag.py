@@ -372,11 +372,16 @@ def seed_rag_components(session: Session):
         type=ParameterType.STRING,
         nullable=True,
         default="date",
-        ui_component=UIComponent.TEXTAREA,
+        ui_component=UIComponent.TEXTFIELD,
         ui_component_properties=UIComponentProperties(
             label="Date field used for penalty",
-            description="The metadata field that contains the date of the chunk. "
-            "This date is used to calculate the chunk's age for applying penalties.",
+            description=(
+                "The metadata field(s) that contain the date information for each chunk. "
+                "This date is used to calculate the chunk's age when applying penalties. "
+                "You can specify multiple date fields names as a comma-separated list "
+                "(e.g., created_date,updated_date). "
+                "The system will check each field in order and use the first valid (non-null) date it finds."
+            ),
             placeholder="Enter the date field here",
         ).model_dump(exclude_unset=True, exclude_none=True),
         is_advanced=True,

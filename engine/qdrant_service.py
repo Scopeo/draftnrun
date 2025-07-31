@@ -27,6 +27,10 @@ DATETIME_FORMATS = [
     "%Y-%m-%dT%H:%M:%S.%f",
     "%Y-%m-%dT%H:%M:%SZ",
     "%Y-%m-%dT%H:%M:%S.%fZ",
+    "%Y-%m-%dT%H:%M:%S%z",
+    "%Y-%m-%dT%H:%M:%S.%f%z",
+    "%Y-%m-%d %H:%M:%S%z",
+    "%Y-%m-%d %H:%M:%S.%f%z",
     "%Y-%m-%d",
     "%d/%m/%Y",
     "%m/%d/%Y",
@@ -406,7 +410,7 @@ class QdrantService:
     def apply_date_penalty_to_chunks(
         self,
         vector_results: list[tuple[str, float, dict]],
-        metadata_date_key: str,
+        metadata_date_key: list[str],
         default_penalty_rate: float,
         chunk_age_penalty_rate: float,
         max_retrieved_chunks_after_penalty: int,
@@ -415,7 +419,12 @@ class QdrantService:
         current_year = datetime.today().year
         start_of_year = datetime(current_year, 1, 1)
         for vector_id, score, payload in vector_results:
-            date = payload.get(metadata_date_key)
+            # Try each date key in order until we find a valid one
+            date = None
+            for date_key in metadata_date_key:
+                date = payload.get(date_key)
+                if date is not None and date:  # Check if not None and not empty
+                    break
             if not date:
                 penalized_score = default_penalty_rate
             else:
@@ -442,7 +451,7 @@ class QdrantService:
         enable_date_penalty_for_chunks: bool = False,
         chunk_age_penalty_rate: Optional[float] = None,
         default_penalty_rate: Optional[float] = None,
-        metadata_date_key: Optional[str] = None,
+        metadata_date_key: Optional[list[str]] = None,
         max_retrieved_chunks_after_penalty: Optional[int] = None,
         **search_params,
     ) -> list[SourceChunk]:
@@ -514,7 +523,7 @@ class QdrantService:
         enable_date_penalty_for_chunks: bool = False,
         chunk_age_penalty_rate: Optional[float] = None,
         default_penalty_rate: Optional[float] = None,
-        metadata_date_key: Optional[str] = None,
+        metadata_date_key: Optional[list[str]] = None,
         max_retrieved_chunks_after_penalty: Optional[int] = None,
         **search_params,
     ) -> list[SourceChunk]:
