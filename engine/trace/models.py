@@ -77,7 +77,7 @@ class OrganizationUsage(Base):
 
 
 class SpanMessage(Base):
-    __tablename__ = "messages"
+    __tablename__ = "span_messages"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     span_id = Column(String, nullable=False)

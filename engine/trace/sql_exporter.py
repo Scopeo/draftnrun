@@ -69,7 +69,7 @@ def parse_str_or_dict(input_str: str) -> str | dict | list:
         return input_str
 
 
-def get_messages_from_span(attributes: dict) -> list[dict]:
+def get_messages_from_span(attributes: dict) -> tuple[list[dict], list[dict]]:
     try:
         input = []
         output = []
