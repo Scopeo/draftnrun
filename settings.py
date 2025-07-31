@@ -129,6 +129,7 @@ class BaseConfig(BaseSettings):
     SLACK_BOT_TOKEN: Optional[str] = None
     SLACK_CLIENT_ID: Optional[str] = None
     SLACK_CLIENT_SECRET: Optional[str] = None
+    SLACK_SIGNING_SECRET: Optional[str] = None
 
     # Observability stack endpoints
     TEMPO_ENDPOINT: str = "http://localhost:4318/v1/traces"

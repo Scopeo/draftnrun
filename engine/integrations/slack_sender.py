@@ -8,10 +8,9 @@ from opentelemetry.trace import get_current_span
 from ada_backend.database.setup_db import get_db
 from engine.agent.agent import AgentPayload, ChatMessage, ComponentAttributes, ToolDescription
 from engine.agent.agent import Agent
-from engine.integrations.utils import get_slack_oauth_access_token, get_slack_client
+from engine.integrations.utils import get_slack_client
 from engine.integrations.slack_utils import send_slack_message
 from engine.trace.trace_manager import TraceManager
-from settings import settings
 
 LOGGER = logging.getLogger(__name__)
 
@@ -46,8 +45,6 @@ class SlackSender(Agent):
         secret_integration_id: str,
         default_channel: Optional[str] = None,
         tool_description: ToolDescription = SLACK_SENDER_TOOL_DESCRIPTION,
-        slack_client_id: Optional[str] = None,
-        slack_client_secret: Optional[str] = None,
     ):
         super().__init__(
             trace_manager,
@@ -55,17 +52,21 @@ class SlackSender(Agent):
             component_attributes=component_attributes,
         )
 
-        if not slack_client_id:
-            slack_client_id = settings.SLACK_CLIENT_ID
-        if not slack_client_secret:
-            slack_client_secret = settings.SLACK_CLIENT_SECRET
-
-        # Get OAuth access token from database
+        # Get OAuth access token from database (with automatic refresh)
         session = next(get_db())
-        access_token = get_slack_oauth_access_token(
-            session, UUID(secret_integration_id), slack_client_id, slack_client_secret
-        )
+        from settings import get_settings
+        from engine.integrations.utils import get_slack_oauth_access_token
 
+        settings = get_settings()
+        if not settings.SLACK_CLIENT_ID or not settings.SLACK_CLIENT_SECRET:
+            raise ValueError("Slack OAuth credentials not configured")
+
+        access_token = get_slack_oauth_access_token(
+            session=session,
+            integration_secret_id=UUID(secret_integration_id),
+            slack_client_id=settings.SLACK_CLIENT_ID,
+            slack_client_secret=settings.SLACK_CLIENT_SECRET,
+        )
         self.client = get_slack_client(access_token)
         self.default_channel = default_channel
 

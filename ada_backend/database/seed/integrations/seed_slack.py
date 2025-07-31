@@ -22,7 +22,7 @@ def seed_slack_components(session: Session):
     slack_sender_component = Component(
         id=COMPONENT_UUIDS["slack_sender"],
         name="Slack Sender",
-        description="A component to send messages to Slack channels using OAuth tokens.",
+        description="A component to send messages to Slack channels using OAuth integration.",
         is_agent=False,
         integration_id=INTEGRATION_UUIDS["slack_sender"],  # Use proper integration
         function_callable=True,
@@ -42,8 +42,8 @@ def seed_slack_components(session: Session):
             default=None,
             ui_component=UIComponent.TEXTFIELD,
             ui_component_properties=UIComponentProperties(
-                label="Slack Integration",
-                description="Select the Slack integration to use for sending messages.",
+                label="Slack OAuth Integration",
+                description="Select the Slack OAuth integration to use for sending messages.",
                 type="text",
             ).model_dump(exclude_unset=True, exclude_none=True),
         ),
