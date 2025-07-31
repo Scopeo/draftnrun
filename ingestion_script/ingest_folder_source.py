@@ -67,8 +67,10 @@ def load_llms_services():
         vision_completion_service = get_first_available_multimodal_custom_llm()
         fallback_vision_llm_service = vision_completion_service
         if vision_completion_service is None:
-            raise ValueError("No multimodal custom LLM found. Please set up a custom model for ingestion"
-                             "or check that your providers for custom llm are unique.")
+            raise ValueError(
+                "No multimodal custom LLM found. Please set up a custom model for ingestion"
+                "or check that your providers for custom llm are unique."
+            )
     else:
         vision_completion_service = VisionService(
             provider="google",
@@ -85,15 +87,17 @@ def load_llms_services():
     if settings.INGESTION_VIA_CUSTOM_MODEL:
         embedding_service = get_first_available_embeddings_custom_llm()
         if embedding_service is None:
-            raise ValueError("No custom embedding model found. Please set up a custom model for ingestion"
-                             "or check that your providers for custom llm are unique.")
+            raise ValueError(
+                "No custom embedding model found. Please set up a custom model for ingestion"
+                "or check that your providers for custom llm are unique."
+            )
     else:
         embedding_service = EmbeddingService(
             provider="openai",
             model_name="text-embedding-3-large",
             trace_manager=TraceManager(project_name="ingestion"),
         )
-    
+
     return vision_completion_service, fallback_vision_llm_service, embedding_service
 
 

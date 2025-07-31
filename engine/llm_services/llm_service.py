@@ -685,7 +685,7 @@ class VisionService(LLMService):
                     )
                     return chat_response.choices[0].message.parsed
                 case _:
-                    chat_response = client.chat.completions.create(
+                    chat_response = await client.chat.completions.create(
                         messages=messages,
                         model=self._model_name,
                         temperature=self._temperature,
