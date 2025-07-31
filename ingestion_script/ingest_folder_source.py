@@ -94,7 +94,7 @@ def sync_chunks_to_qdrant(
             collection_name=collection_name,
             query_filter_qdrant=query_filter_qdrant,
         )
-    
+
     return asyncio.run(_sync_chunks())
 
 
