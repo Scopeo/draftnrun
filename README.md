@@ -405,23 +405,29 @@ How to get them:
 
 Make sure the redirect URI matches what you configure in Google and your app. Do not commit these secrets to version control.
 
-#### Slack Bot Setup
+#### Slack OAuth Setup
 
-To enable Slack messaging, set this in your credentials.env:
+To enable Slack messaging with OAuth, set these in your credentials.env:
 
 ```env
-SLACK_BOT_TOKEN=xoxb-your-slack-bot-token
+SLACK_CLIENT_ID=your-slack-client-id
+SLACK_CLIENT_SECRET=your-slack-client-secret
 ```
 
-How to get it:
+How to set up Slack OAuth:
 
 - Go to [Slack API Apps page](https://api.slack.com/apps).
 - Create a new app or use an existing one.
-- Go to "OAuth & Permissions" and add bot token scopes:
-  - `chat:write` - Send messages to channels
-  - `channels:read` - Read channel information
+- Go to "OAuth & Permissions" and configure:
+  - **Redirect URLs**: Add your app's OAuth redirect URL (e.g., `http://localhost:3000/oauth/slack/callback`)
+  - **Scopes**: Add these bot token scopes:
+    - `chat:write` - Send messages to channels
+    - `channels:read` - Read channel information
+    - `channels:history` - Read message history
+- Copy the **Client ID** and **Client Secret** from the "Basic Information" page.
 - Install the app to your workspace.
-- Copy the "Bot User OAuth Token" (starts with `xoxb-`) and paste it above.
+
+**Note**: The old `SLACK_BOT_TOKEN` approach is deprecated. Use OAuth for proper integration with the database.
 
 ### Set up the database for backend and ingestion
 

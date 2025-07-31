@@ -1,12 +1,15 @@
 import logging
 from typing import Optional
+from uuid import UUID
 
 from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttributes
 from opentelemetry.trace import get_current_span
 
+from ada_backend.database.setup_db import get_db
 from engine.agent.agent import AgentPayload, ChatMessage, ComponentAttributes, ToolDescription
 from engine.agent.agent import Agent
-from engine.integrations.slack_utils import get_slack_client, send_slack_message
+from engine.integrations.utils import get_slack_oauth_access_token, get_slack_client
+from engine.integrations.slack_utils import send_slack_message
 from engine.trace.trace_manager import TraceManager
 from settings import settings
 
@@ -14,7 +17,7 @@ LOGGER = logging.getLogger(__name__)
 
 SLACK_SENDER_TOOL_DESCRIPTION = ToolDescription(
     name="Slack Sender",
-    description="A tool to send messages to Slack channels using bot token.",
+    description="A tool to send messages to Slack channels using OAuth integration.",
     tool_properties={
         "channel": {
             "type": "string",
@@ -40,9 +43,11 @@ class SlackSender(Agent):
         self,
         trace_manager: TraceManager,
         component_attributes: ComponentAttributes,
-        bot_token: str,
+        secret_integration_id: str,
         default_channel: Optional[str] = None,
         tool_description: ToolDescription = SLACK_SENDER_TOOL_DESCRIPTION,
+        slack_client_id: Optional[str] = None,
+        slack_client_secret: Optional[str] = None,
     ):
         super().__init__(
             trace_manager,
@@ -50,14 +55,18 @@ class SlackSender(Agent):
             component_attributes=component_attributes,
         )
 
-        # Simple parameter-based approach
-        if not bot_token:
-            # Fall back to environment variable if no token provided
-            if not settings.SLACK_BOT_TOKEN:
-                raise ValueError("SLACK_BOT_TOKEN not configured in environment")
-            bot_token = settings.SLACK_BOT_TOKEN
+        if not slack_client_id:
+            slack_client_id = settings.SLACK_CLIENT_ID
+        if not slack_client_secret:
+            slack_client_secret = settings.SLACK_CLIENT_SECRET
 
-        self.client = get_slack_client(bot_token)
+        # Get OAuth access token from database
+        session = next(get_db())
+        access_token = get_slack_oauth_access_token(
+            session, UUID(secret_integration_id), slack_client_id, slack_client_secret
+        )
+
+        self.client = get_slack_client(access_token)
         self.default_channel = default_channel
 
     async def _run_without_trace(
