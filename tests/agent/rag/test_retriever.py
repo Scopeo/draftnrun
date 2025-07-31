@@ -2,7 +2,7 @@ from unittest.mock import Mock, AsyncMock
 
 import pytest
 
-from engine.agent.agent import SourceChunk
+from engine.agent.types import SourceChunk
 from engine.agent.rag.retriever import Retriever
 from engine.llm_services.llm_service import EmbeddingService
 from engine.qdrant_service import QdrantService

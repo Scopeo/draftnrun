@@ -10,7 +10,7 @@ from ada_backend.services.entity_factory import (
     detect_and_convert_dataclasses,
     pydantic_processor,
 )
-from engine.agent.agent import ToolDescription
+from engine.agent.types import ToolDescription
 from engine.trace.trace_context import get_trace_manager
 from engine.trace.trace_manager import TraceManager
 

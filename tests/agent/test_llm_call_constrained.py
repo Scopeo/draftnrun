@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock
 
 from engine.agent.llm_call_agent import LLMCallAgent
 from engine.agent.utils import load_str_to_json
-from engine.agent.agent import AgentPayload, ComponentAttributes
+from engine.agent.types import AgentPayload, ComponentAttributes
 from engine.llm_services.utils import chat_completion_to_response
 
 
@@ -110,7 +110,7 @@ def llm_call_with_output_format():
 
 @pytest.mark.anyio
 async def test_agent_input_combinations(llm_call_with_output_format, input_payload):
-    response = await llm_call_with_output_format._run_without_trace(input_payload)
+    response = await llm_call_with_output_format._run_without_io_trace(input_payload)
 
     # Check that the question was passed in the messages
     assert isinstance(response, AgentPayload)
@@ -125,7 +125,7 @@ async def test_agent_input_combinations(llm_call_with_output_format, input_paylo
 
 @pytest.mark.anyio
 async def test_chat_completion_to_response(llm_call_with_output_format, input_payload_with_file):
-    response = await llm_call_with_output_format._run_without_trace(input_payload_with_file)
+    response = await llm_call_with_output_format._run_without_io_trace(input_payload_with_file)
     # Check that the question was passed in the messages
     assert isinstance(response, AgentPayload)
 

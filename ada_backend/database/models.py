@@ -156,6 +156,8 @@ def cast_value(
     parameter_type: ParameterType,
     unresolved_value: str,
 ) -> str | int | float | bool | dict:
+    if parameter_type != ParameterType.STRING and (unresolved_value == "None" or unresolved_value is None):
+        return None
     if parameter_type == ParameterType.STRING:
         return unresolved_value
     elif parameter_type == ParameterType.INTEGER:
@@ -165,8 +167,6 @@ def cast_value(
     elif parameter_type == ParameterType.BOOLEAN:
         return unresolved_value.lower() in ("true", "1")
     elif parameter_type == ParameterType.JSON or parameter_type == ParameterType.DATA_SOURCE:
-        if unresolved_value == "None" or unresolved_value is None:
-            return None
         return json.loads(unresolved_value)
     elif parameter_type == ParameterType.LLM_API_KEY:
         return unresolved_value

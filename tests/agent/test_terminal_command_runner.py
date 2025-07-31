@@ -3,7 +3,7 @@ import pytest
 from unittest.mock import Mock, patch, AsyncMock
 
 from engine.agent.tools.terminal_command_runner import TerminalCommandRunner, TERMINAL_COMMAND_RUNNER_TOOL_DESCRIPTION
-from engine.agent.agent import AgentPayload, ChatMessage
+from engine.agent.types import AgentPayload, ChatMessage
 from tests.mocks.trace_manager import MockTraceManager
 
 
@@ -122,13 +122,13 @@ class TestTerminalCommandE2BTool:
 
     @pytest.mark.asyncio
     @patch("engine.agent.tools.terminal_command_runner.AsyncSandbox")
-    async def test_run_without_trace_basic(self, mock_sandbox_class, terminal_command_tool, mock_sandbox):
-        """Test the basic _run_without_trace functionality."""
+    async def test_run_without_io_trace_basic(self, mock_sandbox_class, terminal_command_tool, mock_sandbox):
+        """Test the basic _run_without_io_trace functionality."""
         mock_sandbox_class.create = AsyncMock(return_value=mock_sandbox)
 
         input_payload = AgentPayload(messages=[ChatMessage(role="user", content="test input")])
 
-        result = await terminal_command_tool._run_without_trace(input_payload, command="pwd")
+        result = await terminal_command_tool._run_without_io_trace(input_payload, command="pwd")
 
         assert len(result.messages) == 1
         assert result.messages[0].role == "assistant"
@@ -143,8 +143,8 @@ class TestTerminalCommandE2BTool:
 
     @pytest.mark.asyncio
     @patch("engine.agent.tools.terminal_command_runner.AsyncSandbox")
-    async def test_run_without_trace_with_error(self, mock_sandbox_class, terminal_command_tool, mock_sandbox):
-        """Test _run_without_trace with command that produces an error."""
+    async def test_run_without_io_trace_with_error(self, mock_sandbox_class, terminal_command_tool, mock_sandbox):
+        """Test _run_without_io_trace with command that produces an error."""
         mock_execution = Mock()
         mock_execution.stdout = ""
         mock_execution.stderr = "command not found"
@@ -154,7 +154,7 @@ class TestTerminalCommandE2BTool:
 
         input_payload = AgentPayload(messages=[ChatMessage(role="user", content="test input")])
 
-        result = await terminal_command_tool._run_without_trace(input_payload, command="invalid_cmd")
+        result = await terminal_command_tool._run_without_io_trace(input_payload, command="invalid_cmd")
 
         content = json.loads(result.messages[0].content)
         assert content["stderr"] == "command not found"
@@ -163,14 +163,16 @@ class TestTerminalCommandE2BTool:
 
     @pytest.mark.asyncio
     @patch("engine.agent.tools.terminal_command_runner.AsyncSandbox")
-    async def test_run_without_trace_exception_handling(self, mock_sandbox_class, terminal_command_tool, mock_sandbox):
+    async def test_run_without_io_trace_exception_handling(
+        self, mock_sandbox_class, terminal_command_tool, mock_sandbox
+    ):
         """Test that exceptions during execution are handled properly."""
         mock_sandbox.commands.run.side_effect = Exception("Sandbox error")
         mock_sandbox_class.create = AsyncMock(return_value=mock_sandbox)
 
         input_payload = AgentPayload(messages=[ChatMessage(role="user", content="test input")])
 
-        result = await terminal_command_tool._run_without_trace(input_payload, command="test_cmd")
+        result = await terminal_command_tool._run_without_io_trace(input_payload, command="test_cmd")
 
         content = json.loads(result.messages[0].content)
         assert content["stderr"] == "Sandbox error"

@@ -3,7 +3,8 @@ from typing import Optional
 from openinference.semconv.trace import SpanAttributes
 from opentelemetry.trace import get_current_span
 
-from engine.agent.agent import Agent, AgentPayload, ChatMessage, ComponentAttributes, ToolDescription
+from engine.agent.agent import Agent
+from engine.agent.types import AgentPayload, ChatMessage, ToolDescription, ComponentAttributes
 from engine.agent.utils import extract_vars_in_text_template, parse_openai_message_format
 from engine.llm_services.llm_service import CompletionService
 from engine.trace.trace_manager import TraceManager
@@ -74,7 +75,7 @@ class LLMCallAgent(Agent):
         self._file_content_key = file_content_key
         self.output_format = output_format
 
-    async def _run_without_trace(self, *input_payloads: AgentPayload | dict, **kwargs) -> AgentPayload:
+    async def _run_without_io_trace(self, *input_payloads: AgentPayload | dict, **kwargs) -> AgentPayload:
         prompt_vars = extract_vars_in_text_template(self._prompt_template)
         input_replacements = {}
         files_content = []

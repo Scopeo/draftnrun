@@ -2,12 +2,12 @@ import pytest
 from unittest.mock import MagicMock, patch, AsyncMock
 
 from llama_index.llms.openai import OpenAI
-from engine.agent.agent import SourceChunk
+from engine.agent.types import SourceChunk
 from engine.agent.rag.retriever import Retriever
 from engine.agent.synthesizer import Synthesizer
 from engine.agent.rag.vocabulary_search import VocabularySearch
 from engine.llm_services.llm_service import CompletionService
-from engine.agent.agent import AgentPayload, ChatMessage
+from engine.agent.types import AgentPayload, ChatMessage
 from engine.agent.rag.rag import RAG
 from tests.mocks.trace_manager import MockTraceManager
 

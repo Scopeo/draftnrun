@@ -10,7 +10,7 @@ import requests
 import httpx
 import pandas as pd
 
-from engine.agent.agent import SourceChunk
+from engine.agent.types import SourceChunk
 from engine.llm_services.llm_service import EmbeddingService
 from settings import settings
 

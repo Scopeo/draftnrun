@@ -3,7 +3,7 @@ import logging
 from opentelemetry import trace as trace_api
 from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttributes
 
-from engine.agent.agent import ComponentAttributes, ToolDescription
+from engine.agent.types import ToolDescription, ComponentAttributes
 from engine.trace.trace_manager import TraceManager
 from engine.agent.utils import load_str_to_json
 from engine.trace.serializer import serialize_to_json

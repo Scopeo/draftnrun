@@ -3,7 +3,7 @@ import re
 
 import sqlalchemy as sa
 
-from engine.agent.agent import ToolDescription
+from engine.agent.types import ToolDescription
 from settings import settings
 
 LOGGER = logging.getLogger(__name__)

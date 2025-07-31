@@ -1,5 +1,5 @@
 import pytest
-from engine.agent.agent import SourceChunk
+from engine.agent.types import SourceChunk
 from engine.agent.rag.formatter import PAGE_NUMBER_FIELD
 
 

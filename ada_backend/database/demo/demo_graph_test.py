@@ -8,7 +8,7 @@ from ada_backend.schemas.pipeline.base import (
     ComponentInstanceSchema,
 )
 from ada_backend.schemas.pipeline.graph_schema import EdgeSchema, GraphUpdateSchema
-from engine.agent.agent import ToolDescription
+from engine.agent.types import ToolDescription
 from engine.agent.rag.rag import format_rag_tool_description
 from ada_backend.services.registry import COMPLETION_MODEL_IN_DB
 
