@@ -3,7 +3,7 @@ from uuid import UUID
 from urllib.parse import urlencode
 
 from sqlalchemy.orm import Session
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import RedirectResponse
 
 from ada_backend.database.setup_db import get_db
