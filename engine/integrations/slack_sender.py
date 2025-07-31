@@ -36,6 +36,8 @@ SLACK_SENDER_TOOL_DESCRIPTION = ToolDescription(
 
 
 class SlackSender(Agent):
+    """Slack integration component for sending messages to Slack channels using OAuth."""
+
     TRACE_SPAN_KIND = OpenInferenceSpanKindValues.TOOL.value
 
     def __init__(
@@ -46,13 +48,24 @@ class SlackSender(Agent):
         default_channel: Optional[str] = None,
         tool_description: ToolDescription = SLACK_SENDER_TOOL_DESCRIPTION,
     ):
+        """Initialize SlackSender with OAuth token management.
+
+        Args:
+            trace_manager: Trace manager for observability
+            component_attributes: Component configuration attributes
+            secret_integration_id: UUID of the integration secret containing OAuth tokens
+            default_channel: Default Slack channel for messages
+            tool_description: Tool description for the agent
+
+        Raises:
+            ValueError: If Slack OAuth credentials are not configured
+        """
         super().__init__(
             trace_manager,
             tool_description=tool_description,
             component_attributes=component_attributes,
         )
 
-        # Get OAuth access token from database (with automatic refresh)
         session = next(get_db())
         from settings import get_settings
         from engine.integrations.utils import get_slack_oauth_access_token
@@ -77,6 +90,21 @@ class SlackSender(Agent):
         message: Optional[str] = None,
         thread_ts: Optional[str] = None,
     ) -> AgentPayload:
+        """Send a message to a Slack channel.
+
+        Args:
+            *inputs: Input payloads (not used for this component)
+            channel: Target Slack channel (uses default if not provided)
+            message: Message text to send
+            thread_ts: Thread timestamp for replies (optional)
+
+        Returns:
+            AgentPayload: Success response with message details
+
+        Raises:
+            ValueError: If message or channel is not provided
+            RuntimeError: If message sending fails
+        """
         if not message:
             raise ValueError("Message must be provided")
 
