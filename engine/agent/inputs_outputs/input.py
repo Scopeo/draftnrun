@@ -43,8 +43,8 @@ class Input:
             span.set_attributes(
                 {
                     SpanAttributes.OPENINFERENCE_SPAN_KIND: OpenInferenceSpanKindValues.UNKNOWN.value,
-                    SpanAttributes.INPUT_VALUE: serialize_to_json(input_data),
-                    SpanAttributes.OUTPUT_VALUE: serialize_to_json(filtered_input),
+                    SpanAttributes.INPUT_VALUE: serialize_to_json(input_data, shorten_string=True),
+                    SpanAttributes.OUTPUT_VALUE: serialize_to_json(filtered_input, shorten_string=True),
                     "component_instance_id": str(self.component_attributes.component_instance_id),
                 }
             )

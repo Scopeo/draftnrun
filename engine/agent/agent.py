@@ -179,7 +179,7 @@ class Agent(ABC):
             span.set_attributes(
                 {
                     SpanAttributes.OPENINFERENCE_SPAN_KIND: self.TRACE_SPAN_KIND,
-                    SpanAttributes.INPUT_VALUE: serialize_to_json(inputs[0]),
+                    SpanAttributes.INPUT_VALUE: serialize_to_json(inputs[0], shorten_string=True),
                     "component_instance_id": str(self.component_attributes.component_instance_id),
                 }
             )
@@ -188,7 +188,7 @@ class Agent(ABC):
                     {
                         SpanAttributes.TOOL_NAME: self.tool_description.name,
                         SpanAttributes.TOOL_DESCRIPTION: self.tool_description.description,
-                        SpanAttributes.TOOL_PARAMETERS: serialize_to_json(kwargs),
+                        SpanAttributes.TOOL_PARAMETERS: serialize_to_json(kwargs, shorten_string=True),
                     }
                 )
             try:
