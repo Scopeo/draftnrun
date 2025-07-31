@@ -10,7 +10,7 @@ from ada_backend.repositories.component_repository import (
     get_component_parameter_definition_by_component_id,
     upsert_sub_component_input,
 )
-from ada_backend.repositories.edge_repository import upsert_edge
+from ada_backend.repositories.edge_repository import delete_edge, get_edges, upsert_edge
 from ada_backend.repositories.graph_runner_repository import (
     delete_node,
     get_component_nodes,
@@ -46,6 +46,7 @@ async def update_graph_service(
         insert_graph_runner_and_bind_to_project(session, graph_runner_id, project_id=project_id, env=env)
     # TODO: Add the get_graph_runner_nodes function when we will handle nested graphs
     previous_graph_nodes = set(node.id for node in get_component_nodes(session, graph_runner_id))
+    previous_edge_ids = set(edge.id for edge in get_edges(session, graph_runner_id))
 
     # Create/update all component instances
     instance_ids = set()
@@ -102,6 +103,11 @@ async def update_graph_service(
             graph_runner_id=graph_runner_id,
             order=edge.order,
         )
+
+    edge_ids_to_delete = previous_edge_ids - {edge.id for edge in graph_project.edges}
+    LOGGER.info("Deleting edges: {}".format(len(edge_ids_to_delete)))
+    for edge_id in edge_ids_to_delete:
+        delete_edge(session, edge_id)
 
     nodes_to_delete = previous_graph_nodes - instance_ids
     if len(nodes_to_delete) > 0:
