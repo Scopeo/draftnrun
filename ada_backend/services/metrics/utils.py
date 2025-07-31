@@ -37,7 +37,7 @@ def query_trace_messages(
     LOGGER.debug(f"Querying messages for since {start_time_offset_days}")
 
     query = (
-        "SELECT m.span_id, m.input_content, m.output_content FROM messages m "
+        "SELECT m.span_id, m.input_content, m.output_content FROM span_messages m "
         "JOIN spans s ON m.span_id = s.span_id "
         f"WHERE s.start_time > '{start_time_offset_days}';"
     )
