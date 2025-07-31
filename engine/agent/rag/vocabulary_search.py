@@ -3,7 +3,7 @@ import pandas as pd
 from opentelemetry import trace as trace_api
 from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttributes
 
-from engine.agent.agent import ComponentAttributes, TermDefinition
+from engine.agent.types import TermDefinition, ComponentAttributes
 from engine.trace.trace_manager import TraceManager
 from engine.agent.utils import fuzzy_matching
 

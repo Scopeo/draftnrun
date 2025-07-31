@@ -16,7 +16,7 @@ from ada_backend.repositories.integration_repository import (
 from ada_backend.schemas.components_schema import ComponentWithParametersDTO, SubComponentParamSchema
 from ada_backend.schemas.integration_schema import IntegrationSchema
 from ada_backend.schemas.parameter_schema import ComponentParamDefDTO
-from engine.agent.agent import ToolDescription
+from engine.agent.types import ToolDescription
 
 LOGGER = logging.getLogger(__name__)
 
@@ -265,90 +265,92 @@ def get_all_components_with_parameters(
     # For each component, get its parameter definitions and build result
     result = []
     for component in components:
-        parameters = get_component_parameter_definition_by_component_id(
-            session,
-            component.id,
-        )
-
-        subcomponent_params = get_subcomponent_param_def_by_component_id(
-            session,
-            component.id,
-        )
-
-        parameters_to_fill = []
-        tool_param_name = None
-        for param in parameters:
-            if param.type == ParameterType.TOOL:
-                if tool_param_name is None:
-                    tool_param_name = param.name
-                else:
-                    raise ValueError(
-                        f"Multiple tool parameters found for component {component.name}: "
-                        f"{tool_param_name}, {param.name}"
-                    )
-            elif param.type != ParameterType.COMPONENT:
-                parameters_to_fill.append(
-                    ComponentParamDefDTO(
-                        id=param.id,
-                        component_id=param.component_id,
-                        name=param.name,
-                        type=param.type,
-                        nullable=param.nullable,
-                        default=param.get_default(),
-                        ui_component=param.ui_component,
-                        ui_component_properties=param.ui_component_properties,
-                        is_advanced=param.is_advanced,
-                        order=param.order,
-                    )
-                )
-
-        default_tool_description_db = get_tool_description_component(session=session, component_id=component.id)
-        tool_description = (
-            ToolDescription(
-                name=default_tool_description_db.name,
-                description=default_tool_description_db.description,
-                tool_properties=default_tool_description_db.tool_properties,
-                required_tool_properties=default_tool_description_db.required_tool_properties,
-            ).model_dump()
-            if default_tool_description_db
-            else None
-        )
-        if component.integration_id:
-            integration = get_integration(session, component.integration_id)
-        # Create ComponentWithParametersDTO
-        result.append(
-            ComponentWithParametersDTO(
-                id=component.id,
-                name=component.name,
-                description=component.description,
-                is_agent=component.is_agent,
-                integration=(
-                    IntegrationSchema(
-                        id=integration.id,
-                        name=integration.name,
-                        service=integration.service,
-                    )
-                    if component.integration_id
-                    else None
-                ),
-                tool_parameter_name=tool_param_name,
-                function_callable=component.function_callable,
-                release_stage=component.release_stage,
-                can_use_function_calling=component.can_use_function_calling,
-                tool_description=tool_description,
-                parameters=parameters_to_fill,
-                subcomponents_info=[
-                    SubComponentParamSchema(
-                        id=param_child_def.child_component_id,
-                        parameter_name=subcomponent_param.name,
-                        is_optional=subcomponent_param.nullable,
-                    )
-                    for subcomponent_param, param_child_def in subcomponent_params
-                ],
-                categories=get_categories(session, component.id),
+        try:
+            parameters = get_component_parameter_definition_by_component_id(
+                session,
+                component.id,
             )
-        )
 
+            subcomponent_params = get_subcomponent_param_def_by_component_id(
+                session,
+                component.id,
+            )
+
+            parameters_to_fill = []
+            tool_param_name = None
+            for param in parameters:
+                if param.type == ParameterType.TOOL:
+                    if tool_param_name is None:
+                        tool_param_name = param.name
+                    else:
+                        raise ValueError(
+                            f"Multiple tool parameters found for component {component.name}: "
+                            f"{tool_param_name}, {param.name}"
+                        )
+                elif param.type != ParameterType.COMPONENT:
+                    parameters_to_fill.append(
+                        ComponentParamDefDTO(
+                            id=param.id,
+                            component_id=param.component_id,
+                            name=param.name,
+                            type=param.type,
+                            nullable=param.nullable,
+                            default=param.get_default(),
+                            ui_component=param.ui_component,
+                            ui_component_properties=param.ui_component_properties,
+                            is_advanced=param.is_advanced,
+                            order=param.order,
+                        )
+                    )
+
+            default_tool_description_db = get_tool_description_component(session=session, component_id=component.id)
+            tool_description = (
+                ToolDescription(
+                    name=default_tool_description_db.name,
+                    description=default_tool_description_db.description,
+                    tool_properties=default_tool_description_db.tool_properties,
+                    required_tool_properties=default_tool_description_db.required_tool_properties,
+                ).model_dump()
+                if default_tool_description_db
+                else None
+            )
+            if component.integration_id:
+                integration = get_integration(session, component.integration_id)
+            # Create ComponentWithParametersDTO
+            result.append(
+                ComponentWithParametersDTO(
+                    id=component.id,
+                    name=component.name,
+                    description=component.description,
+                    is_agent=component.is_agent,
+                    integration=(
+                        IntegrationSchema(
+                            id=integration.id,
+                            name=integration.name,
+                            service=integration.service,
+                        )
+                        if component.integration_id
+                        else None
+                    ),
+                    tool_parameter_name=tool_param_name,
+                    function_callable=component.function_callable,
+                    release_stage=component.release_stage,
+                    can_use_function_calling=component.can_use_function_calling,
+                    tool_description=tool_description,
+                    parameters=parameters_to_fill,
+                    subcomponents_info=[
+                        SubComponentParamSchema(
+                            id=param_child_def.child_component_id,
+                            parameter_name=subcomponent_param.name,
+                            is_optional=subcomponent_param.nullable,
+                        )
+                        for subcomponent_param, param_child_def in subcomponent_params
+                    ],
+                    categories=get_categories(session, component.id),
+                )
+            )
+        except Exception as e:
+            LOGGER.error(f"Error getting component {component.name}: {e}")
     return result
 
 

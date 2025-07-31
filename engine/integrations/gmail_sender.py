@@ -8,8 +8,8 @@ from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttribu
 from opentelemetry.trace import get_current_span
 
 from ada_backend.database.setup_db import get_db
-from engine.agent.agent import AgentPayload, ChatMessage, ComponentAttributes, ToolDescription
 from engine.agent.agent import Agent
+from engine.agent.types import AgentPayload, ChatMessage, ComponentAttributes, ToolDescription
 from engine.integrations.utils import get_gmail_sender_service, get_google_user_email, get_oauth_access_token
 from engine.trace.trace_manager import TraceManager
 from settings import settings
@@ -120,7 +120,7 @@ class GmailSender(Agent):
             raise RuntimeError(f"Failed to send email: {error}")
         return sent_message
 
-    async def _run_without_trace(
+    async def _run_without_io_trace(
         self,
         *inputs: AgentPayload,
         mail_subject: Optional[str] = None,

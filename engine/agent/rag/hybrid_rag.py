@@ -3,7 +3,7 @@ from typing import Optional
 
 from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttributes
 
-from engine.agent.agent import (
+from engine.agent.types import (
     ChatMessage,
     AgentPayload,
     ComponentAttributes,
@@ -57,13 +57,13 @@ class HybridRAG(RAG):
         self._filtering_condition = filtering_condition
         self._formatter = formatter
 
-    async def _run_without_trace(
+    async def _run_without_io_trace(
         self,
         agent_input: AgentPayload,
         query_text: Optional[str] = None,
         filters: Optional[dict] = None,
     ) -> AgentPayload:
-        content = query_text or agent_input.last_message.content
+        content = query_text or agent_input.main_content
         if content is None:
             raise ValueError("No content provided for the RAG tool.")
         formatted_filters = format_qdrant_filter(filters, self._filtering_condition)

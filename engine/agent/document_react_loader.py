@@ -2,11 +2,9 @@ import logging
 
 from engine.agent.document_enhanced_llm_call import DocumentEnhancedLLMCallAgent
 from engine.agent.react_function_calling import ReActAgent
-
-
-from engine.agent.agent import (
-    ComponentAttributes,
+from engine.agent.types import (
     ToolDescription,
+    ComponentAttributes,
 )
 from engine.trace.trace_manager import TraceManager
 from engine.llm_services.llm_service import LLMService

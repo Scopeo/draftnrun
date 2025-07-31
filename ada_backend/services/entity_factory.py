@@ -6,7 +6,7 @@ from uuid import UUID
 from dataclasses import is_dataclass
 from pydantic import BaseModel
 
-from engine.agent.agent import ToolDescription
+from engine.agent.types import ToolDescription
 from engine.trace.trace_context import get_trace_manager
 from engine.llm_services.llm_service import EmbeddingService, CompletionService, WebSearchService, OCRService
 from engine.qdrant_service import QdrantService, QdrantCollectionSchema

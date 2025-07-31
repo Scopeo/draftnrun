@@ -2,7 +2,7 @@ from typing import Optional
 from pydantic import BaseModel
 
 from engine.llm_services.llm_service import LLMService
-from engine.agent.agent import ComponentAttributes, SourceChunk, SourcedResponse
+from engine.agent.types import SourceChunk, SourcedResponse, ComponentAttributes
 from engine.agent.build_context import build_context_from_source_chunks
 
 CHUNK_SELECTION_PROMPT = (
