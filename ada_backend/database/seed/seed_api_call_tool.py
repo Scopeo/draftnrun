@@ -27,7 +27,7 @@ def seed_api_call_components(session: Session):
         is_agent=False,
         function_callable=True,
         can_use_function_calling=False,
-        release_stage=db.ReleaseStage.INTERNAL,
+        release_stage=db.ReleaseStage.PUBLIC,
         default_tool_description_id=TOOL_DESCRIPTION_UUIDS["default_api_call_tool_description"],
     )
     upsert_components(session, [api_call_component])
