@@ -125,8 +125,7 @@ class BaseConfig(BaseSettings):
     GOOGLE_CLIENT_ID: Optional[str] = None
     GOOGLE_CLIENT_SECRET: Optional[str] = None
 
-    # Slack configuration
-    SLACK_BOT_TOKEN: Optional[str] = None
+    # Slack OAuth configuration
     SLACK_CLIENT_ID: Optional[str] = None
     SLACK_CLIENT_SECRET: Optional[str] = None
     SLACK_SIGNING_SECRET: Optional[str] = None

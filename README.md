@@ -405,7 +405,7 @@ How to get them:
 
 Make sure the redirect URI matches what you configure in Google and your app. Do not commit these secrets to version control.
 
-#### Slack Bot Token Setup
+#### Slack OAuth Setup
 
 To enable Slack messaging with OAuth integration, set these in your credentials.env:
 
@@ -431,12 +431,6 @@ How to set up Slack OAuth:
 - Copy the **Signing Secret** from the "Basic Information" page.
 
 **OAuth Flow**: Users will be redirected to Slack for authorization, and tokens will be automatically managed with refresh capabilities.
-
-**Legacy Bot Token** (deprecated): If you need to use the old bot token approach temporarily:
-
-```env
-SLACK_BOT_TOKEN=xoxb-your-slack-bot-token-here
-```
 
 ### Set up the database for backend and ingestion
 
