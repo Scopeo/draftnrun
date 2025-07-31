@@ -6,12 +6,12 @@ from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttribu
 from opentelemetry.trace import get_current_span
 
 from ada_backend.database.setup_db import get_db
-from engine.agent.agent import AgentPayload, ChatMessage, ComponentAttributes, ToolDescription
+from engine.agent.types import AgentPayload, ChatMessage, ComponentAttributes, ToolDescription
 from engine.agent.agent import Agent
-from engine.integrations.utils import get_slack_oauth_access_token, get_slack_client
+from engine.integrations.utils import get_slack_client, get_slack_oauth_access_token
 from engine.integrations.slack_utils import send_slack_message
 from engine.trace.trace_manager import TraceManager
-from settings import settings
+from settings import get_settings
 
 LOGGER = logging.getLogger(__name__)
 
@@ -37,6 +37,8 @@ SLACK_SENDER_TOOL_DESCRIPTION = ToolDescription(
 
 
 class SlackSender(Agent):
+    """Slack integration component for sending messages to Slack channels using OAuth."""
+
     TRACE_SPAN_KIND = OpenInferenceSpanKindValues.TOOL.value
 
     def __init__(
@@ -46,36 +48,62 @@ class SlackSender(Agent):
         secret_integration_id: str,
         default_channel: Optional[str] = None,
         tool_description: ToolDescription = SLACK_SENDER_TOOL_DESCRIPTION,
-        slack_client_id: Optional[str] = None,
-        slack_client_secret: Optional[str] = None,
     ):
+        """Initialize SlackSender with OAuth token management.
+
+        Args:
+            trace_manager: Trace manager for observability
+            component_attributes: Component configuration attributes
+            secret_integration_id: UUID of the integration secret containing OAuth tokens
+            default_channel: Default Slack channel for messages
+            tool_description: Tool description for the agent
+
+        Raises:
+            ValueError: If Slack OAuth credentials are not configured
+        """
         super().__init__(
             trace_manager,
             tool_description=tool_description,
             component_attributes=component_attributes,
         )
 
-        if not slack_client_id:
-            slack_client_id = settings.SLACK_CLIENT_ID
-        if not slack_client_secret:
-            slack_client_secret = settings.SLACK_CLIENT_SECRET
-
-        # Get OAuth access token from database
         session = next(get_db())
-        access_token = get_slack_oauth_access_token(
-            session, UUID(secret_integration_id), slack_client_id, slack_client_secret
-        )
 
+        settings = get_settings()
+        if not settings.SLACK_CLIENT_ID or not settings.SLACK_CLIENT_SECRET:
+            raise ValueError("Slack OAuth credentials not configured")
+
+        access_token = get_slack_oauth_access_token(
+            session=session,
+            integration_secret_id=UUID(secret_integration_id),
+            slack_client_id=settings.SLACK_CLIENT_ID,
+            slack_client_secret=settings.SLACK_CLIENT_SECRET,
+        )
         self.client = get_slack_client(access_token)
         self.default_channel = default_channel
 
-    async def _run_without_trace(
+    async def _run_without_io_trace(
         self,
         *inputs: AgentPayload,
         channel: Optional[str] = None,
         message: Optional[str] = None,
         thread_ts: Optional[str] = None,
     ) -> AgentPayload:
+        """Send a message to a Slack channel.
+
+        Args:
+            *inputs: Input payloads (not used for this component)
+            channel: Target Slack channel (uses default if not provided)
+            message: Message text to send
+            thread_ts: Thread timestamp for replies (optional)
+
+        Returns:
+            AgentPayload: Success response with message details
+
+        Raises:
+            ValueError: If message or channel is not provided
+            RuntimeError: If message sending fails
+        """
         if not message:
             raise ValueError("Message must be provided")
 
@@ -110,4 +138,4 @@ class SlackSender(Agent):
         except Exception as e:
             error_msg = f"Failed to send Slack message: {e}"
             LOGGER.error(error_msg)
-            raise RuntimeError(error_msg)
+            raise RuntimeError(error_msg) from e

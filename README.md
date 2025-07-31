@@ -388,46 +388,19 @@ ADA_URL=http://localhost:8000
 ```
 
 #### Google OAuth Setup
-
 To enable Google login, set these in your credentials.env:
 
 ```env
 GOOGLE_CLIENT_ID=your-google-client-id
 GOOGLE_CLIENT_SECRET=your-google-client-secret
 ```
-
 How to get them:
-
 - Go to Google Cloud Console.
 - Create OAuth 2.0 credentials (type: Web application).
-- Add your app's redirect URI (e.g. https://yourdomain.com/auth/google/callback).
+- Add your app’s redirect URI (e.g. https://yourdomain.com/auth/google/callback).
 - Copy the Client ID and Client Secret and paste them above.
 
 Make sure the redirect URI matches what you configure in Google and your app. Do not commit these secrets to version control.
-
-#### Slack OAuth Setup
-
-To enable Slack messaging with OAuth, set these in your credentials.env:
-
-```env
-SLACK_CLIENT_ID=your-slack-client-id
-SLACK_CLIENT_SECRET=your-slack-client-secret
-```
-
-How to set up Slack OAuth:
-
-- Go to [Slack API Apps page](https://api.slack.com/apps).
-- Create a new app or use an existing one.
-- Go to "OAuth & Permissions" and configure:
-  - **Redirect URLs**: Add your app's OAuth redirect URL (e.g., `http://localhost:3000/oauth/slack/callback`)
-  - **Scopes**: Add these bot token scopes:
-    - `chat:write` - Send messages to channels
-    - `channels:read` - Read channel information
-    - `channels:history` - Read message history
-- Copy the **Client ID** and **Client Secret** from the "Basic Information" page.
-- Install the app to your workspace.
-
-**Note**: The old `SLACK_BOT_TOKEN` approach is deprecated. Use OAuth for proper integration with the database.
 
 ### Set up the database for backend and ingestion
 
