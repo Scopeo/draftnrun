@@ -1,4 +1,4 @@
-from enum import Enum
+from enum import Enum, StrEnum
 from typing import Type
 
 from sqlalchemy import Text, Column, Integer, String, TIMESTAMP, Enum as SQLAlchemyEnum
@@ -24,6 +24,13 @@ def make_pg_string_enum(enum_cls: Type[Enum]) -> SQLAlchemyEnum:
         values_callable=lambda x: [e.value for e in x],
         native_enum=True,
     )
+
+
+class SpanMessageDirection(StrEnum):
+    """Enum for span message direction."""
+
+    INPUT = "input"
+    OUTPUT = "output"
 
 
 Base = declarative_base()
@@ -67,3 +74,12 @@ class OrganizationUsage(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     organization_id = Column(String, nullable=False, index=True)
     total_tokens = Column(Integer, nullable=False, default=0)
+
+
+class SpanMessage(Base):
+    __tablename__ = "span_messages"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    span_id = Column(String, nullable=False)
+    input_content = Column(Text, nullable=False)
+    output_content = Column(Text, nullable=False)
