@@ -1,6 +1,6 @@
 from collections import defaultdict
 import json
-from typing import List, Optional
+from typing import List
 from uuid import UUID
 import logging
 
