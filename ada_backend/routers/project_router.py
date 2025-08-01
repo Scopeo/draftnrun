@@ -206,14 +206,6 @@ async def get_project_trace(
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
     try:
-        print(
-            "Fetching trace for project:",
-            project_id,
-            "with duration:",
-            duration,
-            "and include_messages:",
-            include_messages,
-        )
         response = get_trace_by_project(user.id, project_id, duration, include_messages)
         return response
     except ValueError as e:

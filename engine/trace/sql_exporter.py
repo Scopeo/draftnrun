@@ -55,7 +55,7 @@ def convert_to_list(obj: Any) -> list[str] | None:
     return None
 
 
-def parse_str_or_dict(input_str: str) -> str | dict | list:
+def parse_str_or_dict(input_str: str | list) -> str | dict | list:
     if isinstance(input_str, list):
         return input_str
     try:
