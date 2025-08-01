@@ -213,6 +213,24 @@ async def get_project_trace(
         raise HTTPException(status_code=500, detail="Internal Server Error") from e
 
 
+# TODO: filter trace by graph_runner_id
+@router.get("/{project_id}/trace/v2", response_model=List[TraceSpan], tags=["Metrics"])
+async def get_project_trace_v2(
+    project_id: UUID,
+    duration: int,
+    user: Annotated[SupabaseUser, Depends(get_user_from_supabase_token)],
+):
+    if not user.id:
+        raise HTTPException(status_code=400, detail="User ID not found")
+    try:
+        response = get_trace_by_project(user.id, project_id, duration, include_messages=True)
+        return response
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Internal Server Error") from e
+
+
 @router.get("/{project_id}/kpis", response_model=KPISResponse, tags=["Metrics"])
 async def get_project_monitoring_kpi(
     project_id: UUID,

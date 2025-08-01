@@ -87,13 +87,18 @@ def build_span_trees(df: pd.DataFrame) -> List[TraceSpan]:
     return trace_trees
 
 
-def get_trace_by_project(user_id: UUID, project_id: UUID, duration: int) -> List[TraceSpan]:
+def get_trace_by_project(
+    user_id: UUID, project_id: UUID, duration: int, include_messages: bool = False
+) -> List[TraceSpan]:
     df_span = query_trace_duration(project_id, duration)
     track_project_observability_loaded(user_id, project_id)
-    df_messages = query_trace_messages(duration)
-    df = df_span.merge(df_messages, on="span_id", how="left")
-    df = df.replace({np.nan: None})
-    return build_span_trees(df)
+
+    if include_messages:
+        df_messages = query_trace_messages(duration)
+        df_span = df_span.merge(df_messages, on="span_id", how="left")
+
+    df_span = df_span.replace({np.nan: None})
+    return build_span_trees(df_span)
 
 
 def get_token_usage(organization_id: UUID) -> TokenUsage:
