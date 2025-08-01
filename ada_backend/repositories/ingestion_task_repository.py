@@ -32,6 +32,7 @@ def create_ingestion_task(
     source_name: str,
     source_type: db.SourceType,
     status: db.TaskStatus,
+    source_id: Optional[UUID] = None,
 ) -> UUID:
     """Create a new ingestion task for an organization."""
     ingestion_task = db.IngestionTask(
@@ -39,6 +40,7 @@ def create_ingestion_task(
         source_name=source_name,
         source_type=source_type,
         status=status,
+        source_id=source_id,
     )
     session.add(ingestion_task)
     session.commit()
@@ -66,9 +68,7 @@ def update_ingestion_task(
             .first()
         )
         if existing_task:
-            # Update existing task
-            if source_id is not None:  # Only update if source_id is not None
-
+            if source_id is not None:
                 existing_task.source_id = source_id
             if source_name:
                 existing_task.source_name = source_name

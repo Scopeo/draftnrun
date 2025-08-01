@@ -120,3 +120,16 @@ def track_ingestion_task_created(user_id: UUID, organization_id: UUID, task_id: 
             "task_id": str(task_id),
         },
     )
+
+
+@non_breaking_track
+def track_ingestion_task_update(user_id: UUID, organization_id: UUID, task_id: UUID):
+    analytics.track(
+        user_id=str(user_id),
+        event="Ingestion Task Update",
+        properties={
+            "env": settings.ENV,
+            "organization_id": str(organization_id),
+            "task_id": str(task_id),
+        },
+    )
