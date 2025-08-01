@@ -2,7 +2,6 @@ import pytest
 import pytest_asyncio
 from unittest.mock import MagicMock, patch, Mock
 from pathlib import Path
-import shutil
 
 from engine.agent.pdf_generation_tool import PDFGenerationTool
 from engine.agent.agent import ComponentAttributes
