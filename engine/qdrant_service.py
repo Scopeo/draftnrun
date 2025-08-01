@@ -66,6 +66,52 @@ def parse_datetime(date_string: str) -> Optional[datetime]:
     LOGGER.warning(f"Could not parse datetime string: {date_string}")
     return None
 
+# Common datetime formats to try when parsing
+DATETIME_FORMATS = [
+    "%Y-%m-%d %H:%M:%S",
+    "%Y-%m-%d %H:%M:%S.%f",
+    "%Y-%m-%dT%H:%M:%S",
+    "%Y-%m-%dT%H:%M:%S.%f",
+    "%Y-%m-%dT%H:%M:%SZ",
+    "%Y-%m-%dT%H:%M:%S.%fZ",
+    "%Y-%m-%dT%H:%M:%S%z",
+    "%Y-%m-%dT%H:%M:%S.%f%z",
+    "%Y-%m-%d %H:%M:%S%z",
+    "%Y-%m-%d %H:%M:%S.%f%z",
+    "%Y-%m-%d",
+    "%d/%m/%Y",
+    "%m/%d/%Y",
+    "%Y/%m/%d",
+    "%d-%m-%Y",
+    "%m-%d-%Y",
+    "%Y-%m-%d %H:%M",
+    "%d/%m/%Y %H:%M:%S",
+    "%m/%d/%Y %H:%M:%S",
+    "%Y/%m/%d %H:%M:%S",
+    "%d-%m-%Y %H:%M:%S",
+    "%m-%d-%Y %H:%M:%S",
+]
+
+
+def parse_datetime(date_string: str) -> Optional[datetime]:
+
+    if not date_string:
+        return None
+
+    if isinstance(date_string, datetime):
+        return date_string
+
+    # Try each format until one works
+    for fmt in DATETIME_FORMATS:
+        try:
+            return datetime.strptime(date_string, fmt)
+        except ValueError:
+            continue
+
+    # If none of the formats work, log a warning and return None
+    LOGGER.warning(f"Could not parse datetime string: {date_string}")
+    return None
+
 
 class FieldSchema(Enum):
     # TODO: add other field types when we have metadata fields types
