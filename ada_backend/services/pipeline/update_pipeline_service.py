@@ -47,6 +47,7 @@ def create_or_update_component_instance(
         component_id=instance_data.component_id,
         name=instance_data.name,
         ref=instance_data.ref,
+        color=instance_data.color,
         tool_description_id=tool_description.id if tool_description else None,
         id_=instance_data.id,  # Pass the ID if provided, None otherwise
     )

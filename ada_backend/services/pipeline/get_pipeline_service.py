@@ -62,6 +62,7 @@ def get_component_instance(
         component_id=component_instance.component_id,
         tool_description=tool_description,
         component_name=component.name,
+        color=component_instance.color,
         tool_parameter_name=tool_parameter.name if tool_parameter else None,
         component_description=component.description,
         is_agent=component.is_agent,

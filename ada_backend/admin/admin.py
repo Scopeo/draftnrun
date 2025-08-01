@@ -178,7 +178,7 @@ class GraphRunnerAdmin(EnhancedModelView, model=db.GraphRunner):
 class ComponentInstanceAdmin(EnhancedModelView, model=db.ComponentInstance):
     category = AdminCategory.COMPONENTS
     icon = "fas fa-cogs"
-    column_list = ["id", "component", "name", "ref", "tool_description", "created_at"]
+    column_list = ["id", "component", "name", "ref", "color", "tool_description", "created_at"]
     column_searchable_list = ["ref", "id"]
     form_columns = ["component", "ref", "tool_description"]
 

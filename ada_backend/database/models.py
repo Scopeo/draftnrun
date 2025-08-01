@@ -417,6 +417,7 @@ class ComponentInstance(Base):
     )
     name = mapped_column(String, nullable=True, index=True)
     ref = mapped_column(String, nullable=True, index=True)
+    color = mapped_column(String, nullable=True)
     tool_description_id = mapped_column(UUID(as_uuid=True), ForeignKey("tool_descriptions.id"), nullable=True)
     created_at = mapped_column(DateTime(timezone=True), server_default=func.now())
 

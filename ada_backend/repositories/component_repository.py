@@ -387,6 +387,7 @@ def upsert_component_instance(
     component_id: UUID,
     name: Optional[str] = None,
     ref: Optional[str] = None,
+    color: Optional[str] = None,
     tool_description_id: Optional[UUID] = None,
     id_: Optional[UUID] = None,
 ) -> db.ComponentInstance:
@@ -404,6 +405,7 @@ def upsert_component_instance(
         component_id=component_id,
         name=name,
         ref=ref,
+        color=color,
         tool_description_id=tool_description_id,
         id=id_,
     )

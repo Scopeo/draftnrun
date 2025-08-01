@@ -52,6 +52,7 @@ def copy_component_instance(
         component_id=component_instance.component_id,
         tool_description=component_instance.tool_description,
         is_start_node=is_start_node,
+        color=component_instance.color,
         parameters=[
             PipelineParameterSchema(name=parameter.name, value=parameter.value, order=parameter.order)
             for parameter in component_instance.parameters
