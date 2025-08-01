@@ -29,6 +29,7 @@ from engine.agent.rag.document_search import DocumentSearch
 from engine.integrations.gmail_sender import GmailSender
 from engine.storage_service.local_service import SQLLocalService
 from engine.storage_service.snowflake_service.snowflake_service import SnowflakeService
+from engine.control_directives.batching import BatchStart, BatchEnd
 from ada_backend.services.entity_factory import (
     EntityFactory,
     AgentFactory,
@@ -83,6 +84,10 @@ class SupportedEntityType(StrEnum):
     OCR_CALL = "OCR Call"
     INPUT = "API Input"
     FILTER = "Filter"
+    
+    # Control Directives
+    BATCH_START = "BatchStart"
+    BATCH_END = "BatchEnd"
 
     # Integrations
     GMAIL_SENDER = "Gmail Sender"
@@ -415,6 +420,21 @@ def create_factory_registry() -> FactoryRegistry:
         name=SupportedEntityType.FILTER,
         factory=AgentFactory(
             entity_class=Filter,
+        ),
+    )
+
+    # Control Directives - use EntityFactory since they don't need trace manager
+    registry.register(
+        name=SupportedEntityType.BATCH_START,
+        factory=EntityFactory(
+            entity_class=BatchStart,
+        ),
+    )
+
+    registry.register(
+        name=SupportedEntityType.BATCH_END,
+        factory=EntityFactory(
+            entity_class=BatchEnd,
         ),
     )
 

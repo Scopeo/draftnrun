@@ -7,7 +7,7 @@ from ada_backend.database.models import EnvType, OrgSecretType
 from ada_backend.repositories.edge_repository import get_edges
 from ada_backend.schemas.project_schema import ChatResponse
 from ada_backend.services.agent_builder_service import instantiate_component
-from engine.graph_runner.graph_runner import GraphRunner
+from engine.graph_runner.graph_runner import GraphRunner, ExecutableType
 from ada_backend.repositories.graph_runner_repository import (
     get_component_nodes,
     get_graph_runner_for_env,
@@ -17,7 +17,6 @@ from ada_backend.repositories.graph_runner_repository import (
 from engine.agent.agent import Agent
 from ada_backend.repositories.project_repository import get_project, get_project_with_details
 from ada_backend.repositories.organization_repository import get_organization_secrets
-from engine.graph_runner.runnable import Runnable
 from engine.trace.trace_context import get_trace_manager
 from engine.trace.span_context import set_tracing_span
 
@@ -53,23 +52,23 @@ async def build_graph_runner(
     edges = get_edges(session, graph_runner_id)
     start_nodes = [str(node.id) for node in get_start_components(session, graph_runner_id)]
 
-    runnables: dict[str, Runnable] = {}
+    executables: dict[str, ExecutableType] = {}  # Unified dictionary for agents and directives
     graph = nx.DiGraph()
 
     for component_node in component_nodes:
-        agent = instantiate_component(
+        executable = instantiate_component(
             session=session,
             component_instance_id=component_node.id,
             project_id=project_id,
         )
-        runnables[str(component_node.id)] = agent
+        executables[str(component_node.id)] = executable
         graph.add_node(str(component_node.id))
 
     for edge in edges:
         if edge.source_node_id:
             graph.add_edge(str(edge.source_node_id), str(edge.target_node_id), order=edge.order)
 
-    return GraphRunner(graph, runnables, start_nodes, trace_manager=trace_manager)
+    return GraphRunner(graph, executables, start_nodes, trace_manager=trace_manager)
 
 
 async def get_agent_for_project(
