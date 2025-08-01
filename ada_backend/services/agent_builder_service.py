@@ -9,7 +9,7 @@ from ada_backend.repositories.integration_repository import (
     get_component_instance_integration_relationship,
 )
 from ada_backend.repositories.organization_repository import get_organization_secrets_from_project_id
-from engine.agent.agent import ComponentAttributes, ToolDescription
+from engine.agent.types import ToolDescription, ComponentAttributes
 from ada_backend.database.models import ComponentInstance
 from ada_backend.repositories.component_repository import (
     get_component_instance_by_id,

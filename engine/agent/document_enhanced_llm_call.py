@@ -4,8 +4,8 @@ from collections import defaultdict
 
 from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttributes
 
-from engine.agent.agent import (
-    Agent,
+from engine.agent.agent import Agent
+from engine.agent.types import (
     AgentPayload,
     ChatMessage,
     ComponentAttributes,
@@ -15,7 +15,7 @@ from engine.agent.agent import (
 from engine.agent.rag.document_search import DocumentSearch
 from engine.trace.trace_manager import TraceManager
 from engine.agent.synthesizer import Synthesizer
-from engine.agent.agent import DocumentContent
+from engine.agent.types import DocumentContent
 
 DEFAULT_DOCUMENT_ENHANCED_LLM_CALL_TOOL_DESCRIPTION = ToolDescription(
     name="Document_enhanced_llm_call",
@@ -127,7 +127,7 @@ class DocumentEnhancedLLMCallAgent(Agent):
             + self.tree_of_documents
         )
 
-    async def _run_without_trace(
+    async def _run_without_io_trace(
         self,
         *inputs: AgentPayload,
         query_text: Optional[str] = None,

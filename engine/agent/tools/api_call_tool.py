@@ -6,8 +6,8 @@ from typing import Optional, Dict, Any
 import httpx
 from openinference.semconv.trace import OpenInferenceSpanKindValues
 
-from engine.agent.agent import (
-    Agent,
+from engine.agent.agent import Agent
+from engine.agent.types import (
     ChatMessage,
     AgentPayload,
     ComponentAttributes,
@@ -122,7 +122,7 @@ class APICallTool(Agent):
                 "success": False,
             }
 
-    async def _run_without_trace(
+    async def _run_without_io_trace(
         self,
         *inputs: AgentPayload,
         **kwargs: Any,

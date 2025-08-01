@@ -5,8 +5,8 @@ from e2b_code_interpreter import AsyncSandbox
 from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttributes
 from opentelemetry.trace import get_current_span
 
-from engine.agent.agent import (
-    Agent,
+from engine.agent.agent import Agent
+from engine.agent.types import (
     ChatMessage,
     AgentPayload,
     ComponentAttributes,
@@ -102,7 +102,7 @@ class PythonCodeRunner(Agent):
                 await sandbox.kill()
         return result
 
-    async def _run_without_trace(
+    async def _run_without_io_trace(
         self,
         *inputs: AgentPayload,
         **kwargs: Any,

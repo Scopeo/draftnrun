@@ -2,7 +2,8 @@ from pathlib import Path
 import logging
 from typing import Optional
 
-from engine.agent.agent import Agent, ChatMessage, AgentPayload, ComponentAttributes, ToolDescription
+from engine.agent.agent import Agent
+from engine.agent.types import ChatMessage, AgentPayload, ToolDescription, ComponentAttributes
 from engine.llm_services.llm_service import CompletionService
 from engine.storage_service.db_service import DBService
 from engine.trace.trace_manager import TraceManager
@@ -98,7 +99,7 @@ class SQLTool(Agent):
         self._dialect = db_service.engine.dialect.name
         self.synthesize_sql_prompt = synthesize_sql_prompt
 
-    async def _run_without_trace(
+    async def _run_without_io_trace(
         self, *inputs: AgentPayload, natural_language_query: Optional[str] = None
     ) -> AgentPayload:
         agent_input = inputs[0]

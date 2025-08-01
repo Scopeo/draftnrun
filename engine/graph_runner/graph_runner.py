@@ -7,7 +7,7 @@ import networkx as nx
 from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttributes
 from opentelemetry import trace as trace_api
 
-from engine.agent.agent import AgentPayload, ChatMessage
+from engine.agent.types import AgentPayload, ChatMessage
 from engine.graph_runner.runnable import Runnable
 from engine.trace.trace_manager import TraceManager
 from engine.trace.serializer import serialize_to_json
@@ -126,7 +126,7 @@ class GraphRunner:
                     SpanAttributes.INPUT_VALUE: trace_input,
                 }
             )
-            final_output = await self._run_without_trace(input_data, **kwargs)
+            final_output = await self._run_without_io_trace(input_data, **kwargs)
             # TODO: Update trace when AgentInput/Output is refactored
             trace_output = serialize_to_json(final_output, shorten_string=True)
             span.set_attributes(
@@ -138,7 +138,7 @@ class GraphRunner:
 
             return final_output
 
-    async def _run_without_trace(self, *inputs: AgentPayload | dict, **kwargs) -> AgentPayload | dict:
+    async def _run_without_io_trace(self, *inputs: AgentPayload | dict, **kwargs) -> AgentPayload | dict:
         input_data = inputs[0]
         self._initialize_execution(input_data)
         while node_id := self._next_task():

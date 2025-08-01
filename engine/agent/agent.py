@@ -1,109 +1,19 @@
 import asyncio
 import logging
 from abc import ABC, abstractmethod
-from typing import Optional, Any
-from enum import StrEnum
-from uuid import UUID
+from typing import Any
 
-from openai.types.chat import ChatCompletionMessageToolCall
 from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttributes
 from opentelemetry import trace as trace_api
 from opentelemetry.util.types import Attributes
-from pydantic import BaseModel, Field
 from tenacity import RetryError
 
+from engine.agent.types import AgentPayload, ToolDescription, ComponentAttributes
 from engine.trace.trace_manager import TraceManager
 from engine.trace.serializer import serialize_to_json
 from engine.prometheus_metric import track_calls
 
 LOGGER = logging.getLogger(__name__)
-
-
-class ChatMessage(BaseModel):
-    role: str
-    content: Optional[str | list] = None
-    tool_calls: Optional[list[ChatCompletionMessageToolCall]] = None
-    tool_call_id: Optional[str] = None
-
-
-class AgentPayload(BaseModel):
-    messages: list[ChatMessage]
-    error: Optional[str] = None
-    artifacts: dict[str, Any] = Field(default_factory=dict)
-    is_final: Optional[bool] = False
-
-    @property
-    def last_message(self) -> ChatMessage:
-        return self.messages[-1]
-
-    model_config = {"extra": "allow"}
-
-
-class URLDisplayType(StrEnum):
-    blank = "blank"
-    download = "download"
-    viewer = "viewer"
-    no_show = "no_show"
-
-
-class SourceChunk(BaseModel):
-    name: str
-    document_name: str
-    content: str
-    url: Optional[str] = None
-    url_display_type: URLDisplayType = URLDisplayType.viewer
-    metadata: dict[str, Any] = Field(default_factory=dict)
-
-
-class SourcedResponse(BaseModel):
-    response: str
-    sources: list[SourceChunk]
-    is_successful: Optional[bool] = None
-
-
-class TermDefinition(BaseModel):
-    term: str
-    definition: str
-
-
-class DocumentContent(BaseModel):
-    document_name: str
-    content_document: str
-
-
-class ToolDescription(BaseModel):
-    name: str
-    description: str
-    tool_properties: dict[str, dict[str, Any]]
-    required_tool_properties: list[str]
-
-    @property
-    def openai_format(self):
-        return {
-            "type": "function",
-            "function": {
-                "name": self.name,
-                "description": self.description,
-                "parameters": {
-                    "type": "object",
-                    "properties": self.tool_properties,
-                    "required": self.required_tool_properties,
-                },
-            },
-        }
-
-    @property
-    def is_tool(self) -> bool:
-        return self.tool_properties != {}
-
-    @property
-    def parameters(self) -> dict:
-        return self.openai_format.get("function", {}).get("parameters", {})
-
-
-class ComponentAttributes(BaseModel):
-    component_instance_name: str
-    component_instance_id: Optional[UUID] = None
 
 
 class Agent(ABC):
@@ -124,7 +34,7 @@ class Agent(ABC):
         self._trace_events: list[str] = []
 
     @abstractmethod
-    async def _run_without_trace(self, *inputs: AgentPayload, **kwargs) -> AgentPayload:
+    async def _run_without_io_trace(self, *inputs: AgentPayload, **kwargs) -> AgentPayload:
         pass
 
     def log_trace(
@@ -192,7 +102,7 @@ class Agent(ABC):
                     }
                 )
             try:
-                agent_output = await self._run_without_trace(*inputs, **kwargs)
+                agent_output = await self._run_without_io_trace(*inputs, **kwargs)
                 span.set_attributes(
                     {
                         SpanAttributes.OUTPUT_VALUE: agent_output.last_message.content,
