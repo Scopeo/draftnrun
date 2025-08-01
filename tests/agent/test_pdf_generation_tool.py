@@ -74,9 +74,3 @@ async def test_pdf_generation_and_cleanup(pdf_tool):
         # Clean up the PDF file
         pdf_path.unlink()
         assert not pdf_path.exists()
-
-        # Delete the entire temp folder and all its contents
-        temp_folder = Path("test-uuid-12345")
-        if temp_folder.exists():
-            shutil.rmtree(temp_folder)
-            assert not temp_folder.exists()
