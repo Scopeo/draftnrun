@@ -40,11 +40,11 @@ async def pdf_tool(mock_trace_manager):
 
 
 @pytest.mark.anyio
-async def test_pdf_generation_and_cleanup(pdf_tool):
+async def test_pdf_generation_and_cleanup(pdf_tool, tmp_path):
     """Test that PDF is generated and then cleaned up properly."""
-    # Mock the tracing span to return a specific UUID
+    # Use pytest's tmp_path as a writable temp directory for CI safety
     mock_params = Mock()
-    mock_params.uuid_for_temp_folder = "test-uuid-12345"
+    mock_params.uuid_for_temp_folder = str(tmp_path / "test-uuid-12345")
 
     with patch("engine.agent.pdf_generation_tool.get_tracing_span", return_value=mock_params):
         # Generate PDF
