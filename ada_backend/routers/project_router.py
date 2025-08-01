@@ -214,7 +214,7 @@ async def get_project_trace(
 
 
 # TODO: filter trace by graph_runner_id
-@router.get("/{project_id}/trace/v2", response_model=List[TraceSpan], tags=["Metrics"])
+@router.get("/{project_id}/v2/trace", response_model=List[TraceSpan], tags=["Metrics"])
 async def get_project_trace_v2(
     project_id: UUID,
     duration: int,
