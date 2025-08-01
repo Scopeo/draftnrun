@@ -1,4 +1,5 @@
 from uuid import UUID
+import uuid
 
 from sqlalchemy.orm import Session
 import networkx as nx
@@ -13,6 +14,7 @@ from ada_backend.repositories.graph_runner_repository import (
     get_graph_runner_for_env,
     get_start_components,
     graph_runner_exists,
+    delete_temp_folder,
 )
 from engine.agent.agent import Agent
 from ada_backend.repositories.project_repository import get_project, get_project_with_details
@@ -20,7 +22,6 @@ from ada_backend.repositories.organization_repository import get_organization_se
 from engine.graph_runner.runnable import Runnable
 from engine.trace.trace_context import get_trace_manager
 from engine.trace.span_context import set_tracing_span
-from engine.agent.pdf_generation_tool import delete_pdf_file_if_exists
 
 
 def get_organization_llm_providers(session: Session, organization_id: UUID) -> list[str]:
@@ -122,12 +123,13 @@ async def run_agent(
     # TODO : Add again the monitoring for frequently asked questions after parallelization of agent run
     # db_service = SQLLocalService(engine_url="sqlite:///ada_backend/database/monitor.db", dialect="sqlite")
     # asyncio.create_task(monitor_questions(db_service, project_id, input_data))
-
+    uuid_for_temp_folder = str(uuid.uuid4())
     set_tracing_span(
         project_id=str(project_id),
         organization_id=str(project_details.organization_id),
         organization_llm_providers=get_organization_llm_providers(session, project_details.organization_id),
         conversation_id=input_data.get("conversation_id"),
+        uuid_for_temp_folder=uuid_for_temp_folder,
     )
     try:
         agent_output = await agent.run(
@@ -136,7 +138,8 @@ async def run_agent(
         )
     except Exception as e:
         raise ValueError(f"Error running agent: {str(e)}") from e
-    delete_pdf_file_if_exists(agent_output)
+    finally:
+        delete_temp_folder(uuid_for_temp_folder)
     return ChatResponse(
         message=agent_output.last_message.content, artifacts=agent_output.artifacts, error=agent_output.error
     )
