@@ -201,7 +201,7 @@ async def get_project_trace(
     project_id: UUID,
     duration: int,
     user: Annotated[SupabaseUser, Depends(get_user_from_supabase_token)],
-    include_messages: Optional[bool] = None,
+    include_messages: bool = False,
 ):
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")

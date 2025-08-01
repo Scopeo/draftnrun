@@ -108,7 +108,7 @@ def get_attributes_with_messages(span_kind: str, row: pd.Series) -> dict:
     return input, output, documents, tool_info, model_name
 
 
-def build_span_trees(df: pd.DataFrame, include_messages: Optional[bool] = False) -> List[TraceSpan]:
+def build_span_trees(df: pd.DataFrame, include_messages: bool) -> List[TraceSpan]:
     """Convert a Pandas DataFrame containing multiple OpenTelemetry spans into a list of hierarchical JSON trees."""
     traces = defaultdict(dict)  # {trace_id: {span_id: span}}
 
@@ -159,7 +159,7 @@ def build_span_trees(df: pd.DataFrame, include_messages: Optional[bool] = False)
 
 
 def get_trace_by_project(
-    user_id: UUID, project_id: UUID, duration: int, include_messages: Optional[bool] = False
+    user_id: UUID, project_id: UUID, duration: int, include_messages: bool = False
 ) -> List[TraceSpan]:
     df_span = query_trace_duration(project_id, duration)
     track_project_observability_loaded(user_id, project_id)
@@ -170,8 +170,7 @@ def get_trace_by_project(
         df_span = df_span.merge(df_messages, on="span_id", how="left")
 
     df_span = df_span.replace({np.nan: None})
-    print(len(df_span), "spans found for project", project_id, "in the last", duration, "days")
-    return build_span_trees(df_span)
+    return build_span_trees(df_span, include_messages=include_messages)
 
 
 def get_token_usage(organization_id: UUID) -> TokenUsage:
