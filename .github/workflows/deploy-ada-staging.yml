@@ -20,8 +20,8 @@ jobs:
           script: |
             cd /home/ec2-user/draftnrun
             git remote set-url origin git@github.com:scopeo/draftnrun.git
-            git reset --hard HEAD
-            git pull origin staging
+            git fetch --all
+            git reset --hard origin/staging
     
       - name: SSH Remote Commands
         uses: appleboy/ssh-action@master
