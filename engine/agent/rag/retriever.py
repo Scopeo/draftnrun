@@ -9,6 +9,13 @@ from engine.qdrant_service import QdrantService
 from engine.trace.trace_manager import TraceManager
 
 
+def cast_string_to_list(string: Optional[str]) -> list[str]:
+    """Cast a comma-separated string into a list of trimmed strings."""
+    if not string:
+        return []
+    return [s.strip() for s in string.split(",") if s.strip()]
+
+
 class Retriever:
     def __init__(
         self,
@@ -49,7 +56,7 @@ class Retriever:
             enable_date_penalty_for_chunks=self.enable_chunk_penalization,
             chunk_age_penalty_rate=self.chunk_age_penalty_rate,
             default_penalty_rate=self.default_penalty_rate,
-            metadata_date_key=self.metadata_date_key,
+            metadata_date_key=cast_string_to_list(self.metadata_date_key),
             max_retrieved_chunks_after_penalty=self.max_retrieved_chunks_after_penalty,
         )
 

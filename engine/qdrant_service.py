@@ -19,6 +19,52 @@ LOGGER = logging.getLogger(__name__)
 DEFAULT_MAX_CHUNKS = 10
 MAX_BATCH_SIZE_FOR_CHUNK_UPLOAD = 50
 
+# Common datetime formats to try when parsing
+DATETIME_FORMATS = [
+    "%Y-%m-%d %H:%M:%S",
+    "%Y-%m-%d %H:%M:%S.%f",
+    "%Y-%m-%dT%H:%M:%S",
+    "%Y-%m-%dT%H:%M:%S.%f",
+    "%Y-%m-%dT%H:%M:%SZ",
+    "%Y-%m-%dT%H:%M:%S.%fZ",
+    "%Y-%m-%dT%H:%M:%S%z",
+    "%Y-%m-%dT%H:%M:%S.%f%z",
+    "%Y-%m-%d %H:%M:%S%z",
+    "%Y-%m-%d %H:%M:%S.%f%z",
+    "%Y-%m-%d",
+    "%d/%m/%Y",
+    "%m/%d/%Y",
+    "%Y/%m/%d",
+    "%d-%m-%Y",
+    "%m-%d-%Y",
+    "%Y-%m-%d %H:%M",
+    "%d/%m/%Y %H:%M:%S",
+    "%m/%d/%Y %H:%M:%S",
+    "%Y/%m/%d %H:%M:%S",
+    "%d-%m-%Y %H:%M:%S",
+    "%m-%d-%Y %H:%M:%S",
+]
+
+
+def parse_datetime(date_string: str) -> Optional[datetime]:
+
+    if not date_string:
+        return None
+
+    if isinstance(date_string, datetime):
+        return date_string
+
+    # Try each format until one works
+    for fmt in DATETIME_FORMATS:
+        try:
+            return datetime.strptime(date_string, fmt)
+        except ValueError:
+            continue
+
+    # If none of the formats work, log a warning and return None
+    LOGGER.warning(f"Could not parse datetime string: {date_string}")
+    return None
+
 
 class FieldSchema(Enum):
     # TODO: add other field types when we have metadata fields types
@@ -364,7 +410,7 @@ class QdrantService:
     def apply_date_penalty_to_chunks(
         self,
         vector_results: list[tuple[str, float, dict]],
-        metadata_date_key: str,
+        metadata_date_key: list[str],
         default_penalty_rate: float,
         chunk_age_penalty_rate: float,
         max_retrieved_chunks_after_penalty: int,
@@ -373,14 +419,23 @@ class QdrantService:
         current_year = datetime.today().year
         start_of_year = datetime(current_year, 1, 1)
         for vector_id, score, payload in vector_results:
-            date = payload.get(metadata_date_key)
+            # Try each date key in order until we find a valid one
+            date = None
+            for date_key in metadata_date_key:
+                date = payload.get(date_key)
+                if date is not None and date:  # Check if not None and not empty
+                    break
             if not date:
                 penalized_score = default_penalty_rate
             else:
-                chunk_date = datetime.strptime(date, "%Y-%m-%d")
-                age = max(0, (start_of_year - chunk_date).days / 365)
-                penalty = min(age * chunk_age_penalty_rate, 5 * chunk_age_penalty_rate)
-                penalized_score = score - penalty
+                chunk_date = parse_datetime(date)
+                if chunk_date is None:
+                    # If we can't parse the date, apply default penalty
+                    penalized_score = default_penalty_rate
+                else:
+                    age = max(0, (start_of_year - chunk_date).days / 365)
+                    penalty = min(age * chunk_age_penalty_rate, 5 * chunk_age_penalty_rate)
+                    penalized_score = score - penalty
             ordered_chunks.append((vector_id, penalized_score, payload))
         ordered_chunks.sort(key=lambda x: x[1], reverse=True)
         sorted_chunks = ordered_chunks[:max_retrieved_chunks_after_penalty]
@@ -396,7 +451,7 @@ class QdrantService:
         enable_date_penalty_for_chunks: bool = False,
         chunk_age_penalty_rate: Optional[float] = None,
         default_penalty_rate: Optional[float] = None,
-        metadata_date_key: Optional[str] = None,
+        metadata_date_key: Optional[list[str]] = None,
         max_retrieved_chunks_after_penalty: Optional[int] = None,
         **search_params,
     ) -> list[SourceChunk]:
@@ -468,7 +523,7 @@ class QdrantService:
         enable_date_penalty_for_chunks: bool = False,
         chunk_age_penalty_rate: Optional[float] = None,
         default_penalty_rate: Optional[float] = None,
-        metadata_date_key: Optional[str] = None,
+        metadata_date_key: Optional[list[str]] = None,
         max_retrieved_chunks_after_penalty: Optional[int] = None,
         **search_params,
     ) -> list[SourceChunk]:
