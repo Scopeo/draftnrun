@@ -114,12 +114,16 @@ class BaseConfig(BaseSettings):
     REDIS_PASSWORD: Optional[str] = None
     REDIS_QUEUE_NAME: str = "ada_ingestion_queue"
 
-    # S3 configuration
     S3_ENDPOINT_URL: Optional[str] = None
     S3_ACCESS_KEY_ID: Optional[str] = None
     S3_SECRET_ACCESS_KEY: Optional[str] = None
     S3_BUCKET_NAME: Optional[str] = None
     S3_REGION_NAME: Optional[str] = None
+
+    # Ingestion parameters
+    NUMBER_OF_PAGES_TO_DETECT_DOCUMENT_TYPE: Optional[int] = 5
+    PAGE_RESOLUTION_ZOOM: Optional[float] = 3.0
+    INGESTION_VIA_CUSTOM_MODEL: Optional[bool] = False
 
     # Google OAuth configuration
     GOOGLE_CLIENT_ID: Optional[str] = None
@@ -134,9 +138,6 @@ class BaseConfig(BaseSettings):
 
     # Observability stack feature flag
     ENABLE_OBSERVABILITY_STACK: bool = False
-
-    # Number of pages to detect document type
-    NUMBER_OF_PAGES_TO_DETECT_DOCUMENT_TYPE: Optional[int] = 5
 
     @model_validator(mode="after")
     @classmethod
