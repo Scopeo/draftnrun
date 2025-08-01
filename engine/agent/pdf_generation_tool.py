@@ -1,5 +1,4 @@
 import logging
-import uuid
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -11,6 +10,7 @@ from weasyprint import HTML
 
 from engine.agent.agent import Agent, ComponentAttributes, ToolDescription, AgentPayload, ChatMessage
 from engine.trace.trace_manager import TraceManager
+from engine.trace.span_context import get_tracing_span
 
 LOGGER = logging.getLogger(__name__)
 
@@ -25,32 +25,6 @@ DEFAULT_PDF_GENERATION_TOOL_DESCRIPTION = ToolDescription(
     },
     required_tool_properties=["markdown_content"],
 )
-
-
-def delete_pdf_file_if_exists(final_output: AgentPayload | dict) -> None:
-    # Convert to dict if it's an AgentPayload object
-    if not isinstance(final_output, dict):
-        final_output = final_output.__dict__
-    artifacts = final_output.get("artifacts", {})
-    if artifacts:
-        pdf_filename = artifacts.get("pdf_filename", None)
-        if pdf_filename:
-            pdf_path = Path(pdf_filename)
-            if pdf_path.exists() and pdf_path.is_file():
-                # Delete the PDF file
-                pdf_path.unlink()
-                LOGGER.info(f"Deleted PDF file: {pdf_path}")
-
-                # Check if the parent directory is empty and remove it if so
-                parent_dir = pdf_path.parent
-                if parent_dir.exists() and parent_dir.is_dir():
-                    try:
-                        # Check if directory is empty (no files or subdirectories)
-                        if not any(parent_dir.iterdir()):
-                            parent_dir.rmdir()
-                            LOGGER.info(f"Deleted empty directory: {parent_dir}")
-                    except OSError as e:
-                        LOGGER.warning(f"Could not remove directory {parent_dir}: {e}")
 
 
 class PDFGenerationTool(Agent):
@@ -84,8 +58,11 @@ class PDFGenerationTool(Agent):
                 is_final=True,
             )
 
-        uuid_suffix = str(uuid.uuid4())
-        output_dir = Path("temp") / f"{uuid_suffix}"
+        params = get_tracing_span()
+        if not params.uuid_for_temp_folder:
+            raise ValueError("UUID for temp folder is not set")
+
+        output_dir = Path(params.uuid_for_temp_folder)
         output_dir.mkdir(parents=True, exist_ok=True)
 
         # Generate filename with timestamp
