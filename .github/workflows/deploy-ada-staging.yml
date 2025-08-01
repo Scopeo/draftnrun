@@ -20,7 +20,8 @@ jobs:
           script: |
             cd /home/ec2-user/draftnrun
             git remote set-url origin git@github.com:scopeo/draftnrun.git
-            git fetch --all
+            git fetch origin
+            git checkout staging
             git reset --hard origin/staging
     
       - name: SSH Remote Commands
