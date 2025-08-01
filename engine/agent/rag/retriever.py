@@ -37,7 +37,7 @@ class Retriever:
         self.enable_chunk_penalization = enable_date_penalty_for_chunks
         self.chunk_age_penalty_rate = chunk_age_penalty_rate
         self.default_penalty_rate = default_penalty_rate
-        self.metadata_date_key = cast_string_to_list(metadata_date_key)
+        self.metadata_date_key = metadata_date_key
         self.max_retrieved_chunks_after_penalty = max_retrieved_chunks_after_penalty
         self.component_attributes = component_attributes or ComponentAttributes(
             component_instance_name=self.__class__.__name__
@@ -56,7 +56,7 @@ class Retriever:
             enable_date_penalty_for_chunks=self.enable_chunk_penalization,
             chunk_age_penalty_rate=self.chunk_age_penalty_rate,
             default_penalty_rate=self.default_penalty_rate,
-            metadata_date_key=self.metadata_date_key,
+            metadata_date_key=cast_string_to_list(self.metadata_date_key),
             max_retrieved_chunks_after_penalty=self.max_retrieved_chunks_after_penalty,
         )
 
