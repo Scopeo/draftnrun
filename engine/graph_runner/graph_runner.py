@@ -1,7 +1,7 @@
 import logging
 from enum import StrEnum
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, Union, Any
 
 import networkx as nx
 from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttributes
@@ -11,6 +11,10 @@ from engine.agent.agent import AgentPayload, ChatMessage
 from engine.graph_runner.runnable import Runnable
 from engine.trace.trace_manager import TraceManager
 from engine.trace.serializer import serialize_to_json
+from engine.control_directives.batching import BatchStart, BatchEnd, BatchAgentPayload
+
+PayloadType = Union[AgentPayload, BatchAgentPayload]
+ExecutableType = Union[Runnable, BatchStart, BatchEnd]
 
 LOGGER = logging.getLogger(__name__)
 
@@ -27,7 +31,7 @@ class Task:
 
     pending_deps: int
     state: TaskState = TaskState.NOT_READY
-    result: Optional[AgentPayload] = None
+    result: Optional[PayloadType] = None  # Can be either AgentPayload or BatchAgentPayload
 
     def decrement_pending_deps(self):
         """Decrement pending dependencies, marking the task as ready
@@ -42,7 +46,7 @@ class Task:
         if self.pending_deps == 0:
             self.state = TaskState.READY
 
-    def complete(self, result: AgentPayload):
+    def complete(self, result: PayloadType):
         """Mark the task as completed with a result."""
         if self.state != TaskState.READY:
             raise ValueError("Cannot complete a non-ready task")
@@ -68,13 +72,13 @@ class GraphRunner:
     def __init__(
         self,
         graph: nx.DiGraph,
-        runnables: dict[str, Runnable],
+        executables: dict[str, ExecutableType],  # Both Runnables and Control Directives
         start_nodes: list[str],
         trace_manager: TraceManager,
     ):
         self.trace_manager = trace_manager
         self.graph = graph
-        self.runnables = runnables
+        self.executables = executables  # Unified dictionary for all executable components
         self.start_nodes = start_nodes
 
         # Track node dependencies and results
@@ -145,10 +149,7 @@ class GraphRunner:
             task = self.tasks[node_id]
             assert task.state == TaskState.READY, f"Node '{node_id}' is not ready"
 
-            input_list = self._gather_inputs(node_id)
-
-            runnable = self.runnables[node_id]
-            result = await runnable.run(*tuple(input_list))
+            result = await self._execute_node(node_id)
 
             LOGGER.debug(f"Node '{node_id}' completed execution with result: {result}")
             task.complete(result)
@@ -161,6 +162,50 @@ class GraphRunner:
         final_output = self._collect_outputs()
         return final_output
 
+    # TODO: This is an example of type-based dispatch. It probably doesn't
+    # handle the multiple inputs correctly (*inputs) but it shows the idea
+    async def _execute_node(self, node_id: str) -> PayloadType:
+        """
+        Execute a single node with type-based dispatch.
+        Handles both Runnables (agents/services) and Control Directives.
+        """
+        inputs = self._gather_inputs(node_id)
+        executable = self.executables[node_id]
+
+        # Type-based dispatch with validation
+        if isinstance(executable, BatchStart):
+            # BatchStart expects single AgentPayload
+            # maybe this check could go on the BatchStart class itself
+            # and we could have a "validate_input" method for each directive
+            if not inputs or not isinstance(inputs[0], AgentPayload):
+                raise ValueError(f"BatchStart node {node_id} requires AgentPayload input")
+            result = await executable(inputs)
+
+        elif isinstance(executable, BatchEnd):
+            # BatchEnd expects BatchAgentPayload
+            if not inputs or not isinstance(inputs[0], BatchAgentPayload):
+                raise ValueError(f"BatchEnd node {node_id} requires BatchAgentPayload input")
+            result = await executable(inputs)
+
+        elif isinstance(executable, Runnable):
+            # Handle batch processing for agents
+            input_payload = inputs[0]
+
+            if isinstance(input_payload, BatchAgentPayload):
+                # Agent receives batch - process each chunk
+                batch_results = []
+                for payload in input_payload.payloads:
+                    chunk_result = await executable.run(payload)
+                    batch_results.append(chunk_result)
+                result = BatchAgentPayload(payloads=batch_results)
+            else:
+                # Normal agent execution
+                result = await executable.run(input_payload)
+        else:
+            raise ValueError(f"Unknown executable type for node {node_id}: {type(executable)}")
+
+        return result
+
     def _add_virtual_input_node(self):
         """Add a virtual input node and connect it to all start nodes."""
         self.graph.add_node(self._input_node_id)
@@ -172,10 +217,10 @@ class GraphRunner:
 
     # NOTE: Our current AgentInput/Output loses the message history
     # TODO: Fix this after AgentInput/Output is refactored
-    def _gather_inputs(self, node_id: str) -> list[AgentPayload]:
+    def _gather_inputs(self, node_id: str) -> list[PayloadType]:
         """Gather inputs for a node from its predecessors"""
 
-        results: list[AgentPayload] = []
+        results: list[PayloadType] = []
 
         ordered_predecessors = sorted(
             self.graph.predecessors(node_id), key=lambda pred: self.graph[pred][node_id].get("order", 0)
@@ -211,8 +256,8 @@ class GraphRunner:
         return _merge_agent_outputs(leaf_outputs)
 
     def _validate_graph(self):
-        if len(set(self.runnables.keys())) != len(self.runnables):
-            raise ValueError("All runnables ids must be unique")
+        if len(set(self.executables.keys())) != len(self.executables):
+            raise ValueError("All executable ids must be unique")
 
-        if set(self.runnables.keys()) != set(self.graph.nodes()) - {self._input_node_id}:
-            raise ValueError("All runnables must be in the graph")
+        if set(self.executables.keys()) != set(self.graph.nodes()) - {self._input_node_id}:
+            raise ValueError("All executables must be in the graph")
