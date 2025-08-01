@@ -56,9 +56,9 @@ async def test_pdf_generation_and_cleanup(pdf_tool):
         artifacts = getattr(result, "artifacts", None) or result.__dict__.get("artifacts", {})
         pdf_filename = artifacts.get("pdf_filename")
         assert pdf_filename is not None
+        pdf_path = Path(pdf_filename)
 
         # Verify PDF file exists
-        pdf_path = Path(pdf_filename)
         assert pdf_path.exists()
         assert pdf_path.is_file()
         assert pdf_path.suffix == ".pdf"
