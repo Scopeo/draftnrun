@@ -1,6 +1,6 @@
 import pytest
 import pytest_asyncio
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch, Mock
 from pathlib import Path
 import shutil
 
@@ -38,35 +38,40 @@ async def pdf_tool(mock_trace_manager):
 @pytest.mark.anyio
 async def test_pdf_generation_and_cleanup(pdf_tool):
     """Test that PDF is generated and then cleaned up properly."""
-    # Generate PDF
-    result = await pdf_tool._run_without_trace(markdown_content=MARKDOWN_CONTENT)
+    # Mock the tracing span to return a specific UUID
+    mock_params = Mock()
+    mock_params.uuid_for_temp_folder = "test-uuid-12345"
 
-    # Verify result structure
-    assert result.is_final is True
-    assert result.error is None
-    assert len(result.messages) == 1
-    assert "PDF generated successfully" in result.messages[0].content
+    with patch("engine.agent.pdf_generation_tool.get_tracing_span", return_value=mock_params):
+        # Generate PDF
+        result = await pdf_tool._run_without_trace(markdown_content=MARKDOWN_CONTENT)
 
-    # Get the PDF filename from artifacts
-    artifacts = getattr(result, "artifacts", None) or result.__dict__.get("artifacts", {})
-    pdf_filename = artifacts.get("pdf_filename")
-    assert pdf_filename is not None
+        # Verify result structure
+        assert result.is_final is True
+        assert result.error is None
+        assert len(result.messages) == 1
+        assert "PDF generated successfully" in result.messages[0].content
 
-    # Verify PDF file exists
-    pdf_path = Path(pdf_filename)
-    assert pdf_path.exists()
-    assert pdf_path.is_file()
-    assert pdf_path.suffix == ".pdf"
+        # Get the PDF filename from artifacts
+        artifacts = getattr(result, "artifacts", None) or result.__dict__.get("artifacts", {})
+        pdf_filename = artifacts.get("pdf_filename")
+        assert pdf_filename is not None
 
-    # Verify file size is reasonable (not empty)
-    assert pdf_path.stat().st_size > 100  # Should be at least 100 bytes
+        # Verify PDF file exists
+        pdf_path = Path(pdf_filename)
+        assert pdf_path.exists()
+        assert pdf_path.is_file()
+        assert pdf_path.suffix == ".pdf"
 
-    # Clean up the PDF file
-    pdf_path.unlink()
-    assert not pdf_path.exists()
+        # Verify file size is reasonable (not empty)
+        assert pdf_path.stat().st_size > 100  # Should be at least 100 bytes
 
-    # Delete the entire temp folder and all its contents
-    temp_folder = Path("temp")
-    if temp_folder.exists():
-        shutil.rmtree(temp_folder)
-        assert not temp_folder.exists()
+        # Clean up the PDF file
+        pdf_path.unlink()
+        assert not pdf_path.exists()
+
+        # Delete the entire temp folder and all its contents
+        temp_folder = Path("test-uuid-12345")
+        if temp_folder.exists():
+            shutil.rmtree(temp_folder)
+            assert not temp_folder.exists()
