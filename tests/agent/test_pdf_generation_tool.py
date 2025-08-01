@@ -34,7 +34,6 @@ async def pdf_tool(mock_trace_manager):
     yield tool
 
 
-
 @pytest.mark.anyio
 async def test_pdf_generation_and_cleanup(pdf_tool, tmp_path):
     """Test that PDF is generated and then cleaned up properly."""
