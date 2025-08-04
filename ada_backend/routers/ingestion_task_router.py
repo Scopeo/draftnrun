@@ -17,11 +17,13 @@ from ada_backend.services.ingestion_task_service import (
     create_ingestion_task_by_organization,
     upsert_ingestion_task_by_organization_id,
     delete_ingestion_task_by_id,
+    update_ingestion_task_by_source_id,
 )
 from ada_backend.schemas.ingestion_task_schema import (
     IngestionTaskQueue,
     IngestionTaskUpdate,
     IngestionTaskResponse,
+    UpdateIngestionTaskRequest,
 )
 
 
@@ -59,6 +61,9 @@ def create_organization_task(
         # Create the ingestion task
         task_id = create_ingestion_task_by_organization(session, user.id, organization_id, ingestion_task_data)
         return task_id
+    except ValueError as e:
+        # Handle validation errors (including duplicate source name)
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail="Internal Server Error") from e
 
@@ -73,6 +78,38 @@ def update_organization_task(
     try:
         upsert_ingestion_task_by_organization_id(session, organization_id, ingestion_task_data)
         return None
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Internal Server Error") from e
+
+
+@router.patch("/{organization_id}/sources/{source_id}/tasks", status_code=status.HTTP_200_OK)
+def update_ingestion_task_by_source(
+    organization_id: UUID,
+    source_id: UUID,
+    update_request: UpdateIngestionTaskRequest,
+    user: Annotated[
+        SupabaseUser, Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.WRITER.value))
+    ],
+    session: Session = Depends(get_db),
+) -> dict:
+    """
+    Update ingestion task for a specific source with new files/folders.
+
+    This endpoint creates a new ingestion task linked to the existing source
+    and triggers re-ingestion with the provided files or folder.
+    """
+    if not user.id:
+        raise HTTPException(status_code=400, detail="User ID not found")
+
+    try:
+        task_id = update_ingestion_task_by_source_id(session, user.id, organization_id, source_id, update_request)
+        return {
+            "message": "Ingestion task updated successfully",
+            "task_id": str(task_id),
+            "source_id": str(source_id),
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail="Internal Server Error") from e
 

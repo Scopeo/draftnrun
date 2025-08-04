@@ -19,7 +19,13 @@ from engine.storage_service.db_service import DBService
 from engine.storage_service.db_utils import PROCESSED_DATETIME_FIELD, DBColumn, DBDefinition, create_db_if_not_exists
 from engine.storage_service.local_service import SQLLocalService
 from engine.trace.trace_manager import TraceManager
-from ingestion_script.utils import create_source, get_sanitize_names, update_ingestion_task
+from ingestion_script.utils import (
+    create_source,
+    update_source,
+    get_source_by_name,
+    get_sanitize_names,
+    update_ingestion_task,
+)
 from settings import settings
 
 LOGGER = logging.getLogger(__name__)
@@ -171,31 +177,41 @@ def _ingest_folder_source(
     LOGGER.info(f"Table schema in ingestion : {db_table_schema}")
     LOGGER.info(f"Table name in ingestion : {db_table_name}")
 
-    ingestion_task = IngestionTaskUpdate(
+    in_progress_ingestion_task = IngestionTaskUpdate(
+        id=task_id,
+        source_name=source_name,
+        source_type=source_type,
+        status=db.TaskStatus.IN_PROGRESS,
+    )
+
+    update_ingestion_task(
+        organization_id=organization_id,
+        ingestion_task=in_progress_ingestion_task,
+    )
+
+    failing_ingestion_task = IngestionTaskUpdate(
         id=task_id,
         source_name=source_name,
         source_type=source_type,
         status=db.TaskStatus.FAILED,
     )
 
-    # Check if source already exists in either database or Qdrant
-    if db_service.schema_exists(schema_name=db_table_schema) and db_service.table_exists(
-        table_name=db_table_name, schema_name=db_table_schema
-    ):
+    # Check if source already exists in database or Qdrant
+    if (
+        db_service.schema_exists(schema_name=db_table_schema)
+        and db_service.table_exists(table_name=db_table_name, schema_name=db_table_schema)
+    ) or qdrant_service.collection_exists(qdrant_collection_name):
         LOGGER.error(f"Source {source_name} already exists in Database")
+        updating_ingestion_task = IngestionTaskUpdate(
+            id=task_id,
+            source_name=source_name,
+            source_type=source_type,
+            status=db.TaskStatus.UPDATING,
+        )
         update_ingestion_task(
             organization_id=organization_id,
-            ingestion_task=ingestion_task,
+            ingestion_task=updating_ingestion_task,
         )
-        return
-
-    if qdrant_service.collection_exists(qdrant_collection_name):
-        LOGGER.error(f"Source {source_name} already exists in Qdrant")
-        update_ingestion_task(
-            organization_id=organization_id,
-            ingestion_task=ingestion_task,
-        )
-        return
 
     LOGGER.info("Starting ingestion process")
     files_info = folder_manager.list_all_files_info()
@@ -217,7 +233,7 @@ def _ingest_folder_source(
         LOGGER.error(f"Failed to chunk documents: {str(e)}")
         update_ingestion_task(
             organization_id=organization_id,
-            ingestion_task=ingestion_task,
+            ingestion_task=failing_ingestion_task,
         )
         return
 
@@ -259,12 +275,13 @@ def _ingest_folder_source(
             sync_chunks_to_qdrant(db_table_schema, db_table_name, qdrant_collection_name, db_service, qdrant_service)
     except Exception as e:
         LOGGER.error(f"Failed to ingest folder source: {str(e)}")
-        ingestion_task.status = db.TaskStatus.FAILED
         update_ingestion_task(
             organization_id=organization_id,
-            ingestion_task=ingestion_task,
+            ingestion_task=failing_ingestion_task,
         )
         return
+
+    # Create or update source in database
     source_data = DataSourceSchema(
         name=source_name,
         type=source_type,
@@ -274,13 +291,23 @@ def _ingest_folder_source(
         qdrant_schema=QDRANT_SCHEMA.to_dict(),
         embedding_model_reference=f"{EMBEDDING_SERVICE._provider}:{EMBEDDING_SERVICE._model_name}",
     )
-    LOGGER.info(f"Creating source {source_name} for organization {organization_id} in database")
-    source_id = create_source(
-        organization_id=organization_id,
-        source_data=source_data,
-    )
 
-    ingestion_task = IngestionTaskUpdate(
+    existing_source = get_source_by_name(organization_id=organization_id, source_name=source_name)
+    if existing_source:
+        LOGGER.info(f"Source {source_name} already exists, updating it.")
+        update_source(
+            source_id=existing_source["id"],
+            source_data=source_data,
+        )
+        source_id = existing_source["id"]
+    else:
+        LOGGER.info(f"Source {source_name} does not exist, creating it.")
+        source_id = create_source(
+            organization_id=organization_id,
+            source_data=source_data,
+        )
+
+    sucessful_ingestion_task = IngestionTaskUpdate(
         id=task_id,
         source_id=source_id,
         source_name=source_name,
@@ -291,6 +318,6 @@ def _ingest_folder_source(
     LOGGER.info(f" Update status {source_name} source for organization {organization_id} in database")
     update_ingestion_task(
         organization_id=organization_id,
-        ingestion_task=ingestion_task,
+        ingestion_task=sucessful_ingestion_task,
     )
-    LOGGER.info(f"Successfully ingested {source_name} source for organization {organization_id}")
+    LOGGER.info(f"Successfully ingested/updated {source_name} source for organization {organization_id}")

@@ -63,10 +63,36 @@ def update_ingestion_task(
         ) from e
 
 
+def get_sources_by_organization(organization_id: str) -> list:
+    """Get all sources for an organization."""
+    try:
+        response = requests.get(
+            f"{str(settings.ADA_URL)}/sources/{organization_id}/ingestion",
+            headers={
+                "x-ingestion-api-key": settings.INGESTION_API_KEY,
+                "Content-Type": "application/json",
+            },
+        )
+        response.raise_for_status()
+        return response.json()
+    except Exception as e:
+        LOGGER.error(f"Failed to get sources for organization {organization_id}: {str(e)}")
+        return []
+
+
+def get_source_by_name(organization_id: str, source_name: str):
+    """Get a source by name and organization."""
+    sources = get_sources_by_organization(organization_id)
+    for source in sources:
+        if source.get("name") == source_name:
+            return source
+    return None
+
+
 def create_source(
     organization_id: str,
     source_data: DataSourceSchema,
-) -> None:
+) -> str:
     """Create a source in the database."""
 
     try:
@@ -79,13 +105,39 @@ def create_source(
             },
         )
         response.raise_for_status()
+        source_id = response.json()  # The endpoint returns the UUID directly
         LOGGER.info(f"Successfully created source for organization {organization_id}")
-        return response.json()
+        return str(source_id)  # Convert UUID to string
     except Exception as e:
         LOGGER.error(f"Failed to create source: {str(e)}")
         raise requests.exceptions.RequestException(
             f"Failed to create source for organization {organization_id}: "
             f"{str(e)} with the data {source_data.model_dump(mode='json')}"
+        ) from e
+
+
+def update_source(
+    source_id: str,
+    source_data: DataSourceSchema,
+) -> None:
+    """Update a source in the database by its ID."""
+
+    try:
+        response = requests.patch(
+            f"{str(settings.ADA_URL)}/sources/{source_id}",
+            json=source_data.model_dump(mode="json"),
+            headers={
+                "x-ingestion-api-key": settings.INGESTION_API_KEY,
+                "Content-Type": "application/json",
+            },
+        )
+        response.raise_for_status()
+        LOGGER.info(f"Successfully updated source {source_id}")
+        return None  # PATCH endpoint returns no content
+    except Exception as e:
+        LOGGER.error(f"Failed to update source: {str(e)}")
+        raise requests.exceptions.RequestException(
+            f"Failed to update source {source_id}: " f"{str(e)} with the data {source_data.model_dump(mode='json')}"
         ) from e
 
 

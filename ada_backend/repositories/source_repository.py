@@ -1,6 +1,7 @@
 from uuid import UUID
 from typing import Optional
 import logging
+from datetime import datetime
 
 from sqlalchemy.orm import Session
 
@@ -13,7 +14,6 @@ def get_data_source_by_id(
     session_sql_alchemy: Session,
     source_id: UUID,
 ) -> Optional[db.DataSource]:
-    """Retrieve a source by its id"""
     return (
         session_sql_alchemy.query(db.DataSource)
         .filter(
@@ -28,7 +28,6 @@ def get_data_source_by_org_id(
     organization_id: UUID,
     source_id: UUID,
 ) -> Optional[db.DataSource]:
-    """Retrieve a source by its id and organization id"""
     return (
         session_sql_alchemy.query(db.DataSource)
         .filter(
@@ -39,13 +38,27 @@ def get_data_source_by_org_id(
     )
 
 
+def get_data_source_by_name_and_org(
+    session_sql_alchemy: Session,
+    organization_id: UUID,
+    source_name: str,
+) -> Optional[db.DataSource]:
+    if isinstance(organization_id, str):
+        organization_id = UUID(organization_id)
+    return (
+        session_sql_alchemy.query(db.DataSource)
+        .filter(
+            db.DataSource.organization_id == organization_id,
+            db.DataSource.name == source_name,
+        )
+        .first()
+    )
+
+
 def get_sources(
     session_sql_alchemy: Session,
     organization_id: UUID,
 ) -> list[db.DataSource]:
-    """"""
-    if isinstance(organization_id, str):
-        organization_id = UUID(organization_id)
     query = session_sql_alchemy.query(db.DataSource).filter(db.DataSource.organization_id == organization_id)
     sources = query.all()
     return sources
@@ -89,7 +102,6 @@ def upsert_source(
     qdrant_schema: Optional[dict] = None,
     embedding_model_reference: Optional[str] = None,
 ) -> None:
-    """"""
     existing_source = (
         session_sql_alchemy.query(db.DataSource)
         .filter(
@@ -109,6 +121,7 @@ def upsert_source(
         existing_source.database_table_name = database_table_name
         existing_source.qdrant_collection_name = qdrant_collection_name
         existing_source.qdrant_schema = qdrant_schema
+        existing_source.last_ingestion_time = datetime.utcnow()
     session_sql_alchemy.commit()
 
 
@@ -122,3 +135,20 @@ def delete_source(
         db.DataSource.organization_id == organization_id, db.DataSource.id == source_id
     ).delete()
     session_sql_alchemy.commit()
+
+
+def check_source_name_exists(
+    session_sql_alchemy: Session,
+    organization_id: UUID,
+    source_name: str,
+) -> bool:
+    existing_source = (
+        session_sql_alchemy.query(db.DataSource)
+        .filter(
+            db.DataSource.organization_id == organization_id,
+            db.DataSource.name == source_name,
+        )
+        .first()
+    )
+
+    return existing_source is not None
