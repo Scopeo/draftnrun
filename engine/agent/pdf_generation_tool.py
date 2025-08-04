@@ -42,7 +42,7 @@ class PDFGenerationTool(Agent):
             component_attributes=component_attributes,
         )
 
-    async def _run_without_trace(
+    def _run_without_trace(
         self,
         *inputs: AgentPayload,
         **kwargs: Any,

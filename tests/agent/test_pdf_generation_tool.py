@@ -42,8 +42,8 @@ async def test_pdf_generation_and_cleanup(pdf_tool, tmp_path):
     mock_params.uuid_for_temp_folder = str(tmp_path / "test-uuid-12345")
 
     with patch("engine.agent.pdf_generation_tool.get_tracing_span", return_value=mock_params):
-        # Generate PDF
-        result = await pdf_tool._run_without_trace(markdown_content=MARKDOWN_CONTENT)
+
+        result = pdf_tool._run_without_trace(markdown_content=MARKDOWN_CONTENT)
 
         # Verify result structure
         assert result.is_final is True
