@@ -7,8 +7,8 @@ from typing import Any
 from openinference.semconv.trace import OpenInferenceSpanKindValues
 import markdown2
 from weasyprint import HTML
-
-from engine.agent.agent import Agent, ComponentAttributes, ToolDescription, AgentPayload, ChatMessage
+from engine.agent.agent import Agent
+from engine.agent.types import ChatMessage, AgentPayload, ToolDescription, ComponentAttributes
 from engine.trace.trace_manager import TraceManager
 from engine.trace.span_context import get_tracing_span
 
@@ -42,7 +42,7 @@ class PDFGenerationTool(Agent):
             component_attributes=component_attributes,
         )
 
-    def _run_without_trace(
+    async def _run_without_io_trace(
         self,
         *inputs: AgentPayload,
         **kwargs: Any,

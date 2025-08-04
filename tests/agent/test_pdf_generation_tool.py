@@ -43,7 +43,7 @@ async def test_pdf_generation_and_cleanup(pdf_tool, tmp_path):
 
     with patch("engine.agent.pdf_generation_tool.get_tracing_span", return_value=mock_params):
 
-        result = pdf_tool._run_without_trace(markdown_content=MARKDOWN_CONTENT)
+        result = await pdf_tool._run_without_io_trace(markdown_content=MARKDOWN_CONTENT)
 
         # Verify result structure
         assert result.is_final is True
