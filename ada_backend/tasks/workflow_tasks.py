@@ -74,16 +74,17 @@ def get_production_endpoint_url(project_id: str) -> str:
 
 
 @celery_app.task(name="execute_scheduled_workflow", bind=True)
-def execute_scheduled_workflow(self, project_id: str, graph_runner_id: str, scheduler_id: str, **kwargs):
+def execute_scheduled_workflow(self, project_id: str, scheduled_workflow_uuid: str, type: str, args: str, **kwargs):
     """
     Execute a scheduled workflow via HTTP call to production endpoint.
     This task is triggered by Celery Beat based on cron schedules.
 
     Args:
         project_id: Project UUID string
-        graph_runner_id: Graph runner UUID string
-        scheduler_id: Scheduler component instance UUID string
-        **kwargs: Additional arguments from periodic task (cron_expression, timezone, etc.)
+        scheduled_workflow_uuid: Scheduled workflow UUID string
+        type: Workflow type (Project, Ingestion)
+        args: JSON string containing workflow arguments
+        **kwargs: Additional arguments from periodic task
 
     Returns:
         Execution result
@@ -91,18 +92,20 @@ def execute_scheduled_workflow(self, project_id: str, graph_runner_id: str, sche
     task_id = self.request.id
     start_time = datetime.utcnow()
 
-    # Extract additional info from kwargs
-    cron_expression = kwargs.get("cron_expression", "unknown")
-    timezone = kwargs.get("timezone", "UTC")
-    user_timezone = kwargs.get("user_timezone", timezone)
-    created_at = kwargs.get("created_at")
-
-    LOGGER.info(
-        f"Starting scheduled workflow execution: task={task_id}, project={project_id}, graph={graph_runner_id}"
-    )
-    LOGGER.info(f"Scheduled execution details: cron={cron_expression}, tz={timezone}, user_tz={user_timezone}")
-
     try:
+        # Parse args to get component information
+        import json
+
+        args_dict = json.loads(args)
+        component_instance_id = args_dict.get("component_instance_id")
+        cron_expression = args_dict.get("cron_expression", "unknown")
+        timezone = args_dict.get("timezone", "UTC")
+
+        LOGGER.info(
+            f"Starting scheduled workflow execution: task={task_id}, project={project_id}, workflow={scheduled_workflow_uuid}"
+        )
+        LOGGER.info(f"Scheduled execution details: cron={cron_expression}, tz={timezone}, type={type}")
+
         # Get cron API key for the project
         with get_db_session() as session:
             cron_api_key = get_existing_cron_api_key(session, UUID(project_id))
@@ -140,11 +143,10 @@ def execute_scheduled_workflow(self, project_id: str, graph_runner_id: str, sche
                 "task_id": task_id,
                 "cron_expression": cron_expression,
                 "timezone": timezone,
-                "user_timezone": user_timezone,
                 "triggered_at": start_time.isoformat(),
-                "graph_runner_id": graph_runner_id,
-                "scheduler_id": scheduler_id,
-                "schedule_created_at": created_at,
+                "scheduled_workflow_uuid": scheduled_workflow_uuid,
+                "type": type,
+                "component_instance_id": component_instance_id,
             },
         }
 
@@ -167,8 +169,7 @@ def execute_scheduled_workflow(self, project_id: str, graph_runner_id: str, sche
                 "status": "SUCCESS",
                 "task_id": task_id,
                 "project_id": project_id,
-                "graph_runner_id": graph_runner_id,
-                "scheduler_id": scheduler_id,
+                "scheduled_workflow_uuid": scheduled_workflow_uuid,
                 "execution_time": execution_time,
                 "result": result["result"],
                 "http_status_code": result["status_code"],
@@ -181,8 +182,7 @@ def execute_scheduled_workflow(self, project_id: str, graph_runner_id: str, sche
                 "error": error_msg,
                 "task_id": task_id,
                 "project_id": project_id,
-                "graph_runner_id": graph_runner_id,
-                "scheduler_id": scheduler_id,
+                "scheduled_workflow_uuid": scheduled_workflow_uuid,
                 "execution_time": execution_time,
                 "http_status_code": result.get("status_code"),
             }
@@ -197,8 +197,7 @@ def execute_scheduled_workflow(self, project_id: str, graph_runner_id: str, sche
             "error": error_msg,
             "task_id": task_id,
             "project_id": project_id,
-            "graph_runner_id": graph_runner_id,
-            "scheduler_id": scheduler_id,
+            "scheduled_workflow_uuid": scheduled_workflow_uuid,
             "execution_time": execution_time,
         }
 

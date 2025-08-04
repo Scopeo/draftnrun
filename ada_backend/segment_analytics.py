@@ -7,7 +7,7 @@ from settings import settings
 
 
 LOGGER = logging.getLogger(__name__)
-if hasattr(settings, "SEGMENT_API_KEY") and hasattr(settings, "ENV"):
+if hasattr(settings, "SEGMENT_API_KEY") and hasattr(settings, "ENV") and settings.SEGMENT_API_KEY:
     analytics.write_key = settings.SEGMENT_API_KEY
     analytics_enabled = True
 else:

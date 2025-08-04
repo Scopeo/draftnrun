@@ -16,6 +16,7 @@ from sqlalchemy import (
     func,
     CheckConstraint,
     UUID,
+    Index,
 )
 from sqlalchemy.orm import relationship, declarative_base, mapped_column
 from cryptography.fernet import Fernet
@@ -605,6 +606,7 @@ class Project(Base):
         cascade="all, delete-orphan",
     )
     envs = relationship("ProjectEnvironmentBinding", back_populates="project")
+    scheduled_workflows = relationship("ScheduledWorkflow", back_populates="project")
 
     def __str__(self):
         return f"Project({self.name})"
@@ -749,3 +751,82 @@ class DataSource(Base):
 
     def __str__(self):
         return f"DataSource({self.name})"
+
+
+# --- Scheduled Workflows ---
+class ScheduledWorkflowType(StrEnum):
+    """Enumeration of scheduled workflow types."""
+
+    INGESTION = "Ingestion"
+    PROJECT = "Project"
+
+
+class ScheduledWorkflow(Base):
+    """
+    Primary source of truth for scheduled workflows.
+    Links to django-celery-beat tables via UUID for automatic synchronization.
+    """
+
+    __tablename__ = "scheduled_workflows"
+
+    # Primary key
+    id = mapped_column(Integer, primary_key=True, autoincrement=True)
+
+    # UUID for linking with django-celery-beat tables
+    uuid = mapped_column(UUID(as_uuid=True), default=uuid.uuid4, unique=True, nullable=False)
+
+    # Foreign keys
+    organization_id = mapped_column(UUID(as_uuid=True), nullable=False)  # No foreign key since no Organization model
+    project_id = mapped_column(UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=True)
+
+    # Timestamps
+    created_at = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+    # Workflow type
+    type = mapped_column(make_pg_enum(ScheduledWorkflowType), nullable=False)
+
+    # Scheduling fields
+    cron_expression = mapped_column(String, nullable=False)
+    timezone = mapped_column(String, nullable=False, default="UTC")
+    enabled = mapped_column(Boolean, nullable=False, default=True)
+
+    # Arguments as JSON string
+    args = mapped_column(Text, nullable=False, default="{}")
+
+    # Relationships
+    project = relationship("Project", back_populates="scheduled_workflows")
+
+    # Constraints
+    __table_args__ = (
+        # Check that args is valid JSON
+        CheckConstraint("args::json IS NOT NULL", name="chk_scheduled_workflows_args_json"),
+        # Check that project_id is required for Project type
+        CheckConstraint(
+            "(type = 'Project' AND project_id IS NOT NULL) OR (type = 'Ingestion' AND project_id IS NULL)",
+            name="chk_scheduled_workflows_project_required_for_project_type",
+        ),
+        # Indexes for better performance
+        Index("idx_scheduled_workflows_organization_id", "organization_id"),
+        Index("idx_scheduled_workflows_project_id", "project_id"),
+        Index("idx_scheduled_workflows_type", "type"),
+        Index("idx_scheduled_workflows_uuid", "uuid"),
+        Index("idx_scheduled_workflows_created_at", "created_at"),
+        Index("idx_scheduled_workflows_enabled", "enabled"),
+    )
+
+    def __repr__(self):
+        return f"<ScheduledWorkflow(id={self.id}, uuid={self.uuid}, type={self.type}, organization_id={self.organization_id})>"
+
+    def to_dict(self):
+        """Convert model to dictionary"""
+        return {
+            "id": self.id,
+            "uuid": str(self.uuid),
+            "organization_id": str(self.organization_id),
+            "project_id": str(self.project_id) if self.project_id else None,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+            "type": self.type.value if self.type else None,
+            "args": self.args,
+        }

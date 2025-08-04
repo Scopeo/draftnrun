@@ -1,6 +1,6 @@
 from settings import settings
 
-# Standard database settings (using public schema)
+# Database settings with custom schema for django-celery-beat
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.postgresql",
@@ -9,6 +9,7 @@ DATABASES = {
         "PASSWORD": settings.ADA_DB_PASSWORD,
         "HOST": settings.ADA_DB_HOST,
         "PORT": settings.ADA_DB_PORT,
+        "OPTIONS": {"options": "-c search_path=django_beat_cron_scheduler,public"},
     }
 }
 
@@ -31,9 +32,6 @@ SECRET_KEY = "django-celery-beat-minimal-config"
 
 # Debug settings
 DEBUG = False
-
-# Database settings
-DATABASE_OPTIONS = {}
 
 # Middleware (standard)
 MIDDLEWARE = [
@@ -90,26 +88,3 @@ TEMPLATES = [
         },
     },
 ]
-
-
-class SchemaRouter:
-    def db_for_read(self, model, **hints):
-        if model._meta.app_label == "django_celery_beat":
-            return "default"
-        return None
-
-    def db_for_write(self, model, **hints):
-        if model._meta.app_label == "django_celery_beat":
-            return "default"
-        return None
-
-    def allow_migrate(self, db, app_label, model_name=None, **hints):
-        if app_label == "django_celery_beat":
-            return db == "default"
-        return None
-
-
-DATABASE_ROUTERS = ["ada_backend.django_scheduler.django_settings.SchemaRouter"]
-
-# Force table creation in schema by setting table prefix
-TABLE_PREFIX = "scheduled_workflows."

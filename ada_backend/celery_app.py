@@ -43,15 +43,18 @@ celery_app.conf.update(
     timezone="UTC",
     enable_utc=True,
     result_expires=3600,  # Remove the task from redis after 1 hour
-    # Task routing - only execution tasks use Redis
+    # Task routing
     task_routes={
-        "ada_backend.tasks.workflow_tasks.*": {"queue": "scheduled_workflows"},
+        "execute_scheduled_workflow": {"queue": "scheduled_workflows"},
+        "cleanup_old_executions": {"queue": "default"},
+        "ada_backend.tasks.test_tasks.*": {"queue": "scheduled_tasks"},
     },
     # Define queues
     task_default_queue="default",
     task_queues=(
         Queue("default"),
         Queue("scheduled_workflows"),  # For scheduled workflow execution
+        Queue("scheduled_tasks"),  # For test tasks and other scheduled tasks
     ),
     # Worker configuration
     worker_prefetch_multiplier=1,
@@ -75,7 +78,8 @@ celery_app.conf.update(
 # Auto-discover tasks
 celery_app.autodiscover_tasks(
     [
-        "ada_backend.tasks.workflow_tasks",  # Only workflow execution tasks
+        "ada_backend.tasks.workflow_tasks",  # Workflow execution tasks
+        "ada_backend.tasks.test_tasks",  # Test tasks
     ]
 )
 
