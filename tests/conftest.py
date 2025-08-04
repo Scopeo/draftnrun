@@ -44,3 +44,13 @@ def disable_observability_in_tests():
     """Disable observability stack for all tests to avoid external dependencies."""
     with patch("settings.settings.ENABLE_OBSERVABILITY_STACK", False):
         yield
+
+
+@pytest.fixture(autouse=True, scope="session")
+def close_event_loop_at_end():
+    import asyncio
+
+    yield
+    loop = asyncio.get_event_loop()
+    if not loop.is_closed():
+        loop.close()
