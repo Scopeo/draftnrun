@@ -17,3 +17,12 @@ select
 where not exists (
   select 1 from public.organizations where id = '11111111-1111-1111-1111-111111111111'
 );
+insert into public.organizations (id, created_at, name, billing_id)
+select
+  'edb9fe43-7000-48c0-aa52-0f6dacf20454',
+  now(),
+  'Templates',
+  'edb9fe43-7000-48c0-aa52-0f6dacf20454'
+where not exists (
+  select 1 from public.organizations where id = 'edb9fe43-7000-48c0-aa52-0f6dacf20454'
+);
