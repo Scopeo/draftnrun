@@ -5,7 +5,7 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 from sqlalchemy import func, and_
 
-from ada_backend.database.models import InputGroundtruth, DatasetProject, VersionByProject, VersionOutput
+from ada_backend.database.models import InputGroundtruth, DatasetProject, VersionOutput, EnvType
 from ada_backend.schemas.quality_assurance_schema import InputGroundtruthCreate
 
 LOGGER = logging.getLogger(__name__)
@@ -18,7 +18,7 @@ def get_inputs_groundtruths_by_dataset(
     skip: int = 0,
     limit: int = 100,
 ) -> List[InputGroundtruth]:
-    """Get all input-groundtruth entries for a dataset with pagination."""
+    """Get input-groundtruth entries for a dataset with pagination."""
     return (
         session.query(InputGroundtruth)
         .filter(InputGroundtruth.dataset_id == dataset_id)
@@ -40,17 +40,17 @@ def get_inputs_groundtruths_by_ids(
 def get_inputs_groundtruths_with_version_outputs(
     session: Session,
     dataset_id: UUID,
-    version_id: Optional[UUID] = None,
+    version: Optional[EnvType] = None,
     skip: int = 0,
     limit: int = 100,
 ) -> List[Tuple[InputGroundtruth, Optional[VersionOutput]]]:
     """
-    Get all input-groundtruth entries for a dataset with their version outputs using LEFT JOIN.
+    Get input-groundtruth entries for a dataset with their version outputs using LEFT JOIN.
 
     Args:
         session: SQLAlchemy session
         dataset_id: ID of the dataset
-        version_id: Optional version_id filter
+        version: Optional version filter (draft or production)
         skip: Number of records to skip
         limit: Maximum number of records to return
 
@@ -63,7 +63,7 @@ def get_inputs_groundtruths_with_version_outputs(
             VersionOutput,
             and_(
                 InputGroundtruth.id == VersionOutput.input_id,
-                VersionOutput.version_id == version_id if version_id else True,
+                VersionOutput.version == version if version else True,
             ),
         )
         .filter(InputGroundtruth.dataset_id == dataset_id)
@@ -99,13 +99,13 @@ def get_inputs_groundtruths_with_pagination(
 def get_inputs_groundtruths_with_version_outputs_pagination(
     session: Session,
     dataset_id: UUID,
-    version_id: Optional[UUID] = None,
+    version: Optional[EnvType] = None,
     page: int = 1,
     size: int = 100,
 ) -> tuple[List[Tuple[InputGroundtruth, Optional[VersionOutput]]], int]:
     """Get input-groundtruth entries with version outputs using pagination and total count."""
     skip = (page - 1) * size
-    results = get_inputs_groundtruths_with_version_outputs(session, dataset_id, version_id, skip, size)
+    results = get_inputs_groundtruths_with_version_outputs(session, dataset_id, version, skip, size)
     total_count = get_inputs_groundtruths_count_by_dataset(session, dataset_id)
     return results, total_count
 
@@ -188,35 +188,35 @@ def create_version_output(
     session: Session,
     input_id: UUID,
     output: str,
-    version_id: UUID,
+    version: EnvType,
 ) -> VersionOutput:
     """Create a version output entry."""
     version_output = VersionOutput(
         input_id=input_id,
         output=output,
-        version_id=version_id,
+        version=version,
     )
 
     session.add(version_output)
     session.commit()
     session.refresh(version_output)
 
-    LOGGER.info(f"Created version output for input {input_id} and version {version_id}")
+    LOGGER.info(f"Created version output for input {input_id} and version {version}")
     return version_output
 
 
 def create_version_outputs(
     session: Session,
-    version_outputs_data: List[Tuple[UUID, str, UUID]],
+    version_outputs_data: List[Tuple[UUID, str, EnvType]],
 ) -> List[VersionOutput]:
     """Create multiple version output entries."""
     version_outputs = []
 
-    for input_id, output, version_id in version_outputs_data:
+    for input_id, output, version in version_outputs_data:
         version_output = VersionOutput(
             input_id=input_id,
             output=output,
-            version_id=version_id,
+            version=version,
         )
         version_outputs.append(version_output)
 
@@ -315,66 +315,4 @@ def delete_datasets(
     session.commit()
 
     LOGGER.info(f"Deleted {deleted_count} datasets for project {project_id}")
-    return deleted_count
-
-
-# Project Version functions
-def get_project_versions(
-    session: Session,
-    project_id: UUID,
-    skip: int = 0,
-    limit: int = 100,
-) -> List[VersionByProject]:
-    """Get all versions for a project with pagination."""
-    return (
-        session.query(VersionByProject)
-        .filter(VersionByProject.project_id == project_id)
-        .order_by(VersionByProject.created_at.desc())
-        .offset(skip)
-        .limit(limit)
-        .all()
-    )
-
-
-def create_project_versions(
-    session: Session,
-    project_id: UUID,
-    versions: List[str],
-) -> List[VersionByProject]:
-    """Create multiple project versions."""
-    project_versions = []
-
-    for version in versions:
-        project_version = VersionByProject(
-            project_id=project_id,
-            version=version,
-        )
-        project_versions.append(project_version)
-
-    session.add_all(project_versions)
-    session.commit()
-
-    # Refresh all objects to get their IDs
-    for project_version in project_versions:
-        session.refresh(project_version)
-
-    LOGGER.info(f"Created {len(project_versions)} versions for project {project_id}")
-    return project_versions
-
-
-def delete_project_versions(
-    session: Session,
-    version_ids: List[UUID],
-    project_id: UUID,
-) -> int:
-    """Delete multiple project versions."""
-    deleted_count = (
-        session.query(VersionByProject)
-        .filter(VersionByProject.id.in_(version_ids), VersionByProject.project_id == project_id)
-        .delete(synchronize_session=False)
-    )
-
-    session.commit()
-
-    LOGGER.info(f"Deleted {deleted_count} versions for project {project_id}")
     return deleted_count

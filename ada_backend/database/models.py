@@ -682,7 +682,6 @@ class Project(Base):
 
     # Quality Assurance relationships
     datasets = relationship("DatasetProject", back_populates="project", cascade="all, delete-orphan")
-    versions = relationship("VersionByProject", back_populates="project", cascade="all, delete-orphan")
 
     def __str__(self):
         return f"Project({self.name})"
@@ -987,26 +986,6 @@ class DatasetProject(Base):
         return f"DatasetProject(id={self.id}, name={self.dataset_name})"
 
 
-class VersionByProject(Base):
-    __tablename__ = "version_by_project"
-    __table_args__ = {"schema": "quality_assurance"}
-
-    id = mapped_column(UUID(as_uuid=True), primary_key=True, index=True, server_default=func.gen_random_uuid())
-    project_id = mapped_column(
-        UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True
-    )
-    version = mapped_column(String, nullable=False)
-    created_at = mapped_column(DateTime(timezone=True), server_default=func.now())
-    updated_at = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
-
-    # Relationships
-    project = relationship("Project", back_populates="versions")
-    version_outputs = relationship("VersionOutput", back_populates="version_by_project", cascade="all, delete-orphan")
-
-    def __str__(self):
-        return f"VersionByProject(id={self.id}, version={self.version})"
-
-
 class VersionOutput(Base):
     __tablename__ = "version_output"
     __table_args__ = {"schema": "quality_assurance"}
@@ -1019,18 +998,12 @@ class VersionOutput(Base):
         index=True,
     )
     output = mapped_column(String, nullable=False)
-    version_id = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("quality_assurance.version_by_project.id", ondelete="CASCADE"),
-        nullable=False,
-        index=True,
-    )
+    version = mapped_column(make_pg_enum(EnvType), nullable=False)  # Changed from version_id to version using EnvType
     created_at = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     # Relationships
     input_groundtruth = relationship("InputGroundtruth", back_populates="version_outputs")
-    version_by_project = relationship("VersionByProject", back_populates="version_outputs")
 
     def __str__(self):
-        return f"VersionOutput(id={self.id}, input_id={self.input_id}, version_id={self.version_id})"
+        return f"VersionOutput(id={self.id}, input_id={self.input_id}, version={self.version})"
