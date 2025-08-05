@@ -16,9 +16,6 @@ from ada_backend.repositories.quality_assurance_repository import (
     update_datasets,
     delete_datasets,
     get_datasets_by_project,
-    create_project_versions,
-    get_project_versions,
-    delete_project_versions,
 )
 from ada_backend.schemas.quality_assurance_schema import (
     InputGroundtruthResponse,
@@ -36,10 +33,6 @@ from ada_backend.schemas.quality_assurance_schema import (
     DatasetUpdateList,
     DatasetDeleteList,
     DatasetListResponse,
-    VersionByProjectCreateList,
-    VersionByProjectResponse,
-    VersionByProjectListResponse,
-    VersionDeleteList,
 )
 from ada_backend.services.agent_runner_service import run_env_agent
 from ada_backend.database.models import EnvType
@@ -80,7 +73,7 @@ def get_inputs_groundtruths_by_dataset_service(
 def get_inputs_groundtruths_with_version_outputs_service(
     session: Session,
     dataset_id: UUID,
-    version_id: UUID = None,
+    version: EnvType = None,
     page: int = 1,
     size: int = 100,
 ) -> List[InputGroundtruthWithVersionResponse]:
@@ -90,7 +83,7 @@ def get_inputs_groundtruths_with_version_outputs_service(
     Args:
         session (Session): SQLAlchemy session
         dataset_id (UUID): ID of the dataset
-        version_id (UUID, optional): Version ID to filter by
+        version (EnvType, optional): Version to filter by (draft or production)
         page (int): Page number (1-based)
         size (int): Number of items per page
 
@@ -98,9 +91,7 @@ def get_inputs_groundtruths_with_version_outputs_service(
         List[InputGroundtruthWithVersionResponse]: List of input-groundtruth entries with version outputs
     """
     try:
-        results, _ = get_inputs_groundtruths_with_version_outputs_pagination(
-            session, dataset_id, version_id, page, size
-        )
+        results, _ = get_inputs_groundtruths_with_version_outputs_pagination(session, dataset_id, version, page, size)
 
         response_list = []
         for input_groundtruth, version_output in results:
@@ -109,12 +100,7 @@ def get_inputs_groundtruths_with_version_outputs_service(
                 "input": input_groundtruth.input,
                 "groundtruth": input_groundtruth.groundtruth,
                 "output": version_output.output if version_output else None,
-                "version_id": version_output.version_id if version_output else None,
-                "version": (
-                    version_output.version_by_project.version
-                    if version_output and version_output.version_by_project
-                    else None
-                ),
+                "version": version_output.version if version_output else None,
             }
             response_list.append(InputGroundtruthWithVersionResponse(**response_data))
 
@@ -139,7 +125,7 @@ async def run_qa_service(
         session (Session): SQLAlchemy session
         project_id (UUID): ID of the project to run
         dataset_id (UUID): ID of the dataset
-        run_request (QARunRequest): Request containing version_id and input_ids
+        run_request (QARunRequest): Request containing version and input_ids
 
     Returns:
         QARunResponse: Results of the QA run with summary
@@ -156,12 +142,6 @@ async def run_qa_service(
             if entry.dataset_id != dataset_id:
                 raise ValueError(f"Input {entry.id} does not belong to dataset {dataset_id}")
 
-        # Get the version information
-        version_entry = get_project_versions(session, project_id)
-        version_entry = next((v for v in version_entry if v.id == run_request.version_id), None)
-        if not version_entry:
-            raise ValueError(f"Version {run_request.version_id} not found for project {project_id}")
-
         results = []
         successful_runs = 0
         failed_runs = 0
@@ -172,11 +152,11 @@ async def run_qa_service(
                 # Prepare input data for the agent (similar to chat endpoint)
                 input_data = {"messages": [{"role": "user", "content": input_entry.input}]}
 
-                # Run the agent using draft environment by default
+                # Run the agent using the specified version (draft or production)
                 chat_response = await run_env_agent(
                     session=session,
                     project_id=project_id,
-                    env=EnvType.DRAFT,
+                    env=run_request.version,
                     input_data=input_data,
                 )
 
@@ -190,7 +170,7 @@ async def run_qa_service(
                     session=session,
                     input_id=input_entry.id,
                     output=output_content,
-                    version_id=run_request.version_id,
+                    version=run_request.version,
                 )
 
                 # TODO : Add a score to determine success or failure
@@ -199,8 +179,7 @@ async def run_qa_service(
                     input=input_entry.input,
                     groundtruth=input_entry.groundtruth,
                     output=output_content,
-                    version_id=run_request.version_id,
-                    version=version_entry.version,
+                    version=run_request.version,
                     success=True,  # Everyone passes for now
                     error=None,
                 )
@@ -216,7 +195,7 @@ async def run_qa_service(
                     session=session,
                     input_id=input_entry.id,
                     output=error_output,
-                    version_id=run_request.version_id,
+                    version=run_request.version,
                 )
 
                 # Prepare error result
@@ -225,8 +204,7 @@ async def run_qa_service(
                     input=input_entry.input,
                     groundtruth=input_entry.groundtruth,
                     output=error_output,
-                    version_id=run_request.version_id,
-                    version=version_entry.version,
+                    version=run_request.version,
                     success=False,
                     error=str(e),
                 )
@@ -248,9 +226,7 @@ async def run_qa_service(
             success_rate=success_rate,
         )
 
-        LOGGER.info(
-            f"QA run completed for project {project_id}, dataset {dataset_id}, version {version_entry.version}"
-        )
+        LOGGER.info(f"QA run completed for project {project_id}, dataset {dataset_id}, version {run_request.version}")
         LOGGER.info(
             f"Total processed: {total_processed}, Successful: {successful_runs}, "
             f"Failed: {failed_runs}, Success Rate: {success_rate:.2f}%"
@@ -498,96 +474,5 @@ def delete_datasets_service(
     except Exception as e:
         LOGGER.error(f"Error in delete_datasets_service: {str(e)}")
         raise ValueError(f"Failed to delete datasets: {str(e)}") from e
-    finally:
-        session.close()
-
-
-# Project Version services
-def get_project_versions_service(
-    session: Session,
-    project_id: UUID,
-) -> List[VersionByProjectResponse]:
-    """
-    Get all versions for a project.
-
-    Args:
-        session (Session): SQLAlchemy session
-        project_id (UUID): ID of the project
-
-    Returns:
-        List[VersionByProjectResponse]: List of project versions
-    """
-    try:
-        versions = get_project_versions(session, project_id)
-        return [VersionByProjectResponse.model_validate(version) for version in versions]
-    except Exception as e:
-        LOGGER.error(f"Error in get_project_versions_service: {str(e)}")
-        raise ValueError(f"Failed to get project versions: {str(e)}") from e
-    finally:
-        session.close()
-
-
-def create_project_versions_service(
-    session: Session,
-    project_id: UUID,
-    versions_data: VersionByProjectCreateList,
-) -> VersionByProjectListResponse:
-    """
-    Create project versions.
-
-    Args:
-        session (Session): SQLAlchemy session
-        project_id (UUID): ID of the project
-        versions_data (VersionByProjectCreateList): Version data to create
-
-    Returns:
-        VersionByProjectListResponse: The created project versions
-    """
-    try:
-        created_versions = create_project_versions(
-            session,
-            project_id,
-            versions_data.versions,
-        )
-
-        LOGGER.info(f"Created {len(created_versions)} versions for project {project_id}")
-        return VersionByProjectListResponse(
-            versions=[VersionByProjectResponse.model_validate(version) for version in created_versions]
-        )
-    except Exception as e:
-        LOGGER.error(f"Error in create_project_versions_service: {str(e)}")
-        raise ValueError(f"Failed to create project versions: {str(e)}") from e
-    finally:
-        session.close()
-
-
-def delete_project_versions_service(
-    session: Session,
-    project_id: UUID,
-    delete_data: VersionDeleteList,
-) -> int:
-    """
-    Delete multiple project versions.
-
-    Args:
-        session (Session): SQLAlchemy session
-        project_id (UUID): ID of the project
-        delete_data (VersionDeleteList): IDs of versions to delete
-
-    Returns:
-        int: Number of deleted versions
-    """
-    try:
-        deleted_count = delete_project_versions(
-            session,
-            delete_data.version_ids,
-            project_id,
-        )
-
-        LOGGER.info(f"Deleted {deleted_count} versions for project {project_id}")
-        return deleted_count
-    except Exception as e:
-        LOGGER.error(f"Error in delete_project_versions_service: {str(e)}")
-        raise ValueError(f"Failed to delete project versions: {str(e)}") from e
     finally:
         session.close()
