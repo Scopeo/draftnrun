@@ -38,6 +38,7 @@ class SourceAttributes(BaseModel):
     update_existing: Optional[bool] = False
     query_filter: Optional[str] = None
     timestamp_filter: Optional[str] = None
+    additional_timestamp_column_name: Optional[str] = None
 
 
 class IngestionTaskUpdate(IngestionTask):

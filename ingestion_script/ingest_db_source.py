@@ -71,6 +71,7 @@ def get_db_source(
     df = sql_local_service.get_table_df(
         table_name=table_name,
         schema_name=source_schema_name,
+        timestamp_column_name=timestamp_column_name,
         sql_query_filter=sql_query_filter,
     )
     if df.empty:
@@ -137,16 +138,17 @@ async def upload_db_source(
     update_existing: bool = False,
     query_filter: Optional[str] = None,
     timestamp_filter: Optional[str] = None,
+    additional_timestamp_column_name: Optional[str] = None,
 ):
     combined_filter_sql = build_combined_sql_filter(
         query_filter=query_filter,
         timestamp_filter=timestamp_filter,
-        timestamp_column_name=timestamp_column_name,
+        additional_timestamp_column_name=additional_timestamp_column_name,
     )
     combined_filter_qdrant = qdrant_service._build_combined_filter(
         query_filter=query_filter,
         timestamp_filter=timestamp_filter,
-        timestamp_column_name=timestamp_column_name,
+        additional_timestamp_column_name=additional_timestamp_column_name,
     )
 
     df = get_db_source(
@@ -172,10 +174,10 @@ async def upload_db_source(
         table_definition=db_definition,
         id_column_name=chunk_id_column_name,
         timestamp_column_name=timestamp_column_name,
-        append_mode=update_existing,
         schema_name=storage_schema_name,
         sql_query_filter=combined_filter_sql,
     )
+
     LOGGER.info(f"Updated table '{storage_table_name}' in schema '{storage_schema_name}' with {len(df)} rows.")
     await sync_chunks_to_qdrant(
         storage_schema_name,
@@ -183,8 +185,9 @@ async def upload_db_source(
         collection_name=qdrant_collection_name,
         db_service=db_service,
         qdrant_service=qdrant_service,
-        sql_query_filter=combined_filter_sql,
         query_filter_qdrant=combined_filter_qdrant,
+        timestamp_column_name=timestamp_column_name,
+        sql_query_filter=combined_filter_sql,
     )
 
 
@@ -205,6 +208,7 @@ async def ingestion_database(
     update_existing: bool = False,
     query_filter: Optional[str] = None,
     timestamp_filter: Optional[str] = None,
+    additional_timestamp_column_name: Optional[str] = None,
 ) -> None:
     chunk_id_column_name = "chunk_id"
     chunk_column_name = "content"
@@ -250,7 +254,9 @@ async def ingestion_database(
             url_column_name=url_column_name,
             chunk_size=chunk_size,
             chunk_overlap=chunk_overlap,
+            update_existing=update_existing,
             query_filter=query_filter,
             timestamp_filter=timestamp_filter,
+            additional_timestamp_column_name=additional_timestamp_column_name,
         ),
     )

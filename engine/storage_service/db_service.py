@@ -81,87 +81,6 @@ class DBService(ABC):
     ) -> None:
         pass
 
-    # def update_table(
-    #     self,
-    #     new_df: pd.DataFrame,
-    #     table_name: str,
-    #     table_definition: DBDefinition,
-    #     id_column_name: str,
-    #     schema_name: Optional[str] = None,
-    #     timestamp_column_name: Optional[str] = None,
-    #     append_mode: bool = True,
-    #     sql_query_filter: Optional[str] = None,
-    # ) -> None:
-    #     """
-    #     Update a table on Database with a new DataFrame.
-    #     If the table does not exist, it will be created.
-    #     """
-    #     if schema_name:
-    #         target_table_name = f"{schema_name}.{table_name}"
-    #     else:
-    #         target_table_name = table_name
-
-    #     if not self.table_exists(table_name, schema_name=schema_name):
-    #         LOGGER.info(f"Table {target_table_name} does not exist. Creating it...")
-    #         self.create_table(
-    #             table_name=table_name,
-    #             table_definition=table_definition,
-    #             schema_name=schema_name,
-    #         )
-    #         self.insert_df_to_table(df=new_df, table_name=table_name, schema_name=schema_name)
-    #     else:
-    #         query = (
-    #             f"SELECT {id_column_name}, {timestamp_column_name} FROM {target_table_name}"
-    #             if timestamp_column_name
-    #             else f"SELECT {id_column_name} FROM {target_table_name}"
-    #         )
-    #         final_query = f"{query} WHERE {sql_query_filter};" if sql_query_filter else f"{query};"
-    #         old_df = self._fetch_sql_query_as_dataframe(final_query)
-    #         old_df = convert_to_correct_pandas_type(old_df, id_column_name, table_definition)
-
-    #         common_df = new_df.merge(old_df, on=id_column_name, how="inner")
-
-    #         if timestamp_column_name and not sql_query_filter:
-    #             ids_to_update = set(
-    #                 common_df[common_df[timestamp_column_name + "_x"] > common_df[timestamp_column_name + "_y"]][
-    #                     id_column_name
-    #                 ]
-    #             )
-    #         else:
-    #             ids_to_update = set(common_df[id_column_name])
-
-    #         LOGGER.info(f"Found {len(ids_to_update)} rows to update in the table")
-    #         updated_data = new_df[new_df[id_column_name].isin(ids_to_update)].copy()
-    #         for col in updated_data.select_dtypes(include=["datetime64[ns]"]):
-    #             updated_data[col] = updated_data[col].astype(object).where(updated_data[col].notna(), None)
-    #         self._refresh_table_from_df(
-    #             df=updated_data,
-    #             table_name=table_name,
-    #             id_column=id_column_name,
-    #             table_definition=table_definition,
-    #             schema_name=schema_name,
-    #         )
-
-    #         new_df["exists"] = new_df[id_column_name].isin(old_df[id_column_name].values)
-    #         LOGGER.info(f"Found {new_df['exists'][new_df['exists']].sum()} existing rows in the table")
-    #         new_data = new_df[~new_df["exists"]].copy()
-    #         new_data.drop(columns=["exists"], inplace=True)
-    #         self.insert_df_to_table(new_data, table_name, schema_name=schema_name)
-
-    #         if not append_mode:
-    #             filtered_existing_ids = set(old_df[id_column_name]) if len(old_df) > 0 else set()
-    #             new_ids_in_scope = set(new_df[id_column_name])
-    #             ids_to_delete = filtered_existing_ids - new_ids_in_scope
-
-    #             LOGGER.info(f"Found {len(ids_to_delete)} rows to delete in the filtered scope")
-    #             if ids_to_delete:
-    #                 self.delete_rows_from_table(
-    #                     table_name=table_name,
-    #                     ids=list(ids_to_delete),
-    #                     id_column_name=id_column_name,
-    #                     schema_name=schema_name,
-    #                 )
-
     def update_table(
         self,
         new_df: pd.DataFrame,
@@ -170,8 +89,7 @@ class DBService(ABC):
         id_column_name: str,
         schema_name: Optional[str] = None,
         timestamp_column_name: Optional[str] = None,
-        timestamp_filter: Optional[str] = None,
-        query_filter: Optional[str] = None,
+        sql_query_filter: Optional[str] = None,
     ) -> None:
         """
         Update a table on Database with a new DataFrame.
@@ -198,35 +116,47 @@ class DBService(ABC):
                 else f"SELECT {id_column_name} FROM {target_table_name}"
             )
 
-            final_query = (
-                f"{query} WHERE {timestamp_column_name} {timestamp_filter} AND {timestamp_column_name} IS NOT NULL;"
-                if timestamp_filter
-                else f"{query};"
-            )
+            final_query = f"{query} WHERE {sql_query_filter};" if sql_query_filter else f"{query};"
             old_df = self._fetch_sql_query_as_dataframe(final_query)
             old_df = convert_to_correct_pandas_type(old_df, id_column_name, table_definition)
 
             ids_to_delete = set(old_df[id_column_name]) - set(new_df[id_column_name])
-            if ids_to_delete and len(ids_to_delete) / len(old_df) > 0.2:
-                self.delete_rows_from_table(
-                    table_name=table_name,
-                    ids=list(ids_to_delete),
-                    id_column_name=id_column_name,
-                    schema_name=schema_name,
-                )
-                old_df = old_df[~old_df[id_column_name].isin(ids_to_delete)]
-                LOGGER.info(f"Deleted {len(ids_to_delete)} rows from the table")
-            else:
-                LOGGER.warning(f"Deleting more than 20% of the rows from the table is not allowed. Skipping deletion.")
+            # Check if we should delete rows (only if less than 20% of rows are being deleted)
+            if ids_to_delete and len(old_df) > 0:
+                deletion_percentage = len(ids_to_delete) / len(old_df)
+                if deletion_percentage <= 0.2:
+                    self.delete_rows_from_table(
+                        table_name=table_name,
+                        ids=list(ids_to_delete),
+                        id_column_name=id_column_name,
+                        schema_name=schema_name,
+                    )
+                    old_df = old_df[~old_df[id_column_name].isin(ids_to_delete)]
+                    LOGGER.info(f"Deleted {len(ids_to_delete)} rows from the table ({deletion_percentage:.1%})")
+                else:
+                    LOGGER.warning(
+                        f"Deleting {deletion_percentage:.1%} of the rows from the table is "
+                        "not allowed (max 20%). Skipping deletion."
+                    )
 
             # find the latest timestamp for old_df
-            old_df["timestamp"] = pd.to_datetime(old_df[timestamp_column_name])
-            latest_timestamp = old_df["timestamp"].max()
-            LOGGER.info(f"Latest timestamp in the table is {latest_timestamp}")
-            # take the data only >= form latest date for new_df
-            new_df = new_df[new_df[timestamp_column_name] >= latest_timestamp]
-            ids_to_update = set(new_df[id_column_name])
-            LOGGER.info(f"Found {len(ids_to_update)} rows to update in the table")
+            if not old_df.empty and timestamp_column_name:
+                old_df["timestamp"] = pd.to_datetime(old_df[timestamp_column_name])
+                latest_timestamp = old_df["timestamp"].max()
+                if pd.notna(latest_timestamp):
+                    LOGGER.info(f"Latest timestamp in the table is {latest_timestamp}")
+                    # take the data only >= from latest date for new_df
+                    # Convert new_df timestamp column to datetime for proper comparison
+                    new_df["temp_timestamp"] = pd.to_datetime(new_df[timestamp_column_name])
+                    new_df = new_df[new_df["temp_timestamp"] >= latest_timestamp]
+                    new_df = new_df.drop(columns=["temp_timestamp"])
+                    LOGGER.info(f"Filtered new_df to {len(new_df)} rows after timestamp filter")
+                else:
+                    LOGGER.warning("No valid timestamps found in old_df, using all new data")
+            else:
+                LOGGER.info("No timestamp filtering applied")
+
+            LOGGER.info(f"Found {len(new_df)} rows to update in the table")
 
             self._refresh_table_from_df(
                 df=new_df,

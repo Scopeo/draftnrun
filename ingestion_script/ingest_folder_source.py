@@ -76,12 +76,14 @@ async def sync_chunks_to_qdrant(
     collection_name: str,
     db_service: DBService,
     qdrant_service: QdrantService,
-    sql_query_filter: Optional[str] = None,
     query_filter_qdrant: Optional[dict] = None,
+    timestamp_column_name: Optional[str] = None,
+    sql_query_filter: Optional[str] = None,
 ) -> None:
     chunks_df = db_service.get_table_df(
         table_name,
         schema_name=table_schema,
+        timestamp_column_name=timestamp_column_name,
         sql_query_filter=sql_query_filter,
     )
     LOGGER.info(f"Syncing chunks to Qdrant collection {collection_name} with {len(chunks_df)} rows")
@@ -91,6 +93,7 @@ async def sync_chunks_to_qdrant(
         df=chunks_df,
         collection_name=collection_name,
         query_filter_qdrant=query_filter_qdrant,
+        timestamp_column_name=timestamp_column_name,
     )
 
 
