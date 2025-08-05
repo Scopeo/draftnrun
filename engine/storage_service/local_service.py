@@ -146,18 +146,20 @@ class SQLLocalService(DBService):
         table_name: str,
         schema_name: Optional[str] = None,
         timestamp_column_name: Optional[str] = None,
-        timestamp_filter: Optional[str] = None,
-        query_filter: Optional[str] = None,
+        sql_query_filter: Optional[str] = None,
     ) -> pd.DataFrame:
         table = self.get_table(table_name, schema_name)
         with self.Session() as session:
             stmt = sqlalchemy.select(table)
+
+            # Add timestamp column not null check if specified
             if timestamp_column_name:
                 stmt = stmt.where(table.c[timestamp_column_name].isnot(None))
-            if timestamp_filter:
-                stmt = stmt.where(table.c[timestamp_column_name] + " " + timestamp_filter)
-            if query_filter:
-                stmt = stmt.where(text(query_filter))
+
+            # Apply additional query filter if provided
+            if sql_query_filter:
+                stmt = stmt.where(text(sql_query_filter))
+
             result = session.execute(stmt)
             return pd.DataFrame(result.fetchall(), columns=result.keys())
 
