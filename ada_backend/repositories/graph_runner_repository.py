@@ -1,6 +1,8 @@
 from typing import Optional
 from uuid import UUID
 import logging
+import shutil
+from pathlib import Path
 
 from sqlalchemy.orm import Session
 from sqlalchemy import select, exists
@@ -237,3 +239,10 @@ def add_input_component_to_graph(session: Session, graph_runner_id: UUID) -> db.
 
     session.commit()
     return input_component
+
+
+def delete_temp_folder(uuid_for_temp_folder: str) -> None:
+    temp_folder = Path(uuid_for_temp_folder)
+    if temp_folder.exists():
+        shutil.rmtree(temp_folder)
+        LOGGER.info(f"Deleted temp folder: {temp_folder}")
