@@ -1,9 +1,9 @@
 """
-Pydantic schemas for scheduled workflow operations.
-Follows the same patterns as project_schema.py.
+Pydantic schemas for core scheduled workflow operations.
+Basic CRUD operations for schedule management.
 """
 
-from typing import Any, List, Optional, Dict
+from typing import List, Optional, Dict, Any
 from uuid import UUID
 from pydantic import BaseModel, Field
 
@@ -67,51 +67,4 @@ class ScheduleDeleteResponse(BaseModel):
     """Schema for schedule deletion response."""
 
     schedule_id: int
-    message: str = "Schedule deleted successfully"
-
-
-class ScheduleSyncResponse(BaseModel):
-    """Schema for schedule sync response."""
-
-    schedule_id: int
-    schedule_uuid: UUID
-    action: str = Field(..., description="'created' or 'updated'")
-    periodic_task_id: Optional[int] = Field(None, description="Django-celery-beat task ID")
-    message: str
-
-
-class CronComponentConfig(BaseModel):
-    """Schema for cron component configuration."""
-
-    component_instance_id: UUID
-    cron_expression: str = Field(..., description="Cron expression (e.g., '0 9 * * *')")
-    timezone: str = Field(default="UTC", description="Timezone for the schedule")
-    enabled: bool = Field(default=True, description="Whether the cron component is enabled")
-
-
-class ScheduleActionResult(BaseModel):
-    """Schema for schedule action result."""
-
-    action: str = Field(..., description="'created' or 'updated'")
-
-
-class DeploymentSchedulingError(BaseModel):
-    """Schema for deployment scheduling error."""
-
-    component_instance_id: Optional[UUID] = Field(None, description="Component instance ID if applicable")
-    schedule_id: Optional[int] = Field(None, description="Schedule ID if applicable")
-    error: str = Field(..., description="Error message")
-
-
-class DeploymentSchedulingResponse(BaseModel):
-    """Schema for deployment scheduling response."""
-
-    project_id: UUID
-    graph_runner_id: UUID
-    previous_production_graph_id: Optional[UUID] = Field(None, description="Previous production graph runner ID")
-    schedules_updated: int = Field(0, description="Number of schedules updated/created")
-    schedules_removed: int = Field(0, description="Number of schedules deleted")
-    schedules_errors: List[DeploymentSchedulingError] = Field(
-        default_factory=list, description="List of errors encountered"
-    )
-    message: str = Field("Scheduling handled successfully", description="Summary message")
+    message: str = "Schedule deleted successfully" 

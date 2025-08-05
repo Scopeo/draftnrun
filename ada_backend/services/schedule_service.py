@@ -20,12 +20,14 @@ from ada_backend.repositories.schedule_repository import (
     get_scheduled_workflows_by_project,
 )
 from ada_backend.django_scheduler.sync_backend_to_django import sync_to_django
-from ada_backend.schemas.schedule_schema import (
+from ada_backend.schemas.schedule_base_schema import (
     ScheduleCreateSchema,
     ScheduleUpdateSchema,
     ScheduleResponse,
     ScheduleDeleteResponse,
-    CronComponentConfig,
+)
+from ada_backend.schemas.cron_schema import CronComponentConfig
+from ada_backend.schemas.deployment_scheduling_schema import (
     DeploymentSchedulingError,
     DeploymentSchedulingResponse,
 )

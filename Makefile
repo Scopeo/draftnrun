@@ -20,18 +20,6 @@ help:
 	@echo ""
 	@echo "Cron Database Commands:"
 	@echo "  cron-db-setup: Setup django-celery-beat tables in custom schema"
-	@echo ""
-	@echo "Test Commands:"
-	@echo "  test-celery-setup: Setup test schedules for celery beat testing"
-	@echo "  test-celery-cleanup: Clean up test schedules"
-	@echo "  test-celery-list: List current schedules"
-	@echo "  test-api-key-integration: Test API key integration in deployment process"
-	@echo "  test-complete-integration: Test complete API key lifecycle integration"
-	@echo "  test-project-deletion-cleanup: Test project deletion API key cleanup"
-	@echo "  debug-schedules: Debug schedules for a project (use: make debug-schedules project_id=<uuid>)"
-	@echo "  cleanup-orphaned-schedules: Clean up orphaned schedules (use: make cleanup-orphaned-schedules project_id=<uuid>)"
-	@echo "  verify-celery-tasks: Verify Celery task registration and consistency"
-
 # -------------------------------------------
 # Development and Running
 # -------------------------------------------
@@ -161,41 +149,7 @@ db-reset:
 .PHONY: cron-db-setup
 cron-db-setup:
 	@echo "Setting up django-celery-beat tables in custom schema"
-	@uv run python ada_backend/scripts/setup_django_beat_schema.py
-
-# -------------------------------------------
-# Test Commands
-# -------------------------------------------
-.PHONY: test-celery-setup
-test-celery-setup:
-	@echo "Setting up test schedules for celery beat testing"
-	@uv run python ada_backend/scripts/test_celery_beat_setup.py setup
-
-.PHONY: test-celery-cleanup
-test-celery-cleanup:
-	@echo "Cleaning up test schedules"
-	@uv run python ada_backend/scripts/test_celery_beat_setup.py cleanup
-
-.PHONY: test-celery-list
-test-celery-list:
-	@echo "Listing current schedules"
-	@uv run python ada_backend/scripts/test_celery_beat_setup.py list
-
-.PHONY: test-api-key-integration
-test-api-key-integration:
-	@echo "Testing API key integration in deployment process"
-	@uv run python ada_backend/scripts/test_api_key_integration.py
-
-.PHONY: test-complete-integration
-test-complete-integration:
-	@echo "Testing complete API key lifecycle integration"
-	@uv run python ada_backend/scripts/test_complete_integration.py
-
-.PHONY: test-project-deletion-cleanup
-test-project-deletion-cleanup:
-	@echo "Testing project deletion API key cleanup"
-	@uv run python ada_backend/scripts/test_project_deletion_api_key_cleanup.py
-
+	@uv run python ada_backend/django_scheduler/setup_django_beat_schema.py
 # -------------------------------------------
 # Trace Database Migrations (Alembic)
 # -------------------------------------------
@@ -225,13 +179,3 @@ trace-db-history:
 trace-db-current:
 	@echo "Checking current migration"
 	@$(TRACE_ALEMBIC_CMD) current
-
-.PHONY: cleanup-orphaned-schedules
-cleanup-orphaned-schedules:
-	@echo "Cleaning up orphaned schedules for project $(project_id)"
-	@uv run python ada_backend/scripts/debug_schedules.py cleanup $(project_id) --dry-run
-
-.PHONY: verify-celery-tasks
-verify-celery-tasks:
-	@echo "Verifying Celery task registration and consistency"
-	@uv run python ada_backend/scripts/verify_celery_tasks.py

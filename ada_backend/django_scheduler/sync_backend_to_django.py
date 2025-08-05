@@ -12,7 +12,8 @@ from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 
 from ada_backend.database.models import ScheduledWorkflow
-from ada_backend.schemas.schedule_schema import ScheduleSyncResponse
+from ada_backend.schemas.deployment_scheduling_schema import ScheduleSyncResponse
+from ada_backend.utils.database_utils import get_postgres_connection
 
 LOGGER = logging.getLogger(__name__)
 
@@ -34,6 +35,25 @@ def _get_django_models():
     from ada_backend.django_scheduler.models import CrontabSchedule, PeriodicTask, PeriodicTasks
 
     return CrontabSchedule, PeriodicTask, PeriodicTasks
+
+
+def _update_scheduled_workflow_uuid(periodic_task_id: int, scheduled_workflow_uuid: str):
+    """
+    Update the scheduled_workflow_uuid field for a periodic task using raw SQL.
+    
+    Args:
+        periodic_task_id: ID of the periodic task to update
+        scheduled_workflow_uuid: UUID to set
+    """
+    with get_postgres_connection() as (conn, cursor):
+        cursor.execute(
+            """
+            UPDATE django_beat_cron_scheduler.django_celery_beat_periodictask 
+            SET scheduled_workflow_uuid = %s
+            WHERE id = %s
+        """,
+            (scheduled_workflow_uuid, periodic_task_id),
+        )
 
 
 def create_or_update_crontab_schedule(cron_expression: str, timezone: str = "UTC") -> Any:
@@ -169,33 +189,8 @@ def sync_to_django(session: Session, scheduled_workflow_id: int) -> ScheduleSync
             existing_task.kwargs = json.dumps({})  # No kwargs needed
             existing_task.save()
 
-            # Update the scheduled_workflow_uuid field using raw SQL
-            import psycopg2
-            from settings import settings
-
-            db_params = {
-                "dbname": settings.ADA_DB_NAME,
-                "user": settings.ADA_DB_USER,
-                "password": settings.ADA_DB_PASSWORD,
-                "host": settings.ADA_DB_HOST,
-                "port": settings.ADA_DB_PORT,
-            }
-
-            conn = psycopg2.connect(**db_params)
-            cursor = conn.cursor()
-
-            cursor.execute(
-                """
-                UPDATE django_beat_cron_scheduler.django_celery_beat_periodictask 
-                SET scheduled_workflow_uuid = %s
-                WHERE id = %s
-            """,
-                (str(scheduled_workflow.uuid), existing_task.id),
-            )
-
-            conn.commit()
-            cursor.close()
-            conn.close()
+            # Update the scheduled_workflow_uuid field using utility
+            _update_scheduled_workflow_uuid(existing_task.id, str(scheduled_workflow.uuid))
 
             periodic_task = existing_task
             action = "updated"
@@ -219,33 +214,8 @@ def sync_to_django(session: Session, scheduled_workflow_id: int) -> ScheduleSync
                 description=f"Scheduled workflow {scheduled_workflow.type.value} for {scheduled_workflow.uuid}",
             )
 
-            # Set the scheduled_workflow_uuid field using raw SQL
-            import psycopg2
-            from settings import settings
-
-            db_params = {
-                "dbname": settings.ADA_DB_NAME,
-                "user": settings.ADA_DB_USER,
-                "password": settings.ADA_DB_PASSWORD,
-                "host": settings.ADA_DB_HOST,
-                "port": settings.ADA_DB_PORT,
-            }
-
-            conn = psycopg2.connect(**db_params)
-            cursor = conn.cursor()
-
-            cursor.execute(
-                """
-                UPDATE django_beat_cron_scheduler.django_celery_beat_periodictask 
-                SET scheduled_workflow_uuid = %s
-                WHERE id = %s
-            """,
-                (str(scheduled_workflow.uuid), periodic_task.id),
-            )
-
-            conn.commit()
-            cursor.close()
-            conn.close()
+            # Set the scheduled_workflow_uuid field using utility
+            _update_scheduled_workflow_uuid(periodic_task.id, str(scheduled_workflow.uuid))
 
             action = "created"
 
