@@ -3,6 +3,8 @@ from typing import Optional, List
 from uuid import UUID
 from pydantic import BaseModel
 
+from ada_backend.database.models import EnvType
+
 
 class InputGroundtruthCreate(BaseModel):
     """Schema for creating a new input-groundtruth entry."""
@@ -18,8 +20,7 @@ class InputGroundtruthWithVersionResponse(BaseModel):
     input: str
     groundtruth: Optional[str] = None
     output: Optional[str] = None
-    version_id: Optional[UUID] = None
-    version: Optional[str] = None
+    version: Optional[EnvType] = None
 
     class Config:
         from_attributes = True
@@ -29,7 +30,7 @@ class InputGroundtruthWithVersionResponse(BaseModel):
 class QARunRequest(BaseModel):
     """Schema for QA run request."""
 
-    version_id: UUID
+    version: EnvType
     input_ids: List[UUID]
 
 
@@ -40,8 +41,7 @@ class QARunResult(BaseModel):
     input: str
     groundtruth: Optional[str] = None
     output: str
-    version_id: UUID
-    version: str
+    version: EnvType
     success: bool
     error: Optional[str] = None
 
@@ -155,35 +155,3 @@ class DatasetListResponse(BaseModel):
     """Schema for multiple dataset responses."""
 
     datasets: List[DatasetResponse]
-
-
-# Project Version schemas
-class VersionByProjectCreateList(BaseModel):
-    """Schema for creating multiple project versions."""
-
-    versions: List[str]
-
-
-class VersionByProjectResponse(BaseModel):
-    """Schema for project version response."""
-
-    id: UUID
-    project_id: UUID
-    version: str
-    created_at: datetime
-    updated_at: datetime
-
-    class Config:
-        from_attributes = True
-
-
-class VersionByProjectListResponse(BaseModel):
-    """Schema for multiple project version responses."""
-
-    versions: List[VersionByProjectResponse]
-
-
-class VersionDeleteList(BaseModel):
-    """Schema for deleting multiple project versions."""
-
-    version_ids: List[UUID]

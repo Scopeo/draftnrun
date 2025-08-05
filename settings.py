@@ -142,7 +142,6 @@ class BaseConfig(BaseSettings):
     # Evaluation settings
     EVALUATIONS_DB_URL: Optional[str] = None
 
-
     @model_validator(mode="after")
     @classmethod
     def sync_db_settings(cls, values):
