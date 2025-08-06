@@ -121,6 +121,7 @@ class DBService(ABC):
             old_df = convert_to_correct_pandas_type(old_df, id_column_name, table_definition)
 
             ids_to_delete = set(old_df[id_column_name]) - set(new_df[id_column_name])
+
             # Check if we should delete rows (only if less than 20% of rows are being deleted)
             if ids_to_delete and len(old_df) > 0:
                 deletion_percentage = len(ids_to_delete) / len(old_df)
@@ -157,14 +158,29 @@ class DBService(ABC):
                 LOGGER.info("No timestamp filtering applied")
 
             LOGGER.info(f"Found {len(new_df)} rows to update in the table")
-
-            self._refresh_table_from_df(
-                df=new_df,
-                table_name=table_name,
-                id_column=id_column_name,
-                table_definition=table_definition,
-                schema_name=schema_name,
-            )
+            # For timestamp filtering, we need to find:
+            # - ids_to_update: IDs that exist in both old_df and new_df (need to be updated with newer data)
+            # - ids_to_add: IDs that exist in new_df but not in old_df (completely new)
+            ids_to_update = set(new_df[id_column_name]) & set(old_df[id_column_name])
+            ids_to_add = set(new_df[id_column_name]) - set(old_df[id_column_name])
+            new_df_to_add = new_df[new_df[id_column_name].isin(ids_to_add)]
+            new_df_to_update = new_df[new_df[id_column_name].isin(ids_to_update)]
+            if not new_df_to_add.empty:
+                self.insert_df_to_table(
+                    df=new_df_to_add,
+                    table_name=table_name,
+                    schema_name=schema_name,
+                )
+            if not new_df_to_update.empty:
+                self._refresh_table_from_df(
+                    df=new_df_to_update,
+                    table_name=table_name,
+                    id_column=id_column_name,
+                    table_definition=table_definition,
+                    schema_name=schema_name,
+                )
+            LOGGER.info(f"Updated {len(new_df_to_update)} rows in the table")
+            LOGGER.info(f"Added {len(new_df_to_add)} rows to the table")
 
     @abstractmethod
     def _refresh_table_from_df(

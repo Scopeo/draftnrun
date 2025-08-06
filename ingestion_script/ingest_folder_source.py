@@ -256,11 +256,16 @@ async def _ingest_folder_source(
                 table_definition=FILE_TABLE_DEFINITION,
                 id_column_name=ID_COLUMN_NAME,
                 timestamp_column_name=TIMESTAMP_COLUMN_NAME,
-                append_mode=True,
                 schema_name=db_table_schema,
             )
+
             await sync_chunks_to_qdrant(
-                db_table_schema, db_table_name, qdrant_collection_name, db_service, qdrant_service
+                table_schema=db_table_schema,
+                table_name=db_table_name,
+                collection_name=qdrant_collection_name,
+                db_service=db_service,
+                qdrant_service=qdrant_service,
+                timestamp_column_name=TIMESTAMP_COLUMN_NAME,
             )
     except Exception as e:
         LOGGER.error(f"Failed to ingest folder source: {str(e)}")
