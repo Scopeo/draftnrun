@@ -37,4 +37,4 @@ class DeploymentSchedulingResponse(BaseModel):
     schedules_errors: List[DeploymentSchedulingError] = Field(
         default_factory=list, description="List of errors encountered"
     )
-    message: str = Field("Scheduling handled successfully", description="Summary message") 
+    message: str = Field("Scheduling handled successfully", description="Summary message")

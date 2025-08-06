@@ -59,6 +59,7 @@ dependencies = [
     "celery>=5.5.3",
     "django-celery-beat>=2.8.1",
     "cron-converter>=1.2.2",
+    "apscheduler>=3.11.0",
 ]
 [dependency-groups]
 dev = [

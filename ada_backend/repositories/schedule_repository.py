@@ -3,14 +3,11 @@ Repository for scheduled_workflows table operations.
 Provides data access layer for scheduled workflow management.
 """
 
-import json
 import logging
-from typing import Dict, Any, List, Optional
+from typing import List, Optional
 from uuid import UUID
-from datetime import datetime
 
 from sqlalchemy.orm import Session
-from sqlalchemy import and_, or_
 
 from ada_backend.database.models import ScheduledWorkflow, ScheduledWorkflowType
 

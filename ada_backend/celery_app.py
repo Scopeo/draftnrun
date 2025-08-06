@@ -1,20 +1,10 @@
 import logging
-import os
 
 from celery import Celery
 from celery.schedules import crontab
 from kombu import Queue
-import django
-from django.conf import settings as django_settings
 
 from settings import settings
-
-# Configure Django for django-celery-beat
-os.environ.setdefault("DJANGO_SETTINGS_MODULE", "ada_backend.django_scheduler.django_settings")
-
-if not django_settings.configured:
-    django.setup()
-    logging.getLogger(__name__).info("Django configured successfully for django-celery-beat")
 
 LOGGER = logging.getLogger(__name__)
 
@@ -47,23 +37,17 @@ celery_app.conf.update(
     task_routes={
         "execute_scheduled_workflow": {"queue": "scheduled_workflows"},
         "cleanup_old_executions": {"queue": "default"},
-        "ada_backend.tasks.test_tasks.*": {"queue": "scheduled_tasks"},
     },
     # Define queues
     task_default_queue="default",
     task_queues=(
         Queue("default"),
         Queue("scheduled_workflows"),  # For scheduled workflow execution
-        Queue("scheduled_tasks"),  # For test tasks and other scheduled tasks
     ),
     # Worker configuration
     worker_prefetch_multiplier=1,
     task_acks_late=True,
     worker_disable_rate_limits=False,
-    # === DATABASE-DRIVEN SCHEDULER CONFIGURATION ===
-    # Use django-celery-beat for database-driven scheduling
-    beat_scheduler="django_celery_beat.schedulers:DatabaseScheduler",
-    beat_max_loop_interval=30,  # Check database every 30 seconds
     # Static schedules (for system tasks that don't need dynamic management)
     beat_schedule={
         "cleanup-old-executions": {
@@ -79,7 +63,6 @@ celery_app.conf.update(
 celery_app.autodiscover_tasks(
     [
         "ada_backend.tasks.workflow_tasks",  # Workflow execution tasks
-        "ada_backend.tasks.test_tasks",  # Test tasks
     ]
 )
 

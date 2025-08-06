@@ -28,7 +28,7 @@ from ada_backend.schemas.pipeline.base import ComponentInstanceSchema
 from ada_backend.schemas.pipeline.graph_schema import GraphDeployResponse
 from ada_backend.services.pipeline.get_pipeline_service import get_component_instance, get_relationships
 from ada_backend.services.pipeline.update_pipeline_service import create_or_update_component_instance
-from ada_backend.services.schedule_service import handle_scheduling_on_deployment, SYSTEM_USER_ID
+from ada_backend.services.workflow_schedule_service import handle_scheduling_on_deployment
 
 LOGGER = logging.getLogger(__name__)
 
@@ -157,66 +157,67 @@ def clone_graph_runner(
 
 
 def deploy_graph_service(session: Session, graph_runner_id: UUID, project_id: UUID):
-    print(f"=== DEPLOYMENT DEBUG START ===")
-    print(f"Deploying graph_runner_id: {graph_runner_id}")
-    print(f"Project_id: {project_id}")
+    LOGGER.debug("=== DEPLOYMENT DEBUG START ===")
+    LOGGER.info(f"Deploying graph_runner_id: {graph_runner_id}")
+    LOGGER.info(f"Project_id: {project_id}")
 
     try:
-        print("1. Checking if graph runner exists...")
+        LOGGER.info("1. Checking if graph runner exists...")
         if not graph_runner_exists(session, graph_id=graph_runner_id):
-            print(f"ERROR: Graph runner {graph_runner_id} not found")
+            LOGGER.error(f"ERROR: Graph runner {graph_runner_id} not found")
             raise HTTPException(status_code=404, detail="Graph runner not found")
-        print("✅ Graph runner exists")
+        LOGGER.info("✅ Graph runner exists")
 
-        print("2. Checking environment relationship...")
+        LOGGER.info("2. Checking environment relationship...")
         env_relationship = get_env_relationship_by_graph_runner_id(session=session, graph_runner_id=graph_runner_id)
         if not env_relationship:
-            print(f"ERROR: Graph runner {graph_runner_id} not bound to any project")
+            LOGGER.error(f"ERROR: Graph runner {graph_runner_id} not bound to any project")
             raise HTTPException(status_code=404, detail="Graph runner not bound to any project")
-        print(f"Environment relationship found: {env_relationship.environment}")
-        print(
-            f"Environment relationship details: graph_runner_id={env_relationship.graph_runner_id}, project_id={env_relationship.project_id}, environment={env_relationship.environment}"
+        LOGGER.info(f"Environment relationship found: {env_relationship.environment}")
+        LOGGER.debug(
+            f"Environment relationship details: graph_runner_id={env_relationship.graph_runner_id}, "
+            f"project_id={env_relationship.project_id}, environment={env_relationship.environment}"
         )
 
         if env_relationship.environment == EnvType.PRODUCTION:
-            print(f"ERROR: Graph runner {graph_runner_id} already in production")
-            print(f"This means the graph runner is already deployed to production")
-            print(f"Current environment: {env_relationship.environment}")
+            LOGGER.error(f"ERROR: Graph runner {graph_runner_id} already in production")
+            LOGGER.error("This means the graph runner is already deployed to production")
+            LOGGER.error(f"Current environment: {env_relationship.environment}")
             raise HTTPException(status_code=400, detail="Graph runner already in production")
-        print(f"✅ Environment relationship found: {env_relationship.environment}")
+        LOGGER.info(f"✅ Environment relationship found: {env_relationship.environment}")
 
-        print("3. Getting previous production graph...")
+        LOGGER.info("3. Getting previous production graph...")
         previous_production_graph = get_graph_runner_for_env(
             session=session,
             project_id=project_id,
             env=EnvType.PRODUCTION,
         )
         if previous_production_graph:
-            print(f"Found previous production graph: {previous_production_graph.id}")
+            LOGGER.info(f"Found previous production graph: {previous_production_graph.id}")
             update_graph_runner_env(session, previous_production_graph.id, env=None)
-            print(f"Updated previous production graph runner {previous_production_graph.id} to None")
+            LOGGER.info(f"Updated previous production graph runner {previous_production_graph.id} to None")
         else:
-            print("No previous production graph found")
+            LOGGER.info("No previous production graph found")
 
-        print("4. Cloning graph runner...")
+        LOGGER.info("4. Cloning graph runner...")
         new_graph_runner_id = clone_graph_runner(
             session=session,
             graph_runner_id_to_copy=graph_runner_id,
             project_id=project_id,
         )
-        print(f"✅ Cloned graph runner: {new_graph_runner_id}")
+        LOGGER.info(f"✅ Cloned graph runner: {new_graph_runner_id}")
 
-        print("5. Binding new graph runner to project...")
+        LOGGER.info("5. Binding new graph runner to project...")
         bind_graph_runner_to_project(
             session, graph_runner_id=new_graph_runner_id, project_id=project_id, env=EnvType.DRAFT
         )
-        print("✅ Bound new graph runner to project")
+        LOGGER.info("✅ Bound new graph runner to project")
 
-        print("6. Updating original graph runner to production...")
+        LOGGER.info("6. Updating original graph runner to production...")
         update_graph_runner_env(session, graph_runner_id, env=EnvType.PRODUCTION)
-        print(f"✅ Updated graph runner {graph_runner_id} to production")
+        LOGGER.info(f"✅ Updated graph runner {graph_runner_id} to production")
 
-        print("7. Handling cron scheduling...")
+        LOGGER.info("7. Handling cron scheduling...")
         schedule_results = None
         try:
             schedule_results = handle_scheduling_on_deployment(
@@ -225,12 +226,12 @@ def deploy_graph_service(session: Session, graph_runner_id: UUID, project_id: UU
                 project_id=project_id,
                 previous_production_graph_id=previous_production_graph.id if previous_production_graph else None,
             )
-            print(f"✅ Cron scheduling completed: {schedule_results}")
+            LOGGER.info(f"✅ Cron scheduling completed: {schedule_results}")
         except Exception as e:
-            print(f"❌ Cron scheduling failed: {str(e)}")
+            LOGGER.error(f"❌ Cron scheduling failed: {str(e)}")
             LOGGER.error(f"Failed to handle cron scheduling during deployment: {str(e)}", exc_info=True)
 
-        print("8. Creating response...")
+        LOGGER.debug("8. Creating response...")
         response = GraphDeployResponse(
             project_id=project_id,
             draft_graph_runner_id=new_graph_runner_id,
@@ -238,15 +239,15 @@ def deploy_graph_service(session: Session, graph_runner_id: UUID, project_id: UU
             previous_prod_graph_runner_id=previous_production_graph.id if previous_production_graph else None,
             schedule_info=schedule_results.dict() if schedule_results else None,
         )
-        print(f"✅ Response created successfully")
-        print(f"=== DEPLOYMENT DEBUG END ===")
+        LOGGER.info("✅ Response created successfully")
+        LOGGER.debug("=== DEPLOYMENT DEBUG END ===")
         return response
 
     except HTTPException as e:
-        print(f"❌ HTTPException in deployment: {e.status_code} - {e.detail}")
-        print(f"=== DEPLOYMENT DEBUG END WITH HTTP ERROR ===")
+        LOGGER.error(f"❌ HTTPException in deployment: {e.status_code} - {e.detail}")
+        LOGGER.debug("=== DEPLOYMENT DEBUG END WITH HTTP ERROR ===")
         raise
     except Exception as e:
-        print(f"❌ Unexpected error in deployment: {str(e)}")
-        print(f"=== DEPLOYMENT DEBUG END WITH ERROR ===")
+        LOGGER.error(f"❌ Unexpected error in deployment: {str(e)}")
+        LOGGER.debug("=== DEPLOYMENT DEBUG END WITH ERROR ===")
         raise

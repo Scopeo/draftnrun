@@ -19,4 +19,4 @@ class CronComponentConfig(BaseModel):
 class ScheduleActionResult(BaseModel):
     """Schema for schedule action result."""
 
-    action: str = Field(..., description="'created' or 'updated'") 
+    action: str = Field(..., description="'created' or 'updated'")

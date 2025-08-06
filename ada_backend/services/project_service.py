@@ -29,7 +29,7 @@ from ada_backend.schemas.project_schema import (
     ProjectCreateSchema,
 )
 from ada_backend.services.graph.delete_graph_service import delete_graph_runner_service
-from ada_backend.services.schedule_service import cleanup_schedules_for_project
+from ada_backend.services.workflow_schedule_service import cleanup_schedules_for_project
 from ada_backend.services.cron_api_key_service import cleanup_cron_api_keys_for_project
 from ada_backend.segment_analytics import track_project_created, track_project_saved, track_user_get_project_list
 
@@ -92,7 +92,7 @@ def delete_project_service(session: Session, project_id: UUID) -> ProjectDeleteR
         LOGGER.info(f"Cleaning up cron API keys for project {project_id}")
         try:
             # Use SYSTEM_USER_ID for cleanup (defined in schedule_service)
-            from ada_backend.services.schedule_service import SYSTEM_USER_ID
+            from ada_backend.services.workflow_schedule_service import SYSTEM_USER_ID
 
             cleanup_results["api_keys_cleanup"] = cleanup_cron_api_keys_for_project(
                 session=session, project_id=project_id, revoker_user_id=SYSTEM_USER_ID

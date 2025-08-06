@@ -16,7 +16,6 @@ from sqlalchemy import (
     func,
     CheckConstraint,
     UUID,
-    Index,
 )
 from sqlalchemy.orm import relationship, declarative_base, mapped_column
 from cryptography.fernet import Fernet
@@ -753,6 +752,23 @@ class DataSource(Base):
         return f"DataSource({self.name})"
 
 
+# --- APScheduler Jobs Table ---
+class APSchedulerJob(Base):
+    """
+    APScheduler jobs table for storing scheduled job metadata.
+    This table is managed by APScheduler but created via our migrations.
+    """
+
+    __tablename__ = "apscheduler_jobs"
+
+    id = mapped_column(String(191), primary_key=True)
+    next_run_time = mapped_column(DateTime(timezone=True), nullable=True)
+    job_state = mapped_column(Text, nullable=False)  # Serialized job data
+
+    def __repr__(self):
+        return f"<APSchedulerJob(id={self.id}, next_run_time={self.next_run_time})>"
+
+
 # --- Scheduled Workflows ---
 class ScheduledWorkflowType(StrEnum):
     """Enumeration of scheduled workflow types."""
@@ -764,7 +780,7 @@ class ScheduledWorkflowType(StrEnum):
 class ScheduledWorkflow(Base):
     """
     Primary source of truth for scheduled workflows.
-    Links to django-celery-beat tables via UUID for automatic synchronization.
+    Links to APScheduler jobs table via UUID for automatic synchronization.
     """
 
     __tablename__ = "scheduled_workflows"
@@ -772,7 +788,7 @@ class ScheduledWorkflow(Base):
     # Primary key
     id = mapped_column(Integer, primary_key=True, autoincrement=True)
 
-    # UUID for linking with django-celery-beat tables
+    # UUID for linking with APScheduler jobs table
     uuid = mapped_column(UUID(as_uuid=True), default=uuid.uuid4, unique=True, nullable=False)
 
     # Foreign keys
@@ -799,24 +815,17 @@ class ScheduledWorkflow(Base):
 
     # Constraints
     __table_args__ = (
-        # Check that args is valid JSON
-        CheckConstraint("args::json IS NOT NULL", name="chk_scheduled_workflows_args_json"),
-        # Check that project_id is required for Project type
         CheckConstraint(
             "(type = 'Project' AND project_id IS NOT NULL) OR (type = 'Ingestion' AND project_id IS NULL)",
-            name="chk_scheduled_workflows_project_required_for_project_type",
+            name="check_project_id_based_on_type",
         ),
-        # Indexes for better performance
-        Index("idx_scheduled_workflows_organization_id", "organization_id"),
-        Index("idx_scheduled_workflows_project_id", "project_id"),
-        Index("idx_scheduled_workflows_type", "type"),
-        Index("idx_scheduled_workflows_uuid", "uuid"),
-        Index("idx_scheduled_workflows_created_at", "created_at"),
-        Index("idx_scheduled_workflows_enabled", "enabled"),
     )
 
     def __repr__(self):
-        return f"<ScheduledWorkflow(id={self.id}, uuid={self.uuid}, type={self.type}, organization_id={self.organization_id})>"
+        return (
+            f"<ScheduledWorkflow(id={self.id}, uuid={self.uuid}, type={self.type}, "
+            f"organization_id={self.organization_id})>"
+        )
 
     def to_dict(self):
         """Convert model to dictionary"""

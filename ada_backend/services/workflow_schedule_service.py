@@ -19,7 +19,6 @@ from ada_backend.repositories.schedule_repository import (
     delete_scheduled_workflow,
     get_scheduled_workflows_by_project,
 )
-from ada_backend.django_scheduler.sync_backend_to_django import sync_to_django
 from ada_backend.schemas.schedule_base_schema import (
     ScheduleCreateSchema,
     ScheduleUpdateSchema,
@@ -36,6 +35,7 @@ from ada_backend.services.cron_api_key_service import (
     cleanup_cron_api_keys_for_project,
     update_cron_api_key_for_project,
 )
+from ada_backend.services.apscheduler_service import sync_scheduled_workflow, remove_scheduled_workflow
 
 LOGGER = logging.getLogger(__name__)
 
@@ -79,7 +79,8 @@ def scan_cron_components(session: Session, graph_runner_id: UUID) -> List[CronCo
 
             cron_configs.append(CronComponentConfig(**cron_config))
             LOGGER.info(
-                f"Found cron component {component.id}: {cron_config['cron_expression']} {cron_config['timezone']} enabled={cron_config['enabled']}"
+                f"Found cron component {component.id}: {cron_config['cron_expression']} "
+                f"{cron_config['timezone']} enabled={cron_config['enabled']}"
             )
 
         LOGGER.info(f"Scanned {len(cron_configs)} cron components in graph runner {graph_runner_id}")
@@ -126,13 +127,13 @@ def create_schedule(session: Session, schedule_data: ScheduleCreateSchema) -> Sc
         # Create the scheduled workflow using repository
         created_workflow = create_scheduled_workflow(session, scheduled_workflow)
 
-        # Sync to django-celery-beat if enabled
+        # Sync to APScheduler if enabled
         if schedule_data.enabled:
             try:
-                sync_to_django(session, created_workflow.id)
+                sync_scheduled_workflow(created_workflow)
             except Exception as e:
                 LOGGER.error(f"Created scheduled_workflow but sync failed: {str(e)}")
-                raise ValueError(f"Schedule created but sync to django-celery-beat failed: {str(e)}") from e
+                raise ValueError(f"Schedule created but sync to APScheduler failed: {str(e)}") from e
 
         return ScheduleResponse(
             id=created_workflow.id,
@@ -198,12 +199,12 @@ def update_schedule(session: Session, workflow_id: int, updates: ScheduleUpdateS
         # Update the scheduled workflow using repository
         updated_workflow = update_scheduled_workflow(session, current_workflow)
 
-        # Sync to django-celery-beat
+        # Sync to APScheduler
         try:
-            sync_to_django(session, workflow_id)
+            sync_scheduled_workflow(updated_workflow)
         except Exception as e:
             LOGGER.error(f"Updated scheduled_workflow but sync failed: {str(e)}")
-            raise ValueError(f"Schedule updated but sync to django-celery-beat failed: {str(e)}") from e
+            raise ValueError(f"Schedule updated but sync to APScheduler failed: {str(e)}") from e
 
         return ScheduleResponse(
             id=updated_workflow.id,
@@ -226,9 +227,7 @@ def update_schedule(session: Session, workflow_id: int, updates: ScheduleUpdateS
 
 def delete_schedule(session: Session, workflow_id: int) -> ScheduleDeleteResponse:
     """
-    Delete a scheduled workflow.
-    Note: The corresponding django-celery-beat task will be automatically deleted
-    due to the ON DELETE CASCADE foreign key constraint.
+    Delete a scheduled workflow and its associated APScheduler job.
 
     Args:
         session: Database session
@@ -241,10 +240,21 @@ def delete_schedule(session: Session, workflow_id: int) -> ScheduleDeleteRespons
         ValueError: If workflow not found
     """
     try:
-        # Delete the scheduled workflow using repository
-        delete_scheduled_workflow(session, workflow_id)
+        # Get the workflow first to get UUID for APScheduler cleanup
+        workflow = get_scheduled_workflow_by_id(session, workflow_id)
+        workflow_uuid = workflow.uuid
 
-        # Note: django-celery-beat task is automatically deleted via CASCADE
+        # 1. Remove from APScheduler FIRST (before deleting business data)
+        try:
+            remove_scheduled_workflow(workflow_uuid)
+            LOGGER.info(f"Removed APScheduler job for workflow {workflow_uuid}")
+        except Exception as e:
+            LOGGER.warning(f"Failed to remove workflow from APScheduler: {str(e)}")
+            # Continue with deletion even if APScheduler cleanup fails
+
+        # 2. Delete the scheduled workflow from business table
+        delete_scheduled_workflow(session, workflow_id)
+        LOGGER.info(f"Deleted scheduled workflow {workflow_id} from database")
 
         return ScheduleDeleteResponse(schedule_id=workflow_id, message="Schedule deleted successfully")
 
@@ -356,26 +366,25 @@ def handle_scheduling_on_deployment(
     Returns:
         DeploymentSchedulingResponse with scheduling results
     """
-    print(f"=== SCHEDULING DEBUG START ===")
-    print(f"Handling scheduling for graph_runner_id: {graph_runner_id}")
-    print(f"Project_id: {project_id}")
+    LOGGER.info(f"Handling scheduling for graph_runner_id: {graph_runner_id}")
+    LOGGER.info(f"Project_id: {project_id}")
 
     try:
-        print("1. Scanning for cron components...")
+        LOGGER.info("1. Scanning for cron components...")
         cron_configs = scan_cron_components(session, graph_runner_id)
-        print(f"Found {len(cron_configs)} cron components")
+        LOGGER.info(f"Found {len(cron_configs)} cron components")
 
         schedules_updated = 0
         schedules_removed = 0
         schedules_errors = []
 
-        print("2. Getting existing schedules...")
+        LOGGER.info("2. Getting existing schedules...")
         existing_schedules = get_project_schedules(session, project_id)
-        print(f"Found {len(existing_schedules)} existing schedules")
+        LOGGER.info(f"Found {len(existing_schedules)} existing schedules")
 
         # Handle each cron component configuration
         for i, cron_config in enumerate(cron_configs):
-            print(f"3.{i+1}. Processing cron component {cron_config.component_instance_id}...")
+            LOGGER.info(f"3.{i+1}. Processing cron component {cron_config.component_instance_id}...")
             try:
                 # Find existing schedule for this cron component
                 existing_schedule = None
@@ -387,17 +396,11 @@ def handle_scheduling_on_deployment(
                             break
                     except (json.JSONDecodeError, KeyError):
                         continue
-
-                if existing_schedule:
-                    print(f"   Found existing schedule: {existing_schedule.id}")
-                else:
-                    print(f"   No existing schedule found")
-
                 if cron_config.enabled:
-                    print(f"   Cron is enabled, processing...")
+                    LOGGER.debug("   Cron is enabled, processing...")
                     # Cron is enabled - create or update schedule
                     if existing_schedule:
-                        print(f"   Updating existing schedule...")
+                        LOGGER.debug("   Updating existing schedule...")
                         updates = ScheduleUpdateSchema(
                             cron_expression=cron_config.cron_expression,
                             timezone=cron_config.timezone,
@@ -411,9 +414,11 @@ def handle_scheduling_on_deployment(
                         result = update_schedule(session=session, workflow_id=existing_schedule.id, updates=updates)
                         if result:  # Only count if schedule was actually updated
                             schedules_updated += 1
-                            print(f"   ✅ Updated schedule for cron component {cron_config.component_instance_id}")
+                            LOGGER.info(
+                                f"   ✅ Updated schedule for cron component {cron_config.component_instance_id}"
+                            )
                     else:
-                        print(f"   Creating new schedule...")
+                        LOGGER.debug("   Creating new schedule...")
                         # Cron is enabled - create the schedule
                         organization_id = (
                             session.query(Project).filter(Project.id == project_id).first().organization_id
@@ -436,21 +441,23 @@ def handle_scheduling_on_deployment(
                         result = create_schedule(session=session, schedule_data=schedule_data)
                         if result:  # Only count if schedule was actually created
                             schedules_updated += 1
-                            print(f"   ✅ Created new schedule for cron component {cron_config.component_instance_id}")
+                            LOGGER.info(
+                                f"   ✅ Created new schedule for cron component {cron_config.component_instance_id}"
+                            )
 
                 else:
-                    print(f"   Cron is disabled, deleting schedule if exists...")
+                    LOGGER.debug("   Cron is disabled, deleting schedule if exists...")
                     # Cron is disabled - delete associated schedule if exists
                     if existing_schedule:
                         delete_schedule(session=session, workflow_id=existing_schedule.id)
                         schedules_removed += 1
-                        print(
+                        LOGGER.info(
                             f"   ✅ Deleted disabled schedule for cron component {cron_config.component_instance_id}"
                         )
 
             except Exception as e:
                 error_msg = f"Failed to handle cron component {cron_config.component_instance_id}: {str(e)}"
-                print(f"   ❌ Error: {error_msg}")
+                LOGGER.error(f"   ❌ Error: {error_msg}")
                 LOGGER.error(error_msg)
                 schedules_errors.append(
                     DeploymentSchedulingError(component_instance_id=cron_config.component_instance_id, error=error_msg)
@@ -460,53 +467,55 @@ def handle_scheduling_on_deployment(
         enabled_cron_components = [config for config in cron_configs if config.enabled]
 
         if not enabled_cron_components:
-            print("3. No enabled cron components found - deleting all existing schedules...")
+            LOGGER.info("3. No enabled cron components found - deleting all existing schedules...")
             for schedule in existing_schedules:
                 try:
-                    print(f"   Deleting schedule {schedule.id} - no enabled cron components")
+                    LOGGER.debug(f"   Deleting schedule {schedule.id} - no enabled cron components")
                     delete_schedule(session=session, workflow_id=schedule.id)
                     schedules_removed += 1
-                    print(f"   ✅ Deleted schedule {schedule.id}")
+                    LOGGER.info(f"   ✅ Deleted schedule {schedule.id}")
                 except Exception as e:
                     error_msg = f"Failed to delete schedule {schedule.id}: {str(e)}"
-                    print(f"   ❌ Error: {error_msg}")
+                    LOGGER.error(f"   ❌ Error: {error_msg}")
                     LOGGER.error(error_msg)
                     schedules_errors.append(DeploymentSchedulingError(schedule_id=schedule.id, error=error_msg))
 
             # Clean up API key when all schedules are removed
             if existing_schedules:
-                print("   Cleaning up API key - all schedules removed...")
+                LOGGER.debug("   Cleaning up API key - all schedules removed...")
                 try:
                     cleanup_result = cleanup_cron_api_keys_for_project(
                         session=session, project_id=project_id, revoker_user_id=SYSTEM_USER_ID
                     )
                     if cleanup_result["status"] == "SUCCESS":
-                        print(f"   ✅ Cleaned up API key for project {project_id}")
+                        LOGGER.info(f"   ✅ Cleaned up API key for project {project_id}")
                     else:
-                        print(f"   ❌ Failed to cleanup API key: {cleanup_result.get('error', 'Unknown error')}")
+                        LOGGER.error(
+                            f"   ❌ Failed to cleanup API key: {cleanup_result.get('error', 'Unknown error')}"
+                        )
                 except Exception as e:
-                    print(f"   ❌ Exception during API key cleanup: {str(e)}")
+                    LOGGER.error(f"   ❌ Exception during API key cleanup: {str(e)}")
                     LOGGER.error(f"Exception during API key cleanup for project {project_id}: {str(e)}", exc_info=True)
 
-        print("4. Processing API key management...")
+        LOGGER.info("4. Processing API key management...")
         # Generate/rotate API key if schedules were created or updated
         if schedules_updated > 0:
-            print(f"   Schedules updated ({schedules_updated}), generating API key...")
+            LOGGER.debug(f"   Schedules updated ({schedules_updated}), generating API key...")
             try:
                 api_key_result = update_cron_api_key_for_project(
                     session=session, project_id=project_id, creator_user_id=SYSTEM_USER_ID
                 )
                 if api_key_result["status"] == "SUCCESS":
-                    print(f"   ✅ Generated/rotated API key for project {project_id}")
+                    LOGGER.info(f"   ✅ Generated/rotated API key for project {project_id}")
                 else:
-                    print(f"   ❌ Failed to generate API key: {api_key_result.get('error', 'Unknown error')}")
+                    LOGGER.error(f"   ❌ Failed to generate API key: {api_key_result.get('error', 'Unknown error')}")
             except Exception as e:
-                print(f"   ❌ Exception during API key generation: {str(e)}")
+                LOGGER.error(f"   ❌ Exception during API key generation: {str(e)}")
                 LOGGER.error(f"Exception during API key generation for project {project_id}: {str(e)}", exc_info=True)
         else:
-            print(f"   No schedules updated, skipping API key generation")
+            LOGGER.debug("   No schedules updated, skipping API key generation")
 
-        print("5. Creating response...")
+        LOGGER.debug("5. Creating response...")
         result = DeploymentSchedulingResponse(
             project_id=project_id,
             graph_runner_id=graph_runner_id,
@@ -517,16 +526,15 @@ def handle_scheduling_on_deployment(
             message="Scheduling handled successfully",
         )
 
-        print(
-            f"✅ Scheduling completed: {schedules_updated} updated, {schedules_removed} removed, {len(schedules_errors)} errors"
+        LOGGER.info(
+            f"✅ Scheduling completed: {schedules_updated} updated, "
+            f"{schedules_removed} removed, {len(schedules_errors)} errors"
         )
-        print(f"=== SCHEDULING DEBUG END ===")
         return result
 
     except Exception as e:
         error_msg = f"Failed to handle scheduling on deployment: {str(e)}"
-        print(f"❌ Scheduling failed: {error_msg}")
-        print(f"=== SCHEDULING DEBUG END WITH ERROR ===")
+        LOGGER.error(f"❌ Scheduling failed: {error_msg}")
         LOGGER.error(error_msg, exc_info=True)
         return DeploymentSchedulingResponse(
             project_id=project_id,

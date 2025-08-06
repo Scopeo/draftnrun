@@ -67,4 +67,4 @@ class ScheduleDeleteResponse(BaseModel):
     """Schema for schedule deletion response."""
 
     schedule_id: int
-    message: str = "Schedule deleted successfully" 
+    message: str = "Schedule deleted successfully"

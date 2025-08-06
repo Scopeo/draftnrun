@@ -102,7 +102,8 @@ def execute_scheduled_workflow(self, project_id: str, scheduled_workflow_uuid: s
         timezone = args_dict.get("timezone", "UTC")
 
         LOGGER.info(
-            f"Starting scheduled workflow execution: task={task_id}, project={project_id}, workflow={scheduled_workflow_uuid}"
+            f"Starting scheduled workflow execution: task={task_id}, "
+            f"project={project_id}, workflow={scheduled_workflow_uuid}"
         )
         LOGGER.info(f"Scheduled execution details: cron={cron_expression}, tz={timezone}, type={type}")
 

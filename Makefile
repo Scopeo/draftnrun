@@ -11,6 +11,8 @@ help:
 	@echo "run-celery-beat: Start the Celery beat scheduler for cron jobs."
 	@echo "run-celery-worker-debug: Start the Celery worker in debug mode."
 	@echo "run-celery-beat-debug: Start the Celery beat scheduler in debug mode."
+	@echo "run-apscheduler: Start the APScheduler daemon for executing scheduled jobs."
+	@echo "run-apscheduler-debug: Start the APScheduler daemon in debug mode."
 	@echo ""
 	@echo "Database Commands:"
 	@echo "  db-upgrade: Apply database migrations"
@@ -18,8 +20,6 @@ help:
 	@echo "  db-current: Check current migration"
 	@echo "  db-history: Show migration history"
 	@echo ""
-	@echo "Cron Database Commands:"
-	@echo "  cron-db-setup: Setup django-celery-beat tables in custom schema"
 # -------------------------------------------
 # Development and Running
 # -------------------------------------------
@@ -72,6 +72,19 @@ generate-backend-secret-key:
 get-supabase-token:
 	@echo "Fetching Supabase token for username $(username)"
 	@uv run python -m ada_backend.scripts.get_supabase_token --username $(username) --password $(password)
+
+# -------------------------------------------
+# APScheduler Commands  
+# -------------------------------------------
+.PHONY: run-apscheduler
+run-apscheduler:
+	@echo "Starting APScheduler daemon for executing scheduled jobs"
+	@uv run python ada_backend/scripts/run_apscheduler.py
+
+.PHONY: run-apscheduler-debug
+run-apscheduler-debug:
+	@echo "Starting APScheduler daemon in debug mode"
+	@PYTHONPATH=. uv run python -c "import logging; logging.basicConfig(level=logging.DEBUG); exec(open('ada_backend/scripts/run_apscheduler.py').read())"
 
 # -------------------------------------------
 # Celery Commands
@@ -143,13 +156,6 @@ db-reset:
 	@docker exec -it ada_postgres psql -U ada_user -d postgres -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = 'ada_backend' AND pid <> pg_backend_pid();"
 	@docker exec -it ada_postgres psql -U ada_user -d postgres -c "DROP DATABASE IF EXISTS ada_backend;" && docker exec -it ada_postgres psql -U ada_user -d postgres -c "CREATE DATABASE ada_backend;"
 
-# -------------------------------------------
-# Cron Database Setup
-# -------------------------------------------
-.PHONY: cron-db-setup
-cron-db-setup:
-	@echo "Setting up django-celery-beat tables in custom schema"
-	@uv run python ada_backend/django_scheduler/setup_django_beat_schema.py
 # -------------------------------------------
 # Trace Database Migrations (Alembic)
 # -------------------------------------------

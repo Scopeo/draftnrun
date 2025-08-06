@@ -113,6 +113,19 @@ app.add_middleware(
 )
 
 
+@app.on_event("startup")
+async def startup_event():
+    # FastAPI app handles job management only
+    # APScheduler daemon handles job execution separately
+    pass
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    # No cleanup needed - APScheduler runs as separate process
+    pass
+
+
 @app.get("/")
 def read_root():
     return {"message": "Welcome to the LLM Agent Admin Interface!"}
