@@ -33,14 +33,14 @@ def test_qdrant_service():
             "chunk_id": "1",
             "content": "chunk1",
             "file_id": "file_id1",
-            "url": "https//www.dummy1.com",
+            "url": "https://www.dummy1.com",
             "last_edited_ts": "2024-11-26 10:40:40",
         },
         {
             "chunk_id": "2",
             "content": "chunk2",
             "file_id": "file_id2",
-            "url": "https//www.dummy2.com",
+            "url": "https://www.dummy2.com",
             "last_edited_ts": "2024-11-26 10:40:40",
         },
     ]
@@ -65,21 +65,25 @@ def test_qdrant_service():
         )
     )
     assert asyncio.run(qdrant_agentic_service.count_points_async(TEST_COLLECTION_NAME)) == 2
-    assert asyncio.run(qdrant_agentic_service.delete_chunks_async(
-        point_ids=["1"],
-        id_field="chunk_id",
-        collection_name=TEST_COLLECTION_NAME,
-    ))
+    assert asyncio.run(
+        qdrant_agentic_service.delete_chunks_async(
+            point_ids=["1"],
+            id_field="chunk_id",
+            collection_name=TEST_COLLECTION_NAME,
+        )
+    )
     assert asyncio.run(qdrant_agentic_service.count_points_async(TEST_COLLECTION_NAME)) == 1
-    retrieved_chunks = asyncio.run(qdrant_agentic_service.retrieve_similar_chunks_async(
-        query_text="chunk2",
-        collection_name=TEST_COLLECTION_NAME,
-    ))
+    retrieved_chunks = asyncio.run(
+        qdrant_agentic_service.retrieve_similar_chunks_async(
+            query_text="chunk2",
+            collection_name=TEST_COLLECTION_NAME,
+        )
+    )
     correct_chunk = SourceChunk(
         name="2",
         content="chunk2",
         document_name="file_id2",
-        url="https//www.dummy2.com",
+        url="https://www.dummy2.com",
         metadata={},
     )
     assert retrieved_chunks[0] == correct_chunk
@@ -90,19 +94,25 @@ def test_qdrant_service():
                 "chunk_id": "1",
                 "content": "chunk1",
                 "file_id": "file_id1",
-                "url": "https//www.dummy1.com",
-                "last_edited_ts": "2025-01-2 10:40:40",
+                "url": "https://www.dummy1.com",
+                "last_edited_ts": "2025-01-02 10:40:40",
             },
             {
                 "chunk_id": "2",
                 "content": "chunk2",
-                "url": "https//www.dummy2.com",
+                "url": "https://www.dummy2.com",
                 "file_id": "file_id2",
-                "last_edited_ts": "2025-01-2 10:40:40",
+                "last_edited_ts": "2025-01-02 10:40:40",
             },
         ]
     )
-    asyncio.run(qdrant_agentic_service.sync_df_with_collection_async(new_df_1, TEST_COLLECTION_NAME))
+    asyncio.run(
+        qdrant_agentic_service.sync_df_with_collection_async(
+            df=new_df_1,
+            collection_name=TEST_COLLECTION_NAME,
+            timestamp_column_name="last_edited_ts",
+        )
+    )
     assert asyncio.run(qdrant_agentic_service.count_points_async(TEST_COLLECTION_NAME)) == 2
     synced_df = asyncio.run(qdrant_agentic_service.get_collection_data_async(TEST_COLLECTION_NAME))
     synced_df.sort_values(by="chunk_id", inplace=True)
@@ -115,19 +125,23 @@ def test_qdrant_service():
                 "chunk_id": "1",
                 "content": "chunk1",
                 "file_id": "file_id1",
-                "url": "https//www.dummy1.com",
-                "last_edited_ts": "2025-01-2 10:40:40",
+                "url": "https://www.dummy1.com",
+                "last_edited_ts": "2025-01-02 10:40:40",
             },
             {
                 "chunk_id": "3",
                 "content": "chunk3",
                 "file_id": "file_id3",
-                "url": "https//www.dummy3.com",
-                "last_edited_ts": "2025-01-2 10:40:40",
+                "url": "https://www.dummy3.com",
+                "last_edited_ts": "2025-01-02 10:40:40",
             },
         ]
     )
-    asyncio.run(qdrant_agentic_service.sync_df_with_collection_async(new_df_2, TEST_COLLECTION_NAME))
+    asyncio.run(qdrant_agentic_service.sync_df_with_collection_async(
+        df=new_df_2,
+        collection_name=TEST_COLLECTION_NAME,
+        timestamp_column_name="last_edited_ts",
+    ))
     assert asyncio.run(qdrant_agentic_service.count_points_async(TEST_COLLECTION_NAME)) == 2
     synced_df = asyncio.run(qdrant_agentic_service.get_collection_data_async(TEST_COLLECTION_NAME))
     synced_df.sort_values(by="chunk_id", inplace=True)
@@ -182,7 +196,7 @@ def test_qdrant_filtering(
             "chunk_id": "1",
             "content": "chunk1",
             "file_id": "file_id1",
-            "url": "https//www.dummy1.com",
+            "url": "https://www.dummy1.com",
             "last_edited_ts": "2024-11-26 10:40:40",
             "metadata_1": ["a", "b"],
             "metadata_2": ["aa", "bb"],
@@ -191,7 +205,7 @@ def test_qdrant_filtering(
             "chunk_id": "2",
             "content": "chunk2",
             "file_id": "file_id2",
-            "url": "https//www.dummy2.com",
+            "url": "https://www.dummy2.com",
             "last_edited_ts": "2024-11-26 10:40:40",
             "metadata_1": ["c", "d"],
             "metadata_2": ["cc", "dd"],
@@ -225,11 +239,13 @@ def test_qdrant_filtering(
 
     formatted_filter = format_qdrant_filter(filter_dict, filtering_condition)
 
-    retrieved_chunks = asyncio.run(qdrant_agentic_service.retrieve_similar_chunks_async(
-        query_text="chunk1",
-        collection_name=TEST_COLLECTION_NAME,
-        filter=formatted_filter,
-    ))
+    retrieved_chunks = asyncio.run(
+        qdrant_agentic_service.retrieve_similar_chunks_async(
+            query_text="chunk1",
+            collection_name=TEST_COLLECTION_NAME,
+            filter=formatted_filter,
+        )
+    )
     set_chunks = set([chunk.name for chunk in retrieved_chunks])
     assert expected_chunk == set_chunks
     assert asyncio.run(qdrant_agentic_service.delete_collection_async(TEST_COLLECTION_NAME))
