@@ -1148,7 +1148,7 @@ class QdrantService:
 
         return asyncio.run(self.get_points_only_ids_timestamp_async(collection_name, filter, timestamp_column_name))
 
-    async def get_points_only_ids_timestamp_async(
+    async def get_collection_data_with_only_ids_timestamp_async(
         self,
         collection_name: str,
         filter: Optional[dict] = None,
