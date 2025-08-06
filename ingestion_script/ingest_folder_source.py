@@ -101,6 +101,7 @@ def sync_chunks_to_qdrant(
 
     return asyncio.run(_sync_chunks())
 
+
 def ingest_google_drive_source(
     folder_id: str,
     organization_id: str,
