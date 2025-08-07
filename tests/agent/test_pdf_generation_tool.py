@@ -41,8 +41,51 @@ async def test_pdf_generation_and_cleanup(pdf_tool, tmp_path):
     mock_params = Mock()
     mock_params.uuid_for_temp_folder = str(tmp_path / "test-uuid-12345")
 
-    with patch("engine.agent.pdf_generation_tool.get_tracing_span", return_value=mock_params):
+    # Mock weasyprint to avoid HTTP requests
+    mock_html = Mock()
+    mock_html.write_pdf = Mock()
 
+    with (
+        patch("engine.agent.pdf_generation_tool.get_tracing_span", return_value=mock_params),
+        patch("engine.agent.pdf_generation_tool.HTML", return_value=mock_html),
+    ):
+
+        result = await pdf_tool._run_without_io_trace(markdown_content=MARKDOWN_CONTENT)
+
+        # Verify result structure
+        assert result.is_final is True
+        assert result.error is None
+        assert len(result.messages) == 1
+        assert "PDF generated successfully" in result.messages[0].content
+
+        # Get the PDF filename from artifacts
+        artifacts = getattr(result, "artifacts", None) or result.__dict__.get("artifacts", {})
+        pdf_filename = artifacts.get("pdf_filename")
+        assert pdf_filename is not None
+        pdf_path = Path(pdf_filename)
+
+        # Verify that weasyprint was called correctly
+        mock_html.write_pdf.assert_called_once_with(str(pdf_path))
+
+        # Verify the directory was created
+        assert pdf_path.parent.exists()
+        assert pdf_path.parent.is_dir()
+
+        # Clean up the directory
+        import shutil
+
+        shutil.rmtree(pdf_path.parent)
+        assert not pdf_path.parent.exists()
+
+
+@pytest.mark.anyio
+async def test_pdf_generation_with_actual_pdf(pdf_tool, tmp_path):
+    """Test that PDF is generated with actual PDF creation (for integration testing)."""
+    # Use pytest's tmp_path as a writable temp directory for CI safety
+    mock_params = Mock()
+    mock_params.uuid_for_temp_folder = str(tmp_path / "test-uuid-12345")
+
+    with patch("engine.agent.pdf_generation_tool.get_tracing_span", return_value=mock_params):
         result = await pdf_tool._run_without_io_trace(markdown_content=MARKDOWN_CONTENT)
 
         # Verify result structure
@@ -68,3 +111,9 @@ async def test_pdf_generation_and_cleanup(pdf_tool, tmp_path):
         # Clean up the PDF file
         pdf_path.unlink()
         assert not pdf_path.exists()
+
+        # Clean up the directory
+        import shutil
+
+        shutil.rmtree(pdf_path.parent)
+        assert not pdf_path.parent.exists()
