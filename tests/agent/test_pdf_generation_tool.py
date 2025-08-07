@@ -1,4 +1,5 @@
 import pytest
+import asyncio
 import pytest_asyncio
 from unittest.mock import MagicMock, patch, Mock
 from pathlib import Path
@@ -32,6 +33,8 @@ async def pdf_tool(mock_trace_manager):
         component_attributes=ComponentAttributes(component_instance_name="test_pdf_tool"),
     )
     yield tool
+
+    await asyncio.sleep(0.1)
 
 
 @pytest.mark.anyio
