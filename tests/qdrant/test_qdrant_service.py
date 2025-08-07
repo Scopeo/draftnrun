@@ -9,7 +9,7 @@ from engine.agent.types import SourceChunk
 from engine.agent.utils import format_qdrant_filter
 from tests.mocks.trace_manager import MockTraceManager
 
-TEST_COLLECTION_NAME = f"test_agentic_ci_collection_{uuid4()}"
+TEST_COLLECTION_NAME = f"test_collection_{uuid4().hex[:8]}"
 
 
 def test_qdrant_service():
