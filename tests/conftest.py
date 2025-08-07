@@ -1,7 +1,5 @@
 import pytest
 from unittest.mock import patch
-import sys
-import asyncio
 
 # Import LLM service mocks
 from tests.mocks.llm_service import (
@@ -46,8 +44,3 @@ def disable_observability_in_tests():
     """Disable observability stack for all tests to avoid external dependencies."""
     with patch("settings.settings.ENABLE_OBSERVABILITY_STACK", False):
         yield
-
-
-def pytest_sessionstart(session):
-    if sys.platform.startswith("linux"):
-        asyncio.set_event_loop_policy(asyncio.SelectorEventLoopPolicy())
