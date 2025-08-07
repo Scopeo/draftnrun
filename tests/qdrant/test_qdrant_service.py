@@ -46,7 +46,7 @@ def test_qdrant_service():
     qdrant_agentic_service = QdrantService.from_defaults(
         embedding_service=embedding_service,
         default_collection_schema=qdrant_schema,
-        timeout=60.0,  # Increased timeout for tests
+        timeout=80.0,  # Increased timeout for tests
     )
 
     # Ensure a clean state
@@ -199,7 +199,7 @@ def test_qdrant_filtering(
     qdrant_agentic_service = QdrantService.from_defaults(
         embedding_service=embedding_service,
         default_collection_schema=qdrant_schema,
-        timeout=60.0,  # Increased timeout for tests
+        timeout=80.0,  # Increased timeout for tests
     )
 
     # Ensure a clean state before testing
