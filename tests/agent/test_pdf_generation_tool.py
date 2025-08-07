@@ -1,6 +1,5 @@
 import pytest
 import asyncio
-import pytest_asyncio
 from unittest.mock import MagicMock, patch, Mock
 from pathlib import Path
 
@@ -25,20 +24,16 @@ def mock_trace_manager():
     return MagicMock(spec=TraceManager)
 
 
-@pytest_asyncio.fixture
-async def pdf_tool(mock_trace_manager):
+@pytest.fixture
+def pdf_tool(mock_trace_manager):
     """Create a PDF generation tool instance."""
-    tool = PDFGenerationTool(
+    return PDFGenerationTool(
         trace_manager=mock_trace_manager,
         component_attributes=ComponentAttributes(component_instance_name="test_pdf_tool"),
     )
-    yield tool
-
-    await asyncio.sleep(0.1)
 
 
-@pytest.mark.anyio
-async def test_pdf_generation_and_cleanup(pdf_tool, tmp_path):
+def test_pdf_generation_and_cleanup(pdf_tool, tmp_path):
     """Test that PDF is generated and then cleaned up properly."""
     # Use pytest's tmp_path as a writable temp directory for CI safety
     mock_params = Mock()
@@ -52,8 +47,8 @@ async def test_pdf_generation_and_cleanup(pdf_tool, tmp_path):
         patch("engine.agent.pdf_generation_tool.get_tracing_span", return_value=mock_params),
         patch("engine.agent.pdf_generation_tool.HTML", return_value=mock_html),
     ):
-
-        result = await pdf_tool._run_without_io_trace(markdown_content=MARKDOWN_CONTENT)
+        # Call async function from sync test
+        result = asyncio.run(pdf_tool._run_without_io_trace(markdown_content=MARKDOWN_CONTENT))
 
         # Verify result structure
         assert result.is_final is True
@@ -81,15 +76,15 @@ async def test_pdf_generation_and_cleanup(pdf_tool, tmp_path):
         assert not pdf_path.parent.exists()
 
 
-@pytest.mark.anyio
-async def test_pdf_generation_with_actual_pdf(pdf_tool, tmp_path):
+def test_pdf_generation_with_actual_pdf(pdf_tool, tmp_path):
     """Test that PDF is generated with actual PDF creation (for integration testing)."""
     # Use pytest's tmp_path as a writable temp directory for CI safety
     mock_params = Mock()
     mock_params.uuid_for_temp_folder = str(tmp_path / "test-uuid-12345")
 
     with patch("engine.agent.pdf_generation_tool.get_tracing_span", return_value=mock_params):
-        result = await pdf_tool._run_without_io_trace(markdown_content=MARKDOWN_CONTENT)
+        # Call async function from sync test
+        result = asyncio.run(pdf_tool._run_without_io_trace(markdown_content=MARKDOWN_CONTENT))
 
         # Verify result structure
         assert result.is_final is True
