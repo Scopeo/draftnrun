@@ -78,6 +78,19 @@ def seed_llm_call_components(session: Session):
                 ).model_dump(exclude_unset=True, exclude_none=True),
             ),
             db.ComponentParameterDefinition(
+                id=UUID("0dcee65b-d3b7-43e6-8cb4-2ec531c1875c"),
+                component_id=llm_call.id,
+                name="file_url_key",
+                type=ParameterType.STRING,
+                nullable=True,
+                ui_component=UIComponent.TEXTFIELD,
+                ui_component_properties=UIComponentProperties(
+                    label="File URL key",
+                    placeholder="file_url",
+                    description=("Reference the output key from the previous component that contains the file URL."),
+                ).model_dump(exclude_unset=True, exclude_none=True),
+            ),
+            db.ComponentParameterDefinition(
                 id=UUID("d7ee43ab-80f8-4ee5-ac38-938163933610"),
                 component_id=llm_call.id,
                 name="output_format",

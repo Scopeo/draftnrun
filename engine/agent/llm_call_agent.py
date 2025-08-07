@@ -42,9 +42,13 @@ DEFAULT_LLM_CALL_TOOL_DESCRIPTION = ToolDescription(
                                         "file_data": {
                                             "type": "string",
                                             "description": "Base64-encoded file content with MIME prefix.",
-                                        }
+                                        },
+                                        "file_url": {
+                                            "type": "string",
+                                            "description": "URL to the file for OpenAI API.",
+                                        },
                                     },
-                                    "required": ["file_data"],
+                                    "required": ["file_data", "file_url"],
                                 },
                             },
                             "required": ["type"],
@@ -68,6 +72,7 @@ class LLMCallAgent(Agent):
         component_attributes: ComponentAttributes,
         prompt_template: str,
         file_content_key: Optional[str] = None,
+        file_url_key: Optional[str] = None,
         output_format: Optional[dict[str] | None] = None,
     ):
         super().__init__(
@@ -78,6 +83,7 @@ class LLMCallAgent(Agent):
         self._completion_service = completion_service
         self._prompt_template = prompt_template
         self._file_content_key = file_content_key
+        self._file_url_key = file_url_key
         self.output_format = output_format
 
     async def _run_without_io_trace(self, *input_payloads: AgentPayload | dict, **kwargs) -> AgentPayload:
@@ -126,6 +132,13 @@ class LLMCallAgent(Agent):
                     and "file_data" in payload_json[self._file_content_key]
                 ):
                     files_content.append({"type": "file", "file": payload_json[self._file_content_key]})
+                    continue
+
+        if self._file_url_key:
+            for payload in input_payloads:
+                if self._file_url_key in payload_json:
+                    file_url = payload_json[self._file_url_key]
+                    files_content.append({"type": "file", "file_url": file_url})
                     continue
 
         text_content = self._prompt_template.format(**input_replacements)
