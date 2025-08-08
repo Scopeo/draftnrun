@@ -74,6 +74,11 @@ class EnvType(StrEnum):
     PRODUCTION = "production"
 
 
+class CallType(StrEnum):
+    API = "api"
+    SANDBOX = "sandbox"
+
+
 class UIComponent(StrEnum):
     AUTOCOMPLETE = "Autocomplete"
     CHECKBOX = "Checkbox"
