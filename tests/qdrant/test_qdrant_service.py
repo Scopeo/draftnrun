@@ -102,7 +102,11 @@ def test_qdrant_service():
             },
         ]
     )
-    asyncio.run(qdrant_agentic_service.sync_df_with_collection_async(new_df_1, TEST_COLLECTION_NAME))
+    asyncio.run(qdrant_agentic_service.sync_df_with_collection_async(
+        df=new_df_1,
+        collection_name=TEST_COLLECTION_NAME,
+        timestamp_column_name="last_edited_ts",
+    ))
     assert asyncio.run(qdrant_agentic_service.count_points_async(TEST_COLLECTION_NAME)) == 2
     synced_df = asyncio.run(qdrant_agentic_service.get_collection_data_async(TEST_COLLECTION_NAME))
     synced_df.sort_values(by="chunk_id", inplace=True)
@@ -127,7 +131,11 @@ def test_qdrant_service():
             },
         ]
     )
-    asyncio.run(qdrant_agentic_service.sync_df_with_collection_async(new_df_2, TEST_COLLECTION_NAME))
+    asyncio.run(qdrant_agentic_service.sync_df_with_collection_async(
+        df=new_df_2,
+        collection_name=TEST_COLLECTION_NAME,
+        timestamp_column_name="last_edited_ts",
+    ))
     assert asyncio.run(qdrant_agentic_service.count_points_async(TEST_COLLECTION_NAME)) == 2
     synced_df = asyncio.run(qdrant_agentic_service.get_collection_data_async(TEST_COLLECTION_NAME))
     synced_df.sort_values(by="chunk_id", inplace=True)
