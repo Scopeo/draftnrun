@@ -178,43 +178,4 @@ def get_slack_oauth_access_token(
     else:
         raise ValueError(f"Integration secret with ID {integration_secret_id} not found.")
 
-
-def exchange_slack_oauth_code(
-    code: str, client_id: str, client_secret: str, redirect_uri: str
-) -> tuple[str, str, int, datetime]:
-    """Exchange Slack OAuth authorization code for access and refresh tokens.
-
-    Args:
-        code: Authorization code from Slack OAuth callback
-        client_id: Slack OAuth client ID
-        client_secret: Slack OAuth client secret
-        redirect_uri: Redirect URI used in OAuth flow
-
-    Returns:
-        tuple: (access_token, refresh_token, expires_in, creation_timestamp)
-
-    Raises:
-        ValueError: If code exchange fails or Slack API returns an error
-    """
-    url = "https://slack.com/api/oauth.v2.access"
-    payload = {
-        "client_id": client_id,
-        "client_secret": client_secret,
-        "code": code,
-        "redirect_uri": redirect_uri,
-    }
-    resp = requests.post(url, data=payload)
-    if resp.ok:
-        creation_timestamp = datetime.now(timezone.utc)
-        tokens = resp.json()
-        if tokens.get("ok"):
-            return (
-                tokens.get("access_token"),
-                tokens.get("refresh_token"),
-                tokens.get("expires_in", 0),
-                creation_timestamp,
-            )
-        else:
-            raise ValueError(f"Slack API error: {tokens.get('error')}")
-    else:
-        raise ValueError(f"Failed to exchange Slack OAuth code: {resp.status_code} {resp.text}")
+ 
