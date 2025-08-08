@@ -72,6 +72,8 @@ class TraceManager:
             attributes["organization_id"] = params.organization_id
             attributes["organization_llm_providers"] = params.organization_llm_providers
             attributes["conversation_id"] = params.conversation_id
+            attributes["environment"] = params.environment
+            attributes["call_type"] = params.call_type
 
         # Handle trace isolation for root spans
         if isolate_context:
