@@ -10,7 +10,7 @@ from engine.agent.types import SourceChunk
 from engine.agent.utils import format_qdrant_filter
 from tests.mocks.trace_manager import MockTraceManager
 
-TEST_COLLECTION_NAME = f"test_collection_{uuid4().hex[:8]}"
+TEST_COLLECTION_NAME = f"test_agentic_ci_collection_{uuid4()}"
 
 
 def test_qdrant_service():
@@ -51,30 +51,30 @@ def test_qdrant_service():
     )
 
     # Ensure a clean state
-    if qdrant_agentic_service.collection_exists(TEST_COLLECTION_NAME):
-        qdrant_agentic_service.delete_collection(TEST_COLLECTION_NAME)
-    assert not qdrant_agentic_service.collection_exists(TEST_COLLECTION_NAME)
+    if asyncio.run(qdrant_agentic_service.collection_exists_async(TEST_COLLECTION_NAME)):
+        asyncio.run(qdrant_agentic_service.delete_collection_async(TEST_COLLECTION_NAME))
+    assert not asyncio.run(qdrant_agentic_service.collection_exists_async(TEST_COLLECTION_NAME))
 
-    qdrant_agentic_service.create_collection(collection_name=TEST_COLLECTION_NAME)
-    assert qdrant_agentic_service.collection_exists(TEST_COLLECTION_NAME)
-    assert qdrant_agentic_service.count_points(TEST_COLLECTION_NAME) == 0
+    asyncio.run(qdrant_agentic_service.create_collection_async(collection_name=TEST_COLLECTION_NAME))
+    assert asyncio.run(qdrant_agentic_service.collection_exists_async(TEST_COLLECTION_NAME))
+    assert asyncio.run(qdrant_agentic_service.count_points_async(TEST_COLLECTION_NAME)) == 0
     asyncio.run(
         qdrant_agentic_service.add_chunks_async(
             list_chunks=chunks,
             collection_name=TEST_COLLECTION_NAME,
         )
     )
-    assert qdrant_agentic_service.count_points(TEST_COLLECTION_NAME) == 2
-    assert qdrant_agentic_service.delete_chunks(
+    assert asyncio.run(qdrant_agentic_service.count_points_async(TEST_COLLECTION_NAME)) == 2
+    assert asyncio.run(qdrant_agentic_service.delete_chunks_async(
         point_ids=["1"],
         id_field="chunk_id",
         collection_name=TEST_COLLECTION_NAME,
-    )
-    assert qdrant_agentic_service.count_points(TEST_COLLECTION_NAME) == 1
-    retrieved_chunks = qdrant_agentic_service.retrieve_similar_chunks(
+    ))
+    assert asyncio.run(qdrant_agentic_service.count_points_async(TEST_COLLECTION_NAME)) == 1
+    retrieved_chunks = asyncio.run(qdrant_agentic_service.retrieve_similar_chunks_async(
         query_text="chunk2",
         collection_name=TEST_COLLECTION_NAME,
-    )
+    ))
     correct_chunk = SourceChunk(
         name="2",
         content="chunk2",
@@ -102,9 +102,9 @@ def test_qdrant_service():
             },
         ]
     )
-    qdrant_agentic_service.sync_df_with_collection(new_df_1, TEST_COLLECTION_NAME)
-    assert qdrant_agentic_service.count_points(TEST_COLLECTION_NAME) == 2
-    synced_df = qdrant_agentic_service.get_collection_data(TEST_COLLECTION_NAME)
+    asyncio.run(qdrant_agentic_service.sync_df_with_collection_async(new_df_1, TEST_COLLECTION_NAME))
+    assert asyncio.run(qdrant_agentic_service.count_points_async(TEST_COLLECTION_NAME)) == 2
+    synced_df = asyncio.run(qdrant_agentic_service.get_collection_data_async(TEST_COLLECTION_NAME))
     synced_df.sort_values(by="chunk_id", inplace=True)
     synced_df.reset_index(drop=True, inplace=True)
     assert synced_df.equals(new_df_1)
@@ -127,15 +127,15 @@ def test_qdrant_service():
             },
         ]
     )
-    qdrant_agentic_service.sync_df_with_collection(new_df_2, TEST_COLLECTION_NAME)
-    assert qdrant_agentic_service.count_points(TEST_COLLECTION_NAME) == 2
-    synced_df = qdrant_agentic_service.get_collection_data(TEST_COLLECTION_NAME)
+    asyncio.run(qdrant_agentic_service.sync_df_with_collection_async(new_df_2, TEST_COLLECTION_NAME))
+    assert asyncio.run(qdrant_agentic_service.count_points_async(TEST_COLLECTION_NAME)) == 2
+    synced_df = asyncio.run(qdrant_agentic_service.get_collection_data_async(TEST_COLLECTION_NAME))
     synced_df.sort_values(by="chunk_id", inplace=True)
     synced_df.reset_index(drop=True, inplace=True)
     assert synced_df.equals(new_df_2)
 
-    assert qdrant_agentic_service.delete_collection(TEST_COLLECTION_NAME)
-    assert not qdrant_agentic_service.collection_exists(TEST_COLLECTION_NAME)
+    assert asyncio.run(qdrant_agentic_service.delete_collection_async(TEST_COLLECTION_NAME))
+    assert not asyncio.run(qdrant_agentic_service.collection_exists_async(TEST_COLLECTION_NAME))
 
 
 @pytest.mark.parametrize(
@@ -206,14 +206,14 @@ def test_qdrant_filtering(
     )
 
     # Ensure a clean state before testing
-    if qdrant_agentic_service.collection_exists(TEST_COLLECTION_NAME):
-        qdrant_agentic_service.delete_collection(TEST_COLLECTION_NAME)
-    assert not qdrant_agentic_service.collection_exists(TEST_COLLECTION_NAME)
+    if asyncio.run(qdrant_agentic_service.collection_exists_async(TEST_COLLECTION_NAME)):
+        asyncio.run(qdrant_agentic_service.delete_collection_async(TEST_COLLECTION_NAME))
+    assert not asyncio.run(qdrant_agentic_service.collection_exists_async(TEST_COLLECTION_NAME))
 
     # Create the collection and add chunks
-    qdrant_agentic_service.create_collection(collection_name=TEST_COLLECTION_NAME)
-    assert qdrant_agentic_service.collection_exists(TEST_COLLECTION_NAME)
-    assert qdrant_agentic_service.count_points(TEST_COLLECTION_NAME) == 0
+    asyncio.run(qdrant_agentic_service.create_collection_async(collection_name=TEST_COLLECTION_NAME))
+    assert asyncio.run(qdrant_agentic_service.collection_exists_async(TEST_COLLECTION_NAME))
+    assert asyncio.run(qdrant_agentic_service.count_points_async(TEST_COLLECTION_NAME)) == 0
 
     asyncio.run(
         qdrant_agentic_service.add_chunks_async(
@@ -221,16 +221,16 @@ def test_qdrant_filtering(
             collection_name=TEST_COLLECTION_NAME,
         )
     )
-    assert qdrant_agentic_service.count_points(TEST_COLLECTION_NAME) == 2
+    assert asyncio.run(qdrant_agentic_service.count_points_async(TEST_COLLECTION_NAME)) == 2
 
     formatted_filter = format_qdrant_filter(filter_dict, filtering_condition)
 
-    retrieved_chunks = qdrant_agentic_service.retrieve_similar_chunks(
+    retrieved_chunks = asyncio.run(qdrant_agentic_service.retrieve_similar_chunks_async(
         query_text="chunk1",
         collection_name=TEST_COLLECTION_NAME,
         filter=formatted_filter,
-    )
+    ))
     set_chunks = set([chunk.name for chunk in retrieved_chunks])
     assert expected_chunk == set_chunks
-    assert qdrant_agentic_service.delete_collection(TEST_COLLECTION_NAME)
-    assert not qdrant_agentic_service.collection_exists(TEST_COLLECTION_NAME)
+    assert asyncio.run(qdrant_agentic_service.delete_collection_async(TEST_COLLECTION_NAME))
+    assert not asyncio.run(qdrant_agentic_service.collection_exists_async(TEST_COLLECTION_NAME))
