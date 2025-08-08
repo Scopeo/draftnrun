@@ -27,7 +27,7 @@ def seed_python_code_runner_components(session: Session):
         is_agent=False,
         function_callable=True,
         can_use_function_calling=False,
-        release_stage=db.ReleaseStage.BETA,
+        release_stage=db.ReleaseStage.PUBLIC,
         default_tool_description_id=TOOL_DESCRIPTION_UUIDS["python_code_runner_tool_description"],
     )
     upsert_components(session, [python_code_runner_component])

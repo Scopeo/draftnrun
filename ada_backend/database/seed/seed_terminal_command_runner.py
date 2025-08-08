@@ -25,7 +25,7 @@ def seed_terminal_command_runner_components(session: Session):
         is_agent=False,
         function_callable=True,
         can_use_function_calling=False,
-        release_stage=db.ReleaseStage.BETA,
+        release_stage=db.ReleaseStage.PUBLIC,
         default_tool_description_id=TOOL_DESCRIPTION_UUIDS["terminal_command_runner_tool_description"],
     )
     upsert_components(session, [terminal_command_runner_component])
