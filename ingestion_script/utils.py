@@ -205,14 +205,14 @@ def upload_source(
 def build_combined_sql_filter(
     query_filter: Optional[str],
     timestamp_filter: Optional[str],
-    timestamp_column_name: Optional[str],
+    additional_timestamp_column_name: Optional[str],
 ) -> Optional[str]:
     """Combine query_filter and timestamp_filter into a single SQL WHERE clause."""
     filters = []
     if query_filter:
         filters.append(f"({query_filter})")
-    if timestamp_filter and timestamp_column_name:
-        filters.append(f"({timestamp_column_name} {timestamp_filter})")
+    if timestamp_filter and additional_timestamp_column_name:
+        filters.append(f"({additional_timestamp_column_name} {timestamp_filter})")
     if filters:
         return " AND ".join(filters)
     return None
