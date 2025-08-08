@@ -1,5 +1,6 @@
 import pandas as pd
 import pytest
+import asyncio
 from typing import Union
 from uuid import uuid4
 
@@ -46,7 +47,7 @@ def test_qdrant_service():
     qdrant_agentic_service = QdrantService.from_defaults(
         embedding_service=embedding_service,
         default_collection_schema=qdrant_schema,
-        timeout=80.0,  # Increased timeout for tests
+        timeout=60.0,  # Increased timeout for tests
     )
 
     # Ensure a clean state
@@ -199,7 +200,7 @@ def test_qdrant_filtering(
     qdrant_agentic_service = QdrantService.from_defaults(
         embedding_service=embedding_service,
         default_collection_schema=qdrant_schema,
-        timeout=80.0,  # Increased timeout for tests
+        timeout=60.0,  # Increased timeout for tests
     )
 
     # Ensure a clean state before testing
@@ -212,10 +213,10 @@ def test_qdrant_filtering(
     assert qdrant_agentic_service.collection_exists(TEST_COLLECTION_NAME)
     assert qdrant_agentic_service.count_points(TEST_COLLECTION_NAME) == 0
 
-    qdrant_agentic_service.add_chunks(
+    asyncio.run(qdrant_agentic_service.add_chunks_async(
         list_chunks=chunks,
         collection_name=TEST_COLLECTION_NAME,
-    )
+    ))
     assert qdrant_agentic_service.count_points(TEST_COLLECTION_NAME) == 2
 
     formatted_filter = format_qdrant_filter(filter_dict, filtering_condition)
