@@ -70,7 +70,18 @@ class PDFGenerationTool(Agent):
         filename = output_dir / f"document_{timestamp}.pdf"
 
         html = markdown2.markdown(markdown_content)
-        HTML(string=html).write_pdf(str(filename))
+
+        # Create HTML object and ensure proper cleanup
+        html_obj = HTML(string=html)
+        try:
+            html_obj.write_pdf(str(filename))
+        finally:
+            # Ensure any HTTP connections are properly closed
+            if hasattr(html_obj, "_url_fetcher") and hasattr(html_obj._url_fetcher, "session"):
+                try:
+                    html_obj._url_fetcher.session.close()
+                except Exception:
+                    pass
 
         success_msg = f"PDF generated successfully: {filename}"
         LOGGER.info(success_msg)
