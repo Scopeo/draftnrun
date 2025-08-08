@@ -405,7 +405,7 @@ How to get them:
 
 Make sure the redirect URI matches what you configure in Google and your app. Do not commit these secrets to version control.
 
-#### Slack OAuth Setup
+#### Slack Integration Setup (Frontend-driven OAuth)
 
 To enable Slack messaging with OAuth integration, set these in your credentials.env:
 
@@ -415,22 +415,29 @@ SLACK_CLIENT_SECRET=your-slack-client-secret-here
 SLACK_SIGNING_SECRET=your-slack-signing-secret-here
 ```
 
-How to set up Slack OAuth:
+How it works (aligned with Gmail):
 
-- Go to [Slack API Apps page](https://api.slack.com/apps).
-- Create a new app or use an existing one.
-- Go to "OAuth & Permissions" and configure:
-  - **Redirect URLs**: Add your callback URL: `http://localhost:8000/project/{project_id}/oauth/slack/callback`
-  - **Scopes**: Add these OAuth scopes:
-    - `chat:write` - Send messages to channels
-    - `channels:read` - Read channel information
-    - `groups:read` - Read private channels
-    - `im:read` - Read direct messages
-    - `mpim:read` - Read group direct messages
-- Copy the **Client ID** and **Client Secret** from the "Basic Information" page.
-- Copy the **Signing Secret** from the "Basic Information" page.
+- The frontend performs the Slack OAuth flow and obtains access/refresh tokens
+- The frontend calls the backend to register the secret:
+  - `PUT /project/{project_id}/integration/{integration_id}` with body:
+    ```json
+    {
+      "access_token": "xoxb-...",
+      "refresh_token": "xoxr-...",
+      "expires_in": 3600,
+      "token_last_updated": "2025-01-07T00:00:00Z"
+    }
+    ```
+- The backend stores the encrypted tokens and returns a `secret_id`
+- The frontend sets this `secret_id` inside the component instance's `integration` object in the graph
 
-**OAuth Flow**: Users will be redirected to Slack for authorization, and tokens will be automatically managed with refresh capabilities.
+Recommended Slack app scopes:
+
+- `chat:write` - Send messages to channels
+- `channels:read` - Read channel information
+- `groups:read` - Read private channels
+- `im:read` - Read direct messages
+- `mpim:read` - Read group direct messages
 
 ### Set up the database for backend and ingestion
 

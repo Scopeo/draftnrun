@@ -8,7 +8,6 @@ from engine.integrations.utils import (
     get_slack_client,
     refresh_slack_oauth_token,
     get_slack_oauth_access_token,
-    exchange_slack_oauth_code,
     needs_new_token,
 )
 from ada_backend.database import models as db
@@ -83,67 +82,7 @@ class TestSlackOAuthUtils:
         with pytest.raises(ValueError, match="Failed to refresh Slack token: 500 Internal Server Error"):
             refresh_slack_oauth_token("refresh-token", "client-id", "client-secret")
 
-    @patch("engine.integrations.utils.requests.post")
-    def test_exchange_slack_oauth_code_success(self, mock_post):
-        """Test successful Slack OAuth code exchange."""
-        mock_response = Mock()
-        mock_response.ok = True
-        mock_response.json.return_value = {
-            "ok": True,
-            "access_token": "xoxb-access-token",
-            "refresh_token": "xoxb-refresh-token",
-            "expires_in": 3600,
-        }
-        mock_post.return_value = mock_response
-
-        code = "test-auth-code"
-        client_id = "test-client-id"
-        client_secret = "test-client-secret"
-        redirect_uri = "https://example.com/callback"
-
-        access_token, refresh_token, expires_in, creation_timestamp = exchange_slack_oauth_code(
-            code, client_id, client_secret, redirect_uri
-        )
-
-        assert access_token == "xoxb-access-token"
-        assert refresh_token == "xoxb-refresh-token"
-        assert expires_in == 3600
-        assert isinstance(creation_timestamp, datetime)
-        assert creation_timestamp.tzinfo == timezone.utc
-
-        # Verify the request was made correctly
-        mock_post.assert_called_once_with(
-            "https://slack.com/api/oauth.v2.access",
-            data={
-                "client_id": client_id,
-                "client_secret": client_secret,
-                "code": code,
-                "redirect_uri": redirect_uri,
-            },
-        )
-
-    @patch("engine.integrations.utils.requests.post")
-    def test_exchange_slack_oauth_code_api_error(self, mock_post):
-        """Test Slack OAuth code exchange with API error."""
-        mock_response = Mock()
-        mock_response.ok = True
-        mock_response.json.return_value = {"ok": False, "error": "invalid_code"}
-        mock_post.return_value = mock_response
-
-        with pytest.raises(ValueError, match="Slack API error: invalid_code"):
-            exchange_slack_oauth_code("invalid-code", "client-id", "client-secret", "redirect-uri")
-
-    @patch("engine.integrations.utils.requests.post")
-    def test_exchange_slack_oauth_code_http_error(self, mock_post):
-        """Test Slack OAuth code exchange with HTTP error."""
-        mock_response = Mock()
-        mock_response.ok = False
-        mock_response.status_code = 400
-        mock_response.text = "Bad Request"
-        mock_post.return_value = mock_response
-
-        with pytest.raises(ValueError, match="Failed to exchange Slack OAuth code: 400 Bad Request"):
-            exchange_slack_oauth_code("code", "client-id", "client-secret", "redirect-uri")
+    
 
     def test_needs_new_token_fresh_token(self):
         """Test token freshness check with valid token."""
