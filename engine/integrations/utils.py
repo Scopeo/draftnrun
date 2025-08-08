@@ -177,5 +177,3 @@ def get_slack_oauth_access_token(
             return integration_secret.get_access_token()
     else:
         raise ValueError(f"Integration secret with ID {integration_secret_id} not found.")
-
- 

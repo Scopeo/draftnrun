@@ -1,8 +1,7 @@
 import pytest
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock, patch
 from datetime import datetime, timezone, timedelta
 from uuid import UUID
-import requests
 
 from engine.integrations.utils import (
     get_slack_client,
@@ -10,7 +9,6 @@ from engine.integrations.utils import (
     get_slack_oauth_access_token,
     needs_new_token,
 )
-from ada_backend.database import models as db
 
 
 class TestSlackOAuthUtils:
@@ -81,8 +79,6 @@ class TestSlackOAuthUtils:
 
         with pytest.raises(ValueError, match="Failed to refresh Slack token: 500 Internal Server Error"):
             refresh_slack_oauth_token("refresh-token", "client-id", "client-secret")
-
-    
 
     def test_needs_new_token_fresh_token(self):
         """Test token freshness check with valid token."""
