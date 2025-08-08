@@ -58,9 +58,11 @@ def test_qdrant_service():
     qdrant_agentic_service.create_collection(collection_name=TEST_COLLECTION_NAME)
     assert qdrant_agentic_service.collection_exists(TEST_COLLECTION_NAME)
     assert qdrant_agentic_service.count_points(TEST_COLLECTION_NAME) == 0
-    qdrant_agentic_service.add_chunks(
-        list_chunks=chunks,
-        collection_name=TEST_COLLECTION_NAME,
+    asyncio.run(
+        qdrant_agentic_service.add_chunks_async(
+            list_chunks=chunks,
+            collection_name=TEST_COLLECTION_NAME,
+        )
     )
     assert qdrant_agentic_service.count_points(TEST_COLLECTION_NAME) == 2
     assert qdrant_agentic_service.delete_chunks(
@@ -213,10 +215,12 @@ def test_qdrant_filtering(
     assert qdrant_agentic_service.collection_exists(TEST_COLLECTION_NAME)
     assert qdrant_agentic_service.count_points(TEST_COLLECTION_NAME) == 0
 
-    asyncio.run(qdrant_agentic_service.add_chunks_async(
-        list_chunks=chunks,
-        collection_name=TEST_COLLECTION_NAME,
-    ))
+    asyncio.run(
+        qdrant_agentic_service.add_chunks_async(
+            list_chunks=chunks,
+            collection_name=TEST_COLLECTION_NAME,
+        )
+    )
     assert qdrant_agentic_service.count_points(TEST_COLLECTION_NAME) == 2
 
     formatted_filter = format_qdrant_filter(filter_dict, filtering_condition)
