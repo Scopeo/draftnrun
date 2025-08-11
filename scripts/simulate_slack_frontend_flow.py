@@ -39,6 +39,8 @@ class OAuthCallbackHandler(http.server.BaseHTTPRequestHandler):
 
         self.send_response(200)
         self.send_header("Content-Type", "text/html; charset=utf-8")
+        # Add bypass header for localtunnel security page
+        self.send_header("bypass-tunnel-reminder", "true")
         self.end_headers()
         self.wfile.write(
             b"<html><body><h2>Slack OAuth complete.</h2>\n"
@@ -92,7 +94,9 @@ def exchange_code_for_tokens(code: str, client_id: str, client_secret: str, redi
 
 def put_integration_secret(base_url: str, project_id: str, integration_id: str, jwt: str, payload: dict) -> dict:
     url = f"{base_url}/project/{project_id}/integration/{integration_id}"
-    resp = requests.put(url, headers={"Authorization": f"Bearer {jwt}", "Content-Type": "application/json"}, json=payload, timeout=30)
+    resp = requests.put(
+        url, headers={"Authorization": f"Bearer {jwt}", "Content-Type": "application/json"}, json=payload, timeout=30
+    )
     if not resp.ok:
         raise RuntimeError(f"PUT integration secret failed: {resp.status_code} {resp.text}")
     return resp.json()
@@ -156,7 +160,8 @@ def main():
 
     # Spin up local callback server
     parsed = urllib.parse.urlparse(args.redirect_uri)
-    host = parsed.hostname or "localhost"
+    # Always bind locally; tunnels (e.g., Cloudflare) forward to this local port
+    host = "127.0.0.1"
     port = parsed.port or 8765
     start_callback_server(host, port)
 
@@ -235,5 +240,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
