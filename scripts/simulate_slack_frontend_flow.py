@@ -39,8 +39,6 @@ class OAuthCallbackHandler(http.server.BaseHTTPRequestHandler):
 
         self.send_response(200)
         self.send_header("Content-Type", "text/html; charset=utf-8")
-        # Add bypass header for localtunnel security page
-        self.send_header("bypass-tunnel-reminder", "true")
         self.end_headers()
         self.wfile.write(
             b"<html><body><h2>Slack OAuth complete.</h2>\n"
