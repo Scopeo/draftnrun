@@ -84,6 +84,9 @@ class Agent(ABC):
         Returns:
             AgentOutput: The output of the agent. Only one output it's allowed.
         """
+        if any(isinstance(input_data, dict) for input_data in inputs):
+            LOGGER.warning("There are dictionaries in the inputs, this will be deprecated in the future")
+
         span_name = self.component_attributes.component_instance_name
         with self.trace_manager.start_span(span_name) as span:
             span.set_attributes(
