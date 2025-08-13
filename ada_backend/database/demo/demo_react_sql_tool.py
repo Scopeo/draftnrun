@@ -6,7 +6,7 @@ from ada_backend.schemas.pipeline.base import (
     ComponentInstanceSchema,
 )
 from ada_backend.schemas.pipeline.graph_schema import GraphUpdateSchema
-from ada_backend.services.registry import COMPLETION_MODEL_IN_DB
+from ada_backend.database.seed.constants import COMPLETION_MODEL_IN_DB
 
 ADDITIONAL_DB_DESCRIPTION = (
     "Pour les tables, voici une explication des données: \n"
