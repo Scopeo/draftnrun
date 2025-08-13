@@ -1,5 +1,6 @@
 import uuid
 import json
+from datetime import datetime
 from typing import List, Optional, Union, Type
 from enum import StrEnum
 import logging
@@ -230,11 +231,11 @@ class SecretIntegration(Base):
 
     id = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     integration_id = mapped_column(UUID(as_uuid=True), ForeignKey("integrations.id"))
-    encrypted_access_token = mapped_column(String)
-    encrypted_refresh_token = mapped_column(String)
-    expires_in = mapped_column(Integer)
-    token_last_updated = mapped_column(DateTime(timezone=True))
-
+    encrypted_access_token = mapped_column(String, nullable=False)  
+    encrypted_refresh_token = mapped_column(String, nullable=True)
+    expires_in = mapped_column(Integer, nullable=True)
+    token_last_updated = mapped_column(DateTime(timezone=True), nullable=True)
+    is_expiring = mapped_column(Boolean, nullable=False, default=True)
     secret_integration_component_instances = relationship(
         "IntegrationComponentInstanceRelationship",
         back_populates="secret_integration",
@@ -251,7 +252,10 @@ class SecretIntegration(Base):
     def get_access_token(self) -> str:
         return CIPHER.decrypt(self.encrypted_access_token.encode()).decode()
 
-    def get_refresh_token(self) -> str:
+    def get_refresh_token(self) -> Optional[str]:
+        """Decrypts and returns the refresh token if it exists, otherwise raises an error."""
+        if self.encrypted_refresh_token is None:
+            raise ValueError("No refresh token found")
         return CIPHER.decrypt(self.encrypted_refresh_token.encode()).decode()
 
 

@@ -54,4 +54,7 @@ async def add_integration_secrets(
             create_project_integration=create_project_integration,
         )
     except Exception as e:
+        import traceback
+
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail="Internal Server Error") from e
