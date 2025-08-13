@@ -23,7 +23,7 @@ from ada_backend.database.seed.utils import (
     ParameterLLMConfig,
     build_completion_service_config_definitions,
 )
-from ada_backend.services.registry import COMPLETION_MODEL_IN_DB
+from ada_backend.database.seed.constants import COMPLETION_MODEL_IN_DB
 from engine.agent.synthesizer_prompts import (
     get_base_synthetizer_prompt_template,
     get_hybrid_synthetizer_prompt_template,
