@@ -28,6 +28,7 @@ from ada_backend.segment_analytics import track_project_saved
 LOGGER = logging.getLogger(__name__)
 
 
+# TODO: Refactor to rollback if instantiation failed.
 async def update_graph_service(
     session: Session,
     graph_runner_id: UUID,

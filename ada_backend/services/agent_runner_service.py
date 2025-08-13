@@ -16,7 +16,6 @@ from ada_backend.repositories.graph_runner_repository import (
     graph_runner_exists,
     delete_temp_folder,
 )
-from engine.agent.agent import Agent
 from ada_backend.repositories.project_repository import get_project, get_project_with_details
 from ada_backend.repositories.organization_repository import get_organization_secrets
 from engine.graph_runner.runnable import Runnable
@@ -78,7 +77,7 @@ async def get_agent_for_project(
     session: Session,
     graph_runner_id: UUID,
     project_id: UUID,
-) -> Agent | GraphRunner:
+) -> GraphRunner:
     project = get_project(session, project_id=project_id)
     if not project:
         raise ValueError(f"Project {project_id} not found.")

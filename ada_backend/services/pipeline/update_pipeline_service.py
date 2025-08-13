@@ -19,7 +19,7 @@ from ada_backend.repositories.component_repository import (
     delete_component_instance_parameters,
 )
 from ada_backend.services.entity_factory import get_llm_provider_and_model
-from ada_backend.services.registry import COMPLETION_MODEL_IN_DB
+from ada_backend.database.seed.constants import COMPLETION_MODEL_IN_DB
 
 LOGGER = getLogger(__name__)
 
