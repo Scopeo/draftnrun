@@ -63,12 +63,11 @@ def test_tool_description_structure():
     assert "python_code" in desc.required_tool_properties
 
 
-@pytest.mark.anyio
-async def test_execute_simple_python_code(e2b_tool, e2b_api_key):
+def test_execute_simple_python_code(e2b_tool, e2b_api_key):
     """Test executing simple Python code that returns a value."""
     python_code = "print('Hello, World!'); x = 42; x"
 
-    result_data = await e2b_tool.execute_python_code(python_code)
+    result_data = asyncio.run(e2b_tool.execute_python_code(python_code))
 
     # Check that the execution was successful
     assert "error" in result_data
@@ -87,8 +86,7 @@ async def test_execute_simple_python_code(e2b_tool, e2b_api_key):
     assert result_data["results"][0].text == "42"
 
 
-@pytest.mark.anyio
-async def test_execute_python_code_with_imports(e2b_tool, e2b_api_key):
+def test_execute_python_code_with_imports(e2b_tool, e2b_api_key):
     """Test executing Python code that uses standard library imports."""
     python_code = """
 import math
@@ -105,7 +103,7 @@ result = {"area": area, "date": current_time}
 result
 """
 
-    result_data = await e2b_tool.execute_python_code(python_code)
+    result_data = asyncio.run(e2b_tool.execute_python_code(python_code))
 
     assert "error" in result_data
     assert "stdout" in result_data
@@ -125,8 +123,7 @@ result
     assert "date" in result_obj.json
 
 
-@pytest.mark.anyio
-async def test_execute_python_code_with_error(e2b_tool, e2b_api_key):
+def test_execute_python_code_with_error(e2b_tool, e2b_api_key):
     """Test executing Python code that raises an error."""
     python_code = """
 x = 10
@@ -134,7 +131,7 @@ y = 0
 result = x / y  # This will raise a ZeroDivisionError
 """
 
-    result_data = await e2b_tool.execute_python_code(python_code)
+    result_data = asyncio.run(e2b_tool.execute_python_code(python_code))
 
     assert "error" in result_data
     assert "stdout" in result_data
@@ -149,8 +146,7 @@ result = x / y  # This will raise a ZeroDivisionError
     assert "ZeroDivisionError" in result_data["error"] or "division by zero" in result_data["error"]
 
 
-@pytest.mark.anyio
-async def test_execute_python_code_with_file_operations(e2b_tool, e2b_api_key):
+def test_execute_python_code_with_file_operations(e2b_tool, e2b_api_key):
     """Test executing Python code that performs file operations."""
     python_code = """
 # Create a file and write to it
@@ -170,7 +166,7 @@ files = os.listdir('.')
 {"content": content, "files": files}
 """
 
-    result_data = await e2b_tool.execute_python_code(python_code)
+    result_data = asyncio.run(e2b_tool.execute_python_code(python_code))
 
     assert "error" in result_data
     assert "stdout" in result_data
@@ -189,8 +185,7 @@ files = os.listdir('.')
     assert "test_file.txt" in result_obj.json["files"]
 
 
-@pytest.mark.anyio
-async def test_execute_python_code_with_data_processing(e2b_tool, e2b_api_key):
+def test_execute_python_code_with_data_processing(e2b_tool, e2b_api_key):
     """Test executing Python code that processes data."""
     python_code = """
 # Create some sample data
@@ -215,7 +210,7 @@ print(f"Even numbers: {even_numbers}")
 }
 """
 
-    result_data = await e2b_tool.execute_python_code(python_code)
+    result_data = asyncio.run(e2b_tool.execute_python_code(python_code))
 
     assert "error" in result_data
     assert "stdout" in result_data
@@ -239,8 +234,7 @@ print(f"Even numbers: {even_numbers}")
     assert result_data_obj["even_numbers"] == [2, 4, 6, 8, 10]
 
 
-@pytest.mark.anyio
-async def test_execute_python_code_with_single_image(e2b_tool, e2b_api_key):
+def test_execute_python_code_with_single_image(e2b_tool, e2b_api_key):
     """Test executing Python code that generates a single matplotlib plot."""
     python_code = """
 import matplotlib.pyplot as plt
@@ -261,7 +255,7 @@ plt.show()
 print("Single plot generated!")
 """
 
-    result_data = await e2b_tool.execute_python_code(python_code)
+    result_data = asyncio.run(e2b_tool.execute_python_code(python_code))
 
     # Check that execution was successful
     assert result_data["error"] is None
@@ -285,8 +279,7 @@ print("Single plot generated!")
         pytest.fail("Image data is not valid base64")
 
 
-@pytest.mark.anyio
-async def test_execute_python_code_with_multiple_images(e2b_tool, e2b_api_key):
+def test_execute_python_code_with_multiple_images(e2b_tool, e2b_api_key):
     """Test executing Python code that generates multiple matplotlib plots."""
     python_code = """
 import matplotlib.pyplot as plt
@@ -319,7 +312,7 @@ plt.show()
 print("Three plots generated!")
 """
 
-    result_data = await e2b_tool.execute_python_code(python_code)
+    result_data = asyncio.run(e2b_tool.execute_python_code(python_code))
 
     # Check that execution was successful
     assert result_data["error"] is None
@@ -343,8 +336,7 @@ print("Three plots generated!")
             pytest.fail(f"Image {i+1} data is not valid base64")
 
 
-@pytest.mark.anyio
-async def test_execute_python_code_with_no_images(e2b_tool, e2b_api_key):
+def test_execute_python_code_with_no_images(e2b_tool, e2b_api_key):
     """Test executing Python code that doesn't generate any images."""
     python_code = """
 import numpy as np
@@ -362,7 +354,7 @@ print("Calculations completed!")
 result
 """
 
-    result_data = await e2b_tool.execute_python_code(python_code)
+    result_data = asyncio.run(e2b_tool.execute_python_code(python_code))
 
     # Check that execution was successful
     assert result_data["error"] is None
@@ -374,8 +366,7 @@ result
     assert len(images) == 0
 
 
-@pytest.mark.anyio
-async def test_run_without_io_trace_with_single_image(e2b_tool, e2b_api_key):
+def test_run_without_io_trace_with_single_image(e2b_tool, e2b_api_key):
     """Test the async _run_without_io_trace method with image generation."""
     python_code = """
 import matplotlib.pyplot as plt
@@ -393,7 +384,7 @@ plt.show()
 print("Async image test completed!")
 """
 
-    result = await e2b_tool._run_without_io_trace(python_code=python_code)
+    result = asyncio.run(e2b_tool._run_without_io_trace(python_code=python_code))
 
     assert isinstance(result, AgentPayload)
     assert len(result.messages) == 1
@@ -425,8 +416,7 @@ print("Async image test completed!")
     assert "[1 image(s) generated and included in artifacts]" in content
 
 
-@pytest.mark.anyio
-async def test_run_without_io_trace_with_multiple_images(e2b_tool, e2b_api_key):
+def test_run_without_io_trace_with_multiple_images(e2b_tool, e2b_api_key):
     """Test the async _run_without_io_trace method with multiple image generation."""
     python_code = """
 import matplotlib.pyplot as plt
@@ -444,7 +434,7 @@ for i, func in enumerate([np.sin, np.cos]):
 print("Two async plots generated!")
 """
 
-    result = await e2b_tool._run_without_io_trace(python_code=python_code)
+    result = asyncio.run(e2b_tool._run_without_io_trace(python_code=python_code))
 
     assert isinstance(result, AgentPayload)
     assert len(result.messages) == 1
@@ -471,12 +461,11 @@ print("Two async plots generated!")
     assert "[2 image(s) generated and included in artifacts]" in content
 
 
-@pytest.mark.anyio
-async def test_run_without_io_trace_no_images(e2b_tool, e2b_api_key):
+def test_run_without_io_trace_no_images(e2b_tool, e2b_api_key):
     """Test the async _run_without_io_trace method with no image generation."""
     python_code = "print('No images here!'); result = {'value': 42}; result"
 
-    result = await e2b_tool._run_without_io_trace(python_code=python_code)
+    result = asyncio.run(e2b_tool._run_without_io_trace(python_code=python_code))
 
     assert isinstance(result, AgentPayload)
     assert len(result.messages) == 1
@@ -492,12 +481,11 @@ async def test_run_without_io_trace_no_images(e2b_tool, e2b_api_key):
     assert "image(s) generated" not in content
 
 
-@pytest.mark.anyio
-async def test_run_without_io_trace_simple_code(e2b_tool, e2b_api_key):
+def test_run_without_io_trace_simple_code(e2b_tool, e2b_api_key):
     """Test the async _run_without_io_trace method with simple code."""
     python_code = "print('Async test'); 2 + 2"
 
-    result = await e2b_tool._run_without_io_trace(python_code=python_code)
+    result = asyncio.run(e2b_tool._run_without_io_trace(python_code=python_code))
 
     assert isinstance(result, AgentPayload)
     assert len(result.messages) == 1
@@ -533,8 +521,7 @@ async def test_run_without_io_trace_simple_code(e2b_tool, e2b_api_key):
     # Note: artifacts has Result objects while execution_data has serialized strings
 
 
-@pytest.mark.anyio
-async def test_run_without_io_trace_complex_code(e2b_tool, e2b_api_key):
+def test_run_without_io_trace_complex_code(e2b_tool, e2b_api_key):
     """Test the async _run_without_io_trace method with complex code."""
     python_code = """
 import json
@@ -564,7 +551,7 @@ print(f"Processed {len(data['numbers'])} numbers")
 json.dumps(result)
 """
 
-    result = await e2b_tool._run_without_io_trace(python_code=python_code)
+    result = asyncio.run(e2b_tool._run_without_io_trace(python_code=python_code))
 
     assert isinstance(result, AgentPayload)
     assert len(result.messages) == 1
@@ -597,8 +584,7 @@ json.dumps(result)
     assert '"count": 5' in result_obj
 
 
-@pytest.mark.anyio
-async def test_missing_api_key():
+def test_missing_api_key():
     """Test that the tool raises an error when E2B API key is not configured."""
     with pytest.MonkeyPatch().context() as m:
         m.setattr("settings.settings.E2B_API_KEY", None)
@@ -610,7 +596,7 @@ async def test_missing_api_key():
             ),
         )
         with pytest.raises(ValueError, match="E2B API key not configured"):
-            await tool.execute_python_code("print('test')")
+            asyncio.run(tool.execute_python_code("print('test')"))
 
 
 def test_sandbox_timeout_configuration():

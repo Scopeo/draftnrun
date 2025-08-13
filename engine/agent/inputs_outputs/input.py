@@ -3,7 +3,7 @@ import logging
 from opentelemetry import trace as trace_api
 from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttributes
 
-from engine.agent.types import ToolDescription, ComponentAttributes
+from engine.agent.types import ToolDescription, ComponentAttributes, AgentPayload
 from engine.trace.trace_manager import TraceManager
 from engine.agent.utils import load_str_to_json
 from engine.trace.serializer import serialize_to_json
@@ -36,9 +36,16 @@ class Input:
         self.component_attributes = component_attributes
         self.payload_schema = load_str_to_json(payload_schema)
 
-    async def run(self, input_data: dict):
-        filtered_input = {k: input_data[k] for k in self.payload_schema if k in input_data}
-        filtered_input.update({k: self.payload_schema[k] for k in self.payload_schema if k not in input_data})
+    # TODO: Refactor Agent I/O to use an unified input/output object:
+    async def run(self, input_data: AgentPayload | dict) -> dict:
+        if isinstance(input_data, AgentPayload):
+            input_data = input_data.model_dump()
+
+        filtered_input = input_data.copy()
+        for k, v in self.payload_schema.items():
+            if k not in filtered_input:
+                filtered_input[k] = v
+
         with self.trace_manager.start_span(self.component_attributes.component_instance_name) as span:
             span.set_attributes(
                 {

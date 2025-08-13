@@ -23,11 +23,11 @@ from ada_backend.database.seed.utils import (
     ParameterLLMConfig,
     build_completion_service_config_definitions,
 )
-from ada_backend.services.registry import (
+from ada_backend.database.seed.constants import (
     COMPLETION_MODEL_IN_DB,
     TEMPERATURE_IN_DB,
-    REASONING_IN_DB,
     VERBOSITY_IN_DB,
+    REASONING_IN_DB,
 )
 from engine.agent.synthesizer_prompts import (
     get_base_synthetizer_prompt_template,
