@@ -20,7 +20,6 @@ from engine.integrations.gmail_sender import GMAIL_SENDER_TOOL_DESCRIPTION
 from engine.agent.tools.python_code_runner import PYTHON_CODE_RUNNER_TOOL_DESCRIPTION
 from engine.agent.tools.terminal_command_runner import TERMINAL_COMMAND_RUNNER_TOOL_DESCRIPTION
 from engine.agent.pdf_generation_tool import DEFAULT_PDF_GENERATION_TOOL_DESCRIPTION
-from engine.agent.graph_runner_block import DEFAULT_GRAPH_RUNNER_BLOCK_TOOL_DESCRIPTION
 
 
 TOOL_DESCRIPTION_UUIDS = {
@@ -41,6 +40,7 @@ TOOL_DESCRIPTION_UUIDS = {
     "default_llm_call_tool_description": UUID("b91d418d-a67f-40b9-9266-b01ca202747d"),
     "default_pdf_generation_tool_description": UUID("e2b11113-2222-3333-4444-555555555555"),
     "default_project_reference_tool_description": UUID("4c8f9e2e-1a3b-4567-8901-234567890abc"),
+    "default_chunk_processor_tool_description": UUID("5d9f0f3f-2b4c-5678-9012-345678901bcd"),
 }
 
 
@@ -104,10 +104,6 @@ def seed_tool_description(session: Session):
         id=TOOL_DESCRIPTION_UUIDS["default_pdf_generation_tool_description"],
         **DEFAULT_PDF_GENERATION_TOOL_DESCRIPTION.model_dump(),
     )
-    project_reference_tool_description = db.ToolDescription(
-        id=TOOL_DESCRIPTION_UUIDS["default_project_reference_tool_description"],
-        **DEFAULT_GRAPH_RUNNER_BLOCK_TOOL_DESCRIPTION.model_dump(),
-    )
     upsert_tool_descriptions(
         session=session,
         tool_descriptions=[
@@ -127,6 +123,5 @@ def seed_tool_description(session: Session):
             terminal_command_runner_tool_description,
             default_llm_call_tool_description,
             pdf_generation_tool_description,
-            project_reference_tool_description,
         ],
     )

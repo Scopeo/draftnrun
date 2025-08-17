@@ -156,6 +156,31 @@ class AgentFactory(EntityFactory):
         return args, kwargs
 
 
+class NonToolCallableBlockFactory(EntityFactory):
+    """
+    Factory for agent-like blocks that are not meant to be function-callable.
+
+    Differences from AgentFactory:
+    - Does NOT enforce the presence/type of a ToolDescription in params.
+    - Still injects a trace manager when the target constructor accepts it.
+    """
+
+    def __init__(
+        self,
+        entity_class: Type[Any],
+        parameter_processors: Optional[list[ParameterProcessor]] = None,
+        constructor_method: str = "__init__",
+    ):
+        processors = parameter_processors or []
+        processors.append(build_trace_manager_processor())
+
+        super().__init__(
+            entity_class=entity_class,
+            parameter_processors=processors,
+            constructor_method=constructor_method,
+        )
+
+
 def build_dataclass_processor(dataclass_type: Type[Any], param_name: str) -> ParameterProcessor:
     """
     Creates a processor for converting a specific parameter to a specific dataclass type.
@@ -439,12 +464,12 @@ def build_project_reference_processor(target_name: str = "graph_runner") -> Para
         context = get_request_context()
         user = context.require_user()
 
-        # Capture the current context including TraceManager and other context variables
+        # Capture the current context including TraceManager.
         current_context = contextvars.copy_context()
 
         with get_db_session() as session:
-            # TODO: Fix circular import issue - these imports should be moved to avoid
-            # circular dependency between entity_factory and agent_runner_service
+            # TODO: Fix circular import issue - these imports are here to avoid
+            # circular dependency between entity_factory and agent_runner_service.
             from ada_backend.repositories.graph_runner_repository import get_graph_runner_for_env
             from ada_backend.services.agent_runner_service import get_agent_for_project
 
