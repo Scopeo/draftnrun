@@ -439,12 +439,12 @@ def build_project_reference_processor(target_name: str = "graph_runner") -> Para
         context = get_request_context()
         user = context.require_user()
 
-        # Capture the current context including TraceManager and other context variables
+        # Capture the current context including TraceManager.
         current_context = contextvars.copy_context()
 
         with get_db_session() as session:
-            # TODO: Fix circular import issue - these imports should be moved to avoid
-            # circular dependency between entity_factory and agent_runner_service
+            # TODO: Fix circular import issue - these imports are here to avoid
+            # circular dependency between entity_factory and agent_runner_service.
             from ada_backend.repositories.graph_runner_repository import get_graph_runner_for_env
             from ada_backend.services.agent_runner_service import get_agent_for_project
 
