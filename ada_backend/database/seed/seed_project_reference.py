@@ -21,7 +21,7 @@ def seed_project_reference_components(session: Session):
         description="Execute another project's graph workflow as a component",
         is_agent=True,
         function_callable=True,
-        release_stage=db.ReleaseStage.PUBLIC,
+        release_stage=db.ReleaseStage.INTERNAL,
         default_tool_description_id=TOOL_DESCRIPTION_UUIDS["default_project_reference_tool_description"],
     )
 
@@ -47,6 +47,7 @@ def seed_project_reference_components(session: Session):
                     description="The UUID of the project whose graph workflow will be executed",
                 ).model_dump(exclude_unset=True, exclude_none=True),
             ),
+            # TODO: Change to version
             db.ComponentParameterDefinition(
                 id=UUID("b8f3c2d1-4e5a-4b6c-9d7e-1f2a3b4c5d6e"),
                 component_id=project_reference.id,
