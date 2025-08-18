@@ -1,4 +1,3 @@
-from copy import deepcopy
 from typing import List
 from engine.agent.agent import Agent
 from engine.agent.types import AgentPayload, ToolDescription, ComponentAttributes, ChatMessage
@@ -113,9 +112,8 @@ class ChunkProcessor(Agent):
 
         results: List[AgentPayload] = []
         for chunk_payload in chunk_payloads:
-            # TODO: Make a reset state method for the graph runner
-            graph_runner_copy = deepcopy(self._graph_runner)
-            result = await graph_runner_copy.run(chunk_payload)
+            self._graph_runner.reset()
+            result = await self._graph_runner.run(chunk_payload)
 
             if not isinstance(result, AgentPayload):
                 raise ValueError(

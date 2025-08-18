@@ -210,6 +210,14 @@ class GraphRunner:
 
         return _merge_agent_outputs(leaf_outputs)
 
+    def reset(self):
+        """Reset the graph runner state to allow reuse.
+
+        This clears all task state and results, allowing the same GraphRunner
+        instance to be used for multiple executions.
+        """
+        self.tasks.clear()
+
     def _validate_graph(self):
         if len(set(self.runnables.keys())) != len(self.runnables):
             raise ValueError("All runnables ids must be unique")
