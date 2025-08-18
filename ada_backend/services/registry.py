@@ -28,6 +28,7 @@ from engine.agent.document_react_loader import DocumentReactLoaderAgent
 from engine.agent.ocr_call import OCRCall
 from engine.agent.rag.document_search import DocumentSearch
 from engine.agent.graph_runner_block import GraphRunnerBlock
+from engine.agent.chunk_processor import ChunkProcessor
 from engine.integrations.gmail_sender import GmailSender
 from engine.storage_service.local_service import SQLLocalService
 from engine.storage_service.snowflake_service.snowflake_service import SnowflakeService
@@ -85,6 +86,7 @@ class SupportedEntityType(StrEnum):
     INPUT = "API Input"
     FILTER = "Filter"
     PROJECT_REFERENCE = "ProjectReference"
+    CHUNK_PROCESSOR = "ChunkProcessor"
 
     # Integrations
     GMAIL_SENDER = "Gmail Sender"
@@ -313,6 +315,15 @@ def create_factory_registry() -> FactoryRegistry:
         name=SupportedEntityType.PROJECT_REFERENCE,
         factory=AgentFactory(
             entity_class=GraphRunnerBlock,
+            parameter_processors=[
+                build_project_reference_processor(),
+            ],
+        ),
+    )
+    registry.register(
+        name=SupportedEntityType.CHUNK_PROCESSOR,
+        factory=AgentFactory(
+            entity_class=ChunkProcessor,
             parameter_processors=[
                 build_project_reference_processor(),
             ],

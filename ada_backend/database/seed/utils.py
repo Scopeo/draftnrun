@@ -76,6 +76,7 @@ COMPONENT_UUIDS: dict[str, UUID] = {
     "terminal_command_runner": UUID("e2b10000-1111-2222-3333-444444444444"),
     "pdf_generation": UUID("428baac0-0c5f-4374-b2de-8075218082b4"),
     "project_reference": UUID("4c8f9e2d-1a3b-4567-8901-234567890abc"),
+    "chunk_processor": UUID("5d9f0f3e-2b4c-5678-9012-345678901bcd"),
 }
 
 # Get models by capability and convert to select options
