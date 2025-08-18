@@ -57,21 +57,18 @@ def insert_secret_integration(
     session: Session,
     integration_id: UUID,
     access_token: str,
-    refresh_token: Optional[str],
+    refresh_token: str,
     expires_in: Optional[int] = None,
     token_last_updated: Optional[datetime] = None,
-    is_expiring: bool = True,  # Default to expiring (Gmail-style) for backward compatibility
 ) -> db.SecretIntegration:
 
     new_integration = db.SecretIntegration(
         integration_id=integration_id,
         expires_in=expires_in,
         token_last_updated=token_last_updated,
-        is_expiring=is_expiring,  # Set whether token expires or not
     )
     new_integration.set_access_token(access_token)
-    if refresh_token is not None:
-        new_integration.set_refresh_token(refresh_token)
+    new_integration.set_refresh_token(refresh_token)
     session.add(new_integration)
     session.commit()
     return new_integration
@@ -81,16 +78,14 @@ def update_integration_secret(
     session: Session,
     integration_secret_id: UUID,
     access_token: str,
-    refresh_token: Optional[str],
-    token_last_updated: Optional[datetime] = None,
+    refresh_token: str,
+    token_last_updated: datetime,
 ) -> None:
     integration_secret = get_integration_secret(session, integration_secret_id)
     if integration_secret:
         integration_secret.set_access_token(access_token)
-        if refresh_token is not None:
-            integration_secret.set_refresh_token(refresh_token)
-        if token_last_updated is not None:
-            integration_secret.token_last_updated = token_last_updated
+        integration_secret.set_refresh_token(refresh_token)
+        integration_secret.token_last_updated = token_last_updated
         session.commit()
 
 
