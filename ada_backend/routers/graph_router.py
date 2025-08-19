@@ -13,12 +13,14 @@ from ada_backend.schemas.auth_schema import SupabaseUser
 from ada_backend.schemas.pipeline.graph_schema import (
     GraphDeployResponse,
     GraphGetResponse,
+    GraphLoadResponse,
     GraphUpdateResponse,
     GraphUpdateSchema,
 )
 from ada_backend.database.setup_db import get_db
 
 from ada_backend.services.graph.deploy_graph_service import deploy_graph_service
+from ada_backend.services.graph.load_copy_graph_service import load_copy_graph_service
 from ada_backend.services.graph.update_graph_service import update_graph_service
 from ada_backend.services.graph.get_graph_service import get_graph_service
 
@@ -103,6 +105,36 @@ def deploy_graph(
             session=session,
             graph_runner_id=graph_runner_id,
             project_id=project_id,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+
+@router.get(
+    "/{graph_runner_id}/load-copy",
+    summary="Load a copy of a Project Graph to use it",
+    response_model=GraphLoadResponse,
+    tags=["Graph"],
+)
+def load_copy_graph_runner(
+    project_id: UUID,
+    graph_runner_id: UUID,
+    user: Annotated[
+        SupabaseUser, Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.READER.value))
+    ],
+    session: Session = Depends(get_db),
+) -> GraphLoadResponse:
+    if not user.id:
+        raise HTTPException(status_code=400, detail="User ID not found")
+    project = get_project(session, project_id=project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    try:
+        return load_copy_graph_service(
+            session=session,
+            project_id_to_copy=project_id,
+            graph_runner_id_to_copy=graph_runner_id,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
