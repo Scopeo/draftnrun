@@ -151,9 +151,13 @@ class CompletionService(LLMService):
         api_key: Optional[str] = None,
         base_url: Optional[str] = None,
         temperature: float = 0.5,
+        verbosity: Optional[str] = None,
+        reasoning: Optional[str] = None,
     ):
         super().__init__(trace_manager, provider, model_name, api_key, base_url)
         self._temperature = temperature
+        self._verbosity = verbosity
+        self._reasoning = reasoning
 
     @with_usage_check
     def complete(
