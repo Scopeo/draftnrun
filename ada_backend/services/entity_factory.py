@@ -302,7 +302,7 @@ def build_completion_service_processor(
             provider=provider,
             model_name=model_name,
             trace_manager=get_trace_manager(),
-            temperature=params.pop("temperature", 0.5),
+            temperature=params.pop("temperature", 1.0),
             api_key=params.pop("llm_api_key", None),
         )
 
