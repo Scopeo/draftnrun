@@ -1,3 +1,4 @@
+import asyncio
 import pytest
 import pandas as pd
 from unittest.mock import Mock, patch
@@ -37,10 +38,12 @@ def test_get_chunks_dataframe_from_docs(mock_file_document, mock_file_chunk):
     docs_to_process = mock_file_document
 
     with patch("data_ingestion.document.document_chunking.LOGGER") as mock_logger:
-        result_df = get_chunks_dataframe_from_doc(
-            document=docs_to_process,
-            document_chunk_mapping=document_chunk_mapping,
-            llm_service=llm_mock,
+        result_df = asyncio.run(
+            get_chunks_dataframe_from_doc(
+                document=docs_to_process,
+                document_chunk_mapping=document_chunk_mapping,
+                llm_service=llm_mock,
+            )
         )
 
     mock_processor.assert_called_once_with(mock_file_document, chunk_size=1024)

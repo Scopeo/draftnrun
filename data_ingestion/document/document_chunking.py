@@ -1,3 +1,4 @@
+import inspect
 from typing import Callable, Optional
 from functools import partial
 import logging
@@ -65,7 +66,7 @@ def document_chunking_mapping(
     return document_chunking_mapping
 
 
-def get_chunks_dataframe_from_doc(
+async def get_chunks_dataframe_from_doc(
     document: FileDocument,
     document_chunk_mapping: dict[FileDocumentType, FileProcessor],
     llm_service: CompletionService,
@@ -95,6 +96,8 @@ def get_chunks_dataframe_from_doc(
     #     description_doc = ""
     #     chunk_size_doc = default_chunk_size
     chunks = document_chunk_mapping[document.type.value](document, chunk_size=chunk_size_doc)
+    if inspect.isawaitable(chunks):  # puis on await si nécessaire
+        chunks = await chunks
     # if description_doc is not None:
     #     chunks = add_summary_in_chunks_func(
     #         summary=description_doc,

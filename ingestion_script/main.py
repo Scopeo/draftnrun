@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from uuid import UUID
 
@@ -34,7 +35,7 @@ def check_missing_params(
     return False
 
 
-def ingestion_main(
+async def ingestion_main_async(
     source_name: str, organization_id: UUID, task_id: UUID, source_type: SourceType, source_attributes: dict
 ):
 
@@ -78,7 +79,7 @@ def ingestion_main(
                 "Google Drive folder_id should be a specific ID, not just '/'",
             )
         try:
-            ingest_google_drive_source(
+            await ingest_google_drive_source(
                 folder_id=folder_id,
                 organization_id=organization_id,
                 source_name=source_name,
@@ -106,7 +107,7 @@ def ingestion_main(
             return
 
         try:
-            ingest_local_folder_source(
+            await ingest_local_folder_source(
                 list_of_files_to_ingest=source_attributes["list_of_files_from_local_folder"],
                 organization_id=organization_id,
                 source_name=source_name,
@@ -140,7 +141,7 @@ def ingestion_main(
         from ingestion_script.ingest_db_source import ingestion_database
 
         try:
-            ingestion_database(
+            await ingestion_database(
                 source_name=source_name,
                 organization_id=organization_id,
                 task_id=task_id,
@@ -165,3 +166,7 @@ def ingestion_main(
                 ingestion_task=failed_ingestion_task,
             )
             return
+
+
+def ingestion_main(**kwargs):
+    asyncio.run(ingestion_main_async(**kwargs))

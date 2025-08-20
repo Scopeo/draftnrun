@@ -1,3 +1,4 @@
+import asyncio
 import requests
 
 from ada_backend.database.setup_db import SessionLocal
@@ -93,13 +94,15 @@ def test_ingest_local_folder_source():
         ),
     )
 
-    ingest_local_folder_source(
-        list_of_files_to_ingest=test_source_attributes["list_of_files_from_local_folder"],
-        organization_id=ORGANIZATION_ID,
-        source_name=test_source_name,
-        task_id=task_id,
-        save_supabase=False,
-        add_doc_description_to_chunks=False,
+    asyncio.run(
+        ingest_local_folder_source(
+            list_of_files_to_ingest=test_source_attributes["list_of_files_from_local_folder"],
+            organization_id=ORGANIZATION_ID,
+            source_name=test_source_name,
+            task_id=task_id,
+            save_supabase=False,
+            add_doc_description_to_chunks=False,
+        )
     )
 
     get_source_response = requests.get(
