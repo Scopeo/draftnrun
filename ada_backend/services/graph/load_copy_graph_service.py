@@ -43,7 +43,7 @@ def load_copy_graph_service(
     graph_get_response = get_graph_service(
         session=session, project_id=project_id_to_copy, graph_runner_id=graph_runner_id_to_copy
     )
-    component_instance_map = {}
+    component_instance_map: dict[UUID, ComponentInstanceSchema] = {}
     for component_instance_to_copy in graph_get_response.component_instances:
         component_instance = ComponentInstanceSchema(
             id=uuid4(),
@@ -59,7 +59,7 @@ def load_copy_graph_service(
         )
         component_instance_map[component_instance_to_copy.id] = component_instance
 
-    load_copy_relationships = []
+    load_copy_relationships: list[ComponentRelationshipSchema] = []
     for old_relation in graph_get_response.relationships:
         if old_relation.child_component_instance_id not in component_instance_map.keys():
             # The child component instance is not a graph node, so we need to create it
@@ -85,7 +85,7 @@ def load_copy_graph_service(
             )
         )
 
-    load_copy_edges = []
+    load_copy_edges: list[EdgeSchema] = []
     for edge in graph_get_response.edges:
         load_copy_edges.append(
             EdgeSchema(
