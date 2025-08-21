@@ -60,6 +60,7 @@ def query_root_trace_duration(project_id: UUID, duration_days: int) -> pd.DataFr
     df = pd.read_sql_query(query, session.bind)
     session.close()
     df = df.replace({np.nan: None})
+    # TODO: Update the table to add the project_id column to improve filtering efficiency
     df["attributes"] = df["attributes"].apply(lambda x: json.loads(x) if isinstance(x, str) else x)
     df_expanded = df.join(pd.json_normalize(df["attributes"]))
     trace_rowids = df_expanded[df_expanded["parent_id"].isna() & (df_expanded["project_id"] == str(project_id))][
@@ -77,6 +78,4 @@ def query_trace_by_trace_id(trace_id: UUID) -> pd.DataFrame:
     df = pd.read_sql_query(query, session.bind)
     session.close()
     df = df.replace({np.nan: None})
-    print(df.columns)
-    print(df.head())
     return df

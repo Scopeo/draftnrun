@@ -1,6 +1,6 @@
 from collections import defaultdict
 import json
-from typing import List
+from typing import List, Optional
 from uuid import UUID
 import logging
 
@@ -221,7 +221,11 @@ def get_span_trace_service(user_id: UUID, trace_id: UUID) -> TraceSpan:
     df_span = query_trace_by_trace_id(trace_id)
     track_span_observability_loaded(user_id, trace_id)
 
-    return build_span_trees(df_span, include_messages=True)[0]
+    span_trees = build_span_trees(df_span, include_messages=True)
+    if len(span_trees) == 0:
+        raise ValueError(f"No spans found for trace_id {trace_id}")
+
+    return span_trees[0]
 
 
 def get_root_traces_by_project(user_id: UUID, project_id: UUID, duration: int) -> List[RootTraceSpan]:

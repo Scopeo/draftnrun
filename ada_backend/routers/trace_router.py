@@ -12,11 +12,11 @@ from ada_backend.services.trace_service import get_root_traces_by_project, get_s
 LOGGER = logging.getLogger(__name__)
 
 
-router = APIRouter(prefix="/traces")
+router = APIRouter()
 
 
 # TODO: filter trace by graph_runner_id
-@router.get("/project/{project_id}", response_model=List[RootTraceSpan], tags=["Metrics"])
+@router.get("/projects/{project_id}/traces", response_model=List[RootTraceSpan], tags=["Metrics"])
 async def get_root_traces(
     project_id: UUID,
     duration: int,
@@ -33,7 +33,7 @@ async def get_root_traces(
         raise HTTPException(status_code=500, detail="Internal Server Error") from e
 
 
-@router.get("/{trace_id}/tree", response_model=TraceSpan, tags=["Metrics"])
+@router.get("/traces/{trace_id}/tree", response_model=TraceSpan, tags=["Metrics"])
 async def get_span_trace(
     trace_id: str,
     user: Annotated[SupabaseUser, Depends(get_user_from_supabase_token)],
