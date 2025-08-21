@@ -85,16 +85,13 @@ async def sync_chunks_to_qdrant(
         sql_query_filter=sql_query_filter,
     )
     LOGGER.info(f"Syncing chunks to Qdrant collection {collection_name} with {len(chunks_df)} rows")
-    print(f"Syncing chunks to Qdrant collection {collection_name}")
     if not await qdrant_service.collection_exists_async(collection_name):
-        print("Creating Qdrant collection")
         await qdrant_service.create_collection_async(collection_name)
     await qdrant_service.sync_df_with_collection_async(
         df=chunks_df,
         collection_name=collection_name,
         query_filter_qdrant=query_filter_qdrant,
     )
-    print("end of sync chunks function")
 
 
 async def ingest_google_drive_source(
