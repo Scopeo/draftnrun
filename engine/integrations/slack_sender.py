@@ -6,7 +6,7 @@ from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttribu
 from opentelemetry.trace import get_current_span
 
 from ada_backend.database.setup_db import get_db
-from engine.agent.agent import AgentPayload, ChatMessage, ComponentAttributes, ToolDescription
+from engine.agent.types import AgentPayload, ChatMessage, ComponentAttributes, ToolDescription
 from engine.agent.agent import Agent
 from engine.integrations.utils import get_slack_client, get_slack_oauth_access_token
 from engine.integrations.slack_utils import send_slack_message
