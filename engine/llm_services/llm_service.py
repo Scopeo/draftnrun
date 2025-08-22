@@ -25,6 +25,8 @@ from openai.types.chat import ChatCompletion
 
 LOGGER = logging.getLogger(__name__)
 
+DEFAULT_TEMPERATURE = 1
+
 
 def with_usage_check(func):
     @wraps(func)
@@ -150,7 +152,7 @@ class CompletionService(LLMService):
         model_name: str = "gpt-4.1-mini",
         api_key: Optional[str] = None,
         base_url: Optional[str] = None,
-        temperature: float = 1,
+        temperature: float = DEFAULT_TEMPERATURE,
         verbosity: Optional[str] = None,
         reasoning: Optional[str] = None,
     ):
@@ -572,7 +574,7 @@ class VisionService(LLMService):
         model_name: str = "gpt-4.1-mini",
         api_key: Optional[str] = None,
         base_url: Optional[str] = None,
-        temperature: float = 1.0,
+        temperature: float = DEFAULT_TEMPERATURE,
     ):
         super().__init__(trace_manager, provider, model_name, api_key, base_url)
         self._temperature = temperature
