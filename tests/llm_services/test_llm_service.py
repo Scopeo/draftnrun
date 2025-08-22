@@ -29,7 +29,7 @@ def test_completion_service():
     assert completion_service._provider == "openai"
     assert completion_service._model_name == "gpt-4.1-mini"
     assert completion_service._api_key is not None
-    assert completion_service._temperature == 0.5
+    assert completion_service._invocation_parameters.get("temperature") == 0.5
     assert completion_service._trace_manager is not None
     text = "Hello, world!"
     response = completion_service.complete(text)
@@ -44,7 +44,7 @@ async def test_completion_service_async():
     assert completion_service._provider == "openai"
     assert completion_service._model_name == "gpt-4o-mini"
     assert completion_service._api_key is not None
-    assert completion_service._temperature == 0.5
+    assert completion_service._invocation_parameters.get("temperature") == 0.5
     assert completion_service._trace_manager is not None
     text = "Hello, world!"
     response = await completion_service.complete_async(text)
