@@ -141,6 +141,8 @@ def build_span_trees(df: pd.DataFrame, include_messages: bool) -> List[TraceSpan
             llm_token_count_prompt=row.get("llm_token_count_prompt", None),
             llm_token_count_completion=row.get("llm_token_count_completion", None),
             children=[],
+            environment=row.get("environment", None),
+            call_type=row.get("call_type", None),
         )
 
     trace_trees = []
@@ -178,37 +180,10 @@ def get_trace_by_project(
     df_span = df_span.replace({np.nan: None})
 
     if environment is not None:
-        has_environment_in_attributes = (
-            df_span["attributes"].apply(lambda x: x and isinstance(x, dict) and x.get("environment") is not None).any()
-        )
-
-        if has_environment_in_attributes:
-            df_span = df_span[
-                df_span["attributes"].apply(
-                    lambda x: (
-                        x.get("environment") == environment.value
-                        if x and isinstance(x, dict) and x.get("environment") is not None
-                        else False
-                    )
-                )
-            ]
+        df_span = df_span[df_span["environment"] == environment.value]
 
     if call_type is not None:
-
-        has_call_type_in_attributes = (
-            df_span["attributes"].apply(lambda x: x and isinstance(x, dict) and x.get("call_type") is not None).any()
-        )
-
-        if has_call_type_in_attributes:
-            df_span = df_span[
-                df_span["attributes"].apply(
-                    lambda x: (
-                        x.get("call_type") == call_type.value
-                        if x and isinstance(x, dict) and x.get("call_type") is not None
-                        else False
-                    )
-                )
-            ]
+        df_span = df_span[df_span["call_type"] == call_type.value]
 
     return build_span_trees(df_span, include_messages=include_messages)
 

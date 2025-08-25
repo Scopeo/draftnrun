@@ -1,5 +1,7 @@
 from pydantic import BaseModel
 
+from ada_backend.database.models import EnvType, CallType
+
 
 class TraceSpan(BaseModel):
     span_id: str
@@ -18,6 +20,8 @@ class TraceSpan(BaseModel):
     llm_token_count_prompt: int | None
     llm_token_count_completion: int | None
     children: list["TraceSpan"]
+    environment: EnvType | None
+    call_type: CallType | None
 
     @classmethod
     def from_dict(cls, data: dict) -> "TraceSpan":
@@ -37,6 +41,8 @@ class TraceSpan(BaseModel):
             llm_token_count_prompt=data.get("llm_token_count_prompt"),
             llm_token_count_completion=data.get("llm_token_count_completion"),
             children=[cls.from_dict(child) for child in data.get("children", [])],
+            environment=data.get("environment"),
+            call_type=data.get("call_type"),
         )
 
 

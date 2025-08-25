@@ -149,6 +149,23 @@ class SQLSpanExporter(SpanExporter):
                 split_nested_keys(json_span["attributes"]) if isinstance(json_span["attributes"], dict) else {}
             )
 
+            # Extract environment and call_type from attributes for dedicated columns
+            # These should come from the tracing context, not just attributes
+            environment = formatted_attributes.get("environment")
+            call_type = formatted_attributes.get("call_type")
+
+            # If not in attributes, try to get from span attributes directly
+            if not environment:
+                environment = span.attributes.get("environment")
+            if not call_type:
+                call_type = span.attributes.get("call_type")
+
+            # Remove them from attributes since they're now stored in dedicated columns
+            if "environment" in formatted_attributes:
+                del formatted_attributes["environment"]
+            if "call_type" in formatted_attributes:
+                del formatted_attributes["call_type"]
+
             openinference_span_kind = json_span["attributes"].get(SpanAttributes.OPENINFERENCE_SPAN_KIND, "UNKNOWN")
             span_row = models.Span(
                 span_id=json_span["context"]["span_id"],
@@ -167,6 +184,8 @@ class SQLSpanExporter(SpanExporter):
                 cumulative_llm_token_count_completion=cumulative_llm_token_count_completion,
                 llm_token_count_prompt=span.attributes.get(SpanAttributes.LLM_TOKEN_COUNT_PROMPT),
                 llm_token_count_completion=span.attributes.get(SpanAttributes.LLM_TOKEN_COUNT_COMPLETION),
+                environment=environment,
+                call_type=call_type,
             )
             ancestors = (
                 select(models.Span.id, models.Span.parent_id)

@@ -102,7 +102,6 @@ async def run_env_agent(
     graph_runner = get_graph_runner_for_env(session=session, project_id=project_id, env=env)
     if not graph_runner:
         raise ValueError(f"{env} graph runner not found for project {project_id}.")
-    print(f"Running agent for project {project_id} in environment {env}")
     return await run_agent(
         session=session,
         project_id=project_id,

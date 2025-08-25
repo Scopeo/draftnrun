@@ -72,9 +72,11 @@ class TraceManager:
             attributes["organization_id"] = params.organization_id
             attributes["organization_llm_providers"] = params.organization_llm_providers
             attributes["conversation_id"] = params.conversation_id
-            attributes["environment"] = params.environment
-            attributes["call_type"] = params.call_type
-
+            # Add environment and call_type to attributes so SQL exporter can extract them to dedicated columns
+            if params.environment:
+                attributes["environment"] = params.environment.value
+            if params.call_type:
+                attributes["call_type"] = params.call_type.value
         # Handle trace isolation for root spans
         if isolate_context:
             kwargs["context"] = Context()
