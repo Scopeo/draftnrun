@@ -1,6 +1,6 @@
 from collections import defaultdict
 import json
-from typing import List
+from typing import List, Optional
 from uuid import UUID
 import logging
 
@@ -166,8 +166,8 @@ def get_trace_by_project(
     project_id: UUID,
     duration: int,
     include_messages: bool = False,
-    environment: EnvType = None,
-    call_type: CallType = None,
+    environment: Optional[EnvType] = None,
+    call_type: Optional[CallType] = None,
 ) -> List[TraceSpan]:
     df_span = query_trace_duration(project_id, duration)
     track_project_observability_loaded(user_id, project_id)
