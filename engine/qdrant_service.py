@@ -1109,6 +1109,7 @@ class QdrantService:
             latest_timestamp = old_df["timestamp"].max()
             if pd.notna(latest_timestamp):
                 # Convert df timestamp column to datetime for proper comparison
+                df = df.copy()
                 df["temp_timestamp"] = pd.to_datetime(df[timestamp_column_name])
                 df = df[df["temp_timestamp"] >= latest_timestamp]
                 df = df.drop(columns=["temp_timestamp"])
