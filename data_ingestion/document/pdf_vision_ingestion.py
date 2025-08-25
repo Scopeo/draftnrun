@@ -89,7 +89,7 @@ def _pdf_to_images(pdf_content, zoom: float = 3.0):
         yield img_byte_arr.getvalue()
 
 
-def _extract_text_from_pages_as_images(
+async def _extract_text_from_pages_as_images(
     prompt: str,
     google_llm_service: VisionService,
     openai_llm_service: VisionService,
@@ -97,7 +97,7 @@ def _extract_text_from_pages_as_images(
     image_content_list: List[bytes] = None,
 ) -> Any:
     try:
-        extracted_text = google_llm_service.get_image_description(
+        extracted_text = await google_llm_service.get_image_description_async(
             image_content_list=image_content_list,
             text_prompt=prompt,
             response_format=response_format,
@@ -107,11 +107,12 @@ def _extract_text_from_pages_as_images(
     except Exception as e:
         LOGGER.warning(f"Google LLM failed: {e}. Switching to OpenAI.")
         openai_llm_service._model_name = OPENAI_MODEL_NAME
-        extracted_text = openai_llm_service.get_image_description(
+        extracted_text = await openai_llm_service.get_image_description_async(
             image_content_list=image_content_list,
             text_prompt=prompt,
             response_format=response_format,
         )
+        print("OpenAI LLM response:", extracted_text)
 
     return extracted_text
 
@@ -170,7 +171,7 @@ def _build_section_hierarchy(sections, level=1, ancestors=None) -> List[Sections
     return sections_tree
 
 
-def _get_markdown_from_sections(
+async def _get_markdown_from_sections(
     sections_tree: List[SectionsTree],
     google_llm_service: VisionService,
     openai_llm_service: VisionService,
@@ -184,7 +185,7 @@ def _get_markdown_from_sections(
 
         section_images = images_content_list[start_page:end_page]
 
-        extracted_text = _extract_text_from_pages_as_images(
+        extracted_text = await _extract_text_from_pages_as_images(
             prompt=PDF_STRUCTURED_CONTENT_EXTRACTION_PROMPT.format(
                 section_toc=section.string_toc,
                 section_pages_info=f"Pages {start_page} to {end_page}",
@@ -225,7 +226,7 @@ def _create_chunks_from_markdown(
     return chunks
 
 
-def create_chunks_from_document(
+async def create_chunks_from_document(
     document: FileDocument,
     get_file_content: Callable[[FileDocument], str],
     google_llm_service: VisionService,
@@ -239,7 +240,7 @@ def create_chunks_from_document(
     content_to_process = get_file_content(document.id)
     pdf_type, total_pages = _get_pdf_orientation_from_content(content_to_process)
     images_content_list = [img_base64 for img_base64 in _pdf_to_images(pdf_content=content_to_process, zoom=zoom)]
-    file_type = _extract_text_from_pages_as_images(
+    file_type = await _extract_text_from_pages_as_images(
         prompt=PROMPT_DETERMINE_FILE_TYPE,
         google_llm_service=google_llm_service,
         openai_llm_service=openai_llm_service,
@@ -250,7 +251,7 @@ def create_chunks_from_document(
         LOGGER.info("Processing PDF in landscape mode...")
         for i, img_base64 in enumerate(_pdf_to_images(pdf_content=content_to_process, zoom=zoom)):
             document.metadata["page_number"] = i + 1
-            extracted_text = _extract_text_from_pages_as_images(
+            extracted_text = await _extract_text_from_pages_as_images(
                 prompt=PPTX_CONTENT_EXTRACTION_PROMPT,
                 google_llm_service=google_llm_service,
                 openai_llm_service=openai_llm_service,
@@ -273,7 +274,7 @@ def create_chunks_from_document(
         LOGGER.info("Processing PDF in portrait mode...")
 
         try:
-            extracted_table_of_content = _extract_text_from_pages_as_images(
+            extracted_table_of_content = await _extract_text_from_pages_as_images(
                 prompt=PDF_TABLE_OF_CONTENT_EXTRACTION_PROMPT,
                 google_llm_service=google_llm_service,
                 openai_llm_service=openai_llm_service,
@@ -289,7 +290,7 @@ def create_chunks_from_document(
                 sections=extracted_table_of_content.sections,
                 level=1,
             )
-            markdown = _get_markdown_from_sections(
+            markdown = await _get_markdown_from_sections(
                 sections_tree=section_hierarchy,
                 google_llm_service=google_llm_service,
                 openai_llm_service=openai_llm_service,
@@ -303,7 +304,7 @@ def create_chunks_from_document(
         else:
             for i, img_base64 in enumerate(_pdf_to_images(pdf_content=content_to_process, zoom=zoom)):
                 document.metadata["page_number"] = i + 1
-                extracted_text = _extract_text_from_pages_as_images(
+                extracted_text = await _extract_text_from_pages_as_images(
                     prompt=PDF_CONTENT_EXTRACTION_PROMPT,
                     google_llm_service=google_llm_service,
                     openai_llm_service=openai_llm_service,

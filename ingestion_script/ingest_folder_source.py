@@ -1,5 +1,4 @@
 import logging
-import asyncio
 from uuid import UUID
 from typing import Optional
 
@@ -71,7 +70,7 @@ QDRANT_SCHEMA = QdrantCollectionSchema(
 )
 
 
-def sync_chunks_to_qdrant(
+async def sync_chunks_to_qdrant(
     table_schema: str,
     table_name: str,
     collection_name: str,
@@ -80,25 +79,22 @@ def sync_chunks_to_qdrant(
     sql_query_filter: Optional[str] = None,
     query_filter_qdrant: Optional[dict] = None,
 ) -> None:
-    async def _sync_chunks():
-        chunks_df = db_service.get_table_df(
-            table_name,
-            schema_name=table_schema,
-            sql_query_filter=sql_query_filter,
-        )
-        LOGGER.info(f"Syncing chunks to Qdrant collection {collection_name} with {len(chunks_df)} rows")
-        if not await qdrant_service.collection_exists_async(collection_name):
-            await qdrant_service.create_collection_async(collection_name)
-        await qdrant_service.sync_df_with_collection_async(
-            df=chunks_df,
-            collection_name=collection_name,
-            query_filter_qdrant=query_filter_qdrant,
-        )
-
-    return asyncio.run(_sync_chunks())
+    chunks_df = db_service.get_table_df(
+        table_name,
+        schema_name=table_schema,
+        sql_query_filter=sql_query_filter,
+    )
+    LOGGER.info(f"Syncing chunks to Qdrant collection {collection_name} with {len(chunks_df)} rows")
+    if not await qdrant_service.collection_exists_async(collection_name):
+        await qdrant_service.create_collection_async(collection_name)
+    await qdrant_service.sync_df_with_collection_async(
+        df=chunks_df,
+        collection_name=collection_name,
+        query_filter_qdrant=query_filter_qdrant,
+    )
 
 
-def ingest_google_drive_source(
+async def ingest_google_drive_source(
     folder_id: str,
     organization_id: str,
     source_name: str,
@@ -112,7 +108,7 @@ def ingest_google_drive_source(
     path = "https://drive.google.com/drive/folders/" + folder_id
     folder_manager = GoogleDriveFolderManager(path=path, access_token=access_token)
     source_type = db.SourceType.GOOGLE_DRIVE
-    _ingest_folder_source(
+    await _ingest_folder_source(
         folder_manager=folder_manager,
         organization_id=organization_id,
         source_name=source_name,
@@ -124,7 +120,7 @@ def ingest_google_drive_source(
     )
 
 
-def ingest_local_folder_source(
+async def ingest_local_folder_source(
     list_of_files_to_ingest: list[dict],
     organization_id: str,
     source_name: str,
@@ -135,7 +131,7 @@ def ingest_local_folder_source(
 ) -> None:
     folder_manager = S3FolderManager(folder_payload=list_of_files_to_ingest)
     source_type = db.SourceType.LOCAL
-    _ingest_folder_source(
+    await _ingest_folder_source(
         folder_manager=folder_manager,
         organization_id=organization_id,
         source_name=source_name,
@@ -148,7 +144,7 @@ def ingest_local_folder_source(
     folder_manager.clean_bucket()
 
 
-def _ingest_folder_source(
+async def _ingest_folder_source(
     folder_manager: FolderManager,
     organization_id: str,
     source_name: str,
@@ -193,7 +189,7 @@ def _ingest_folder_source(
         )
         return
 
-    if qdrant_service.collection_exists(qdrant_collection_name):
+    if await qdrant_service.collection_exists_async(qdrant_collection_name):
         LOGGER.error(f"Source {source_name} already exists in Qdrant")
         update_ingestion_task(
             organization_id=organization_id,
@@ -241,7 +237,7 @@ def _ingest_folder_source(
         if len(files_info) == 0:
             raise ValueError("No files found to ingest")
         for document in files_info:
-            chunks_df = get_chunks_dataframe_from_doc(
+            chunks_df = await get_chunks_dataframe_from_doc(
                 document,
                 document_chunk_mapping,
                 llm_service=OPENAI_COMPLETION_SERVICE,
@@ -260,7 +256,9 @@ def _ingest_folder_source(
                 append_mode=True,
                 schema_name=db_table_schema,
             )
-            sync_chunks_to_qdrant(db_table_schema, db_table_name, qdrant_collection_name, db_service, qdrant_service)
+            await sync_chunks_to_qdrant(
+                db_table_schema, db_table_name, qdrant_collection_name, db_service, qdrant_service
+            )
     except Exception as e:
         LOGGER.error(f"Failed to ingest folder source: {str(e)}")
         ingestion_task.status = db.TaskStatus.FAILED

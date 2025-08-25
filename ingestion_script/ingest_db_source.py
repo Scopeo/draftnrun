@@ -114,7 +114,7 @@ def get_db_source(
     return df_chunks[columns].copy()
 
 
-def upload_db_source(
+async def upload_db_source(
     db_service: DBService,
     qdrant_service: QdrantService,
     db_definition: DBDefinition,
@@ -177,7 +177,7 @@ def upload_db_source(
         sql_query_filter=combined_filter_sql,
     )
     LOGGER.info(f"Updated table '{storage_table_name}' in schema '{storage_schema_name}' with {len(df)} rows.")
-    sync_chunks_to_qdrant(
+    await sync_chunks_to_qdrant(
         storage_schema_name,
         storage_table_name,
         collection_name=qdrant_collection_name,
@@ -188,7 +188,7 @@ def upload_db_source(
     )
 
 
-def ingestion_database(
+async def ingestion_database(
     source_name: str,
     organization_id: str,
     task_id: UUID,
@@ -235,7 +235,7 @@ def ingestion_database(
         qdrant_schema,
         update_existing=update_existing,
         ingestion_function=partial(
-            upload_db_source,
+            await upload_db_source,
             db_definition=db_definition,
             source_db_url=source_db_url,
             source_schema_name=source_schema_name,
