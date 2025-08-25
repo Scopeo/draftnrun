@@ -23,18 +23,7 @@ def query_trace_duration(project_id: UUID, duration_days: int) -> pd.DataFrame:
     session.close()
     df = df.replace({np.nan: None})
     df["attributes"] = df["attributes"].apply(lambda x: json.loads(x) if isinstance(x, str) else x)
-
-    # Remove environment and call_type from attributes to avoid column conflicts with dedicated columns
-    def clean_attributes(attrs):
-        if isinstance(attrs, dict):
-            cleaned = attrs.copy()
-            cleaned.pop("environment", None)
-            cleaned.pop("call_type", None)
-            return cleaned
-        return attrs
-
-    df["cleaned_attributes"] = df["attributes"].apply(clean_attributes)
-    df_expanded = df.join(pd.json_normalize(df["cleaned_attributes"]))
+    df_expanded = df.join(pd.json_normalize(df["attributes"]))
     trace_rowids = df_expanded[df_expanded["parent_id"].isna() & (df_expanded["project_id"] == str(project_id))][
         "trace_rowid"
     ].values
