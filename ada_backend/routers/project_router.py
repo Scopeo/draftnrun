@@ -1,4 +1,4 @@
-from typing import Annotated, List
+from typing import Annotated, List, Optional
 from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Body
 from sqlalchemy.orm import Session
@@ -203,8 +203,8 @@ async def get_project_trace(
     project_id: UUID,
     duration: int,
     user: Annotated[SupabaseUser, Depends(get_user_from_supabase_token)],
-    environment: EnvType = None,
-    call_type: CallType = None,
+    environment: Optional[EnvType] = None,
+    call_type: Optional[CallType] = None,
 ):
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
@@ -230,8 +230,8 @@ async def get_project_trace_v2(
     project_id: UUID,
     duration: int,
     user: Annotated[SupabaseUser, Depends(get_user_from_supabase_token)],
-    environment: EnvType = None,
-    call_type: CallType = None,
+    environment: Optional[EnvType] = None,
+    call_type: Optional[CallType] = None,
 ):
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")

@@ -149,22 +149,8 @@ class SQLSpanExporter(SpanExporter):
                 split_nested_keys(json_span["attributes"]) if isinstance(json_span["attributes"], dict) else {}
             )
 
-            # Extract environment and call_type from attributes for dedicated columns
-            # These should come from the tracing context, not just attributes
-            environment = formatted_attributes.get("environment")
-            call_type = formatted_attributes.get("call_type")
-
-            # If not in attributes, try to get from span attributes directly
-            if not environment:
-                environment = span.attributes.get("environment")
-            if not call_type:
-                call_type = span.attributes.get("call_type")
-
-            # Remove them from attributes since they're now stored in dedicated columns
-            if "environment" in formatted_attributes:
-                del formatted_attributes["environment"]
-            if "call_type" in formatted_attributes:
-                del formatted_attributes["call_type"]
+            environment = json_span["attributes"].get("environment")
+            call_type = json_span["attributes"].get("call_type")
 
             openinference_span_kind = json_span["attributes"].get(SpanAttributes.OPENINFERENCE_SPAN_KIND, "UNKNOWN")
             span_row = models.Span(
