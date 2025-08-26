@@ -5,7 +5,7 @@ from pydantic import BaseModel
 
 from ada_backend.database.models import ParameterType, SelectOption, UIComponent, UIComponentProperties
 from ada_backend.database import models as db
-from ada_backend.services.registry import COMPLETION_MODEL_IN_DB, EMBEDDING_MODEL_IN_DB
+from ada_backend.services.registry import COMPLETION_MODEL_IN_DB, EMBEDDING_MODEL_IN_DB, TEMPERATURE_IN_DB
 from ada_backend.database.seed.supported_models import (
     get_models_by_capability,
     ModelCapability,
@@ -146,15 +146,66 @@ def build_completion_service_config_definitions(
                     ).model_dump(exclude_unset=True, exclude_none=True),
                 )
             )
-        if param.param_name == "temperature":
+        if param.param_name == TEMPERATURE_IN_DB:
             definitions.append(
                 db.ComponentParameterDefinition(
                     id=param.param_id,
                     component_id=component_id,
-                    name="temperature",
+                    name=TEMPERATURE_IN_DB,
                     type=ParameterType.FLOAT,
                     nullable=False,
                     default="1.0",
+                    ui_component=UIComponent.TEXTFIELD,
+                    ui_component_properties=UIComponentProperties(
+                        label="Temperature",
+                        placeholder="Enter temperature, it is different for each model, check the model documentation",
+                    ).model_dump(exclude_unset=True, exclude_none=True),
+                    is_advanced=True,
+                )
+            )
+        if param.param_name == "verbosity":
+            definitions.append(
+                db.ComponentParameterDefinition(
+                    id=param.param_id,
+                    component_id=component_id,
+                    name="verbosity",
+                    type=ParameterType.STRING,
+                    nullable=True,
+                    default=None,
+                    ui_component=UIComponent.SELECT,
+                    ui_component_properties=UIComponentProperties(
+                        label="Verbosity",
+                        options=[
+                            SelectOption(value="low", label="Low"),
+                            SelectOption(value="medium", label="Medium"),
+                            SelectOption(value="high", label="High"),
+                        ],
+                        placeholder="Select verbosity level useful only for GPT 5 models",
+                    ).model_dump(exclude_unset=True, exclude_none=True),
+                    is_advanced=True,
+                )
+            )
+        if param.param_name == "reasoning":
+            definitions.append(
+                db.ComponentParameterDefinition(
+                    id=param.param_id,
+                    component_id=component_id,
+                    name="reasoning",
+                    type=ParameterType.STRING,
+                    nullable=True,
+                    default=None,
+                    ui_component=UIComponent.SELECT,
+                    ui_component_properties=UIComponentProperties(
+                        label="Reasoning",
+                        options=[
+                            SelectOption(value="minimal", label="Minimal"),
+                            SelectOption(value="medium", label="Medium"),
+                            SelectOption(value="high", label="High"),
+                            SelectOption(value="low", label="Low"),
+                        ],
+                        placeholder="Select reasoning level useful only for GPT 5 models",
+                    ).model_dump(exclude_unset=True, exclude_none=True),
+                    is_advanced=True,
                 )
             )
         if param.param_name == "api_key":
@@ -201,15 +252,21 @@ def build_function_calling_service_config_definitions(
                     ).model_dump(exclude_unset=True, exclude_none=True),
                 )
             )
-        if param.param_name == "temperature":
+        if param.param_name == TEMPERATURE_IN_DB:
             definitions.append(
                 db.ComponentParameterDefinition(
                     id=param.param_id,
                     component_id=component_id,
-                    name="temperature",
+                    name=TEMPERATURE_IN_DB,
                     type=ParameterType.FLOAT,
                     nullable=False,
                     default="1.0",
+                    ui_component=UIComponent.TEXTAREA,
+                    ui_component_properties=UIComponentProperties(
+                        label="Temperature",
+                        placeholder="Enter temperature, it is different for each model, check the model documentation",
+                    ).model_dump(exclude_unset=True, exclude_none=True),
+                    is_advanced=True,
                 )
             )
         if param.param_name == "api_key":

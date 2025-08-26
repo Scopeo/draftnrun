@@ -192,6 +192,8 @@ class CompletionService(LLMService):
                     input=messages,
                     temperature=self._invocation_parameters.get("temperature"),
                     stream=stream,
+                    text={"verbosity": self._invocation_parameters.get("verbosity")},
+                    reasoning={"effort": self._invocation_parameters.get("reasoning")},
                 )
                 span.set_attributes(
                     {
@@ -265,6 +267,8 @@ class CompletionService(LLMService):
                     "temperature": self._invocation_parameters.get("temperature"),
                     "stream": stream,
                     "text_format": response_format,
+                    "reasoning": {"effort": self._invocation_parameters.get("reasoning")},
+                    "text": {"verbosity": self._invocation_parameters.get("verbosity")},
                 }
 
                 client = openai.AsyncOpenAI(api_key=self._api_key)
@@ -378,7 +382,8 @@ class CompletionService(LLMService):
                     "model": self._model_name,
                     "temperature": self._invocation_parameters.get("temperature"),
                     "stream": stream,
-                    "text": {"format": response_format},
+                    "text": {"format": response_format, "verbosity": self._invocation_parameters.get("verbosity")},
+                    "reasoning": {"effort": self._invocation_parameters.get("reasoning")},
                 }
 
                 client = openai.AsyncOpenAI(api_key=self._api_key)
