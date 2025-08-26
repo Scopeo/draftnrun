@@ -26,7 +26,6 @@ from ada_backend.services.registry import (
     VERBOSITY_IN_DB,
 )
 
-
 def seed_llm_call_components(session: Session):
     llm_call = db.Component(
         id=COMPONENT_UUIDS["llm_call"],

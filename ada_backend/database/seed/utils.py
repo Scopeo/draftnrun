@@ -170,6 +170,7 @@ def build_completion_service_config_definitions(
                     is_advanced=True,
                 )
             )
+
         if param.param_name == VERBOSITY_IN_DB:
             definitions.append(
                 db.ComponentParameterDefinition(
@@ -192,6 +193,7 @@ def build_completion_service_config_definitions(
                     is_advanced=True,
                 )
             )
+
         if param.param_name == REASONING_IN_DB:
             definitions.append(
                 db.ComponentParameterDefinition(
