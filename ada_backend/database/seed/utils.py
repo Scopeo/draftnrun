@@ -261,7 +261,7 @@ def build_function_calling_service_config_definitions(
                     type=ParameterType.FLOAT,
                     nullable=False,
                     default="1.0",
-                    ui_component=UIComponent.TEXTAREA,
+                    ui_component=UIComponent.TEXTFIELD,
                     ui_component_properties=UIComponentProperties(
                         label="Temperature",
                         placeholder="Enter temperature, it is different for each model, check the model documentation",
