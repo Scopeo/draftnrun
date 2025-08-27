@@ -10,6 +10,7 @@ from ada_backend.repositories.source_repository import (
     get_data_source_by_org_id,
     get_sources,
     upsert_source,
+    get_source_attributes,
 )
 from ada_backend.schemas.source_schema import (
     DataSourceSchema,
@@ -88,6 +89,7 @@ def create_source_by_organization(
             source_data.qdrant_collection_name,
             source_data.qdrant_schema,
             source_data.embedding_model_reference,
+            source_data.attributes,
         )
 
         LOGGER.info(f"Source {source_data.name} created for organization {organization_id}")
@@ -126,6 +128,7 @@ def upsert_source_by_organization(
             source_data.qdrant_collection_name,
             source_data.qdrant_schema,
             source_data.embedding_model_reference,
+            source_data.attributes,
         )
     except Exception as e:
         LOGGER.error(f"Error in upsert_source_by_organization: {str(e)}")
@@ -168,3 +171,15 @@ def delete_source_service(
     except Exception as e:
         LOGGER.error(f"Error in delete_source_by_id: {str(e)}")
         raise ValueError(f"Failed to delete source: {str(e)}") from e
+
+
+def get_source_attributes_by_org_id(
+    session: Session,
+    organization_id: UUID,
+    source_id: UUID,
+) -> dict:
+    return get_source_attributes(
+        session,
+        organization_id,
+        source_id,
+    )

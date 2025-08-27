@@ -97,6 +97,7 @@ async def upload_source(
     qdrant_schema: QdrantCollectionSchema,
     ingestion_function: callable,
     update_existing: bool = False,
+    attributes: Optional[dict] = None,
 ) -> None:
     check_signature(
         ingestion_function,
@@ -179,6 +180,7 @@ async def upload_source(
         qdrant_collection_name=qdrant_collection_name,
         qdrant_schema=qdrant_schema.to_dict(),
         embedding_model_reference=f"{embedding_service._provider}:{embedding_service._model_name}",
+        attributes=attributes,
     )
     LOGGER.info(f"Creating source {source_name} for organization {organization_id} in database")
     source_id = create_source(

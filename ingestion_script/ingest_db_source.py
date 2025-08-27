@@ -205,6 +205,7 @@ async def ingestion_database(
     update_existing: bool = False,
     query_filter: Optional[str] = None,
     timestamp_filter: Optional[str] = None,
+    attributes: Optional[dict] = None,
 ) -> None:
     chunk_id_column_name = "chunk_id"
     chunk_column_name = "content"
@@ -253,4 +254,5 @@ async def ingestion_database(
             query_filter=query_filter,
             timestamp_filter=timestamp_filter,
         ),
+        attributes=attributes,
     )

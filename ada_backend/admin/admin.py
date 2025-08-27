@@ -347,6 +347,7 @@ class SourceAdmin(EnhancedModelView, model=db.DataSource):
         "created_at",
         "updated_at",
         "last_ingestion_time",
+        "attributes",
     ]
 
     column_searchable_list = ["organization_id", "type"]

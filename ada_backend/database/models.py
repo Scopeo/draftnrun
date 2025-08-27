@@ -783,6 +783,7 @@ class DataSource(Base):
     created_at = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     last_ingestion_time = mapped_column(DateTime(timezone=True), nullable=True)
+    attributes = mapped_column(JSON, nullable=True)
 
     ingestion_tasks = relationship("IngestionTask", back_populates="source")
 

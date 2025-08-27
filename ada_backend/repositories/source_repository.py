@@ -122,3 +122,17 @@ def delete_source(
         db.DataSource.organization_id == organization_id, db.DataSource.id == source_id
     ).delete()
     session_sql_alchemy.commit()
+
+
+def get_source_attributes(
+    session_sql_alchemy: Session,
+    organization_id: UUID,
+    source_id: UUID,
+) -> dict:
+    """"""
+    return (
+        session_sql_alchemy.query(db.DataSource)
+        .filter(db.DataSource.organization_id == organization_id, db.DataSource.id == source_id)
+        .first()
+        .attributes
+    )
