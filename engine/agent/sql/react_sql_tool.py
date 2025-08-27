@@ -33,7 +33,7 @@ DEFAULT_REACT_SQL_TOOL_PROMPT = (
     "You have access to a database with the following schema:\n"
     "{schema}\n\n"
     "Answer the question using SQL tool and the information.\n"
-    "Anwer should not be the sql query, but the answer to the question.\n"
+    "Answer should not be the sql query, but the answer to the question.\n"
     "Create a syntactically correct {dialect} query to run on the database.\n"
     "If you use %, just make it double %%.\n"
     "Strings are always compared in lower case. \n"
@@ -70,7 +70,7 @@ class ReactSQLAgent(ReActAgent):
             kwargs = {
                 "schema_name": db_schema_name,
             }
-            prompt += "Do not forget the add the schema name in the query.\n"
+            prompt += "Do not forget to add the schema name in the query.\n"
         schema = db_service.get_db_description(table_names=include_tables, **kwargs)
         initial_prompt = prompt.format(
             additional_db_description=additional_db_description, schema=schema, dialect=db_service.dialect
