@@ -76,12 +76,14 @@ async def sync_chunks_to_qdrant(
     collection_name: str,
     db_service: DBService,
     qdrant_service: QdrantService,
-    sql_query_filter: Optional[str] = None,
     query_filter_qdrant: Optional[dict] = None,
+    timestamp_column_name: Optional[str] = None,
+    sql_query_filter: Optional[str] = None,
 ) -> None:
     chunks_df = db_service.get_table_df(
         table_name,
         schema_name=table_schema,
+        timestamp_column_name=timestamp_column_name,
         sql_query_filter=sql_query_filter,
     )
     LOGGER.info(f"Syncing chunks to Qdrant collection {collection_name} with {len(chunks_df)} rows")
@@ -91,6 +93,7 @@ async def sync_chunks_to_qdrant(
         df=chunks_df,
         collection_name=collection_name,
         query_filter_qdrant=query_filter_qdrant,
+        timestamp_column_name=timestamp_column_name,
     )
 
 
@@ -253,11 +256,16 @@ async def _ingest_folder_source(
                 table_definition=FILE_TABLE_DEFINITION,
                 id_column_name=ID_COLUMN_NAME,
                 timestamp_column_name=TIMESTAMP_COLUMN_NAME,
-                append_mode=True,
                 schema_name=db_table_schema,
             )
+
             await sync_chunks_to_qdrant(
-                db_table_schema, db_table_name, qdrant_collection_name, db_service, qdrant_service
+                table_schema=db_table_schema,
+                table_name=db_table_name,
+                collection_name=qdrant_collection_name,
+                db_service=db_service,
+                qdrant_service=qdrant_service,
+                timestamp_column_name=TIMESTAMP_COLUMN_NAME,
             )
     except Exception as e:
         LOGGER.error(f"Failed to ingest folder source: {str(e)}")
