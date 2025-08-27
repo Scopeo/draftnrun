@@ -61,6 +61,7 @@ def create_source(
     qdrant_collection_name: Optional[str] = None,
     qdrant_schema: Optional[dict] = None,
     embedding_model_reference: Optional[str] = None,
+    attributes: Optional[dict] = None,
 ) -> UUID:
     source_data_create = db.DataSource(
         name=source_name,
@@ -71,6 +72,7 @@ def create_source(
         qdrant_collection_name=qdrant_collection_name,
         qdrant_schema=qdrant_schema,
         embedding_model_reference=embedding_model_reference,
+        attributes=attributes,
     )
     session.add(source_data_create)
     session.commit()
@@ -88,6 +90,7 @@ def upsert_source(
     qdrant_collection_name: Optional[str] = None,
     qdrant_schema: Optional[dict] = None,
     embedding_model_reference: Optional[str] = None,
+    attributes: Optional[dict] = None,
 ) -> None:
     """"""
     existing_source = (
@@ -109,6 +112,7 @@ def upsert_source(
         existing_source.database_table_name = database_table_name
         existing_source.qdrant_collection_name = qdrant_collection_name
         existing_source.qdrant_schema = qdrant_schema
+        existing_source.attributes = attributes
     session_sql_alchemy.commit()
 
 
