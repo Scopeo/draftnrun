@@ -144,7 +144,7 @@ Here are two important variables that you get in the terminal when running supab
 - **anon key**: `ey_...`
 - **service_role key**: `eyJ...`
 
-You need to use them to to fill those environnement variables:
+You need to use them to fill those environment variables:
 
 ```env
 SUPABASE_PROJECT_KEY=*anon-key*
