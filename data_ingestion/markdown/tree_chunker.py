@@ -1,5 +1,6 @@
 import logging
 from functools import partial
+from typing import Optional
 
 import tiktoken
 from llama_index.core.node_parser import SentenceSplitter
@@ -115,8 +116,12 @@ class TreeChunker:
         else:
             return self._fetch_ancestors_to_level(ancestors[:-1], level)
 
-    def chunk_tree(self, node: MarkdownNode, ancestors: list["TreeChunk"] = []) -> list[TreeChunk]:
+    def chunk_tree(
+        self, node: MarkdownNode, ancestors: Optional[list[TreeChunk]] = None
+    ) -> list[TreeChunk]:
         """Combines nodes into larger chunks without exceeding max token size."""
+        if ancestors is None:
+            ancestors = []
         if len(node.children) == 0:
             if node.level.value <= ancestors[-1].level.value:
                 new_ancestors = self._fetch_ancestors_to_level(ancestors, node.level)
