@@ -18,7 +18,7 @@ from ada_backend.database.seed.utils import (
     ParameterLLMConfig,
     build_function_calling_service_config_definitions,
 )
-from ada_backend.services.registry import COMPLETION_MODEL_IN_DB
+from ada_backend.database.seed.constants import COMPLETION_MODEL_IN_DB
 
 
 def seed_ai_agent_components(session: Session):

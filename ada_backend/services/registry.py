@@ -27,6 +27,7 @@ from engine.agent.document_enhanced_llm_call import DocumentEnhancedLLMCallAgent
 from engine.agent.document_react_loader import DocumentReactLoaderAgent
 from engine.agent.ocr_call import OCRCall
 from engine.agent.rag.document_search import DocumentSearch
+from engine.agent.graph_runner_block import GraphRunnerBlock
 from engine.integrations.gmail_sender import GmailSender
 from engine.storage_service.local_service import SQLLocalService
 from engine.storage_service.snowflake_service.snowflake_service import SnowflakeService
@@ -41,11 +42,9 @@ from ada_backend.services.entity_factory import (
     compose_processors,
     build_web_service_processor,
     build_ocr_service_processor,
+    build_project_reference_processor,
 )
-
-COMPLETION_MODEL_IN_DB = "completion_model"
-EMBEDDING_MODEL_IN_DB = "embedding_model"
-WEB_SERVICE_IN_DB = "web_service"
+from ada_backend.database.seed.constants import COMPLETION_MODEL_IN_DB, EMBEDDING_MODEL_IN_DB
 
 
 class SupportedEntityType(StrEnum):
@@ -85,6 +84,7 @@ class SupportedEntityType(StrEnum):
     OCR_CALL = "OCR Call"
     INPUT = "API Input"
     FILTER = "Filter"
+    PROJECT_REFERENCE = "ProjectReference"
 
     # Integrations
     GMAIL_SENDER = "Gmail Sender"
@@ -306,6 +306,15 @@ def create_factory_registry() -> FactoryRegistry:
             entity_class=LLMCallAgent,
             parameter_processors=[
                 completion_service_processor,
+            ],
+        ),
+    )
+    registry.register(
+        name=SupportedEntityType.PROJECT_REFERENCE,
+        factory=AgentFactory(
+            entity_class=GraphRunnerBlock,
+            parameter_processors=[
+                build_project_reference_processor(),
             ],
         ),
     )

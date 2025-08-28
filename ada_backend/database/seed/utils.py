@@ -5,7 +5,7 @@ from pydantic import BaseModel
 
 from ada_backend.database.models import ParameterType, SelectOption, UIComponent, UIComponentProperties
 from ada_backend.database import models as db
-from ada_backend.services.registry import COMPLETION_MODEL_IN_DB, EMBEDDING_MODEL_IN_DB
+from ada_backend.database.seed.constants import COMPLETION_MODEL_IN_DB, EMBEDDING_MODEL_IN_DB
 from ada_backend.database.seed.supported_models import (
     get_models_by_capability,
     ModelCapability,
@@ -43,6 +43,7 @@ def add_custom_llm_model(
     return list_model_options
 
 
+# TODO: Move to constants.py
 # Define UUIDs for components and instances
 COMPONENT_UUIDS: dict[str, UUID] = {
     "synthesizer": UUID("6f790dd1-06f6-4489-a655-1a618763a114"),
@@ -74,6 +75,7 @@ COMPONENT_UUIDS: dict[str, UUID] = {
     "python_code_runner": UUID("e2b00000-0000-1111-2222-333333333333"),
     "terminal_command_runner": UUID("e2b10000-1111-2222-3333-444444444444"),
     "pdf_generation": UUID("428baac0-0c5f-4374-b2de-8075218082b4"),
+    "project_reference": UUID("4c8f9e2d-1a3b-4567-8901-234567890abc"),
 }
 
 # Get models by capability and convert to select options

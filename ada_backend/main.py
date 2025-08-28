@@ -6,6 +6,7 @@ from prometheus_fastapi_instrumentator import PrometheusFastApiInstrumentator
 
 from ada_backend.admin.admin import setup_admin
 from ada_backend.instrumentation import setup_performance_instrumentation
+from ada_backend.middleware.request_context import RequestContextMiddleware
 from ada_backend.routers.project_router import router as project_router
 from ada_backend.routers.template_router import router as template_router
 from ada_backend.routers.integration_router import router as integration_router
@@ -104,6 +105,7 @@ app.include_router(components_router)
 app.include_router(graph_router)
 app.include_router(graphql_router, prefix="/graphql")
 
+app.add_middleware(RequestContextMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.CORS_ALLOW_ORIGINS.split(","),

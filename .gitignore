@@ -4,6 +4,7 @@
 .coverage
 .pytest_cache
 .idea
+.cursor
 
 # virtual-env
 venv
