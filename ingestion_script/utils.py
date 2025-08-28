@@ -89,7 +89,7 @@ def create_source(
         ) from e
 
 
-def upload_source(
+async def upload_source(
     source_name: str,
     organization_id: str,
     task_id: str,
@@ -140,7 +140,7 @@ def upload_source(
                 ingestion_task=ingestion_task,
             )
             return
-    elif not update_existing and qdrant_service.collection_exists(qdrant_collection_name):
+    elif not update_existing and await qdrant_service.collection_exists_async(qdrant_collection_name):
         LOGGER.error(f"Source {source_name} already exists in Qdrant")
         update_ingestion_task(
             organization_id=organization_id,
@@ -149,7 +149,7 @@ def upload_source(
         return
 
     try:
-        ingestion_function(
+        await ingestion_function(
             db_service=db_service,
             qdrant_service=qdrant_service,
             storage_schema_name=schema_name,
@@ -212,7 +212,7 @@ def build_combined_sql_filter(
     if query_filter:
         filters.append(f"({query_filter})")
     if timestamp_filter and timestamp_column_name:
-        filters.append(f"({timestamp_column_name} {timestamp_filter})")
+        filters.append(f"({timestamp_column_name} IS NOT NULL AND {timestamp_column_name} {timestamp_filter})")
     if filters:
         return " AND ".join(filters)
     return None

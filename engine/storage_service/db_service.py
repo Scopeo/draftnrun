@@ -108,6 +108,9 @@ class DBService(ABC):
                 table_definition=table_definition,
                 schema_name=schema_name,
             )
+            # Convert pandas NaT to None for datetime-like columns before insert
+            for col in new_df.select_dtypes(include=["datetime64[ns]", "datetimetz"]):
+                new_df[col] = new_df[col].astype(object).where(new_df[col].notna(), None)
             self.insert_df_to_table(df=new_df, table_name=table_name, schema_name=schema_name)
         else:
             query = (
@@ -132,7 +135,7 @@ class DBService(ABC):
 
             LOGGER.info(f"Found {len(ids_to_update)} rows to update in the table")
             updated_data = new_df[new_df[id_column_name].isin(ids_to_update)].copy()
-            for col in updated_data.select_dtypes(include=["datetime64[ns]"]):
+            for col in updated_data.select_dtypes(include=["datetime64[ns]", "datetimetz"]):
                 updated_data[col] = updated_data[col].astype(object).where(updated_data[col].notna(), None)
             self._refresh_table_from_df(
                 df=updated_data,
@@ -146,6 +149,9 @@ class DBService(ABC):
             LOGGER.info(f"Found {new_df['exists'][new_df['exists']].sum()} existing rows in the table")
             new_data = new_df[~new_df["exists"]].copy()
             new_data.drop(columns=["exists"], inplace=True)
+            # Convert pandas NaT to None for datetime-like columns before insert
+            for col in new_data.select_dtypes(include=["datetime64[ns]", "datetimetz"]):
+                new_data[col] = new_data[col].astype(object).where(new_data[col].notna(), None)
             self.insert_df_to_table(new_data, table_name, schema_name=schema_name)
 
             if not append_mode:
