@@ -25,6 +25,8 @@ from openai.types.chat import ChatCompletion
 
 LOGGER = logging.getLogger(__name__)
 
+DEFAULT_TEMPERATURE = 1
+
 
 def with_usage_check(func):
     @wraps(func)
@@ -150,10 +152,16 @@ class CompletionService(LLMService):
         model_name: str = "gpt-4.1-mini",
         api_key: Optional[str] = None,
         base_url: Optional[str] = None,
-        temperature: float = 0.5,
+        temperature: float = DEFAULT_TEMPERATURE,
+        verbosity: Optional[str] = None,
+        reasoning: Optional[str] = None,
     ):
         super().__init__(trace_manager, provider, model_name, api_key, base_url)
-        self._temperature = temperature
+        self._invocation_parameters = {"temperature": temperature}
+        if verbosity is not None:
+            self._invocation_parameters["verbosity"] = verbosity
+        if reasoning is not None:
+            self._invocation_parameters["reasoning"] = reasoning
 
     @with_usage_check
     def complete(
@@ -170,7 +178,7 @@ class CompletionService(LLMService):
         stream: bool = False,
     ) -> str:
         span = get_current_span()
-        span.set_attributes({SpanAttributes.LLM_INVOCATION_PARAMETERS: json.dumps({"temperature": self._temperature})})
+        span.set_attributes({SpanAttributes.LLM_INVOCATION_PARAMETERS: json.dumps(self._invocation_parameters)})
         match self._provider:
             case "openai":
                 import openai
@@ -182,8 +190,10 @@ class CompletionService(LLMService):
                 response = await client.responses.create(
                     model=self._model_name,
                     input=messages,
-                    temperature=self._temperature,
+                    temperature=self._invocation_parameters.get("temperature"),
                     stream=stream,
+                    text={"verbosity": self._invocation_parameters.get("verbosity")},
+                    reasoning={"effort": self._invocation_parameters.get("reasoning")},
                 )
                 span.set_attributes(
                     {
@@ -204,7 +214,7 @@ class CompletionService(LLMService):
                 response = await client.chat.completions.create(
                     model=self._model_name,
                     messages=messages,
-                    temperature=self._temperature,
+                    temperature=self._invocation_parameters.get("temperature"),
                 )
                 span.set_attributes(
                     {
@@ -244,7 +254,7 @@ class CompletionService(LLMService):
         tool_choice: str = "auto",
     ) -> BaseModel:
         span = get_current_span()
-        span.set_attributes({SpanAttributes.LLM_INVOCATION_PARAMETERS: json.dumps({"temperature": self._temperature})})
+        span.set_attributes({SpanAttributes.LLM_INVOCATION_PARAMETERS: json.dumps(self._invocation_parameters)})
         match self._provider:
             case "openai":
                 import openai
@@ -254,9 +264,11 @@ class CompletionService(LLMService):
                 kwargs = {
                     "input": messages,
                     "model": self._model_name,
-                    "temperature": self._temperature,
+                    "temperature": self._invocation_parameters.get("temperature"),
                     "stream": stream,
                     "text_format": response_format,
+                    "reasoning": {"effort": self._invocation_parameters.get("reasoning")},
+                    "text": {"verbosity": self._invocation_parameters.get("verbosity")},
                 }
 
                 client = openai.AsyncOpenAI(api_key=self._api_key)
@@ -289,7 +301,7 @@ class CompletionService(LLMService):
                 response = await client.chat.completions.create(
                     model=self._model_name,
                     messages=messages,
-                    temperature=self._temperature,
+                    temperature=self._invocation_parameters.get("temperature"),
                     stream=stream,
                     response_format=response_format_schema,
                 )
@@ -312,7 +324,7 @@ class CompletionService(LLMService):
                 response = await client.chat.parse_async(
                     model=self._model_name,
                     messages=messages,
-                    temperature=self._temperature,
+                    temperature=self._invocation_parameters.get("temperature"),
                     response_format=response_format,
                 )
                 span.set_attributes(
@@ -358,7 +370,7 @@ class CompletionService(LLMService):
         response_format = OutputFormatModel(**response_format).model_dump(exclude_none=True, exclude_unset=True)
 
         span = get_current_span()
-        span.set_attributes({SpanAttributes.LLM_INVOCATION_PARAMETERS: json.dumps({"temperature": self._temperature})})
+        span.set_attributes({SpanAttributes.LLM_INVOCATION_PARAMETERS: json.dumps(self._invocation_parameters)})
         match self._provider:
             case "openai":
                 import openai
@@ -368,9 +380,10 @@ class CompletionService(LLMService):
                 kwargs = {
                     "input": messages,
                     "model": self._model_name,
-                    "temperature": self._temperature,
+                    "temperature": self._invocation_parameters.get("temperature"),
                     "stream": stream,
-                    "text": {"format": response_format},
+                    "text": {"format": response_format, "verbosity": self._invocation_parameters.get("verbosity")},
+                    "reasoning": {"effort": self._invocation_parameters.get("reasoning")},
                 }
 
                 client = openai.AsyncOpenAI(api_key=self._api_key)
@@ -407,7 +420,7 @@ class CompletionService(LLMService):
                 response = await client.chat.completions.create(
                     model=self._model_name,
                     messages=messages,
-                    temperature=self._temperature,
+                    temperature=self._invocation_parameters.get("temperature"),
                     stream=stream,
                     response_format=response_format,
                 )
@@ -446,7 +459,7 @@ class CompletionService(LLMService):
         openai_tools = [tool.openai_format for tool in tools]
 
         span = get_current_span()
-        span.set_attributes({SpanAttributes.LLM_INVOCATION_PARAMETERS: json.dumps({"temperature": self._temperature})})
+        span.set_attributes({SpanAttributes.LLM_INVOCATION_PARAMETERS: json.dumps(self._invocation_parameters)})
         match self._provider:
             case "openai" | "google":
                 import openai
@@ -456,7 +469,7 @@ class CompletionService(LLMService):
                     model=self._model_name,
                     messages=messages,
                     tools=openai_tools,
-                    temperature=self._temperature,
+                    temperature=self._invocation_parameters.get("temperature"),
                     stream=stream,
                     tool_choice=tool_choice,
                 )
@@ -481,7 +494,7 @@ class CompletionService(LLMService):
                     model=self._model_name,
                     messages=mistral_compatible_messages,
                     tools=openai_tools,
-                    temperature=self._temperature,
+                    temperature=self._invocation_parameters.get("temperature"),
                     stream=stream,
                     tool_choice=tool_choice,
                 )
@@ -504,7 +517,7 @@ class CompletionService(LLMService):
                     model=self._model_name,
                     messages=messages,
                     tools=openai_tools,
-                    temperature=self._temperature,
+                    temperature=self._invocation_parameters.get("temperature"),
                     stream=stream,
                     tool_choice=tool_choice,
                 )
@@ -566,7 +579,7 @@ class VisionService(LLMService):
         model_name: str = "gpt-4.1-mini",
         api_key: Optional[str] = None,
         base_url: Optional[str] = None,
-        temperature: float = 1.0,
+        temperature: float = DEFAULT_TEMPERATURE,
     ):
         super().__init__(trace_manager, provider, model_name, api_key, base_url)
         self._temperature = temperature

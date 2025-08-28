@@ -46,6 +46,7 @@ from ada_backend.services.entity_factory import (
 COMPLETION_MODEL_IN_DB = "completion_model"
 EMBEDDING_MODEL_IN_DB = "embedding_model"
 WEB_SERVICE_IN_DB = "web_service"
+TEMPERATURE_IN_DB = "default_temperature"
 
 
 class SupportedEntityType(StrEnum):
@@ -171,7 +172,9 @@ def create_factory_registry() -> FactoryRegistry:
             {
                 # Name from DB -> Name in processor
                 COMPLETION_MODEL_IN_DB: "completion_model",
-                "default_temperature": "temperature",
+                TEMPERATURE_IN_DB: "temperature",
+                "verbosity": "verbosity",
+                "reasoning": "reasoning",
                 "api_key": "llm_api_key",
             }
         ),
