@@ -4,6 +4,8 @@
 .coverage
 .pytest_cache
 .idea
+.cursor
+generated-config/
 
 # virtual-env
 venv

@@ -118,6 +118,15 @@ class ReleaseStage(StrEnum):
     INTERNAL = "internal"
 
 
+class ComponentType(StrEnum):
+    """Enumeration of component types for classification."""
+
+    GRAPH_RUNNER = "graph_runner"
+    AGENT = "agent"                        # Standard computational agents
+    CONTROL_DIRECTIVE = "control_directive"  # Batching, conditionals, switches
+    SERVICE = "service"                    # Tools like Synthesizer, Retriever
+
+
 class SelectOption(BaseModel):
     """Option for Select and similar UI components"""
 
@@ -188,7 +197,8 @@ class Component(Base):
     id = mapped_column(UUID(as_uuid=True), primary_key=True, index=True, default=uuid.uuid4)
     name = mapped_column(String, unique=True, nullable=False)
     description = mapped_column(Text, nullable=True)
-    is_agent = mapped_column(Boolean, nullable=False, default=False)
+    is_agent = mapped_column(Boolean, nullable=False, default=False)  # Keep for backward compatibility
+    component_type = mapped_column(make_pg_enum(ComponentType), nullable=False, default=ComponentType.AGENT)
     integration_id = mapped_column(UUID(as_uuid=True), ForeignKey("integrations.id"), nullable=True)
     created_at = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
