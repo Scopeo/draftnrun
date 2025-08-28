@@ -1,6 +1,6 @@
 from collections import defaultdict
 import json
-from typing import List
+from typing import List, Optional
 from uuid import UUID
 import logging
 
@@ -12,6 +12,7 @@ from ada_backend.services.metrics.utils import query_trace_duration, query_trace
 from engine.trace import models as db
 from engine.trace.sql_exporter import get_session_trace, parse_str_or_dict
 from ada_backend.segment_analytics import track_project_observability_loaded
+from ada_backend.database.models import EnvType, CallType
 
 
 LOGGER = logging.getLogger(__name__)
@@ -140,6 +141,8 @@ def build_span_trees(df: pd.DataFrame, include_messages: bool) -> List[TraceSpan
             llm_token_count_prompt=row.get("llm_token_count_prompt", None),
             llm_token_count_completion=row.get("llm_token_count_completion", None),
             children=[],
+            environment=row.get("environment", None),
+            call_type=row.get("call_type", None),
         )
 
     trace_trees = []
@@ -159,7 +162,12 @@ def build_span_trees(df: pd.DataFrame, include_messages: bool) -> List[TraceSpan
 
 
 def get_trace_by_project(
-    user_id: UUID, project_id: UUID, duration: int, include_messages: bool = False
+    user_id: UUID,
+    project_id: UUID,
+    duration: int,
+    include_messages: bool = False,
+    environment: Optional[EnvType] = None,
+    call_type: Optional[CallType] = None,
 ) -> List[TraceSpan]:
     df_span = query_trace_duration(project_id, duration)
     track_project_observability_loaded(user_id, project_id)
@@ -170,6 +178,13 @@ def get_trace_by_project(
         df_span = df_span.merge(df_messages, on="span_id", how="left")
 
     df_span = df_span.replace({np.nan: None})
+
+    if environment is not None:
+        df_span = df_span[df_span["environment"] == environment.value]
+
+    if call_type is not None:
+        df_span = df_span[df_span["call_type"] == call_type.value]
+
     return build_span_trees(df_span, include_messages=include_messages)
 
 
