@@ -6,6 +6,7 @@ import logging
 from sqlalchemy.orm import Session
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
+from slack_sdk import WebClient
 
 
 from ada_backend.repositories.integration_repository import get_integration_secret, update_integration_secret
@@ -15,6 +16,11 @@ LOGGER = logging.getLogger(__name__)
 
 
 def needs_new_token(integration_secret: db.SecretIntegration) -> bool:
+    # Non-expiring tokens (Slack): refresh token is None, expires_in is None
+    if integration_secret.get_refresh_token() is None and integration_secret.expires_in is None:
+        return False  # Token doesn't expire, no need to refresh
+
+    # Expiring tokens (Gmail): check expiration
     if integration_secret.token_last_updated is None or integration_secret.expires_in is None:
         # If we don't know the current token or expiration, assume we need a new one
         return True
@@ -75,8 +81,102 @@ def get_oauth_access_token(
         # If the token is expired or needs to be refreshed
         if needs_new_token(integration_secret):
             refresh_token = integration_secret.get_refresh_token()
+            if refresh_token is None:
+                raise ValueError(
+                    "Token needs refresh but no refresh token available (non-expiring token misconfigured)"
+                )
             new_access_token, creation_timestamp = refresh_oauth_token(
                 refresh_token, google_client_id, google_client_secret
+            )
+            update_integration_secret(
+                session,
+                integration_secret.id,
+                new_access_token,
+                refresh_token,
+                token_last_updated=creation_timestamp,
+            )
+            return new_access_token
+        else:
+            return integration_secret.get_access_token()
+    else:
+        raise ValueError(f"Integration secret with ID {integration_secret_id} not found.")
+
+
+def get_slack_client(access_token: str) -> WebClient:
+    """Create a Slack WebClient with the given access token.
+
+    Args:
+        access_token: OAuth access token for Slack API
+
+    Returns:
+        WebClient: Configured Slack WebClient instance
+    """
+    return WebClient(token=access_token)
+
+
+def refresh_slack_oauth_token(refresh_token: str, client_id: str, client_secret: str) -> tuple[str, datetime]:
+    """Refresh a Slack OAuth access token using the refresh token.
+
+    Args:
+        refresh_token: Current refresh token
+        client_id: Slack OAuth client ID
+        client_secret: Slack OAuth client secret
+
+    Returns:
+        tuple: (new_access_token, creation_timestamp)
+
+    Raises:
+        ValueError: If token refresh fails or Slack API returns an error
+    """
+    url = "https://slack.com/api/oauth.v2.access"
+    payload = {
+        "client_id": client_id,
+        "client_secret": client_secret,
+        "refresh_token": refresh_token,
+        "grant_type": "refresh_token",
+    }
+    resp = requests.post(url, data=payload)
+    if resp.ok:
+        creation_timestamp = datetime.now(timezone.utc)
+        tokens = resp.json()
+        if tokens.get("ok"):
+            return tokens.get("access_token"), creation_timestamp
+        else:
+            raise ValueError(f"Slack API error: {tokens.get('error')}")
+    else:
+        raise ValueError(f"Failed to refresh Slack token: {resp.status_code} {resp.text}")
+
+
+def get_slack_oauth_access_token(
+    session: Session,
+    integration_secret_id: UUID,
+    slack_client_id: str,
+    slack_client_secret: str,
+) -> str:
+    """Get a valid Slack OAuth access token, refreshing if necessary.
+
+    Args:
+        session: Database session
+        integration_secret_id: UUID of the integration secret
+        slack_client_id: Slack OAuth client ID
+        slack_client_secret: Slack OAuth client secret
+
+    Returns:
+        str: Valid access token
+
+    Raises:
+        ValueError: If integration secret not found or token refresh fails
+    """
+    integration_secret = get_integration_secret(session, integration_secret_id)
+    if integration_secret:
+        if needs_new_token(integration_secret):
+            refresh_token = integration_secret.get_refresh_token()
+            if refresh_token is None:
+                raise ValueError(
+                    "Token needs refresh but no refresh token available (non-expiring token misconfigured)"
+                )
+            new_access_token, creation_timestamp = refresh_slack_oauth_token(
+                refresh_token, slack_client_id, slack_client_secret
             )
             update_integration_secret(
                 session,
