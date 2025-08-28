@@ -24,6 +24,14 @@ class GraphGetResponse(BaseModel):
     edges: list[EdgeSchema]
 
 
+class GraphLoadResponse(BaseModel):
+    """Response model for loading a graph"""
+
+    component_instances: list[ComponentInstanceSchema]
+    relationships: list[ComponentRelationshipSchema]
+    edges: list[EdgeSchema]
+
+
 class GraphUpdateSchema(BaseModel):
     """Complete pipeline definition"""
 
