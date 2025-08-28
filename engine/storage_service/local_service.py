@@ -233,7 +233,14 @@ class SQLLocalService(DBService):
         check_columns_matching_between_data_and_database_table(df.columns, description_table)
 
         with self.Session() as session:
-            data = df.to_dict(orient="records")
+            # Handle NULL values before converting to dict
+            clean_df = df.copy()
+            # Handle datetime columns specifically (convert NaT to None), including tz-aware
+            for col in clean_df.select_dtypes(include=["datetime64[ns]", "datetimetz"]):
+                clean_df[col] = clean_df[col].astype(object).where(clean_df[col].notna(), None)
+            # Handle other NULL/NaN values
+            clean_df = clean_df.where(pd.notnull(clean_df), None)
+            data = clean_df.to_dict(orient="records")
             session.execute(table.insert(), data)
             session.commit()
 
@@ -280,7 +287,12 @@ class SQLLocalService(DBService):
             LOGGER.info(f"Temporary table created to update {table_name}")
 
             with self.Session() as session:
-                session.execute(temp_table.insert(), df.to_dict(orient="records"))
+                # Ensure NaT and NaN are converted to None before inserting to temp table
+                clean_df = df.copy()
+                for col in clean_df.select_dtypes(include=["datetime64[ns]", "datetimetz"]):
+                    clean_df[col] = clean_df[col].astype(object).where(clean_df[col].notna(), None)
+                clean_df = clean_df.where(pd.notnull(clean_df), None)
+                session.execute(temp_table.insert(), clean_df.to_dict(orient="records"))
                 session.commit()
 
             # Exclude _processed_datetime field from the temp table values, but set it explicitly to current timestamp

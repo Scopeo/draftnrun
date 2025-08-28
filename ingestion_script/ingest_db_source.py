@@ -227,7 +227,7 @@ async def ingestion_database(
     )
     source_type = db.SourceType.DATABASE
     LOGGER.info("Start ingestion data from the database source...")
-    upload_source(
+    await upload_source(
         source_name,
         organization_id,
         task_id,
@@ -235,7 +235,7 @@ async def ingestion_database(
         qdrant_schema,
         update_existing=update_existing,
         ingestion_function=partial(
-            await upload_db_source,
+            upload_db_source,
             db_definition=db_definition,
             source_db_url=source_db_url,
             source_schema_name=source_schema_name,
