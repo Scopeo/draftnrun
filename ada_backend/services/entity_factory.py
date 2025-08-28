@@ -12,6 +12,8 @@ from engine.llm_services.llm_service import EmbeddingService, CompletionService,
 from engine.qdrant_service import QdrantService, QdrantCollectionSchema
 from ada_backend.database.setup_db import get_db_session
 from ada_backend.repositories.source_repository import get_data_source_by_id
+from engine.agent.rag.retriever import Retriever
+from engine.agent.synthesizer import Synthesizer
 
 LOGGER = logging.getLogger(__name__)
 
@@ -400,6 +402,81 @@ def build_qdrant_service_processor(target_name: str = "qdrant_service") -> Param
         params[target_name] = qdrant_service
         params["collection_name"] = collection_name
 
+        return params
+
+    return processor
+
+
+def build_retriever_subcomponent_processor(target_name: str = "retriever") -> ParameterProcessor:
+    """
+    Creates a processor that builds a Retriever sub-component from provided parameters.
+
+    Expected (pre-processed) params:
+    - qdrant_service: QdrantService (injected by build_qdrant_service_processor)
+    - collection_name: str (injected by build_qdrant_service_processor)
+    - max_retrieved_chunks: int (required)
+    - enable_date_penalty_for_chunks: bool (optional)
+    - chunk_age_penalty_rate: float (optional)
+    - default_penalty_rate: float (optional)
+    - metadata_date_key: str | comma-separated fields (optional)
+    - max_retrieved_chunks_after_penalty: int (optional)
+    """
+
+    def processor(params: dict, constructor_params: dict[str, Any]) -> dict:
+        qdrant_service: QdrantService | None = params.pop("qdrant_service", None)
+        collection_name: str | None = params.pop("collection_name", None)
+        if qdrant_service is None or collection_name is None:
+            raise ValueError("qdrant_service and collection_name are required to build Retriever")
+
+        max_retrieved_chunks = params.pop("max_retrieved_chunks", None)
+        if max_retrieved_chunks is None:
+            # Be lenient and default to 10 when not provided
+            max_retrieved_chunks = 10
+
+        retriever = Retriever(
+            trace_manager=get_trace_manager(),
+            qdrant_service=qdrant_service,
+            collection_name=collection_name,
+            max_retrieved_chunks=max_retrieved_chunks,
+            enable_date_penalty_for_chunks=params.pop("enable_date_penalty_for_chunks", False),
+            chunk_age_penalty_rate=params.pop("chunk_age_penalty_rate", None),
+            default_penalty_rate=params.pop("default_penalty_rate", None),
+            metadata_date_key=params.pop("metadata_date_key", None),
+            max_retrieved_chunks_after_penalty=params.pop("max_retrieved_chunks_after_penalty", None),
+        )
+
+        params[target_name] = retriever
+        return params
+
+    return processor
+
+
+def build_synthesizer_subcomponent_processor(target_name: str = "synthesizer") -> ParameterProcessor:
+    """
+    Creates a processor that builds a Synthesizer sub-component from provided parameters.
+
+    Expected (pre-processed) params:
+    - completion_service: CompletionService (injected by build_completion_service_processor)
+    - prompt_template: Optional[str]
+    """
+
+    def processor(params: dict, constructor_params: dict[str, Any]) -> dict:
+        completion_service: CompletionService | None = params.pop("completion_service", None)
+        if completion_service is None:
+            raise ValueError("completion_service is required to build Synthesizer")
+
+        optional_kwargs: dict[str, Any] = {}
+        prompt_template = params.pop("prompt_template", None)
+        if prompt_template is not None:
+            optional_kwargs["prompt_template"] = prompt_template
+
+        synthesizer = Synthesizer(
+            completion_service=completion_service,
+            trace_manager=get_trace_manager(),
+            **optional_kwargs,
+        )
+
+        params[target_name] = synthesizer
         return params
 
     return processor

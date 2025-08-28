@@ -41,6 +41,8 @@ from ada_backend.services.entity_factory import (
     compose_processors,
     build_web_service_processor,
     build_ocr_service_processor,
+    build_retriever_subcomponent_processor,
+    build_synthesizer_subcomponent_processor,
 )
 
 COMPLETION_MODEL_IN_DB = "completion_model"
@@ -322,6 +324,16 @@ def create_factory_registry() -> FactoryRegistry:
         name=SupportedEntityType.RAG_AGENT,
         factory=AgentFactory(
             entity_class=RAG,
+            parameter_processors=[
+                # Build Synthesizer as sub-component
+                completion_service_processor,
+                build_synthesizer_subcomponent_processor(),
+                # Build Retriever as sub-component (depends on qdrant processor)
+                qdrant_service_processor,
+                build_retriever_subcomponent_processor(),
+                # Ensure trace manager injected to RAG itself
+                trace_manager_processor,
+            ],
         ),
     )
     registry.register(

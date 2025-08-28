@@ -113,20 +113,6 @@ def seed_rag_components(session: Session):
     )
 
     # RAG
-    rag_retriever_param = db.ComponentParameterDefinition(
-        id=UUID("1428f05e-225e-4a90-950d-4107818b3b49"),
-        component_id=rag_agent.id,
-        name="retriever",
-        type=ParameterType.COMPONENT,
-        nullable=False,
-    )
-    rag_synthesizer_param = db.ComponentParameterDefinition(
-        id=UUID("2c4763cf-5e2c-489b-a1a9-d3b2bc92a786"),
-        component_id=rag_agent.id,
-        name="synthesizer",
-        type=ParameterType.COMPONENT,
-        nullable=False,
-    )
     rag_reranker_param = db.ComponentParameterDefinition(
         id=UUID("4f234948-c276-4f3f-88d1-cc8df58fc20e"),
         component_id=rag_agent.id,
@@ -151,9 +137,7 @@ def seed_rag_components(session: Session):
     upsert_components_parameter_definitions(
         session=session,
         component_parameter_definitions=[
-            rag_retriever_param,
             rag_reranker_param,
-            rag_synthesizer_param,
             rag_formatter_param,
             rag_vocabulary_search_param,
         ],
@@ -162,19 +146,9 @@ def seed_rag_components(session: Session):
         session=session,
         component_parameter_child_relationships=[
             db.ComponentParameterChildRelationship(
-                id=UUID("d2536a60-b6ce-45ec-ae49-5c9c1a269fad"),
-                component_parameter_definition_id=rag_retriever_param.id,
-                child_component_id=retriever.id,
-            ),
-            db.ComponentParameterChildRelationship(
                 id=UUID("b314a46c-62f0-4d0a-b56f-2d4fa43fa242"),
                 component_parameter_definition_id=rag_reranker_param.id,
                 child_component_id=cohere_reranker.id,
-            ),
-            db.ComponentParameterChildRelationship(
-                id=UUID("5f021860-3db6-4e9d-9069-8de9eaf6d267"),
-                component_parameter_definition_id=rag_synthesizer_param.id,
-                child_component_id=synthesizer.id,
             ),
             db.ComponentParameterChildRelationship(
                 id=UUID("8a38709b-3a3a-4ae3-b1d5-0dc244a3280c"),
@@ -436,6 +410,158 @@ def seed_rag_components(session: Session):
                     placeholder="Enter the key from your input data to access messages history",
                 ).model_dump(exclude_unset=True, exclude_none=True),
                 is_advanced=True,
+            ),
+            # RAG-level Synthesizer configuration
+            db.ComponentParameterDefinition(
+                id=UUID("f78a5a64-6c8e-4f80-8d9d-3db3d6f2d5a0"),
+                component_id=rag_agent.id,
+                name="prompt_template",
+                type=ParameterType.STRING,
+                nullable=True,
+                default=get_base_synthetizer_prompt_template(),
+                ui_component=UIComponent.TEXTAREA,
+                ui_component_properties=UIComponentProperties(
+                    label="Prompt Template",
+                    placeholder=(
+                        "Enter your prompt template here. "
+                        "Use {context_str} and {query_str} for variable substitution."
+                    ),
+                ).model_dump(exclude_unset=True, exclude_none=True),
+                is_advanced=False,
+            ),
+            # RAG-level Retriever configuration
+            db.ComponentParameterDefinition(
+                id=UUID("a2b9b94d-9f40-4f0a-9c9b-6c3c7a9b3d8e"),
+                component_id=rag_agent.id,
+                name="data_source",
+                type=ParameterType.DATA_SOURCE,
+                nullable=False,
+                ui_component=UIComponent.SELECT,
+                ui_component_properties=UIComponentProperties(
+                    label="Data Source",
+                    description="The data source from which to retrieve chunks. ",
+                ).model_dump(exclude_unset=True, exclude_none=True),
+                is_advanced=False,
+            ),
+            db.ComponentParameterDefinition(
+                id=UUID("f2f8d3c2-4a1e-4f61-8c9b-2e7c1a8d9f21"),
+                component_id=rag_agent.id,
+                name="max_retrieved_chunks",
+                type=ParameterType.INTEGER,
+                nullable=False,
+                default="10",
+                ui_component=UIComponent.TEXTFIELD,
+                ui_component_properties=UIComponentProperties(
+                    label="Max Retrieved Chunks",
+                    description=(
+                        "The maximum number of chunks to retrieve before applying any filtering or penalties. "
+                        "This sets the upper limit for how many chunks will be returned by the retrieval process."
+                    ),
+                    placeholder="Enter the maximum number of chunks here",
+                ).model_dump(exclude_unset=True, exclude_none=True),
+                is_advanced=True,
+            ),
+            db.ComponentParameterDefinition(
+                id=UUID("e3c7d2b1-5f6a-4c3e-9b7a-1c2d3e4f5a6b"),
+                component_id=rag_agent.id,
+                name="enable_date_penalty_for_chunks",
+                type=ParameterType.BOOLEAN,
+                nullable=True,
+                default="False",
+                ui_component=UIComponent.CHECKBOX,
+                ui_component_properties=UIComponentProperties(
+                    label="Apply age based penalty",
+                    description="When enabled, older content chunks will be penalized based on their age. This helps prioritize more recent content.",
+                ).model_dump(exclude_unset=True, exclude_none=True),
+                is_advanced=True,
+            ),
+            db.ComponentParameterDefinition(
+                id=UUID("b1a2c3d4-e5f6-41a2-93b7-2c1d4e5f6a7b"),
+                component_id=rag_agent.id,
+                name="chunk_age_penalty_rate",
+                type=ParameterType.FLOAT,
+                nullable=True,
+                default="0.1",
+                ui_component=UIComponent.SLIDER,
+                ui_component_properties=UIComponentProperties(
+                    min=0.0,
+                    max=1.0,
+                    step=0.01,
+                    marks=True,
+                    label="Penalty per Age",
+                    description="Determines how much to penalize older content chunks. A higher value means older chunks are penalized more.",
+                ).model_dump(exclude_unset=True, exclude_none=True),
+                is_advanced=True,
+            ),
+            db.ComponentParameterDefinition(
+                id=UUID("c4d5e6f7-a8b9-4c1d-82e3-4f5a6b7c8d9e"),
+                component_id=rag_agent.id,
+                name="default_penalty_rate",
+                type=ParameterType.FLOAT,
+                nullable=True,
+                default="0.1",
+                ui_component=UIComponent.SLIDER,
+                ui_component_properties=UIComponentProperties(
+                    min=0.0,
+                    max=1.0,
+                    step=0.01,
+                    marks=True,
+                    label="Default Penalty Rate",
+                    description="Used as a fallback penalty rate for chunks without a specific date. This allows you to decide how to deal with missing information.",
+                ).model_dump(exclude_unset=True, exclude_none=True),
+                is_advanced=True,
+            ),
+            db.ComponentParameterDefinition(
+                id=UUID("d6e7f8a9-b0c1-4d2e-93f4-5a6b7c8d9e0f"),
+                component_id=rag_agent.id,
+                name="metadata_date_key",
+                type=ParameterType.STRING,
+                nullable=True,
+                default="date",
+                ui_component=UIComponent.TEXTFIELD,
+                ui_component_properties=UIComponentProperties(
+                    label="Date field used for penalty",
+                    description=(
+                        "The metadata field(s) that contain the date information for each chunk. "
+                        "You can specify multiple date fields names as a comma-separated list (e.g., created_date,updated_date). "
+                        "The system will check each field in order and use the first valid (non-null) date it finds. "
+                        "This date is used to calculate the chunk's age when applying penalties."
+                    ),
+                    placeholder="Enter the date field here",
+                ).model_dump(exclude_unset=True, exclude_none=True),
+                is_advanced=True,
+            ),
+            db.ComponentParameterDefinition(
+                id=UUID("e0f9a8b7-c6d5-4e3f-91a2-3b4c5d6e7f8a"),
+                component_id=rag_agent.id,
+                name="max_retrieved_chunks_after_penalty",
+                type=ParameterType.INTEGER,
+                nullable=True,
+                default="10",
+                ui_component=UIComponent.TEXTFIELD,
+                ui_component_properties=UIComponentProperties(
+                    label="Max Retrieved Chunks After Penalty",
+                    description=(
+                        "The maximum number of chunks to retrieve after applying penalties. "
+                        "This sets the upper limit for how many chunks will be returned in the final result. "
+                        "Note: this value should be less than or equal to the maximum number of retrieved chunks before penalty."
+                    ),
+                ).model_dump(exclude_unset=True, exclude_none=True),
+                is_advanced=True,
+            ),
+            # Completion service config for Synthesizer at RAG level
+            *build_completion_service_config_definitions(
+                component_id=rag_agent.id,
+                params_to_seed=[
+                    ParameterLLMConfig(
+                        param_name=COMPLETION_MODEL_IN_DB,
+                        param_id=UUID("a4c6e8f0-1b2c-4d3e-9f5a-6b7c8d9e0f1a"),
+                    ),
+                    ParameterLLMConfig(
+                        param_name="api_key",
+                        param_id=UUID("b5d7f9e1-2c3d-4e5f-8a9b-7c8d9e0f1a2b"),
+                    ),
+                ],
             ),
             # Vocabulary Search
             db.ComponentParameterDefinition(

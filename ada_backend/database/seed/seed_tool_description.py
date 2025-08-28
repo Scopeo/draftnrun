@@ -58,7 +58,7 @@ def seed_tool_description(session: Session):
     )
     default_rag_tool_description = db.ToolDescription(
         id=TOOL_DESCRIPTION_UUIDS["default_rag_tool_description"],
-        **format_rag_tool_description(source="notion").model_dump(),
+        **format_rag_tool_description().model_dump(),
     )
     default_run_sql_query_tool_description = db.ToolDescription(
         id=TOOL_DESCRIPTION_UUIDS["default_run_sql_query_tool_description"],

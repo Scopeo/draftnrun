@@ -70,8 +70,7 @@ class RAG(Agent):
         content = query_text or agent_input.last_message.content
         if content is None:
             raise ValueError("No content provided for the RAG tool.")
-        formatted_filters = format_qdrant_filter(filters, FILTERING_CONDITION_WITH_METADATA_QDRANT)
-        chunks = await self._retriever.get_chunks(query_text=content, filters=formatted_filters)
+        chunks = await self._retriever.get_chunks(query_text=content, filters=filters)
 
         if self._reranker is not None:
             chunks = await self._reranker.rerank(query=content, chunks=chunks)
@@ -108,22 +107,181 @@ class RAG(Agent):
         )
 
 
-def format_rag_tool_description(source: str) -> ToolDescription:
+def format_rag_tool_description() -> ToolDescription:
     return ToolDescription(
-        name=f"{source}_RAG",
+        name="RAG",
         description=(
             f"Searches a document database to retrieve relevant information in the "
-            f"company's knowledge base {source}."
+            f"company's knowledge base."
         ),
         tool_properties={
             "query_text": {
                 "type": "string",
                 "description": "The search query for the knowledge base.",
             },
-            # TODO: Improve filter support: https://api.qdrant.tech/api-reference/search/points
+            # Qdrant filtering docs: https://qdrant.tech/documentation/concepts/filtering
             "filters": {
                 "type": "object",
-                "description": "The filters to apply to the search query.",
+                "description": (
+                    "Qdrant filter object. Use top-level 'must' (AND), 'should' (OR), and/or 'must_not' (NOT) arrays of conditions. "
+                    "Each condition targets a payload field or special selector. Supported condition forms include: \n"
+                    '- Field match (exact): {"key": "<field>", "match": {"value": <string|number|bool>}}\n'
+                    '- Match any (IN): {"key": "<field>", "match": {"any": [<values>]}}\n'
+                    '- Range/Datetime range: {"key": "<field>", "range": {"gte": v1, "lte": v2}} (dates as ISO 8601 strings)\n'
+                    '- Is null: {"is_null": {"key": "<field>"}}\n'
+                    '- Is empty: {"is_empty": {"key": "<field>"}}\n'
+                    '- Has id (restrict by point ids): {"has_id": [<id1>, <id2>]}\n'
+                    '- Has vector (named vector present): {"has_vector": "<name>"}\n'
+                    '- Nested object: {"nested": {"key": "<path>", "filter": {"must": [ ... ]}}} or use dot-path in key.\n'
+                    "Examples:\n"
+                    "1) AND with NOT and date lower bound:\n"
+                    '{\n  "must": [\n    {"key": "department", "match": {"any": ["HR", "Legal"]}},\n    {"key": "last_edited_ts", "range": {"gte": "2024-01-01"}}\n  ],\n  "must_not": [\n    {"key": "archived", "match": {"value": true}}\n  ]\n}\n'
+                    "2) OR over tags:\n"
+                    '{\n  "should": [\n    {"key": "tags", "match": {"any": ["policy", "gdpr"]}}\n  ]\n}\n'
+                    "Ensure field names match payload schema."
+                ),
+                "properties": {
+                    "must": {
+                        "type": "array",
+                        "items": {"$ref": "#/$defs/condition"},
+                    },
+                    "should": {
+                        "type": "array",
+                        "items": {"$ref": "#/$defs/condition"},
+                    },
+                    "must_not": {
+                        "type": "array",
+                        "items": {"$ref": "#/$defs/condition"},
+                    },
+                },
+                "$defs": {
+                    "scalar": {
+                        "oneOf": [
+                            {"type": "string"},
+                            {"type": "number"},
+                            {"type": "boolean"},
+                        ]
+                    },
+                    "stringOrNumber": {"oneOf": [{"type": "string"}, {"type": "number"}]},
+                    "matchValue": {
+                        "type": "object",
+                        "required": ["value"],
+                        "properties": {"value": {"$ref": "#/$defs/scalar"}},
+                        "additionalProperties": False,
+                    },
+                    "matchAny": {
+                        "type": "object",
+                        "required": ["any"],
+                        "properties": {"any": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/scalar"}}},
+                        "additionalProperties": False,
+                    },
+                    "matchCondition": {
+                        "type": "object",
+                        "required": ["key", "match"],
+                        "properties": {
+                            "key": {"type": "string"},
+                            "match": {"oneOf": [{"$ref": "#/$defs/matchValue"}, {"$ref": "#/$defs/matchAny"}]},
+                        },
+                        "additionalProperties": False,
+                    },
+                    "rangeObject": {
+                        "type": "object",
+                        "properties": {
+                            "gt": {"$ref": "#/$defs/stringOrNumber"},
+                            "gte": {"$ref": "#/$defs/stringOrNumber"},
+                            "lt": {"$ref": "#/$defs/stringOrNumber"},
+                            "lte": {"$ref": "#/$defs/stringOrNumber"},
+                        },
+                        "minProperties": 1,
+                        "additionalProperties": False,
+                    },
+                    "rangeCondition": {
+                        "type": "object",
+                        "required": ["key", "range"],
+                        "properties": {"key": {"type": "string"}, "range": {"$ref": "#/$defs/rangeObject"}},
+                        "additionalProperties": False,
+                    },
+                    "isNullCondition": {
+                        "type": "object",
+                        "required": ["is_null"],
+                        "properties": {
+                            "is_null": {
+                                "type": "object",
+                                "required": ["key"],
+                                "properties": {"key": {"type": "string"}},
+                                "additionalProperties": False,
+                            }
+                        },
+                        "additionalProperties": False,
+                    },
+                    "isEmptyCondition": {
+                        "type": "object",
+                        "required": ["is_empty"],
+                        "properties": {
+                            "is_empty": {
+                                "type": "object",
+                                "required": ["key"],
+                                "properties": {"key": {"type": "string"}},
+                                "additionalProperties": False,
+                            }
+                        },
+                        "additionalProperties": False,
+                    },
+                    "hasIdCondition": {
+                        "type": "object",
+                        "required": ["has_id"],
+                        "properties": {
+                            "has_id": {
+                                "type": "array",
+                                "minItems": 1,
+                                "items": {"oneOf": [{"type": "string"}, {"type": "integer"}]},
+                            }
+                        },
+                        "additionalProperties": False,
+                    },
+                    "hasVectorCondition": {
+                        "type": "object",
+                        "required": ["has_vector"],
+                        "properties": {"has_vector": {"type": "string"}},
+                        "additionalProperties": False,
+                    },
+                    "nestedCondition": {
+                        "type": "object",
+                        "required": ["nested"],
+                        "properties": {
+                            "nested": {
+                                "type": "object",
+                                "required": ["key", "filter"],
+                                "properties": {
+                                    "key": {"type": "string"},
+                                    "filter": {
+                                        "type": "object",
+                                        "properties": {
+                                            "must": {"type": "array", "items": {"$ref": "#/$defs/condition"}},
+                                            "should": {"type": "array", "items": {"$ref": "#/$defs/condition"}},
+                                            "must_not": {"type": "array", "items": {"$ref": "#/$defs/condition"}},
+                                        },
+                                        "additionalProperties": False,
+                                    },
+                                },
+                                "additionalProperties": False,
+                            }
+                        },
+                        "additionalProperties": False,
+                    },
+                    "condition": {
+                        "oneOf": [
+                            {"$ref": "#/$defs/matchCondition"},
+                            {"$ref": "#/$defs/rangeCondition"},
+                            {"$ref": "#/$defs/isNullCondition"},
+                            {"$ref": "#/$defs/isEmptyCondition"},
+                            {"$ref": "#/$defs/hasIdCondition"},
+                            {"$ref": "#/$defs/hasVectorCondition"},
+                            {"$ref": "#/$defs/nestedCondition"},
+                        ]
+                    },
+                },
+                "additionalProperties": False,
             },
         },
         required_tool_properties=[],
