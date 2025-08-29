@@ -54,11 +54,15 @@ def create_organization_source(
 
 @router.patch("/{organization_id}", status_code=status.HTTP_200_OK)
 def update_organization_source(
-    verified_ingestion_api_key: Annotated[None, Depends(verify_ingestion_api_key_dependency)],
+    user: Annotated[
+        SupabaseUser, Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.WRITER.value))
+    ],
     organization_id: UUID,
     source: DataSourceUpdateSchema,
     session: Session = Depends(get_db),
 ):
+    if not user.id:
+        raise HTTPException(status_code=400, detail="User ID not found")
     try:
         upsert_source_by_organization(session, organization_id, source)
         return None
