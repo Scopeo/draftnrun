@@ -17,7 +17,6 @@ from engine.storage_service.local_service import SQLLocalService
 from ingestion_script.ingest_folder_source import sync_chunks_to_qdrant
 from ada_backend.database import models as db
 from ingestion_script.utils import upload_source, build_combined_sql_filter
-from ada_backend.schemas.source_schema import SourceSecretsSchema
 from ingestion_script.client_specific_functions import (
     create_cogiterra_url,
     COGITERRA_URL_COLUMN_NAME,
@@ -222,6 +221,7 @@ async def ingestion_database(
     query_filter: Optional[str] = None,
     timestamp_filter: Optional[str] = None,
     attributes: Optional[dict] = None,
+    secret_key: Optional[str] = None,
 ) -> None:
     chunk_id_column_name = "chunk_id"
     chunk_column_name = "content"
@@ -278,5 +278,6 @@ async def ingestion_database(
             organization_id=organization_id,
         ),
         attributes=attributes,
-        source_secrets=SourceSecretsSchema(source_db_url=source_db_url),
+        secret_key=secret_key,
+        secret=source_db_url,
     )

@@ -6,7 +6,7 @@ import requests
 
 from ada_backend.schemas.ingestion_task_schema import IngestionTaskUpdate
 from ada_backend.database import models as db
-from ada_backend.schemas.source_schema import DataSourceSchema, SourceSecretsSchema
+from ada_backend.schemas.source_schema import DataSourceSchema
 from data_ingestion.utils import sanitize_filename
 from engine.llm_services.llm_service import EmbeddingService
 from engine.qdrant_service import QdrantCollectionSchema, QdrantService
@@ -98,7 +98,8 @@ async def upload_source(
     ingestion_function: callable,
     update_existing: bool = False,
     attributes: Optional[dict] = None,
-    source_secrets: Optional[SourceSecretsSchema] = None,
+    secret_key: Optional[str] = None,
+    secret: Optional[str] = None,
 ) -> None:
     check_signature(
         ingestion_function,
@@ -182,7 +183,8 @@ async def upload_source(
         qdrant_schema=qdrant_schema.to_dict(),
         embedding_model_reference=f"{embedding_service._provider}:{embedding_service._model_name}",
         attributes=attributes,
-        source_secrets=source_secrets,
+        secret_key=secret_key,
+        secret=secret,
     )
     LOGGER.info(f"Creating source {source_name} for organization {organization_id} in database")
     source_id = create_source(

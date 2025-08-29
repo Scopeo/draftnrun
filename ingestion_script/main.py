@@ -162,6 +162,7 @@ async def ingestion_main_async(
                 query_filter=source_attributes.get("query_filter"),
                 timestamp_filter=source_attributes.get("timestamp_filter"),
                 attributes=source_attributes,
+                secret_key="source_db_url",
             )
         except Exception as e:
             LOGGER.error(f"Error during database ingestion: {str(e)}")

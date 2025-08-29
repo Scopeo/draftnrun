@@ -7,9 +7,9 @@ from sqlalchemy.orm import Session
 from ada_backend.database import models as db
 
 from ada_backend.repositories.organization_repository import (
-    get_organization_source_secrets_by_source_id,
+    get_organization_secrets,
+    upsert_organization_secret,
 )
-from ada_backend.schemas.source_schema import SourceSecretsSchema
 
 LOGGER = logging.getLogger(__name__)
 
@@ -67,7 +67,8 @@ def create_source(
     qdrant_schema: Optional[dict] = None,
     embedding_model_reference: Optional[str] = None,
     attributes: Optional[dict] = None,
-    source_secrets: Optional[SourceSecretsSchema] = None,
+    secret_key: Optional[str] = None,
+    secret: Optional[str] = None,
 ) -> UUID:
     source_data_create = db.DataSource(
         name=source_name,
@@ -85,18 +86,15 @@ def create_source(
     session.commit()
     session.refresh(source_data_create)
 
-    if source_secrets:
-        source_secrets_dict = source_secrets.model_dump(exclude_none=True)
-        for key, secret in source_secrets_dict.items():
-            organization_secret = db.OrganizationSecret(
-                organization_id=organization_id,
-                data_source_id=source_data_create.id,
-                key=key,
-                secret_type=db.OrgSecretType.DATABASE_URL,
-            )
-            organization_secret.set_secret(secret)
-            session.add(organization_secret)
-        session.commit()
+    if secret_key and secret:
+        unique_key = f"{source_data_create.id}_{secret_key}"
+        upsert_organization_secret(
+            session=session,
+            organization_id=organization_id,
+            key=unique_key,
+            secret=secret,
+            secret_type=db.OrgSecretType.DATABASE_URL,
+        )
 
     return source_data_create.id
 
@@ -156,7 +154,17 @@ def get_source_attributes(
     source_id: UUID,
 ) -> dict:
     """"""
-    secrets = get_organization_source_secrets_by_source_id(session_sql_alchemy, source_id, organization_id)
+    organization_secrets = get_organization_secrets(session_sql_alchemy, organization_id)
+
+    source_secrets = [
+        secret
+        for secret in organization_secrets
+        if (
+            secret.secret_type == db.OrgSecretType.DATABASE_URL
+            and secret.key
+            and secret.key.startswith(f"{source_id}_")
+        )
+    ]
 
     data_source = (
         session_sql_alchemy.query(db.DataSource)
@@ -168,8 +176,8 @@ def get_source_attributes(
         raise ValueError(f"Data source with id {source_id} not found")
 
     attributes = data_source.attributes or {}
-    for secret in secrets:
+    for secret in source_secrets:
         if secret.key and secret.secret is not None:
-            attributes[secret.key] = secret.secret
-
+            original_key = secret.key.replace(f"{source_id}_", "", 1)
+            attributes[original_key] = secret.secret
     return attributes

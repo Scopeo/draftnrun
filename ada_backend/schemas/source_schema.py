@@ -5,15 +5,6 @@ from pydantic import BaseModel, ConfigDict
 from ada_backend.database import models as db
 
 
-# TODO: add google drive secrets
-class SourceSecretsSchema(BaseModel):
-    source_db_url: Optional[str] = None
-
-    model_config = ConfigDict(
-        from_attributes=True, json_encoders={datetime: lambda dt: dt.isoformat() if dt else None}
-    )
-
-
 class DataSourceSchema(BaseModel):
     name: str
     type: db.SourceType
@@ -23,7 +14,8 @@ class DataSourceSchema(BaseModel):
     qdrant_schema: Optional[dict] = None
     embedding_model_reference: Optional[str] = None
     attributes: Optional[dict] = None
-    source_secrets: Optional[SourceSecretsSchema] = None
+    secret_key: Optional[str] = None
+    secret: Optional[str] = None
 
     model_config = ConfigDict(
         from_attributes=True, json_encoders={datetime: lambda dt: dt.isoformat() if dt else None}
