@@ -18,12 +18,13 @@ from ingestion_script.ingest_folder_source import sync_chunks_to_qdrant
 from ada_backend.database import models as db
 from ingestion_script.utils import upload_source, build_combined_sql_filter
 from ada_backend.schemas.source_schema import SourceSecretsSchema
+from ingestion_script.client_specific_functions import (
+    create_cogiterra_url,
+    COGITERRA_URL_COLUMN_NAME,
+    COGITERRA_ORGANIZATION_ID,
+)
 
 LOGGER = logging.getLogger(__name__)
-
-
-TEMP_URL_COLUMN_NAME = "url"
-SPECIFIC_URL_BEGINNING = "https://www.actu-environnement.com/ae/news/"
 
 
 def get_db_source_definition(
@@ -33,6 +34,7 @@ def get_db_source_definition(
     timestamp_column_name: Optional[str] = None,
     url_column_name: Optional[str] = None,
     metadata_column_names: Optional[list] = None,
+    organization_id: Optional[str] = None,
 ) -> DBDefinition:
     columns = [
         DBColumn(name=PROCESSED_DATETIME_FIELD, type="DATETIME", default="CURRENT_TIMESTAMP"),
@@ -51,8 +53,8 @@ def get_db_source_definition(
         columns.extend(
             DBColumn(name=col, type="VARCHAR") for col in metadata_column_names if col not in existing_names
         )
-    if not url_column_name:
-        columns.append(DBColumn(name="url", type="VARCHAR"))
+    if organization_id == COGITERRA_ORGANIZATION_ID:
+        columns.append(DBColumn(name=COGITERRA_URL_COLUMN_NAME, type="VARCHAR"))
     return DBDefinition(
         columns=columns,
     )
@@ -73,6 +75,7 @@ def get_db_source(
     chunk_size: int = 1024,
     chunk_overlap: int = 0,
     sql_query_filter: Optional[str] = None,
+    organization_id: Optional[str] = None,
 ) -> pd.DataFrame:
     sql_local_service = SQLLocalService(engine_url=db_url)
     df = sql_local_service.get_table_df(
@@ -118,20 +121,9 @@ def get_db_source(
             LOGGER.debug(f"Metadata columns to keep: {metadata_column_names}")
             columns.extend(metadata_column_names)
 
-    # TODO: remove this function and make more general
-    if url_column_name not in df_chunks.columns:
-
-        def _build_url(row):
-            nom_fichier = row.get("nom_fichier")
-            id_news = row.get("id_news")
-            if pd.notna(nom_fichier) and pd.notna(id_news):
-                return f"{SPECIFIC_URL_BEGINNING}{nom_fichier}{id_news}.php4"
-            if pd.notna(id_news):
-                return f"{SPECIFIC_URL_BEGINNING}{id_news}.php4"
-            return None
-
-        df_chunks[TEMP_URL_COLUMN_NAME] = df_chunks.apply(_build_url, axis=1)
-        columns.append(TEMP_URL_COLUMN_NAME)
+    if organization_id == COGITERRA_ORGANIZATION_ID:
+        df_chunks[COGITERRA_URL_COLUMN_NAME] = df_chunks.apply(create_cogiterra_url, axis=1)
+        columns.append(COGITERRA_URL_COLUMN_NAME)
 
     return df_chunks[columns].copy()
 
@@ -159,6 +151,7 @@ async def upload_db_source(
     update_existing: bool = False,
     query_filter: Optional[str] = None,
     timestamp_filter: Optional[str] = None,
+    organization_id: Optional[str] = None,
 ):
     combined_filter_sql = build_combined_sql_filter(
         query_filter=query_filter,
@@ -186,6 +179,7 @@ async def upload_db_source(
         chunk_size=chunk_size,
         chunk_overlap=chunk_overlap,
         sql_query_filter=combined_filter_sql,
+        organization_id=organization_id,
     )
 
     db_service.update_table(
@@ -232,15 +226,18 @@ async def ingestion_database(
     chunk_id_column_name = "chunk_id"
     chunk_column_name = "content"
     file_id_column_name = "source_identifier"
+    metadata_column_names_qdrant = (
+        metadata_column_names + [COGITERRA_URL_COLUMN_NAME]
+        if organization_id == COGITERRA_ORGANIZATION_ID
+        else metadata_column_names
+    )
     qdrant_schema = QdrantCollectionSchema(
         chunk_id_field=chunk_id_column_name,
         content_field=chunk_column_name,
         file_id_field=file_id_column_name,
         url_id_field=url_column_name,
         last_edited_ts_field=timestamp_column_name,
-        metadata_fields_to_keep=(
-            set(metadata_column_names).add(TEMP_URL_COLUMN_NAME) if metadata_column_names else None
-        ),
+        metadata_fields_to_keep=(set(metadata_column_names_qdrant) if metadata_column_names_qdrant else None),
     )
     db_definition = get_db_source_definition(
         chunk_id_column_name=chunk_id_column_name,
@@ -249,6 +246,7 @@ async def ingestion_database(
         timestamp_column_name=timestamp_column_name,
         url_column_name=url_column_name,
         metadata_column_names=metadata_column_names,
+        organization_id=organization_id,
     )
     source_type = db.SourceType.DATABASE
     LOGGER.info("Start ingestion data from the database source...")
@@ -277,6 +275,7 @@ async def ingestion_database(
             chunk_overlap=chunk_overlap,
             query_filter=query_filter,
             timestamp_filter=timestamp_filter,
+            organization_id=organization_id,
         ),
         attributes=attributes,
         source_secrets=SourceSecretsSchema(source_db_url=source_db_url),
