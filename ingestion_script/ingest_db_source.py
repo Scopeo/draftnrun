@@ -26,6 +26,7 @@ def get_db_source_definition(
     chunk_column_name: str,
     file_id_column_name: str,
     timestamp_column_name: Optional[str] = None,
+    url_column_name: Optional[str] = None,
     url_pattern: Optional[str] = None,
     metadata_column_names: Optional[list] = None,
 ) -> DBDefinition:
@@ -44,7 +45,7 @@ def get_db_source_definition(
             DBColumn(name=col, type="VARCHAR") for col in metadata_column_names if col not in existing_names
         )
     if url_pattern:
-        columns.append(DBColumn(name="url", type="VARCHAR"))
+        columns.append(DBColumn(name=url_column_name, type="VARCHAR"))
 
     return DBDefinition(
         columns=columns,
@@ -229,6 +230,7 @@ async def ingestion_database(
         chunk_column_name=chunk_column_name,
         file_id_column_name=file_id_column_name,
         timestamp_column_name=timestamp_column_name,
+        url_column_name=url_column_name,
         url_pattern=url_pattern,
         metadata_column_names=metadata_column_names,
     )
