@@ -347,7 +347,6 @@ class SourceAdmin(EnhancedModelView, model=db.DataSource):
         "created_at",
         "updated_at",
         "last_ingestion_time",
-        "attributes",
     ]
 
     column_searchable_list = ["organization_id", "type"]
@@ -362,6 +361,17 @@ class SourceAdmin(EnhancedModelView, model=db.DataSource):
         "qdrant_collection_name",
         "qdrant_schema",
         "embedding_model_reference",
+    ]
+
+
+class SourceAttributesAdmin(EnhancedModelView, model=db.SourceAttributes):
+    category = AdminCategory.SOURCES
+    icon = "fas fa-database"
+    column_list = [
+        "id",
+        "source_id",
+        "created_at",
+        "updated_at",
     ]
 
 
@@ -426,5 +436,6 @@ def setup_admin(app: FastAPI):
     admin.add_view(ToolDescriptionAdmin)
     admin.add_view(SourceAdmin)
     admin.add_view(IngestionTaskAdmin)
+    admin.add_view(SourceAttributesAdmin)
 
     return admin

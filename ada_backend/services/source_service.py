@@ -90,8 +90,6 @@ def create_source_by_organization(
             source_data.qdrant_schema,
             source_data.embedding_model_reference,
             source_data.attributes,
-            source_data.secret_key,
-            source_data.secret,
         )
 
         LOGGER.info(f"Source {source_data.name} created for organization {organization_id}")

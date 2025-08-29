@@ -7,9 +7,9 @@ from sqlalchemy.orm import Session
 from ada_backend.database import models as db
 
 from ada_backend.repositories.organization_repository import (
-    get_organization_secrets,
     upsert_organization_secret,
 )
+from ada_backend.schemas.ingestion_task_schema import SourceAttributes
 
 LOGGER = logging.getLogger(__name__)
 
@@ -66,9 +66,7 @@ def create_source(
     qdrant_collection_name: Optional[str] = None,
     qdrant_schema: Optional[dict] = None,
     embedding_model_reference: Optional[str] = None,
-    attributes: Optional[dict] = None,
-    secret_key: Optional[str] = None,
-    secret: Optional[str] = None,
+    attributes: Optional[SourceAttributes] = None,
 ) -> UUID:
     source_data_create = db.DataSource(
         name=source_name,
@@ -79,23 +77,43 @@ def create_source(
         qdrant_collection_name=qdrant_collection_name,
         qdrant_schema=qdrant_schema,
         embedding_model_reference=embedding_model_reference,
-        attributes=attributes,
     )
 
     session.add(source_data_create)
     session.commit()
     session.refresh(source_data_create)
 
-    if secret_key and secret:
-        unique_key = f"{source_data_create.id}_{secret_key}"
-        upsert_organization_secret(
+    if attributes and attributes.source_db_url:
+        org_secret = upsert_organization_secret(
             session=session,
             organization_id=organization_id,
-            key=unique_key,
-            secret=secret,
-            secret_type=db.OrgSecretType.DATABASE_URL,
+            key=f"{source_data_create.id}_db_url",
+            secret=attributes.source_db_url,
         )
 
+    source_attributes = db.SourceAttributes(
+        source_id=source_data_create.id,
+        access_token=attributes.access_token,
+        path=attributes.path,
+        list_of_files_from_local_folder=attributes.list_of_files_from_local_folder,
+        folder_id=attributes.folder_id,
+        source_db_url=org_secret.id,
+        source_table_name=attributes.source_table_name,
+        id_column_name=attributes.id_column_name,
+        text_column_names=attributes.text_column_names,
+        source_schema_name=attributes.source_schema_name,
+        chunk_size=attributes.chunk_size,
+        chunk_overlap=attributes.chunk_overlap,
+        metadata_column_names=attributes.metadata_column_names,
+        timestamp_column_name=attributes.timestamp_column_name,
+        url_column_name=attributes.url_column_name,
+        update_existing=attributes.update_existing,
+        query_filter=attributes.query_filter,
+        timestamp_filter=attributes.timestamp_filter,
+    )
+
+    session.add(source_attributes)
+    session.commit()
     return source_data_create.id
 
 
@@ -152,32 +170,42 @@ def get_source_attributes(
     session_sql_alchemy: Session,
     organization_id: UUID,
     source_id: UUID,
-) -> dict:
-    """"""
-    organization_secrets = get_organization_secrets(session_sql_alchemy, organization_id)
+) -> dict():
+    """Get source attributes including decrypted database URL from the SourceAttributes table."""
 
-    source_secrets = [
-        secret
-        for secret in organization_secrets
-        if (
-            secret.secret_type == db.OrgSecretType.DATABASE_URL
-            and secret.key
-            and secret.key.startswith(f"{source_id}_")
-        )
-    ]
-
-    data_source = (
-        session_sql_alchemy.query(db.DataSource)
-        .filter(db.DataSource.organization_id == organization_id, db.DataSource.id == source_id)
-        .first()
+    source_attributes = (
+        session_sql_alchemy.query(db.SourceAttributes).filter(db.SourceAttributes.source_id == source_id).first()
     )
 
-    if not data_source:
-        raise ValueError(f"Data source with id {source_id} not found")
+    attributes = SourceAttributes(
+        access_token=source_attributes.access_token,
+        path=source_attributes.path,
+        list_of_files_from_local_folder=source_attributes.list_of_files_from_local_folder,
+        folder_id=source_attributes.folder_id,
+        source_table_name=source_attributes.source_table_name,
+        id_column_name=source_attributes.id_column_name,
+        text_column_names=source_attributes.text_column_names,
+        source_schema_name=source_attributes.source_schema_name,
+        chunk_size=source_attributes.chunk_size,
+        chunk_overlap=source_attributes.chunk_overlap,
+        metadata_column_names=source_attributes.metadata_column_names,
+        timestamp_column_name=source_attributes.timestamp_column_name,
+        url_column_name=source_attributes.url_column_name,
+        update_existing=source_attributes.update_existing,
+        query_filter=source_attributes.query_filter,
+        timestamp_filter=source_attributes.timestamp_filter,
+    )
 
-    attributes = data_source.attributes or {}
-    for secret in source_secrets:
-        if secret.key and secret.secret is not None:
-            original_key = secret.key.replace(f"{source_id}_", "", 1)
-            attributes[original_key] = secret.secret
-    return attributes
+    if source_attributes.source_db_url:
+        db_url_secret = (
+            session_sql_alchemy.query(db.OrganizationSecret)
+            .filter(
+                db.OrganizationSecret.id == source_attributes.source_db_url,
+                db.OrganizationSecret.organization_id == organization_id,
+            )
+            .first()
+        )
+        if db_url_secret:
+            attributes.source_db_url = db_url_secret.get_secret()
+
+    return attributes.model_dump()

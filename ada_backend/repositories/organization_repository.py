@@ -72,7 +72,6 @@ def upsert_organization_secret(
     organization_id: UUID,
     key: str,
     secret: str,
-    secret_type: Optional[db.OrgSecretType] = None,
 ) -> db.OrganizationSecret:
     """
     Inserts a new organization secret into the database.
@@ -91,13 +90,12 @@ def upsert_organization_secret(
         .filter(
             db.OrganizationSecret.organization_id == organization_id,
             db.OrganizationSecret.key == key,
-            db.OrganizationSecret.secret_type == secret_type,
         )
         .first()
     )
     if not organization_secret:
         LOGGER.info(f"Creating new secret with key {key} for organization {organization_id}")
-        organization_secret = db.OrganizationSecret(organization_id=organization_id, key=key, secret_type=secret_type)
+        organization_secret = db.OrganizationSecret(organization_id=organization_id, key=key)
     else:
         LOGGER.info(f"Updating existing secret with key {key} for organization {organization_id}")
     organization_secret.set_secret(secret)
