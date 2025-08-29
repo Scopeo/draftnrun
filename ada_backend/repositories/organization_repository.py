@@ -18,7 +18,6 @@ class OrganizationSecretDTO:
     key: str
     secret: str
     secret_type: db.OrgSecretType
-    data_source_id: Optional[UUID] = None
 
 
 def get_organization_secrets(
