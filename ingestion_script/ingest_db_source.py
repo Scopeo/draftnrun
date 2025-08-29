@@ -17,6 +17,7 @@ from engine.storage_service.local_service import SQLLocalService
 from ingestion_script.ingest_folder_source import sync_chunks_to_qdrant
 from ada_backend.database import models as db
 from ingestion_script.utils import upload_source, build_combined_sql_filter
+from ada_backend.schemas.ingestion_task_schema import SourceAttributes
 
 LOGGER = logging.getLogger(__name__)
 
@@ -27,6 +28,7 @@ def get_db_source_definition(
     file_id_column_name: str,
     timestamp_column_name: Optional[str] = None,
     url_column_name: Optional[str] = None,
+    url_pattern: Optional[str] = None,
     metadata_column_names: Optional[list] = None,
 ) -> DBDefinition:
     columns = [
@@ -38,14 +40,14 @@ def get_db_source_definition(
     if timestamp_column_name:
         columns.append(DBColumn(name=timestamp_column_name, type="VARCHAR"))
 
-    if url_column_name:
-        columns.append(DBColumn(name=url_column_name, type="VARCHAR"))
-
     if metadata_column_names:
         existing_names = {c.name for c in columns}
         columns.extend(
             DBColumn(name=col, type="VARCHAR") for col in metadata_column_names if col not in existing_names
         )
+    if url_pattern:
+        columns.append(DBColumn(name=url_column_name, type="VARCHAR"))
+
     return DBDefinition(
         columns=columns,
     )
@@ -63,6 +65,7 @@ def get_db_source(
     metadata_column_names: Optional[list[str]] = None,
     timestamp_column_name: Optional[str] = None,
     url_column_name: Optional[str] = None,
+    url_pattern: Optional[str] = None,
     chunk_size: int = 1024,
     chunk_overlap: int = 0,
     sql_query_filter: Optional[str] = None,
@@ -84,8 +87,6 @@ def get_db_source(
         raise ValueError(f"Metadata columns {metadata_column_names} not found in the columns: {df.columns.tolist()}")
     if timestamp_column_name and timestamp_column_name not in df.columns:
         raise ValueError(f"Timestamp column '{timestamp_column_name}' not found in the columns: {df.columns.tolist()}")
-    if url_column_name and url_column_name not in df.columns:
-        raise ValueError(f"URL column '{url_column_name}' not found in the columns: {df.columns.tolist()}")
 
     df["text"] = df[text_column_names].apply(lambda x: " ".join(x.astype(str)), axis=1)
     LOGGER.info(f"Retrieved {len(df)} rows from the source table '{table_name}'.")
@@ -103,13 +104,16 @@ def get_db_source(
     LOGGER.debug(f"Columns to keep: {columns}")
     if timestamp_column_name:
         columns.append(timestamp_column_name)
-    if url_column_name:
-        columns.append(url_column_name)
     if metadata_column_names:
         metadata_column_names = [col for col in metadata_column_names if col not in columns]
         if metadata_column_names:
             LOGGER.debug(f"Metadata columns to keep: {metadata_column_names}")
             columns.extend(metadata_column_names)
+    if url_pattern:
+        columns.append(url_column_name)
+        df_chunks[url_column_name] = df_chunks.apply(
+            lambda row: url_pattern.format_map({k: ("" if pd.isna(v) else v) for k, v in row.items()}), axis=1
+        )
 
     return df_chunks[columns].copy()
 
@@ -132,6 +136,7 @@ async def upload_db_source(
     metadata_column_names: Optional[list[str]] = None,
     timestamp_column_name: Optional[str] = None,
     url_column_name: Optional[str] = None,
+    url_pattern: Optional[str] = None,
     chunk_size: int = 1024,
     chunk_overlap: int = 0,
     update_existing: bool = False,
@@ -161,6 +166,7 @@ async def upload_db_source(
         metadata_column_names=metadata_column_names,
         timestamp_column_name=timestamp_column_name,
         url_column_name=url_column_name,
+        url_pattern=url_pattern,
         chunk_size=chunk_size,
         chunk_overlap=chunk_overlap,
         sql_query_filter=combined_filter_sql,
@@ -199,21 +205,23 @@ async def ingestion_database(
     source_schema_name: Optional[str] = None,
     metadata_column_names: Optional[list[str]] = None,
     timestamp_column_name: Optional[str] = None,
-    url_column_name: Optional[str] = None,
+    url_pattern: Optional[str] = None,
     chunk_size: int = 1024,
     chunk_overlap: int = 0,
     update_existing: bool = False,
     query_filter: Optional[str] = None,
     timestamp_filter: Optional[str] = None,
+    source_attributes: Optional[SourceAttributes] = None,
 ) -> None:
     chunk_id_column_name = "chunk_id"
     chunk_column_name = "content"
     file_id_column_name = "source_identifier"
+    url_column_name = "url"
     qdrant_schema = QdrantCollectionSchema(
         chunk_id_field=chunk_id_column_name,
         content_field=chunk_column_name,
         file_id_field=file_id_column_name,
-        url_id_field=url_column_name,
+        url_id_field=url_column_name if url_pattern else None,
         last_edited_ts_field=timestamp_column_name,
         metadata_fields_to_keep=(set(metadata_column_names) if metadata_column_names else None),
     )
@@ -223,6 +231,7 @@ async def ingestion_database(
         file_id_column_name=file_id_column_name,
         timestamp_column_name=timestamp_column_name,
         url_column_name=url_column_name,
+        url_pattern=url_pattern,
         metadata_column_names=metadata_column_names,
     )
     source_type = db.SourceType.DATABASE
@@ -248,9 +257,11 @@ async def ingestion_database(
             metadata_column_names=metadata_column_names,
             timestamp_column_name=timestamp_column_name,
             url_column_name=url_column_name,
+            url_pattern=url_pattern,
             chunk_size=chunk_size,
             chunk_overlap=chunk_overlap,
             query_filter=query_filter,
             timestamp_filter=timestamp_filter,
         ),
+        attributes=source_attributes,
     )
