@@ -6,6 +6,11 @@ from sqlalchemy.orm import Session
 
 from ada_backend.database import models as db
 
+from ada_backend.repositories.organization_repository import (
+    get_organization_source_secrets_by_source_id,
+)
+from ada_backend.schemas.source_schema import SourceSecretsSchema
+
 LOGGER = logging.getLogger(__name__)
 
 
@@ -62,6 +67,7 @@ def create_source(
     qdrant_schema: Optional[dict] = None,
     embedding_model_reference: Optional[str] = None,
     attributes: Optional[dict] = None,
+    source_secrets: Optional[SourceSecretsSchema] = None,
 ) -> UUID:
     source_data_create = db.DataSource(
         name=source_name,
@@ -74,8 +80,24 @@ def create_source(
         embedding_model_reference=embedding_model_reference,
         attributes=attributes,
     )
+
     session.add(source_data_create)
     session.commit()
+    session.refresh(source_data_create)
+
+    if source_secrets:
+        source_secrets_dict = source_secrets.model_dump(exclude_none=True)
+        for key, secret in source_secrets_dict.items():
+            organization_secret = db.OrganizationSecret(
+                organization_id=organization_id,
+                data_source_id=source_data_create.id,
+                key=key,
+                secret_type=db.OrgSecretType.DATABASE_URL,
+            )
+            organization_secret.set_secret(secret)
+            session.add(organization_secret)
+        session.commit()
+
     return source_data_create.id
 
 
@@ -134,9 +156,24 @@ def get_source_attributes(
     source_id: UUID,
 ) -> dict:
     """"""
-    return (
+    secrets = get_organization_source_secrets_by_source_id(session_sql_alchemy, source_id, organization_id)
+    database_url = None
+    for secret in secrets:
+        if secret.key == "source_db_url":
+            database_url = secret.secret  # DTO already has decrypted secret
+            break
+
+    data_source = (
         session_sql_alchemy.query(db.DataSource)
         .filter(db.DataSource.organization_id == organization_id, db.DataSource.id == source_id)
         .first()
-        .attributes
     )
+
+    if not data_source:
+        raise ValueError(f"Data source with id {source_id} not found")
+
+    attributes = data_source.attributes or {}
+    if database_url:
+        attributes["source_db_url"] = database_url
+
+    return attributes

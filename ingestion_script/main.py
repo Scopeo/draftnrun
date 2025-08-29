@@ -141,11 +141,14 @@ async def ingestion_main_async(
         from ingestion_script.ingest_db_source import ingestion_database
 
         try:
+            # Extract source_db_url before passing attributes
+            source_db_url = source_attributes.pop("source_db_url")
+
             await ingestion_database(
                 source_name=source_name,
                 organization_id=organization_id,
                 task_id=task_id,
-                source_db_url=source_attributes["source_db_url"],
+                source_db_url=source_db_url,
                 source_table_name=source_attributes["source_table_name"],
                 id_column_name=source_attributes["id_column_name"],
                 text_column_names=source_attributes["text_column_names"],

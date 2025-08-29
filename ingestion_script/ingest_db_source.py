@@ -17,6 +17,7 @@ from engine.storage_service.local_service import SQLLocalService
 from ingestion_script.ingest_folder_source import sync_chunks_to_qdrant
 from ada_backend.database import models as db
 from ingestion_script.utils import upload_source, build_combined_sql_filter
+from ada_backend.schemas.source_schema import SourceSecretsSchema
 
 LOGGER = logging.getLogger(__name__)
 
@@ -255,4 +256,5 @@ async def ingestion_database(
             timestamp_filter=timestamp_filter,
         ),
         attributes=attributes,
+        source_secrets=SourceSecretsSchema(source_db_url=source_db_url),
     )

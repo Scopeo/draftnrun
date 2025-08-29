@@ -60,6 +60,7 @@ class ParameterType(StrEnum):
 class OrgSecretType(StrEnum):
     LLM_API_KEY = "llm_api_key"
     PASSWORD = "password"
+    DATABASE_URL = "database_url"
 
 
 class NodeType(StrEnum):
@@ -700,12 +701,16 @@ class OrganizationSecret(Base):
     encrypted_secret = mapped_column(String, nullable=False)
     created_at = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    data_source_id = mapped_column(
+        UUID(as_uuid=True), ForeignKey("data_sources.id", ondelete="CASCADE"), nullable=True
+    )
 
     basic_parameters = relationship(
         "BasicParameter",
         back_populates="organization_secret",
         cascade="all, delete-orphan",
     )
+    data_source = relationship("DataSource", back_populates="organization_secrets")
 
     def __str__(self):
         return f"OrganizationSecret(organization_id={self.organization_id}, key={self.key})"
@@ -786,6 +791,7 @@ class DataSource(Base):
     attributes = mapped_column(JSON, nullable=True)
 
     ingestion_tasks = relationship("IngestionTask", back_populates="source")
+    organization_secrets = relationship("OrganizationSecret", back_populates="data_source")
 
     def __str__(self):
         return f"DataSource({self.name})"

@@ -18,6 +18,7 @@ class OrganizationSecretDTO:
     key: str
     secret: str
     secret_type: db.OrgSecretType
+    data_source_id: Optional[UUID] = None
 
 
 def get_organization_secrets(
@@ -125,3 +126,29 @@ def delete_organization_secret(
         session.delete(organization_secret)
         session.commit()
     return organization_secret
+
+
+def get_organization_source_secrets_by_source_id(
+    session: Session,
+    source_id: UUID,
+    organization_id: UUID,
+) -> list[db.OrganizationSecret]:
+    """"""
+    organization_secrets = (
+        session.query(db.OrganizationSecret)
+        .filter(
+            db.OrganizationSecret.data_source_id == source_id, db.OrganizationSecret.organization_id == organization_id
+        )
+        .all()
+    )
+    return [
+        OrganizationSecretDTO(
+            id=secret.id,
+            organization_id=organization_id,
+            key=secret.key,
+            secret=secret.get_secret(),
+            secret_type=secret.secret_type,
+            data_source_id=source_id,
+        )
+        for secret in organization_secrets
+    ]
