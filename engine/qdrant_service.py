@@ -538,9 +538,6 @@ class QdrantService:
             collection_name, index_name=schema.chunk_id_field, field_schema=FieldSchema.KEYWORD
         )
         if schema.metadata_fields_to_keep:
-            # TODO: remove url when we have a general solution
-            if "url" not in schema.metadata_fields_to_keep and "url" in list_chunks[0]:
-                schema.metadata_fields_to_keep.append("url")
             for metadata_field in schema.metadata_fields_to_keep:
                 await self.create_index_if_needed_async(
                     collection_name, index_name=metadata_field, field_schema=FieldSchema.KEYWORD
@@ -1067,7 +1064,6 @@ class QdrantService:
     ) -> bool:
         old_df = await self.get_collection_data_async(collection_name, query_filter_qdrant)
         if old_df.empty:
-            df = create_url_column(df, "url", "nom_fichier", "id_news")
             await self.add_chunks_async(df.to_dict(orient="records"), collection_name)
             LOGGER.info(f"Qdrant collection is empty. Added {len(df)} chunks to Qdrant")
             return True
@@ -1103,7 +1099,6 @@ class QdrantService:
             LOGGER.info(f"Deleted {len(ids_to_delete)} chunks from Qdrant")
         if len(ids_to_upsert) > 0:
             chunks_to_upsert = df[df[self.default_schema.chunk_id_field].isin(ids_to_upsert)]
-            chunks_to_upsert = create_url_column(chunks_to_upsert, "url", "nom_fichier", "id_news")
             list_payloads = chunks_to_upsert.to_dict(orient="records")
             await self.add_chunks_async(list_payloads, collection_name)
             LOGGER.info(f"Upserted {len(ids_to_upsert)} chunks to Qdrant")
@@ -1123,27 +1118,3 @@ class QdrantService:
         else:
             LOGGER.info(f"Sync successful : number of points in Qdrant is {n_points}")
             return True
-
-
-# TODO: remove this function and make more general
-def create_url_column(
-    df: pd.DataFrame, url_column_name: str, nom_fichier_column_name: str, id_news_column_name: str
-) -> pd.DataFrame:
-    if url_column_name not in df.columns:
-        has_nom_fichier = nom_fichier_column_name in df.columns and not df[nom_fichier_column_name].isna().all()
-        has_id_news = id_news_column_name in df.columns and not df[id_news_column_name].isna().all()
-        if has_nom_fichier and has_id_news:
-            df[url_column_name] = df.apply(
-                lambda row: (
-                    f"https://www.actu-environnement.com/ae/news/"
-                    f"{row[nom_fichier_column_name]}{row[id_news_column_name]}.php4"
-                ),
-                axis=1,
-            )
-        elif has_id_news:
-            df[url_column_name] = df.apply(
-                lambda row: (f"https://www.actu-environnement.com/ae/news/{row[id_news_column_name]}.php4"),
-                axis=1,
-            )
-
-    return df

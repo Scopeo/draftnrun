@@ -22,6 +22,10 @@ from ada_backend.schemas.source_schema import SourceSecretsSchema
 LOGGER = logging.getLogger(__name__)
 
 
+TEMP_URL_COLUMN_NAME = "url"
+SPECIFIC_URL_BEGINNING = "https://www.actu-environnement.com/ae/news/"
+
+
 def get_db_source_definition(
     chunk_id_column_name: str,
     chunk_column_name: str,
@@ -47,6 +51,8 @@ def get_db_source_definition(
         columns.extend(
             DBColumn(name=col, type="VARCHAR") for col in metadata_column_names if col not in existing_names
         )
+    if not url_column_name:
+        columns.append(DBColumn(name="url", type="VARCHAR"))
     return DBDefinition(
         columns=columns,
     )
@@ -111,6 +117,21 @@ def get_db_source(
         if metadata_column_names:
             LOGGER.debug(f"Metadata columns to keep: {metadata_column_names}")
             columns.extend(metadata_column_names)
+
+    # TODO: remove this function and make more general
+    if url_column_name not in df_chunks.columns:
+
+        def _build_url(row):
+            nom_fichier = row.get("nom_fichier")
+            id_news = row.get("id_news")
+            if pd.notna(nom_fichier) and pd.notna(id_news):
+                return f"{SPECIFIC_URL_BEGINNING}{nom_fichier}{id_news}.php4"
+            if pd.notna(id_news):
+                return f"{SPECIFIC_URL_BEGINNING}{id_news}.php4"
+            return None
+
+        df_chunks[TEMP_URL_COLUMN_NAME] = df_chunks.apply(_build_url, axis=1)
+        columns.append(TEMP_URL_COLUMN_NAME)
 
     return df_chunks[columns].copy()
 
@@ -217,7 +238,9 @@ async def ingestion_database(
         file_id_field=file_id_column_name,
         url_id_field=url_column_name,
         last_edited_ts_field=timestamp_column_name,
-        metadata_fields_to_keep=(set(metadata_column_names) if metadata_column_names else None),
+        metadata_fields_to_keep=(
+            set(metadata_column_names).add(TEMP_URL_COLUMN_NAME) if metadata_column_names else None
+        ),
     )
     db_definition = get_db_source_definition(
         chunk_id_column_name=chunk_id_column_name,

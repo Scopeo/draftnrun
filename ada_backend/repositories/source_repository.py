@@ -157,11 +157,6 @@ def get_source_attributes(
 ) -> dict:
     """"""
     secrets = get_organization_source_secrets_by_source_id(session_sql_alchemy, source_id, organization_id)
-    database_url = None
-    for secret in secrets:
-        if secret.key == "source_db_url":
-            database_url = secret.secret  # DTO already has decrypted secret
-            break
 
     data_source = (
         session_sql_alchemy.query(db.DataSource)
@@ -173,7 +168,8 @@ def get_source_attributes(
         raise ValueError(f"Data source with id {source_id} not found")
 
     attributes = data_source.attributes or {}
-    if database_url:
-        attributes["source_db_url"] = database_url
+    for secret in secrets:
+        if secret.key and secret.secret is not None:
+            attributes[secret.key] = secret.secret
 
     return attributes
