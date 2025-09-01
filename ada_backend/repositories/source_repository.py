@@ -91,29 +91,29 @@ def create_source(
             secret=attributes.source_db_url,
         )
 
-    source_attributes = db.SourceAttributes(
-        source_id=source_data_create.id,
-        access_token=attributes.access_token,
-        path=attributes.path,
-        list_of_files_from_local_folder=attributes.list_of_files_from_local_folder,
-        folder_id=attributes.folder_id,
-        source_db_url=org_secret.id,
-        source_table_name=attributes.source_table_name,
-        id_column_name=attributes.id_column_name,
-        text_column_names=attributes.text_column_names,
-        source_schema_name=attributes.source_schema_name,
-        chunk_size=attributes.chunk_size,
-        chunk_overlap=attributes.chunk_overlap,
-        metadata_column_names=attributes.metadata_column_names,
-        timestamp_column_name=attributes.timestamp_column_name,
-        url_column_name=attributes.url_column_name,
-        update_existing=attributes.update_existing,
-        query_filter=attributes.query_filter,
-        timestamp_filter=attributes.timestamp_filter,
-    )
+        source_attributes = db.SourceAttributes(
+            source_id=source_data_create.id,
+            access_token=attributes.access_token,
+            path=attributes.path,
+            list_of_files_from_local_folder=attributes.list_of_files_from_local_folder,
+            folder_id=attributes.folder_id,
+            source_db_url=org_secret.id,
+            source_table_name=attributes.source_table_name,
+            id_column_name=attributes.id_column_name,
+            text_column_names=attributes.text_column_names,
+            source_schema_name=attributes.source_schema_name,
+            chunk_size=attributes.chunk_size,
+            chunk_overlap=attributes.chunk_overlap,
+            metadata_column_names=attributes.metadata_column_names,
+            timestamp_column_name=attributes.timestamp_column_name,
+            url_column_name=attributes.url_column_name,
+            update_existing=attributes.update_existing,
+            query_filter=attributes.query_filter,
+            timestamp_filter=attributes.timestamp_filter,
+        )
 
-    session.add(source_attributes)
-    session.commit()
+        session.add(source_attributes)
+        session.commit()
     return source_data_create.id
 
 
