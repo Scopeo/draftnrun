@@ -8,7 +8,6 @@ from ada_backend.database.component_definition_seeding import (
     upsert_components,
     upsert_components_parameter_definitions,
 )
-from ada_backend.database.seed.seed_tool_description import TOOL_DESCRIPTION_UUIDS
 from ada_backend.database.seed.utils import COMPONENT_UUIDS
 
 
@@ -20,9 +19,8 @@ def seed_chunk_processor_components(session: Session):
         name="ChunkProcessor",
         description="Process data in chunks using a project's graph workflow",
         is_agent=True,
-        function_callable=True,
+        function_callable=False,
         release_stage=db.ReleaseStage.PUBLIC,
-        default_tool_description_id=TOOL_DESCRIPTION_UUIDS["default_chunk_processor_tool_description"],
     )
 
     upsert_components(

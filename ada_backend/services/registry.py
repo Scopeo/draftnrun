@@ -323,7 +323,7 @@ def create_factory_registry() -> FactoryRegistry:
     )
     registry.register(
         name=SupportedEntityType.CHUNK_PROCESSOR,
-        factory=AgentFactory(
+        factory=NonToolCallableBlockFactory(
             entity_class=ChunkProcessor,
             parameter_processors=[
                 build_project_reference_processor(),
