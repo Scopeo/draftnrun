@@ -34,6 +34,7 @@ from engine.storage_service.snowflake_service.snowflake_service import Snowflake
 from ada_backend.services.entity_factory import (
     EntityFactory,
     AgentFactory,
+    NonToolCallableBlockFactory,
     detect_and_convert_dataclasses,
     build_trace_manager_processor,
     build_completion_service_processor,
@@ -311,7 +312,7 @@ def create_factory_registry() -> FactoryRegistry:
     )
     registry.register(
         name=SupportedEntityType.PROJECT_REFERENCE,
-        factory=AgentFactory(
+        factory=NonToolCallableBlockFactory(
             entity_class=GraphRunnerBlock,
             parameter_processors=[
                 build_project_reference_processor(),

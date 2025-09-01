@@ -156,6 +156,31 @@ class AgentFactory(EntityFactory):
         return args, kwargs
 
 
+class NonToolCallableBlockFactory(EntityFactory):
+    """
+    Factory for agent-like blocks that are not meant to be function-callable.
+
+    Differences from AgentFactory:
+    - Does NOT enforce the presence/type of a ToolDescription in params.
+    - Still injects a trace manager when the target constructor accepts it.
+    """
+
+    def __init__(
+        self,
+        entity_class: Type[Any],
+        parameter_processors: Optional[list[ParameterProcessor]] = None,
+        constructor_method: str = "__init__",
+    ):
+        processors = parameter_processors or []
+        processors.append(build_trace_manager_processor())
+
+        super().__init__(
+            entity_class=entity_class,
+            parameter_processors=processors,
+            constructor_method=constructor_method,
+        )
+
+
 def build_dataclass_processor(dataclass_type: Type[Any], param_name: str) -> ParameterProcessor:
     """
     Creates a processor for converting a specific parameter to a specific dataclass type.
