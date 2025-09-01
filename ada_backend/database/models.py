@@ -709,7 +709,7 @@ class OrganizationSecret(Base):
     source_attributes = relationship(
         "SourceAttributes",
         back_populates="source_db_url_secret",
-        cascade="all, delete-orphan",
+        passive_deletes=True,
     )
 
     def __str__(self):

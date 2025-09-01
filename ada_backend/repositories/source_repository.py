@@ -3,7 +3,7 @@ from typing import Optional
 import logging
 
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import func, and_
 
 from ada_backend.database import models as db
 
@@ -254,9 +254,23 @@ def get_source_attributes(
 ) -> SourceAttributes:
     """Get source attributes including decrypted database URL from the SourceAttributes table."""
 
-    source_attributes = (
-        session_sql_alchemy.query(db.SourceAttributes).filter(db.SourceAttributes.source_id == source_id).first()
+    result = (
+        session_sql_alchemy.query(db.SourceAttributes, db.OrganizationSecret)
+        .outerjoin(
+            db.OrganizationSecret,
+            and_(
+                db.SourceAttributes.source_db_url == db.OrganizationSecret.id,
+                db.OrganizationSecret.organization_id == organization_id,
+            ),
+        )
+        .filter(db.SourceAttributes.source_id == source_id)
+        .first()
     )
+
+    if not result:
+        raise ValueError(f"Source attributes not found for source_id={source_id}")
+
+    source_attributes, org_secret = result
 
     attributes = SourceAttributes(
         access_token=source_attributes.access_token,
@@ -277,16 +291,7 @@ def get_source_attributes(
         timestamp_filter=source_attributes.timestamp_filter,
     )
 
-    if source_attributes.source_db_url:
-        db_url_secret = (
-            session_sql_alchemy.query(db.OrganizationSecret)
-            .filter(
-                db.OrganizationSecret.id == source_attributes.source_db_url,
-                db.OrganizationSecret.organization_id == organization_id,
-            )
-            .first()
-        )
-        if db_url_secret:
-            attributes.source_db_url = db_url_secret.get_secret()
+    if org_secret:
+        attributes.source_db_url = org_secret.get_secret()
 
     return attributes
