@@ -16,7 +16,6 @@ from ada_backend.services.source_service import (
     create_source_by_organization,
     upsert_source_by_organization,
     delete_source_service,
-    get_source_attributes_by_org_id,
 )
 
 router = APIRouter(prefix="/sources", tags=["Sources"])
@@ -52,20 +51,16 @@ def create_organization_source(
         raise HTTPException(status_code=500, detail="Internal Server Error") from e
 
 
-@router.patch("/{organization_id}", status_code=status.HTTP_200_OK)
+@router.patch("/{organization_id}/{source_id}", response_model=DataSourceUpdateSchema, status_code=status.HTTP_200_OK)
 def update_organization_source(
-    user: Annotated[
-        SupabaseUser, Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.WRITER.value))
-    ],
+    verified_ingestion_api_key: Annotated[None, Depends(verify_ingestion_api_key_dependency)],
     organization_id: UUID,
-    source: DataSourceUpdateSchema,
+    source_id: UUID,
     session: Session = Depends(get_db),
 ):
-    if not user.id:
-        raise HTTPException(status_code=400, detail="User ID not found")
     try:
-        upsert_source_by_organization(session, organization_id, source)
-        return None
+        updated_source = upsert_source_by_organization(session, organization_id, source_id)
+        return updated_source
     except Exception as e:
         raise HTTPException(status_code=500, detail="Internal Server Error") from e
 
@@ -86,12 +81,3 @@ def delete_organization_source(
         return None
     except Exception as e:
         raise HTTPException(status_code=500, detail="Internal Server Error") from e
-
-
-@router.get("/{organization_id}/{source_id}/attributes", response_model=dict)
-def get_source_attributes(
-    organization_id: UUID,
-    source_id: UUID,
-    session: Session = Depends(get_db),
-) -> dict:
-    return get_source_attributes_by_org_id(session, organization_id, source_id)

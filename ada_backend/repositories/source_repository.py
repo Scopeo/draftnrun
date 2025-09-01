@@ -3,6 +3,7 @@ from typing import Optional
 import logging
 
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 
 from ada_backend.database import models as db
 
@@ -128,7 +129,7 @@ def upsert_source(
     qdrant_collection_name: Optional[str] = None,
     qdrant_schema: Optional[dict] = None,
     embedding_model_reference: Optional[str] = None,
-    attributes: Optional[dict] = None,
+    attributes: Optional[SourceAttributes] = None,
 ) -> None:
     """"""
     existing_source = (
@@ -150,7 +151,87 @@ def upsert_source(
         existing_source.database_table_name = database_table_name
         existing_source.qdrant_collection_name = qdrant_collection_name
         existing_source.qdrant_schema = qdrant_schema
-        existing_source.attributes = attributes
+        # Ensure updated_at reflects this upsert action
+        existing_source.updated_at = func.now()
+    if attributes:
+        # Upsert secret for DB URL if provided
+        org_secret_id = None
+        if attributes.source_db_url:
+            org_secret = upsert_organization_secret(
+                session=session_sql_alchemy,
+                organization_id=organization_id,
+                key=f"{source_id}_db_url",
+                secret=attributes.source_db_url,
+            )
+            org_secret_id = org_secret.id
+
+        # Fetch existing SourceAttributes row
+        existing_attributes = (
+            session_sql_alchemy.query(db.SourceAttributes).filter(db.SourceAttributes.source_id == source_id).first()
+        )
+
+        if existing_attributes:
+            # Only update fields that are provided (not None) to avoid unintended overwrites
+            if org_secret_id is not None:
+                existing_attributes.source_db_url = org_secret_id
+            if attributes.access_token is not None:
+                existing_attributes.access_token = attributes.access_token
+            if attributes.path is not None:
+                existing_attributes.path = attributes.path
+            if attributes.list_of_files_from_local_folder is not None:
+                existing_attributes.list_of_files_from_local_folder = attributes.list_of_files_from_local_folder
+            if attributes.folder_id is not None:
+                existing_attributes.folder_id = attributes.folder_id
+            if attributes.source_table_name is not None:
+                existing_attributes.source_table_name = attributes.source_table_name
+            if attributes.id_column_name is not None:
+                existing_attributes.id_column_name = attributes.id_column_name
+            if attributes.text_column_names is not None:
+                existing_attributes.text_column_names = attributes.text_column_names
+            if attributes.source_schema_name is not None:
+                existing_attributes.source_schema_name = attributes.source_schema_name
+            if attributes.chunk_size is not None:
+                existing_attributes.chunk_size = attributes.chunk_size
+            if attributes.chunk_overlap is not None:
+                existing_attributes.chunk_overlap = attributes.chunk_overlap
+            if attributes.metadata_column_names is not None:
+                existing_attributes.metadata_column_names = attributes.metadata_column_names
+            if attributes.timestamp_column_name is not None:
+                existing_attributes.timestamp_column_name = attributes.timestamp_column_name
+            if attributes.url_column_name is not None:
+                existing_attributes.url_column_name = attributes.url_column_name
+            if attributes.update_existing is not None:
+                existing_attributes.update_existing = attributes.update_existing
+            if attributes.query_filter is not None:
+                existing_attributes.query_filter = attributes.query_filter
+            if attributes.timestamp_filter is not None:
+                existing_attributes.timestamp_filter = attributes.timestamp_filter
+            # Ensure updated_at reflects this upsert action
+            existing_attributes.updated_at = func.now()
+        else:
+            # Create attributes row if it doesn't exist yet
+            source_attributes = db.SourceAttributes(
+                source_id=source_id,
+                access_token=attributes.access_token,
+                path=attributes.path,
+                list_of_files_from_local_folder=attributes.list_of_files_from_local_folder,
+                folder_id=attributes.folder_id,
+                source_db_url=org_secret_id,
+                source_table_name=attributes.source_table_name,
+                id_column_name=attributes.id_column_name,
+                text_column_names=attributes.text_column_names,
+                source_schema_name=attributes.source_schema_name,
+                chunk_size=attributes.chunk_size,
+                chunk_overlap=attributes.chunk_overlap,
+                metadata_column_names=attributes.metadata_column_names,
+                timestamp_column_name=attributes.timestamp_column_name,
+                url_column_name=attributes.url_column_name,
+                update_existing=attributes.update_existing,
+                query_filter=attributes.query_filter,
+                timestamp_filter=attributes.timestamp_filter,
+            )
+            session_sql_alchemy.add(source_attributes)
+
     session_sql_alchemy.commit()
 
 
@@ -170,7 +251,7 @@ def get_source_attributes(
     session_sql_alchemy: Session,
     organization_id: UUID,
     source_id: UUID,
-) -> dict():
+) -> SourceAttributes:
     """Get source attributes including decrypted database URL from the SourceAttributes table."""
 
     source_attributes = (
@@ -208,4 +289,4 @@ def get_source_attributes(
         if db_url_secret:
             attributes.source_db_url = db_url_secret.get_secret()
 
-    return attributes.model_dump()
+    return attributes

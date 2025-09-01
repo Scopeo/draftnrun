@@ -17,6 +17,7 @@ from ada_backend.schemas.source_schema import (
     DataSourceSchemaResponse,
     DataSourceUpdateSchema,
 )
+from ada_backend.schemas.ingestion_task_schema import SourceAttributes
 from engine.qdrant_service import QdrantCollectionSchema, QdrantService
 from engine.storage_service.local_service import SQLLocalService
 from settings import settings
@@ -103,8 +104,8 @@ def create_source_by_organization(
 def upsert_source_by_organization(
     session: Session,
     organization_id: UUID,
-    source_data: DataSourceUpdateSchema,
-) -> None:
+    source_id: UUID,
+) -> DataSourceUpdateSchema:
     """
     Create a new source for an organization.
 
@@ -114,10 +115,12 @@ def upsert_source_by_organization(
         source_data (DataSourceSchema): Source data to create
 
     Returns:
-        None
+        DataSourceUpdateSchema
     """
     try:
-        return upsert_source(
+        source_attributes = get_source_attributes_by_org_id(session, organization_id, source_id)
+        source_data = get_data_source_by_org_id(session, organization_id, source_id)
+        upsert_source(
             session,
             organization_id,
             source_data.id,
@@ -128,7 +131,19 @@ def upsert_source_by_organization(
             source_data.qdrant_collection_name,
             source_data.qdrant_schema,
             source_data.embedding_model_reference,
-            source_data.attributes,
+            source_attributes,
+        )
+        updated_source = get_data_source_by_org_id(session, organization_id, source_id)
+        return DataSourceUpdateSchema(
+            id=updated_source.id,
+            name=updated_source.name,
+            type=updated_source.type,
+            database_table_name=updated_source.database_table_name,
+            database_schema=updated_source.database_schema,
+            qdrant_collection_name=updated_source.qdrant_collection_name,
+            qdrant_schema=updated_source.qdrant_schema,
+            embedding_model_reference=updated_source.embedding_model_reference,
+            attributes=source_attributes,
         )
     except Exception as e:
         LOGGER.error(f"Error in upsert_source_by_organization: {str(e)}")
@@ -177,7 +192,7 @@ def get_source_attributes_by_org_id(
     session: Session,
     organization_id: UUID,
     source_id: UUID,
-) -> dict:
+) -> SourceAttributes:
     return get_source_attributes(
         session,
         organization_id,
