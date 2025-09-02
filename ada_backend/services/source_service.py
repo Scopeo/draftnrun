@@ -10,15 +10,20 @@ from ada_backend.repositories.source_repository import (
     get_data_source_by_org_id,
     get_sources,
     upsert_source,
+    get_source_attributes,
 )
 from ada_backend.schemas.source_schema import (
     DataSourceSchema,
     DataSourceSchemaResponse,
     DataSourceUpdateSchema,
 )
+from ada_backend.schemas.ingestion_task_schema import SourceAttributes
 from engine.qdrant_service import QdrantCollectionSchema, QdrantService
 from engine.storage_service.local_service import SQLLocalService
 from settings import settings
+from ada_backend.schemas.ingestion_task_schema import IngestionTaskQueue
+from ada_backend.services.ingestion_task_service import create_ingestion_task_by_organization
+from ada_backend.database import models as db
 
 
 LOGGER = logging.getLogger(__name__)
@@ -88,6 +93,7 @@ def create_source_by_organization(
             source_data.qdrant_collection_name,
             source_data.qdrant_schema,
             source_data.embedding_model_reference,
+            source_data.attributes,
         )
 
         LOGGER.info(f"Source {source_data.name} created for organization {organization_id}")
@@ -126,6 +132,7 @@ def upsert_source_by_organization(
             source_data.qdrant_collection_name,
             source_data.qdrant_schema,
             source_data.embedding_model_reference,
+            source_data.attributes,
         )
     except Exception as e:
         LOGGER.error(f"Error in upsert_source_by_organization: {str(e)}")
@@ -168,3 +175,45 @@ def delete_source_service(
     except Exception as e:
         LOGGER.error(f"Error in delete_source_by_id: {str(e)}")
         raise ValueError(f"Failed to delete source: {str(e)}") from e
+
+
+def get_source_attributes_by_org_id(
+    session: Session,
+    organization_id: UUID,
+    source_id: UUID,
+) -> SourceAttributes:
+    return get_source_attributes(
+        session,
+        organization_id,
+        source_id,
+    )
+
+
+def update_source_by_source_id(
+    session: Session,
+    organization_id: UUID,
+    source_id: UUID,
+    user_id: UUID,
+) -> DataSourceUpdateSchema:
+
+    source_attributes = get_source_attributes_by_org_id(session, organization_id, source_id)
+    source_data = get_data_source_by_org_id(session, organization_id, source_id)
+    ingestion_task_data = IngestionTaskQueue(
+        source_name=source_data.name,
+        source_type=source_data.type,
+        status=db.TaskStatus.PENDING,
+        source_attributes=source_attributes,
+    )
+    create_ingestion_task_by_organization(session, user_id, organization_id, ingestion_task_data)
+    updated_source = DataSourceUpdateSchema(
+        id=source_data.id,
+        name=source_data.name,
+        type=source_data.type,
+        database_table_name=source_data.database_table_name,
+        database_schema=source_data.database_schema,
+        qdrant_collection_name=source_data.qdrant_collection_name,
+        qdrant_schema=source_data.qdrant_schema,
+        embedding_model_reference=source_data.embedding_model_reference,
+        attributes=source_attributes,
+    )
+    return updated_source

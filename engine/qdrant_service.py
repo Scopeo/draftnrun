@@ -825,7 +825,6 @@ class QdrantService:
 
     async def collection_exists_async(self, collection_name: str) -> bool:
         """Async version of collection_exists."""
-        print(f"Checking if collection {collection_name} exists")
         response = await self._send_request_async(method="GET", endpoint=f"collections/{collection_name}/exists")
         return response.get("result", {}).get("exists", False)
 

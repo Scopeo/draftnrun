@@ -141,6 +141,7 @@ async def ingestion_main_async(
         from ingestion_script.ingest_db_source import ingestion_database
 
         try:
+
             await ingestion_database(
                 source_name=source_name,
                 organization_id=organization_id,
@@ -152,12 +153,13 @@ async def ingestion_main_async(
                 source_schema_name=source_attributes.get("source_schema_name"),
                 metadata_column_names=source_attributes.get("metadata_column_names"),
                 timestamp_column_name=source_attributes.get("timestamp_column_name"),
-                url_column_name=source_attributes.get("url_column_name"),
+                url_pattern=source_attributes.get("url_pattern"),
                 chunk_size=chunk_size,
                 chunk_overlap=chunk_overlap,
                 update_existing=update_existing,
                 query_filter=source_attributes.get("query_filter"),
                 timestamp_filter=source_attributes.get("timestamp_filter"),
+                source_attributes=source_attributes,
             )
         except Exception as e:
             LOGGER.error(f"Error during database ingestion: {str(e)}")

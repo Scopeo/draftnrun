@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from ada_backend.database.setup_db import get_db
 from ada_backend.schemas.auth_schema import SupabaseUser
-from ada_backend.schemas.source_schema import DataSourceSchema, DataSourceSchemaResponse, DataSourceUpdateSchema
+from ada_backend.schemas.source_schema import DataSourceSchema, DataSourceSchemaResponse
 from ada_backend.routers.auth_router import (
     user_has_access_to_organization_dependency,
     UserRights,
@@ -16,6 +16,7 @@ from ada_backend.services.source_service import (
     create_source_by_organization,
     upsert_source_by_organization,
     delete_source_service,
+    update_source_by_source_id,
 )
 
 router = APIRouter(prefix="/sources", tags=["Sources"])
@@ -51,20 +52,20 @@ def create_organization_source(
         raise HTTPException(status_code=500, detail="Internal Server Error") from e
 
 
-@router.patch("/{organization_id}", status_code=status.HTTP_200_OK)
+@router.post("/{organization_id}/{source_id}", status_code=status.HTTP_200_OK)
 def update_organization_source(
-    organization_id: UUID,
-    source: DataSourceUpdateSchema,
     user: Annotated[
-        SupabaseUser, Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.WRITER.value))
+        SupabaseUser, Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.ADMIN.value))
     ],
+    organization_id: UUID,
+    source_id: UUID,
     session: Session = Depends(get_db),
 ):
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
     try:
-        upsert_source_by_organization(session, organization_id, source)
-        return None
+        updated_source = update_source_by_source_id(session, organization_id, source_id, user.id)
+        return upsert_source_by_organization(session, organization_id, updated_source)
     except Exception as e:
         raise HTTPException(status_code=500, detail="Internal Server Error") from e
 

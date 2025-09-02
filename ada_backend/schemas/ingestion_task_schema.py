@@ -34,7 +34,7 @@ class SourceAttributes(BaseModel):
     chunk_overlap: Optional[int] = None
     metadata_column_names: Optional[list[str]] = None
     timestamp_column_name: Optional[str] = None
-    url_column_name: Optional[str] = None
+    url_pattern: Optional[str] = None
     update_existing: Optional[bool] = False
     query_filter: Optional[str] = None
     timestamp_filter: Optional[str] = None

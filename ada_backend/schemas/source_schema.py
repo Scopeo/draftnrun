@@ -2,7 +2,9 @@ from typing import Optional
 from uuid import UUID
 from datetime import datetime
 from pydantic import BaseModel, ConfigDict
+
 from ada_backend.database import models as db
+from ada_backend.schemas.ingestion_task_schema import SourceAttributes
 
 
 class DataSourceSchema(BaseModel):
@@ -13,6 +15,7 @@ class DataSourceSchema(BaseModel):
     qdrant_collection_name: Optional[str] = None
     qdrant_schema: Optional[dict] = None
     embedding_model_reference: Optional[str] = None
+    attributes: Optional[SourceAttributes] = None
 
     model_config = ConfigDict(
         from_attributes=True, json_encoders={datetime: lambda dt: dt.isoformat() if dt else None}

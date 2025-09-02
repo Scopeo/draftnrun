@@ -364,6 +364,17 @@ class SourceAdmin(EnhancedModelView, model=db.DataSource):
     ]
 
 
+class SourceAttributesAdmin(EnhancedModelView, model=db.SourceAttributes):
+    category = AdminCategory.SOURCES
+    icon = "fas fa-database"
+    column_list = [
+        "id",
+        "source_id",
+        "created_at",
+        "updated_at",
+    ]
+
+
 class AdminAuth(AuthenticationBackend):
     """Basic username/password authentication for admin interface."""
 
@@ -425,5 +436,6 @@ def setup_admin(app: FastAPI):
     admin.add_view(ToolDescriptionAdmin)
     admin.add_view(SourceAdmin)
     admin.add_view(IngestionTaskAdmin)
+    admin.add_view(SourceAttributesAdmin)
 
     return admin
