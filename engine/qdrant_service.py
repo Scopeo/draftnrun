@@ -528,7 +528,7 @@ class QdrantService:
 
         if current_type == expected_schema.value:
 
-            LOGGER.info(
+            LOGGER.debug(
                 "Payload index '%s' already exists with type '%s' in collection '%s'.",
                 field_name,
                 current_type,
