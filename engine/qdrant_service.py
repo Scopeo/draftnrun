@@ -484,27 +484,71 @@ class QdrantService:
             )
         return chunks
 
-    def check_index_exists(self, collection_name: str, index_name: str) -> bool:
-        return asyncio.run(self.check_index_exists_async(collection_name, index_name))
-
-    async def check_index_exists_async(self, collection_name: str, index_name: str) -> bool:
-        """Async version of check_index_exists."""
-        results = await self._send_request_async(method="GET", endpoint=f"/collections/{collection_name}")
-        payload_schema = results.get("result", {}).get("payload_schema", {})
-        return index_name in payload_schema
-
-    def create_index_if_needed(self, collection_name: str, index_name: str, field_schema: FieldSchema) -> None:
-        return asyncio.run(self.create_index_if_needed_async(collection_name, index_name, field_schema))
+    def create_index_if_needed(self, collection_name: str, field_name: str, expected_schema: FieldSchema) -> None:
+        return asyncio.run(self.create_index_if_needed_async(collection_name, field_name, expected_schema))
 
     async def create_index_if_needed_async(
-        self, collection_name: str, index_name: str, field_schema: FieldSchema
+        self,
+        collection_name: str,
+        field_name: str,
+        expected_schema: FieldSchema,
     ) -> None:
-        """Async version of create_index_if_needed."""
-        if not await self.check_index_exists_async(collection_name, index_name):
-            LOGGER.info(f"Creating index '{index_name}' for collection '{collection_name}'")
+        """Ensure a payload index exists with the expected type.
+
+        - If missing: create it.
+        - If present with same type: no-op.
+        - If present with different type: delete and re-create.
+        """
+        resp = await self._send_request_async(
+            method="GET",
+            endpoint=f"/collections/{collection_name}",
+        )
+        payload_schema = (resp.get("result") or {}).get("payload_schema") or {}
+
+        entry = payload_schema.get(field_name)
+
+        if isinstance(entry, dict):
+            current_type = entry.get("data_type") or entry.get("type") or entry.get("field_type")
+        else:
+            current_type = entry
+
+        if current_type is None:
+            # No index -> create
+            LOGGER.info(
+                "Creating payload index '%s' (type=%s) for collection '%s'",
+                field_name,
+                expected_schema.value,
+                collection_name,
+            )
+
             endpoint = f"/collections/{collection_name}/index"
-            payload = {"field_name": index_name, "field_schema": field_schema.value}
+            payload = {"field_name": field_name, "field_schema": expected_schema.value}
             await self._send_request_async(method="PUT", endpoint=endpoint, payload=payload)
+            return
+
+        if current_type == expected_schema.value:
+
+            LOGGER.info(
+                "Payload index '%s' already exists with type '%s' in collection '%s'.",
+                field_name,
+                current_type,
+                collection_name,
+            )
+            return
+
+        LOGGER.warning(
+            "Payload index '%s' exists with type '%s' but expected '%s'. " "Recreating index in collection '%s'.",
+            field_name,
+            current_type,
+            expected_schema.value,
+            collection_name,
+        )
+        delete_endpoint = f"/collections/{collection_name}/index/{field_name}"
+        await self._send_request_async(method="DELETE", endpoint=delete_endpoint)
+
+        create_endpoint = f"/collections/{collection_name}/index"
+        payload = {"field_name": field_name, "field_schema": expected_schema.value}
+        await self._send_request_async(method="PUT", endpoint=create_endpoint, payload=payload)
 
     def add_chunks(
         self,
@@ -535,16 +579,16 @@ class QdrantService:
         """
         schema = self._get_schema(collection_name)
         await self.create_index_if_needed_async(
-            collection_name, index_name=schema.chunk_id_field, field_schema=FieldSchema.KEYWORD
+            collection_name, field_name=schema.chunk_id_field, expected_schema=FieldSchema.KEYWORD
         )
         if schema.metadata_fields_to_keep:
             for metadata_field in schema.metadata_fields_to_keep:
                 await self.create_index_if_needed_async(
-                    collection_name, index_name=metadata_field, field_schema=FieldSchema.KEYWORD
+                    collection_name, field_name=metadata_field, expected_schema=FieldSchema.KEYWORD
                 )
         if schema.last_edited_ts_field:
             await self.create_index_if_needed_async(
-                collection_name, index_name=schema.last_edited_ts_field, field_schema=FieldSchema.DATETIME
+                collection_name, field_name=schema.last_edited_ts_field, expected_schema=FieldSchema.DATETIME
             )
         for i in range(0, len(list_chunks), self._max_chunks_to_add):
             current_chunk_batch = list_chunks[i : i + self._max_chunks_to_add]
@@ -1018,6 +1062,12 @@ class QdrantService:
             raise ValueError(f"Collection {collection_name} does not exist.")
 
         schema = self._get_schema(collection_name)
+        await self.create_index_if_needed_async(collection_name, schema.chunk_id_field, FieldSchema.KEYWORD)
+        if schema.metadata_fields_to_keep:
+            for metadata_field in schema.metadata_fields_to_keep:
+                await self.create_index_if_needed_async(collection_name, metadata_field, FieldSchema.KEYWORD)
+        if schema.last_edited_ts_field:
+            await self.create_index_if_needed_async(collection_name, schema.last_edited_ts_field, FieldSchema.DATETIME)
 
         all_points = await self.get_points_async(
             collection_name=collection_name,
