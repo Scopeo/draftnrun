@@ -38,7 +38,7 @@ def upgrade() -> None:
         sa.Column("chunk_overlap", sa.Integer(), nullable=True),
         sa.Column("metadata_column_names", sa.JSON(), nullable=True),
         sa.Column("timestamp_column_name", sa.String(), nullable=True),
-        sa.Column("url_column_name", sa.String(), nullable=True),
+        sa.Column("url_pattern", sa.String(), nullable=True),
         sa.Column("update_existing", sa.Boolean(), nullable=False),
         sa.Column("query_filter", sa.String(), nullable=True),
         sa.Column("timestamp_filter", sa.String(), nullable=True),

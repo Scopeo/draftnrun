@@ -828,7 +828,7 @@ class SourceAttributes(Base):
     chunk_overlap = mapped_column(Integer, nullable=True)
     metadata_column_names = mapped_column(JSON, nullable=True)
     timestamp_column_name = mapped_column(String, nullable=True)
-    url_column_name = mapped_column(String, nullable=True)
+    url_pattern = mapped_column(String, nullable=True)
     update_existing = mapped_column(Boolean, nullable=False, default=False)
     query_filter = mapped_column(String, nullable=True)
     timestamp_filter = mapped_column(String, nullable=True)

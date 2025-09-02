@@ -17,6 +17,12 @@ from settings import settings
 
 LOGGER = logging.getLogger(__name__)
 
+# Default column names used across database ingestion
+CHUNK_ID_COLUMN_NAME = "chunk_id"
+CHUNK_COLUMN_NAME = "content"
+FILE_ID_COLUMN_NAME = "source_identifier"
+URL_COLUMN_NAME = "url"
+
 
 def get_sanitize_names(source_name: str, organization_id: str) -> tuple[str, str, str]:
     sanitize_source_name = sanitize_filename(source_name)

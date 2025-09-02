@@ -88,8 +88,9 @@ def create_source(
         org_secret = upsert_organization_secret(
             session=session,
             organization_id=organization_id,
-            key=f"{source_data_create.id}_db_url",
+            key=f"db_url__{source_data_create.id}",
             secret=attributes.source_db_url,
+            secret_type=db.OrgSecretType.PASSWORD,
         )
 
         source_attributes = db.SourceAttributes(
@@ -107,7 +108,7 @@ def create_source(
             chunk_overlap=attributes.chunk_overlap,
             metadata_column_names=attributes.metadata_column_names,
             timestamp_column_name=attributes.timestamp_column_name,
-            url_column_name=attributes.url_column_name,
+            url_pattern=attributes.url_pattern,
             update_existing=attributes.update_existing,
             query_filter=attributes.query_filter,
             timestamp_filter=attributes.timestamp_filter,
@@ -160,8 +161,9 @@ def upsert_source(
             org_secret = upsert_organization_secret(
                 session=session_sql_alchemy,
                 organization_id=organization_id,
-                key=f"{source_id}_db_url",
+                key=f"db_url__{source_id}",
                 secret=attributes.source_db_url,
+                secret_type=db.OrgSecretType.PASSWORD,
             )
             org_secret_id = org_secret.id
 
@@ -198,8 +200,8 @@ def upsert_source(
                 existing_attributes.metadata_column_names = attributes.metadata_column_names
             if attributes.timestamp_column_name is not None:
                 existing_attributes.timestamp_column_name = attributes.timestamp_column_name
-            if attributes.url_column_name is not None:
-                existing_attributes.url_column_name = attributes.url_column_name
+            if attributes.url_pattern is not None:
+                existing_attributes.url_pattern = attributes.url_pattern
             if attributes.update_existing is not None:
                 existing_attributes.update_existing = attributes.update_existing
             if attributes.query_filter is not None:
@@ -225,7 +227,7 @@ def upsert_source(
                 chunk_overlap=attributes.chunk_overlap,
                 metadata_column_names=attributes.metadata_column_names,
                 timestamp_column_name=attributes.timestamp_column_name,
-                url_column_name=attributes.url_column_name,
+                url_pattern=attributes.url_pattern,
                 update_existing=attributes.update_existing,
                 query_filter=attributes.query_filter,
                 timestamp_filter=attributes.timestamp_filter,
@@ -285,7 +287,7 @@ def get_source_attributes(
         chunk_overlap=source_attributes.chunk_overlap,
         metadata_column_names=source_attributes.metadata_column_names,
         timestamp_column_name=source_attributes.timestamp_column_name,
-        url_column_name=source_attributes.url_column_name,
+        url_pattern=source_attributes.url_pattern,
         update_existing=source_attributes.update_existing,
         query_filter=source_attributes.query_filter,
         timestamp_filter=source_attributes.timestamp_filter,
