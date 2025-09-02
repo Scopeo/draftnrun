@@ -537,7 +537,7 @@ class QdrantService:
             return
 
         LOGGER.warning(
-            "Payload index '%s' exists with type '%s' but expected '%s'. " "Recreating index in collection '%s'.",
+            "Payload index '%s' exists with type '%s' but expected '%s'. Recreating index in collection '%s'.",
             field_name,
             current_type,
             expected_schema.value,
