@@ -1,10 +1,10 @@
-from typing import Annotated, List
+from typing import Annotated, List, Optional
 from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Body
 from sqlalchemy.orm import Session
 import logging
 
-from ada_backend.database.models import EnvType
+from ada_backend.database.models import EnvType, CallType
 from ada_backend.database.setup_db import get_db
 from ada_backend.schemas.auth_schema import SupabaseUser
 from ada_backend.schemas.chart_schema import ChartsResponse
@@ -38,6 +38,7 @@ from ada_backend.services.project_service import (
     update_project_service,
 )
 from ada_backend.services.trace_service import get_trace_by_project
+from ada_backend.repositories.env_repository import get_env_relationship_by_graph_runner_id
 
 
 LOGGER = logging.getLogger(__name__)
@@ -170,6 +171,7 @@ async def run_env_agent_endpoint(
             project_id=project_id,
             input_data=input_data,
             env=env,
+            call_type=CallType.API,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
@@ -201,11 +203,20 @@ async def get_project_trace(
     project_id: UUID,
     duration: int,
     user: Annotated[SupabaseUser, Depends(get_user_from_supabase_token)],
+    environment: Optional[EnvType] = None,
+    call_type: Optional[CallType] = None,
 ):
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
     try:
-        response = get_trace_by_project(user.id, project_id, duration, include_messages=False)
+        response = get_trace_by_project(
+            user.id,
+            project_id,
+            duration,
+            include_messages=False,
+            environment=environment,
+            call_type=call_type,
+        )
         return response
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
@@ -219,11 +230,20 @@ async def get_project_trace_v2(
     project_id: UUID,
     duration: int,
     user: Annotated[SupabaseUser, Depends(get_user_from_supabase_token)],
+    environment: Optional[EnvType] = None,
+    call_type: Optional[CallType] = None,
 ):
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
     try:
-        response = get_trace_by_project(user.id, project_id, duration, include_messages=True)
+        response = get_trace_by_project(
+            user.id,
+            project_id,
+            duration,
+            include_messages=True,
+            environment=environment,
+            call_type=call_type,
+        )
         return response
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
@@ -273,11 +293,18 @@ async def chat(
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
     try:
+        # Get the environment for this graph runner
+        env_relationship = get_env_relationship_by_graph_runner_id(session, graph_runner_id)
+        environment = env_relationship.environment
+        LOGGER.info(f"Determined environment {environment} for graph_runner_id {graph_runner_id}")
+
         return await run_agent(
             session=session,
             project_id=project_id,
             graph_runner_id=graph_runner_id,
             input_data=input_data,
+            environment=environment,
+            call_type=CallType.SANDBOX,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
@@ -316,6 +343,7 @@ async def chat_env(
             project_id=project_id,
             input_data=input_data,
             env=env,
+            call_type=CallType.SANDBOX,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
