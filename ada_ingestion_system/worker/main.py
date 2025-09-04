@@ -165,8 +165,14 @@ class Worker:
             # Execute the command (log without sensitive data)
             safe_cmd = cmd.copy()
             # Replace the full command with a sanitized version for logging
-            if len(safe_cmd) > 3:  # If it's the python -c command format
+            if len(safe_cmd) >= 3:  # If it's the python -c command format
+                # Sanitize access tokens and other sensitive data in the command
                 safe_cmd[2] = safe_cmd[2].replace(repr(source_attributes), "***SANITIZED_SOURCE_ATTRIBUTES***")
+                # Also sanitize any access tokens that might appear directly
+                if 'access_token' in safe_cmd[2]:
+                    import re
+                    safe_cmd[2] = re.sub(r"'access_token': '[^']*'", "'access_token': '***REDACTED***'", safe_cmd[2])
+                    safe_cmd[2] = re.sub(r'"access_token": "[^"]*"', '"access_token": "***REDACTED***"', safe_cmd[2])
             logger.info("executing_command", cmd=" ".join(safe_cmd))
             process = subprocess.Popen(
                 cmd,

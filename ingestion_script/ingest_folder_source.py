@@ -248,6 +248,7 @@ async def _ingest_folder_source(
     try:
         if len(files_info) == 0:
             LOGGER.warning(f"No files found to ingest in source '{source_name}' - marking as completed")
+            LOGGER.info(f"[EMPTY_FOLDER] About to update task status to COMPLETED for task {task_id}")
             # Update task status to COMPLETED for empty folders
             ingestion_task_completed = IngestionTaskUpdate(
                 id=task_id,
@@ -255,11 +256,14 @@ async def _ingest_folder_source(
                 source_type=source_type,
                 status=db.TaskStatus.COMPLETED,
             )
+            LOGGER.info(f"[EMPTY_FOLDER] Calling update_ingestion_task with status: {ingestion_task_completed.status}")
             update_ingestion_task(
                 organization_id=organization_id,
                 ingestion_task=ingestion_task_completed,
             )
+            LOGGER.info(f"[EMPTY_FOLDER] Task status update completed")
             # Still create the empty source in the database for consistency
+            LOGGER.info(f"[EMPTY_FOLDER] About to create empty source in database")
             source_data = DataSourceSchema(
                 name=source_name,
                 type=source_type,
@@ -270,10 +274,12 @@ async def _ingest_folder_source(
                 embedding_model_reference=f"{EMBEDDING_SERVICE._provider}:{EMBEDDING_SERVICE._model_name}",
                 attributes=None,
             )
+            LOGGER.info(f"[EMPTY_FOLDER] Calling create_source for empty folder")
             create_source(
                 organization_id=organization_id,
                 source_data=source_data,
             )
+            LOGGER.info(f"[EMPTY_FOLDER] Empty source created successfully - returning")
             return
         for document in files_info:
             chunks_df = await get_chunks_dataframe_from_doc(
