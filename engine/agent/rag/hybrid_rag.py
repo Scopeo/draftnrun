@@ -16,7 +16,6 @@ from engine.agent.rag.retriever import Retriever
 from engine.trace.trace_manager import TraceManager
 from engine.agent.synthesizer import Synthesizer
 from engine.agent.hybrid_synthesizer import HybridSynthesizer
-from engine.agent.utils import format_qdrant_filter
 from engine.agent.rag.formatter import Formatter
 from engine.agent.rag.chunk_selection import RelevantChunkSelector, RelevantChunk
 
@@ -66,8 +65,7 @@ class HybridRAG(RAG):
         content = query_text or agent_input.main_content
         if content is None:
             raise ValueError("No content provided for the RAG tool.")
-        formatted_filters = format_qdrant_filter(filters, self._filtering_condition)
-        chunks = await self._retriever.get_chunks(query_text=content, filters=formatted_filters)
+        chunks = await self._retriever.get_chunks(query_text=content, filters=filters)
 
         if self._reranker is not None:
             chunks = self._reranker.rerank(query=content, chunks=chunks)
