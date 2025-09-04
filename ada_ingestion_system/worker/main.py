@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any, Dict
 
 import redis
+import requests
 import structlog
 from dotenv import load_dotenv
 
@@ -78,6 +79,10 @@ class Worker:
                 organization_id=organization_id,
                 parameters=safe_payload,
             )
+            
+            # Enhanced logging for debugging
+            logger.info(f"[WORKER] Starting ingestion task processing - ID: {ingestion_id}, Source: {source_name}, Type: {source_type}, Org: {organization_id}")
+            logger.info(f"[WORKER] Task details - Task ID: {task_id}, Source attributes keys: {list(source_attributes.keys()) if source_attributes else 'None'}")
 
             # Get the ada_backend path - assumes a standard structure
             ada_backend_path = Path(__file__).parents[2] / "ada_backend"
@@ -181,11 +186,30 @@ class Worker:
 
             if process.returncode != 0:
                 logger.error("script_failed", return_code=process.returncode)
+                # Update task status to FAILED when subprocess fails
+                self._update_task_status_to_failed(
+                    organization_id=organization_id,
+                    task_id=task_id,
+                    source_name=source_name,
+                    source_type=source_type,
+                    ingestion_id=ingestion_id
+                )
             else:
                 logger.info("task_completed", ingestion_id=ingestion_id)
 
         except Exception as e:
             logger.error("task_error", error=str(e), exc_info=True)
+            # Update task status to FAILED when worker encounters an exception
+            try:
+                self._update_task_status_to_failed(
+                    organization_id=organization_id,
+                    task_id=task_id,
+                    source_name=source_name,
+                    source_type=source_type,
+                    ingestion_id=ingestion_id
+                )
+            except Exception as update_error:
+                logger.error("failed_to_update_task_status", error=str(update_error))
         finally:
             with self.lock:
                 self.current_threads -= 1
@@ -238,6 +262,59 @@ class Worker:
                     result["error_message"] = error_line.split(":", 1)[1].strip()
 
         return result
+
+    def _update_task_status_to_failed(
+        self,
+        organization_id: str,
+        task_id: str,
+        source_name: str,
+        source_type: str,
+        ingestion_id: str,
+    ) -> None:
+        """Update the task status to FAILED in the database."""
+        try:
+            from ada_backend.schemas.ingestion_task_schema import IngestionTaskUpdate
+            from ada_backend.database import models as db
+            
+            # Create the failed task update
+            failed_task = IngestionTaskUpdate(
+                id=task_id,
+                source_name=source_name,
+                source_type=source_type,
+                status=db.TaskStatus.FAILED,
+            )
+            
+            # Get API base URL from environment or use default
+            api_base_url = os.getenv("API_BASE_URL", DEFAULT_API_BASE_URL)
+            ingestion_api_key = os.getenv("INGESTION_API_KEY", "default-key")
+            
+            # Make the API call to update task status
+            response = requests.patch(
+                f"{api_base_url}/ingestion_task/{organization_id}",
+                json=failed_task.model_dump(mode="json"),
+                headers={
+                    "x-ingestion-api-key": ingestion_api_key,
+                    "Content-Type": "application/json",
+                },
+                timeout=10,  # Add timeout to prevent hanging
+            )
+            response.raise_for_status()
+            
+            logger.info(
+                "task_status_updated_to_failed",
+                ingestion_id=ingestion_id,
+                task_id=task_id,
+                organization_id=organization_id
+            )
+            
+        except Exception as e:
+            logger.error(
+                "failed_to_update_task_status_to_failed",
+                ingestion_id=ingestion_id,
+                task_id=task_id,
+                organization_id=organization_id,
+                error=str(e)
+            )
 
     def log_redis_state(self):
         """Log current Redis state including queue contents."""

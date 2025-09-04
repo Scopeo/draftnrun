@@ -61,6 +61,13 @@ def read_chunk_table(table_name: str, db_service: DBService) -> dict:
 
 
 def sanitize_filename(filename, remove_extension_dot=True):
+    # Handle None input
+    if filename is None:
+        return ""
+    
+    # Convert to string if not already
+    filename = str(filename)
+    
     # Convert accented characters to non-accented equivalents
     filename = unicodedata.normalize("NFKD", filename).encode("ASCII", "ignore").decode("ASCII")
     # Replace '&' with 'and'
