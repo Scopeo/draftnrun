@@ -62,6 +62,11 @@ class OrgSecretType(StrEnum):
     PASSWORD = "password"
 
 
+class ApiKeyType(StrEnum):
+    PROJECT = "project"
+    ORGANIZATION = "organization"
+
+
 class NodeType(StrEnum):
     """Enumeration of node types."""
 
@@ -652,7 +657,7 @@ class Project(Base):
     updated_at = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     api_keys = relationship(
-        "ApiKey",
+        "ProjectApiKey",
         back_populates="project",
         cascade="all, delete-orphan",
     )
@@ -725,25 +730,37 @@ class OrganizationSecret(Base):
 
 
 class ApiKey(Base):
-    """Stores API keys that allow users to run agent inferences for the given project."""
-
     __tablename__ = "api_keys"
-
     id = mapped_column(UUID(as_uuid=True), primary_key=True, index=True, default=uuid.uuid4)
+    type = mapped_column(make_pg_enum(ApiKeyType), nullable=False)
     public_key = mapped_column(String, unique=True, nullable=False)
     name = mapped_column(String, nullable=False)
     is_active = mapped_column(Boolean, nullable=False, default=True)
-    project_id = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("projects.id", ondelete="CASCADE"),
-        nullable=False,
-        index=True,
-    )
     creator_user_id = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
     revoker_user_id = mapped_column(UUID(as_uuid=True), nullable=True, index=True)
     created_at = mapped_column(DateTime(timezone=True), server_default=func.now())
 
+    __mapper_args__ = {"polymorphic_on": type, "polymorphic_identity": "base"}
+
+
+class ProjectApiKey(ApiKey):
+    __tablename__ = "project_api_keys"
+    id = mapped_column(UUID(as_uuid=True), ForeignKey("api_keys.id"), primary_key=True)
+    project_id = mapped_column(
+        UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+
     project = relationship("Project", back_populates="api_keys")
+
+    __mapper_args__ = {"polymorphic_identity": ApiKeyType.PROJECT.value}
+
+
+class OrgApiKey(ApiKey):
+    __tablename__ = "org_api_keys"
+    id = mapped_column(UUID(as_uuid=True), ForeignKey("api_keys.id"), primary_key=True)
+    organization_id = mapped_column(UUID(as_uuid=True), index=True, nullable=False)
+
+    __mapper_args__ = {"polymorphic_identity": ApiKeyType.ORGANIZATION.value}
 
 
 class IngestionTask(Base):
