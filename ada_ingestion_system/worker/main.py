@@ -162,8 +162,12 @@ class Worker:
                 f")",
             ]
 
-            # Execute the command
-            logger.info("executing_command", cmd=" ".join(cmd))
+            # Execute the command (log without sensitive data)
+            safe_cmd = cmd.copy()
+            # Replace the full command with a sanitized version for logging
+            if len(safe_cmd) > 3:  # If it's the python -c command format
+                safe_cmd[2] = safe_cmd[2].replace(repr(source_attributes), "***SANITIZED_SOURCE_ATTRIBUTES***")
+            logger.info("executing_command", cmd=" ".join(safe_cmd))
             process = subprocess.Popen(
                 cmd,
                 stdout=subprocess.PIPE,

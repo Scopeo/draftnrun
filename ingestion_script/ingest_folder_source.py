@@ -199,7 +199,7 @@ async def _ingest_folder_source(
             organization_id=organization_id,
             ingestion_task=ingestion_task,
         )
-        return
+        raise ValueError(f"Source '{source_name}' already exists in database table '{db_table_schema}.{db_table_name}'")
 
     if await qdrant_service.collection_exists_async(qdrant_collection_name):
         LOGGER.error(f"Source {source_name} already exists in Qdrant")
@@ -207,7 +207,7 @@ async def _ingest_folder_source(
             organization_id=organization_id,
             ingestion_task=ingestion_task,
         )
-        return
+        raise ValueError(f"Source '{source_name}' already exists in Qdrant collection '{qdrant_collection_name}'")
 
     LOGGER.info("Starting ingestion process")
     files_info = folder_manager.list_all_files_info()
@@ -247,7 +247,34 @@ async def _ingest_folder_source(
     LOGGER.info(f"Found {len(files_info)} files to ingest")
     try:
         if len(files_info) == 0:
-            raise ValueError("No files found to ingest")
+            LOGGER.warning(f"No files found to ingest in source '{source_name}' - marking as completed")
+            # Update task status to COMPLETED for empty folders
+            ingestion_task_completed = IngestionTaskUpdate(
+                id=task_id,
+                source_name=source_name,
+                source_type=source_type,
+                status=db.TaskStatus.COMPLETED,
+            )
+            update_ingestion_task(
+                organization_id=organization_id,
+                ingestion_task=ingestion_task_completed,
+            )
+            # Still create the empty source in the database for consistency
+            source_data = DataSourceSchema(
+                name=source_name,
+                type=source_type,
+                database_schema=db_table_schema,
+                database_table_name=db_table_name,
+                qdrant_collection_name=qdrant_collection_name,
+                qdrant_schema=QDRANT_SCHEMA.to_dict(),
+                embedding_model_reference=f"{EMBEDDING_SERVICE._provider}:{EMBEDDING_SERVICE._model_name}",
+                attributes=None,
+            )
+            create_source(
+                organization_id=organization_id,
+                source_data=source_data,
+            )
+            return
         for document in files_info:
             chunks_df = await get_chunks_dataframe_from_doc(
                 document,

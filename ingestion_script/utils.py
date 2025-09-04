@@ -177,14 +177,14 @@ async def upload_source(
                 organization_id=organization_id,
                 ingestion_task=ingestion_task,
             )
-            return
+            raise ValueError(f"Source '{source_name}' already exists in database schema '{schema_name}'")
     elif not update_existing and await qdrant_service.collection_exists_async(qdrant_collection_name):
         LOGGER.error(f"Source {source_name} already exists in Qdrant")
         update_ingestion_task(
             organization_id=organization_id,
             ingestion_task=ingestion_task,
         )
-        return
+        raise ValueError(f"Source '{source_name}' already exists in Qdrant collection '{qdrant_collection_name}'")
 
     try:
         await ingestion_function(
