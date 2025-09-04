@@ -58,31 +58,6 @@ def fuzzy_matching(query: str, list_of_entities: list[str], fuzzy_matching_candi
     return matching_entities
 
 
-def format_qdrant_filter(filters: dict[str, Union[list[str], str]] | None, filtering_condition: str) -> dict:
-    """Formats filtering criteria into a structured query format.
-
-    Args:
-        filters (dict[str, Union[list[str], str]] | None): A dictionary where keys are filter fields
-            and values are either a single string or a list of strings.
-        filtering_condition (str): The logical condition for filtering ("AND" or "OR").
-
-    Returns:
-        dict: A structured dictionary for filtering, following the "must" (AND) or "should" (OR) conditions.
-    """
-    LOGGER.info("Entering the filtering_formatting function")
-
-    if not filters:
-        return {}
-
-    list_filters = [{"key": key, "match": {"any": value}} for key, value in filters.items()]
-
-    if filtering_condition == "AND":
-        return {"must": list_filters}
-    if filtering_condition == "OR":
-        return {"should": list_filters}
-    return {}
-
-
 def extract_vars_in_text_template(prompt_template: str) -> list[str]:
     return [fname for _, fname, _, _ in string.Formatter().parse(prompt_template) if fname]
 
