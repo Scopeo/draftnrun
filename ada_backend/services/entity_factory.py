@@ -458,9 +458,6 @@ def build_project_reference_processor(target_name: str = "graph_runner") -> Para
             raise ValueError("project_id is required")
         project_id = UUID(project_id_str)
 
-        env_str: str = params.pop("env", "production")
-        env = EnvType(env_str)
-
         context = get_request_context()
         user = context.require_user()
 
@@ -498,10 +495,14 @@ def build_project_reference_processor(target_name: str = "graph_runner") -> Para
             graph_runner_in_db = get_graph_runner_for_env(
                 session=session,
                 project_id=project_id,
-                env=env,
+                # TODO: Add support for using different GR versions
+                env=EnvType.PRODUCTION,
             )
             if graph_runner_in_db is None:
-                raise ValueError(f"GraphRunner not found for project {project_id} and environment {env}")
+                raise ValueError(
+                    f"No production GraphRunner found for project {project_id}. "
+                    f"Publish the project to production and try again.",
+                )
             gr_id: UUID = graph_runner_in_db.id
 
             with concurrent.futures.ThreadPoolExecutor() as executor:

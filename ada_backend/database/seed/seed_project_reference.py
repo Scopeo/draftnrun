@@ -3,7 +3,7 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from ada_backend.database import models as db
-from ada_backend.database.models import ParameterType, UIComponent, UIComponentProperties, SelectOption
+from ada_backend.database.models import ParameterType, UIComponent, UIComponentProperties
 from ada_backend.database.component_definition_seeding import (
     upsert_components,
     upsert_components_parameter_definitions,
@@ -45,23 +45,6 @@ def seed_project_reference_components(session: Session):
                     description="The UUID of the project whose graph workflow will be executed",
                 ).model_dump(exclude_unset=True, exclude_none=True),
             ),
-            # TODO: Change to version
-            db.ComponentParameterDefinition(
-                id=UUID("b8f3c2d1-4e5a-4b6c-9d7e-1f2a3b4c5d6e"),
-                component_id=project_reference.id,
-                name="env",
-                type=ParameterType.STRING,
-                nullable=False,
-                default="production",
-                ui_component=UIComponent.SELECT,
-                ui_component_properties=UIComponentProperties(
-                    options=[
-                        SelectOption(value="production", label="Production"),
-                        SelectOption(value="draft", label="Draft"),
-                    ],
-                    label="Environment",
-                    description="Select which environment of the project to execute",
-                ).model_dump(exclude_unset=True, exclude_none=True),
-            ),
+            # TODO: Add version, now it can only reference the latest "production" version
         ],
     )
