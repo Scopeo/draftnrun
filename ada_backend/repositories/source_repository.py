@@ -57,6 +57,18 @@ def get_sources(
     return sources
 
 
+def get_source_by_name(
+    session_sql_alchemy: Session,
+    organization_id: UUID,
+    source_name: str,
+) -> Optional[db.DataSource]:
+    return (
+        session_sql_alchemy.query(db.DataSource)
+        .filter(db.DataSource.organization_id == organization_id, db.DataSource.name == source_name)
+        .first()
+    )
+
+
 def create_source(
     session: Session,
     organization_id: UUID,

@@ -70,10 +70,43 @@ def update_ingestion_task(
         ) from e
 
 
+def upsert_source(
+    organization_id: str,
+    source_data: DataSourceSchema,
+) -> str:
+    """Upsert a source in the database."""
+    # Get the source from the database
+    try:
+        response = requests.get(
+            f"{str(settings.ADA_URL)}/sources/{organization_id}/{source_data.name}",
+            headers={
+                "Content-Type": "application/json",
+            },
+        )
+        response.raise_for_status()
+        existing_source = response.json()
+
+        # Check if the response is None (source not found)
+        if existing_source is None:
+            # Source doesn't exist, create new one
+            source_id = create_source(organization_id, source_data)
+            return source_id
+
+        # Source already exists, return its ID
+        LOGGER.info(f"Source {existing_source['id']} already exists for organization {organization_id}")
+        return str(existing_source["id"])
+
+    except Exception as e:
+        LOGGER.error(f"Failed to upsert source: {str(e)}")
+        raise requests.exceptions.RequestException(
+            f"Failed to upsert source for organization {organization_id}: {str(e)}"
+        ) from e
+
+
 def create_source(
     organization_id: str,
     source_data: DataSourceSchema,
-) -> None:
+) -> str:
     """Create a source in the database."""
 
     try:
@@ -86,8 +119,9 @@ def create_source(
             },
         )
         response.raise_for_status()
-        LOGGER.info(f"Successfully created source for organization {organization_id}")
-        return response.json()
+        source_id = response.json()
+        LOGGER.info(f"Successfully created source {source_id} for organization {organization_id}")
+        return str(source_id)
     except Exception as e:
         LOGGER.error(f"Failed to create source: {str(e)}")
         raise requests.exceptions.RequestException(
@@ -189,8 +223,8 @@ async def upload_source(
         embedding_model_reference=f"{embedding_service._provider}:{embedding_service._model_name}",
         attributes=attributes,
     )
-    LOGGER.info(f"Creating source {source_name} for organization {organization_id} in database")
-    source_id = create_source(
+    LOGGER.info(f"Upserting source {source_name} for organization {organization_id} in database")
+    source_id = upsert_source(
         organization_id=organization_id,
         source_data=source_data,
     )

@@ -1,5 +1,5 @@
 import logging
-from typing import List
+from typing import List, Optional
 from uuid import UUID
 
 from sqlalchemy.orm import Session
@@ -11,6 +11,7 @@ from ada_backend.repositories.source_repository import (
     get_sources,
     upsert_source,
     get_source_attributes,
+    get_source_by_name,
 )
 from ada_backend.schemas.source_schema import (
     DataSourceSchema,
@@ -65,6 +66,30 @@ def get_sources_by_organization(
     except Exception as e:
         LOGGER.error(f"Error in get_sources_by_organization: {str(e)}")
         raise ValueError(f"Failed to get sources: {str(e)}") from e
+
+
+def get_organization_source_by_name(
+    session: Session,
+    organization_id: UUID,
+    source_name: str,
+) -> Optional[DataSourceSchemaResponse]:
+    source = get_source_by_name(session, organization_id, source_name)
+    if not source:
+        return None
+    return DataSourceSchemaResponse(
+        id=source.id,
+        name=source.name,
+        type=source.type,
+        organization_id=source.organization_id,
+        database_schema=source.database_schema,
+        database_table_name=source.database_table_name,
+        qdrant_collection_name=source.qdrant_collection_name,
+        qdrant_schema=source.qdrant_schema,
+        embedding_model_reference=source.embedding_model_reference,
+        created_at=str(source.created_at),
+        updated_at=str(source.updated_at),
+        last_ingestion_time=str(source.last_ingestion_time) if source.last_ingestion_time else None,
+    )
 
 
 def create_source_by_organization(
