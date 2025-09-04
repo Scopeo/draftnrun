@@ -39,6 +39,7 @@ TOOL_DESCRIPTION_UUIDS = {
     "terminal_command_runner_tool_description": UUID("e2b11112-2222-3333-4444-555555555555"),
     "default_llm_call_tool_description": UUID("b91d418d-a67f-40b9-9266-b01ca202747d"),
     "default_pdf_generation_tool_description": UUID("e2b11113-2222-3333-4444-555555555555"),
+    "default_project_reference_tool_description": UUID("4c8f9e2e-1a3b-4567-8901-234567890abc"),
 }
 
 
