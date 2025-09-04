@@ -113,14 +113,15 @@ def split_df_by_token_limit(
 
     for _, row in df.iterrows():
         current_chunk.append(row)
-        temp_df = pd.DataFrame(current_chunk, columns=df.columns)
+        temp_df = pd.DataFrame(current_chunk, columns=df.columns).reset_index(drop=True)
         if get_chunk_token_count(chunk_df=temp_df) > max_tokens:
             current_chunk.pop()
-            chunk_df = pd.DataFrame(current_chunk, columns=df.columns)
+            chunk_df = pd.DataFrame(current_chunk, columns=df.columns).reset_index(drop=True)
             chunks.append(chunk_df)
             current_chunk = [row]
 
     if current_chunk:
-        chunks.append(pd.DataFrame(current_chunk, columns=df.columns))
+        chunk_df = pd.DataFrame(current_chunk, columns=df.columns).reset_index(drop=True)
+        chunks.append(chunk_df)
 
     return chunks
