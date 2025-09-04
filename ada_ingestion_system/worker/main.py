@@ -172,17 +172,85 @@ class Worker:
                 cwd=str(Path(__file__).parents[2]),  # Run from repository root
             )
 
-            # Stream and log output
-            stdout, stderr = process.communicate()
-
-            if stdout:
-                logger.info("script_stdout", output=stdout.decode())
-            if stderr:
-                stderr_text = stderr.decode()
-                # Parse and format error for better readability
+            # Real-time logging - stream output as it happens
+            import select
+            import fcntl
+            
+            # Make stdout and stderr non-blocking for real-time reading
+            if process.stdout:
+                fd = process.stdout.fileno()
+                fl = fcntl.fcntl(fd, fcntl.F_GETFL)
+                fcntl.fcntl(fd, fcntl.F_SETFL, fl | os.O_NONBLOCK)
+            
+            if process.stderr:
+                fd = process.stderr.fileno()
+                fl = fcntl.fcntl(fd, fcntl.F_GETFL)
+                fcntl.fcntl(fd, fcntl.F_SETFL, fl | os.O_NONBLOCK)
+            
+            stdout_buffer = ""
+            stderr_buffer = ""
+            stderr_lines = []
+            
+            # Stream output in real-time until process completes
+            while process.poll() is None:
+                ready, _, _ = select.select([process.stdout, process.stderr], [], [], 0.1)
+                
+                for stream in ready:
+                    if stream == process.stdout:
+                        try:
+                            chunk = stream.read(1024).decode('utf-8', errors='replace')
+                            if chunk:
+                                stdout_buffer += chunk
+                                # Log complete lines immediately
+                                while '\n' in stdout_buffer:
+                                    line, stdout_buffer = stdout_buffer.split('\n', 1)
+                                    if line.strip():
+                                        logger.info("script_live", output=line.strip())
+                        except:
+                            pass
+                    
+                    elif stream == process.stderr:
+                        try:
+                            chunk = stream.read(1024).decode('utf-8', errors='replace')
+                            if chunk:
+                                stderr_buffer += chunk
+                                # Log complete lines immediately
+                                while '\n' in stderr_buffer:
+                                    line, stderr_buffer = stderr_buffer.split('\n', 1)
+                                    if line.strip():
+                                        stderr_lines.append(line.strip())
+                                        logger.error("script_live_error", output=line.strip())
+                        except:
+                            pass
+            
+            # Read any remaining output after process completes
+            try:
+                if process.stdout:
+                    remaining = process.stdout.read().decode('utf-8', errors='replace')
+                    stdout_buffer += remaining
+                if process.stderr:
+                    remaining = process.stderr.read().decode('utf-8', errors='replace')
+                    stderr_buffer += remaining
+            except:
+                pass
+            
+            # Log any remaining buffer content
+            if stdout_buffer.strip():
+                for line in stdout_buffer.strip().split('\n'):
+                    if line.strip():
+                        logger.info("script_final", output=line.strip())
+            
+            if stderr_buffer.strip():
+                for line in stderr_buffer.strip().split('\n'):
+                    if line.strip():
+                        stderr_lines.append(line.strip())
+                        logger.error("script_final_error", output=line.strip())
+            
+            # Generate error summary if we have stderr content
+            if stderr_lines:
+                stderr_text = '\n'.join(stderr_lines)
                 error_summary = self._parse_error_message(stderr_text)
                 logger.error("script_error_summary", **error_summary)
-                logger.error("script_stderr", output=stderr_text)
 
             if process.returncode != 0:
                 logger.error("script_failed", return_code=process.returncode)
