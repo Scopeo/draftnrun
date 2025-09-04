@@ -65,16 +65,20 @@ def test_qdrant_service():
         )
     )
     assert asyncio.run(qdrant_agentic_service.count_points_async(TEST_COLLECTION_NAME)) == 2
-    assert asyncio.run(qdrant_agentic_service.delete_chunks_async(
-        point_ids=["1"],
-        id_field="chunk_id",
-        collection_name=TEST_COLLECTION_NAME,
-    ))
+    assert asyncio.run(
+        qdrant_agentic_service.delete_chunks_async(
+            point_ids=["1"],
+            id_field="chunk_id",
+            collection_name=TEST_COLLECTION_NAME,
+        )
+    )
     assert asyncio.run(qdrant_agentic_service.count_points_async(TEST_COLLECTION_NAME)) == 1
-    retrieved_chunks = asyncio.run(qdrant_agentic_service.retrieve_similar_chunks_async(
-        query_text="chunk2",
-        collection_name=TEST_COLLECTION_NAME,
-    ))
+    retrieved_chunks = asyncio.run(
+        qdrant_agentic_service.retrieve_similar_chunks_async(
+            query_text="chunk2",
+            collection_name=TEST_COLLECTION_NAME,
+        )
+    )
     correct_chunk = SourceChunk(
         name="2",
         content="chunk2",
@@ -225,11 +229,13 @@ def test_qdrant_filtering(
 
     formatted_filter = format_qdrant_filter(filter_dict, filtering_condition)
 
-    retrieved_chunks = asyncio.run(qdrant_agentic_service.retrieve_similar_chunks_async(
-        query_text="chunk1",
-        collection_name=TEST_COLLECTION_NAME,
-        filter=formatted_filter,
-    ))
+    retrieved_chunks = asyncio.run(
+        qdrant_agentic_service.retrieve_similar_chunks_async(
+            query_text="chunk1",
+            collection_name=TEST_COLLECTION_NAME,
+            filter=formatted_filter,
+        )
+    )
     set_chunks = set([chunk.name for chunk in retrieved_chunks])
     assert expected_chunk == set_chunks
     assert asyncio.run(qdrant_agentic_service.delete_collection_async(TEST_COLLECTION_NAME))
