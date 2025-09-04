@@ -5,6 +5,7 @@ from functools import wraps
 from typing import Optional
 from abc import ABC
 from pydantic import BaseModel
+import base64
 
 from opentelemetry.trace import get_current_span
 from openinference.semconv.trace import SpanAttributes
@@ -20,7 +21,7 @@ from engine.agent.utils import load_str_to_json
 from engine.llm_services.constrained_output_models import (
     OutputFormatModel,
     format_prompt_with_pydantic_output,
-    convert_json_answer_to_pydantic,
+    convert_json_str_to_pydantic,
 )
 from settings import settings
 from engine.llm_services.utils import chat_completion_to_response
@@ -616,8 +617,6 @@ class VisionService(LLMService):
                     )
 
     def _format_image_content(self, image_content_list: list[bytes]) -> list[dict[str, str]]:
-        import base64
-
         return [
             {
                 "type": "image_url",
@@ -697,11 +696,10 @@ class VisionService(LLMService):
                             SpanAttributes.LLM_TOKEN_COUNT_TOTAL: chat_response.usage.total_tokens,
                         }
                     )
-                    return convert_json_answer_to_pydantic(
+                    return convert_json_str_to_pydantic(
                         chat_response.choices[0].message.content,
                         response_format,
                     )
-
         else:
             chat_response = await client.chat.completions.create(
                 messages=messages,
