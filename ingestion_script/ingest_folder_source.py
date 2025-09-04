@@ -61,7 +61,6 @@ QDRANT_SCHEMA = QdrantCollectionSchema(
 )
 
 
-
 def load_llms_services():
     if settings.INGESTION_VIA_CUSTOM_MODEL:
         vision_completion_service = get_first_available_multimodal_custom_llm()
