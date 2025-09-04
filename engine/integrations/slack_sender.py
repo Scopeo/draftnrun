@@ -18,7 +18,10 @@ SLACK_SENDER_TOOL_DESCRIPTION = ToolDescription(
     tool_properties={
         "channel": {
             "type": "string",
-            "description": "Channel name or ID to send message to (e.g., #general or C1234567890)",
+            "description": (
+                "Channel name or ID to send message to (e.g., #general or C1234567890). "
+                "If unspecified, the default channel will be used."
+            ),
         },
         "message": {
             "type": "string",
@@ -29,7 +32,7 @@ SLACK_SENDER_TOOL_DESCRIPTION = ToolDescription(
             "description": "Thread timestamp to reply to (optional). If provided, message will be sent as a reply.",
         },
     },
-    required_tool_properties=["channel", "message"],
+    required_tool_properties=["message"],
 )
 
 
