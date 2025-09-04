@@ -3,10 +3,10 @@ from typing import Optional
 
 from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttributes
 from opentelemetry.trace import get_current_span
+from slack_sdk import WebClient
 
 from engine.agent.types import AgentPayload, ChatMessage, ComponentAttributes, ToolDescription
 from engine.agent.agent import Agent
-from engine.integrations.utils import get_slack_client
 from engine.integrations.slack_utils import send_slack_message
 from engine.trace.trace_manager import TraceManager
 
@@ -61,10 +61,10 @@ class SlackSender(Agent):
             component_attributes=component_attributes,
         )
 
-        self.client = get_slack_client(access_token)
+        self.client = WebClient(token=access_token)
         self.default_channel = default_channel
 
-    async def _run_without_io_trace(
+    async def _run_without_io_trace(  # type: ignore[override]
         self,
         *inputs: AgentPayload,
         channel: Optional[str] = None,
