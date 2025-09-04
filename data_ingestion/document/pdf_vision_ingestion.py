@@ -309,6 +309,7 @@ async def create_chunks_from_document(
         prompt=PROMPT_DETERMINE_FILE_TYPE,
         google_llm_service=google_llm_service,
         openai_llm_service=openai_llm_service,
+        response_format=FileType,
         image_content_list=images_content_list[:number_of_pages_to_detect_document_type],
     )
 
