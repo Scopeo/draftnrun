@@ -178,7 +178,7 @@ def seed_ai_agent_components(session: Session):
                     label="Include current date in system prompt",
                     description=(
                         "When enabled, the current date and time will be automatically added to the"
-                        " end of the system prompt."
+                        " beginning of the system prompt."
                         " This can help the AI agent be aware of the current date for time-sensitive tasks."
                     ),
                 ).model_dump(exclude_unset=True, exclude_none=True),

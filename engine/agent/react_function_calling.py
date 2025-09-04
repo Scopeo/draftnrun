@@ -168,7 +168,7 @@ class ReActAgent(Agent):
         system_prompt_content = self.initial_prompt
         if self._date_in_system_prompt:
             current_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            system_prompt_content = f"{self.initial_prompt}\n\nCurrent date and time: {current_date}"
+            system_prompt_content = f"Current date and time: {current_date}\n\n{self.initial_prompt}"
 
         if system_message is None:
             original_agent_input.messages.insert(

@@ -266,10 +266,10 @@ def test_date_in_system_prompt_enabled(
 
         react_agent.run_sync(agent_input)
 
-        # Check that the system message contains the date
+        # Check that the system message contains the date at the beginning
         system_message = agent_input.messages[0]
         assert system_message.role == "system"
-        assert "Current date and time: 2024-01-15 10:30:00" in system_message.content
+        assert system_message.content.startswith("Current date and time: 2024-01-15 10:30:00")
         assert INITIAL_PROMPT in system_message.content
 
 
