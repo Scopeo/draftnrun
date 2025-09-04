@@ -1,3 +1,4 @@
+from typing import Optional
 from uuid import UUID
 
 from pydantic import BaseModel
@@ -29,6 +30,11 @@ class ApiKeyCreateRequest(BaseModel):
     project_id: UUID
 
 
+class OrgApiKeyCreateRequest(BaseModel):
+    key_name: str
+    org_id: UUID
+
+
 class ApiKeyCreatedResponse(BaseModel):
     private_key: str
     key_id: UUID
@@ -45,4 +51,6 @@ class ApiKeyDeleteResponse(BaseModel):
 
 class VerifiedApiKey(BaseModel):
     api_key_id: UUID
-    project_id: UUID
+    scope_type: str
+    project_id: Optional[UUID]
+    organization_id: Optional[UUID]
