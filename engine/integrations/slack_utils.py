@@ -1,8 +1,8 @@
 import logging
-from typing import Dict, Any
 from functools import wraps
 
 from slack_sdk import WebClient
+from slack_sdk.web import SlackResponse
 from slack_sdk.errors import SlackApiError
 
 LOGGER = logging.getLogger(__name__)
@@ -27,14 +27,16 @@ def send_slack_message(
     client: WebClient,
     channel: str,
     text: str,
+    as_markdown: bool = False,
     thread_ts: str | None = None,
-    attachments: list[Dict[str, str]] | None = None,
-) -> Any:
+    attachments: list[dict[str, str]] | None = None,
+) -> SlackResponse:
     """Send a message to a Slack channel and thread"""
     result = client.chat_postMessage(
         channel=channel,
         thread_ts=thread_ts,
-        text=text,
         attachments=attachments,
+        text=text if not as_markdown else None,
+        markdown_text=text if as_markdown else None,
     )
     return result

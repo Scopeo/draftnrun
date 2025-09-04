@@ -105,6 +105,7 @@ class SlackSender(Agent):
                 channel=target_channel,
                 text=message,
                 thread_ts=thread_ts,
+                as_markdown=True,
             )
 
             output_message = f"Message sent successfully to {target_channel}. Timestamp: {result['ts']}"
