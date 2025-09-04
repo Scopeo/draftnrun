@@ -1,6 +1,7 @@
 import logging
 import json
 import asyncio
+from datetime import datetime
 from typing import Optional
 
 from opentelemetry import trace as trace_api
@@ -52,6 +53,7 @@ class ReActAgent(Agent):
         first_history_messages: int = 1,
         last_history_messages: int = 50,
         allow_tool_shortcuts: bool = False,
+        date_in_system_prompt: bool = False,
     ) -> None:
         super().__init__(
             trace_manager=trace_manager,
@@ -73,6 +75,7 @@ class ReActAgent(Agent):
         self._completion_service = completion_service
         self.input_data_field_for_messages_history = input_data_field_for_messages_history
         self._allow_tool_shortcuts = allow_tool_shortcuts
+        self._date_in_system_prompt = date_in_system_prompt
         self._shared_sandbox: Optional[AsyncSandbox] = None
         self._e2b_api_key = getattr(settings, "E2B_API_KEY", None)
 
@@ -160,6 +163,13 @@ class ReActAgent(Agent):
             original_agent_input["messages"] = original_agent_input[self.input_data_field_for_messages_history]
             original_agent_input = AgentPayload(**original_agent_input)
         system_message = next((msg for msg in original_agent_input.messages if msg.role == "system"), None)
+
+        # Prepare system prompt content
+        system_prompt_content = self.initial_prompt
+        if self._date_in_system_prompt:
+            current_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            system_prompt_content = f"{self.initial_prompt}\n\nCurrent date and time: {current_date}"
+
         if system_message is None:
             original_agent_input.messages.insert(
                 0,
@@ -167,7 +177,7 @@ class ReActAgent(Agent):
                     role="system",
                     content=fill_prompt_template_with_dictionary(
                         original_agent_input.model_dump(),
-                        self.initial_prompt,
+                        system_prompt_content,
                         self.component_attributes.component_instance_name,
                     ),
                 ),
@@ -177,7 +187,7 @@ class ReActAgent(Agent):
             # to replace the system message by the initial prompt
             original_agent_input.messages[0] = ChatMessage(
                 role="system",
-                content=self.initial_prompt,
+                content=system_prompt_content,
             )
         agent_input = original_agent_input.model_copy(deep=True)
         history_messages_handled = self._memory_handling.get_truncated_messages_history(agent_input.messages)

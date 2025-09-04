@@ -166,6 +166,24 @@ def seed_ai_agent_components(session: Session):
                 ).model_dump(exclude_unset=True, exclude_none=True),
                 is_advanced=True,
             ),
+            db.ComponentParameterDefinition(
+                id=UUID("f7dbbe12-e6ff-5bfe-b006-f6bf0e9cbf4d"),
+                component_id=base_ai_agent.id,
+                name="date_in_system_prompt",
+                type=ParameterType.BOOLEAN,
+                nullable=False,
+                default="False",
+                ui_component=UIComponent.CHECKBOX,
+                ui_component_properties=UIComponentProperties(
+                    label="Include current date in system prompt",
+                    description=(
+                        "When enabled, the current date and time will be automatically added to the"
+                        " end of the system prompt."
+                        " This can help the AI agent be aware of the current date for time-sensitive tasks."
+                    ),
+                ).model_dump(exclude_unset=True, exclude_none=True),
+                is_advanced=True,
+            ),
             *build_function_calling_service_config_definitions(
                 component_id=base_ai_agent.id,
                 params_to_seed=[
