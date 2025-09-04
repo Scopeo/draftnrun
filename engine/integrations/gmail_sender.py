@@ -1,7 +1,9 @@
 import base64
 import logging
 from email.message import EmailMessage
-from typing import Optional
+from pathlib import Path
+from typing import Optional, Iterable
+import mimetypes
 
 from googleapiclient.errors import HttpError
 from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttributes
@@ -36,9 +38,46 @@ GMAIL_SENDER_TOOL_DESCRIPTION = ToolDescription(
                 "If not provided, the email will be saved as a draft without recipients."
             ),
         },
+        "cc": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": ("List of CC email addresses to send the email to."),
+        },
+        "bcc": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": ("List of BCC email addresses to send the email to."),
+        },
+        "email_attachments": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": ("List of file paths to attach to the email."),
+        },
     },
     required_tool_properties=["mail_subject", "mail_body"],
 )
+
+
+def _ensure_paths(attachments: Optional[Iterable[str | Path]]) -> list[Path]:
+    """Normalize and validate attachment paths."""
+    if not attachments:
+        return []
+    paths: list[Path] = []
+    for att in attachments:
+        p = Path(att)
+        if not p.is_file():
+            raise FileNotFoundError(f"Attachment not found or not a file: {p}")
+        paths.append(p)
+    return paths
+
+
+def _guess_mimetype(path: Path) -> tuple[str, str]:
+    """Return (maintype, subtype) for the given file path, defaulting to 'application/octet-stream'."""
+    mime, _ = mimetypes.guess_type(path.name)
+    if not mime:
+        return "application", "octet-stream"
+    maintype, subtype = mime.split("/", 1)
+    return maintype, subtype
 
 
 def create_raw_mail_message(
@@ -46,6 +85,9 @@ def create_raw_mail_message(
     body: str,
     sender_email_address: str,
     recipients: Optional[list[str]] = None,
+    cc: Optional[list[str]] = None,
+    bcc: Optional[list[str]] = None,
+    attachments: Optional[Iterable[str | Path]] = None,
 ) -> dict:
     """Creates an EmailMessage object with the given subject, body, and recipients."""
     message = EmailMessage()
@@ -54,6 +96,19 @@ def create_raw_mail_message(
     message["From"] = sender_email_address
     if recipients:
         message["To"] = ", ".join(recipients)
+    if cc:
+        message["Cc"] = ", ".join(cc)
+    if bcc:
+        message["Bcc"] = ", ".join(bcc)
+    for path in _ensure_paths(attachments):
+        maintype, subtype = _guess_mimetype(path)
+        data = path.read_bytes()
+        message.add_attachment(
+            data,
+            maintype=maintype,
+            subtype=subtype,
+            filename=path.name,
+        )
     encoded_message = base64.urlsafe_b64encode(message.as_bytes()).decode()
     return {"raw": encoded_message}
 
@@ -89,13 +144,24 @@ class GmailSender(Agent):
 
         self.email_address = get_google_user_email(access_token)
 
-    def gmail_create_draft(self, email_subject: str, email_body: str, email_recipients: Optional[list[str]] = None):
+    def gmail_create_draft(
+        self,
+        email_subject: str,
+        email_body: str,
+        email_recipients: Optional[list[str]] = None,
+        cc: Optional[list[str]] = None,
+        bcc: Optional[list[str]] = None,
+        attachments: Optional[Iterable[str | Path]] = None,
+    ):
         try:
             raw_email_message = create_raw_mail_message(
                 subject=email_subject,
                 body=email_body,
                 sender_email_address=self.email_address,
                 recipients=email_recipients,
+                cc=cc,
+                bcc=bcc,
+                attachments=attachments,
             )
             draft = self.service.users().drafts().create(userId="me", body={"message": raw_email_message}).execute()
             LOGGER.debug(f'Draft id: {draft["id"]}\nDraft message: {draft["message"]}')
@@ -105,13 +171,24 @@ class GmailSender(Agent):
             draft = None
         return draft
 
-    def gmail_send_email(self, email_subject: str, email_body: str, email_recipients: Optional[list[str]] = None):
+    def gmail_send_email(
+        self,
+        email_subject: str,
+        email_body: str,
+        email_recipients: Optional[list[str]] = None,
+        cc: Optional[list[str]] = None,
+        bcc: Optional[list[str]] = None,
+        attachments: Optional[Iterable[str | Path]] = None,
+    ):
         try:
             create_message = create_raw_mail_message(
                 subject=email_subject,
                 body=email_body,
                 sender_email_address=self.email_address,
                 recipients=email_recipients,
+                cc=cc,
+                bcc=bcc,
+                attachments=attachments,
             )
             sent_message = self.service.users().messages().send(userId="me", body=create_message).execute()
             LOGGER.debug(f"Message sent successfully: {sent_message}")
@@ -126,6 +203,9 @@ class GmailSender(Agent):
         mail_subject: Optional[str] = None,
         mail_body: Optional[str] = None,
         email_recipients: Optional[list[str]] = None,
+        cc: Optional[list[str]] = None,
+        bcc: Optional[list[str]] = None,
+        email_attachments: Optional[Iterable[str | Path]] = None,
     ) -> AgentPayload:
         if not mail_subject or not mail_body:
             raise ValueError("Both email_subject and email_body must be provided")
@@ -137,11 +217,11 @@ class GmailSender(Agent):
         )
         if self.send_as_draft or email_recipients is None:
             LOGGER.info("Creating draft email")
-            draft = self.gmail_create_draft(mail_subject, mail_body, email_recipients)
+            draft = self.gmail_create_draft(mail_subject, mail_body, email_recipients, cc, bcc, email_attachments)
             if not draft:
                 raise RuntimeError("Failed to create draft email")
             output_message = f"Draft created successfully with ID: {draft['id']}"
         else:
-            send_message = self.gmail_send_email(mail_subject, mail_body, email_recipients)
+            send_message = self.gmail_send_email(mail_subject, mail_body, email_recipients, cc, bcc, email_attachments)
             output_message = f"Email sent successfully with ID: {send_message['id']}"
         return AgentPayload(messages=[ChatMessage(role="assistant", content=output_message)])
