@@ -18,7 +18,7 @@ from ada_backend.database.seed.utils import (
     ParameterLLMConfig,
     build_function_calling_service_config_definitions,
 )
-from ada_backend.services.registry import COMPLETION_MODEL_IN_DB
+from ada_backend.services.registry import COMPLETION_MODEL_IN_DB, TEMPERATURE_IN_DB
 
 
 def seed_ai_agent_components(session: Session):
@@ -194,6 +194,10 @@ def seed_ai_agent_components(session: Session):
                     ParameterLLMConfig(
                         param_name="api_key",
                         param_id=UUID("78d5d921-9501-44b3-9939-7d7ebf063513"),
+                    ),
+                    ParameterLLMConfig(
+                        param_name=TEMPERATURE_IN_DB,
+                        param_id=UUID("5bdece0d-bbc1-4cc7-a192-c4b7298dc163"),
                     ),
                 ],
             ),

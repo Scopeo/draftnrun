@@ -19,7 +19,12 @@ from ada_backend.database.seed.utils import (
     ParameterLLMConfig,
     build_completion_service_config_definitions,
 )
-from ada_backend.services.registry import COMPLETION_MODEL_IN_DB
+from ada_backend.services.registry import (
+    COMPLETION_MODEL_IN_DB,
+    TEMPERATURE_IN_DB,
+    REASONING_IN_DB,
+    VERBOSITY_IN_DB,
+)
 
 
 def seed_llm_call_components(session: Session):
@@ -125,6 +130,18 @@ def seed_llm_call_components(session: Session):
                     ParameterLLMConfig(
                         param_name=COMPLETION_MODEL_IN_DB,
                         param_id=UUID("1233f6b4-cfab-44f6-bf62-f6e0a1b95db1"),
+                    ),
+                    ParameterLLMConfig(
+                        param_name=TEMPERATURE_IN_DB,
+                        param_id=UUID("7645d690-45c1-4b3e-bcdc-babf0808f97d"),
+                    ),
+                    ParameterLLMConfig(
+                        param_name=VERBOSITY_IN_DB,
+                        param_id=UUID("76c4361d-06f4-41dd-9c6c-cf66292de155"),
+                    ),
+                    ParameterLLMConfig(
+                        param_name=REASONING_IN_DB,
+                        param_id=UUID("9863153f-d43c-46e5-bec9-9bef1deff2b4"),
                     ),
                     ParameterLLMConfig(
                         param_name="api_key",

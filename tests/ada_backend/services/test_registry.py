@@ -22,4 +22,4 @@ def test_synthesizer_registration():
     assert synthesizer._completion_service is not None
     assert isinstance(synthesizer._completion_service, CompletionService)
     assert synthesizer._completion_service._model_name == "gpt-4.1-mini"
-    assert synthesizer._completion_service._temperature == 0.99
+    assert synthesizer._completion_service._invocation_parameters.get("temperature") == 0.99
