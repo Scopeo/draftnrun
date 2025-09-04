@@ -244,7 +244,7 @@ class ComponentVersion(Base):
     component = relationship("Component")
     definitions = relationship(
         "ComponentParameterDefinition",
-        back_populates="component",
+        back_populates="component_version",
     )
     default_tool_description = relationship("ToolDescription", foreign_keys=[default_tool_description_id])
 
@@ -455,9 +455,9 @@ class ComponentInstance(Base):
     __tablename__ = "component_instances"
 
     id = mapped_column(UUID(as_uuid=True), primary_key=True, index=True, default=uuid.uuid4)
-    component_id = mapped_column(
+    component_version_id = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("components.id", ondelete="CASCADE"),
+        ForeignKey("component_versions.id", ondelete="CASCADE"),
         nullable=False,
     )
     name = mapped_column(String, nullable=True, index=True)
@@ -465,7 +465,7 @@ class ComponentInstance(Base):
     tool_description_id = mapped_column(UUID(as_uuid=True), ForeignKey("tool_descriptions.id"), nullable=True)
     created_at = mapped_column(DateTime(timezone=True), server_default=func.now())
 
-    component = relationship("Component")
+    component_version = relationship("ComponentVersion")
     tool_description = relationship("ToolDescription")
     basic_parameters = relationship(
         "BasicParameter",
