@@ -97,7 +97,7 @@ async def ingestion_main_async(
                 organization_id=organization_id,
                 ingestion_task=failed_ingestion_task,
             )
-            return
+            raise  # Re-raise the exception to ensure subprocess exits with non-zero code
 
     elif source_type == SourceType.LOCAL:
         if check_missing_params(
@@ -124,7 +124,7 @@ async def ingestion_main_async(
                 organization_id=organization_id,
                 ingestion_task=failed_ingestion_task,
             )
-            return
+            raise  # Re-raise the exception to ensure subprocess exits with non-zero code
 
     elif source_type == SourceType.DATABASE:
         if check_missing_params(
@@ -169,7 +169,7 @@ async def ingestion_main_async(
                 organization_id=organization_id,
                 ingestion_task=failed_ingestion_task,
             )
-            return
+            raise  # Re-raise the exception to ensure subprocess exits with non-zero code
 
 
 def ingestion_main(**kwargs):
