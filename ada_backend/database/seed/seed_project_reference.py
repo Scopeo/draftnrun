@@ -17,7 +17,7 @@ def seed_project_reference_components(session: Session):
     project_reference = db.Component(
         id=COMPONENT_UUIDS["project_reference"],
         name="ProjectReference",
-        description="Execute another project's graph workflow as a component",
+        description="Execute another project's graph workflow as a component. The project must be published to production.",
         is_agent=True,
         function_callable=False,
         release_stage=db.ReleaseStage.INTERNAL,
@@ -42,7 +42,10 @@ def seed_project_reference_components(session: Session):
                 ui_component_properties=UIComponentProperties(
                     label="Project ID",
                     placeholder="Enter the UUID of the project to reference",
-                    description="The UUID of the project whose graph workflow will be executed",
+                    description=(
+                        "The UUID of the project whose graph workflow will be executed. "
+                        "The project must be published to production."
+                    ),
                 ).model_dump(exclude_unset=True, exclude_none=True),
             ),
             # TODO: Add version, now it can only reference the latest "production" version
