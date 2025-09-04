@@ -17,7 +17,7 @@ def seed_project_reference_components(session: Session):
     project_reference = db.Component(
         id=COMPONENT_UUIDS["project_reference"],
         name="ProjectReference",
-        description="Execute another project's graph workflow as a component. The project must be published to production.",
+        description="Execute another project's graph workflow as a component.",
         is_agent=True,
         function_callable=False,
         release_stage=db.ReleaseStage.INTERNAL,
