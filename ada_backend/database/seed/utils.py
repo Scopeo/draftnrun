@@ -83,6 +83,7 @@ COMPONENT_UUIDS: dict[str, UUID] = {
 }
 
 DEFAULT_MODEL = "openai:gpt-5-mini"
+
 # Get models by capability and convert to select options
 COMPLETION_MODELS = [
     SelectOption(value=model["reference"], label=model["name"])
