@@ -1,4 +1,4 @@
-from typing import Dict, List, Optional, Union, Literal, get_args, get_origin
+from typing import Dict, List, Optional, Union, Literal
 from pydantic import BaseModel, RootModel
 import dirtyjson
 
@@ -87,14 +87,33 @@ def format_prompt_with_pydantic_output(prompt: str, pydantic_model: BaseModel) -
 
 
 def search_for_json_object(json_string: str) -> Optional[str]:
-    index_start_bracket = -1
-    index_end_bracket = -1
-    for i, (char, reverse_char) in enumerate(zip(json_string, json_string[::-1])):
-        if char == "{" and index_start_bracket == -1:
-            index_start_bracket = i
-        if reverse_char == "}" and index_end_bracket == -1:
-            index_end_bracket = len(json_string) - i - 1
-    return json_string[index_start_bracket: index_end_bracket + 1]
+    """
+    Extracts a JSON object from a string by finding the first '{' and last '}'.
+
+    This function assumes that the first opening brace and last closing brace
+    form a valid JSON object. The actual validation is left to dirtyjson.loads()
+    in the calling function.
+
+    Args:
+        json_string (str): The string to search for JSON objects in.
+
+    Returns:
+        Optional[str]: The JSON object string between first '{' and last '}', or None if not found.
+    """
+    if not json_string:
+        return None
+
+    # Find the first opening brace
+    start_index = json_string.find("{")
+    if start_index == -1:
+        return None
+
+    # Find the last closing brace
+    end_index = json_string.rfind("}")
+    if end_index == -1 or end_index <= start_index:
+        return None
+
+    return json_string[start_index : end_index + 1]
 
 
 def convert_json_str_to_pydantic(json_str: str, pydantic_model: BaseModel) -> BaseModel:

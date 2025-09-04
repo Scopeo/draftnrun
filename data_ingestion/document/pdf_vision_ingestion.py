@@ -141,8 +141,8 @@ def _build_section_hierarchy(sections, level=1, ancestors=None) -> List[Sections
             section
             for i, section in enumerate(sections)
             if i > current_index
-               and section.level > level
-               and (section.page_number < next_page or (section.page_number == next_page and section.level > level))
+            and section.level > level
+            and (section.page_number < next_page or (section.page_number == next_page and section.level > level))
         ]
 
         if page_span > 5 and nested_sections:
@@ -245,7 +245,7 @@ def _create_chunk_from_text(
     )
 
 
-def _process_pages_individually(
+async def _process_pdf_page_by_page(
     document: FileDocument,
     content_to_process: bytes,
     google_llm_service: VisionService,
@@ -256,7 +256,7 @@ def _process_pages_individually(
     """Process PDF pages individually and return chunks."""
     chunks = []
     for i, img_base64 in enumerate(_pdf_to_images(pdf_content=content_to_process, zoom=zoom)):
-        extracted_text = _extract_text_from_pages_as_images(
+        extracted_text = await _extract_text_from_pages_as_images(
             prompt=prompt,
             google_llm_service=google_llm_service,
             openai_llm_service=openai_llm_service,
@@ -267,7 +267,7 @@ def _process_pages_individually(
     return chunks
 
 
-def _process_with_table_of_contents(
+def _process_pdf_with_table_of_contents(
     document: FileDocument,
     extracted_table_of_content: TableOfContent,
     google_llm_service: VisionService,
@@ -315,7 +315,7 @@ async def create_chunks_from_document(
     # Handle landscape PDFs or PowerPoint conversions
     if pdf_type == PDFType.landscape or file_type.is_converted_from_powerpoint:
         LOGGER.info("Processing PDF in landscape mode...")
-        return _process_pages_individually(
+        return await _process_pdf_page_by_page(
             document=document,
             content_to_process=content_to_process,
             google_llm_service=google_llm_service,
@@ -344,7 +344,7 @@ async def create_chunks_from_document(
         # Use TOC-based processing if available, otherwise fall back to page-by-page
         if extracted_table_of_content and extracted_table_of_content.sections:
             try:
-                return _process_with_table_of_contents(
+                return _process_pdf_with_table_of_contents(
                     document=document,
                     extracted_table_of_content=extracted_table_of_content,
                     google_llm_service=google_llm_service,
@@ -359,7 +359,7 @@ async def create_chunks_from_document(
             LOGGER.info("Table of contents is empty. Falling back to page-by-page processing.")
 
         # Fallback to page-by-page processing
-        return _process_pages_individually(
+        return await _process_pdf_page_by_page(
             document=document,
             content_to_process=content_to_process,
             google_llm_service=google_llm_service,
@@ -373,7 +373,7 @@ async def create_chunks_from_document(
         f"Unexpected PDF type combination: {pdf_type}, "
         f"native={file_type.is_native_pdf}, ppt={file_type.is_converted_from_powerpoint}"
     )
-    return _process_pages_individually(
+    return await _process_pdf_page_by_page(
         document=document,
         content_to_process=content_to_process,
         google_llm_service=google_llm_service,
