@@ -1,17 +1,14 @@
 import logging
 from typing import Optional
-from uuid import UUID
 
 from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttributes
 from opentelemetry.trace import get_current_span
 
-from ada_backend.database.setup_db import get_db
 from engine.agent.types import AgentPayload, ChatMessage, ComponentAttributes, ToolDescription
 from engine.agent.agent import Agent
-from engine.integrations.utils import get_slack_client, get_slack_oauth_access_token
+from engine.integrations.utils import get_slack_client
 from engine.integrations.slack_utils import send_slack_message
 from engine.trace.trace_manager import TraceManager
-from settings import get_settings
 
 LOGGER = logging.getLogger(__name__)
 
@@ -45,21 +42,18 @@ class SlackSender(Agent):
         self,
         trace_manager: TraceManager,
         component_attributes: ComponentAttributes,
-        secret_integration_id: str,
+        access_token: str,
         default_channel: Optional[str] = None,
         tool_description: ToolDescription = SLACK_SENDER_TOOL_DESCRIPTION,
     ):
-        """Initialize SlackSender with OAuth token management.
+        """Initialize SlackSender with a provided Slack OAuth access token.
 
         Args:
             trace_manager: Trace manager for observability
             component_attributes: Component configuration attributes
-            secret_integration_id: UUID of the integration secret containing OAuth tokens
+            access_token: Slack OAuth access token (already obtained via OAuth flow)
             default_channel: Default Slack channel for messages
             tool_description: Tool description for the agent
-
-        Raises:
-            ValueError: If Slack OAuth credentials are not configured
         """
         super().__init__(
             trace_manager,
@@ -67,18 +61,6 @@ class SlackSender(Agent):
             component_attributes=component_attributes,
         )
 
-        session = next(get_db())
-
-        settings = get_settings()
-        if not settings.SLACK_CLIENT_ID or not settings.SLACK_CLIENT_SECRET:
-            raise ValueError("Slack OAuth credentials not configured")
-
-        access_token = get_slack_oauth_access_token(
-            session=session,
-            integration_secret_id=UUID(secret_integration_id),
-            slack_client_id=settings.SLACK_CLIENT_ID,
-            slack_client_secret=settings.SLACK_CLIENT_SECRET,
-        )
         self.client = get_slack_client(access_token)
         self.default_channel = default_channel
 
@@ -93,9 +75,7 @@ class SlackSender(Agent):
 
         Args:
             *inputs: Input payloads (not used for this component)
-            channel: Target Slack channel (uses default if not provided)
-            message: Message text to send
-            thread_ts: Thread timestamp for replies (optional)
+            **kwargs: Expected keys: channel, message, thread_ts (optional)
 
         Returns:
             AgentPayload: Success response with message details

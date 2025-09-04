@@ -12,6 +12,8 @@ from engine.llm_services.llm_service import EmbeddingService, CompletionService,
 from engine.qdrant_service import QdrantService, QdrantCollectionSchema
 from ada_backend.database.setup_db import get_db_session
 from ada_backend.repositories.source_repository import get_data_source_by_id
+from engine.integrations.utils import get_slack_oauth_access_token
+from settings import settings
 
 LOGGER = logging.getLogger(__name__)
 
@@ -400,6 +402,39 @@ def build_qdrant_service_processor(target_name: str = "qdrant_service") -> Param
         params[target_name] = qdrant_service
         params["collection_name"] = collection_name
 
+        return params
+
+    return processor
+
+
+def build_slack_integration_processor(target_name: str = "access_token") -> ParameterProcessor:
+    """
+    Returns a processor that injects a Slack OAuth access token for Slack integrations.
+
+    Expects a parameter named "secret_integration_id" (str or UUID) and resolves it to an
+    access token using the backend DB.
+    """
+
+    def processor(params: dict, constructor_params: dict[str, Any]) -> dict:
+        secret_integration_id = params.pop("secret_integration_id", None)
+        if not secret_integration_id:
+            return params
+
+        if not isinstance(secret_integration_id, UUID):
+            secret_integration_id = UUID(str(secret_integration_id))
+
+        if not settings.SLACK_CLIENT_ID or not settings.SLACK_CLIENT_SECRET:
+            raise ValueError("Slack OAuth credentials not configured")
+
+        with get_db_session() as session:
+            access_token = get_slack_oauth_access_token(
+                session=session,
+                integration_secret_id=secret_integration_id,
+                slack_client_id=settings.SLACK_CLIENT_ID,
+                slack_client_secret=settings.SLACK_CLIENT_SECRET,
+            )
+
+        params[target_name] = access_token
         return params
 
     return processor

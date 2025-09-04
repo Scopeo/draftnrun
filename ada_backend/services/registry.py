@@ -43,6 +43,7 @@ from ada_backend.services.entity_factory import (
     build_web_service_processor,
     build_ocr_service_processor,
 )
+from ada_backend.services.entity_factory import build_slack_integration_processor
 
 COMPLETION_MODEL_IN_DB = "completion_model"
 EMBEDDING_MODEL_IN_DB = "embedding_model"
@@ -442,6 +443,9 @@ def create_factory_registry() -> FactoryRegistry:
         name=SupportedEntityType.SLACK_SENDER,
         factory=AgentFactory(
             entity_class=SlackSender,
+            parameter_processors=[
+                build_slack_integration_processor(),
+            ],
         ),
     )
 
