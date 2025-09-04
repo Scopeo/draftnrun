@@ -311,7 +311,7 @@ async def _ingest_folder_source(
             organization_id=organization_id,
             ingestion_task=ingestion_task,
         )
-        return
+        raise  # Re-raise the exception to ensure subprocess exits with non-zero code
     source_data = DataSourceSchema(
         name=source_name,
         type=source_type,
