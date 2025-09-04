@@ -20,7 +20,7 @@ SLACK_SENDER_TOOL_DESCRIPTION = ToolDescription(
             "type": "string",
             "description": (
                 "Channel name or ID to send message to (e.g., #general or C1234567890). "
-                "If unspecified, the default channel will be used."
+                "If unspecified, leave it blank: it will fallback to a default channel."
             ),
         },
         "message": {
