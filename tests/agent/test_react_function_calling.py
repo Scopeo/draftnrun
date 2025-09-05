@@ -241,3 +241,60 @@ def test_react_agent_without_tools(mock_trace_manager, mock_tool_description, mo
     assert react_agent.component_attributes.component_instance_name == "Test React Agent Without Tools"
     assert react_agent._max_iterations == 3
     assert react_agent.initial_prompt == INITIAL_PROMPT
+
+
+@patch("engine.prometheus_metric.get_tracing_span")
+@patch("engine.prometheus_metric.agent_calls")
+def test_date_in_system_prompt_enabled(
+    agent_calls_mock, get_span_mock, mock_trace_manager, mock_tool_description, mock_llm_service, agent_input
+):
+    """Test that date is included in system prompt when date_in_system_prompt is enabled."""
+    get_span_mock.return_value.project_id = "1234"
+    counter_mock = MagicMock()
+    agent_calls_mock.labels.return_value = counter_mock
+
+    react_agent = ReActAgent(
+        completion_service=mock_llm_service,
+        component_attributes=ComponentAttributes(component_instance_name="Test React Agent With Date"),
+        trace_manager=mock_trace_manager,
+        tool_description=mock_tool_description,
+        date_in_system_prompt=True,
+    )
+
+    with patch("engine.agent.react_function_calling.datetime") as mock_datetime:
+        mock_datetime.now.return_value.strftime.return_value = "2024-01-15 10:30:00"
+
+        react_agent.run_sync(agent_input)
+
+        # Check that the system message contains the date at the beginning
+        system_message = agent_input.messages[0]
+        assert system_message.role == "system"
+        assert system_message.content.startswith("Current date and time: 2024-01-15 10:30:00")
+        assert INITIAL_PROMPT in system_message.content
+
+
+@patch("engine.prometheus_metric.get_tracing_span")
+@patch("engine.prometheus_metric.agent_calls")
+def test_date_in_system_prompt_disabled(
+    agent_calls_mock, get_span_mock, mock_trace_manager, mock_tool_description, mock_llm_service, agent_input
+):
+    """Test that date is not included in system prompt when date_in_system_prompt is disabled."""
+    get_span_mock.return_value.project_id = "1234"
+    counter_mock = MagicMock()
+    agent_calls_mock.labels.return_value = counter_mock
+
+    react_agent = ReActAgent(
+        completion_service=mock_llm_service,
+        component_attributes=ComponentAttributes(component_instance_name="Test React Agent Without Date"),
+        trace_manager=mock_trace_manager,
+        tool_description=mock_tool_description,
+        date_in_system_prompt=False,
+    )
+
+    react_agent.run_sync(agent_input)
+
+    # Check that the system message does not contain the date
+    system_message = agent_input.messages[0]
+    assert system_message.role == "system"
+    assert "Current date and time:" not in system_message.content
+    assert system_message.content == INITIAL_PROMPT

@@ -116,9 +116,7 @@ class TreeChunker:
         else:
             return self._fetch_ancestors_to_level(ancestors[:-1], level)
 
-    def chunk_tree(
-        self, node: MarkdownNode, ancestors: Optional[list[TreeChunk]] = None
-    ) -> list[TreeChunk]:
+    def chunk_tree(self, node: MarkdownNode, ancestors: Optional[list[TreeChunk]] = None) -> list[TreeChunk]:
         """Combines nodes into larger chunks without exceeding max token size."""
         if ancestors is None:
             ancestors = []
