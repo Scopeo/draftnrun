@@ -3,7 +3,7 @@ import json
 from pydantic import BaseModel
 import pytest
 
-from engine.llm_services.llm_service import CompletionService, EmbeddingService
+from engine.llm_services.llm_service import DEFAULT_TEMPERATURE, CompletionService, EmbeddingService
 from engine.llm_services.constrained_output_models import OutputFormatModel
 from engine.trace.span_context import set_tracing_span
 
@@ -29,7 +29,7 @@ def test_completion_service():
     assert completion_service._provider == "openai"
     assert completion_service._model_name == "gpt-4.1-mini"
     assert completion_service._api_key is not None
-    assert completion_service._temperature == 0.5
+    assert completion_service._invocation_parameters.get("temperature") == DEFAULT_TEMPERATURE
     assert completion_service._trace_manager is not None
     text = "Hello, world!"
     response = completion_service.complete(text)
@@ -44,7 +44,7 @@ async def test_completion_service_async():
     assert completion_service._provider == "openai"
     assert completion_service._model_name == "gpt-4o-mini"
     assert completion_service._api_key is not None
-    assert completion_service._temperature == 0.5
+    assert completion_service._invocation_parameters.get("temperature") == DEFAULT_TEMPERATURE
     assert completion_service._trace_manager is not None
     text = "Hello, world!"
     response = await completion_service.complete_async(text)

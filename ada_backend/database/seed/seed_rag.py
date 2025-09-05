@@ -23,7 +23,12 @@ from ada_backend.database.seed.utils import (
     ParameterLLMConfig,
     build_completion_service_config_definitions,
 )
-from ada_backend.services.registry import COMPLETION_MODEL_IN_DB
+from ada_backend.services.registry import (
+    COMPLETION_MODEL_IN_DB,
+    TEMPERATURE_IN_DB,
+    REASONING_IN_DB,
+    VERBOSITY_IN_DB,
+)
 from engine.agent.synthesizer_prompts import (
     get_base_synthetizer_prompt_template,
     get_hybrid_synthetizer_prompt_template,
@@ -591,6 +596,18 @@ def seed_rag_components(session: Session):
                         param_name="api_key",
                         param_id=UUID("989b3cec-7f01-4098-847b-a6ad7c07af24"),
                     ),
+                    ParameterLLMConfig(
+                        param_name=TEMPERATURE_IN_DB,
+                        param_id=UUID("dcae1b6d-f02b-49ee-b71c-efadccf5aa3b"),
+                    ),
+                    ParameterLLMConfig(
+                        param_name=VERBOSITY_IN_DB,
+                        param_id=UUID("d4964db0-ce20-4887-be05-903f60605024"),
+                    ),
+                    ParameterLLMConfig(
+                        param_name=REASONING_IN_DB,
+                        param_id=UUID("027c1dd9-4255-4ed7-a341-bb02ac875b92"),
+                    ),
                 ],
             ),
             # Hybrid Synthesizer
@@ -622,6 +639,18 @@ def seed_rag_components(session: Session):
                         param_name="api_key",
                         param_id=UUID("3703e3a4-bd6d-4aea-b8d3-9196c11f9727"),
                     ),
+                    ParameterLLMConfig(
+                        param_name=TEMPERATURE_IN_DB,
+                        param_id=UUID("6eaeaf02-96d0-4a98-9a60-cbbf84f5c75f"),
+                    ),
+                    ParameterLLMConfig(
+                        param_name=VERBOSITY_IN_DB,
+                        param_id=UUID("ed14997e-ed1c-490a-8274-0e0555153f35"),
+                    ),
+                    ParameterLLMConfig(
+                        param_name=REASONING_IN_DB,
+                        param_id=UUID("2d79582a-8b33-4d16-846c-1f95fed80c3e"),
+                    ),
                 ],
             ),
             # Chunk Selector
@@ -648,6 +677,18 @@ def seed_rag_components(session: Session):
                     ParameterLLMConfig(
                         param_name="api_key",
                         param_id=UUID("7fc840a0-fdb4-4582-bf5d-c9b0d4af0ef1"),
+                    ),
+                    ParameterLLMConfig(
+                        param_name=TEMPERATURE_IN_DB,
+                        param_id=UUID("ebe2dc40-2fed-4552-b493-e35823696bb0"),
+                    ),
+                    ParameterLLMConfig(
+                        param_name=VERBOSITY_IN_DB,
+                        param_id=UUID("359dfe81-84f2-4b3f-bc57-fff31ea8ca75"),
+                    ),
+                    ParameterLLMConfig(
+                        param_name=REASONING_IN_DB,
+                        param_id=UUID("5f3faad3-e32e-4e24-8a26-d586ff6f62f2"),
                     ),
                 ],
             ),
