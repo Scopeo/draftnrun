@@ -8,18 +8,31 @@ from ada_backend.database import models as db
 
 def create_api_key(
     session: Session,
-    project_id: UUID,
+    scope_type: db.ApiKeyType,
+    scope_id: UUID,
     key_name: str,
     hashed_key: str,
     creator_user_id: UUID,
 ) -> UUID:
-    """Creates a new API key for the given user, returns the key id."""
-    new_api_key = db.ApiKey(
-        project_id=project_id,
-        public_key=hashed_key,
-        name=key_name,
-        creator_user_id=creator_user_id,
-    )
+    """Creates a new API key (project- or organization-scoped) and returns its id."""
+
+    if scope_type == db.ApiKeyType.PROJECT:
+        new_api_key = db.ProjectApiKey(
+            project_id=scope_id,
+            public_key=hashed_key,
+            name=key_name,
+            creator_user_id=creator_user_id,
+        )
+    elif scope_type == db.ApiKeyType.ORGANIZATION:
+        new_api_key = db.OrgApiKey(
+            organization_id=scope_id,
+            public_key=hashed_key,
+            name=key_name,
+            creator_user_id=creator_user_id,
+        )
+    else:
+        raise ValueError(f"Invalid scope_type: {scope_type!r}")
+
     session.add(new_api_key)
     session.commit()
     return new_api_key.id
@@ -39,11 +52,19 @@ def get_api_key_by_hashed_key(session: Session, hashed_key: str) -> Optional[db.
 def get_api_keys_by_project_id(session: Session, project_id: UUID) -> list[db.ApiKey]:
     """Retrieves all active API keys by project id."""
     return (
-        session.query(db.ApiKey)
+        session.query(db.ProjectApiKey)
         .filter(
-            db.ApiKey.project_id == project_id,
-            db.ApiKey.is_active.is_(True),
+            db.ProjectApiKey.project_id == project_id,
+            db.ProjectApiKey.is_active.is_(True),
         )
+        .all()
+    )
+
+
+def get_api_keys_by_org_id(session: Session, org_id: UUID) -> list[db.OrgApiKey]:
+    return (
+        session.query(db.OrgApiKey)
+        .filter(db.OrgApiKey.organization_id == org_id, db.OrgApiKey.is_active.is_(True))
         .all()
     )
 
@@ -68,9 +89,9 @@ def get_project_by_api_key(
     return (
         session.query(db.Project)
         .join(
-            db.ApiKey,
-            db.ApiKey.project_id == db.Project.id,
+            db.ProjectApiKey,
+            db.ProjectApiKey.project_id == db.Project.id,
         )
-        .filter(db.ApiKey.public_key == hashed_key)
+        .filter(db.ProjectApiKey.public_key == hashed_key)
         .first()
     )

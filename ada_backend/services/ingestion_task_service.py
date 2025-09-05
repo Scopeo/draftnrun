@@ -48,9 +48,10 @@ def get_ingestion_task_by_organization_id(
 
 def create_ingestion_task_by_organization(
     session: Session,
-    user_id: UUID,
     organization_id: UUID,
     ingestion_task_data: IngestionTaskQueue,
+    user_id: UUID | None = None,
+    api_key_id: UUID | None = None,
 ) -> UUID:
     """Create a new source for an organization."""
     try:
@@ -61,7 +62,7 @@ def create_ingestion_task_by_organization(
             ingestion_task_data.source_type,
             ingestion_task_data.status,
         )
-        track_ingestion_task_created(user_id, organization_id, task_id)
+        track_ingestion_task_created(task_id, organization_id, user_id=user_id, api_key_id=api_key_id)
 
         LOGGER.info(f"Task created in database with ID {task_id}")
 
