@@ -19,36 +19,41 @@ DEFAULT_LLM_CALL_TOOL_DESCRIPTION = ToolDescription(
     description="Templated LLM Call",
     tool_properties={
         "messages": {
-            "type": "object",
-            "description": "A single user message containing fixed text and a file.",
-            "properties": {
-                "role": {"type": "string", "const": "user"},
-                "content": {
-                    "type": "array",
-                    "description": "First item is fixed text, second is a file.",
-                    "minItems": 2,
-                    "maxItems": 2,
-                    "items": {
-                        "type": "object",
-                        "properties": {
-                            "type": {"type": "string", "enum": ["text", "file"]},
-                            "text": {"type": "string"},
-                            "file": {
-                                "type": "object",
-                                "properties": {
-                                    "file_data": {
-                                        "type": "string",
-                                        "description": "Base64-encoded file content with MIME prefix.",
-                                    }
+            "type": "array",
+            "description": "A list of messages containing fixed text and a file.",
+            "minItems": 1,
+            "items": {
+                "type": "object",
+                "properties": {
+                    "role": {"type": "string", "const": "user"},
+                    "content": {
+                        "type": "array",
+                        "description": "First item is fixed text, second is a file.",
+                        "minItems": 1,
+                        "maxItems": 2,
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "type": {"type": "string", "enum": ["text", "file"]},
+                                "text": {"type": "string"},
+                                "file": {
+                                    "type": "object",
+                                    "properties": {
+                                        "file_data": {
+                                            "type": "string",
+                                            "description": "Base64-encoded file content with MIME prefix.",
+                                        }
+                                    },
+                                    "required": ["file_data"],
                                 },
                             },
+                            "required": ["type"],
                         },
-                        "required": ["type"],
                     },
                 },
+                "required": ["role", "content"],
             },
-            "required": ["role", "content"],
-        },
+        }
     },
     required_tool_properties=["messages"],
 )
