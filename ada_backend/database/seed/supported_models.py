@@ -12,11 +12,54 @@ class ModelCapability:
     OCR = "ocr"
     EMBEDDING = "embedding"
     COMPLETION = "completion"
+    REASONING = "reasoning"
 
 
 # Comprehensive model definitions with capabilities
 ALL_SUPPORTED_MODELS = [
     # OpenAI Models
+    {
+        "name": "GPT-5",
+        "reference": "openai:gpt-5",
+        "provider": "openai",
+        "capabilities": [
+            ModelCapability.COMPLETION,
+            ModelCapability.FILE,
+            ModelCapability.IMAGE,
+            ModelCapability.CONSTRAINED_OUTPUT,
+            ModelCapability.FUNCTION_CALLING,
+            ModelCapability.WEB_SEARCH,
+            ModelCapability.REASONING,
+        ],
+    },
+    {
+        "name": "GPT-5 Nano",
+        "reference": "openai:gpt-5-nano",
+        "provider": "openai",
+        "capabilities": [
+            ModelCapability.COMPLETION,
+            ModelCapability.FILE,
+            ModelCapability.IMAGE,
+            ModelCapability.CONSTRAINED_OUTPUT,
+            ModelCapability.FUNCTION_CALLING,
+            ModelCapability.WEB_SEARCH,
+            ModelCapability.REASONING,
+        ],
+    },
+    {
+        "name": "GPT-5 Mini",
+        "reference": "openai:gpt-5-mini",
+        "provider": "openai",
+        "capabilities": [
+            ModelCapability.COMPLETION,
+            ModelCapability.FILE,
+            ModelCapability.IMAGE,
+            ModelCapability.CONSTRAINED_OUTPUT,
+            ModelCapability.FUNCTION_CALLING,
+            ModelCapability.WEB_SEARCH,
+            ModelCapability.REASONING,
+        ],
+    },
     {
         "name": "GPT-4.1",
         "reference": "openai:gpt-4.1",
