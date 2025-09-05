@@ -110,13 +110,34 @@ def track_project_observability_loaded(user_id: UUID, project_id: UUID):
 
 
 @non_breaking_track
-def track_ingestion_task_created(user_id: UUID, organization_id: UUID, task_id: UUID):
-    analytics.track(
-        user_id=str(user_id),
-        event="Ingestion Task Created",
-        properties={
-            "env": settings.ENV,
-            "organization_id": str(organization_id),
-            "task_id": str(task_id),
-        },
-    )
+def track_ingestion_task_created(
+    task_id: UUID,
+    organization_id: UUID,
+    user_id: UUID | None = None,
+    api_key_id: UUID | None = None,
+):
+    properties = {
+        "env": settings.ENV,
+        "organization_id": str(organization_id),
+        "task_id": str(task_id),
+    }
+
+    if api_key_id:
+        properties["api_key_name"] = api_key_id
+        analytics.track(
+            user_id="api_key:" + api_key_id,
+            event="Ingestion Task Created",
+            properties=properties,
+        )
+    elif user_id:
+        analytics.track(
+            user_id=str(user_id),
+            event="Ingestion Task Created",
+            properties=properties,
+        )
+    else:
+        analytics.track(
+            user_id="unknown",
+            event="Ingestion Task Created",
+            properties=properties,
+        )

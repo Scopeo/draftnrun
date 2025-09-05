@@ -8,25 +8,6 @@ from ada_backend.database import models as db
 
 def create_api_key(
     session: Session,
-    project_id: UUID,
-    key_name: str,
-    hashed_key: str,
-    creator_user_id: UUID,
-) -> UUID:
-    """Creates a new API key for the given user, returns the key id."""
-    new_api_key = db.ApiKey(
-        project_id=project_id,
-        public_key=hashed_key,
-        name=key_name,
-        creator_user_id=creator_user_id,
-    )
-    session.add(new_api_key)
-    session.commit()
-    return new_api_key.id
-
-
-def create_api_key(
-    session: Session,
     scope_type: db.ApiKeyType,
     scope_id: UUID,
     key_name: str,
@@ -76,6 +57,14 @@ def get_api_keys_by_project_id(session: Session, project_id: UUID) -> list[db.Ap
             db.ProjectApiKey.project_id == project_id,
             db.ProjectApiKey.is_active.is_(True),
         )
+        .all()
+    )
+
+
+def get_api_keys_by_org_id(session: Session, org_id: UUID) -> list[db.OrgApiKey]:
+    return (
+        session.query(db.OrgApiKey)
+        .filter(db.OrgApiKey.organization_id == org_id, db.OrgApiKey.is_active.is_(True))
         .all()
     )
 

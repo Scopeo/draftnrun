@@ -160,7 +160,7 @@ async def get_api_keys(
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
     try:
-        return get_api_keys_service(session, project_id)
+        return get_api_keys_service(session, project_id=project_id)
     except Exception as e:
         raise HTTPException(status_code=500, detail="Failed to get API keys") from e
 
@@ -206,6 +206,26 @@ async def create_api_key(
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail="Failed to create API key") from e
+
+
+@router.get("/org-api-key", summary="Get Organization API Keys")
+async def get_org_api_keys(
+    user: Annotated[
+        SupabaseUser,
+        Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.USER.value)),
+    ],
+    session: Session = Depends(get_db),
+    organization_id: UUID = Query(..., description="The ID of the organization to retrieve API keys for"),
+) -> ApiKeyGetResponse:
+    """
+    Get all active API keys for the authenticated user.
+    """
+    if not user.id:
+        raise HTTPException(status_code=400, detail="User ID not found")
+    try:
+        return get_api_keys_service(session, organization_id=organization_id)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Failed to get API keys") from e
 
 
 @router.post("/org-api-key", summary="Create Organization API Key")
