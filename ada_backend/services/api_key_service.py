@@ -15,6 +15,7 @@ from ada_backend.repositories.api_key_repository import (
     create_api_key,
     get_api_key_by_hashed_key,
     deactivate_api_key,
+    get_api_keys_by_org_id,
     get_api_keys_by_project_id,
     get_project_by_api_key,
 )
@@ -45,11 +46,30 @@ def _generate_api_key() -> str:
     return f"{API_KEY_PREFIX}{base64_key}"
 
 
-def get_api_keys_service(session: Session, project_id: UUID) -> ApiKeyGetResponse:
-    """Service function to get all API keys by project id."""
-    api_keys = get_api_keys_by_project_id(session, project_id)
+def get_api_keys_service(
+    session: Session,
+    project_id: UUID | None = None,
+    organization_id: UUID | None = None,
+) -> ApiKeyGetResponse:
+    """Service function to get all API keys by project or organization."""
+
+    if project_id and organization_id:
+        raise ValueError("Provide either project_id or organization_id, not both.")
+    if not project_id and not organization_id:
+        raise ValueError("Must provide either project_id or organization_id.")
+
+    if project_id:
+        api_keys = get_api_keys_by_project_id(session, project_id)
+        return ApiKeyGetResponse(
+            project_id=project_id,
+            organization_id=None,
+            api_keys=[ApiKeyData(key_id=key.id, key_name=key.name) for key in api_keys],
+        )
+
+    api_keys = get_api_keys_by_org_id(session, organization_id)
     return ApiKeyGetResponse(
-        project_id=project_id,
+        project_id=None,
+        organization_id=organization_id,
         api_keys=[ApiKeyData(key_id=key.id, key_name=key.name) for key in api_keys],
     )
 

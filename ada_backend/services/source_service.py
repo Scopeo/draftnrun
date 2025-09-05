@@ -193,7 +193,8 @@ def update_source_by_source_id(
     session: Session,
     organization_id: UUID,
     source_id: UUID,
-    user_id: UUID,
+    user_id: UUID | None = None,
+    api_key_id: UUID | None = None,
 ) -> DataSourceUpdateSchema:
 
     source_attributes = get_source_attributes_by_org_id(session, organization_id, source_id)
@@ -204,7 +205,9 @@ def update_source_by_source_id(
         status=db.TaskStatus.PENDING,
         source_attributes=source_attributes,
     )
-    create_ingestion_task_by_organization(session, user_id, organization_id, ingestion_task_data)
+    create_ingestion_task_by_organization(
+        session, organization_id, ingestion_task_data, user_id=user_id, api_key_id=api_key_id
+    )
     updated_source = DataSourceUpdateSchema(
         id=source_data.id,
         name=source_data.name,

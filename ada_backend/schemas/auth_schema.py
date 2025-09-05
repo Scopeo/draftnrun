@@ -21,7 +21,8 @@ class ApiKeyData(BaseModel):
 
 
 class ApiKeyGetResponse(BaseModel):
-    project_id: UUID
+    project_id: Optional[UUID]
+    organization_id: Optional[UUID]
     api_keys: list[ApiKeyData]
 
 
