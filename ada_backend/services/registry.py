@@ -28,6 +28,7 @@ from engine.agent.document_react_loader import DocumentReactLoaderAgent
 from engine.agent.ocr_call import OCRCall
 from engine.agent.rag.document_search import DocumentSearch
 from engine.integrations.gmail_sender import GmailSender
+from engine.integrations.slack_sender import SlackSender
 from engine.storage_service.local_service import SQLLocalService
 from engine.storage_service.snowflake_service.snowflake_service import SnowflakeService
 from ada_backend.services.entity_factory import (
@@ -42,6 +43,7 @@ from ada_backend.services.entity_factory import (
     build_web_service_processor,
     build_ocr_service_processor,
 )
+from ada_backend.services.entity_factory import build_slack_integration_processor
 
 COMPLETION_MODEL_IN_DB = "completion_model"
 EMBEDDING_MODEL_IN_DB = "embedding_model"
@@ -88,6 +90,7 @@ class SupportedEntityType(StrEnum):
 
     # Integrations
     GMAIL_SENDER = "Gmail Sender"
+    SLACK_SENDER = "Slack Sender"
 
 
 class FactoryRegistry:
@@ -433,6 +436,16 @@ def create_factory_registry() -> FactoryRegistry:
         name=SupportedEntityType.GMAIL_SENDER,
         factory=AgentFactory(
             entity_class=GmailSender,
+        ),
+    )
+
+    registry.register(
+        name=SupportedEntityType.SLACK_SENDER,
+        factory=AgentFactory(
+            entity_class=SlackSender,
+            parameter_processors=[
+                build_slack_integration_processor(),
+            ],
         ),
     )
 

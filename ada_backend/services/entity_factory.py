@@ -12,6 +12,7 @@ from engine.llm_services.llm_service import EmbeddingService, CompletionService,
 from engine.qdrant_service import QdrantService, QdrantCollectionSchema
 from ada_backend.database.setup_db import get_db_session
 from ada_backend.repositories.source_repository import get_data_source_by_id
+from ada_backend.repositories.integration_repository import get_integration_secret
 
 LOGGER = logging.getLogger(__name__)
 
@@ -400,6 +401,33 @@ def build_qdrant_service_processor(target_name: str = "qdrant_service") -> Param
         params[target_name] = qdrant_service
         params["collection_name"] = collection_name
 
+        return params
+
+    return processor
+
+
+def build_slack_integration_processor(target_name: str = "access_token") -> ParameterProcessor:
+    """
+    Returns a processor that injects a Slack OAuth access token for Slack integrations.
+
+    Expects a parameter named "secret_integration_id" (str or UUID) and resolves it to an
+    access token using the backend DB. Slack tokens are treated as non-rotating here; we
+    use the stored access token directly without attempting refresh.
+    """
+
+    def processor(params: dict, constructor_params: dict[str, Any]) -> dict:
+        secret_integration_id = params.pop("secret_integration_id", None)
+        if not secret_integration_id:
+            return params
+
+        if not isinstance(secret_integration_id, UUID):
+            secret_integration_id = UUID(str(secret_integration_id))
+
+        with get_db_session() as session:
+            integration_secret = get_integration_secret(session, secret_integration_id)
+            if integration_secret is None:
+                raise ValueError(f"Integration secret with ID {secret_integration_id} not found.")
+            params[target_name] = integration_secret.get_access_token()
         return params
 
     return processor

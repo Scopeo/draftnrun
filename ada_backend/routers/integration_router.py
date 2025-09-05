@@ -30,6 +30,20 @@ async def add_integration_secrets(
     ],
     sqlalchemy_db_session: Session = Depends(get_db),
 ) -> IntegrationSecretResponse:
+    """Add integration secrets for a project.
+
+    Args:
+        integration_id: The UUID of the integration
+        create_project_integration: Integration configuration data
+        user: Authenticated user with writer access
+        sqlalchemy_db_session: Database session
+
+    Returns:
+        IntegrationSecretResponse: Created integration secret details
+
+    Raises:
+        HTTPException: If user ID not found or internal server error
+    """
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
 
