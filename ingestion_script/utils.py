@@ -7,7 +7,7 @@ import requests
 
 from ada_backend.schemas.ingestion_task_schema import IngestionTaskUpdate
 from ada_backend.database import models as db
-from ada_backend.schemas.source_schema import DataSourceSchema, DataSourceUpdateSchema
+from ada_backend.schemas.source_schema import DataSourceSchema
 from ada_backend.schemas.ingestion_task_schema import SourceAttributes
 from data_ingestion.utils import sanitize_filename
 from engine.llm_services.llm_service import EmbeddingService
@@ -101,33 +101,13 @@ def create_source(
 def upsert_source(
     organization_id: str,
     source_data: DataSourceSchema,
-    source_id: Optional[str] = None,
+    source_id: Optional[UUID] = None,
 ) -> UUID:
     """Create or update a source in the database."""
 
     try:
         if source_id:
-            update_data = DataSourceUpdateSchema(
-                id=source_id,
-                name=source_data.name,
-                type=source_data.type,
-                database_schema=source_data.database_schema,
-                database_table_name=source_data.database_table_name,
-                qdrant_collection_name=source_data.qdrant_collection_name,
-                qdrant_schema=source_data.qdrant_schema,
-                embedding_model_reference=source_data.embedding_model_reference,
-                attributes=source_data.attributes,
-            )
-            response = requests.patch(
-                f"{str(settings.ADA_URL)}/sources/{organization_id}",
-                json=update_data.model_dump(mode="json"),
-                headers={
-                    "x-ingestion-api-key": settings.INGESTION_API_KEY,
-                    "Content-Type": "application/json",
-                },
-            )
-            response.raise_for_status()
-            LOGGER.info(f"Successfully updated source {source_id} for organization {organization_id}")
+            # TODO imporve upsert source
             return source_id
         else:
             return create_source(organization_id, source_data)
