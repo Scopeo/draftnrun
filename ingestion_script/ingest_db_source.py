@@ -203,6 +203,7 @@ async def ingestion_database(
     query_filter: Optional[str] = None,
     timestamp_filter: Optional[str] = None,
     source_attributes: Optional[SourceAttributes] = None,
+    source_id: Optional[str] = None,
 ) -> None:
     qdrant_schema = QdrantCollectionSchema(
         chunk_id_field=CHUNK_ID_COLUMN_NAME,
@@ -243,4 +244,5 @@ async def ingestion_database(
             timestamp_filter=timestamp_filter,
         ),
         attributes=source_attributes,
+        source_id=source_id,
     )

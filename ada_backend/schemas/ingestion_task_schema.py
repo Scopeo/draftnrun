@@ -7,6 +7,7 @@ from ada_backend.database import models as db
 
 
 class IngestionTask(BaseModel):
+    source_id: Optional[UUID] = None
     source_name: str
     source_type: db.SourceType
     status: db.TaskStatus
@@ -42,7 +43,6 @@ class SourceAttributes(BaseModel):
 
 class IngestionTaskUpdate(IngestionTask):
     id: UUID
-    source_id: Optional[UUID] = None
 
     model_config = ConfigDict(
         from_attributes=True,

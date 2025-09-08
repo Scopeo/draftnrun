@@ -6,7 +6,7 @@ import requests
 
 from ada_backend.schemas.ingestion_task_schema import IngestionTaskUpdate
 from ada_backend.database import models as db
-from ada_backend.schemas.source_schema import DataSourceSchema
+from ada_backend.schemas.source_schema import DataSourceSchema, DataSourceUpdateSchema
 from ada_backend.schemas.ingestion_task_schema import SourceAttributes
 from data_ingestion.utils import sanitize_filename
 from engine.llm_services.llm_service import EmbeddingService
@@ -70,39 +70,6 @@ def update_ingestion_task(
         ) from e
 
 
-def upsert_source(
-    organization_id: str,
-    source_data: DataSourceSchema,
-) -> str:
-    """Upsert a source in the database."""
-    # Get the source from the database
-    try:
-        response = requests.get(
-            f"{str(settings.ADA_URL)}/sources/{organization_id}/{source_data.name}",
-            headers={
-                "Content-Type": "application/json",
-            },
-        )
-        response.raise_for_status()
-        existing_source = response.json()
-
-        # Check if the response is None (source not found)
-        if existing_source is None:
-            # Source doesn't exist, create new one
-            source_id = create_source(organization_id, source_data)
-            return source_id
-
-        # Source already exists, return its ID
-        LOGGER.info(f"Source {existing_source['id']} already exists for organization {organization_id}")
-        return str(existing_source["id"])
-
-    except Exception as e:
-        LOGGER.error(f"Failed to upsert source: {str(e)}")
-        raise requests.exceptions.RequestException(
-            f"Failed to upsert source for organization {organization_id}: {str(e)}"
-        ) from e
-
-
 def create_source(
     organization_id: str,
     source_data: DataSourceSchema,
@@ -130,6 +97,47 @@ def create_source(
         ) from e
 
 
+def upsert_source(
+    organization_id: str,
+    source_data: DataSourceSchema,
+    source_id: Optional[str] = None,
+) -> str:
+    """Create or update a source in the database."""
+
+    try:
+        if source_id:
+            update_data = DataSourceUpdateSchema(
+                id=source_id,
+                name=source_data.name,
+                type=source_data.type,
+                database_schema=source_data.database_schema,
+                database_table_name=source_data.database_table_name,
+                qdrant_collection_name=source_data.qdrant_collection_name,
+                qdrant_schema=source_data.qdrant_schema,
+                embedding_model_reference=source_data.embedding_model_reference,
+                attributes=source_data.attributes,
+            )
+            response = requests.patch(
+                f"{str(settings.ADA_URL)}/sources/{organization_id}",
+                json=update_data.model_dump(mode="json"),
+                headers={
+                    "x-ingestion-api-key": settings.INGESTION_API_KEY,
+                    "Content-Type": "application/json",
+                },
+            )
+            response.raise_for_status()
+            LOGGER.info(f"Successfully updated source {source_id} for organization {organization_id}")
+            return source_id
+        else:
+            return create_source(organization_id, source_data)
+    except Exception as e:
+        LOGGER.error(f"Failed to upsert source: {str(e)}")
+        raise requests.exceptions.RequestException(
+            f"Failed to upsert source for organization {organization_id}: "
+            f"{str(e)} with the data {source_data.model_dump(mode='json')}"
+        ) from e
+
+
 async def upload_source(
     source_name: str,
     organization_id: str,
@@ -139,6 +147,7 @@ async def upload_source(
     ingestion_function: callable,
     update_existing: bool = False,
     attributes: Optional[SourceAttributes] = None,
+    source_id: Optional[str] = None,
 ) -> None:
     check_signature(
         ingestion_function,
@@ -224,14 +233,15 @@ async def upload_source(
         attributes=attributes,
     )
     LOGGER.info(f"Upserting source {source_name} for organization {organization_id} in database")
-    source_id = upsert_source(
+    result_source_id = upsert_source(
         organization_id=organization_id,
         source_data=source_data,
+        source_id=source_id,
     )
 
     ingestion_task = IngestionTaskUpdate(
         id=task_id,
-        source_id=source_id,
+        source_id=result_source_id,
         source_name=source_name,
         source_type=source_type,
         status=db.TaskStatus.COMPLETED,

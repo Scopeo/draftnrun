@@ -18,7 +18,6 @@ from ada_backend.services.source_service import (
     upsert_source_by_organization,
     delete_source_service,
     update_source_by_source_id,
-    get_organization_source_by_name,
 )
 
 router = APIRouter(prefix="/sources", tags=["Sources"])
@@ -54,25 +53,13 @@ def create_organization_source(
         raise HTTPException(status_code=500, detail="Internal Server Error") from e
 
 
-@router.get("/{organization_id}/{source_name}", response_model=Optional[DataSourceSchemaResponse])
-def get_source_by_name(
-    organization_id: UUID,
-    source_name: str,
-    session: Session = Depends(get_db),
-) -> Optional[DataSourceSchemaResponse]:
-    try:
-        return get_organization_source_by_name(session, organization_id, source_name)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail="Internal Server Error") from e
-
-
 @router.patch("/{organization_id}", status_code=status.HTTP_200_OK)
 def upsert_organization_source(
     verified_ingestion_api_key: Annotated[None, Depends(verify_ingestion_api_key_dependency)],
     organization_id: UUID,
     source_data: DataSourceUpdateSchema,
     session: Session = Depends(get_db),
-) -> UUID:
+) -> None:
     try:
         return upsert_source_by_organization(session, organization_id, source_data)
     except Exception as e:

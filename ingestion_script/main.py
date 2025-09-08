@@ -1,5 +1,6 @@
 import asyncio
 import logging
+from typing import Optional
 from uuid import UUID
 
 from ada_backend.database.models import SourceType
@@ -36,7 +37,12 @@ def check_missing_params(
 
 
 async def ingestion_main_async(
-    source_name: str, organization_id: UUID, task_id: UUID, source_type: SourceType, source_attributes: dict
+    source_name: str,
+    organization_id: UUID,
+    task_id: UUID,
+    source_type: SourceType,
+    source_attributes: dict,
+    source_id: Optional[str] = None,
 ):
 
     set_trace_manager(TraceManager(project_name="Ingestion"))
@@ -141,7 +147,6 @@ async def ingestion_main_async(
         from ingestion_script.ingest_db_source import ingestion_database
 
         try:
-
             await ingestion_database(
                 source_name=source_name,
                 organization_id=organization_id,
@@ -160,6 +165,7 @@ async def ingestion_main_async(
                 query_filter=source_attributes.get("query_filter"),
                 timestamp_filter=source_attributes.get("timestamp_filter"),
                 source_attributes=source_attributes,
+                source_id=source_id,
             )
         except Exception as e:
             LOGGER.error(f"Error during database ingestion: {str(e)}")

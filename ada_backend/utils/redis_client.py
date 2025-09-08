@@ -47,6 +47,7 @@ def push_ingestion_task(
     organization_id: str,
     task_id: str,
     source_attributes: SourceAttributes,
+    source_id: Optional[str] = None,
 ) -> bool:
     """
     Push an ingestion task to the Redis queue.
@@ -79,6 +80,7 @@ def push_ingestion_task(
             "organization_id": organization_id,
             "task_id": task_id,
             "source_attributes": source_attributes.model_dump(),
+            "source_id": source_id,
         }
 
         # TODO: add server logging

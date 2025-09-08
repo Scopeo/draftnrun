@@ -57,6 +57,7 @@ class Worker:
             organization_id = payload["organization_id"]
             source_name = payload.get("source_name", f"unnamed-{ingestion_id}")
             task_id = payload["task_id"]
+            source_id = payload.get("source_id")
 
             # Get source attributes from nested structure if present
             source_attributes = payload.get("source_attributes", {})
@@ -153,7 +154,8 @@ class Worker:
                 f"organization_id='{organization_id}', "
                 f"task_id='{task_id}', "
                 f"source_type='{source_type}', "
-                f"source_attributes={repr(source_attributes)}"
+                f"source_attributes={repr(source_attributes)}, "
+                f"source_id={repr(source_id)}"
                 f")",
             ]
 
