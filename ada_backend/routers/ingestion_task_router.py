@@ -56,8 +56,9 @@ def create_organization_task(
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
     try:
-        # Create the ingestion task
-        task_id = create_ingestion_task_by_organization(session, organization_id, ingestion_task_data, user_id=user.id)
+        task_id = create_ingestion_task_by_organization(
+            session, organization_id=organization_id, ingestion_task_data=ingestion_task_data, user_id=user.id
+        )
         return task_id
     except Exception as e:
         raise HTTPException(status_code=500, detail="Internal Server Error") from e
@@ -71,7 +72,9 @@ def update_organization_task(
     session: Session = Depends(get_db),
 ):
     try:
-        upsert_ingestion_task_by_organization_id(session, organization_id, ingestion_task_data)
+        upsert_ingestion_task_by_organization_id(
+            session, organization_id=organization_id, ingestion_task_data=ingestion_task_data
+        )
         return None
     except Exception as e:
         raise HTTPException(status_code=500, detail="Internal Server Error") from e
@@ -89,7 +92,7 @@ def delete_organization_task(
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
     try:
-        delete_ingestion_task_by_id(session, organization_id, source_id)
+        delete_ingestion_task_by_id(session, organization_id=organization_id, id=source_id)
         return None
     except Exception as e:
         raise HTTPException(status_code=500, detail="Internal Server Error") from e

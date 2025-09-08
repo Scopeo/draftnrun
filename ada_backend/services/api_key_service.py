@@ -132,7 +132,7 @@ def verify_api_key(session: Session, private_key: str) -> VerifiedApiKey:
             raise ValueError("Organization not found for the given API key")
         return VerifiedApiKey(
             api_key_id=api_key.id,
-            scope_type=api_key.type,  # l’enum tel quel
+            scope_type=api_key.type,
             project_id=None,
             organization_id=api_key.organization_id,
         )

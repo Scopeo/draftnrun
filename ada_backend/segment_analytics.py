@@ -123,9 +123,9 @@ def track_ingestion_task_created(
     }
 
     if api_key_id:
-        properties["api_key_name"] = api_key_id
+        properties["api_key_id"] = api_key_id
         analytics.track(
-            user_id="api_key:" + api_key_id,
+            anonymous_id=str(organization_id),
             event="Ingestion Task Created",
             properties=properties,
         )
@@ -137,7 +137,7 @@ def track_ingestion_task_created(
         )
     else:
         analytics.track(
-            user_id="unknown",
+            anonymous_id=str(organization_id),
             event="Ingestion Task Created",
             properties=properties,
         )

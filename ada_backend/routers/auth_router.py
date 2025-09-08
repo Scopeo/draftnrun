@@ -267,7 +267,7 @@ async def create_org_api_key(
             creator_user_id=user.id,
         )
     except Exception as e:
-        raise HTTPException(status_code=500, detail="Failed to create API key") from e
+        raise HTTPException(status_code=500, detail="Failed to create Organization API key") from e
 
 
 @router.delete("/api-key", summary="Delete API Key")
