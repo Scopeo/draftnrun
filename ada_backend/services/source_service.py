@@ -204,6 +204,7 @@ def update_source_by_source_id(
         source_type=source_data.type,
         status=db.TaskStatus.PENDING,
         source_attributes=source_attributes,
+        source_id=source_data.id,
     )
     create_ingestion_task_by_organization(
         session, organization_id, ingestion_task_data, user_id=user_id, api_key_id=api_key_id
