@@ -1,6 +1,7 @@
 import logging
 import inspect
 from typing import Optional
+from uuid import UUID
 
 import requests
 
@@ -73,7 +74,7 @@ def update_ingestion_task(
 def create_source(
     organization_id: str,
     source_data: DataSourceSchema,
-) -> str:
+) -> UUID:
     """Create a source in the database."""
 
     try:
@@ -101,7 +102,7 @@ def upsert_source(
     organization_id: str,
     source_data: DataSourceSchema,
     source_id: Optional[str] = None,
-) -> str:
+) -> UUID:
     """Create or update a source in the database."""
 
     try:
