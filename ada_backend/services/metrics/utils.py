@@ -23,7 +23,7 @@ def query_trace_duration(project_id: UUID, duration_days: int) -> pd.DataFrame:
     session.close()
     df = df.replace({np.nan: None})
     df["attributes"] = df["attributes"].apply(lambda x: json.loads(x) if isinstance(x, str) else x)
-    df_expanded = df.join(pd.json_normalize(df["attributes"]), rsuffix="_attr")
+    df_expanded = df.join(pd.json_normalize(df["attributes"]))
     trace_rowids = df_expanded[df_expanded["parent_id"].isna() & (df_expanded["project_id"] == str(project_id))][
         "trace_rowid"
     ].values
