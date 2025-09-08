@@ -88,7 +88,7 @@ def create_source(
         response.raise_for_status()
         source_id = response.json()
         LOGGER.info(f"Successfully created source {source_id} for organization {organization_id}")
-        return str(source_id)
+        return source_id
     except Exception as e:
         LOGGER.error(f"Failed to create source: {str(e)}")
         raise requests.exceptions.RequestException(
