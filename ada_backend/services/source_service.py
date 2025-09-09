@@ -197,7 +197,6 @@ def update_source_by_source_id(
     api_key_id: UUID | None = None,
 ) -> None:
 
-
     source_attributes = get_source_attributes_by_org_id(session, organization_id, source_id)
     source_data = get_data_source_by_org_id(session, organization_id, source_id)
     ingestion_task_data = IngestionTaskQueue(
