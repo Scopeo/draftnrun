@@ -9,13 +9,12 @@ from ada_backend.repositories.source_repository import (
     delete_source,
     get_data_source_by_org_id,
     get_sources,
-    upsert_source,
+    update_source_last_edited_time,
     get_source_attributes,
 )
 from ada_backend.schemas.source_schema import (
     DataSourceSchema,
     DataSourceSchemaResponse,
-    DataSourceUpdateSchema,
 )
 from ada_backend.schemas.ingestion_task_schema import SourceAttributes
 from engine.qdrant_service import QdrantCollectionSchema, QdrantService
@@ -104,39 +103,31 @@ def create_source_by_organization(
         raise ValueError(f"Failed to create source: {str(e)}") from e
 
 
-def upsert_source_by_organization(
+def update_source_last_edited_time_by_organization(
     session: Session,
     organization_id: UUID,
-    source_data: DataSourceUpdateSchema,
+    source_id: UUID,
 ) -> None:
     """
-    Create a new source for an organization.
+    Update the last edited time of a source for an organization.
 
     Args:
         session (Session): SQLAlchemy session
         organization_id (UUID): ID of the organization
-        source_data (DataSourceSchema): Source data to create
+        source_id (UUID): ID of the source to update
 
     Returns:
         None
     """
     try:
-        return upsert_source(
+        return update_source_last_edited_time(
             session,
             organization_id,
-            source_data.id,
-            source_data.name,
-            source_data.type,
-            source_data.database_table_name,
-            source_data.database_schema,
-            source_data.qdrant_collection_name,
-            source_data.qdrant_schema,
-            source_data.embedding_model_reference,
-            source_data.attributes,
+            source_id,
         )
     except Exception as e:
-        LOGGER.error(f"Error in upsert_source_by_organization: {str(e)}")
-        raise ValueError(f"Failed to upsert source: {str(e)}") from e
+        LOGGER.error(f"Error in update_source_last_edited_time_by_organization: {str(e)}")
+        raise ValueError(f"Failed to update source last edited time: {str(e)}") from e
 
 
 def delete_source_service(
@@ -207,6 +198,8 @@ def update_source_by_source_id(
         source_id=source_data.id,
     )
 
-    return create_ingestion_task_by_organization(
+    create_ingestion_task_by_organization(
         session, organization_id, ingestion_task_data, user_id=user_id, api_key_id=api_key_id
     )
+    update_source_last_edited_time_by_organization(session, organization_id, source_id)
+    return None
