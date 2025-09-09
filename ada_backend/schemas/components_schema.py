@@ -8,27 +8,27 @@ from ada_backend.schemas.parameter_schema import ComponentParamDefDTO
 from ada_backend.database import models as db
 
 
-class ComponentDTO(BaseModel):
+class ComponentSchema(BaseModel):
     id: UUID
     name: str
-    description: Optional[str]
-    tool_description: Optional[dict] = None
 
 
 class SubComponentParamSchema(BaseModel):
     """Give information of a subcomponent"""
 
-    id: UUID
+    version_id: UUID
     parameter_name: str
     is_optional: bool
 
 
 class ComponentUseInfoSchema(BaseModel):
+    version_id: UUID
+    version_tag: str
     is_agent: bool
     is_protected: bool = False
     function_callable: bool = False
     can_use_function_calling: bool = False
-    release_stage: str = db.ReleaseStage.BETA
+    release_stage: str
     tool_parameter_name: Optional[str] = None
     subcomponents_info: list[SubComponentParamSchema]
     categories: List[str] = []
@@ -42,7 +42,9 @@ class PortDefinitionSchema(BaseModel):
     description: Optional[str] = None
 
 
-class ComponentWithParametersDTO(ComponentUseInfoSchema, ComponentDTO):
+class ComponentWithParametersDTO(ComponentUseInfoSchema, ComponentSchema):
+    description: Optional[str]
+    tool_description: Optional[dict] = None
     integration: Optional[IntegrationSchema] = None
     parameters: List[ComponentParamDefDTO]
     port_definitions: List[PortDefinitionSchema] = []

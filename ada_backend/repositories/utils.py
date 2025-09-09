@@ -6,9 +6,9 @@ from sqlalchemy.orm import Session
 
 from ada_backend.database.models import (
     BasicParameter,
-    Component,
     ComponentInstance,
     ParameterType,
+    ComponentVersion,
 )
 from ada_backend.database.seed.utils import COMPONENT_UUIDS
 from ada_backend.repositories.component_repository import get_component_parameter_definition_by_component_id
@@ -28,12 +28,15 @@ def create_component_instance(
     Returns:
         ComponentInstance: The created component instance
     """
-    component = session.query(Component).filter(Component.id == component_id).first()
+    component = session.query(ComponentVersion).filter(ComponentVersion.id == component_id).first()
     # Fetch parameter definitions for this component
-    parameter_definitions = get_component_parameter_definition_by_component_id(session, component_id)
+    parameter_definitions = (
+        session.query(ComponentParameterDefinition)
+        .filter(ComponentParameterDefinition.component_id == input_component.id)
+        .all()
+    )
 
-    if component_instance_id is None:
-        component_instance_id = uuid.uuid4()
+    component_instance_id = uuid.uuid4()
     basic_parameters = [
         BasicParameter(
             id=uuid.uuid4(),
@@ -53,8 +56,8 @@ def create_component_instance(
     ]
 
     instance = ComponentInstance(
-        id=component_instance_id,
-        component_id=component.id,
+        id=component_instance_id,  # uuid.uuid4(),  # Generate a new UUID for the instance
+        component_version_id=input_component.id,
         name=name,
         basic_parameters=basic_parameters,
     )

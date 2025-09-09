@@ -15,8 +15,8 @@ from ada_backend.repositories.component_repository import (
     get_component_by_id,
     get_component_instance_by_id,
     get_instance_parameters_with_definition,
-    get_subcomponent_param_def_by_component_id,
-    get_tool_parameter_by_component_id,
+    get_subcomponent_param_def_by_component_version,
+    get_tool_parameter_by_component_version,
     get_component_sub_components,
 )
 from ada_backend.schemas.pipeline.base import ComponentRelationshipSchema
@@ -45,8 +45,8 @@ def get_component_instance(
     component = get_component_by_id(session, component_id=component_instance.component_id)
     if component is None:
         raise ValueError(f"Component {component_instance.component_id} not found")
-    subcomponent_params = get_subcomponent_param_def_by_component_id(session, component_instance.component_id)
-    tool_parameter = get_tool_parameter_by_component_id(session, component_instance.component_id)
+    subcomponent_params = get_subcomponent_param_def_by_component_version(session, component_instance.version_id)
+    tool_parameter = get_tool_parameter_by_component_version(session, component_instance.version_id)
 
     if component.integration_id:
         component_instance_integration = get_component_instance_integration_relationship(
@@ -60,6 +60,8 @@ def get_component_instance(
         ref=component_instance.ref,
         is_start_node=is_start_node,
         component_id=component_instance.component_id,
+        version_id=component_instance.version_id,
+        version_tag=component_instance.version_tag,
         tool_description=tool_description,
         component_name=component.name,
         tool_parameter_name=tool_parameter.name if tool_parameter else None,
@@ -71,7 +73,7 @@ def get_component_instance(
         icon=component.icon,
         subcomponents_info=[
             SubComponentParamSchema(
-                id=param_child_def.child_component_id,
+                version_id=param_child_def.child_component_version_id,
                 parameter_name=subcomponent_param.name,
                 is_optional=subcomponent_param.nullable,
             )

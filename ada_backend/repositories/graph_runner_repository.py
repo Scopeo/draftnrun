@@ -189,10 +189,10 @@ def get_input_component(session: Session, graph_runner_id: UUID) -> db.Component
     return (
         session.query(db.ComponentInstance)
         .join(db.GraphRunnerNode, db.GraphRunnerNode.node_id == db.ComponentInstance.id)
-        .join(db.Component, db.Component.id == db.ComponentInstance.component_id)
+        .join(db.ComponentVersion, db.ComponentVersion.id == db.ComponentInstance.component_version_id)
         .filter(
             db.GraphRunnerNode.graph_runner_id == graph_runner_id,
-            db.Component.id == COMPONENT_UUIDS["input"],
+            db.ComponentVersion.id == COMPONENT_UUIDS["input"],
             db.GraphRunnerNode.is_start_node.is_(True),
         )
         .first()

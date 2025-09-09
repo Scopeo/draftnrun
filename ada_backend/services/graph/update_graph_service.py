@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from ada_backend.database.models import EnvType
 from ada_backend.repositories.component_repository import (
     get_component_instance_by_id,
-    get_component_parameter_definition_by_component_id,
+    get_component_parameter_definition_by_component_version,
     upsert_sub_component_input,
     get_component_instances_by_ids,
     get_canonical_ports_for_components,
@@ -153,7 +153,7 @@ async def update_graph_service(
         if not parent:
             raise ValueError("Invalid relationship: parent component instance not found")
         # TODO: Refactor to repository function that takes name and component_id or with dictionary for faster lookup
-        param_defs = get_component_parameter_definition_by_component_id(session, parent.component_id)
+        param_defs = get_component_parameter_definition_by_component_version(session, parent.version_id)
         param_def = next((p for p in param_defs if p.name == relation.parameter_name), None)
         if not param_def:
             raise ValueError(

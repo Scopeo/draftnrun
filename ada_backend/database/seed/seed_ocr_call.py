@@ -39,7 +39,7 @@ def seed_ocr_call_components(session: Session):
         session=session,
         component_parameter_definitions=[
             *build_ocr_service_config_definitions(
-                component_id=ocr_call.id,
+                component_version_id=ocr_call.id,
                 params_to_seed=[
                     ParameterLLMConfig(
                         param_name=COMPLETION_MODEL_IN_DB,

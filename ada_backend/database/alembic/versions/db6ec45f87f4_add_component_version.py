@@ -19,6 +19,125 @@ branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
 
+def upgrade_fk_from_component_to_version_current(
+    table_name: str,
+    old_component_col: str,
+    new_version_col: str,
+    new_fk_name: str,
+) -> None:
+    """
+    Replace a FK to components(<old_component_col>) with a FK to component_versions(<new_version_col>),
+    mapping each row to the component's *current* version (v.is_current = true).
+
+    Steps:
+      1) Add <new_version_col> (NULL).
+      2) Build temp map component_id -> current version_id.
+      3) Backfill <new_version_col>.
+      4) Create FK to component_versions, set NOT NULL.
+      5) Drop <old_component_col>.
+    """
+    # 1) add new nullable column
+    with op.batch_alter_table(table_name) as batch:
+        batch.add_column(sa.Column(new_version_col, postgresql.UUID(as_uuid=True), nullable=True))
+
+    # 2) temp map
+    tmp = f"_cv_map_{table_name}"
+    op.execute(f"DROP TABLE IF EXISTS {tmp};")
+    op.execute(
+        f"""
+        CREATE TEMP TABLE {tmp} AS
+        SELECT v.component_id, v.id AS current_version_id
+        FROM component_versions v
+        WHERE v.is_current = true;
+    """
+    )
+
+    # 3) backfill
+    op.execute(
+        f"""
+        UPDATE {table_name} t
+        SET {new_version_col} = m.current_version_id
+        FROM {tmp} m
+        WHERE t.{old_component_col} = m.component_id
+          AND t.{new_version_col} IS NULL;
+    """
+    )
+
+    # 4) FK + NOT NULL + drop old column
+    with op.batch_alter_table(table_name) as batch:
+        batch.create_foreign_key(
+            new_fk_name,
+            "component_versions",
+            [new_version_col],
+            ["id"],
+            ondelete="CASCADE",
+        )
+        batch.alter_column(new_version_col, nullable=False)
+        batch.drop_column(old_component_col)
+
+    # 5) cleanup
+    op.execute(f"DROP TABLE IF EXISTS {tmp};")
+
+
+def downgrade_fk_from_version_to_component(
+    table_name: str,
+    old_col: str,
+    new_col: str,
+    fk_name_old: str,
+    fk_name_new: str,
+):
+    """
+    Replace a FK to component_versions with a FK to components during downgrade.
+
+    Args:
+        table_name: The table to modify (e.g. "component_parameter_definitions")
+        old_col: The column that pointed to component_versions (e.g. "component_version_id")
+        new_col: The column to restore pointing to components (e.g. "component_id")
+        fk_name_old: The name of the existing FK constraint to component_versions
+        fk_name_new: The name of the new FK constraint to components
+    """
+    # 1) Add the old column back (nullable)
+    with op.batch_alter_table(table_name) as batch:
+        batch.add_column(sa.Column(new_col, postgresql.UUID(as_uuid=True), nullable=True))
+
+    # 2) Build a temporary map: version_id → component_id
+    tmp = f"_cv_rev_map_{table_name}"
+    op.execute(f"DROP TABLE IF EXISTS {tmp};")
+    op.execute(
+        f"""
+        CREATE TEMP TABLE {tmp} AS
+        SELECT v.id AS version_id, v.component_id
+        FROM component_versions v
+        WHERE v.is_current = true;
+    """
+    )
+
+    # 3) Backfill
+    op.execute(
+        f"""
+        UPDATE {table_name} t
+        SET {new_col} = m.component_id
+        FROM {tmp} m
+        WHERE t.{old_col} = m.version_id;
+    """
+    )
+
+    # 4) Add FK to components, set NOT NULL, drop old FK and column
+    with op.batch_alter_table(table_name) as batch:
+        batch.create_foreign_key(
+            fk_name_new,
+            "components",
+            [new_col],
+            ["id"],
+            ondelete="CASCADE",
+        )
+        batch.alter_column(new_col, nullable=False)
+        batch.drop_constraint(fk_name_old, type_="foreignkey")
+        batch.drop_column(old_col)
+
+    op.execute(f"DROP TABLE IF EXISTS {tmp};")
+
+
 def upgrade() -> None:
     op.create_table(
         "component_versions",
@@ -29,7 +148,7 @@ def upgrade() -> None:
             sa.ForeignKey("components.id", ondelete="CASCADE"),
             nullable=False,
         ),
-        sa.Column("version", sa.String(), nullable=False),
+        sa.Column("version_tag", sa.String(), nullable=False),
         sa.Column("changelog", sa.Text(), nullable=True),
         sa.Column("description", sa.Text(), nullable=True),
         sa.Column("integration_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("integrations.id"), nullable=True),
@@ -43,9 +162,11 @@ def upgrade() -> None:
         sa.Column("is_current", sa.Boolean(), nullable=False, server_default=sa.text("true")),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=True),
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=True),
-        sa.CheckConstraint("LENGTH(version) - LENGTH(REPLACE(version, '.', '')) = 2", name="check_version_format"),
-        sa.CheckConstraint("version <> ''", name="check_version_not_empty"),
-        sa.UniqueConstraint("component_id", "version", name="uq_component_version"),
+        sa.CheckConstraint(
+            "LENGTH(version_tag) - LENGTH(REPLACE(version_tag, '.', '')) = 2", name="check_version_format"
+        ),
+        sa.CheckConstraint("version_tag <> ''", name="check_version_not_empty"),
+        sa.UniqueConstraint("component_id", "version_tag", name="uq_component_version"),
     )
     op.execute("ALTER TABLE component_versions ALTER COLUMN release_stage DROP DEFAULT;")
     op.execute(
@@ -75,7 +196,7 @@ def upgrade() -> None:
         INSERT INTO component_versions (
             id,
             component_id,
-            version,
+            version_tag,
             changelog,
             description,
             integration_id,
@@ -101,95 +222,32 @@ def upgrade() -> None:
         """
     )
 
-    with op.batch_alter_table("component_parameter_definitions") as batch:
-        batch.add_column(sa.Column("component_version_id", postgresql.UUID(as_uuid=True), nullable=True))
-
-    # mapping component_id -> current version_id
-    op.execute("DROP TABLE IF EXISTS _cv_map_defs;")
-    op.execute(
-        """
-        CREATE TEMP TABLE _cv_map_defs AS
-        SELECT v.component_id, v.id AS current_version_id
-        FROM component_versions v
-        WHERE v.is_current = true;
-        """
+    # component_parameter_definitions: component_id -> component_version_id
+    upgrade_fk_from_component_to_version_current(
+        table_name="component_parameter_definitions",
+        old_component_col="component_id",
+        new_version_col="component_version_id",
+        new_fk_name="fk_cpd_component_version",
     )
 
-    # backfill
-    # si ta colonne s'appelait différemment, adapte "component_id" ci-dessous
-    op.execute(
-        """
-        UPDATE component_parameter_definitions d
-        SET component_version_id = m.current_version_id
-        FROM _cv_map_defs m
-        WHERE d.component_id = m.component_id;
-        """
-    )
-    op.execute(
-        """
-        UPDATE component_parameter_definitions d
-        SET component_version_id = m.current_version_id
-        FROM _cv_map_defs m
-        WHERE d.component_id = m.component_id;
-        """
+    # comp_param_child_comps_relationships: child_component_id -> child_component_version_id
+    upgrade_fk_from_component_to_version_current(
+        table_name="comp_param_child_comps_relationships",
+        old_component_col="child_component_id",
+        new_version_col="child_component_version_id",
+        new_fk_name="fk_cpccr_child_component_version",
     )
 
-    with op.batch_alter_table("component_parameter_definitions") as batch:
-        batch.create_foreign_key(
-            "fk_cpd_component_version",
-            "component_versions",
-            ["component_version_id"],
-            ["id"],
-            ondelete="CASCADE",
-        )
-        batch.alter_column("component_version_id", nullable=False)
-        # drop ancienne colonne maintenant remplacée
-        batch.drop_column("component_id")
-
-    op.execute("DROP TABLE IF EXISTS _cv_map_defs;")
+    # component_instances (if you need it): component_id -> component_version_id
+    upgrade_fk_from_component_to_version_current(
+        table_name="component_instances",
+        old_component_col="component_id",
+        new_version_col="component_version_id",
+        new_fk_name="fk_component_instances_component_version",
+    )
 
     # -------------------------------------------------------------------------
-    # 4) Migrer comp_param_child_comps_relationships → child_component_version_id
-    #    (anciennement child_component_id)
-    # -------------------------------------------------------------------------
-    with op.batch_alter_table("comp_param_child_comps_relationships") as batch:
-        batch.add_column(sa.Column("child_component_version_id", postgresql.UUID(as_uuid=True), nullable=True))
-
-    op.execute("DROP TABLE IF EXISTS _cv_map_child;")
-    op.execute(
-        """
-        CREATE TEMP TABLE _cv_map_child AS
-        SELECT v.component_id, v.id AS current_version_id
-        FROM component_versions v
-        WHERE v.is_current = true;
-        """
-    )
-
-    # backfill
-    op.execute(
-        """
-        UPDATE comp_param_child_comps_relationships r
-        SET child_component_version_id = m.current_version_id
-        FROM _cv_map_child m
-        WHERE r.child_component_id = m.component_id;
-        """
-    )
-
-    with op.batch_alter_table("comp_param_child_comps_relationships") as batch:
-        batch.create_foreign_key(
-            "fk_cpccr_child_component_version",
-            "component_versions",
-            ["child_component_version_id"],
-            ["id"],
-            ondelete="CASCADE",
-        )
-        batch.alter_column("child_component_version_id", nullable=False)
-        batch.drop_column("child_component_id")
-
-    op.execute("DROP TABLE IF EXISTS _cv_map_child;")
-
-    # -------------------------------------------------------------------------
-    # 5) Nettoyage: retirer de components les colonnes désormais versionnées
+    # Cleaning : remove from components the columns that are now versioned
     # -------------------------------------------------------------------------
     with op.batch_alter_table("components") as batch:
         batch.drop_column("description")
@@ -229,86 +287,32 @@ def downgrade() -> None:
             )
         )
 
-    # -------------------------------------------------------------------------
-    # 2) Revenir comp_param_child_comps_relationships : version → component
-    # -------------------------------------------------------------------------
-    with op.batch_alter_table("comp_param_child_comps_relationships") as batch:
-        batch.add_column(sa.Column("child_component_id", postgresql.UUID(as_uuid=True), nullable=True))
-
-    op.execute("DROP TABLE IF EXISTS _cv_rev_map_child;")
-    op.execute(
-        """
-        CREATE TEMP TABLE _cv_rev_map_child AS
-        SELECT v.id AS version_id, v.component_id
-        FROM component_versions v
-        WHERE v.is_current = true;
-        """
+    downgrade_fk_from_version_to_component(
+        table_name="component_parameter_definitions",
+        old_col="component_version_id",
+        new_col="component_id",
+        fk_name_old="fk_cpd_component_version",
+        fk_name_new="fk_cpd_component",
     )
 
-    op.execute(
-        """
-        UPDATE comp_param_child_comps_relationships r
-        SET child_component_id = m.component_id
-        FROM _cv_rev_map_child m
-        WHERE r.child_component_version_id = m.version_id;
-        """
+    downgrade_fk_from_version_to_component(
+        table_name="comp_param_child_comps_relationships",
+        old_col="child_component_version_id",
+        new_col="child_component_id",
+        fk_name_old="fk_cpccr_child_component_version",
+        fk_name_new="fk_cpccr_child_component",
     )
 
-    with op.batch_alter_table("comp_param_child_comps_relationships") as batch:
-        batch.create_foreign_key(
-            "fk_cpccr_child_component",
-            "components",
-            ["child_component_id"],
-            ["id"],
-            ondelete="CASCADE",
-        )
-        batch.alter_column("child_component_id", nullable=False)
-        batch.drop_constraint("fk_cpccr_child_component_version", type_="foreignkey")
-        batch.drop_column("child_component_version_id")
-
-    op.execute("DROP TABLE IF EXISTS _cv_rev_map_child;")
-
-    # -------------------------------------------------------------------------
-    # 3) Revenir component_parameter_definitions : version → component
-    # -------------------------------------------------------------------------
-    with op.batch_alter_table("component_parameter_definitions") as batch:
-        batch.add_column(sa.Column("component_id", postgresql.UUID(as_uuid=True), nullable=True))
-
-    op.execute("DROP TABLE IF EXISTS _cv_rev_map_defs;")
-    op.execute(
-        """
-        CREATE TEMP TABLE _cv_rev_map_defs AS
-        SELECT v.id AS version_id, v.component_id
-        FROM component_versions v
-        WHERE v.is_current = true;
-        """
+    downgrade_fk_from_version_to_component(
+        table_name="component_instances",
+        old_col="component_version_id",
+        new_col="component_id",
+        fk_name_old="fk_component_instances_component_version",
+        fk_name_new="fk_component_instances_component",
     )
 
-    op.execute(
-        """
-        UPDATE component_parameter_definitions d
-        SET component_id = m.component_id
-        FROM _cv_rev_map_defs m
-        WHERE d.component_version_id = m.version_id;
-        """
-    )
-
-    with op.batch_alter_table("component_parameter_definitions") as batch:
-        batch.create_foreign_key(
-            "fk_cpd_component",
-            "components",
-            ["component_id"],
-            ["id"],
-            ondelete="CASCADE",
-        )
-        batch.alter_column("component_id", nullable=False)
-        batch.drop_constraint("fk_cpd_component_version", type_="foreignkey")
-        batch.drop_column("component_version_id")
-
-    op.execute("DROP TABLE IF EXISTS _cv_rev_map_defs;")
-
     # -------------------------------------------------------------------------
-    # 4) Reverser le backfill: recopier depuis la version courante vers components
+    # Revert backfill: copy from current version to components
     # -------------------------------------------------------------------------
     op.execute(
         """
@@ -325,7 +329,7 @@ def downgrade() -> None:
     )
 
     # -------------------------------------------------------------------------
-    # 5) Drop index/constraints/table component_versions
+    # Drop index/constraints/table component_versions
     # -------------------------------------------------------------------------
     op.execute("DROP INDEX IF EXISTS uq_component_current_version;")
     op.drop_constraint("check_version_not_empty", "component_versions", type_="check")

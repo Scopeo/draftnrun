@@ -114,7 +114,7 @@ def seed_react_sql_components(session: Session):
                 is_advanced=True,
             ),
             *build_function_calling_service_config_definitions(
-                component_id=react_sql_agent.id,
+                component_version_id=react_sql_agent.id,
                 params_to_seed=[
                     ParameterLLMConfig(
                         param_name=COMPLETION_MODEL_IN_DB,

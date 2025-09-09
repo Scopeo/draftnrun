@@ -170,7 +170,7 @@ class ComponentParameterDefinitionAdmin(EnhancedModelView, model=db.ComponentPar
     icon = "fas fa-cog"
     column_list = [
         "id",
-        "component",
+        "component_version",
         "name",
         "type",
         "nullable",
@@ -196,16 +196,31 @@ class ComponentAdmin(EnhancedModelView, model=db.Component):
     column_list = [
         "id",
         "name",
-        "description",
         "is_agent",
         "function_callable",
         "can_use_function_calling",
+        "is_protected",
+        "created_at",
+        "updated_at",
+    ]
+    column_searchable_list = ["name", "is_agent"]
+
+
+class ComponentVersionAdmin(EnhancedModelView, model=db.ComponentVersion):
+    category = AdminCategory.COMPONENTS
+    icon = "fas fa-cubes"
+    column_list = [
+        "id",
+        "component",
+        "version_tag",
+        "description",
         "release_stage",
         "default_tool_description",
         "created_at",
         "updated_at",
     ]
-    column_searchable_list = ["name", "description"]
+    column_searchable_list = ["version_tag", "description"]
+    form_columns = ["component", "version_tag", "description", "release_stage", "default_tool_description"]
 
 
 class ComponentCategoryAdmin(EnhancedModelView, model=db.ComponentCategory):
@@ -235,9 +250,9 @@ class GraphRunnerAdmin(EnhancedModelView, model=db.GraphRunner):
 class ComponentInstanceAdmin(EnhancedModelView, model=db.ComponentInstance):
     category = AdminCategory.COMPONENTS
     icon = "fas fa-cogs"
-    column_list = ["id", "component", "name", "ref", "tool_description", "created_at"]
+    column_list = ["id", "component_version", "name", "ref", "tool_description", "created_at"]
     column_searchable_list = ["ref", "id"]
-    form_columns = ["component", "ref", "tool_description"]
+    form_columns = ["component_version", "ref", "tool_description"]
 
 
 class GraphRunnerNodeAdmin(EnhancedModelView, model=db.GraphRunnerNode):
@@ -527,6 +542,7 @@ def setup_admin(app: FastAPI):
 
     admin.add_view(GraphRunnerAdmin)
     admin.add_view(ComponentAdmin)
+    admin.add_view(ComponentVersionAdmin)
     admin.add_view(CategoryAdmin)
     admin.add_view(ComponentCategoryAdmin)
     admin.add_view(GraphRunnerNodeAdmin)
