@@ -1,18 +1,23 @@
 import uuid
 import json
 
-from ada_backend.database.models import BasicParameter, ComponentParameterDefinition, Component, ComponentInstance
+from ada_backend.database.models import (
+    BasicParameter,
+    ComponentParameterDefinition,
+    ComponentInstance,
+    ComponentVersion,
+)
 from ada_backend.database.seed.utils import COMPONENT_UUIDS
 
 
 def create_input_component(session, name: str = "API Input") -> ComponentInstance:
     """Creates a new input component instance"""
     # First get or create the input component
-    input_component = session.query(Component).filter(Component.id == COMPONENT_UUIDS["input"]).first()
+    input_component = session.query(ComponentVersion).filter(ComponentVersion.id == COMPONENT_UUIDS["input"]).first()
     # Fetch parameter definitions for this component
     parameter_definitions = (
         session.query(ComponentParameterDefinition)
-        .filter(ComponentParameterDefinition.component_id == input_component.id)
+        .filter(ComponentParameterDefinition.component_version_id == input_component.id)
         .all()
     )
 
@@ -31,7 +36,7 @@ def create_input_component(session, name: str = "API Input") -> ComponentInstanc
     # Create the component instance
     instance = ComponentInstance(
         id=component_instance_id,  # uuid.uuid4(),  # Generate a new UUID for the instance
-        component_id=input_component.id,
+        component_version_id=input_component.id,
         name=name,
         basic_parameters=basic_parameters,
     )

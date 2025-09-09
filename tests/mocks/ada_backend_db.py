@@ -70,37 +70,69 @@ def populate_ada_backend_db_with_mock_data(session: Session):
     component_1 = db.Component(
         id=MOCK_UUIDS["component_1"],
         name="CompletionService",
-        description="Completion Service.",
     )
     component_2 = db.Component(
         id=MOCK_UUIDS["component_2"],
         name="Synthesizer",
-        description="Synthesizer Component.",
     )
     component_3 = db.Component(
         id=MOCK_UUIDS["component_3"],
         name="Retriever",
-        description="Retriever Component.",
     )
     component_4 = db.Component(
         id=MOCK_UUIDS["component_4"],
         name="ReActAgent",
-        description="ReAct framework agent.",
         is_agent=True,
     )
     component_5 = db.Component(
         id=MOCK_UUIDS["component_5"],
         name="RAGAgent",
-        description="Retrieve and Generate Agent.",
         is_agent=True,
     )
     component_6 = db.Component(
         id=MOCK_UUIDS["component_6"],
         name="EmbeddingService",
-        description="Embedding Service.",
     )
     session.add_all([component_1, component_2, component_3, component_4, component_5, component_6])
     session.commit()
+
+    # --- Component Versions ---
+    component_version_1 = db.ComponentVersion(
+        id=MOCK_UUIDS["component_1"],
+        component_id=component_1.id,
+        version_tag="v1.0.0",
+        description="Completion Service.",
+    )
+    component_version_2 = db.ComponentVersion(
+        id=MOCK_UUIDS["component_2"],
+        component_id=component_2.id,
+        version_tag="v1.0.0",
+        description="Synthesizer Component.",
+    )
+    component_version_3 = db.ComponentVersion(
+        id=MOCK_UUIDS["component_3"],
+        component_id=component_3.id,
+        version_tag="v1.0.0",
+        description="Retriever Component.",
+    )
+    component_version_4 = db.ComponentVersion(
+        id=MOCK_UUIDS["component_4"],
+        component_id=component_4.id,
+        version_tag="v1.0.0",
+        description="ReAct Agent Component.",
+    )
+    component_version_5 = db.ComponentVersion(
+        id=MOCK_UUIDS["component_5"],
+        component_id=component_5.id,
+        version_tag="v1.0.0",
+        description="RAG Agent Component.",
+    )
+    component_version_6 = db.ComponentVersion(
+        id=MOCK_UUIDS["component_6"],
+        component_id=component_6.id,
+        version_tag="v1.0.0",
+        description="Embedding Service Component.",
+    )
 
     # --- Tool Descriptions ---
     tool_description_1 = db.ToolDescription(
@@ -123,34 +155,34 @@ def populate_ada_backend_db_with_mock_data(session: Session):
     # --- Component Instances ---
     component_instance_1 = db.ComponentInstance(
         id=MOCK_UUIDS["component_instance_1"],
-        component_id=component_1.id,
+        component_version_id=component_version_1.id,
         ref="completion_service_a",
     )
     component_instance_2 = db.ComponentInstance(
         id=MOCK_UUIDS["component_instance_2"],
-        component_id=component_2.id,
+        component_version_id=component_version_2.id,
         ref="synthesizer_a",
     )
     component_instance_3 = db.ComponentInstance(
         id=MOCK_UUIDS["component_instance_3"],
-        component_id=component_3.id,
+        component_version_id=component_version_3.id,
         ref="retriever_b",
     )
     component_instance_4 = db.ComponentInstance(
         id=MOCK_UUIDS["component_instance_4"],
-        component_id=component_4.id,
+        component_version_id=component_version_4.id,
         ref="react_agent_a",
         tool_description_id=tool_description_1.id,
     )
     component_instance_5 = db.ComponentInstance(
         id=MOCK_UUIDS["component_instance_5"],
-        component_id=component_5.id,
+        component_version_id=component_version_5.id,
         ref="rag_agent_b",
         tool_description_id=tool_description_2.id,
     )
     component_instance_6 = db.ComponentInstance(
         id=MOCK_UUIDS["component_instance_6"],
-        component_id=component_6.id,
+        component_version_id=component_version_6.id,
         ref="embedding_service_a",
     )
     session.add_all(
