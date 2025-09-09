@@ -468,15 +468,24 @@ def test_quality_assurance_complete_workflow():
     assert input_response.status_code == 200
     input_data = input_response.json()
 
-    # Test filtering by version (draft)
+    # Test querying without version filter - should return all entries with null versions initially
+    get_response_initial = client.get(f"/projects/{project_uuid}/qa/{dataset_id}", headers=HEADERS_JWT)
+    assert get_response_initial.status_code == 200
+    initial_results = get_response_initial.json()
+    assert len(initial_results) == 2  # All 2 inputs should be returned
+    # All should have no outputs initially (LEFT JOIN behavior)
+    for result in initial_results:
+        assert result["output"] is None
+        assert result["version"] is None
+        assert result["input_id"] is not None
+        assert result["input"] is not None
+        assert result["groundtruth"] is not None
+
+    # Test filtering by version (draft) - should return 0 results initially
     get_response_draft = client.get(f"/projects/{project_uuid}/qa/{dataset_id}?version=draft", headers=HEADERS_JWT)
     assert get_response_draft.status_code == 200
     draft_results = get_response_draft.json()
-    assert len(draft_results) == 2
-    # Initially, no version outputs should exist
-    for result in draft_results:
-        assert result["output"] is None
-        assert result["version"] is None
+    assert len(draft_results) == 0  # No draft outputs exist yet
 
     # Run QA on draft version
     run_qa_payload = {
@@ -494,9 +503,10 @@ def test_quality_assurance_complete_workflow():
     )
     assert get_response_draft_after.status_code == 200
     draft_results_after = get_response_draft_after.json()
-    # One result should have draft version output
-    draft_outputs = [r for r in draft_results_after if r["version"] == "draft"]
-    assert len(draft_outputs) == 1
+    # Should return exactly 1 result with draft version output
+    assert len(draft_results_after) == 1
+    assert draft_results_after[0]["version"] == "draft"
+    assert draft_results_after[0]["output"] is not None
 
     # Run QA on production version
     run_qa_payload_production = {
@@ -514,8 +524,10 @@ def test_quality_assurance_complete_workflow():
     )
     assert get_response_production.status_code == 200
     production_results = get_response_production.json()
-    production_outputs = [r for r in production_results if r["version"] == "production"]
-    assert len(production_outputs) == 1
+    # Should return exactly 1 result with production version output
+    assert len(production_results) == 1
+    assert production_results[0]["version"] == "production"
+    assert production_results[0]["output"] is not None
 
     # Check that getting all versions shows both draft and production outputs
     get_response_all = client.get(f"/projects/{project_uuid}/qa/{dataset_id}", headers=HEADERS_JWT)
