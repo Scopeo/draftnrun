@@ -98,27 +98,6 @@ def create_source(
         ) from e
 
 
-def upsert_source(
-    organization_id: str,
-    source_data: DataSourceSchema,
-    source_id: Optional[UUID] = None,
-) -> UUID:
-    """Create or update a source in the database."""
-
-    try:
-        if source_id:
-            # TODO imporve upsert source
-            return source_id
-        else:
-            return create_source(organization_id, source_data)
-    except Exception as e:
-        LOGGER.error(f"Failed to upsert source: {str(e)}")
-        raise requests.exceptions.RequestException(
-            f"Failed to upsert source for organization {organization_id}: "
-            f"{str(e)} with the data {source_data.model_dump(mode='json')}"
-        ) from e
-
-
 async def upload_source(
     source_name: str,
     organization_id: str,
@@ -214,11 +193,13 @@ async def upload_source(
         attributes=attributes,
     )
     LOGGER.info(f"Upserting source {source_name} for organization {organization_id} in database")
-    result_source_id = upsert_source(
-        organization_id=organization_id,
-        source_data=source_data,
-        source_id=source_id,
-    )
+    if source_id:
+        result_source_id = source_id
+    else:
+        result_source_id = create_source(
+            organization_id=organization_id,
+            source_data=source_data,
+        )
 
     ingestion_task = IngestionTaskUpdate(
         id=task_id,
