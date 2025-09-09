@@ -837,7 +837,6 @@ class DataSource(Base):
         return f"DataSource({self.name})"
 
 
-<<<<<<< HEAD
 class SourceAttributes(Base):
     """
     Represents attributes for a data source.
