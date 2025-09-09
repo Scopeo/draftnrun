@@ -9,7 +9,7 @@ from ada_backend.repositories.quality_assurance_repository import (
     update_inputs_groundtruths,
     delete_inputs_groundtruths,
     get_inputs_groundtruths_with_pagination,
-    get_inputs_groundtruths_with_version_outputs_pagination,
+    get_inputs_groundtruths_with_version_outputs,
     get_inputs_groundtruths_by_ids,
     create_version_output,
     create_datasets,
@@ -48,7 +48,7 @@ def get_inputs_groundtruths_by_dataset_service(
     size: int = 100,
 ) -> List[InputGroundtruthResponse]:
     """
-    Get all input-groundtruth entries for a dataset with pagination.
+    Get input-groundtruth entries for a dataset with pagination.
 
     Args:
         session (Session): SQLAlchemy session
@@ -78,7 +78,7 @@ def get_inputs_groundtruths_with_version_outputs_service(
     size: int = 100,
 ) -> List[InputGroundtruthWithVersionResponse]:
     """
-    Get all input-groundtruth entries for a dataset with version outputs using LEFT JOIN.
+    Get input-groundtruth entries for a dataset with version outputs using LEFT JOIN.
 
     Args:
         session (Session): SQLAlchemy session
@@ -91,7 +91,8 @@ def get_inputs_groundtruths_with_version_outputs_service(
         List[InputGroundtruthWithVersionResponse]: List of input-groundtruth entries with version outputs
     """
     try:
-        results, _ = get_inputs_groundtruths_with_version_outputs_pagination(session, dataset_id, version, page, size)
+        skip = (page - 1) * size
+        results = get_inputs_groundtruths_with_version_outputs(session, dataset_id, version, skip, size)
 
         response_list = []
         for input_groundtruth, version_output in results:

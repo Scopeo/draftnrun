@@ -96,20 +96,6 @@ def get_inputs_groundtruths_with_pagination(
     return inputs_groundtruths, total_count
 
 
-def get_inputs_groundtruths_with_version_outputs_pagination(
-    session: Session,
-    dataset_id: UUID,
-    version: Optional[EnvType] = None,
-    page: int = 1,
-    size: int = 100,
-) -> tuple[List[Tuple[InputGroundtruth, Optional[VersionOutput]]], int]:
-    """Get input-groundtruth entries with version outputs using pagination and total count."""
-    skip = (page - 1) * size
-    results = get_inputs_groundtruths_with_version_outputs(session, dataset_id, version, skip, size)
-    total_count = get_inputs_groundtruths_count_by_dataset(session, dataset_id)
-    return results, total_count
-
-
 def create_inputs_groundtruths(
     session: Session,
     dataset_id: UUID,
@@ -238,7 +224,7 @@ def get_datasets_by_project(
     skip: int = 0,
     limit: int = 100,
 ) -> List[DatasetProject]:
-    """Get all datasets for a project with pagination."""
+    """Get datasets for a project with pagination."""
     return (
         session.query(DatasetProject)
         .filter(DatasetProject.project_id == project_id)
