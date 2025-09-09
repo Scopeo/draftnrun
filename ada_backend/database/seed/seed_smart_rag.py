@@ -145,7 +145,7 @@ def seed_smart_rag_components(session: Session):
                 is_advanced=False,
             ),
             *build_function_calling_service_config_definitions(
-                component_id=document_react_loader_agent.id,
+                component_version_id=document_react_loader_agent.id,
                 params_to_seed=[
                     ParameterLLMConfig(
                         param_name=COMPLETION_MODEL_IN_DB,
