@@ -80,9 +80,7 @@ def update_organization_source_api_key(
     if verified_api_key.organization_id != organization_id:
         raise HTTPException(status_code=403, detail="You don't have access to this organization")
     try:
-        return update_source_by_source_id(
-            session, organization_id, source_id, api_key_id=verified_api_key.api_key_id
-        )
+        return update_source_by_source_id(session, organization_id, source_id, api_key_id=verified_api_key.api_key_id)
 
     except Exception as e:
         raise HTTPException(status_code=500, detail="Internal Server Error") from e

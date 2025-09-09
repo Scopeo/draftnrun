@@ -29,7 +29,6 @@ async def api_tool(mock_trace_manager):
     )
 
 
-
 @pytest.fixture
 def mock_response():
     mock = MagicMock()

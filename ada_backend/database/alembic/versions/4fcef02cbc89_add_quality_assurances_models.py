@@ -1,8 +1,8 @@
-"""add_quality_assurance_schema_and_tables
+"""add_quality_assurances_models
 
-Revision ID: f2d2064a1026
-Revises: 0d0db05d4dac
-Create Date: 2025-08-05 09:55:20.539600
+Revision ID: 4fcef02cbc89
+Revises: 8b393d7c2c4b
+Create Date: 2025-09-09 16:07:33.463376
 
 """
 
@@ -11,10 +11,9 @@ from typing import Sequence, Union
 from alembic import op
 import sqlalchemy as sa
 
-
 # revision identifiers, used by Alembic.
-revision: str = "f2d2064a1026"
-down_revision: Union[str, None] = "0d0db05d4dac"
+revision: str = "4fcef02cbc89"
+down_revision: Union[str, None] = "8b393d7c2c4b"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

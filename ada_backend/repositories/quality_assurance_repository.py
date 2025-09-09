@@ -45,7 +45,10 @@ def get_inputs_groundtruths_with_version_outputs(
     limit: int = 100,
 ) -> List[Tuple[InputGroundtruth, Optional[VersionOutput]]]:
     """
-    Get input-groundtruth entries for a dataset with their version outputs using LEFT JOIN.
+    Get input-groundtruth entries for a dataset with their version outputs.
+
+    - If version is specified: Uses INNER JOIN to only return inputs that have outputs for that version
+    - If version is None: Uses LEFT JOIN to return all inputs with their outputs (if any)
 
     Args:
         session: SQLAlchemy session
@@ -57,20 +60,35 @@ def get_inputs_groundtruths_with_version_outputs(
     Returns:
         List of tuples containing (InputGroundtruth, VersionOutput or None)
     """
-    query = (
-        session.query(InputGroundtruth, VersionOutput)
-        .outerjoin(
-            VersionOutput,
-            and_(
-                InputGroundtruth.id == VersionOutput.input_id,
-                VersionOutput.version == version if version else True,
-            ),
+    if version is not None:
+        # Use INNER JOIN when filtering by version - only return inputs that have outputs for that version
+        query = (
+            session.query(InputGroundtruth, VersionOutput)
+            .join(
+                VersionOutput,
+                and_(
+                    InputGroundtruth.id == VersionOutput.input_id,
+                    VersionOutput.version == version,
+                ),
+            )
+            .filter(InputGroundtruth.dataset_id == dataset_id)
+            .order_by(InputGroundtruth.created_at.desc())
+            .offset(skip)
+            .limit(limit)
         )
-        .filter(InputGroundtruth.dataset_id == dataset_id)
-        .order_by(InputGroundtruth.created_at.desc())
-        .offset(skip)
-        .limit(limit)
-    )
+    else:
+        # Use LEFT JOIN when no version filter - return all inputs with their outputs (if any)
+        query = (
+            session.query(InputGroundtruth, VersionOutput)
+            .outerjoin(
+                VersionOutput,
+                InputGroundtruth.id == VersionOutput.input_id,
+            )
+            .filter(InputGroundtruth.dataset_id == dataset_id)
+            .order_by(InputGroundtruth.created_at.desc())
+            .offset(skip)
+            .limit(limit)
+        )
 
     return query.all()
 
