@@ -38,6 +38,7 @@ def check_missing_params(
 async def ingestion_main_async(
     source_name: str, organization_id: UUID, task_id: UUID, source_type: SourceType, source_attributes: dict
 ):
+    LOGGER.info(f"[INGESTION_MAIN] Starting ingestion - Source: '{source_name}', Type: {source_type}, Organization: {organization_id}, Task: {task_id}")
 
     set_trace_manager(TraceManager(project_name="Ingestion"))
     set_tracing_span(
@@ -47,6 +48,7 @@ async def ingestion_main_async(
             session=SessionLocal(), organization_id=organization_id
         ),
     )
+    LOGGER.info(f"[INGESTION_MAIN] Trace manager and span initialized for task {task_id}")
     chunk_size = source_attributes.get("chunk_size")
     if chunk_size is None:
         chunk_size = DEFAULT_CHUNK_SIZE
@@ -95,7 +97,7 @@ async def ingestion_main_async(
                 organization_id=organization_id,
                 ingestion_task=failed_ingestion_task,
             )
-            return
+            raise  # Re-raise the exception to ensure subprocess exits with non-zero code
 
     elif source_type == SourceType.LOCAL:
         if check_missing_params(
@@ -122,7 +124,7 @@ async def ingestion_main_async(
                 organization_id=organization_id,
                 ingestion_task=failed_ingestion_task,
             )
-            return
+            raise  # Re-raise the exception to ensure subprocess exits with non-zero code
 
     elif source_type == SourceType.DATABASE:
         if check_missing_params(
@@ -167,8 +169,14 @@ async def ingestion_main_async(
                 organization_id=organization_id,
                 ingestion_task=failed_ingestion_task,
             )
-            return
+            raise  # Re-raise the exception to ensure subprocess exits with non-zero code
 
 
 def ingestion_main(**kwargs):
-    asyncio.run(ingestion_main_async(**kwargs))
+    LOGGER.info(f"[INGESTION_MAIN] Entry point called with kwargs: {list(kwargs.keys())}")
+    try:
+        asyncio.run(ingestion_main_async(**kwargs))
+        LOGGER.info(f"[INGESTION_MAIN] Completed successfully")
+    except Exception as e:
+        LOGGER.error(f"[INGESTION_MAIN] FAILED with error: {str(e)}")
+        raise
