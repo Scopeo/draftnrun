@@ -17,6 +17,7 @@ azure_files
 docstore
 images/*
 monitoring
+generated-config
 *.db
 pipeline.json
 *.csv
