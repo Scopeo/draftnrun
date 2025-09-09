@@ -1,8 +1,8 @@
-"""add component versions
+"""add component version
 
-Revision ID: 438636f25d06
-Revises: d4a5151de832
-Create Date: 2025-09-04 16:30:54.544050
+Revision ID: db6ec45f87f4
+Revises: 8b393d7c2c4b
+Create Date: 2025-09-09 11:15:23.491087
 
 """
 
@@ -13,8 +13,8 @@ import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
-revision: str = "438636f25d06"
-down_revision: Union[str, None] = "d4a5151de832"
+revision: str = "db6ec45f87f4"
+down_revision: Union[str, None] = "8b393d7c2c4b"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
