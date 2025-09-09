@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from ada_backend.database.setup_db import get_db
 from ada_backend.schemas.auth_schema import SupabaseUser, VerifiedApiKey
 from ada_backend.schemas.source_schema import DataSourceSchema, DataSourceSchemaResponse
+
 from ada_backend.routers.auth_router import (
     user_has_access_to_organization_dependency,
     UserRights,
@@ -15,7 +16,6 @@ from ada_backend.routers.auth_router import (
 from ada_backend.services.source_service import (
     get_sources_by_organization,
     create_source_by_organization,
-    upsert_source_by_organization,
     delete_source_service,
     update_source_by_source_id,
 )
@@ -65,8 +65,7 @@ def update_organization_source(
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
     try:
-        updated_source = update_source_by_source_id(session, organization_id, source_id, user_id=user.id)
-        return upsert_source_by_organization(session, organization_id, updated_source)
+        return update_source_by_source_id(session, organization_id, source_id, user_id=user.id)
     except Exception as e:
         raise HTTPException(status_code=500, detail="Internal Server Error") from e
 
@@ -81,10 +80,10 @@ def update_organization_source_api_key(
     if verified_api_key.organization_id != organization_id:
         raise HTTPException(status_code=403, detail="You don't have access to this organization")
     try:
-        updated_source = update_source_by_source_id(
+        return update_source_by_source_id(
             session, organization_id, source_id, api_key_id=verified_api_key.api_key_id
         )
-        return upsert_source_by_organization(session, organization_id, updated_source)
+
     except Exception as e:
         raise HTTPException(status_code=500, detail="Internal Server Error") from e
 

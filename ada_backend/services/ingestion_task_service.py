@@ -61,6 +61,7 @@ def create_ingestion_task_by_organization(
             ingestion_task_data.source_name,
             ingestion_task_data.source_type,
             ingestion_task_data.status,
+            ingestion_task_data.source_id,
         )
         track_ingestion_task_created(task_id, organization_id, user_id=user_id, api_key_id=api_key_id)
 
@@ -76,6 +77,7 @@ def create_ingestion_task_by_organization(
             organization_id=str(organization_id),
             task_id=str(task_id),
             source_attributes=ingestion_task_data.source_attributes,
+            source_id=str(ingestion_task_data.source_id) if ingestion_task_data.source_id else None,
         )
 
         if not redis_result:

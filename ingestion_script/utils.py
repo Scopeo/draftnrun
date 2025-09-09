@@ -1,6 +1,7 @@
 import logging
 import inspect
 from typing import Optional
+from uuid import UUID
 
 import requests
 
@@ -73,7 +74,7 @@ def update_ingestion_task(
 def create_source(
     organization_id: str,
     source_data: DataSourceSchema,
-) -> None:
+) -> UUID:
     """Create a source in the database."""
 
     try:
@@ -86,8 +87,9 @@ def create_source(
             },
         )
         response.raise_for_status()
-        LOGGER.info(f"Successfully created source for organization {organization_id}")
-        return response.json()
+        source_id = response.json()
+        LOGGER.info(f"Successfully created source {source_id} for organization {organization_id}")
+        return source_id
     except Exception as e:
         LOGGER.error(f"Failed to create source: {str(e)}")
         raise requests.exceptions.RequestException(
@@ -105,6 +107,7 @@ async def upload_source(
     ingestion_function: callable,
     update_existing: bool = False,
     attributes: Optional[SourceAttributes] = None,
+    source_id: Optional[str] = None,
 ) -> None:
     check_signature(
         ingestion_function,
@@ -189,15 +192,18 @@ async def upload_source(
         embedding_model_reference=f"{embedding_service._provider}:{embedding_service._model_name}",
         attributes=attributes,
     )
-    LOGGER.info(f"Creating source {source_name} for organization {organization_id} in database")
-    source_id = create_source(
-        organization_id=organization_id,
-        source_data=source_data,
-    )
+    LOGGER.info(f"Upserting source {source_name} for organization {organization_id} in database")
+    if source_id:
+        result_source_id = source_id
+    else:
+        result_source_id = create_source(
+            organization_id=organization_id,
+            source_data=source_data,
+        )
 
     ingestion_task = IngestionTaskUpdate(
         id=task_id,
-        source_id=source_id,
+        source_id=result_source_id,
         source_name=source_name,
         source_type=source_type,
         status=db.TaskStatus.COMPLETED,
