@@ -19,7 +19,7 @@ from ada_backend.database.seed.utils import (
     ParameterLLMConfig,
     build_function_calling_service_config_definitions,
 )
-from ada_backend.services.registry import COMPLETION_MODEL_IN_DB
+from ada_backend.database.seed.constants import COMPLETION_MODEL_IN_DB
 from engine.agent.document_react_loader import INITIAL_PROMPT as DEFAULT_DOCUMENT_REACT_LOADER_PROMPT
 
 

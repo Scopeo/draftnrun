@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from ada_backend.database.models import ApiKeyType
 from ada_backend.repositories.project_repository import get_project
+from ada_backend.context import get_request_context
 from settings import settings
 from ada_backend.database.setup_db import get_db
 from ada_backend.services.api_key_service import (
@@ -55,6 +56,7 @@ async def get_user_from_supabase_token(
 ) -> SupabaseUser:
     """
     Validate Supabase JWT from Authorization header and return user info.
+    Also sets the user in the request context.
 
     Args:
         authorization (Optional[str]): Supabase JWT in the 'Authorization' header.
@@ -69,11 +71,18 @@ async def get_user_from_supabase_token(
         if not user_response or not user_response.user:
             raise HTTPException(status_code=401, detail="Invalid Supabase token")
 
-        return SupabaseUser(
+        user = SupabaseUser(
             id=user_response.user.id,
             email=user_response.user.email,
             token=supabase_token,
         )
+
+        context = get_request_context()
+        context.set_user(user)
+
+        return user
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=401, detail="Failed to validate Supabase token") from e
 

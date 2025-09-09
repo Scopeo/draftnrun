@@ -1,5 +1,8 @@
 import logging
 import json
+import asyncio
+import concurrent.futures
+import contextvars
 from inspect import signature
 from typing import Optional, Any, Type, Callable, get_type_hints, get_origin, get_args, Union
 from uuid import UUID
@@ -11,7 +14,11 @@ from engine.trace.trace_context import get_trace_manager
 from engine.llm_services.llm_service import EmbeddingService, CompletionService, WebSearchService, OCRService
 from engine.qdrant_service import QdrantService, QdrantCollectionSchema
 from ada_backend.database.setup_db import get_db_session
+from ada_backend.database.models import EnvType
 from ada_backend.repositories.source_repository import get_data_source_by_id
+from ada_backend.repositories.project_repository import get_project
+from ada_backend.context import get_request_context
+from ada_backend.services.user_roles_service import get_user_access_to_organization
 
 LOGGER = logging.getLogger(__name__)
 
@@ -147,6 +154,31 @@ class AgentFactory(EntityFactory):
             raise ValueError("Tool description must be a ToolDescription object.")
 
         return args, kwargs
+
+
+class NonToolCallableBlockFactory(EntityFactory):
+    """
+    Factory for agent-like blocks that are not meant to be function-callable.
+
+    Differences from AgentFactory:
+    - Does NOT enforce the presence/type of a ToolDescription in params.
+    - Still injects a trace manager when the target constructor accepts it.
+    """
+
+    def __init__(
+        self,
+        entity_class: Type[Any],
+        parameter_processors: Optional[list[ParameterProcessor]] = None,
+        constructor_method: str = "__init__",
+    ):
+        processors = parameter_processors or []
+        processors.append(build_trace_manager_processor())
+
+        super().__init__(
+            entity_class=entity_class,
+            parameter_processors=processors,
+            constructor_method=constructor_method,
+        )
 
 
 def build_dataclass_processor(dataclass_type: Type[Any], param_name: str) -> ParameterProcessor:
@@ -401,6 +433,93 @@ def build_qdrant_service_processor(target_name: str = "qdrant_service") -> Param
 
         params[target_name] = qdrant_service
         params["collection_name"] = collection_name
+
+        return params
+
+    return processor
+
+
+def build_project_reference_processor(target_name: str = "graph_runner") -> ParameterProcessor:
+    """
+    Returns a processor function to build a GraphRunner from a project reference.
+    Access control is enforced to ensure the user has permission to use the project.
+
+    Note: This processor calls async functions from sync code using ThreadPoolExecutor
+    to avoid event loop conflicts when running inside FastAPI's async context.
+
+    Returns:
+        ParameterProcessor: A function that validates project access before instantiation
+
+    Raises:
+        ValueError: If user doesn't have access to the referenced project
+    """
+
+    def processor(params: dict, constructor_params: dict[str, Any]) -> dict:
+        project_id_str: str | None = params.pop("project_id", None)
+        if project_id_str is None:
+            raise ValueError("project_id is required")
+        project_id = UUID(project_id_str)
+
+        context = get_request_context()
+        user = context.require_user()
+
+        # Capture the current context including TraceManager.
+        current_context = contextvars.copy_context()
+
+        with get_db_session() as session:
+            # TODO: Fix circular import issue - these imports are here to avoid
+            # circular dependency between entity_factory and agent_runner_service.
+            from ada_backend.repositories.graph_runner_repository import get_graph_runner_for_env
+            from ada_backend.services.agent_runner_service import get_agent_for_project
+
+            project = get_project(session, project_id)
+            if not project:
+                raise ValueError(f"Project {project_id} not found")
+
+            # Validate user has access to the project's organization
+            try:
+                # Run async function in a new thread with copied context to preserve TraceManager
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(
+                        current_context.run,
+                        asyncio.run,
+                        get_user_access_to_organization(
+                            user=user,
+                            organization_id=project.organization_id,
+                        ),
+                    )
+                    access = future.result()
+                LOGGER.info(f"User {user.id} has access to project {project_id} with role {access.role}")
+            except ValueError as e:
+                raise ValueError(f"Access denied to project {project_id}: {e}") from e
+
+            # Get and instantiate GraphRunner
+            graph_runner_in_db = get_graph_runner_for_env(
+                session=session,
+                project_id=project_id,
+                # TODO: Add support for using different GR versions
+                env=EnvType.PRODUCTION,
+            )
+            if graph_runner_in_db is None:
+                raise ValueError(
+                    f"No production GraphRunner found for project {project_id}. "
+                    f"Publish the project to production and try again.",
+                )
+            gr_id: UUID = graph_runner_in_db.id
+
+            with concurrent.futures.ThreadPoolExecutor() as executor:
+                future = executor.submit(
+                    current_context.run,
+                    asyncio.run,
+                    get_agent_for_project(
+                        session=session,
+                        graph_runner_id=gr_id,
+                        project_id=project_id,
+                    ),
+                )
+                graph_runner = future.result()
+
+        params[target_name] = graph_runner
 
         return params
 

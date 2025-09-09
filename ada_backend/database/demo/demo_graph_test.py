@@ -10,7 +10,7 @@ from ada_backend.schemas.pipeline.base import (
 from ada_backend.schemas.pipeline.graph_schema import EdgeSchema, GraphUpdateSchema
 from engine.agent.types import ToolDescription
 from engine.agent.rag.rag import format_rag_tool_description
-from ada_backend.services.registry import COMPLETION_MODEL_IN_DB
+from ada_backend.database.seed.constants import COMPLETION_MODEL_IN_DB
 
 
 GRAPH_TEST_TOOL_DESCRIPTION = ToolDescription(

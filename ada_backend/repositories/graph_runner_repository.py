@@ -28,7 +28,11 @@ def get_graph_runners_by_project(session: Session, project_id: UUID) -> list[db.
     )
 
 
-def get_graph_runner_for_env(session: Session, project_id: UUID, env: db.EnvType) -> db.GraphRunner:
+def get_graph_runner_for_env(
+    session: Session,
+    project_id: UUID,
+    env: db.EnvType,
+) -> Optional[db.GraphRunner]:
     """Returns the GraphRunner bound to the given project and environment."""
     return (
         session.query(db.GraphRunner)
