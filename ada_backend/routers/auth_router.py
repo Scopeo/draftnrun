@@ -8,18 +8,20 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from supabase import Client, create_client
 from sqlalchemy.orm import Session
 
+from ada_backend.database.models import ApiKeyType
 from ada_backend.repositories.project_repository import get_project
 from settings import settings
 from ada_backend.database.setup_db import get_db
 from ada_backend.services.api_key_service import (
+    generate_scoped_api_key,
     get_api_keys_service,
-    generate_api_key,
     deactivate_api_key_service,
     verify_api_key,
     verify_ingestion_api_key,
 )
 from ada_backend.services.user_roles_service import get_user_access_to_organization
 from ada_backend.schemas.auth_schema import (
+    OrgApiKeyCreateRequest,
     SupabaseUser,
     ApiKeyGetResponse,
     ApiKeyCreateRequest,
@@ -158,7 +160,7 @@ async def get_api_keys(
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
     try:
-        return get_api_keys_service(session, project_id)
+        return get_api_keys_service(session, project_id=project_id)
     except Exception as e:
         raise HTTPException(status_code=500, detail="Failed to get API keys") from e
 
@@ -195,14 +197,77 @@ async def create_api_key(
     user = await _is_user(project_id=api_key_create.project_id, user=user, session=session)
 
     try:
-        return generate_api_key(
+        return generate_scoped_api_key(
             session=session,
-            project_id=api_key_create.project_id,
+            scope_type=ApiKeyType.PROJECT.value,
+            scope_id=api_key_create.project_id,
             key_name=api_key_create.key_name,
             creator_user_id=user.id,
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail="Failed to create API key") from e
+
+
+@router.get("/org-api-key", summary="Get Organization API Keys")
+async def get_org_api_keys(
+    user: Annotated[
+        SupabaseUser,
+        Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.USER.value)),
+    ],
+    session: Session = Depends(get_db),
+    organization_id: UUID = Query(..., description="The ID of the organization to retrieve API keys for"),
+) -> ApiKeyGetResponse:
+    """
+    Get all active API keys for the authenticated user.
+    """
+    if not user.id:
+        raise HTTPException(status_code=400, detail="User ID not found")
+    try:
+        return get_api_keys_service(session, organization_id=organization_id)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Failed to get API keys") from e
+
+
+@router.post("/org-api-key", summary="Create Organization API Key")
+async def create_org_api_key(
+    user: Annotated[SupabaseUser, Depends(get_user_from_supabase_token)],
+    session: Session = Depends(get_db),
+    org_api_key_create: OrgApiKeyCreateRequest = Body(...),
+) -> ApiKeyCreatedResponse:
+    """
+    Generate and store a new organization API key for the authenticated user.
+    This API key gives users access to run inferences using an any Agent or Pipeline
+    that they have access to (i.e. they are a member of the organization that
+    the Agent or Pipeline belongs to)
+
+    Args:
+        user (SupabaseUser): User information from Supabase.
+        db (Session): Database session.
+
+    Returns:
+        ApiKeyCreatedResponse: Generated API key.
+
+    Raises:
+        HTTPException: If the API key cannot be created.
+    """
+    if not user.id:
+        raise HTTPException(status_code=400, detail="User ID not found")
+
+    _is_user = user_has_access_to_organization_dependency(
+        allowed_roles=set(UserRights.USER.value),
+    )
+    user = await _is_user(organization_id=org_api_key_create.org_id, user=user)
+
+    try:
+        return generate_scoped_api_key(
+            session=session,
+            scope_type=ApiKeyType.ORGANIZATION.value,
+            scope_id=org_api_key_create.org_id,
+            key_name=org_api_key_create.key_name,
+            creator_user_id=user.id,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Failed to create Organization API key") from e
 
 
 @router.delete("/api-key", summary="Delete API Key")

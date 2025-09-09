@@ -4,6 +4,7 @@ import hashlib
 from uuid import UUID
 
 from sqlalchemy.orm import Session
+from ada_backend.database.models import ApiKeyType, OrgApiKey, ProjectApiKey
 from ada_backend.schemas.auth_schema import (
     ApiKeyCreatedResponse,
     VerifiedApiKey,
@@ -14,6 +15,7 @@ from ada_backend.repositories.api_key_repository import (
     create_api_key,
     get_api_key_by_hashed_key,
     deactivate_api_key,
+    get_api_keys_by_org_id,
     get_api_keys_by_project_id,
     get_project_by_api_key,
 )
@@ -44,31 +46,48 @@ def _generate_api_key() -> str:
     return f"{API_KEY_PREFIX}{base64_key}"
 
 
-def get_api_keys_service(session: Session, project_id: UUID) -> ApiKeyGetResponse:
-    """Service function to get all API keys by project id."""
-    api_keys = get_api_keys_by_project_id(session, project_id)
+def get_api_keys_service(
+    session: Session,
+    project_id: UUID | None = None,
+    organization_id: UUID | None = None,
+) -> ApiKeyGetResponse:
+    """Service function to get all API keys by project or organization."""
+
+    if project_id and organization_id:
+        raise ValueError("Provide either project_id or organization_id, not both.")
+    if not project_id and not organization_id:
+        raise ValueError("Must provide either project_id or organization_id.")
+
+    if project_id:
+        api_keys = get_api_keys_by_project_id(session, project_id)
+        return ApiKeyGetResponse(
+            project_id=project_id,
+            organization_id=None,
+            api_keys=[ApiKeyData(key_id=key.id, key_name=key.name) for key in api_keys],
+        )
+
+    api_keys = get_api_keys_by_org_id(session, organization_id)
     return ApiKeyGetResponse(
-        project_id=project_id,
+        project_id=None,
+        organization_id=organization_id,
         api_keys=[ApiKeyData(key_id=key.id, key_name=key.name) for key in api_keys],
     )
 
 
-def generate_api_key(
+def generate_scoped_api_key(
     session: Session,
-    project_id: UUID,
+    scope_type: ApiKeyType,
+    scope_id: UUID,
     key_name: str,
     creator_user_id: UUID,
 ) -> ApiKeyCreatedResponse:
-    """
-    Service function to generate a new API key for the given project.
-    Returns a user-friendly API key format.
-    """
     api_key = _generate_api_key()
     hashed_key = _hash_key(api_key)
 
     key_id = create_api_key(
         session=session,
-        project_id=project_id,
+        scope_type=scope_type,
+        scope_id=scope_id,
         key_name=key_name,
         hashed_key=hashed_key,
         creator_user_id=creator_user_id,
@@ -94,16 +113,31 @@ def verify_api_key(session: Session, private_key: str) -> VerifiedApiKey:
     if not api_key.is_active:
         raise ValueError("API key is not active")
 
-    project = get_project_by_api_key(session, hashed_key=hashed_key)
-    if not project:
-        raise ValueError("Project not found for the given API key")
-    if project.id != api_key.project_id:
-        raise ValueError("Mismatched project ID for the API key")
+    if isinstance(api_key, ProjectApiKey):
+        project = get_project_by_api_key(session, hashed_key=hashed_key)
+        if not project:
+            raise ValueError("Project not found for the given API key")
+        if project.id != api_key.project_id:
+            raise ValueError("Mismatched project ID for the API key")
 
-    return VerifiedApiKey(
-        api_key_id=api_key.id,
-        project_id=api_key.project_id,
-    )
+        return VerifiedApiKey(
+            api_key_id=api_key.id,
+            scope_type=api_key.type,
+            project_id=api_key.project_id,
+            organization_id=None,
+        )
+
+    if isinstance(api_key, OrgApiKey):
+        if not api_key.organization_id:
+            raise ValueError("Organization not found for the given API key")
+        return VerifiedApiKey(
+            api_key_id=api_key.id,
+            scope_type=api_key.type,
+            project_id=None,
+            organization_id=api_key.organization_id,
+        )
+
+    raise ValueError(f"Unsupported API key scope: {api_key.type!r}")
 
 
 def deactivate_api_key_service(

@@ -4,11 +4,12 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from ada_backend.database.setup_db import get_db
-from ada_backend.schemas.auth_schema import SupabaseUser
+from ada_backend.schemas.auth_schema import SupabaseUser, VerifiedApiKey
 from ada_backend.schemas.source_schema import DataSourceSchema, DataSourceSchemaResponse
 from ada_backend.routers.auth_router import (
     user_has_access_to_organization_dependency,
     UserRights,
+    verify_api_key_dependency,
     verify_ingestion_api_key_dependency,
 )
 from ada_backend.services.source_service import (
@@ -64,7 +65,25 @@ def update_organization_source(
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
     try:
-        updated_source = update_source_by_source_id(session, organization_id, source_id, user.id)
+        updated_source = update_source_by_source_id(session, organization_id, source_id, user_id=user.id)
+        return upsert_source_by_organization(session, organization_id, updated_source)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Internal Server Error") from e
+
+
+@router.post("/{organization_id}/{source_id}/api-key", status_code=status.HTTP_200_OK)
+def update_organization_source_api_key(
+    organization_id: UUID,
+    source_id: UUID,
+    session: Session = Depends(get_db),
+    verified_api_key: VerifiedApiKey = Depends(verify_api_key_dependency),
+):
+    if verified_api_key.organization_id != organization_id:
+        raise HTTPException(status_code=403, detail="You don't have access to this organization")
+    try:
+        updated_source = update_source_by_source_id(
+            session, organization_id, source_id, api_key_id=verified_api_key.api_key_id
+        )
         return upsert_source_by_organization(session, organization_id, updated_source)
     except Exception as e:
         raise HTTPException(status_code=500, detail="Internal Server Error") from e
