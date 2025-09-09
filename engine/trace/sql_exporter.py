@@ -149,8 +149,8 @@ class SQLSpanExporter(SpanExporter):
                 split_nested_keys(json_span["attributes"]) if isinstance(json_span["attributes"], dict) else {}
             )
 
-            environment = json_span["attributes"].get("environment")
-            call_type = json_span["attributes"].get("call_type")
+            environment = formatted_attributes.pop("environment", None)
+            call_type = formatted_attributes.pop("call_type", None)
 
             openinference_span_kind = json_span["attributes"].get(SpanAttributes.OPENINFERENCE_SPAN_KIND, "UNKNOWN")
             span_row = models.Span(
