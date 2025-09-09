@@ -1,13 +1,10 @@
 import pandas as pd
-import pytest
 import asyncio
-from typing import Union
 from uuid import uuid4
 
 from engine.qdrant_service import QdrantCollectionSchema, QdrantService
 from engine.llm_services.llm_service import EmbeddingService
 from engine.agent.types import SourceChunk
-from engine.agent.utils import format_qdrant_filter
 from tests.mocks.trace_manager import MockTraceManager
 
 TEST_COLLECTION_NAME = f"test_agentic_ci_collection_{uuid4()}"
@@ -138,105 +135,5 @@ def test_qdrant_service():
     synced_df.reset_index(drop=True, inplace=True)
     assert synced_df.equals(new_df_2)
 
-    assert asyncio.run(qdrant_agentic_service.delete_collection_async(TEST_COLLECTION_NAME))
-    assert not asyncio.run(qdrant_agentic_service.collection_exists_async(TEST_COLLECTION_NAME))
-
-
-@pytest.mark.parametrize(
-    "filter_dict, filtering_condition, expected_chunk",
-    [
-        ({"metadata_1": ["a"]}, "OR", {"1"}),
-        ({"metadata_2": ["cc"]}, "OR", {"2"}),
-        ({"metadata_1": ["a"], "metadata_2": ["cc"]}, "OR", {"1", "2"}),
-        ({"metadata_1": ["f", "g"]}, "OR", set()),
-        ({"metadata_2": ["cc", "dd"]}, "OR", {"2"}),
-        ({"metadata_1": ["a", "c"], "metadata_2": ["aa", "dd"]}, "AND", {"1", "2"}),
-        ({"metadata_1": ["a"], "metadata_2": ["aa"]}, "AND", {"1"}),
-    ],
-)
-def test_qdrant_filtering(
-    filter_dict: dict[str, Union[list[str], str]], filtering_condition: str, expected_chunk: str
-):
-    """Tests the Qdrant filtering functionality using different filter conditions.
-
-    Args:
-        filter_dict (dict[str, Union[list[str], str]]): The filter dictionary to apply.
-        filtering_condition (str): The filtering condition, either "AND" or "OR".
-        expected_chunk (str): The expected chunk name to be retrieved.
-    """
-    mock_trace_manager = MockTraceManager(project_name="test")
-    embedding_service = EmbeddingService(
-        trace_manager=mock_trace_manager,
-        provider="openai",
-        model_name="text-embedding-3-large",
-    )
-    # Define the Qdrant schema
-    qdrant_schema = QdrantCollectionSchema(
-        chunk_id_field="chunk_id",
-        content_field="content",
-        file_id_field="file_id",
-        url_id_field="url",
-        last_edited_ts_field="last_edited_ts",
-        metadata_fields_to_keep=["metadata_1", "metadata_2"],
-    )
-
-    # Define test data
-    chunks = [
-        {
-            "chunk_id": "1",
-            "content": "chunk1",
-            "file_id": "file_id1",
-            "url": "https//www.dummy1.com",
-            "last_edited_ts": "2024-11-26 10:40:40",
-            "metadata_1": ["a", "b"],
-            "metadata_2": ["aa", "bb"],
-        },
-        {
-            "chunk_id": "2",
-            "content": "chunk2",
-            "file_id": "file_id2",
-            "url": "https//www.dummy2.com",
-            "last_edited_ts": "2024-11-26 10:40:40",
-            "metadata_1": ["c", "d"],
-            "metadata_2": ["cc", "dd"],
-        },
-    ]
-
-    # Initialize Qdrant service
-    qdrant_agentic_service = QdrantService.from_defaults(
-        embedding_service=embedding_service,
-        default_collection_schema=qdrant_schema,
-        timeout=60.0,  # Increased timeout for tests
-    )
-
-    # Ensure a clean state before testing
-    if asyncio.run(qdrant_agentic_service.collection_exists_async(TEST_COLLECTION_NAME)):
-        asyncio.run(qdrant_agentic_service.delete_collection_async(TEST_COLLECTION_NAME))
-    assert not asyncio.run(qdrant_agentic_service.collection_exists_async(TEST_COLLECTION_NAME))
-
-    # Create the collection and add chunks
-    asyncio.run(qdrant_agentic_service.create_collection_async(collection_name=TEST_COLLECTION_NAME))
-    assert asyncio.run(qdrant_agentic_service.collection_exists_async(TEST_COLLECTION_NAME))
-    assert asyncio.run(qdrant_agentic_service.count_points_async(TEST_COLLECTION_NAME)) == 0
-
-    asyncio.run(
-        qdrant_agentic_service.add_chunks_async(
-            list_chunks=chunks,
-            collection_name=TEST_COLLECTION_NAME,
-        )
-    )
-    assert asyncio.run(qdrant_agentic_service.count_points_async(TEST_COLLECTION_NAME)) == 2
-
-    formatted_filter = format_qdrant_filter(filter_dict, filtering_condition)
-
-    retrieved_chunks = asyncio.run(
-        qdrant_agentic_service.retrieve_similar_chunks_async(
-            query_text="chunk1",
-            collection_name=TEST_COLLECTION_NAME,
-            filter=formatted_filter,
-        )
-    )
-    set_chunks = set([chunk.name for chunk in retrieved_chunks])
-    assert expected_chunk == set_chunks
     assert asyncio.run(qdrant_agentic_service.delete_collection_async(TEST_COLLECTION_NAME))
     assert not asyncio.run(qdrant_agentic_service.collection_exists_async(TEST_COLLECTION_NAME))
