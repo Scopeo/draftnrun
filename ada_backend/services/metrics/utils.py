@@ -13,6 +13,7 @@ LOGGER = logging.getLogger(__name__)
 
 def query_trace_duration(project_id: UUID, duration_days: int) -> pd.DataFrame:
     start_time_offset_days = (datetime.now() - timedelta(days=duration_days)).isoformat()
+    # TODO: Refactor this function to be SQL-native for better efficiency
     query = (
         f"SELECT * FROM spans WHERE start_time > '{start_time_offset_days}'"
         "ORDER BY MAX(start_time) OVER (PARTITION BY trace_rowid) DESC, "
@@ -58,6 +59,7 @@ def query_root_trace_duration(project_id: UUID, duration_days: int) -> pd.DataFr
     )
     session = get_session_trace()
     df = pd.read_sql_query(query, session.bind)
+    # TODO: Refactor this function to be SQL-native for better efficiency
     session.close()
     df = df.replace({np.nan: None})
     # TODO: Update the table to add the project_id column to improve filtering efficiency

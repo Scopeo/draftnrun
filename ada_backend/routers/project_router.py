@@ -198,7 +198,7 @@ async def get_project_charts(
 
 
 # TODO: Delete this endpoint
-@router.get("/{project_id}/trace", response_model=List[TraceSpan], tags=["Metrics"])
+@router.get("/{project_id}/trace", response_model=List[TraceSpan], tags=["Metrics"], deprecated=True)
 async def get_project_trace(
     project_id: UUID,
     duration: int,
@@ -225,7 +225,7 @@ async def get_project_trace(
 
 
 # TODO: Delete this endpoint
-@router.get("/{project_id}/v2/trace", response_model=List[TraceSpan], tags=["Metrics"])
+@router.get("/{project_id}/v2/trace", response_model=List[TraceSpan], tags=["Metrics"], deprecated=True)
 async def get_project_trace_v2(
     project_id: UUID,
     duration: int,
