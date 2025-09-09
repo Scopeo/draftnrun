@@ -12,7 +12,7 @@ from ada_backend.repositories.organization_repository import get_organization_se
 from ada_backend.schemas.pipeline.base import ComponentInstanceSchema
 from ada_backend.database import models as db
 from ada_backend.repositories.component_repository import (
-    get_component_parameter_definition_by_component_id,
+    get_component_parameter_definition_by_component_version,
     upsert_component_instance,
     upsert_basic_parameter,
     get_or_create_tool_description,
@@ -70,9 +70,9 @@ def create_or_update_component_instance(
     # Get parameter definitions for validation
     param_definitions: dict[str, db.ComponentParameterDefinition] = {
         p.name: p
-        for p in get_component_parameter_definition_by_component_id(
+        for p in get_component_parameter_definition_by_component_version(
             session,
-            instance_data.component_id,
+            instance_data.version_id,
         )
     }
 

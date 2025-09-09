@@ -262,7 +262,7 @@ class ComponentVersion(Base):
         ForeignKey("components.id", ondelete="CASCADE"),
         nullable=False,
     )
-    version = mapped_column(String, nullable=False)
+    version_tag = mapped_column(String, nullable=False)
     changelog = mapped_column(Text, nullable=True)
 
     description = mapped_column(Text, nullable=True)
@@ -291,15 +291,15 @@ class ComponentVersion(Base):
     child_definitions = relationship("ComponentParameterChildRelationship", back_populates="child_component")
 
     __table_args__ = (
-        CheckConstraint("version <> ''", name="check_version_not_empty"),
+        CheckConstraint("version_tag <> ''", name="check_version_not_empty"),
         CheckConstraint(
-            "LENGTH(version) - LENGTH(REPLACE(version, '.', '')) = 2",
+            "LENGTH(version_tag) - LENGTH(REPLACE(version_tag, '.', '')) = 2",
             name="check_version_format",
         ),
     )
 
     def __str__(self):
-        return f"ComponentVersion(component_id={self.component_id}, version={self.version})"
+        return f"ComponentVersion(component_id={self.component_id}, version_tag={self.version_tag})"
 
 
 class Integration(Base):
