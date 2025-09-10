@@ -4,7 +4,7 @@ import uuid
 from sqlalchemy.orm import Session
 import networkx as nx
 
-from ada_backend.database.models import EnvType, OrgSecretType
+from ada_backend.database.models import EnvType, OrgSecretType, CallType
 from ada_backend.repositories.edge_repository import get_edges
 from ada_backend.schemas.project_schema import ChatResponse
 from ada_backend.services.agent_builder_service import instantiate_component
@@ -97,12 +97,18 @@ async def run_env_agent(
     project_id: UUID,
     env: EnvType,
     input_data: dict,
+    call_type: CallType,
 ) -> ChatResponse:
     graph_runner = get_graph_runner_for_env(session=session, project_id=project_id, env=env)
     if not graph_runner:
         raise ValueError(f"{env} graph runner not found for project {project_id}.")
     return await run_agent(
-        session=session, project_id=project_id, graph_runner_id=graph_runner.id, input_data=input_data
+        session=session,
+        project_id=project_id,
+        graph_runner_id=graph_runner.id,
+        input_data=input_data,
+        environment=env,
+        call_type=call_type,
     )
 
 
@@ -111,6 +117,8 @@ async def run_agent(
     project_id: UUID,
     graph_runner_id: UUID,
     input_data: dict,
+    environment: EnvType,
+    call_type: CallType,
 ) -> ChatResponse:
     project_details = get_project_with_details(session, project_id=project_id)
     agent = await get_agent_for_project(
@@ -129,6 +137,8 @@ async def run_agent(
         organization_llm_providers=get_organization_llm_providers(session, project_details.organization_id),
         conversation_id=input_data.get("conversation_id"),
         uuid_for_temp_folder=uuid_for_temp_folder,
+        environment=environment,
+        call_type=call_type,
     )
     try:
         agent_output = await agent.run(
