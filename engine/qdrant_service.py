@@ -475,10 +475,10 @@ class QdrantService:
                 metadata = {}
             chunks.append(
                 SourceChunk(
-                    name=chunk_data.get(schema.chunk_id_field, ""),
-                    document_name=chunk_data.get(schema.file_id_field, ""),
+                    name=chunk_data.get(schema.chunk_id_field, "") or "",
+                    document_name=chunk_data.get(schema.file_id_field, "") or "",
                     content=query_text,
-                    url=str(chunk_data.get(schema.url_id_field, "")),
+                    url=str(chunk_data.get(schema.url_id_field, "") or ""),
                     metadata=metadata,
                 )
             )

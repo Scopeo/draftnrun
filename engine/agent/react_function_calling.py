@@ -115,7 +115,7 @@ class ReActAgent(Agent):
             tool_output = await tool_to_use.run(*original_agent_inputs, **tool_arguments)
         except Exception as e:
             LOGGER.error(f"Error running tool {tool_function_name}: {e}")
-            tool_output = AgentPayload(error=str(e))
+            tool_output = AgentPayload(messages=[], error=str(e))
         return tool_call_id, tool_output
 
     async def _process_tool_calls(
