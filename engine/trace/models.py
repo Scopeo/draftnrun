@@ -6,6 +6,8 @@ from sqlalchemy.orm import declarative_base, mapped_column
 from opentelemetry.trace.status import StatusCode
 from openinference.semconv.trace import OpenInferenceSpanKindValues
 
+from ada_backend.database.models import EnvType, CallType
+
 
 # PostgreSQL-compatible enum helper (adapted from ada_backend pattern)
 def camel_to_snake(name: str) -> str:
@@ -66,6 +68,8 @@ class Span(Base):
     cumulative_llm_token_count_completion = Column(Integer, nullable=False)
     llm_token_count_prompt = Column(Integer, nullable=True)
     llm_token_count_completion = Column(Integer, nullable=True)
+    environment = mapped_column(make_pg_string_enum(EnvType), nullable=True)
+    call_type = mapped_column(make_pg_string_enum(CallType), nullable=True)
 
 
 class OrganizationUsage(Base):

@@ -149,6 +149,9 @@ class SQLSpanExporter(SpanExporter):
                 split_nested_keys(json_span["attributes"]) if isinstance(json_span["attributes"], dict) else {}
             )
 
+            environment = formatted_attributes.pop("environment", None)
+            call_type = formatted_attributes.pop("call_type", None)
+
             openinference_span_kind = json_span["attributes"].get(SpanAttributes.OPENINFERENCE_SPAN_KIND, "UNKNOWN")
             span_row = models.Span(
                 span_id=json_span["context"]["span_id"],
@@ -167,6 +170,8 @@ class SQLSpanExporter(SpanExporter):
                 cumulative_llm_token_count_completion=cumulative_llm_token_count_completion,
                 llm_token_count_prompt=span.attributes.get(SpanAttributes.LLM_TOKEN_COUNT_PROMPT),
                 llm_token_count_completion=span.attributes.get(SpanAttributes.LLM_TOKEN_COUNT_COMPLETION),
+                environment=environment,
+                call_type=call_type,
             )
             ancestors = (
                 select(models.Span.id, models.Span.parent_id)

@@ -2,6 +2,8 @@ from contextvars import ContextVar
 from dataclasses import dataclass
 from typing import Optional
 
+from ada_backend.database.models import EnvType, CallType
+
 
 @dataclass
 class TracingSpanParams:
@@ -10,6 +12,8 @@ class TracingSpanParams:
     organization_llm_providers: list[str]
     conversation_id: Optional[str] = None
     uuid_for_temp_folder: Optional[str] = None
+    environment: Optional[EnvType] = None
+    call_type: Optional[CallType] = None
 
 
 _tracing_context: ContextVar[Optional[TracingSpanParams]] = ContextVar("_tracing_context", default=None)
@@ -21,6 +25,8 @@ def set_tracing_span(
     organization_llm_providers: list[str],
     conversation_id: Optional[str] = None,
     uuid_for_temp_folder: Optional[str] = None,
+    environment: Optional[EnvType] = None,
+    call_type: Optional[CallType] = None,
 ) -> None:
     """Set current tracing context with project/org/llm info."""
     params = TracingSpanParams(
@@ -29,6 +35,8 @@ def set_tracing_span(
         organization_llm_providers,
         conversation_id,
         uuid_for_temp_folder,
+        environment,
+        call_type,
     )
     _tracing_context.set(params)
 
