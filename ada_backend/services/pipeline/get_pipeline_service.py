@@ -21,6 +21,7 @@ from ada_backend.repositories.component_repository import (
 )
 from ada_backend.schemas.pipeline.base import ComponentRelationshipSchema
 from ada_backend.schemas.pipeline.get_pipeline_schema import ComponentInstanceReadSchema
+from ada_backend.database.models import UIComponent
 
 LOGGER = getLogger(__name__)
 
@@ -80,7 +81,11 @@ def get_component_instance(
             PipelineParameterReadSchema(
                 id=param.id,
                 name=param.name,
-                value=param.value,
+                value=(
+                    str(param.value)
+                    if param.ui_component in [UIComponent.TEXTAREA, UIComponent.TEXTFIELD]
+                    else param.value
+                ),
                 type=param.type,
                 nullable=param.nullable,
                 default=param.default,
