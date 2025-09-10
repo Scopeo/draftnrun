@@ -34,7 +34,7 @@ class URLDisplayType(StrEnum):
 
 class SourceChunk(BaseModel):
     name: str
-    document_name: str
+    document_name: Optional[str] = None
     content: str
     url: Optional[str] = None
     url_display_type: URLDisplayType = URLDisplayType.viewer
