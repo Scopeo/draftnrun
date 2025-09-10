@@ -214,12 +214,13 @@ class ComponentVersionAdmin(EnhancedModelView, model=db.ComponentVersion):
         "component",
         "version_tag",
         "description",
+        "is_current",
         "release_stage",
         "default_tool_description",
         "created_at",
         "updated_at",
     ]
-    column_searchable_list = ["version_tag", "description"]
+    column_searchable_list = ["version_tag", "description", "release_stage"]
     form_columns = ["component", "version_tag", "description", "release_stage", "default_tool_description"]
 
 

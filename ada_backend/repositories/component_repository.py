@@ -98,6 +98,22 @@ def get_component_by_id(
     )
 
 
+def get_component_version_by_id(
+    session: Session,
+    component_version_id: UUID,
+) -> Optional[db.ComponentVersion]:
+    """
+    Retrieves a specific component version by its ID.
+    """
+    return (
+        session.query(db.ComponentVersion)
+        .filter(
+            db.ComponentVersion.id == component_version_id,
+        )
+        .first()
+    )
+
+
 def get_component_parameter_definition_by_component_version(
     session: Session,
     component_version_id: UUID,
@@ -295,6 +311,29 @@ def get_component_sub_components(
     )
 
 
+def get_component_name_from_instance(
+    session: Session,
+    component_instance_id: UUID,
+) -> Optional[str]:
+    """
+    Retrieves the component name associated with a specific component instance.
+    """
+    result = (
+        session.query(db.Component.name)
+        .join(
+            db.ComponentVersion,
+            db.Component.id == db.ComponentVersion.component_id,
+        )
+        .join(
+            db.ComponentInstance,
+            db.ComponentInstance.component_version_id == db.ComponentVersion.id,
+        )
+        .filter(db.ComponentInstance.id == component_instance_id)
+        .first()
+    )
+    return result[0] if result else None
+
+
 def get_tool_description(
     session: Session,
     component_instance_id: UUID,
@@ -376,6 +415,21 @@ def get_tool_parameter_by_component_version(
     )
 
 
+def get_current_component_version_id(
+    session: Session,
+    component_id: UUID,
+) -> Optional[UUID]:
+    """
+    Retrieves the current version ID of a specific component.
+    """
+    query = (
+        session.query(db.ComponentVersion.id)
+        .join(db.Component, db.Component.id == db.ComponentVersion.component_id)
+        .filter(db.Component.id == component_id, db.ComponentVersion.is_current.is_(True))
+    )
+    return session.execute(query).scalars().first()
+
+
 def get_current_component_versions(
     session: Session,
     allowed_stages: Optional[List[ReleaseStage]] = None,
@@ -386,7 +440,7 @@ def get_current_component_versions(
     query = (
         session.query(db.Component, db.ComponentVersion)
         .join(db.Component, db.Component.id == db.ComponentVersion.component_id)
-        .filter(db.ComponentVersion.is_current == True)
+        .filter(db.ComponentVersion.is_current.is_(True))
     )
 
     if allowed_stages:
@@ -508,7 +562,7 @@ def get_all_components_with_parameters(
                     )
 
             default_tool_description_db = get_tool_description_component(
-                session=session, component_id=component_with_version.version_id
+                session=session, component_version_id=component_with_version.version_id
             )
             tool_description = (
                 ToolDescriptionSchema(

@@ -15,6 +15,7 @@ from ada_backend.database.models import ComponentInstance
 from ada_backend.repositories.component_repository import (
     get_component_instance_by_id,
     get_component_basic_parameters,
+    get_component_name_from_instance,
     get_component_sub_components,
     get_tool_description,
     get_tool_description_component,
@@ -107,10 +108,11 @@ def instantiate_component(
     """
     # Fetch the component instance
     component_instance = get_component_instance_by_id(session, component_instance_id)
+    component_name = get_component_name_from_instance(session, component_instance_id)
     if not component_instance:
         raise ValueError(f"Component instance {component_instance_id} not found.")
-    component_name = component_instance.component.name
-    LOGGER.debug(f"Init instantiation for component: {component_name}\n")
+    component_version_id = component_instance.component_version_id
+    LOGGER.debug(f"Init instantiation for component {component_name} version: {component_version_id}\n")
 
     # Fetch basic parameters
     input_params: dict[str, Any] = get_component_params(
@@ -120,7 +122,7 @@ def instantiate_component(
     )
     LOGGER.debug(f"{input_params=}\n")
 
-    component_integration = get_integration_from_component(session, component_instance.component_id)
+    component_integration = get_integration_from_component(session, component_instance.component_version_id)
 
     if component_integration:
         # If the component has an integration, we need to fetch the secret integration ID
@@ -265,7 +267,7 @@ def _get_tool_description(
 
     db_tool_description = get_tool_description(session, component_instance.id)
     if not db_tool_description:
-        db_tool_description = get_tool_description_component(session, component_instance.component_id)
+        db_tool_description = get_tool_description_component(session, component_instance.component_version_id)
 
     if not db_tool_description:
         LOGGER.warning(f"Tool description not found for agent component instance {component_instance.id}.")
