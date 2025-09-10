@@ -267,7 +267,7 @@ async def _process_pdf_page_by_page(
     return chunks
 
 
-def _process_pdf_with_table_of_contents(
+async def _process_pdf_with_table_of_contents(
     document: FileDocument,
     extracted_table_of_content: TableOfContent,
     google_llm_service: VisionService,
@@ -279,7 +279,7 @@ def _process_pdf_with_table_of_contents(
         sections=extracted_table_of_content.sections,
         level=1,
     )
-    markdown = _get_markdown_from_sections(
+    markdown = await _get_markdown_from_sections(
         sections_tree=section_hierarchy,
         google_llm_service=google_llm_service,
         openai_llm_service=openai_llm_service,
@@ -329,7 +329,19 @@ async def create_chunks_from_document(
     if pdf_type == PDFType.portrait and file_type.is_native_pdf:
         LOGGER.info("Processing PDF in portrait mode...")
 
-        # Try to extract table of contents
+        # Skip TOC processing when using custom models (they often hallucinate page numbers)
+        if settings.INGESTION_VIA_CUSTOM_MODEL:
+            LOGGER.info("Using custom models - skipping TOC processing, using page-by-page processing instead.")
+            return await _process_pdf_page_by_page(
+                document=document,
+                content_to_process=content_to_process,
+                google_llm_service=google_llm_service,
+                openai_llm_service=openai_llm_service,
+                prompt=PDF_CONTENT_EXTRACTION_PROMPT,
+                zoom=zoom,
+            )
+
+        # Try to extract table of contents (only for non-custom models)
         try:
             extracted_table_of_content = await _extract_text_from_pages_as_images(
                 prompt=PDF_TABLE_OF_CONTENT_EXTRACTION_PROMPT,
@@ -345,7 +357,7 @@ async def create_chunks_from_document(
         # Use TOC-based processing if available, otherwise fall back to page-by-page
         if extracted_table_of_content and extracted_table_of_content.sections:
             try:
-                return _process_pdf_with_table_of_contents(
+                return await _process_pdf_with_table_of_contents(
                     document=document,
                     extracted_table_of_content=extracted_table_of_content,
                     google_llm_service=google_llm_service,
