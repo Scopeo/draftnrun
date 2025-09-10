@@ -192,7 +192,7 @@ def upgrade() -> None:
     )
 
     op.execute(
-        f"""
+        """
         INSERT INTO component_versions (
             id,
             component_id,
@@ -207,8 +207,8 @@ def upgrade() -> None:
             updated_at
         )
         SELECT
-            gen_random_uuid(),
-            c.id ,
+            c.id,
+            c.id,
             '1.0.0',
             NULL,
             c.description,

@@ -58,7 +58,7 @@ def get_graph_service(
                 component_node.id,
             )
         ]
-
+    print("len component_instances_with_definitions", len(component_instances_with_definitions))
     graph_runner_edges = get_edges(session, graph_runner_id)
     for edge in graph_runner_edges:
         edges.append(

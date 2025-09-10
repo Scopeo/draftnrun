@@ -40,14 +40,14 @@ def get_integration_secret(
 
 def get_integration_from_component(
     session: Session,
-    component_id: UUID,
+    component_version_id: UUID,
 ) -> db.Integration:
     return (
         session.query(db.Integration)
-        .join(db.Component, db.Integration.id == db.Component.integration_id)
+        .join(db.ComponentVersion, db.Integration.id == db.ComponentVersion.integration_id)
         .filter(
-            db.Component.id == component_id,
-            db.Component.integration_id.isnot(None),
+            db.ComponentVersion.id == component_version_id,
+            db.ComponentVersion.integration_id.isnot(None),
         )
         .first()
     )
