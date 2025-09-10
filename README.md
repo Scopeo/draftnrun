@@ -1,10 +1,13 @@
-# [Draft'n run](https://draftnrun.com)
+<h1 style="font-size: 60px;">
+  <a href="https://draftnrun.com" target="_blank">Draft'n run</a>
+</h1>
+
 
 We provide here a guide on how to set up **locally** your Draft'n run backend application.
 
-## Set up the services
+# Prerequisites
 
-### Installations third-party packages
+## Installations third-party packages
 
 You will need to install the following packages:
 
@@ -13,7 +16,65 @@ You will need to install the following packages:
 - [Docker Compose](https://docs.docker.com/compose/)
 - [Supabase CLI](https://supabase.com/docs/guides/local-development/cli/getting-started?queryGroups=platform&platform=macos)
 
-### Set up and run backend services
+
+## Library Prerequisites
+
+Install this library : libgobject-2.0
+```bash
+brew install glib gobject-introspection gtk+3
+```
+
+
+## Install Python packages
+
+Use **UV**
+
+1. [Install UV](https://docs.astral.sh/uv/getting-started/installation/#standalone-installer)
+2. Create a virtual environment .venv:
+
+```bash
+uv venv
+```
+
+3. Activate it
+
+```bash
+source .venv/bin/activate
+```
+
+4. Install the packages
+
+```bash
+uv sync
+```
+
+
+# Set up the credentials files
+
+You will need to create two env files :
+
+- `.env` file in the `ada_ingestion_system` folder (you can copy the `.env.example` file)
+- `credentials.env` at the root of the repository (you can copy the `credentials.env.example` file)
+
+
+In the `credentials.env` file (copied from `credentials.env.example`).
+
+Generate the secret keys for:
+
+- `BACKEND_SECRET_KEY`
+
+```bash
+uv run python -c "import secrets; print(secrets.token_hex(32))+"
+```
+
+- `FERNET_KEY`
+
+```bash
+uv run python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+```
+
+
+## Set up credentials for the services
 
 To use the backend of the app, you will need to run a Docker Compose file that launches the following services:
 
@@ -23,12 +84,7 @@ To use the backend of the app, you will need to run a Docker Compose file that l
 - prometheus
 - seaweedFS
 
-#### Credentials for the services
-
-You will need to create two env files related to those services:
-
-- `.env` file in the `ada_ingestion_system` folder (you can copy the `.env.example` file)
-- `credentials.env` at the root of the repository (you can copy the `credentials.env.example` file)
+### Services setup
 
 By default, the credentials to run those services on Docker Compose are the same as in the `credentials.env.example` and `.env.example` files, except
 for the seaweedFS service.
@@ -116,7 +172,44 @@ To clean the Docker volume if you suspect corruption:
 docker volume prune
 ```
 
-### Set up and run Supabase service
+### Non-local version
+
+Update these if using remote services:
+
+```env
+# QDRANT
+QDRANT_CLUSTER_URL=xxxxx
+QDRANT_API_KEY=xxxxx
+
+# Supabase
+SUPABASE_PROJECT_URL=http://localhost:54321
+SUPABASE_PROJECT_KEY=xxxxx
+SUPABASE_SERVICE_ROLE_SECRET_KEY=xxxx
+SUPABASE_USERNAME=xxx@xxx.com
+SUPABASE_PASSWORD=xxx
+SUPABASE_BUCKET_NAME=ada-backend
+
+# Redis
+REDIS_HOST=xxxx
+REDIS_PORT=6379
+REDIS_PASSWORD=xxxx
+REDIS_QUEUE_NAME=ada_ingestion_queue
+
+
+# Ingestion
+INGESTION_DB_URL=postgresql://postgres:ada_password@localhost:5432/ada_ingestion
+
+# Backend DB
+ADA_DB_URL=postgresql://postgres:ada_password@localhost:5432/ada_backend
+
+# URL to run the backend app
+ADA_URL=http://localhost:8000
+```
+
+
+### Set up and run Supabase service locally
+
+**This paragraph is only for those who want to run Supabase locally**
 
 Supabase is the service needed to link the FrontEnd and Backend.
 
@@ -137,7 +230,7 @@ To view them again later:
 supabase status
 ```
 
-##### Put Supabase values in credentials.env file
+#### -> Put Supabase values in credentials.env file
 
 Here are two important variables that you get in the terminal when running supabase:
 
@@ -177,11 +270,11 @@ Then:
 - Create a user in the **Authentication** tab.
 - Use the **Table Editor** to add your user to one of the existing organizations.
 
-#### Video tutorial
+#### -> Video tutorial
 
 [Here](https://youtu.be/m9WCJ5mMD6w) is a quick video tutorial on how to set up those three things
 
-#### Create a bucket in Supabase
+#### -> Create a bucket in Supabase
 
 Go to the **Storage** tab → **New Bucket**, and set a name.
 
@@ -195,7 +288,7 @@ SUPABASE_BUCKET_NAME=my_new_bucket
 
 In your `credentials.env`.
 
-#### Create a user account
+#### -> Create a user account
 
 Go to the **Authentication** tab and register a user (email/password).  
 In **Table Editor**, check the `auth_user_emails` table for your user’s ID.
@@ -207,7 +300,7 @@ SUPABASE_USERNAME=xxx
 SUPABASE_PASSWORD=xxx
 ```
 
-#### Add user to an organization
+#### -> Add user to an organization
 
 Use the **organization_members** table.
 
@@ -215,7 +308,7 @@ Use the **organization_members** table.
 - `org_id` = the ID of the desired organization (e.g., `DraftNRun-test-organization` or `test2-organization`)
 - `role` = your role in the organization (put admin to have all the rights)
 
-#### Reset or stop Supabase
+#### -> Reset or stop Supabase
 
 Reset database (clears data and buckets):
 
@@ -247,51 +340,12 @@ SUPABASE_PASSWORD=xxx
 SUPABASE_BUCKET_NAME=ada-backend
 ```
 
-## Set up and run the backend
+### Set up Supabase non-locally (cloud)
 
-### Install Python packages
+**This paragraph is for those who already have a shared Supabase service that they want to use**
 
-Use **UV**
 
-1. [Install UV](https://docs.astral.sh/uv/getting-started/installation/#standalone-installer)
-2. Create a virtual environment .venv:
-
-```bash
-uv venv
-```
-
-3. Activate it
-
-```bash
-source .venv/bin/activate
-```
-
-4. Install the packages
-
-```bash
-uv sync
-```
-
-### Credentials
-
-Create the `credentials.env` file (copy from `credentials.env.example`).
-
-Generate the secret keys for:
-
-- `BACKEND_SECRET_KEY`
-
-```bash
-uv run python -c "import secrets; print(secrets.token_hex(32))"
-```
-
-- `FERNET_KEY`
-
-```bash
-uv run python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
-```
-
-Fill Supabase values based on earlier [steps](#store-the-following-values):
-
+Find these informations on your shared supabase service :
 ```env
 SUPABASE_PROJECT_URL=http://localhost:54321
 SUPABASE_PROJECT_KEY=*anon-key*
@@ -312,11 +366,14 @@ INGESTION_API_KEY=xxxx
 INGESTION_API_KEY_HASHED=xxxx
 ```
 
-#### Custom LLM Configuration
+
+## Optional configurations
+
+### Custom LLM Configuration
 
 You can configure Draft'n run to use your own custom Large Language Model (LLM) service by adding the following variables to your `credentials.env` file:
 
-You can configure Draft'n run to use your own custom Large Language Model (LLM) service by copying the `custom_models_example.json` one a `custom_models.json` file in the root directory.
+You can configure Draft'n run to use your own custom Large Language Model (LLM) service by copying the `custom_models_example.json` on a `custom_models.json` file in the root directory.
 
 **Configuration options:**
 
@@ -338,7 +395,7 @@ You can configure Draft'n run to use your own custom Large Language Model (LLM) 
 
 **Note:** If you dont have embedding models pass an empty list.
 
-**3. Usage:**
+**Usage:**
 
 Once configured, your custom models will appear in the model selection dropdowns throughout the application. You can reference them using the format `provider_name:model_name` (e.g., `your_provider_name:your-completion-model`).
 
@@ -353,41 +410,8 @@ make db-seed
 **How it works:**  
 If you set these variables, your custom model will appear as an option in the model selection dropdown after reseeding. When this model is selected, the backend will route requests to your custom LLM service instead of sending them to OpenAI or other providers.
 
-#### Non-local version
 
-Update these if using remote services:
-
-```env
-# QDRANT
-QDRANT_CLUSTER_URL=xxxxx
-QDRANT_API_KEY=xxxxx
-
-# Supabase
-SUPABASE_PROJECT_URL=http://localhost:54321
-SUPABASE_PROJECT_KEY=xxxxx
-SUPABASE_SERVICE_ROLE_SECRET_KEY=xxxx
-SUPABASE_USERNAME=xxx@xxx.com
-SUPABASE_PASSWORD=xxx
-SUPABASE_BUCKET_NAME=ada-backend
-
-# Redis
-REDIS_HOST=xxxx
-REDIS_PORT=6379
-REDIS_PASSWORD=xxxx
-REDIS_QUEUE_NAME=ada_ingestion_queue
-
-
-# Ingestion
-INGESTION_DB_URL=postgresql://postgres:ada_password@localhost:5432/ada_ingestion
-
-# Backend DB
-ADA_DB_URL=postgresql://postgres:ada_password@localhost:5432/ada_backend
-
-# URL to run the backend app
-ADA_URL=http://localhost:8000
-```
-
-#### Google OAuth Setup
+### Google OAuth Setup
 To enable Google login, set these in your credentials.env:
 
 ```env
@@ -402,7 +426,8 @@ How to get them:
 
 Make sure the redirect URI matches what you configure in Google and your app. Do not commit these secrets to version control.
 
-### Set up the database for backend and ingestion
+
+## Set up the database for backend and ingestion
 
 Ensure Postgres is running.
 
@@ -420,7 +445,7 @@ Run the backend:
 make run-draftnrun-agents-backend
 ```
 
-#### How to visualize the docs of the backend endpoints/admin console
+### How to visualize the docs of the backend endpoints/admin console
 
 Define in the credentials.env your username password:
 
@@ -442,7 +467,7 @@ If you run locally, `ADA_URL` in your credentials.env should be
 ADA_URL=http://localhost:8000
 ```
 
-#### Set up and run the ingestion worker
+### Set up and run the ingestion worker
 
 Ensure redis credentials are correctly set in both `.env` files.
 
@@ -452,11 +477,11 @@ Run the worker:
 uv run python -m ada_ingestion_system.worker.main
 ```
 
-## Backend Observability Stack
+# Backend Observability Stack
 
 Draft'n run includes a comprehensive observability stack for monitoring, tracing, and performance analysis. The stack uses industry-standard open-source tools that provide production-ready monitoring capabilities.
 
-### Observability Technologies
+## Observability Technologies
 
 Our observability stack consists of:
 
@@ -469,7 +494,7 @@ Our observability stack consists of:
 
 This setup provides both **operational monitoring** (for DevOps) and **user-facing analytics** (for business insights).
 
-### Enabling/Disabling Observability
+## Enabling/Disabling Observability
 
 Control the observability stack with a single environment variable:
 
@@ -480,7 +505,7 @@ ENABLE_OBSERVABILITY_STACK=false  # Disable (backend runs standalone)
 
 When disabled, the backend runs without external observability dependencies. User-facing analytics still work normally.
 
-### Quick Start - Observability Only
+## Quick Start - Observability Only
 
 If you only need the observability stack (without databases), run:
 
@@ -489,9 +514,9 @@ cd services
 docker compose up -d prometheus tempo grafana
 ```
 
-### Deployment Options
+## Deployment Options
 
-#### 1. **Local Development** (Default)
+### 1. **Local Development** (Default)
 
 Perfect for development and testing:
 
@@ -506,7 +531,7 @@ Access points:
 - **Prometheus Metrics**: http://localhost:9090
 - **FastAPI Metrics**: http://localhost:8000/metrics
 
-#### 2. **Same-Machine Production** (Recommended for quick deployment)
+### 2. **Same-Machine Production** (Recommended for quick deployment)
 
 Deploy observability stack on the same server as your backend:
 
@@ -533,7 +558,7 @@ docker compose up -d prometheus tempo grafana
 
 **🔒 Security Note**: Grafana is now secured with login authentication. Set strong credentials in `credentials.env`.
 
-#### 3. **Separate Infrastructure** (Enterprise setup)
+### 3. **Separate Infrastructure** (Enterprise setup)
 
 Deploy observability on dedicated servers/cluster:
 
@@ -548,7 +573,7 @@ GRAFANA_ADMIN_PASSWORD=secure-password
 
 No code changes needed - just update environment variables!
 
-### Testing Your Setup
+## Testing Your Setup
 
 1. **Health Check**: Run the observability test script
 
@@ -567,7 +592,7 @@ No code changes needed - just update environment variables!
    - View "FastAPI Performance Dashboard"
    - Monitor real-time metrics during load tests
 
-### Health Check Script
+## Health Check Script
 
 Use the observability health check script to verify all components are connected and working:
 
@@ -591,13 +616,13 @@ GRAFANA_HOST=grafana.your-domain.com \
 ./scripts/test_observability_stack.sh
 ```
 
-## Developer Guide
+# Developer Guide
 
-### Logging convention
+## Logging convention
 
 We use Python’s `logging` module with `logging-config.yaml` and `logger.py`.
 
-#### Setup logging
+### Setup logging
 
 At the app entry point:
 
@@ -607,7 +632,7 @@ from logger import setup_logging
 setup_logging()
 ```
 
-#### Use logger
+### Use logger
 
 ```python
 import logging
@@ -618,11 +643,11 @@ def some_function():
     LOGGER.info("Info message from some_function")
 ```
 
-### Tracing
+## Tracing
 
 For more details, see the [tracing documentation](engine/trace/README.md).
 
-## AI Models
+# AI Models
 
 AI models are the primary agents that you can run
 
@@ -631,15 +656,15 @@ AI models are the primary agents that you can run
 - **LLM Call**: Templated LLM Call
 - **Database Query Agent**: Agent able to interrogate a SQL database
 
-## Input
+# Input
 
 The input block is at the begining of each flow. It allows the user to determine what information the AI agent can use during the flow.
 
-## Tools
+# Tools
 
 Tools are available for the AI Agent. Note that the AI Agent can also have other AI models as tools
 
-### Tool description
+## Tool description
 
 - **API call**: A generic API tool that can make HTTP requests to any API endpoint.
 - **Internet Search with OpenAI**: Answer a question using web search.
