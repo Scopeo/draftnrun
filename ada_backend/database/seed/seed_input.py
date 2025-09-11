@@ -11,6 +11,7 @@ from ada_backend.database.models import (
 )
 from ada_backend.database.component_definition_seeding import (
     upsert_component_categories,
+    upsert_component_versions,
     upsert_components,
     upsert_components_parameter_definitions,
 )
@@ -25,11 +26,8 @@ def seed_input_components(session: Session):
     input = db.Component(
         id=COMPONENT_UUIDS["input"],
         name="API Input",
-        description="This block is triggered by an API call",
         is_agent=True,
         is_protected=True,
-        release_stage=db.ReleaseStage.PUBLIC,
-        default_tool_description_id=TOOL_DESCRIPTION_UUIDS["default_tool_description"],
     )
     upsert_components(
         session=session,
@@ -37,12 +35,25 @@ def seed_input_components(session: Session):
             input,
         ],
     )
+    input_version = db.ComponentVersion(
+        id=COMPONENT_UUIDS["input"],
+        component_id=COMPONENT_UUIDS["input"],
+        version_tag="v1.0.0",
+        release_stage=db.ReleaseStage.PUBLIC,
+        description="This block is triggered by an API call",
+        default_tool_description_id=TOOL_DESCRIPTION_UUIDS["default_tool_description"],
+        is_current=True,
+    )
+    upsert_component_versions(
+        session=session,
+        component_versions=[input_version],
+    )
     upsert_components_parameter_definitions(
         session=session,
         component_parameter_definitions=[
             db.ComponentParameterDefinition(
                 id=UUID("48332255-4a0e-4432-8fb4-46267e8ffd4d"),
-                component_id=input.id,
+                component_version_id=input_version.id,
                 name=INPUT_PAYLOAD_PARAMETER_NAME,
                 type=ParameterType.STRING,
                 nullable=False,

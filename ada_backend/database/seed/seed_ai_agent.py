@@ -9,6 +9,7 @@ from ada_backend.database.models import (
     UIComponentProperties,
 )
 from ada_backend.database.component_definition_seeding import (
+    upsert_component_versions,
     upsert_components,
     upsert_components_parameter_definitions,
 )
@@ -25,25 +26,35 @@ from ada_backend.database.seed.constants import (
 
 
 def seed_ai_agent_components(session: Session):
-    base_ai_agent = db.Component(
+    base_ai_agent_component = db.Component(
         id=COMPONENT_UUIDS["base_ai_agent"],
         name="AI Agent",
         base_component="AI Agent",
-        description=(
-            "AI operator provided with tools."
-            " LLM calls will choose next action step by step until it decides to provide a response."
-        ),
         is_agent=True,
         function_callable=True,
         can_use_function_calling=True,
-        release_stage=db.ReleaseStage.PUBLIC,
-        default_tool_description_id=TOOL_DESCRIPTION_UUIDS["default_ai_agent_description"],
     )
     upsert_components(
         session=session,
         components=[
-            base_ai_agent,
+            base_ai_agent_component,
         ],
+    )
+    base_ai_agent_version = db.ComponentVersion(
+        id=COMPONENT_UUIDS["base_ai_agent"],
+        component_id=COMPONENT_UUIDS["base_ai_agent"],
+        version_tag="v1.0.0",
+        release_stage=db.ReleaseStage.PUBLIC,
+        default_tool_description_id=TOOL_DESCRIPTION_UUIDS["default_ai_agent_description"],
+        description=(
+            "AI operator provided with tools."
+            " LLM calls will choose next action step by step until it decides to provide a response."
+        ),
+        is_current=True,
+    )
+    upsert_component_versions(
+        session=session,
+        component_versions=[base_ai_agent_version],
     )
     upsert_components_parameter_definitions(
         session=session,
@@ -51,7 +62,7 @@ def seed_ai_agent_components(session: Session):
             # React Agent
             db.ComponentParameterDefinition(
                 id=UUID("521cfedb-e3f1-4953-9372-1c6a0cfdba6f"),
-                component_id=base_ai_agent.id,
+                component_version_id=base_ai_agent_version.id,
                 name="agent_tools",
                 type=ParameterType.TOOL,
                 nullable=False,
@@ -59,7 +70,7 @@ def seed_ai_agent_components(session: Session):
             ),
             db.ComponentParameterDefinition(
                 id=UUID("3f8aa317-215a-4075-80ba-efca2a3d83ca"),
-                component_id=base_ai_agent.id,
+                component_version_id=base_ai_agent_version.id,
                 name="allow_tool_shortcuts",
                 type=ParameterType.BOOLEAN,
                 nullable=False,
@@ -72,7 +83,7 @@ def seed_ai_agent_components(session: Session):
             ),
             db.ComponentParameterDefinition(
                 id=UUID("89efb2e1-9228-44db-91d6-871a41042067"),
-                component_id=base_ai_agent.id,
+                component_version_id=base_ai_agent_version.id,
                 name="max_iterations",
                 type=ParameterType.INTEGER,
                 nullable=True,
@@ -85,7 +96,7 @@ def seed_ai_agent_components(session: Session):
             ),
             db.ComponentParameterDefinition(
                 id=UUID("1cd1cd58-f066-4cf5-a0f5-9b2018fc4c6a"),
-                component_id=base_ai_agent.id,
+                component_version_id=base_ai_agent_version.id,
                 name="initial_prompt",
                 type=ParameterType.STRING,
                 nullable=True,
@@ -110,7 +121,7 @@ def seed_ai_agent_components(session: Session):
             ),
             db.ComponentParameterDefinition(
                 id=UUID("bf56e90a-5e2b-4777-9ef4-34838b8973b6"),
-                component_id=base_ai_agent.id,
+                component_version_id=base_ai_agent_version.id,
                 name="input_data_field_for_messages_history",
                 type=ParameterType.STRING,
                 nullable=False,
@@ -124,7 +135,7 @@ def seed_ai_agent_components(session: Session):
             ),
             db.ComponentParameterDefinition(
                 id=UUID("4ca78b43-4484-4a9d-bdab-e6dbdaff6da1"),
-                component_id=base_ai_agent.id,
+                component_version_id=base_ai_agent_version.id,
                 name="first_history_messages",
                 type=ParameterType.INTEGER,
                 nullable=True,
@@ -148,7 +159,7 @@ def seed_ai_agent_components(session: Session):
             ),
             db.ComponentParameterDefinition(
                 id=UUID("e6caae01-d5ee-4afd-a995-e5ae9dbf3fbc"),
-                component_id=base_ai_agent.id,
+                component_version_id=base_ai_agent_version.id,
                 name="last_history_messages",
                 type=ParameterType.INTEGER,
                 nullable=True,
@@ -172,7 +183,7 @@ def seed_ai_agent_components(session: Session):
             ),
             db.ComponentParameterDefinition(
                 id=UUID("f7dbbe12-e6ff-5bfe-b006-f6bf0e9cbf4d"),
-                component_id=base_ai_agent.id,
+                component_version_id=base_ai_agent_version.id,
                 name="date_in_system_prompt",
                 type=ParameterType.BOOLEAN,
                 nullable=False,
@@ -189,7 +200,7 @@ def seed_ai_agent_components(session: Session):
                 is_advanced=True,
             ),
             *build_function_calling_service_config_definitions(
-                component_version_id=base_ai_agent.id,
+                component_version_id=base_ai_agent_version.id,
                 params_to_seed=[
                     ParameterLLMConfig(
                         param_name=COMPLETION_MODEL_IN_DB,
