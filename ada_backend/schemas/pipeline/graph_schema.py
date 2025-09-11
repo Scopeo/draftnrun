@@ -49,7 +49,7 @@ class ValidationIssueSchema(BaseModel):
 
 class ComponentCheckSchema(BaseModel):
     instance_id: UUID
-    component_id: UUID
+    component_id: Optional[UUID] = None
     status: str
     message: Optional[str] = None
     issues: list[ValidationIssueSchema] | None = None
