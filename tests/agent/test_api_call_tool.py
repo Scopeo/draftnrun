@@ -27,6 +27,10 @@ async def api_tool(mock_trace_manager):
         timeout=30,
         fixed_parameters='{"api_version": "v2", "format": "json", "language": "en"}',
     )
+    yield tool
+    # Cleanup: ensure any lingering HTTP connections are closed
+
+    await asyncio.sleep(0.1)
 
 
 @pytest.fixture
