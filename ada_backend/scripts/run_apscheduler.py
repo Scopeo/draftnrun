@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 APScheduler daemon process for executing scheduled jobs.
-This runs separately from the FastAPI app, similar to celery beat.
+This runs separately from the FastAPI app and handles all cron-based workflow scheduling.
 """
 
 import sys

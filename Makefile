@@ -8,9 +8,7 @@ help:
 	@echo "quality-check: Check the code quality using flake8 and Black."
 	@echo "pre-push: Run tests and quality checks before pushing code."
 	@echo "run-celery-worker: Start the Celery worker for background tasks."
-	@echo "run-celery-beat: Start the Celery beat scheduler for cron jobs."
 	@echo "run-celery-worker-debug: Start the Celery worker in debug mode."
-	@echo "run-celery-beat-debug: Start the Celery beat scheduler in debug mode."
 	@echo "run-apscheduler: Start the APScheduler daemon for executing scheduled jobs."
 	@echo "run-apscheduler-debug: Start the APScheduler daemon in debug mode."
 	@echo ""
@@ -94,20 +92,10 @@ run-celery-worker:
 	@echo "Starting Celery worker"
 	@uv run celery -A ada_backend.celery_app worker --loglevel=info
 
-.PHONY: run-celery-beat
-run-celery-beat:
-	@echo "Starting Celery beat scheduler"
-	@uv run celery -A ada_backend.celery_app beat --loglevel=info
-
 .PHONY: run-celery-worker-debug
 run-celery-worker-debug:
 	@echo "Starting Celery worker in debug mode"
 	@uv run celery -A ada_backend.celery_app worker --loglevel=debug
-
-.PHONY: run-celery-beat-debug
-run-celery-beat-debug:
-	@echo "Starting Celery beat scheduler in debug mode"
-	@uv run celery -A ada_backend.celery_app beat --loglevel=debug
 
 # -------------------------------------------
 # Database Migrations (Alembic)

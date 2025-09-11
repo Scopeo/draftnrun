@@ -14,7 +14,7 @@ class ScheduleSyncResponse(BaseModel):
     schedule_id: int
     schedule_uuid: UUID
     action: str = Field(..., description="'created' or 'updated'")
-    periodic_task_id: Optional[int] = Field(None, description="Django-celery-beat task ID")
+    apscheduler_job_id: Optional[str] = Field(None, description="APScheduler job ID")
     message: str
 
 

@@ -77,7 +77,7 @@ def get_production_endpoint_url(project_id: str) -> str:
 def execute_scheduled_workflow(self, project_id: str, scheduled_workflow_uuid: str, type: str, args: str, **kwargs):
     """
     Execute a scheduled workflow via HTTP call to production endpoint.
-    This task is triggered by Celery Beat based on cron schedules.
+    This task is triggered by APScheduler based on cron schedules.
 
     Args:
         project_id: Project UUID string
@@ -203,35 +203,3 @@ def execute_scheduled_workflow(self, project_id: str, scheduled_workflow_uuid: s
         }
 
 
-@celery_app.task(name="cleanup_old_executions")
-def cleanup_old_executions(days_to_keep: int = 90) -> Dict[str, Any]:
-    """
-    Clean up old execution records.
-    This is a system maintenance task that runs daily.
-
-    Args:
-        days_to_keep: Number of days of execution records to keep
-
-    Returns:
-        Cleanup result
-    """
-    LOGGER.info(f"Starting cleanup of execution records older than {days_to_keep} days")
-
-    try:
-        # Note: With the simplified approach, we don't have a separate executions table
-        # Execution history is stored in Celery's result backend (Redis) or can be logged
-        # This task can be used for other cleanup operations if needed
-
-        LOGGER.info("Cleanup completed (no separate executions table in simplified approach)")
-
-        return {
-            "status": "SUCCESS",
-            "message": "Cleanup completed",
-            "days_to_keep": days_to_keep,
-            "method": "simplified_django_celery_beat_only",
-        }
-
-    except Exception as e:
-        error_msg = f"Failed to cleanup old executions: {str(e)}"
-        LOGGER.error(error_msg, exc_info=True)
-        return {"status": "FAILED", "error": error_msg, "days_to_keep": days_to_keep}

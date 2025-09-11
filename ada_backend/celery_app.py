@@ -1,7 +1,6 @@
 import logging
 
 from celery import Celery
-from celery.schedules import crontab
 from kombu import Queue
 
 from settings import settings
@@ -36,7 +35,6 @@ celery_app.conf.update(
     # Task routing
     task_routes={
         "execute_scheduled_workflow": {"queue": "scheduled_workflows"},
-        "cleanup_old_executions": {"queue": "default"},
     },
     # Define queues
     task_default_queue="default",
@@ -48,15 +46,6 @@ celery_app.conf.update(
     worker_prefetch_multiplier=1,
     task_acks_late=True,
     worker_disable_rate_limits=False,
-    # Static schedules (for system tasks that don't need dynamic management)
-    beat_schedule={
-        "cleanup-old-executions": {
-            "task": "cleanup_old_executions",
-            "schedule": crontab(hour=2, minute=0),  # Daily at 2:00 AM UTC
-            "args": (90,),  # Keep 90 days of execution records
-            "options": {"queue": "default"},
-        },
-    },
 )
 
 # Auto-discover tasks

@@ -66,7 +66,7 @@ def delete_project_service(session: Session, project_id: UUID) -> ProjectDeleteR
     """
     Delete a project and all its associated resources including:
     - Graph runners and their components
-    - Scheduled tasks (django-celery-beat)
+    - Scheduled workflows (APScheduler)
     - Cron API keys
     """
     LOGGER.info(f"Starting deletion of project {project_id}")

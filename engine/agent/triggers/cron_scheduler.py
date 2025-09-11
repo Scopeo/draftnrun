@@ -59,7 +59,7 @@ class CronScheduler(Agent):
     Cron Scheduler component that triggers workflows based on cron expressions.
 
     In DRAFT mode: Simulates scheduled execution when user chats with workflow
-    In PRODUCTION mode: Actually gets triggered by Celery Beat at scheduled times
+    In PRODUCTION mode: Gets triggered by APScheduler at scheduled times
     """
 
     def __init__(
