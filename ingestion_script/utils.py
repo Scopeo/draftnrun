@@ -10,7 +10,7 @@ from ada_backend.database import models as db
 from ada_backend.schemas.source_schema import DataSourceSchema
 from ada_backend.schemas.ingestion_task_schema import SourceAttributes
 from data_ingestion.utils import sanitize_filename
-from engine.llm_services.llm_service import EmbeddingService
+from engine.llm_services.llm_service import VisionService, EmbeddingService
 from engine.qdrant_service import QdrantCollectionSchema, QdrantService
 from engine.storage_service.local_service import SQLLocalService
 from engine.trace.trace_manager import TraceManager
@@ -231,3 +231,34 @@ def build_combined_sql_filter(
     if filters:
         return " AND ".join(filters)
     return None
+
+
+def get_first_available_multimodal_custom_llm():
+    custom_models = settings.custom_models
+    if custom_models is None or len(custom_models) == 0:
+        return None
+    for provider, config_provider in custom_models.items():
+        list_completion_models = config_provider.get("completion_models", [])
+        for model_config in list_completion_models:
+            if model_config.get("multimodal", False):
+                return VisionService(
+                    trace_manager=TraceManager(project_name="ingestion"),
+                    provider=provider,
+                    model_name=model_config.get("model_name"),
+                    temperature=0.0,
+                )
+
+
+def get_first_available_embeddings_custom_llm() -> EmbeddingService | None:
+    custom_models = settings.custom_models
+    if custom_models is None or len(custom_models) == 0:
+        return None
+    for provider, config_provider in custom_models.items():
+        list_embeddings_models = config_provider.get("embedding_models", [])
+        for model_config in list_embeddings_models:
+            return EmbeddingService(
+                provider=provider,
+                model_name=model_config.get("model_name"),
+                trace_manager=TraceManager(project_name="ingestion"),
+                embedding_size=model_config.get("embedding_size"),
+            )
