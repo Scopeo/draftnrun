@@ -35,10 +35,15 @@ serve(async (req) => {
     }
     
     // Check if user already exists
-    const { data: existingUser } = await supabaseAdmin
+    const { data: existingUser, error: userCheckError } = await supabaseAdmin
       .rpc('get_user_by_email', { email })
     
+    if (userCheckError) {
+      console.warn('Could not check existing user, proceeding with creation:', userCheckError)
+    }
+    
     if (existingUser) {
+      console.log('User with email already exists:', email)
       throw new Error('User with this email already exists')
     }
     
@@ -52,13 +57,29 @@ serve(async (req) => {
         username,
         full_name: username,
         super_admin: false,
-        org_roles: []
+        org_roles: [
+          {
+            org_id: invitation.org_id,
+            role: invitation.role
+          }
+        ]
       }
     })
     
-    if (createError || !newUser.user) {
-      throw createError || new Error('Failed to create user')
+    if (createError) {
+      if (createError.message?.includes('User already registered')) {
+        console.log('User already registered (caught during creation):', email)
+        throw new Error('User with this email already exists')
+      }
+      console.error('User creation failed:', createError)
+      throw createError
     }
+    
+    if (!newUser.user) {
+      throw new Error('Failed to create user')
+    }
+    
+    console.log('User created successfully via invite:', newUser.user.id, newUser.user.email)
     
     // Add user to organization
     const { error: memberError } = await supabaseAdmin
