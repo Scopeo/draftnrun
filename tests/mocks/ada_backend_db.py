@@ -100,37 +100,37 @@ def populate_ada_backend_db_with_mock_data(session: Session):
     component_version_1 = db.ComponentVersion(
         id=MOCK_UUIDS["component_1"],
         component_id=component_1.id,
-        version_tag="v1.0.0",
+        version_tag="1.0.0",
         description="Completion Service.",
     )
     component_version_2 = db.ComponentVersion(
         id=MOCK_UUIDS["component_2"],
         component_id=component_2.id,
-        version_tag="v1.0.0",
+        version_tag="1.0.0",
         description="Synthesizer Component.",
     )
     component_version_3 = db.ComponentVersion(
         id=MOCK_UUIDS["component_3"],
         component_id=component_3.id,
-        version_tag="v1.0.0",
+        version_tag="1.0.0",
         description="Retriever Component.",
     )
     component_version_4 = db.ComponentVersion(
         id=MOCK_UUIDS["component_4"],
         component_id=component_4.id,
-        version_tag="v1.0.0",
+        version_tag="1.0.0",
         description="ReAct Agent Component.",
     )
     component_version_5 = db.ComponentVersion(
         id=MOCK_UUIDS["component_5"],
         component_id=component_5.id,
-        version_tag="v1.0.0",
+        version_tag="1.0.0",
         description="RAG Agent Component.",
     )
     component_version_6 = db.ComponentVersion(
         id=MOCK_UUIDS["component_6"],
         component_id=component_6.id,
-        version_tag="v1.0.0",
+        version_tag="1.0.0",
         description="Embedding Service Component.",
     )
 

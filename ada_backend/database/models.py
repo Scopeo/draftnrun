@@ -5,6 +5,7 @@ from enum import StrEnum
 import logging
 
 from sqlalchemy import (
+    Index,
     String,
     Text,
     JSON,
@@ -13,9 +14,11 @@ from sqlalchemy import (
     DateTime,
     Boolean,
     Enum as SQLAlchemyEnum,
+    UniqueConstraint,
     func,
     CheckConstraint,
     UUID,
+    text,
 )
 import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import JSONB
@@ -291,10 +294,15 @@ class ComponentVersion(Base):
     child_definitions = relationship("ComponentParameterChildRelationship", back_populates="child_component")
 
     __table_args__ = (
-        CheckConstraint("version_tag <> ''", name="check_version_not_empty"),
-        CheckConstraint(
-            "LENGTH(version_tag) - LENGTH(REPLACE(version_tag, '.', '')) = 2",
-            name="check_version_format",
+        # Enforce strict "1.0.0" format, not just "a.b.c"
+        CheckConstraint("version_tag ~ '^[0-9]+\\.[0-9]+\\.[0-9]+$'", name="check_version_semver"),
+        # Move from migration into model for clarity
+        UniqueConstraint("component_id", "version_tag", name="uq_component_version"),
+        Index(
+            "uq_component_current_version",
+            "component_id",
+            unique=True,
+            postgresql_where=text("is_current = true"),
         ),
     )
 

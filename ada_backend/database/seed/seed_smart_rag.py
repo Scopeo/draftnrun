@@ -38,7 +38,7 @@ def seed_smart_rag_components(session: Session):
     document_search_version = db.ComponentVersion(
         id=COMPONENT_UUIDS["document_search"],
         component_id=COMPONENT_UUIDS["document_search"],
-        version_tag="v1.0.0",
+        version_tag="1.0.0",
         release_stage=db.ReleaseStage.BETA,
         description="Document Search for searching documents from a db using documents names",
         is_current=True,
@@ -69,7 +69,7 @@ def seed_smart_rag_components(session: Session):
     document_enhanced_llm_call_agent_version = db.ComponentVersion(
         id=COMPONENT_UUIDS["document_enhanced_llm_call_agent"],
         component_id=COMPONENT_UUIDS["document_enhanced_llm_call_agent"],
-        version_tag="v1.0.0",
+        version_tag="1.0.0",
         release_stage=db.ReleaseStage.BETA,
         description="LLM Call Agent able to load a file and use it as context",
         default_tool_description_id=TOOL_DESCRIPTION_UUIDS["default_document_enhanced_llm_agent"],
@@ -77,7 +77,7 @@ def seed_smart_rag_components(session: Session):
     document_react_loader_agent_version = db.ComponentVersion(
         id=COMPONENT_UUIDS["document_react_loader_agent"],
         component_id=COMPONENT_UUIDS["document_react_loader_agent"],
-        version_tag="v1.0.0",
+        version_tag="1.0.0",
         release_stage=db.ReleaseStage.BETA,
         description="React Agent able to call a document llm loader agent as a tool",
         default_tool_description_id=TOOL_DESCRIPTION_UUIDS["default_tool_description"],

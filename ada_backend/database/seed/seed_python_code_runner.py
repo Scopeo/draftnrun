@@ -33,7 +33,7 @@ def seed_python_code_runner_components(session: Session):
     python_code_runner_component_version = db.ComponentVersion(
         id=COMPONENT_UUIDS["python_code_runner"],
         component_id=COMPONENT_UUIDS["python_code_runner"],
-        version_tag="v1.0.0",
+        version_tag="1.0.0",
         release_stage=db.ReleaseStage.PUBLIC,
         description="Execute Python code in a secure sandbox environment.",
         default_tool_description_id=TOOL_DESCRIPTION_UUIDS["python_code_runner_tool_description"],

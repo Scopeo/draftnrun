@@ -36,7 +36,7 @@ def seed_db_service_components(session: Session):
     sql_db_service_version = db.ComponentVersion(
         id=COMPONENT_UUIDS["sql_db_service"],
         component_id=COMPONENT_UUIDS["sql_db_service"],
-        version_tag="v1.0.0",
+        version_tag="1.0.0",
         release_stage=db.ReleaseStage.PUBLIC,
         description="SQL Database service for querying databases",
         is_current=True,
@@ -44,7 +44,7 @@ def seed_db_service_components(session: Session):
     snowflake_db_service_version = db.ComponentVersion(
         id=COMPONENT_UUIDS["snowflake_db_service"],
         component_id=COMPONENT_UUIDS["snowflake_db_service"],
-        version_tag="v1.0.0",
+        version_tag="1.0.0",
         release_stage=db.ReleaseStage.PUBLIC,
         description="SQL Database service for querying databases with snowflake",
         is_current=True,

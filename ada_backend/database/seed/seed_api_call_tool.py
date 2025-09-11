@@ -34,7 +34,7 @@ def seed_api_call_components(session: Session):
     api_call_component_version = db.ComponentVersion(
         id=COMPONENT_UUIDS["api_call_tool"],
         component_id=COMPONENT_UUIDS["api_call_tool"],
-        version_tag="v1.0.0",
+        version_tag="1.0.0",
         release_stage=db.ReleaseStage.PUBLIC,
         description="A generic API tool that can make HTTP requests to any API endpoint.",
         default_tool_description_id=TOOL_DESCRIPTION_UUIDS["default_api_call_tool_description"],
