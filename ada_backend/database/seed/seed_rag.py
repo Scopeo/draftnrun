@@ -12,6 +12,7 @@ from ada_backend.database.models import (
 )
 from ada_backend.database.component_definition_seeding import (
     upsert_component_categories,
+    upsert_component_versions,
     upsert_components,
     upsert_components_parameter_child_relationships,
     upsert_components_parameter_definitions,
@@ -39,44 +40,30 @@ def seed_rag_components(session: Session):
     synthesizer = db.Component(
         id=COMPONENT_UUIDS["synthesizer"],
         name="Synthesizer",
-        description="Synthesizer for generating outputs",
-        release_stage=db.ReleaseStage.PUBLIC,
     )
     hybrid_synthesizer = db.Component(
         id=COMPONENT_UUIDS["hybrid_synthesizer"],
         name="HybridSynthesizer",
-        description="Hybrid Synthesizer for generating outputs",
-        release_stage=db.ReleaseStage.BETA,
     )
     chunk_selector = db.Component(
         id=COMPONENT_UUIDS["relevant_chunk_selector"],
         name="ChunkSelector",
-        description="Chunk Selector for selecting relevant chunks",
-        release_stage=db.ReleaseStage.BETA,
     )
     retriever = db.Component(
         id=COMPONENT_UUIDS["retriever"],
         name="Retriever",
-        description="Retriever for fetching chunks",
-        release_stage=db.ReleaseStage.PUBLIC,
     )
     cohere_reranker = db.Component(
         id=COMPONENT_UUIDS["cohere_reranker"],
         name="CohereReranker",
-        description="Cohere API-based Reranker",
-        release_stage=db.ReleaseStage.PUBLIC,
     )
     rag_formatter = db.Component(
         id=COMPONENT_UUIDS["formatter"],
         name="Formatter",
-        description="Rag formatter. Design to customize how to display sources on answer",
-        release_stage=db.ReleaseStage.PUBLIC,
     )
     vocabulary_search = db.Component(
         id=COMPONENT_UUIDS["vocabulary_search"],
         name="Vocabulary Search",
-        description="Enriches RAG with search on user defined vocabulary",
-        release_stage=db.ReleaseStage.PUBLIC,
     )
     upsert_components(
         session=session,
@@ -90,25 +77,87 @@ def seed_rag_components(session: Session):
             vocabulary_search,
         ],
     )
+    synthesizer_version = db.ComponentVersion(
+        id=COMPONENT_UUIDS["synthesizer"],
+        component_id=COMPONENT_UUIDS["synthesizer"],
+        version_tag="v1.0.0",
+        description="Synthesizer for generating outputs",
+        release_stage=db.ReleaseStage.PUBLIC,
+        is_current=True,
+    )
+    hybrid_synthesizer_version = db.ComponentVersion(
+        id=COMPONENT_UUIDS["hybrid_synthesizer"],
+        component_id=COMPONENT_UUIDS["hybrid_synthesizer"],
+        version_tag="v1.0.0",
+        description="Hybrid Synthesizer for generating outputs",
+        release_stage=db.ReleaseStage.BETA,
+        is_current=True,
+    )
+    chunk_selector_version = db.ComponentVersion(
+        id=COMPONENT_UUIDS["relevant_chunk_selector"],
+        component_id=COMPONENT_UUIDS["relevant_chunk_selector"],
+        version_tag="v1.0.0",
+        description="Chunk Selector for selecting relevant chunks",
+        release_stage=db.ReleaseStage.BETA,
+        is_current=True,
+    )
+    retriever_version = db.ComponentVersion(
+        id=COMPONENT_UUIDS["retriever"],
+        component_id=COMPONENT_UUIDS["retriever"],
+        version_tag="v1.0.0",
+        description="Retriever for fetching chunks",
+        release_stage=db.ReleaseStage.PUBLIC,
+        is_current=True,
+    )
+    cohere_reranker_version = db.ComponentVersion(
+        id=COMPONENT_UUIDS["cohere_reranker"],
+        component_id=COMPONENT_UUIDS["cohere_reranker"],
+        version_tag="v1.0.0",
+        description="Cohere API-based Reranker",
+        release_stage=db.ReleaseStage.PUBLIC,
+        is_current=True,
+    )
+    rag_formatter_version = db.ComponentVersion(
+        id=COMPONENT_UUIDS["formatter"],
+        component_id=COMPONENT_UUIDS["formatter"],
+        version_tag="v1.0.0",
+        description="Rag formatter. Design to customize how to display sources on answer",
+        release_stage=db.ReleaseStage.PUBLIC,
+        is_current=True,
+    )
+    vocabulary_search_version = db.ComponentVersion(
+        id=COMPONENT_UUIDS["vocabulary_search"],
+        component_id=COMPONENT_UUIDS["vocabulary_search"],
+        version_tag="v1.0.0",
+        description="Vocabulary Search for retrieving information from a user-defined vocabulary",
+        release_stage=db.ReleaseStage.PUBLIC,
+        is_current=True,
+    )
+    upsert_component_versions(
+        session=session,
+        component_versions=[
+            synthesizer_version,
+            hybrid_synthesizer_version,
+            chunk_selector_version,
+            retriever_version,
+            cohere_reranker_version,
+            rag_formatter_version,
+            vocabulary_search_version,
+        ],
+    )
 
     rag_agent = db.Component(
         id=COMPONENT_UUIDS["rag_agent"],
         name="RAG",
-        description="Retrieves information from knowledge bases using RAG",
         is_agent=True,
         function_callable=True,
-        release_stage=db.ReleaseStage.PUBLIC,
-        default_tool_description_id=TOOL_DESCRIPTION_UUIDS["default_rag_tool_description"],
         icon="tabler-report-search",
     )
     hybrid_rag_agent = db.Component(
         id=COMPONENT_UUIDS["hybrid_rag_agent"],
         name="HybridRAGAgent",
-        description="Hybrid RAG Agent",
         is_agent=False,
         function_callable=False,
-        release_stage=db.ReleaseStage.BETA,
-        default_tool_description_id=TOOL_DESCRIPTION_UUIDS["default_rag_tool_description"],
     )
     upsert_components(
         session=session,
@@ -117,39 +166,64 @@ def seed_rag_components(session: Session):
             hybrid_rag_agent,
         ],
     )
+    rag_agent_version = db.ComponentVersion(
+        id=COMPONENT_UUIDS["rag_agent"],
+        component_id=COMPONENT_UUIDS["rag_agent"],
+        version_tag="v1.0.0",
+        description="RAG Agent for retrieving information from knowledge bases",
+        default_tool_description_id=TOOL_DESCRIPTION_UUIDS["default_rag_tool_description"],
+        release_stage=db.ReleaseStage.PUBLIC,
+        is_current=True,
+    )
+    hybrid_rag_agent_version = db.ComponentVersion(
+        id=COMPONENT_UUIDS["hybrid_rag_agent"],
+        component_id=COMPONENT_UUIDS["hybrid_rag_agent"],
+        version_tag="v1.0.0",
+        description="Hybrid RAG Agent for retrieving information from knowledge bases",
+        release_stage=db.ReleaseStage.BETA,
+        default_tool_description_id=TOOL_DESCRIPTION_UUIDS["default_rag_tool_description"],
+        is_current=True,
+    )
+    upsert_component_versions(
+        session=session,
+        component_versions=[
+            rag_agent_version,
+            hybrid_rag_agent_version,
+        ],
+    )
 
     # RAG
     rag_retriever_param = db.ComponentParameterDefinition(
         id=UUID("1428f05e-225e-4a90-950d-4107818b3b49"),
-        component_id=rag_agent.id,
+        component_version_id=rag_agent_version.id,
         name="retriever",
         type=ParameterType.COMPONENT,
         nullable=False,
     )
     rag_synthesizer_param = db.ComponentParameterDefinition(
         id=UUID("2c4763cf-5e2c-489b-a1a9-d3b2bc92a786"),
-        component_id=rag_agent.id,
+        component_version_id=rag_agent_version.id,
         name="synthesizer",
         type=ParameterType.COMPONENT,
         nullable=False,
     )
     rag_reranker_param = db.ComponentParameterDefinition(
         id=UUID("4f234948-c276-4f3f-88d1-cc8df58fc20e"),
-        component_id=rag_agent.id,
+        component_version_id=rag_agent_version.id,
         name="reranker",
         type=ParameterType.COMPONENT,
         nullable=True,
     )
     rag_formatter_param = db.ComponentParameterDefinition(
         id=UUID("c5e9b6da-4b49-455f-8cf9-cb4f9f2e4468"),
-        component_id=rag_agent.id,
+        component_version_id=rag_agent_version.id,
         name="formatter",
         type=ParameterType.COMPONENT,
         nullable=True,
     )
     rag_vocabulary_search_param = db.ComponentParameterDefinition(
         id=UUID("8e6c5827-667e-4c01-bf8b-e82a65614c5a"),
-        component_id=rag_agent.id,
+        component_version_id=rag_agent_version.id,
         name="vocabulary_search",
         type=ParameterType.COMPONENT,
         nullable=True,
@@ -170,27 +244,27 @@ def seed_rag_components(session: Session):
             db.ComponentParameterChildRelationship(
                 id=UUID("d2536a60-b6ce-45ec-ae49-5c9c1a269fad"),
                 component_parameter_definition_id=rag_retriever_param.id,
-                child_component_id=retriever.id,
+                child_component_version_id=retriever_version.id,
             ),
             db.ComponentParameterChildRelationship(
                 id=UUID("b314a46c-62f0-4d0a-b56f-2d4fa43fa242"),
                 component_parameter_definition_id=rag_reranker_param.id,
-                child_component_id=cohere_reranker.id,
+                child_component_version_id=cohere_reranker_version.id,
             ),
             db.ComponentParameterChildRelationship(
                 id=UUID("5f021860-3db6-4e9d-9069-8de9eaf6d267"),
                 component_parameter_definition_id=rag_synthesizer_param.id,
-                child_component_id=synthesizer.id,
+                child_component_version_id=synthesizer_version.id,
             ),
             db.ComponentParameterChildRelationship(
                 id=UUID("8a38709b-3a3a-4ae3-b1d5-0dc244a3280c"),
                 component_parameter_definition_id=rag_formatter_param.id,
-                child_component_id=rag_formatter.id,
+                child_component_version_id=rag_formatter_version.id,
             ),
             db.ComponentParameterChildRelationship(
                 id=UUID("004062a7-724a-4f4e-b49d-b56681bd85ab"),
                 component_parameter_definition_id=rag_vocabulary_search_param.id,
-                child_component_id=vocabulary_search.id,
+                child_component_version_id=vocabulary_search.id,
             ),
         ],
     )
@@ -199,42 +273,42 @@ def seed_rag_components(session: Session):
     # Hybrid RAG
     hybrid_rag_retriever_param = db.ComponentParameterDefinition(
         id=UUID("7d4bb3fd-9188-4b40-82de-bb85c7e8f08a"),
-        component_id=hybrid_rag_agent.id,
+        component_version_id=hybrid_rag_agent_version.id,
         name="retriever",
         type=ParameterType.COMPONENT,
         nullable=True,
     )
     hybrid_rag_synthesizer_param = db.ComponentParameterDefinition(
         id=UUID("7e91d7a2-8bde-4f67-b4b3-4b4b9b3c406c"),
-        component_id=hybrid_rag_agent.id,
+        component_version_id=hybrid_rag_agent_version.id,
         name="synthesizer",
         type=ParameterType.COMPONENT,
         nullable=False,
     )
     hybrid_rag_reranker_param = db.ComponentParameterDefinition(
         id=UUID("370fa33e-bb78-47fc-a09d-1e149fe593e0"),
-        component_id=hybrid_rag_agent.id,
+        component_version_id=hybrid_rag_agent_version.id,
         name="reranker",
         type=ParameterType.COMPONENT,
         nullable=True,
     )
     hybrid_rag_hybrid_synthesizer_param = db.ComponentParameterDefinition(
         id=UUID("85cf3541-b7b8-4f58-815e-3c8f60e5109b"),
-        component_id=hybrid_rag_agent.id,
+        component_version_id=hybrid_rag_agent_version.id,
         name="hybrid_synthesizer",
         type=ParameterType.COMPONENT,
         nullable=False,
     )
     hybrid_rag_relevant_chunk_selector_param = db.ComponentParameterDefinition(
         id=UUID("fef295ec-51cc-4ac5-9f09-c78f77f3ea07"),
-        component_id=hybrid_rag_agent.id,
+        component_version_id=hybrid_rag_agent_version.id,
         name="relevant_chunk_selector",
         type=ParameterType.COMPONENT,
         nullable=False,
     )
     hybrid_rag_formatter_param = db.ComponentParameterDefinition(
         id=UUID("7cf4fc67-d2d8-49a5-bc93-8e9f5888933c"),
-        component_id=hybrid_rag_agent.id,
+        component_version_id=hybrid_rag_agent_version.id,
         name="formatter",
         type=ParameterType.COMPONENT,
         nullable=True,
@@ -256,32 +330,32 @@ def seed_rag_components(session: Session):
             db.ComponentParameterChildRelationship(
                 id=UUID("60e0df9d-f80f-4b58-8c91-9bdf5cd88e8c"),
                 component_parameter_definition_id=hybrid_rag_retriever_param.id,
-                child_component_id=retriever.id,
+                child_component_version_id=retriever_version.id,
             ),
             db.ComponentParameterChildRelationship(
                 id=UUID("4ad3cdd2-790c-4f91-83f1-2f0e4e5272ff"),
                 component_parameter_definition_id=hybrid_rag_synthesizer_param.id,
-                child_component_id=synthesizer.id,
+                child_component_version_id=synthesizer_version.id,
             ),
             db.ComponentParameterChildRelationship(
                 id=UUID("b899f694-e2b4-4636-986f-dbd0ad0c17c6"),
                 component_parameter_definition_id=hybrid_rag_reranker_param.id,
-                child_component_id=cohere_reranker.id,
+                child_component_version_id=cohere_reranker_version.id,
             ),
             db.ComponentParameterChildRelationship(
                 id=UUID("285f3e6c-0557-4ab7-bf9b-b1d645ab81b1"),
                 component_parameter_definition_id=hybrid_rag_hybrid_synthesizer_param.id,
-                child_component_id=hybrid_synthesizer.id,
+                child_component_version_id=hybrid_synthesizer_version.id,
             ),
             db.ComponentParameterChildRelationship(
                 id=UUID("29c64935-442a-495f-88e1-924028370118"),
                 component_parameter_definition_id=hybrid_rag_relevant_chunk_selector_param.id,
-                child_component_id=chunk_selector.id,
+                child_component_version_id=chunk_selector.id,
             ),
             db.ComponentParameterChildRelationship(
                 id=UUID("61b56c07-3f5c-42b7-b34a-53eec9c51f2d"),
                 component_parameter_definition_id=hybrid_rag_formatter_param.id,
-                child_component_id=rag_formatter.id,
+                child_component_version_id=rag_formatter.id,
             ),
         ],
     )
@@ -289,7 +363,7 @@ def seed_rag_components(session: Session):
     # Retriever
     retriever_collection_name_param = db.ComponentParameterDefinition(
         id=UUID("2caba92f-421b-43a4-a197-9b53d9da79be"),
-        component_id=retriever.id,
+        component_version_id=retriever_version.id,
         name="data_source",
         type=ParameterType.DATA_SOURCE,
         nullable=False,
@@ -301,7 +375,7 @@ def seed_rag_components(session: Session):
     )
     retriever_max_retrieved_chunks_param = db.ComponentParameterDefinition(
         id=UUID("2799c83e-2df0-4b55-babb-86f84e4f2ce1"),
-        component_id=retriever.id,
+        component_version_id=retriever_version.id,
         name="max_retrieved_chunks",
         type=ParameterType.INTEGER,
         nullable=False,
@@ -319,7 +393,7 @@ def seed_rag_components(session: Session):
     )
     retriever_enable_date_penalty_for_chunks_param = db.ComponentParameterDefinition(
         id=UUID("f3b0a2c4-1d5e-4b8e-8c7f-6a2d9f3e1b2d"),
-        component_id=retriever.id,
+        component_version_id=retriever_version.id,
         name="enable_date_penalty_for_chunks",
         type=ParameterType.BOOLEAN,
         nullable=True,
@@ -334,7 +408,7 @@ def seed_rag_components(session: Session):
     )
     retriever_chunk_age_penalty_rate_param = db.ComponentParameterDefinition(
         id=UUID("d2f3a2c4-1d5e-4b8e-8c7f-6a2d9f3e1b2d"),
-        component_id=retriever.id,
+        component_version_id=retriever_version.id,
         name="chunk_age_penalty_rate",
         type=ParameterType.FLOAT,
         nullable=True,
@@ -353,7 +427,7 @@ def seed_rag_components(session: Session):
     )
     retriever_default_penalty_rate_param = db.ComponentParameterDefinition(
         id=UUID("d94c8c4e-2f89-4b9b-9738-74c2b90801a5"),
-        component_id=retriever.id,
+        component_version_id=retriever_version.id,
         name="default_penalty_rate",
         type=ParameterType.FLOAT,
         nullable=True,
@@ -373,7 +447,7 @@ def seed_rag_components(session: Session):
 
     retriever_metadata_date_key_param = db.ComponentParameterDefinition(
         id=UUID("c2fa6342-0c9f-4b77-b0b2-2bb18a77a6c5"),
-        component_id=retriever.id,
+        component_version_id=retriever_version.id,
         name="metadata_date_key",
         type=ParameterType.STRING,
         nullable=True,
@@ -394,7 +468,7 @@ def seed_rag_components(session: Session):
     )
     retriever_max_retrieved_chunks_after_penalty_param = db.ComponentParameterDefinition(
         id=UUID("fc3e8e2b-2f5f-4b61-9aef-5480d7ed22f1"),
-        component_id=retriever.id,
+        component_version_id=retriever_version.id,
         name="max_retrieved_chunks_after_penalty",
         type=ParameterType.INTEGER,
         nullable=True,
@@ -431,7 +505,7 @@ def seed_rag_components(session: Session):
             # RAG Agent
             db.ComponentParameterDefinition(
                 id=UUID("c5c813b4-884c-42af-9303-d56189e57f48"),
-                component_id=rag_agent.id,
+                component_version_id=rag_agent_version.id,
                 name="input_data_field_for_messages_history",
                 type=ParameterType.STRING,
                 nullable=False,
@@ -446,7 +520,7 @@ def seed_rag_components(session: Session):
             # Vocabulary Search
             db.ComponentParameterDefinition(
                 id=UUID("4f207c2b-4231-4fc0-bf2b-51a39a3ae666"),
-                component_id=vocabulary_search.id,
+                component_version_id=vocabulary_search_version.id,
                 name="vocabulary_context_data",
                 type=ParameterType.JSON,
                 nullable=False,
@@ -462,7 +536,7 @@ def seed_rag_components(session: Session):
             ),
             db.ComponentParameterDefinition(
                 id=UUID("3b7d03ce-3054-4248-8c6f-be76973ce58d"),
-                component_id=vocabulary_search.id,
+                component_version_id=vocabulary_search_version.id,
                 name="fuzzy_matching_candidates",
                 type=ParameterType.INTEGER,
                 nullable=False,
@@ -475,7 +549,7 @@ def seed_rag_components(session: Session):
             ),
             db.ComponentParameterDefinition(
                 id=UUID("14b0d5ce-326c-402a-8678-bd21d49abdf3"),
-                component_id=vocabulary_search.id,
+                component_version_id=vocabulary_search_version.id,
                 name="fuzzy_threshold",
                 type=ParameterType.INTEGER,
                 nullable=False,
@@ -499,7 +573,7 @@ def seed_rag_components(session: Session):
             ),
             db.ComponentParameterDefinition(
                 id=UUID("80ae22be-5832-4c7b-a936-6d129caeec80"),
-                component_id=vocabulary_search.id,
+                component_version_id=vocabulary_search_version.id,
                 name="vocabulary_context_prompt_key",
                 type=ParameterType.STRING,
                 nullable=False,
@@ -517,7 +591,7 @@ def seed_rag_components(session: Session):
             # RAG Formatter
             db.ComponentParameterDefinition(
                 id=UUID("b3f71f3a-8e3d-4622-9ef1-723a427b4f74"),
-                component_id=rag_formatter.id,
+                component_version_id=rag_formatter_version.id,
                 name="add_sources",
                 type=ParameterType.BOOLEAN,
                 nullable=True,
@@ -526,7 +600,7 @@ def seed_rag_components(session: Session):
             # Cohere Reranker
             db.ComponentParameterDefinition(
                 id=UUID("3cc26c73-f803-4726-aea7-4d4602f47a5e"),
-                component_id=cohere_reranker.id,
+                component_version_id=cohere_reranker_version.id,
                 name="cohere_model",
                 type=ParameterType.STRING,
                 nullable=True,
@@ -544,7 +618,7 @@ def seed_rag_components(session: Session):
             ),
             db.ComponentParameterDefinition(
                 id=UUID("9cf01671-1cf7-4a34-9f64-df92a3e0193f"),
-                component_id=cohere_reranker.id,
+                component_version_id=cohere_reranker_version.id,
                 name="score_threshold",
                 type=ParameterType.FLOAT,
                 nullable=True,
@@ -557,7 +631,7 @@ def seed_rag_components(session: Session):
             ),
             db.ComponentParameterDefinition(
                 id=UUID("9b474d7b-6c0b-45d0-b6b4-ccefd6931d0b"),
-                component_id=cohere_reranker.id,
+                component_version_id=cohere_reranker_version.id,
                 name="num_doc_reranked",
                 type=ParameterType.INTEGER,
                 nullable=True,
@@ -571,7 +645,7 @@ def seed_rag_components(session: Session):
             # Synthesizer
             db.ComponentParameterDefinition(
                 id=UUID("373dc6d2-e12d-495c-936f-e07d1c27e254"),
-                component_id=synthesizer.id,
+                component_version_id=synthesizer_version.id,
                 name="prompt_template",
                 type=ParameterType.STRING,
                 nullable=True,
@@ -587,7 +661,7 @@ def seed_rag_components(session: Session):
                 is_advanced=False,
             ),
             *build_completion_service_config_definitions(
-                component_id=synthesizer.id,
+                component_version_id=synthesizer_version.id,
                 params_to_seed=[
                     ParameterLLMConfig(
                         param_name=COMPLETION_MODEL_IN_DB,
@@ -614,7 +688,7 @@ def seed_rag_components(session: Session):
             # Hybrid Synthesizer
             db.ComponentParameterDefinition(
                 id=UUID("78df9f84-2d9c-4499-bafe-24c7c96d2a08"),
-                component_id=hybrid_synthesizer.id,
+                component_version_id=hybrid_synthesizer_version.id,
                 name="prompt_template",
                 type=ParameterType.STRING,
                 nullable=True,
@@ -630,7 +704,7 @@ def seed_rag_components(session: Session):
                 is_advanced=False,
             ),
             *build_completion_service_config_definitions(
-                component_id=hybrid_synthesizer.id,
+                component_version_id=hybrid_synthesizer_version.id,
                 params_to_seed=[
                     ParameterLLMConfig(
                         param_name=COMPLETION_MODEL_IN_DB,
@@ -657,7 +731,7 @@ def seed_rag_components(session: Session):
             # Chunk Selector
             db.ComponentParameterDefinition(
                 id=UUID("3b738fb6-3a3f-4261-9b7e-78a3256d4db2"),
-                component_id=chunk_selector.id,
+                component_version_id=chunk_selector_version.id,
                 name="prompt_template",
                 type=ParameterType.STRING,
                 nullable=True,
@@ -669,7 +743,7 @@ def seed_rag_components(session: Session):
                 is_advanced=False,
             ),
             *build_completion_service_config_definitions(
-                component_id=chunk_selector.id,
+                component_version_id=chunk_selector_version.id,
                 params_to_seed=[
                     ParameterLLMConfig(
                         param_name=COMPLETION_MODEL_IN_DB,

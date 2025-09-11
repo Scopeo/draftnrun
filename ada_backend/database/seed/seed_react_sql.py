@@ -10,6 +10,7 @@ from ada_backend.database.models import (
 )
 from ada_backend.database.component_definition_seeding import (
     upsert_component_categories,
+    upsert_component_versions,
     upsert_components,
     upsert_components_parameter_child_relationships,
     upsert_components_parameter_definitions,
@@ -29,12 +30,9 @@ def seed_react_sql_components(session: Session):
     react_sql_agent = db.Component(
         id=COMPONENT_UUIDS["react_sql_agent"],
         name="Database Query Agent",
-        description="ReAct Agent with SQL query tools",
         is_agent=True,
         function_callable=True,
         can_use_function_calling=True,
-        release_stage=db.ReleaseStage.PUBLIC,
-        default_tool_description_id=TOOL_DESCRIPTION_UUIDS["default_react_sql_tool_description"],
         icon="tabler-database-cog",
     )
     upsert_components(
@@ -43,10 +41,23 @@ def seed_react_sql_components(session: Session):
             react_sql_agent,
         ],
     )
+    react_sql_agent_version = db.ComponentVersion(
+        id=COMPONENT_UUIDS["react_sql_agent"],
+        component_id=COMPONENT_UUIDS["react_sql_agent"],
+        version_tag="v1.0.0",
+        release_stage=db.ReleaseStage.PUBLIC,
+        description="ReAct Agent with SQL query tools",
+        default_tool_description_id=TOOL_DESCRIPTION_UUIDS["default_react_sql_tool_description"],
+        is_current=True,
+    )
+    upsert_component_versions(
+        session=session,
+        component_versions=[react_sql_agent_version],
+    )
     # ReAct SQL Agent
     react_sql_agent_param = db.ComponentParameterDefinition(
         id=UUID("3f510f8c-79e9-4cf0-abe3-880e89c9372d"),
-        component_id=react_sql_agent.id,
+        component_version_id=react_sql_agent_version.id,
         name="db_service",
         type=ParameterType.COMPONENT,
         nullable=False,
@@ -61,12 +72,12 @@ def seed_react_sql_components(session: Session):
             db.ComponentParameterChildRelationship(
                 id=UUID("f4749274-abc6-4de7-8ef2-2e7424895151"),
                 component_parameter_definition_id=react_sql_agent_param.id,
-                child_component_id=COMPONENT_UUIDS["snowflake_db_service"],
+                child_component_version_id=COMPONENT_UUIDS["snowflake_db_service"],
             ),
             db.ComponentParameterChildRelationship(
                 id=UUID("12e869f3-0465-4e47-a810-d79a4f9a7bd0"),
                 component_parameter_definition_id=react_sql_agent_param.id,
-                child_component_id=COMPONENT_UUIDS["sql_db_service"],
+                child_component_version_id=COMPONENT_UUIDS["sql_db_service"],
             ),
         ],
     )
@@ -75,14 +86,14 @@ def seed_react_sql_components(session: Session):
         component_parameter_definitions=[
             db.ComponentParameterDefinition(
                 id=UUID("3253a083-0a54-4d7b-b438-6a7c13d67dc8"),
-                component_id=react_sql_agent.id,
+                component_version_id=react_sql_agent_version.id,
                 name="include_tables",
                 type=ParameterType.JSON,
                 nullable=True,
             ),
             db.ComponentParameterDefinition(
                 id=UUID("18baf91c-bdc2-4a14-a9db-bf573e2153d0"),
-                component_id=react_sql_agent.id,
+                component_version_id=react_sql_agent_version.id,
                 name="additional_db_description",
                 type=ParameterType.STRING,
                 nullable=True,
@@ -94,7 +105,7 @@ def seed_react_sql_components(session: Session):
             ),
             db.ComponentParameterDefinition(
                 id=UUID("69728a7d-0dd2-412d-b3d4-9348de3b92cd"),
-                component_id=react_sql_agent.id,
+                component_version_id=react_sql_agent_version.id,
                 name="prompt",
                 type=ParameterType.STRING,
                 nullable=False,
@@ -102,7 +113,7 @@ def seed_react_sql_components(session: Session):
             ),
             db.ComponentParameterDefinition(
                 id=UUID("81ad2034-3c5e-4f10-bc57-1fe5ea450d92"),
-                component_id=react_sql_agent.id,
+                component_version_id=react_sql_agent_version.id,
                 name="db_schema_name",
                 type=ParameterType.STRING,
                 nullable=True,
@@ -114,7 +125,7 @@ def seed_react_sql_components(session: Session):
                 is_advanced=True,
             ),
             *build_function_calling_service_config_definitions(
-                component_version_id=react_sql_agent.id,
+                component_version_id=react_sql_agent_version.id,
                 params_to_seed=[
                     ParameterLLMConfig(
                         param_name=COMPLETION_MODEL_IN_DB,

@@ -10,6 +10,7 @@ from ada_backend.database.models import (
 )
 from ada_backend.database.component_definition_seeding import (
     upsert_component_categories,
+    upsert_component_versions,
     upsert_components,
     upsert_components_parameter_definitions,
 )
@@ -23,20 +24,27 @@ def seed_api_call_components(session: Session):
     api_call_component = Component(
         id=COMPONENT_UUIDS["api_call_tool"],
         name="API Call",
-        description="A generic API tool that can make HTTP requests to any API endpoint.",
         is_agent=False,
         function_callable=True,
         can_use_function_calling=False,
-        release_stage=db.ReleaseStage.PUBLIC,
-        default_tool_description_id=TOOL_DESCRIPTION_UUIDS["default_api_call_tool_description"],
         icon="tabler-api",
     )
     upsert_components(session, [api_call_component])
 
+    api_call_component_version = db.ComponentVersion(
+        id=COMPONENT_UUIDS["api_call_tool"],
+        component_id=COMPONENT_UUIDS["api_call_tool"],
+        version_tag="v1.0.0",
+        release_stage=db.ReleaseStage.PUBLIC,
+        description="A generic API tool that can make HTTP requests to any API endpoint.",
+        default_tool_description_id=TOOL_DESCRIPTION_UUIDS["default_api_call_tool_description"],
+    )
+    upsert_component_versions(session, [api_call_component_version])
+
     api_call_parameter_definitions = [
         ComponentParameterDefinition(
             id=UUID("b2c3d4e5-f6a7-8901-bcde-f12345678901"),
-            component_id=api_call_component.id,
+            component_version_id=api_call_component_version.id,
             name="endpoint",
             type=ParameterType.STRING,
             nullable=False,
@@ -49,7 +57,7 @@ def seed_api_call_components(session: Session):
         ),
         ComponentParameterDefinition(
             id=UUID("c3d4e5f6-a7b8-9012-cdef-123456789012"),
-            component_id=api_call_component.id,
+            component_version_id=api_call_component_version.id,
             name="method",
             type=ParameterType.STRING,
             nullable=False,
@@ -67,7 +75,7 @@ def seed_api_call_components(session: Session):
         ),
         ComponentParameterDefinition(
             id=UUID("d4e5f6a7-b8c9-0123-def1-234567890123"),
-            component_id=api_call_component.id,
+            component_version_id=api_call_component_version.id,
             name="headers",
             type=ParameterType.STRING,
             nullable=True,
@@ -79,7 +87,7 @@ def seed_api_call_components(session: Session):
         ),
         ComponentParameterDefinition(
             id=UUID("f6a7b8c9-d0e1-2345-f123-456789012345"),
-            component_id=api_call_component.id,
+            component_version_id=api_call_component_version.id,
             name="timeout",
             type=ParameterType.INTEGER,
             default=30,
@@ -95,7 +103,7 @@ def seed_api_call_components(session: Session):
         ),
         ComponentParameterDefinition(
             id=UUID("a7b8c9d0-e1f2-3456-1234-567890123456"),
-            component_id=api_call_component.id,
+            component_version_id=api_call_component_version.id,
             name="fixed_parameters",
             type=ParameterType.STRING,
             nullable=True,

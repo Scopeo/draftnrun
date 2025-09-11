@@ -47,6 +47,36 @@ def upsert_components(
     session.commit()
 
 
+def upsert_component_versions(
+    session: Session,
+    component_versions: list[db.ComponentVersion],
+) -> None:
+    """
+    Upserts component versions in the database.
+    If a component version already exists and has same attributes, it will be skipped.
+    If it exists but has different attributes, it will be updated.
+    If it does not exist, it will be inserted.
+    """
+    for component_version in component_versions:
+        existing_component_version = (
+            session.query(db.ComponentVersion)
+            .filter(
+                db.ComponentVersion.id == component_version.id,
+            )
+            .first()
+        )
+        if existing_component_version:
+            if models_are_equal(existing_component_version, component_version):
+                LOGGER.info(f"Component version {component_version.id} did not change, skipping.")
+            else:
+                update_model_fields(existing_component_version, component_version)
+                LOGGER.info(f"Component version {component_version.id} updated.")
+        else:
+            session.add(component_version)
+            LOGGER.info(f"Component version {component_version.id} inserted.")
+    session.commit()
+
+
 def upsert_components_parameter_definitions(
     session: Session,
     component_parameter_definitions: list[db.ComponentParameterDefinition],

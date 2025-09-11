@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from ada_backend.database import models as db
 from ada_backend.database.component_definition_seeding import (
     upsert_component_categories,
+    upsert_component_versions,
     upsert_components,
     upsert_components_parameter_definitions,
 )
@@ -27,9 +28,7 @@ def seed_web_search_components(session: Session):
         description="Performs internet search using OpenAI",
         is_agent=True,
         function_callable=True,
-        release_stage=db.ReleaseStage.PUBLIC,
-        default_tool_description_id=TOOL_DESCRIPTION_UUIDS["default_web_search_openai_tool_description"],
-        icon="tabler-world-search",
+        icon="tabler-brand-openai",
     )
     upsert_components(
         session=session,
@@ -37,12 +36,25 @@ def seed_web_search_components(session: Session):
             web_search_openai_agent,
         ],
     )
+    web_search_openai_agent_version = db.ComponentVersion(
+        id=COMPONENT_UUIDS["web_search_openai_agent"],
+        component_id=COMPONENT_UUIDS["web_search_openai_agent"],
+        version_tag="v1.0.0",
+        release_stage=db.ReleaseStage.PUBLIC,
+        description="Agent that uses OpenAI to perform internet searches and answer questions based on the results.",
+        default_tool_description_id=TOOL_DESCRIPTION_UUIDS["default_web_search_openai_tool_description"],
+        is_current=True,
+    )
+    upsert_component_versions(
+        session=session,
+        component_versions=[web_search_openai_agent_version],
+    )
     upsert_components_parameter_definitions(
         session=session,
         component_parameter_definitions=[
             # Web Search OpenAI Agent
             *build_web_service_config_definitions(
-                component_id=web_search_openai_agent.id,
+                component_version_id=web_search_openai_agent_version.id,
                 params_to_seed=[
                     ParameterLLMConfig(
                         param_name=COMPLETION_MODEL_IN_DB,

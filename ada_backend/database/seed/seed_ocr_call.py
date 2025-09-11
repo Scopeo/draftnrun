@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from ada_backend.database import models as db
 from ada_backend.database.component_definition_seeding import (
     upsert_component_categories,
+    upsert_component_versions,
     upsert_components,
     upsert_components_parameter_definitions,
 )
@@ -21,11 +22,8 @@ def seed_ocr_call_components(session: Session):
     ocr_call = db.Component(
         id=COMPONENT_UUIDS["ocr_call"],
         name="OCR Call",
-        description="Extract text from PDF files using OCR (Optical Character Recognition)",
         is_agent=True,
         function_callable=True,
-        release_stage=db.ReleaseStage.PUBLIC,
-        default_tool_description_id=TOOL_DESCRIPTION_UUIDS["default_tool_description"],
         icon="tabler-text-scan-2",
     )
     upsert_components(
@@ -35,11 +33,25 @@ def seed_ocr_call_components(session: Session):
         ],
     )
 
+    ocr_call_version = db.ComponentVersion(
+        id=COMPONENT_UUIDS["ocr_call"],
+        component_id=COMPONENT_UUIDS["ocr_call"],
+        version_tag="v1.0.0",
+        release_stage=db.ReleaseStage.PUBLIC,
+        description="Extract text from PDF files using OCR (Optical Character Recognition)",
+        default_tool_description_id=TOOL_DESCRIPTION_UUIDS["default_tool_description"],
+        is_current=True,
+    )
+    upsert_component_versions(
+        session=session,
+        component_versions=[ocr_call_version],
+    )
+
     upsert_components_parameter_definitions(
         session=session,
         component_parameter_definitions=[
             *build_ocr_service_config_definitions(
-                component_version_id=ocr_call.id,
+                component_version_id=ocr_call_version.id,
                 params_to_seed=[
                     ParameterLLMConfig(
                         param_name=COMPLETION_MODEL_IN_DB,
