@@ -21,7 +21,6 @@ from ada_backend.repositories.component_repository import (
 )
 from ada_backend.schemas.pipeline.base import ComponentRelationshipSchema
 from ada_backend.schemas.pipeline.get_pipeline_schema import ComponentInstanceReadSchema
-from ada_backend.database.models import UIComponent
 
 LOGGER = getLogger(__name__)
 
