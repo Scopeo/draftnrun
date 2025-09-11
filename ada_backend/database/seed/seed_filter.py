@@ -11,6 +11,7 @@ from ada_backend.database.models import (
 )
 from ada_backend.database.component_definition_seeding import (
     upsert_component_categories,
+    upsert_component_versions,
     upsert_components,
     upsert_components_parameter_definitions,
 )
@@ -73,11 +74,8 @@ def seed_filter_components(session: Session):
     filter = db.Component(
         id=COMPONENT_UUIDS["filter"],
         name="Filter",
-        description="Filter: takes a json and filters it according to a given json schema",
         is_agent=True,
         is_protected=True,
-        release_stage=db.ReleaseStage.PUBLIC,
-        default_tool_description_id=TOOL_DESCRIPTION_UUIDS["default_filter_tool_description"],
         icon="tabler-json",
     )
     upsert_components(
@@ -86,12 +84,25 @@ def seed_filter_components(session: Session):
             filter,
         ],
     )
+    filter_version = db.ComponentVersion(
+        id=COMPONENT_UUIDS["filter"],
+        component_id=COMPONENT_UUIDS["filter"],
+        version_tag="v1.0.0",
+        release_stage=db.ReleaseStage.PUBLIC,
+        description="Filter: takes a json and filters it according to a given json schema",
+        default_tool_description_id=TOOL_DESCRIPTION_UUIDS["default_filter_tool_description"],
+        is_current=True,
+    )
+    upsert_component_versions(
+        session=session,
+        component_versions=[filter_version],
+    )
     upsert_components_parameter_definitions(
         session=session,
         component_parameter_definitions=[
             db.ComponentParameterDefinition(
                 id=UUID("59443366-5b1f-5543-9fc5-57378f9aaf6e"),
-                component_id=filter.id,
+                component_version_id=filter_version.id,
                 name=FILTER_SCHEMA_PARAMETER_NAME,
                 type=ParameterType.STRING,
                 nullable=False,

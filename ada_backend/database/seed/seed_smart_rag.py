@@ -9,6 +9,7 @@ from ada_backend.database.models import (
     UIComponentProperties,
 )
 from ada_backend.database.component_definition_seeding import (
+    upsert_component_versions,
     upsert_components,
     upsert_components_parameter_child_relationships,
     upsert_components_parameter_definitions,
@@ -27,8 +28,6 @@ def seed_smart_rag_components(session: Session):
     document_search = db.Component(
         id=COMPONENT_UUIDS["document_search"],
         name="Document Search",
-        description="Document Search for searching documents from a db using documents names",
-        release_stage=db.ReleaseStage.BETA,
     )
     upsert_components(
         session=session,
@@ -36,23 +35,29 @@ def seed_smart_rag_components(session: Session):
             document_search,
         ],
     )
+    document_search_version = db.ComponentVersion(
+        id=COMPONENT_UUIDS["document_search"],
+        component_id=COMPONENT_UUIDS["document_search"],
+        version_tag="v1.0.0",
+        release_stage=db.ReleaseStage.BETA,
+        description="Document Search for searching documents from a db using documents names",
+        is_current=True,
+    )
+    upsert_component_versions(
+        session=session,
+        component_versions=[document_search_version],
+    )
     document_enhanced_llm_call_agent = db.Component(
         id=COMPONENT_UUIDS["document_enhanced_llm_call_agent"],
         name="Document Enhanced LLM Agent",
-        description="LLM Call Agent able to load a file and use it as context",
         is_agent=False,
         function_callable=False,
-        release_stage=db.ReleaseStage.BETA,
-        default_tool_description_id=TOOL_DESCRIPTION_UUIDS["default_document_enhanced_llm_agent"],
     )
     document_react_loader_agent = db.Component(
         id=COMPONENT_UUIDS["document_react_loader_agent"],
         name="Document AI Agent",
-        description="React Agent able to call a document llm loader agent as a tool",
         is_agent=False,
         function_callable=False,
-        release_stage=db.ReleaseStage.BETA,
-        default_tool_description_id=TOOL_DESCRIPTION_UUIDS["default_tool_description"],
     )
     upsert_components(
         session=session,
@@ -61,10 +66,33 @@ def seed_smart_rag_components(session: Session):
             document_react_loader_agent,
         ],
     )
+    document_enhanced_llm_call_agent_version = db.ComponentVersion(
+        id=COMPONENT_UUIDS["document_enhanced_llm_call_agent"],
+        component_id=COMPONENT_UUIDS["document_enhanced_llm_call_agent"],
+        version_tag="v1.0.0",
+        release_stage=db.ReleaseStage.BETA,
+        description="LLM Call Agent able to load a file and use it as context",
+        default_tool_description_id=TOOL_DESCRIPTION_UUIDS["default_document_enhanced_llm_agent"],
+    )
+    document_react_loader_agent_version = db.ComponentVersion(
+        id=COMPONENT_UUIDS["document_react_loader_agent"],
+        component_id=COMPONENT_UUIDS["document_react_loader_agent"],
+        version_tag="v1.0.0",
+        release_stage=db.ReleaseStage.BETA,
+        description="React Agent able to call a document llm loader agent as a tool",
+        default_tool_description_id=TOOL_DESCRIPTION_UUIDS["default_tool_description"],
+    )
+    upsert_component_versions(
+        session=session,
+        component_versions=[
+            document_enhanced_llm_call_agent_version,
+            document_react_loader_agent_version,
+        ],
+    )
     # document react loader agent
     document_react_loader_agent_document_enhanced_llm_agent_param = db.ComponentParameterDefinition(
         id=UUID("8ff93e7c-9bc3-4855-b9a4-9aabd9f06356"),
-        component_id=document_react_loader_agent.id,
+        component_version_id=document_react_loader_agent_version.id,
         name="document_enhanced_llm_call_agent",
         type=ParameterType.COMPONENT,
         nullable=False,
@@ -72,21 +100,21 @@ def seed_smart_rag_components(session: Session):
     # document enhanced llm call agent
     document_enhanced_llm_call_agent_document_search_param = db.ComponentParameterDefinition(
         id=UUID("7facf1a7-47c5-468c-95c9-650a2b883f1f"),
-        component_id=document_enhanced_llm_call_agent.id,
+        component_version_id=document_enhanced_llm_call_agent_version.id,
         name="document_search",
         type=ParameterType.COMPONENT,
         nullable=False,
     )
     document_enhanced_llm_call_agent_synthesizer_param = db.ComponentParameterDefinition(
         id=UUID("90450c2a-d24d-41e0-85b9-1b0da2661b15"),
-        component_id=document_enhanced_llm_call_agent.id,
+        component_version_id=document_enhanced_llm_call_agent_version.id,
         name="synthesizer",
         type=ParameterType.COMPONENT,
         nullable=False,
     )
     document_search_db_service_param = db.ComponentParameterDefinition(
         id=UUID("2a36a68a-612c-4533-95b6-c90d17924b78"),
-        component_id=document_search.id,
+        component_version_id=document_search_version.id,
         name="db_service",
         type=ParameterType.COMPONENT,
         nullable=False,
@@ -108,22 +136,22 @@ def seed_smart_rag_components(session: Session):
             db.ComponentParameterChildRelationship(
                 id=UUID("e8dcf9d9-3ea5-4c8f-bdde-e9d0dddd45de"),
                 component_parameter_definition_id=document_react_loader_agent_document_enhanced_llm_agent_param.id,
-                child_component_id=document_enhanced_llm_call_agent.id,
+                child_component_version_id=document_enhanced_llm_call_agent_version.id,
             ),
             db.ComponentParameterChildRelationship(
                 id=UUID("14cd549b-ccdb-4c29-a315-e97023dec3ac"),
                 component_parameter_definition_id=document_enhanced_llm_call_agent_document_search_param.id,
-                child_component_id=document_search.id,
+                child_component_version_id=document_search_version.id,
             ),
             db.ComponentParameterChildRelationship(
                 id=UUID("a0d97386-2eca-477f-81d6-759d0a8833f6"),
                 component_parameter_definition_id=document_enhanced_llm_call_agent_synthesizer_param.id,
-                child_component_id=COMPONENT_UUIDS["synthesizer"],
+                child_component_version_id=COMPONENT_UUIDS["synthesizer"],
             ),
             db.ComponentParameterChildRelationship(
                 id=UUID("c2176066-08ed-4b6a-8165-6e05105275c5"),
                 component_parameter_definition_id=document_search_db_service_param.id,
-                child_component_id=COMPONENT_UUIDS["snowflake_db_service"],
+                child_component_version_id=COMPONENT_UUIDS["snowflake_db_service"],
             ),
         ],
     )
@@ -132,7 +160,7 @@ def seed_smart_rag_components(session: Session):
         component_parameter_definitions=[  # Document React loader
             db.ComponentParameterDefinition(
                 id=UUID("f70d5b64-72b3-4fc5-a443-6242c58a6a77"),
-                component_id=document_react_loader_agent.id,
+                component_version_id=document_react_loader_agent_version.id,
                 name="prompt",
                 type=ParameterType.STRING,
                 nullable=False,
@@ -145,7 +173,7 @@ def seed_smart_rag_components(session: Session):
                 is_advanced=False,
             ),
             *build_function_calling_service_config_definitions(
-                component_version_id=document_react_loader_agent.id,
+                component_version_id=document_react_loader_agent_version.id,
                 params_to_seed=[
                     ParameterLLMConfig(
                         param_name=COMPLETION_MODEL_IN_DB,
@@ -160,7 +188,7 @@ def seed_smart_rag_components(session: Session):
             #  Document Search
             db.ComponentParameterDefinition(
                 id=UUID("1589c2b6-a2a9-4d91-9766-ac1b67c6cf81"),
-                component_id=document_search.id,
+                component_version_id=document_search_version.id,
                 name="table_name",
                 type=ParameterType.STRING,
                 nullable=False,
@@ -175,7 +203,7 @@ def seed_smart_rag_components(session: Session):
             # TODO: connect directly to source db of ingested data
             db.ComponentParameterDefinition(
                 id=UUID("069ef7db-5f01-4d82-a24c-547c1a1b71ca"),
-                component_id=document_search.id,
+                component_version_id=document_search_version.id,
                 name="schema_name",
                 type=ParameterType.STRING,
                 nullable=False,
@@ -189,7 +217,7 @@ def seed_smart_rag_components(session: Session):
             ),
             db.ComponentParameterDefinition(
                 id=UUID("22c1be78-4621-4e26-b95a-a9190ce236f1"),
-                component_id=document_search.id,
+                component_version_id=document_search_version.id,
                 name="document_name_column",
                 type=ParameterType.STRING,
                 nullable=False,
@@ -203,7 +231,7 @@ def seed_smart_rag_components(session: Session):
             ),
             db.ComponentParameterDefinition(
                 id=UUID("92d0d486-bc7d-4c5c-8b70-a01c476c1387"),
-                component_id=document_search.id,
+                component_version_id=document_search_version.id,
                 name="content_document_column",
                 type=ParameterType.STRING,
                 nullable=False,
@@ -217,7 +245,7 @@ def seed_smart_rag_components(session: Session):
             ),
             db.ComponentParameterDefinition(
                 id=UUID("930f33a1-52d3-46d6-95f9-37cd8da7c809"),
-                component_id=document_search.id,
+                component_version_id=document_search_version.id,
                 name="fuzzy_threshold",
                 type=ParameterType.INTEGER,
                 nullable=False,

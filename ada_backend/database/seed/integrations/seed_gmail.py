@@ -9,6 +9,7 @@ from ada_backend.database.models import (
     ParameterType,
 )
 from ada_backend.database.component_definition_seeding import (
+    upsert_component_versions,
     upsert_components,
     upsert_components_parameter_definitions,
 )
@@ -32,11 +33,22 @@ def seed_gmail_components(session: Session):
         icon="logos-google-gmail",
     )
     upsert_components(session, [gmail_sender_component])
+    gmail_sender_version = db.ComponentVersion(
+        id=COMPONENT_UUIDS["gmail_sender"],
+        component_id=COMPONENT_UUIDS["gmail_sender"],
+        version_tag="v1.0.0",
+        release_stage=db.ReleaseStage.INTERNAL,
+        description="A component to send emails using Gmail API.",
+        integration_id=INTEGRATION_UUIDS["gmail_sender"],
+        is_current=True,
+        default_tool_description_id=TOOL_DESCRIPTION_UUIDS["gmail_sender_tool_description"],
+    )
+    upsert_component_versions(session, [gmail_sender_version])
 
     gmail_sender_parameter_definitions = [
         ComponentParameterDefinition(
             id=UUID("6a74e715-ea03-42d9-bc1d-a1e1450f1ff7"),
-            component_id=gmail_sender_component.id,
+            component_version_id=gmail_sender_version.id,
             name="save_as_draft",
             type=ParameterType.BOOLEAN,
             nullable=False,
