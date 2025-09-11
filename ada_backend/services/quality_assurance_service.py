@@ -17,7 +17,7 @@ from ada_backend.repositories.quality_assurance_repository import (
     delete_datasets,
     get_datasets_by_project,
 )
-from ada_backend.schemas.quality_assurance_schema import (
+from ada_backend.schemas.input_groundtruth_schema import (
     InputGroundtruthResponse,
     InputGroundtruthCreateList,
     InputGroundtruthUpdateList,
@@ -28,6 +28,8 @@ from ada_backend.schemas.quality_assurance_schema import (
     QARunResult,
     QARunResponse,
     QARunSummary,
+)
+from ada_backend.schemas.dataset_schema import (
     DatasetCreateList,
     DatasetResponse,
     DatasetUpdateList,
@@ -35,7 +37,7 @@ from ada_backend.schemas.quality_assurance_schema import (
     DatasetListResponse,
 )
 from ada_backend.services.agent_runner_service import run_env_agent
-from ada_backend.database.models import EnvType
+from ada_backend.database.models import EnvType, CallType
 
 LOGGER = logging.getLogger(__name__)
 
@@ -159,6 +161,7 @@ async def run_qa_service(
                     project_id=project_id,
                     env=run_request.version,
                     input_data=input_data,
+                    call_type=CallType.API,
                 )
 
                 # Extract the output message
