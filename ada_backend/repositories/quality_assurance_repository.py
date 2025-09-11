@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func, and_
 
 from ada_backend.database.models import InputGroundtruth, DatasetProject, VersionOutput, EnvType
-from ada_backend.schemas.quality_assurance_schema import InputGroundtruthCreate
+from ada_backend.schemas.input_groundtruth_schema import InputGroundtruthCreate
 
 LOGGER = logging.getLogger(__name__)
 

@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from ada_backend.schemas.auth_schema import SupabaseUser
-from ada_backend.schemas.quality_assurance_schema import (
+from ada_backend.schemas.input_groundtruth_schema import (
     InputGroundtruthCreateList,
     InputGroundtruthUpdateList,
     InputGroundtruthDeleteList,
@@ -12,6 +12,8 @@ from ada_backend.schemas.quality_assurance_schema import (
     InputGroundtruthWithVersionResponse,
     QARunRequest,
     QARunResponse,
+)
+from ada_backend.schemas.dataset_schema import (
     DatasetCreateList,
     DatasetResponse,
     DatasetUpdateList,
