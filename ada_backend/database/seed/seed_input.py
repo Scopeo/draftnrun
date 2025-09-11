@@ -40,7 +40,7 @@ def seed_input_components(session: Session):
     input_version = db.ComponentVersion(
         id=COMPONENT_UUIDS["input"],
         component_id=COMPONENT_UUIDS["input"],
-        version_tag="v1.0.0",
+        version_tag="1.0.0",
         release_stage=db.ReleaseStage.PUBLIC,
         description="This block is triggered by an API call",
         default_tool_description_id=TOOL_DESCRIPTION_UUIDS["default_tool_description"],

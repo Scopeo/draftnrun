@@ -44,7 +44,7 @@ def seed_sql_tool_components(session: Session):
     sql_tool_version = db.ComponentVersion(
         id=COMPONENT_UUIDS["sql_tool"],
         component_id=COMPONENT_UUIDS["sql_tool"],
-        version_tag="v1.0.0",
+        version_tag="1.0.0",
         release_stage=db.ReleaseStage.PUBLIC,
         description="SQL Tool for querying databases",
         default_tool_description_id=TOOL_DESCRIPTION_UUIDS["default_tool_description"],
@@ -53,7 +53,7 @@ def seed_sql_tool_components(session: Session):
     run_sql_query_tool_version = db.ComponentVersion(
         id=COMPONENT_UUIDS["run_sql_query_tool"],
         component_id=COMPONENT_UUIDS["run_sql_query_tool"],
-        version_tag="v1.0.0",
+        version_tag="1.0.0",
         description="Run SQL Query Tool",
         release_stage=db.ReleaseStage.PUBLIC,
         default_tool_description_id=TOOL_DESCRIPTION_UUIDS["default_run_sql_query_tool_description"],
