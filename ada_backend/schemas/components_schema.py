@@ -3,6 +3,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, field_validator
 
+from ada_backend.database.models import ReleaseStage
 from ada_backend.schemas.integration_schema import IntegrationSchema
 from ada_backend.schemas.parameter_schema import ComponentParamDefDTO
 
@@ -27,7 +28,7 @@ class ComponentUseInfoSchema(BaseModel):
     is_protected: bool = False
     function_callable: bool = False
     can_use_function_calling: bool = False
-    release_stage: str
+    release_stage: ReleaseStage
     tool_parameter_name: Optional[str] = None
     subcomponents_info: list[SubComponentParamSchema]
     categories: List[str] = []
