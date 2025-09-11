@@ -110,6 +110,18 @@ def track_project_observability_loaded(user_id: UUID, project_id: UUID):
 
 
 @non_breaking_track
+def track_span_observability_loaded(user_id: UUID, span_id: UUID):
+    analytics.track(
+        user_id=str(user_id),
+        event="Observability Loaded",
+        properties={
+            "env": settings.ENV,
+            "span_id": str(span_id),
+        },
+    )
+
+
+@non_breaking_track
 def track_ingestion_task_created(
     task_id: UUID,
     organization_id: UUID,

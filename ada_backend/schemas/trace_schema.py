@@ -46,6 +46,22 @@ class TraceSpan(BaseModel):
         )
 
 
+class RootTraceSpan(BaseModel):
+    trace_id: str
+    span_id: str
+    name: str
+    span_kind: str
+    start_time: str
+    end_time: str
+    input: list
+    output: list
+    status_code: str
+    cumulative_llm_token_count_prompt: int
+    cumulative_llm_token_count_completion: int
+    llm_token_count_prompt: int | None
+    llm_token_count_completion: int | None
+
+
 class TokenUsage(BaseModel):
     organization_id: str
     total_tokens: int
