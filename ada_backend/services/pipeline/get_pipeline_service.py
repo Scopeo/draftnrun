@@ -81,11 +81,7 @@ def get_component_instance(
             PipelineParameterReadSchema(
                 id=param.id,
                 name=param.name,
-                value=(
-                    str(param.value)
-                    if param.ui_component in [UIComponent.TEXTAREA, UIComponent.TEXTFIELD]
-                    else param.value
-                ),
+                value=param.value,
                 type=param.type,
                 nullable=param.nullable,
                 default=param.default,
