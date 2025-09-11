@@ -1,6 +1,6 @@
 from collections import defaultdict
 import json
-from typing import List
+from typing import List, Optional
 from uuid import UUID
 import logging
 
@@ -243,8 +243,21 @@ def get_span_trace_service(user_id: UUID, trace_id: UUID) -> TraceSpan:
     return span_trees[0]
 
 
-def get_root_traces_by_project(user_id: UUID, project_id: UUID, duration: int) -> List[RootTraceSpan]:
+def get_root_traces_by_project(
+    user_id: UUID,
+    project_id: UUID,
+    duration: int,
+    environment: Optional[EnvType] = None,
+    call_type: Optional[CallType] = None,
+) -> List[RootTraceSpan]:
     df_span = query_root_trace_duration(project_id, duration)
     track_project_observability_loaded(user_id, project_id)
     LOGGER.info(f"Querying root spans for project {project_id} with duration {duration} days")
+
+    if environment is not None:
+        df_span = df_span[df_span["environment"] == environment.value]
+
+    if call_type is not None:
+        df_span = df_span[df_span["call_type"] == call_type.value]
+
     return build_root_spans(df_span)
