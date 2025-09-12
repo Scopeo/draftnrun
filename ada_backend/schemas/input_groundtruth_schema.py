@@ -1,0 +1,112 @@
+from datetime import datetime
+from typing import Optional, List
+from uuid import UUID
+from pydantic import BaseModel
+
+from ada_backend.database.models import EnvType
+
+
+class InputGroundtruthCreate(BaseModel):
+    """Schema for creating a new input-groundtruth entry."""
+
+    input: str
+    groundtruth: Optional[str] = None
+
+
+class InputGroundtruthWithVersionResponse(BaseModel):
+    """Schema for input-groundtruth response with version output data."""
+
+    input_id: UUID
+    input: str
+    groundtruth: Optional[str] = None
+    output: Optional[str] = None
+    version: Optional[EnvType] = None
+
+    class Config:
+        from_attributes = True
+
+
+# Run endpoint schemas
+class QARunRequest(BaseModel):
+    """Schema for QA run request."""
+
+    version: EnvType
+    input_ids: List[UUID]
+
+
+class QARunResult(BaseModel):
+    """Schema for individual QA run result."""
+
+    input_id: UUID
+    input: str
+    groundtruth: Optional[str] = None
+    output: str
+    version: EnvType
+    success: bool
+    error: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+class QARunSummary(BaseModel):
+    """Schema for QA run summary."""
+
+    total: int
+    passed: int
+    failed: int
+    success_rate: float
+
+
+class QARunResponse(BaseModel):
+    """Schema for QA run response."""
+
+    results: List[QARunResult]
+    summary: QARunSummary
+
+
+# List-based operation schemas
+class InputGroundtruthCreateList(BaseModel):
+    """Schema for creating multiple input-groundtruth entries."""
+
+    inputs_groundtruths: List[InputGroundtruthCreate]
+
+
+class InputGroundtruthUpdateWithId(BaseModel):
+    """Schema for updating an input-groundtruth entry with ID."""
+
+    id: UUID
+    input: Optional[str] = None
+    groundtruth: Optional[str] = None
+
+
+class InputGroundtruthUpdateList(BaseModel):
+    """Schema for updating multiple input-groundtruth entries."""
+
+    inputs_groundtruths: List[InputGroundtruthUpdateWithId]
+
+
+class InputGroundtruthDeleteList(BaseModel):
+    """Schema for deleting multiple input-groundtruth entries."""
+
+    input_groundtruth_ids: List[UUID]
+
+
+class InputGroundtruthResponse(BaseModel):
+    """Schema for input-groundtruth response."""
+
+    id: UUID
+    dataset_id: UUID
+    input: str
+    groundtruth: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class InputGroundtruthResponseList(BaseModel):
+    """Schema for multiple input-groundtruth responses."""
+
+    inputs_groundtruths: List[InputGroundtruthResponse]
