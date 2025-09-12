@@ -19,25 +19,16 @@ from engine.storage_service.db_service import DBService
 from engine.storage_service.db_utils import PROCESSED_DATETIME_FIELD, DBColumn, DBDefinition, create_db_if_not_exists
 from engine.storage_service.local_service import SQLLocalService
 from engine.trace.trace_manager import TraceManager
-from ingestion_script.utils import create_source, get_sanitize_names, update_ingestion_task
+from ingestion_script.utils import (
+    create_source,
+    get_sanitize_names,
+    update_ingestion_task,
+    get_first_available_embeddings_custom_llm,
+    get_first_available_multimodal_custom_llm,
+)
 from settings import settings
 
 LOGGER = logging.getLogger(__name__)
-GOOGLE_COMPLETION_SERVICE = VisionService(
-    provider="google",
-    model_name="gemini-2.0-flash-exp",
-    trace_manager=TraceManager(project_name="ingestion"),
-)
-OPENAI_COMPLETION_SERVICE = VisionService(
-    provider="openai",
-    model_name="gpt-4.1-mini",
-    trace_manager=TraceManager(project_name="ingestion"),
-)
-EMBEDDING_SERVICE = EmbeddingService(
-    provider="openai",
-    model_name="text-embedding-3-large",
-    trace_manager=TraceManager(project_name="ingestion"),
-)
 
 ID_COLUMN_NAME = "chunk_id"
 TIMESTAMP_COLUMN_NAME = "last_edited_ts"
@@ -68,6 +59,45 @@ QDRANT_SCHEMA = QdrantCollectionSchema(
     last_edited_ts_field=TIMESTAMP_COLUMN_NAME,
     metadata_fields_to_keep=["metadata"],
 )
+
+
+def load_llms_services():
+    if settings.INGESTION_VIA_CUSTOM_MODEL:
+        vision_completion_service = get_first_available_multimodal_custom_llm()
+        fallback_vision_llm_service = vision_completion_service
+        if vision_completion_service is None:
+            raise ValueError(
+                "No multimodal custom LLM found. Please set up a custom model for ingestion"
+                "or check that your providers for custom llm are unique."
+            )
+    else:
+        vision_completion_service = VisionService(
+            provider="google",
+            model_name="gemini-2.0-flash-exp",
+            trace_manager=TraceManager(project_name="ingestion"),
+        )
+        fallback_vision_llm_service = VisionService(
+            provider="openai",
+            model_name="gpt-4.1-mini",
+            trace_manager=TraceManager(project_name="ingestion"),
+        )
+
+    # TODO: add the selection at the user level via Front
+    if settings.INGESTION_VIA_CUSTOM_MODEL:
+        embedding_service = get_first_available_embeddings_custom_llm()
+        if embedding_service is None:
+            raise ValueError(
+                "No custom embedding model found. Please set up a custom model for ingestion"
+                "or check that your providers for custom llm are unique."
+            )
+    else:
+        embedding_service = EmbeddingService(
+            provider="openai",
+            model_name="text-embedding-3-large",
+            trace_manager=TraceManager(project_name="ingestion"),
+        )
+
+    return vision_completion_service, fallback_vision_llm_service, embedding_service
 
 
 async def sync_chunks_to_qdrant(
@@ -154,6 +184,22 @@ async def _ingest_folder_source(
     add_doc_description_to_chunks: bool = False,
     chunk_size: Optional[int] = 1024,
 ) -> None:
+    ingestion_task = IngestionTaskUpdate(
+        id=task_id,
+        source_name=source_name,
+        source_type=source_type,
+        status=db.TaskStatus.FAILED,
+    )
+    try:
+        vision_completion_service, fallback_vision_llm_service, embedding_service = load_llms_services()
+    except ValueError as e:
+        LOGGER.error(f"Failed to load LLM services: {str(e)}")
+        update_ingestion_task(
+            organization_id=organization_id,
+            ingestion_task=ingestion_task,
+        )
+        return
+
     db_table_schema, db_table_name, qdrant_collection_name = get_sanitize_names(
         source_name=source_name,
         organization_id=organization_id,
@@ -164,19 +210,12 @@ async def _ingest_folder_source(
     create_db_if_not_exists(settings.INGESTION_DB_URL)
     db_service = SQLLocalService(engine_url=settings.INGESTION_DB_URL)
     qdrant_service = QdrantService.from_defaults(
-        embedding_service=EMBEDDING_SERVICE,
+        embedding_service=embedding_service,
         default_collection_schema=QDRANT_SCHEMA,
     )
 
     LOGGER.info(f"Table schema in ingestion : {db_table_schema}")
     LOGGER.info(f"Table name in ingestion : {db_table_name}")
-
-    ingestion_task = IngestionTaskUpdate(
-        id=task_id,
-        source_name=source_name,
-        source_type=source_type,
-        status=db.TaskStatus.FAILED,
-    )
 
     # Check if source already exists in either database or Qdrant
     if db_service.schema_exists(schema_name=db_table_schema) and db_service.table_exists(
@@ -208,8 +247,8 @@ async def _ingest_folder_source(
         )
     try:
         document_chunk_mapping = document_chunking_mapping(
-            vision_ingestion_service=GOOGLE_COMPLETION_SERVICE,
-            llm_service=OPENAI_COMPLETION_SERVICE,
+            vision_ingestion_service=vision_completion_service,
+            llm_service=fallback_vision_llm_service,
             get_file_content_func=folder_manager.get_file_content,
             chunk_size=chunk_size,
         )
@@ -240,7 +279,7 @@ async def _ingest_folder_source(
             chunks_df = await get_chunks_dataframe_from_doc(
                 document,
                 document_chunk_mapping,
-                llm_service=OPENAI_COMPLETION_SERVICE,
+                llm_service=fallback_vision_llm_service,
                 add_doc_description_to_chunks=add_doc_description_to_chunks,
                 documents_summary_func=document_summary_func,
                 add_summary_in_chunks_func=add_summary_in_chunks_func,
@@ -274,7 +313,7 @@ async def _ingest_folder_source(
         database_table_name=db_table_name,
         qdrant_collection_name=qdrant_collection_name,
         qdrant_schema=QDRANT_SCHEMA.to_dict(),
-        embedding_model_reference=f"{EMBEDDING_SERVICE._provider}:{EMBEDDING_SERVICE._model_name}",
+        embedding_model_reference=f"{embedding_service._provider}:{embedding_service._model_name}",
     )
     LOGGER.info(f"Creating source {source_name} for organization {organization_id} in database")
     source_id = create_source(

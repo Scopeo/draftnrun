@@ -5,7 +5,7 @@ from functools import wraps
 from typing import Optional
 from abc import ABC
 from pydantic import BaseModel
-
+import base64
 
 from opentelemetry.trace import get_current_span
 from openinference.semconv.trace import SpanAttributes
@@ -18,7 +18,11 @@ from engine.llm_services.utils import (
 from engine.trace.trace_manager import TraceManager
 from engine.agent.types import ToolDescription
 from engine.agent.utils import load_str_to_json
-from engine.llm_services.constrained_output_models import OutputFormatModel
+from engine.llm_services.constrained_output_models import (
+    OutputFormatModel,
+    format_prompt_with_pydantic_output,
+    convert_json_str_to_pydantic,
+)
 from settings import settings
 from engine.llm_services.utils import chat_completion_to_response
 from openai.types.chat import ChatCompletion
@@ -83,9 +87,16 @@ class LLMService(ABC):
                     self._api_key = settings.MISTRAL_API_KEY
                     self._base_url = settings.MISTRAL_BASE_URL
                 case _:
-                    self._api_key = settings.custom_models.get(self._provider).get("api_key")
-                    self._base_url = settings.custom_models.get(self._provider).get("base_url")
+                    config_provider = settings.custom_models.get(self._provider)
+                    if config_provider is None:
+                        raise ValueError(f"Provider {self._provider} not found in settings")
+                    self._api_key = config_provider.get("api_key")
+                    self._base_url = config_provider.get("base_url")
                     LOGGER.debug(f"Using custom api key and base url for provider: {self._provider}")
+                    if self._api_key is None or self._base_url is None:
+                        raise ValueError(
+                            f"API key and base URL must be provided for custom provider: {self._provider}"
+                        )
 
 
 class EmbeddingService(LLMService):
@@ -94,10 +105,12 @@ class EmbeddingService(LLMService):
         trace_manager: TraceManager,
         provider: str = "openai",
         model_name: str = "text-embedding-3-large",
+        embedding_size: int = 3072,
         api_key: Optional[str] = None,
         base_url: Optional[str] = None,
     ):
         super().__init__(trace_manager, provider, model_name, api_key, base_url)
+        self.embedding_size = embedding_size
 
     def embed_text(self, text: str) -> list[float]:
         return asyncio.run(self.embed_text_async(text))
@@ -583,23 +596,36 @@ class VisionService(LLMService):
     ):
         super().__init__(trace_manager, provider, model_name, api_key, base_url)
         self._temperature = temperature
-
-    def _format_image_content(self, image_content_list: list[bytes]) -> list[dict[str, str]]:
+        self._image_format = None
         match self._provider:
             case "openai" | "google":
-                import base64
-
-                return [
-                    {
-                        "type": "image_url",
-                        "image_url": {
-                            "url": f"data:image/jpeg;base64,{base64.b64encode(image_content).decode('utf-8')}"
-                        },
-                    }
-                    for image_content in image_content_list
-                ]
+                self._image_format = "jpeg"
+            case "cerebras":
+                raise ValueError("Our implentation of Cerebras does not support vision models.")
             case _:
-                raise ValueError(f"Invalid provider: {self._provider}")
+                completions_models = settings.custom_models.get(self._provider).get("completion_models")
+                for model in completions_models:
+                    if model.get("model_name") == self._model_name:
+                        self._image_format = model.get("image_format", None)
+                        break
+
+                LOGGER.debug(f"Using image format for custom model {self._model_name}: {self._image_format}")
+                if self._image_format is None:
+                    raise ValueError(
+                        f"image format not provided for custom model {self._model_name} "
+                        f"for provider {self._provider}"
+                    )
+
+    def _format_image_content(self, image_content_list: list[bytes]) -> list[dict[str, str]]:
+        return [
+            {
+                "type": "image_url",
+                "image_url": {
+                    "url": f"data:image/{self._image_format};base64,{base64.b64encode(image_content).decode('utf-8')}"
+                },
+            }
+            for image_content in image_content_list
+        ]
 
     @with_usage_check
     def get_image_description(
@@ -617,7 +643,6 @@ class VisionService(LLMService):
         text_prompt: str,
         response_format: Optional[BaseModel] = None,
     ) -> str | BaseModel:
-        client = None
         span = get_current_span()
         span.set_attributes({SpanAttributes.LLM_INVOCATION_PARAMETERS: json.dumps({"temperature": self._temperature})})
         match self._provider:
@@ -625,6 +650,14 @@ class VisionService(LLMService):
                 import openai
 
                 client = openai.AsyncOpenAI(api_key=self._api_key, base_url=self._base_url)
+            case _:
+                import openai
+
+                client = openai.AsyncOpenAI(api_key=self._api_key, base_url=self._base_url)
+
+                if response_format is not None:
+                    text_prompt = format_prompt_with_pydantic_output(text_prompt, response_format)
+
         content = [{"type": "text", "text": text_prompt}]
         content.extend(self._format_image_content(image_content_list))
         messages = [
@@ -634,21 +667,39 @@ class VisionService(LLMService):
             }
         ]
         if response_format is not None:
-
-            chat_response = await client.beta.chat.completions.parse(
-                messages=messages,
-                model=self._model_name,
-                temperature=self._temperature,
-                response_format=response_format,
-            )
-            span.set_attributes(
-                {
-                    SpanAttributes.LLM_TOKEN_COUNT_COMPLETION: chat_response.usage.completion_tokens,
-                    SpanAttributes.LLM_TOKEN_COUNT_PROMPT: chat_response.usage.prompt_tokens,
-                    SpanAttributes.LLM_TOKEN_COUNT_TOTAL: chat_response.usage.total_tokens,
-                }
-            )
-            return chat_response.choices[0].message.parsed
+            match self._provider:
+                case "openai" | "google":
+                    chat_response = await client.beta.chat.completions.parse(
+                        messages=messages,
+                        model=self._model_name,
+                        temperature=self._temperature,
+                        response_format=response_format,
+                    )
+                    span.set_attributes(
+                        {
+                            SpanAttributes.LLM_TOKEN_COUNT_COMPLETION: chat_response.usage.completion_tokens,
+                            SpanAttributes.LLM_TOKEN_COUNT_PROMPT: chat_response.usage.prompt_tokens,
+                            SpanAttributes.LLM_TOKEN_COUNT_TOTAL: chat_response.usage.total_tokens,
+                        }
+                    )
+                    return chat_response.choices[0].message.parsed
+                case _:
+                    chat_response = await client.chat.completions.create(
+                        messages=messages,
+                        model=self._model_name,
+                        temperature=self._temperature,
+                    )
+                    span.set_attributes(
+                        {
+                            SpanAttributes.LLM_TOKEN_COUNT_COMPLETION: chat_response.usage.completion_tokens,
+                            SpanAttributes.LLM_TOKEN_COUNT_PROMPT: chat_response.usage.prompt_tokens,
+                            SpanAttributes.LLM_TOKEN_COUNT_TOTAL: chat_response.usage.total_tokens,
+                        }
+                    )
+                    return convert_json_str_to_pydantic(
+                        chat_response.choices[0].message.content,
+                        response_format,
+                    )
         else:
             chat_response = await client.chat.completions.create(
                 messages=messages,

@@ -320,11 +320,13 @@ You can configure Draft'n run to use your own custom Large Language Model (LLM) 
 
 **Configuration options:**
 
+
 - **`completion_models`**: List of available completion models
 
   - `model_name`: The name of your model
   - `function_calling`: Whether the model supports function calling
   - `multimodal`: Whether the model supports multimodal inputs (images, etc.)
+  - `image_format`: the type of image to put in the url for the payload to the llm ("jpeg", "png", etc.)
   - `constrained_completion_with_pydantic`: Whether the model supports Pydantic-constrained outputs
   - `constrained_completion_with_json_schema`: Whether the model supports JSON schema-constrained outputs
 
@@ -350,8 +352,24 @@ When you have done all configuration for local models you need to run seed again
 make db-seed
 ```
 
+
+You can also configure the parameters of the ingestion on the `credentials.env` file:
+
+```env
+PAGE_RESOLUTION_ZOOM=1.0
+NUMBER_OF_IMAGES_TO_DETERMINE_TYPE_OF_DOCUMENT=2
+ENFORCE_PAGE_BY_PAGE_INGESTION=False
+```
+
+Here is a breakdown of the variables:
+`PAGE_RESOLUTION_ZOOM`: This parameter controls the zoom level for page resolution during ingestion. A value of `1.0` means no zoom, while values greater than `1.0` will increase the resolution.
+`NUMBER_OF_IMAGES_TO_DETERMINE_TYPE_OF_DOCUMENT`: This parameter specifies how many images are used to determine the type of document during ingestion. A value of `2` means that the first two images will be analyzed to classify the document type. You set up to `-1` to use all the images of the documents.
+`ENFORCE_PAGE_BY_PAGE_INGESTION`: This parameter, when set to `True`, enforces page-by-page ingestion of documents. This is useful for ensuring that each page is processed individually, which can be important if you are using local llms with a short context window.
+
 **How it works:**  
 If you set these variables, your custom model will appear as an option in the model selection dropdown after reseeding. When this model is selected, the backend will route requests to your custom LLM service instead of sending them to OpenAI or other providers.
+Be careful. For now, when you have a local config, the first vision model and embedding model in your configuration will be used by default
+for the ingestion
 
 #### Non-local version
 
