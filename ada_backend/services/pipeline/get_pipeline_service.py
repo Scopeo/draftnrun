@@ -2,7 +2,7 @@ from uuid import UUID
 from logging import getLogger
 from sqlalchemy.orm import Session
 
-from ada_backend.repositories.categories_repository import get_categories
+from ada_backend.repositories.categories_repository import fetch_associated_category_names
 from ada_backend.repositories.integration_repository import (
     get_component_instance_integration_relationship,
     get_integration,
@@ -102,7 +102,7 @@ def get_component_instance(
             if component.integration_id
             else None
         ),
-        categories=get_categories(session, component.id) if component else [],
+        categories=fetch_associated_category_names(session, component.id) if component else [],
     )
 
 
