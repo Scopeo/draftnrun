@@ -8,7 +8,7 @@ from ada_backend.repositories.categories_repository import (
     get_category_by_id,
     update_category,
 )
-from ada_backend.schemas.category_schema import CategoryResponse, CategoryUpdateSchema
+from ada_backend.schemas.category_schema import CategoryCreateSchema, CategoryResponse, CategoryUpdateSchema
 
 
 def get_all_categories_service(session: Session) -> list[CategoryResponse]:
@@ -19,16 +19,14 @@ def get_all_categories_service(session: Session) -> list[CategoryResponse]:
     ]
 
 
-def get_category_by_id_service(session: Session, category_id: str):
+def get_category_by_id_service(session: Session, category_id: str) -> CategoryResponse | None:
     category = get_category_by_id(session, category_id)
     if not category:
         raise HTTPException(status_code=404, detail="Category not found")
     return CategoryResponse.model_validate(category, from_attributes=True) if category else None
 
 
-def create_category_service(session: Session, category: CategoryUpdateSchema) -> CategoryResponse:
-    if category.name is None:
-        raise ValueError("Category name is required")
+def create_category_service(session: Session, category: CategoryCreateSchema) -> CategoryResponse:
     categories = get_all_categories(session)
     if any(cat.name == category.name for cat in categories):
         raise ValueError("Category with this name already exists")
@@ -40,11 +38,9 @@ def update_category_service(
     session: Session,
     category_id: str,
     category: CategoryUpdateSchema | None = None,
-):
+) -> CategoryResponse:
     if category.name is None and category.description is None:
-        raise HTTPException(
-            status_code=400, detail="At least one field (name or description) must be provided for update"
-        )
+        raise ValueError("At least one field (name or description) must be provided for update")
     existings_categories = get_all_categories(session)
     if any(cat.name == category.name and str(cat.id) != category_id for cat in existings_categories):
         raise ValueError("Category with this name already exists")
@@ -53,4 +49,10 @@ def update_category_service(
 
 
 def delete_category_service(session: Session, category_id: str) -> None:
-    delete_category(session, category_id)
+    category = get_category_by_id(session, category_id)
+    if not category:
+        raise ValueError("Category not found")
+    try:
+        delete_category(session, category_id)
+    except Exception as e:
+        raise ValueError(f"Failed to delete category : {str(e)}") from e
