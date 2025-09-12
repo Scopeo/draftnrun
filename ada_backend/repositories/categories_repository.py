@@ -9,7 +9,7 @@ def get_all_categories(session: Session) -> List[db.Category]:
     return session.query(db.Category).all()
 
 
-def get_category_by_id(session: Session, category_id: str) -> db.Category:
+def get_category(session: Session, category_id: str) -> db.Category:
     return session.query(db.Category).filter(db.Category.id == category_id).first()
 
 

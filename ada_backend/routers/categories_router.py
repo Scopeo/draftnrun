@@ -1,10 +1,11 @@
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.orm import Session
 
 from ada_backend.database.setup_db import get_db
+from ada_backend.repositories.categories_repository import get_category
 from ada_backend.schemas.auth_schema import SupabaseUser
 from ada_backend.schemas.category_schema import CategoryCreateSchema, CategoryResponse, CategoryUpdateSchema
 from ada_backend.routers.auth_router import (
@@ -100,9 +101,14 @@ def delete_category(
 ) -> None:
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
-    try:
-        return delete_category_service(session, category_id)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
-    except Exception as e:
-        raise HTTPException(status_code=500, detail="Internal Server Error: " + str(e)) from e
+
+    category = get_category(session, category_id)
+    if category:
+        try:
+            delete_category_service(session, category_id)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Internal Server Error: {e}") from e
+
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
