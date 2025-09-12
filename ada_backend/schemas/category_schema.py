@@ -9,6 +9,11 @@ class CategoryResponse(BaseModel):
     description: str | None
 
 
+class CategoryCreateSchema(BaseModel):
+    name: str
+    description: str | None = None
+
+
 class CategoryUpdateSchema(BaseModel):
     name: str | None = None
     description: str | None = None
