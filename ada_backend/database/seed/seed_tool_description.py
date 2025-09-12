@@ -17,6 +17,7 @@ from engine.agent.sql.react_sql_tool import DEFAULT_REACT_SQL_TOOL_DESCRIPTION
 from engine.agent.sql.run_sql_query_tool import DEFAULT_RUN_SQL_QUERY_TOOL_DESCRIPTION
 from engine.agent.web_search_tool_openai import DEFAULT_WEB_SEARCH_OPENAI_TOOL_DESCRIPTION
 from engine.integrations.gmail_sender import GMAIL_SENDER_TOOL_DESCRIPTION
+from engine.integrations.slack_sender import SLACK_SENDER_TOOL_DESCRIPTION
 from engine.agent.tools.python_code_runner import PYTHON_CODE_RUNNER_TOOL_DESCRIPTION
 from engine.agent.tools.terminal_command_runner import TERMINAL_COMMAND_RUNNER_TOOL_DESCRIPTION
 from engine.agent.pdf_generation_tool import DEFAULT_PDF_GENERATION_TOOL_DESCRIPTION
@@ -35,6 +36,7 @@ TOOL_DESCRIPTION_UUIDS = {
     "default_input_tool_description": UUID("5be22376-7d08-486b-a004-b495bae58f77"),
     "default_filter_tool_description": UUID("6cf33487-8e19-597c-b115-c5a6cbf69a88"),
     "gmail_sender_tool_description": UUID("c1d3aca1-5187-40c6-a350-e3b28b15c802"),
+    "slack_sender_tool_description": UUID("d2e4bdb2-6298-51d7-b461-f4c39c26d913"),
     "python_code_runner_tool_description": UUID("e2b11111-2222-3333-4444-555555555555"),
     "terminal_command_runner_tool_description": UUID("e2b11112-2222-3333-4444-555555555555"),
     "default_llm_call_tool_description": UUID("b91d418d-a67f-40b9-9266-b01ca202747d"),
@@ -102,6 +104,10 @@ def seed_tool_description(session: Session):
         id=TOOL_DESCRIPTION_UUIDS["default_pdf_generation_tool_description"],
         **DEFAULT_PDF_GENERATION_TOOL_DESCRIPTION.model_dump(),
     )
+    slack_sender_tool_description = db.ToolDescription(
+        id=TOOL_DESCRIPTION_UUIDS["slack_sender_tool_description"],
+        **SLACK_SENDER_TOOL_DESCRIPTION.model_dump(),
+    )
     upsert_tool_descriptions(
         session=session,
         tool_descriptions=[
@@ -117,6 +123,7 @@ def seed_tool_description(session: Session):
             default_input_tool_description,
             default_filter_tool_description,
             gmail_sender_tool_description,
+            slack_sender_tool_description,
             python_code_runner_tool_description,
             terminal_command_runner_tool_description,
             default_llm_call_tool_description,

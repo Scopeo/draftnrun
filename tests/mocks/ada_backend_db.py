@@ -7,6 +7,14 @@ from sqlalchemy.orm import sessionmaker, Session
 from ada_backend.database.seed_db import seed_db
 from ada_backend.database.models import Base, ParameterType
 from ada_backend.database import models as db
+from ada_backend.schemas.auth_schema import SupabaseUser
+
+
+def mock_supabase_user():
+    """Create a mock Supabase user for testing."""
+    return SupabaseUser(
+        id=UUID("12345678-1234-5678-1234-567812345678"), email="test@example.com", token="mock-jwt-token"
+    )
 
 
 @pytest.fixture(scope="function")

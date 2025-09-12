@@ -30,6 +30,7 @@ from engine.agent.rag.document_search import DocumentSearch
 from engine.agent.graph_runner_block import GraphRunnerBlock
 from engine.agent.chunk_processor import ChunkProcessor
 from engine.integrations.gmail_sender import GmailSender
+from engine.integrations.slack_sender import SlackSender
 from engine.storage_service.local_service import SQLLocalService
 from engine.storage_service.snowflake_service.snowflake_service import SnowflakeService
 from ada_backend.services.entity_factory import (
@@ -53,6 +54,7 @@ from ada_backend.database.seed.constants import (
     VERBOSITY_IN_DB,
     REASONING_IN_DB,
 )
+from ada_backend.services.entity_factory import build_slack_integration_processor
 
 
 class SupportedEntityType(StrEnum):
@@ -97,6 +99,7 @@ class SupportedEntityType(StrEnum):
 
     # Integrations
     GMAIL_SENDER = "Gmail Sender"
+    SLACK_SENDER = "Slack Sender"
 
 
 class FactoryRegistry:
@@ -462,6 +465,16 @@ def create_factory_registry() -> FactoryRegistry:
         name=SupportedEntityType.GMAIL_SENDER,
         factory=AgentFactory(
             entity_class=GmailSender,
+        ),
+    )
+
+    registry.register(
+        name=SupportedEntityType.SLACK_SENDER,
+        factory=AgentFactory(
+            entity_class=SlackSender,
+            parameter_processors=[
+                build_slack_integration_processor(),
+            ],
         ),
     )
 

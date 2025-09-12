@@ -241,9 +241,9 @@ class SecretIntegration(Base):
     id = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     integration_id = mapped_column(UUID(as_uuid=True), ForeignKey("integrations.id"))
     encrypted_access_token = mapped_column(String)
-    encrypted_refresh_token = mapped_column(String)
-    expires_in = mapped_column(Integer)
-    token_last_updated = mapped_column(DateTime(timezone=True))
+    encrypted_refresh_token = mapped_column(String, nullable=True)  # Optional for non-expiring tokens
+    expires_in = mapped_column(Integer, nullable=True)  # Optional for non-expiring tokens
+    token_last_updated = mapped_column(DateTime(timezone=True), nullable=True)  # Optional for non-expiring tokens
 
     secret_integration_component_instances = relationship(
         "IntegrationComponentInstanceRelationship",
@@ -254,15 +254,20 @@ class SecretIntegration(Base):
         """Encrypts and sets the access token."""
         self.encrypted_access_token = CIPHER.encrypt(access_token.encode()).decode()
 
-    def set_refresh_token(self, refresh_token: str) -> None:
-        """Encrypts and sets the refresh token."""
-        self.encrypted_refresh_token = CIPHER.encrypt(refresh_token.encode()).decode()
+    def set_refresh_token(self, refresh_token: Optional[str]) -> None:
+        """Encrypts and sets the refresh token. None for non-expiring tokens."""
+        if refresh_token is not None:
+            self.encrypted_refresh_token = CIPHER.encrypt(refresh_token.encode()).decode()
+        else:
+            self.encrypted_refresh_token = None
 
     def get_access_token(self) -> str:
         return CIPHER.decrypt(self.encrypted_access_token.encode()).decode()
 
-    def get_refresh_token(self) -> str:
-        return CIPHER.decrypt(self.encrypted_refresh_token.encode()).decode()
+    def get_refresh_token(self) -> Optional[str]:
+        if self.encrypted_refresh_token is not None:
+            return CIPHER.decrypt(self.encrypted_refresh_token.encode()).decode()
+        return None
 
 
 class IntegrationComponentInstanceRelationship(Base):
