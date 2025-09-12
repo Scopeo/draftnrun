@@ -109,9 +109,9 @@ def create_source(
             metadata_column_names=attributes.metadata_column_names,
             timestamp_column_name=attributes.timestamp_column_name,
             url_pattern=attributes.url_pattern,
-            update_existing=attributes.update_existing,
             query_filter=attributes.query_filter,
             timestamp_filter=attributes.timestamp_filter,
+            additional_timestamp_column_name=attributes.additional_timestamp_column_name,
         )
 
         session.add(source_attributes)
@@ -190,9 +190,9 @@ def get_source_attributes(
         metadata_column_names=source_attributes.metadata_column_names,
         timestamp_column_name=source_attributes.timestamp_column_name,
         url_pattern=source_attributes.url_pattern,
-        update_existing=source_attributes.update_existing,
         query_filter=source_attributes.query_filter,
         timestamp_filter=source_attributes.timestamp_filter,
+        additional_timestamp_column_name=source_attributes.additional_timestamp_column_name,
     )
 
     if org_secret:

@@ -74,6 +74,7 @@ def get_db_source(
         table_name=table_name,
         schema_name=source_schema_name,
         sql_query_filter=sql_query_filter,
+        timestamp_column_name=timestamp_column_name,
     )
     if df.empty:
         raise ValueError(f"The table '{table_name}' is empty. No data to ingest.")
@@ -134,19 +135,19 @@ async def upload_db_source(
     url_pattern: Optional[str] = None,
     chunk_size: int = 1024,
     chunk_overlap: int = 0,
-    update_existing: bool = False,
     query_filter: Optional[str] = None,
     timestamp_filter: Optional[str] = None,
+    additional_timestamp_column_name: Optional[str] = None,
 ):
     combined_filter_sql = build_combined_sql_filter(
         query_filter=query_filter,
         timestamp_filter=timestamp_filter,
-        timestamp_column_name=timestamp_column_name,
+        additional_timestamp_column_name=additional_timestamp_column_name,
     )
     combined_filter_qdrant = qdrant_service._build_combined_filter(
         query_filter=query_filter,
         timestamp_filter=timestamp_filter,
-        timestamp_column_name=timestamp_column_name,
+        additional_timestamp_column_name=additional_timestamp_column_name,
     )
 
     df = get_db_source(
@@ -169,7 +170,6 @@ async def upload_db_source(
         table_definition=db_definition,
         id_column_name=CHUNK_ID_COLUMN_NAME,
         timestamp_column_name=timestamp_column_name,
-        append_mode=update_existing,
         schema_name=storage_schema_name,
         sql_query_filter=combined_filter_sql,
     )
@@ -182,6 +182,7 @@ async def upload_db_source(
         qdrant_service=qdrant_service,
         sql_query_filter=combined_filter_sql,
         query_filter_qdrant=combined_filter_qdrant,
+        timestamp_column_name=timestamp_column_name,
     )
 
 
@@ -199,11 +200,11 @@ async def ingestion_database(
     url_pattern: Optional[str] = None,
     chunk_size: int = 1024,
     chunk_overlap: int = 0,
-    update_existing: bool = False,
     query_filter: Optional[str] = None,
     timestamp_filter: Optional[str] = None,
     source_attributes: Optional[SourceAttributes] = None,
     source_id: Optional[str] = None,
+    additional_timestamp_column_name: Optional[str] = None,
 ) -> None:
     qdrant_schema = QdrantCollectionSchema(
         chunk_id_field=CHUNK_ID_COLUMN_NAME,
@@ -226,7 +227,6 @@ async def ingestion_database(
         task_id,
         source_type,
         qdrant_schema,
-        update_existing=update_existing,
         ingestion_function=partial(
             upload_db_source,
             db_definition=db_definition,
@@ -242,6 +242,7 @@ async def ingestion_database(
             chunk_overlap=chunk_overlap,
             query_filter=query_filter,
             timestamp_filter=timestamp_filter,
+            additional_timestamp_column_name=additional_timestamp_column_name,
         ),
         attributes=source_attributes,
         source_id=source_id,

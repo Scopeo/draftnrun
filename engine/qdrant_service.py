@@ -822,7 +822,7 @@ class QdrantService:
         base_filter: Optional[dict] = None,
         query_filter: Optional[str] = None,
         timestamp_filter: Optional[str] = None,
-        timestamp_column_name: Optional[str] = None,
+        additional_timestamp_column_name: Optional[str] = None,
     ) -> Optional[dict]:
 
         additional_filters = []
@@ -832,8 +832,8 @@ class QdrantService:
             if query_dict:
                 additional_filters.append(query_dict)
 
-        if timestamp_filter and timestamp_column_name:
-            timestamp_dict = self._build_timestamp_filter(timestamp_filter, timestamp_column_name)
+        if timestamp_filter and additional_timestamp_column_name:
+            timestamp_dict = self._build_timestamp_filter(timestamp_filter, additional_timestamp_column_name)
             if timestamp_dict:
                 additional_filters.append(timestamp_dict)
 
@@ -843,15 +843,26 @@ class QdrantService:
         self,
         collection_name: str,
         filter: Optional[dict] = None,
+        only_ids_and_timestamp: Optional[bool] = False,
+        timestamp_column_name: Optional[str] = None,
     ) -> list[dict]:
-        return asyncio.run(self.get_points_async(collection_name, filter))
+        return asyncio.run(
+            self.get_points_async(
+                collection_name=collection_name,
+                filter=filter,
+                only_ids_and_timestamp=only_ids_and_timestamp,
+                timestamp_column_name=timestamp_column_name,
+            )
+        )
 
     async def get_points_async(
         self,
         collection_name: str,
         filter: Optional[dict] = None,
+        only_ids_and_timestamp: Optional[bool] = False,
+        timestamp_column_name: Optional[str] = None,
     ) -> list[dict]:
-
+        schema = self._get_schema(collection_name)
         payload = {
             "filter": filter,
             "offset": None,
@@ -863,6 +874,11 @@ class QdrantService:
                 1,
             ),
         }
+        if only_ids_and_timestamp:
+            if not timestamp_column_name:
+                raise ValueError("timestamp_column_name is required when only_ids_and_timestamp is True")
+            payload["with_payload"] = [schema.chunk_id_field, timestamp_column_name]
+
         response = await self._send_request_async(
             method="POST", endpoint=f"collections/{collection_name}/points/scroll?wait=true", payload=payload
         )
@@ -1127,16 +1143,24 @@ class QdrantService:
         df: pd.DataFrame,
         collection_name: str,
         query_filter_qdrant: Optional[dict] = None,
+        timestamp_column_name: Optional[str] = None,
     ) -> bool:
-        return asyncio.run(self.sync_df_with_collection_async(df, collection_name, query_filter_qdrant))
+        return asyncio.run(
+            self.sync_df_with_collection_async(df, collection_name, query_filter_qdrant, timestamp_column_name)
+        )
 
     async def sync_df_with_collection_async(
         self,
         df: pd.DataFrame,
         collection_name: str,
         query_filter_qdrant: Optional[dict] = None,
+        timestamp_column_name: Optional[str] = None,
     ) -> bool:
-        old_df = await self.get_collection_data_async(collection_name, query_filter_qdrant)
+        old_df = await self.get_collection_data_with_only_ids_timestamp_async(
+            collection_name=collection_name,
+            filter=query_filter_qdrant,
+            timestamp_column_name=timestamp_column_name,
+        )
         if old_df.empty:
             await self.add_chunks_async(df.to_dict(orient="records"), collection_name)
             LOGGER.info(f"Qdrant collection is empty. Added {len(df)} chunks to Qdrant")
@@ -1145,24 +1169,6 @@ class QdrantService:
         incoming_ids = set(df[self.default_schema.chunk_id_field])
         existing_ids = set(old_df[self.default_schema.chunk_id_field])
         ids_to_delete = existing_ids - incoming_ids
-        new_ids_to_add = incoming_ids - existing_ids
-
-        common_df = df.merge(old_df, on=self.default_schema.chunk_id_field, how="inner")
-
-        if query_filter_qdrant:
-            ids_to_update = set(common_df[self.default_schema.chunk_id_field])
-        elif self.default_schema.last_edited_ts_field:
-            ids_to_update = set(
-                common_df[
-                    common_df[self.default_schema.last_edited_ts_field + "_x"]
-                    > common_df[self.default_schema.last_edited_ts_field + "_y"]
-                ][self.default_schema.chunk_id_field]
-            )
-        else:
-            ids_to_update = set(common_df[self.default_schema.chunk_id_field])
-
-        ids_to_delete = ids_to_delete.union(ids_to_update)
-        ids_to_upsert = new_ids_to_add.union(ids_to_update)
 
         if len(ids_to_delete) > 0:
             await self.delete_chunks_async(
@@ -1171,11 +1177,41 @@ class QdrantService:
                 collection_name=collection_name,
             )
             LOGGER.info(f"Deleted {len(ids_to_delete)} chunks from Qdrant")
-        if len(ids_to_upsert) > 0:
-            chunks_to_upsert = df[df[self.default_schema.chunk_id_field].isin(ids_to_upsert)]
-            list_payloads = chunks_to_upsert.to_dict(orient="records")
-            await self.add_chunks_async(list_payloads, collection_name)
-            LOGGER.info(f"Upserted {len(ids_to_upsert)} chunks to Qdrant")
+
+        # Find latest timestamp in old collection and get new/updated records
+        timestamp_field = timestamp_column_name or self.default_schema.last_edited_ts_field
+        if timestamp_field and len(old_df) > 0:
+            latest_timestamp = old_df[timestamp_field].max()
+            LOGGER.info(f"Latest timestamp in Qdrant collection: {latest_timestamp}")
+
+            # Find records with timestamps newer than the latest in collection
+            new_data_to_sync = df[df[timestamp_field] >= latest_timestamp]
+
+            if len(new_data_to_sync) > 0:
+                ids_to_add = set(new_data_to_sync[self.default_schema.chunk_id_field])
+                existing_ids = ids_to_add.intersection(set(old_df[self.default_schema.chunk_id_field]))
+
+                # Delete existing records with these IDs first
+                if existing_ids:
+                    await self.delete_chunks_async(
+                        point_ids=list(existing_ids),
+                        id_field=self.default_schema.chunk_id_field,
+                        collection_name=collection_name,
+                    )
+                    LOGGER.info(f"Deleted {len(existing_ids)} existing chunks for update")
+
+                # Add all newer records (both new and updated ones)
+                list_payloads = new_data_to_sync.to_dict(orient="records")
+                await self.add_chunks_async(list_payloads, collection_name)
+                LOGGER.info(f"Added {len(new_data_to_sync)} chunks with timestamps newer than {latest_timestamp}")
+        else:
+            # If no timestamp field or empty old_df, add all new records
+            new_ids_to_add = incoming_ids - existing_ids
+            if new_ids_to_add:
+                chunks_to_add = df[df[self.default_schema.chunk_id_field].isin(new_ids_to_add)]
+                list_payloads = chunks_to_add.to_dict(orient="records")
+                await self.add_chunks_async(list_payloads, collection_name)
+                LOGGER.info(f"Added {len(new_ids_to_add)} new chunks to Qdrant")
 
         n_points = await self.count_points_async(
             collection_name=collection_name,
@@ -1192,3 +1228,39 @@ class QdrantService:
         else:
             LOGGER.info(f"Sync successful : number of points in Qdrant is {n_points}")
             return True
+
+    def get_collection_data_with_only_ids_timestamp(
+        self,
+        collection_name: str,
+        filter: Optional[dict] = None,
+        timestamp_column_name: Optional[str] = None,
+    ) -> pd.DataFrame:
+
+        return asyncio.run(
+            self.get_collection_data_with_only_ids_timestamp_async(collection_name, filter, timestamp_column_name)
+        )
+
+    async def get_collection_data_with_only_ids_timestamp_async(
+        self,
+        collection_name: str,
+        filter: Optional[dict] = None,
+        timestamp_column_name: Optional[str] = None,
+    ) -> list[dict]:
+        schema = self._get_schema(collection_name)
+
+        points = await self.get_points_async(
+            collection_name=collection_name,
+            filter=filter,
+            only_ids_and_timestamp=True,
+            timestamp_column_name=timestamp_column_name,
+        )
+
+        rows = []
+        for point in points:
+            payload = point.get("payload", {})
+            row = {
+                schema.chunk_id_field: payload.get(schema.chunk_id_field),
+                timestamp_column_name: payload.get(timestamp_column_name),
+            }
+            rows.append(row)
+        return pd.DataFrame(rows)
