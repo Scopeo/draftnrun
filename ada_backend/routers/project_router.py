@@ -197,8 +197,8 @@ async def get_project_charts(
         raise HTTPException(status_code=500, detail="Internal Server Error") from e
 
 
-# TODO: filter trace by graph_runner_id
-@router.get("/{project_id}/trace", response_model=List[TraceSpan], tags=["Metrics"])
+# TODO: Delete this endpoint
+@router.get("/{project_id}/trace", response_model=List[TraceSpan], tags=["Metrics"], deprecated=True)
 async def get_project_trace(
     project_id: UUID,
     duration: int,
@@ -224,8 +224,8 @@ async def get_project_trace(
         raise HTTPException(status_code=500, detail="Internal Server Error") from e
 
 
-# TODO: filter trace by graph_runner_id
-@router.get("/{project_id}/v2/trace", response_model=List[TraceSpan], tags=["Metrics"])
+# TODO: Delete this endpoint
+@router.get("/{project_id}/v2/trace", response_model=List[TraceSpan], tags=["Metrics"], deprecated=True)
 async def get_project_trace_v2(
     project_id: UUID,
     duration: int,
