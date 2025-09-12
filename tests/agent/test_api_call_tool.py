@@ -23,9 +23,9 @@ async def api_tool(mock_trace_manager):
         component_attributes=ComponentAttributes(component_instance_name="test_api_tool"),
         endpoint="https://api.example.com/test",
         method="GET",
-        headers={"Content-Type": "application/json", "Authorization": "Bearer test_token"},
+        headers='{"Content-Type": "application/json", "Authorization": "Bearer test_token"}',
         timeout=30,
-        fixed_parameters={"api_version": "v2", "format": "json", "language": "en"},
+        fixed_parameters='{"api_version": "v2", "format": "json", "language": "en"}',
     )
     yield tool
     # Cleanup: ensure any lingering HTTP connections are closed
@@ -158,7 +158,7 @@ def test_make_api_call_post_with_empty_params(mock_client_class, mock_trace_mana
         ),
         endpoint="https://api.example.com/test",
         method="POST",
-        headers={"Content-Type": "application/json"},
+        headers='{"Content-Type": "application/json"}',
     )
 
     mock_client = AsyncMock()
@@ -189,7 +189,7 @@ def test_make_api_call_get_with_empty_params(mock_client_class, mock_trace_manag
         ),
         endpoint="https://api.example.com/test",
         method="GET",
-        headers={"Content-Type": "application/json"},
+        headers='{"Content-Type": "application/json"}',
     )
 
     mock_client = AsyncMock()

@@ -13,6 +13,7 @@ from engine.agent.types import (
     ComponentAttributes,
     ToolDescription,
 )
+from engine.agent.utils import load_str_to_json
 from engine.trace.trace_manager import TraceManager
 
 LOGGER = logging.getLogger(__name__)
@@ -43,9 +44,9 @@ class APICallTool(Agent):
         component_attributes: ComponentAttributes,
         endpoint: str,
         method: str = "GET",
-        headers: Optional[Dict[str, str]] = None,
+        headers: Optional[str] = None,
         timeout: int = 30,
-        fixed_parameters: Optional[Dict[str, Any]] = None,
+        fixed_parameters: Optional[str] = None,
         tool_description: ToolDescription = API_CALL_TOOL_DESCRIPTION,
     ) -> None:
         super().__init__(
@@ -56,9 +57,9 @@ class APICallTool(Agent):
         self.trace_manager = trace_manager
         self.endpoint = endpoint
         self.method = method.upper()
-        self.headers = headers or {}
+        self.headers = load_str_to_json(headers) if headers else {}
         self.timeout = timeout
-        self.fixed_parameters = fixed_parameters or {}
+        self.fixed_parameters = load_str_to_json(fixed_parameters) if fixed_parameters else {}
 
     async def make_api_call(self, **kwargs) -> Dict[str, Any]:
         """Make an HTTP request to the configured API endpoint."""
