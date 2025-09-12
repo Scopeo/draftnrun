@@ -521,6 +521,9 @@ def build_project_reference_processor(target_name: str = "graph_runner") -> Para
                 graph_runner = future.result()
 
         params[target_name] = graph_runner
+        return params
+
+    return processor
 
 
 def build_slack_integration_processor(target_name: str = "access_token") -> ParameterProcessor:
