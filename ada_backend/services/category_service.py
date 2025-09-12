@@ -1,11 +1,10 @@
-from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 from ada_backend.repositories.categories_repository import (
     create_category,
     delete_category,
     get_all_categories,
-    get_category_by_id,
+    get_category,
     update_category,
 )
 from ada_backend.schemas.category_schema import CategoryCreateSchema, CategoryResponse, CategoryUpdateSchema
@@ -20,9 +19,9 @@ def get_all_categories_service(session: Session) -> list[CategoryResponse]:
 
 
 def get_category_by_id_service(session: Session, category_id: str) -> CategoryResponse | None:
-    category = get_category_by_id(session, category_id)
+    category = get_category(session, category_id)
     if not category:
-        raise HTTPException(status_code=404, detail="Category not found")
+        raise ValueError("Category not found")
     return CategoryResponse.model_validate(category, from_attributes=True) if category else None
 
 
@@ -49,9 +48,6 @@ def update_category_service(
 
 
 def delete_category_service(session: Session, category_id: str) -> None:
-    category = get_category_by_id(session, category_id)
-    if not category:
-        raise ValueError("Category not found")
     try:
         delete_category(session, category_id)
     except Exception as e:
