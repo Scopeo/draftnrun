@@ -92,18 +92,24 @@ def test_qdrant_service():
                 "content": "chunk1",
                 "file_id": "file_id1",
                 "url": "https//www.dummy1.com",
-                "last_edited_ts": "2025-01-2 10:40:40",
+                "last_edited_ts": "2025-01-02 10:40:40",
             },
             {
                 "chunk_id": "2",
                 "content": "chunk2",
                 "url": "https//www.dummy2.com",
                 "file_id": "file_id2",
-                "last_edited_ts": "2025-01-2 10:40:40",
+                "last_edited_ts": "2025-01-02 10:40:40",
             },
         ]
     )
-    asyncio.run(qdrant_agentic_service.sync_df_with_collection_async(new_df_1, TEST_COLLECTION_NAME))
+    asyncio.run(
+        qdrant_agentic_service.sync_df_with_collection_async(
+            df=new_df_1,
+            collection_name=TEST_COLLECTION_NAME,
+            timestamp_column_name="last_edited_ts",
+        )
+    )
     assert asyncio.run(qdrant_agentic_service.count_points_async(TEST_COLLECTION_NAME)) == 2
     synced_df = asyncio.run(qdrant_agentic_service.get_collection_data_async(TEST_COLLECTION_NAME))
     synced_df.sort_values(by="chunk_id", inplace=True)
@@ -117,18 +123,24 @@ def test_qdrant_service():
                 "content": "chunk1",
                 "file_id": "file_id1",
                 "url": "https//www.dummy1.com",
-                "last_edited_ts": "2025-01-2 10:40:40",
+                "last_edited_ts": "2025-01-02 10:40:40",
             },
             {
                 "chunk_id": "3",
                 "content": "chunk3",
                 "file_id": "file_id3",
                 "url": "https//www.dummy3.com",
-                "last_edited_ts": "2025-01-2 10:40:40",
+                "last_edited_ts": "2025-01-02 10:40:40",
             },
         ]
     )
-    asyncio.run(qdrant_agentic_service.sync_df_with_collection_async(new_df_2, TEST_COLLECTION_NAME))
+    asyncio.run(
+        qdrant_agentic_service.sync_df_with_collection_async(
+            df=new_df_2,
+            collection_name=TEST_COLLECTION_NAME,
+            timestamp_column_name="last_edited_ts",
+        )
+    )
     assert asyncio.run(qdrant_agentic_service.count_points_async(TEST_COLLECTION_NAME)) == 2
     synced_df = asyncio.run(qdrant_agentic_service.get_collection_data_async(TEST_COLLECTION_NAME))
     synced_df.sort_values(by="chunk_id", inplace=True)

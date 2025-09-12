@@ -105,7 +105,6 @@ async def upload_source(
     source_type: db.SourceType,
     qdrant_schema: QdrantCollectionSchema,
     ingestion_function: callable,
-    update_existing: bool = False,
     attributes: Optional[SourceAttributes] = None,
     source_id: Optional[str] = None,
 ) -> None:
@@ -143,16 +142,18 @@ async def upload_source(
         default_collection_schema=qdrant_schema,
     )
 
-    if not update_existing and db_service.schema_exists(schema_name=schema_name):
+    if not source_id and db_service.schema_exists(schema_name=schema_name):
         if db_service.table_exists(table_name=table_name, schema_name=schema_name):
-            LOGGER.error(f"Source {source_name} already exists db in {schema_name}")
+            LOGGER.error(
+                f"Source {source_name} already exists db in {schema_name}. Update it or delete it and try again."
+            )
             update_ingestion_task(
                 organization_id=organization_id,
                 ingestion_task=ingestion_task,
             )
             return
-    elif not update_existing and await qdrant_service.collection_exists_async(qdrant_collection_name):
-        LOGGER.error(f"Source {source_name} already exists in Qdrant")
+    elif not source_id and await qdrant_service.collection_exists_async(qdrant_collection_name):
+        LOGGER.error(f"Source {source_name} already exists in Qdrant. Update it or delete it and try again.")
         update_ingestion_task(
             organization_id=organization_id,
             ingestion_task=ingestion_task,
@@ -166,7 +167,6 @@ async def upload_source(
             storage_schema_name=schema_name,
             storage_table_name=table_name,
             qdrant_collection_name=qdrant_collection_name,
-            update_existing=update_existing,
         )
     except Exception as e:
         LOGGER.error(f"Failed to get data from the database: {str(e)}")
@@ -220,14 +220,15 @@ async def upload_source(
 def build_combined_sql_filter(
     query_filter: Optional[str],
     timestamp_filter: Optional[str],
-    timestamp_column_name: Optional[str],
+    additional_timestamp_column_name: Optional[str],
 ) -> Optional[str]:
     """Combine query_filter and timestamp_filter into a single SQL WHERE clause."""
     filters = []
     if query_filter:
         filters.append(f"({query_filter})")
-    if timestamp_filter and timestamp_column_name:
-        filters.append(f"({timestamp_column_name} IS NOT NULL AND {timestamp_column_name} {timestamp_filter})")
+
+    if timestamp_filter and additional_timestamp_column_name:
+        filters.append(f"({additional_timestamp_column_name} {timestamp_filter})")
     if filters:
         return " AND ".join(filters)
     return None
