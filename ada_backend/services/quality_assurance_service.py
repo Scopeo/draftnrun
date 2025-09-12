@@ -98,15 +98,15 @@ def get_inputs_groundtruths_with_version_outputs_service(
 
         response_list = []
         for input_groundtruth, version_output in results:
-            response_data = {
-                "input_id": input_groundtruth.id,
-                "input": input_groundtruth.input,
-                "groundtruth": input_groundtruth.groundtruth,
-                "output": version_output.output if version_output else None,
-                "version": version_output.version if version_output else None,
-            }
-            response_list.append(InputGroundtruthWithVersionResponse(**response_data))
-
+            response_list.append(
+                InputGroundtruthWithVersionResponse(
+                    input_id=input_groundtruth.id,
+                    input=input_groundtruth.input,
+                    groundtruth=input_groundtruth.groundtruth,
+                    output=version_output.output if version_output else None,
+                    version=version_output.version if version_output else None,
+                )
+            )
         return response_list
     except Exception as e:
         LOGGER.error(f"Error in get_inputs_groundtruths_with_version_outputs_service: {str(e)}")
@@ -170,7 +170,7 @@ async def run_qa_service(
                     output_content = f"Error: {chat_response.error}"
 
                 # Store result in VersionOutput table
-                _ = create_version_output(
+                create_version_output(
                     session=session,
                     input_id=input_entry.id,
                     output=output_content,
