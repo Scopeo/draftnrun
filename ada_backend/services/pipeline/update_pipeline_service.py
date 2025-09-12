@@ -12,7 +12,9 @@ from ada_backend.repositories.organization_repository import get_organization_se
 from ada_backend.schemas.pipeline.base import ComponentInstanceSchema
 from ada_backend.database import models as db
 from ada_backend.repositories.component_repository import (
-    get_component_parameter_definition_by_component_id,
+    get_component_by_id,
+    get_component_parameter_definition_by_component_version,
+    get_current_component_version_id,
     upsert_component_instance,
     upsert_basic_parameter,
     upsert_tool_description,
@@ -42,9 +44,15 @@ def create_or_update_component_instance(
         )
 
     # Create/update instance (will create new if id is None, or upsert if id exists)
+    component_version_id = (
+        instance_data.version_id
+        if instance_data.version_id
+        else get_current_component_version_id(session, instance_data.component_id)
+    )
+
     component_instance = upsert_component_instance(
         session=session,
-        component_id=instance_data.component_id,
+        component_version_id=component_version_id,
         name=instance_data.name,
         ref=instance_data.ref,
         tool_description_id=tool_description.id if tool_description else None,
@@ -61,7 +69,8 @@ def create_or_update_component_instance(
         )
         delete_linked_integration(session, instance_id)
 
-    component_name = component_instance.component.name
+    component = get_component_by_id(session, instance_data.component_id)
+    component_name = component.name
 
     # Delete existing parameters (full replacement)
     delete_component_instance_parameters(session, instance_id)
@@ -69,11 +78,12 @@ def create_or_update_component_instance(
     # Get parameter definitions for validation
     param_definitions: dict[str, db.ComponentParameterDefinition] = {
         p.name: p
-        for p in get_component_parameter_definition_by_component_id(
+        for p in get_component_parameter_definition_by_component_version(
             session,
-            instance_data.component_id,
+            component_version_id=component_version_id,
         )
     }
+    print("param_definitions", param_definitions)
 
     for param_name, param_def in param_definitions.items():
         if param_def.type == db.ParameterType.LLM_API_KEY:
