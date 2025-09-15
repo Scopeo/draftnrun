@@ -21,6 +21,7 @@ class AdminCategory(StrEnum):
     PROJECTS = "Projects"
     COMPONENTS = "Components"
     SOURCES = "Data Sources"
+    SCHEDULER = "Scheduler"
 
 
 class EnhancedModelView(ModelView):
@@ -38,6 +39,54 @@ class EnhancedModelView(ModelView):
 
 
 # --- Admin Views ---
+class CronJobAdmin(EnhancedModelView, model=db.CronJob):
+    category = AdminCategory.SCHEDULER
+    icon = "fas fa-clock"
+    column_list = [
+        "id",
+        "name",
+        "organization_id",
+        "cron_expr",
+        "tz",
+        "entrypoint",
+        "payload",
+        "is_enabled",
+        "created_at",
+        "updated_at",
+        "deleted_at",
+    ]
+    column_searchable_list = ["name", "entrypoint"]
+    column_filters = ["is_enabled", "organization_id", "entrypoint"]
+    form_columns = [
+        "name",
+        "organization_id",
+        "cron_expr",
+        "tz",
+        "entrypoint",
+        "payload",
+        "is_enabled",
+    ]
+
+
+class CronRunAdmin(EnhancedModelView, model=db.CronRun):
+    category = AdminCategory.SCHEDULER
+    icon = "fas fa-history"
+    column_list = [
+        "id",
+        "cron_job",
+        "status",
+        "scheduled_for",
+        "started_at",
+        "finished_at",
+        "error",
+        "result",
+    ]
+    column_searchable_list = ["cron_job.name"]
+    column_filters = ["status"]
+    can_create = False
+    can_edit = False
+
+
 class ProjectAdmin(EnhancedModelView, model=db.Project):
     category = AdminCategory.PROJECTS
     icon = "fas fa-users"
@@ -437,5 +486,7 @@ def setup_admin(app: FastAPI):
     admin.add_view(SourceAdmin)
     admin.add_view(IngestionTaskAdmin)
     admin.add_view(SourceAttributesAdmin)
+    admin.add_view(CronJobAdmin)
+    admin.add_view(CronRunAdmin)
 
     return admin

@@ -320,7 +320,6 @@ You can configure Draft'n run to use your own custom Large Language Model (LLM) 
 
 **Configuration options:**
 
-
 - **`completion_models`**: List of available completion models
 
   - `model_name`: The name of your model
@@ -351,7 +350,6 @@ When you have done all configuration for local models you need to run seed again
 ```bash
 make db-seed
 ```
-
 
 You can also configure the parameters of the ingestion on the `credentials.env` file:
 
@@ -406,13 +404,16 @@ ADA_URL=http://localhost:8000
 ```
 
 #### Google OAuth Setup
+
 To enable Google login, set these in your credentials.env:
 
 ```env
 GOOGLE_CLIENT_ID=your-google-client-id
 GOOGLE_CLIENT_SECRET=your-google-client-secret
 ```
+
 How to get them:
+
 - Go to Google Cloud Console.
 - Create OAuth 2.0 credentials (type: Web application).
 - Add your app’s redirect URI (e.g. https://yourdomain.com/auth/google/callback).
@@ -639,6 +640,10 @@ def some_function():
 ### Tracing
 
 For more details, see the [tracing documentation](engine/trace/README.md).
+
+### Scheduled jobs (cron)
+
+The backend includes a cron system for scheduled jobs (APScheduler + DB-backed). You can manage jobs via the `/crons` endpoints and extend with custom entrypoints. See `ada_backend/services/cron/Readme.md` for details.
 
 ## AI Models
 

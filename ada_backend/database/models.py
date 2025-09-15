@@ -17,6 +17,7 @@ from sqlalchemy import (
     CheckConstraint,
     UUID,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship, declarative_base, mapped_column
 from cryptography.fernet import Fernet
 from pydantic import BaseModel, ConfigDict, Field
@@ -126,6 +127,17 @@ class ReleaseStage(StrEnum):
     EARLY_ACCESS = "early_access"
     PUBLIC = "public"
     INTERNAL = "internal"
+
+
+class CronEntrypoint(StrEnum):
+    AGENT_INFERENCE = "agent_inference"
+    DUMMY_PRINT = "dummy_print"
+
+
+class CronStatus(StrEnum):
+    SUCCESS = "success"
+    ERROR = "error"
+    RUNNING = "running"
 
 
 class SelectOption(BaseModel):
@@ -862,3 +874,64 @@ class SourceAttributes(Base):
 
     def __str__(self):
         return f"SourceAttributes(source_id={self.source_id})"
+
+
+class CronJob(Base):
+    """
+    Represents a scheduled cron job for an organization.
+    """
+
+    __tablename__ = "cron_jobs"
+    __table_args__ = {"schema": "scheduler"}
+
+    id = mapped_column(UUID(as_uuid=True), primary_key=True, index=True, default=uuid.uuid4)
+    organization_id = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
+    name = mapped_column(String, nullable=False)
+    cron_expr = mapped_column(String, nullable=False)
+    tz = mapped_column(String, nullable=False)
+    entrypoint = mapped_column(make_pg_enum(CronEntrypoint), nullable=False)
+    payload = mapped_column(JSONB, nullable=False, default=dict)
+    is_enabled = mapped_column(Boolean, nullable=False, default=True)
+    created_at = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    deleted_at = mapped_column(DateTime(timezone=True), nullable=True)
+
+    # Relationships
+    cron_runs = relationship(
+        "CronRun",
+        back_populates="cron_job",
+        cascade="all, delete-orphan",
+        order_by="CronRun.scheduled_for.desc()",
+    )
+
+    def __str__(self):
+        return f"CronJob(name={self.name}, organization_id={self.organization_id})"
+
+
+class CronRun(Base):
+    """
+    Represents an execution run of a cron job.
+    """
+
+    __tablename__ = "cron_runs"
+    __table_args__ = {"schema": "scheduler"}
+
+    id = mapped_column(UUID(as_uuid=True), primary_key=True, index=True, default=uuid.uuid4)
+    cron_id = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("scheduler.cron_jobs.id"),
+        nullable=False,
+        index=True,
+    )
+    scheduled_for = mapped_column(DateTime(timezone=True), nullable=False, index=True)
+    started_at = mapped_column(DateTime(timezone=True), nullable=False)
+    finished_at = mapped_column(DateTime(timezone=True), nullable=True)
+    status = mapped_column(make_pg_enum(CronStatus), nullable=False)
+    error = mapped_column(Text, nullable=True)
+    result = mapped_column(JSONB, nullable=True)
+
+    # Relationships
+    cron_job = relationship("CronJob", back_populates="cron_runs")
+
+    def __str__(self):
+        return f"CronRun(cron_id={self.cron_id}, status={self.status}, scheduled_for={self.scheduled_for})"

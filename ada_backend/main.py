@@ -20,10 +20,12 @@ from ada_backend.routers.s3_files_router import router as s3_files_router
 from ada_backend.graphql.schema import graphql_router
 from ada_backend.routers.organization_router import router as org_router
 from ada_backend.routers.trace_router import router as trace_router
+from ada_backend.routers.cron_router import router as cron_router
 from engine.trace.trace_context import set_trace_manager
 from engine.trace.trace_manager import TraceManager
 from settings import settings
 from logger import setup_logging
+from ada_backend.scheduler_boot import scheduler_lifespan
 
 
 setup_logging()
@@ -35,6 +37,7 @@ app = FastAPI(
     title="Ada Backend",
     description="API for managing and running LLM agents",
     version="0.1.0",
+    lifespan=scheduler_lifespan,
     openapi_tags=[
         {
             "name": "Auth",
@@ -88,8 +91,13 @@ app = FastAPI(
             "name": "Ingestion Task",
             "description": "Endpoints for managing ingestion tasks for organization sources",
         },
+        {
+            "name": "Cron Jobs",
+            "description": "Endpoints for managing scheduled cron jobs for organizations",
+        },
     ],
 )
+
 
 PrometheusFastApiInstrumentator().instrument(app).expose(app, endpoint="/metrics")
 
@@ -98,6 +106,7 @@ if settings.ENABLE_OBSERVABILITY_STACK:
     setup_performance_instrumentation(app)
 
 setup_admin(app)
+
 
 app.include_router(auth_router)
 app.include_router(org_router)
@@ -112,6 +121,7 @@ app.include_router(categories_router)
 app.include_router(graph_router)
 app.include_router(graphql_router, prefix="/graphql")
 app.include_router(trace_router)
+app.include_router(cron_router)
 
 app.add_middleware(RequestContextMiddleware)
 app.add_middleware(
