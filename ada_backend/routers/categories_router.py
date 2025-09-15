@@ -19,6 +19,7 @@ from ada_backend.services.category_service import (
     get_category_by_id_service,
     update_category_service,
 )
+from ada_backend.services.errors import CategoryNotFound, DuplicateCategoryName, InvalidCategoryUpdate
 
 router = APIRouter(tags=["Categories"])
 
@@ -50,6 +51,8 @@ def get_category_by_id(
         raise HTTPException(status_code=400, detail="User ID not found")
     try:
         return get_category_by_id_service(session, category_id)
+    except CategoryNotFound:
+        raise HTTPException(status_code=404, detail="Category not found")
     except Exception as e:
         raise HTTPException(status_code=500, detail="Internal Server Error") from e
 
@@ -66,8 +69,8 @@ def create_category(
         raise HTTPException(status_code=400, detail="User ID not found")
     try:
         return create_category_service(session, category)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
+    except DuplicateCategoryName as e:
+        raise HTTPException(status_code=409, detail=str(e)) from e
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}") from e
 
@@ -85,7 +88,11 @@ def update_category(
         raise HTTPException(status_code=400, detail="User ID not found")
     try:
         return update_category_service(session, category_id, category)
-    except ValueError as e:
+    except CategoryNotFound:
+        raise HTTPException(status_code=404, detail="Category not found")
+    except DuplicateCategoryName as e:
+        raise HTTPException(status_code=409, detail=str(e)) from e
+    except InvalidCategoryUpdate as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}") from e
@@ -101,14 +108,9 @@ def delete_category(
 ) -> None:
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
-
-    category = get_category(session, category_id)
-    if category:
-        try:
-            delete_category_service(session, category_id)
-        except ValueError as e:
-            raise HTTPException(status_code=400, detail=str(e)) from e
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Internal Server Error: {e}") from e
+    try:
+        delete_category_service(session, category_id)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Internal Server Error: {e}") from e
 
     return Response(status_code=status.HTTP_204_NO_CONTENT)
