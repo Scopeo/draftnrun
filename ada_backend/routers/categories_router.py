@@ -5,7 +5,6 @@ from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.orm import Session
 
 from ada_backend.database.setup_db import get_db
-from ada_backend.repositories.categories_repository import get_category
 from ada_backend.schemas.auth_schema import SupabaseUser
 from ada_backend.schemas.category_schema import CategoryCreateSchema, CategoryResponse, CategoryUpdateSchema
 from ada_backend.routers.auth_router import (
