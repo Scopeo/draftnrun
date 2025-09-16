@@ -15,15 +15,15 @@ LOGGER = logging.getLogger(__name__)
 
 DEFAULT_PDF_GENERATION_TOOL_DESCRIPTION = ToolDescription(
     name="Markdown_to_PDF_Tool",
-    description=(
-        "A PDF generation tool that converts markdown text to PDF files. \n"
-        "Insert the image into the markdown in src format. I recommend limiting the size of "
-        'images with a style like this: style="width:80%; max-width:100%; height:auto;"'
-    ),
+    description="A PDF generation tool that converts markdown text to PDF files.",
     tool_properties={
         "markdown_content": {
             "type": "string",
-            "description": "The markdown text to convert to PDF",
+            "description": (
+                "The markdown text to convert to PDF. \n"
+                "Insert the image into the markdown in src format. I recommend limiting the size of "
+                'images with a style like this: style="width:80%; max-width:100%; height:auto;"'
+            ),
         }
     },
     required_tool_properties=["markdown_content"],

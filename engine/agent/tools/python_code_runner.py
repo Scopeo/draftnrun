@@ -2,6 +2,7 @@ import base64
 from datetime import datetime
 import logging
 from typing import Any, Optional
+from uuid import uuid4
 from PIL import Image
 from io import BytesIO
 import os, hashlib
@@ -80,10 +81,11 @@ class PythonCodeRunner(Agent):
     def _is_file_to_save(path: str) -> bool:
         return os.path.splitext(path)[1].lower() in VALID_FILE_EXTS
 
-    def _extract_images_from_results(self, execution_result: dict, files_records: list[dict]) -> list[str]:
+    def _save_images_from_results(self, execution_result: dict, files_records: list[dict]) -> list[str]:
         """Extract all images from E2B execution results if any exist."""
-        images = []
         results = execution_result.get("results", [])
+        output_dir = get_output_dir()
+        images_paths = []
 
         file_fp = [r["fp_pixel"] for r in files_records if r.get("fp_pixel")]
 
@@ -94,10 +96,15 @@ class PythonCodeRunner(Agent):
                     fp = fp_pixel_from_base64(image_data)
                     if fp in file_fp:
                         LOGGER.info(f"Skipping image already saved as file")
-                        continue
-                    images.append(image_data)
+                        # continue
+                    uuid = uuid4().hex
+                    image_name = f"image_{uuid}.{image_format}"
+                    image_path = output_dir / image_name
+                    with open(image_path, "wb") as img_file:
+                        img_file.write(base64.b64decode(image_data))
+                    images_paths.append(str(image_name))
 
-        return images
+        return images_paths
 
     async def execute_python_code(self, python_code: str, shared_sandbox: Optional[AsyncSandbox] = None) -> dict:
         """Execute Python code in E2B sandbox and return the result."""
@@ -184,18 +191,9 @@ class PythonCodeRunner(Agent):
         )
         content = serialize_to_json(execution_result_dict)
 
-        images = self._extract_images_from_results(execution_result_dict, records)
+        images_paths = self._save_images_from_results(execution_result_dict, records)
         artifacts = {"execution_result": execution_result_dict}
-        if images:
-            output_dir = get_output_dir()
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            images_paths = []
-            for i, image in enumerate(images):
-                image_name = f"image_{timestamp}_{i + 1}.png"
-                image_path = output_dir / image_name
-                with open(image_path, "wb") as img_file:
-                    img_file.write(image.encode("utf-8"))
-                images_paths.append(str(image_name))
+        if images_paths:
             artifacts["images"] = images_paths
             content += (
                 f"\n\n[{len(images_paths)} image(s) generated and included in artifacts : {', '.join(images_paths)}]"
