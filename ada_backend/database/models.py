@@ -851,9 +851,9 @@ class SourceAttributes(Base):
     metadata_column_names = mapped_column(JSON, nullable=True)
     timestamp_column_name = mapped_column(String, nullable=True)
     url_pattern = mapped_column(String, nullable=True)
-    update_existing = mapped_column(Boolean, nullable=False, default=False)
     query_filter = mapped_column(String, nullable=True)
     timestamp_filter = mapped_column(String, nullable=True)
+    additional_timestamp_column_name = mapped_column(String, nullable=True)
     created_at = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 

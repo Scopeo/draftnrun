@@ -89,7 +89,6 @@ class DBService(ABC):
         id_column_name: str,
         schema_name: Optional[str] = None,
         timestamp_column_name: Optional[str] = None,
-        append_mode: bool = True,
         sql_query_filter: Optional[str] = None,
     ) -> None:
         """
@@ -122,51 +121,58 @@ class DBService(ABC):
             old_df = self._fetch_sql_query_as_dataframe(final_query)
             old_df = convert_to_correct_pandas_type(old_df, id_column_name, table_definition)
 
-            common_df = new_df.merge(old_df, on=id_column_name, how="inner")
-
-            if timestamp_column_name and not sql_query_filter:
-                ids_to_update = set(
-                    common_df[common_df[timestamp_column_name + "_x"] > common_df[timestamp_column_name + "_y"]][
-                        id_column_name
-                    ]
+            ids_to_delete = set(old_df[id_column_name]) - set(new_df[id_column_name])
+            if ids_to_delete:
+                self.delete_rows_from_table(
+                    table_name=table_name,
+                    ids=list(ids_to_delete),
+                    id_column_name=id_column_name,
+                    schema_name=schema_name,
                 )
+                LOGGER.info(f"Deleted {len(ids_to_delete)} rows from the table")
+
+            # Find latest timestamp in old database and get new/updated records
+            if timestamp_column_name and len(old_df) > 0:
+                latest_timestamp = old_df[timestamp_column_name].max()
+                LOGGER.info(f"Latest timestamp in database: {latest_timestamp}")
+
+                # Find records with timestamps newer than the latest in database
+                new_data_to_sync = new_df[new_df[timestamp_column_name] >= latest_timestamp]
+
+                if len(new_data_to_sync) > 0:
+                    ids_to_add = set(new_data_to_sync[id_column_name])
+                    existing_ids = ids_to_add.intersection(set(old_df[id_column_name]))
+
+                    # Delete existing records with these IDs first
+                    if existing_ids:
+                        self.delete_rows_from_table(
+                            table_name=table_name,
+                            ids=list(existing_ids),
+                            id_column_name=id_column_name,
+                            schema_name=schema_name,
+                        )
+                        LOGGER.info(f"Deleted {len(existing_ids)} existing rows for update")
+
+                    # Add all newer records (both new and updated ones)
+                    new_data_to_sync = new_data_to_sync.copy()
+                    for col in new_data_to_sync.select_dtypes(include=["datetime64[ns]", "datetimetz"]):
+                        new_data_to_sync[col] = (
+                            new_data_to_sync[col].astype(object).where(new_data_to_sync[col].notna(), None)
+                        )
+                    self.insert_df_to_table(new_data_to_sync, table_name, schema_name=schema_name)
+                    LOGGER.info(f"Added {len(new_data_to_sync)} records with timestamps newer than {latest_timestamp}")
             else:
-                ids_to_update = set(common_df[id_column_name])
+                # If no timestamp column or empty old_df, add all new records
+                incoming_ids = set(new_df[id_column_name])
+                existing_ids = set(old_df[id_column_name]) if len(old_df) > 0 else set()
+                new_ids_to_add = incoming_ids - existing_ids
 
-            LOGGER.info(f"Found {len(ids_to_update)} rows to update in the table")
-            updated_data = new_df[new_df[id_column_name].isin(ids_to_update)].copy()
-            for col in updated_data.select_dtypes(include=["datetime64[ns]", "datetimetz"]):
-                updated_data[col] = updated_data[col].astype(object).where(updated_data[col].notna(), None)
-            self._refresh_table_from_df(
-                df=updated_data,
-                table_name=table_name,
-                id_column=id_column_name,
-                table_definition=table_definition,
-                schema_name=schema_name,
-            )
-
-            new_df["exists"] = new_df[id_column_name].isin(old_df[id_column_name].values)
-            LOGGER.info(f"Found {new_df['exists'][new_df['exists']].sum()} existing rows in the table")
-            new_data = new_df[~new_df["exists"]].copy()
-            new_data.drop(columns=["exists"], inplace=True)
-            # Convert pandas NaT to None for datetime-like columns before insert
-            for col in new_data.select_dtypes(include=["datetime64[ns]", "datetimetz"]):
-                new_data[col] = new_data[col].astype(object).where(new_data[col].notna(), None)
-            self.insert_df_to_table(new_data, table_name, schema_name=schema_name)
-
-            if not append_mode:
-                filtered_existing_ids = set(old_df[id_column_name]) if len(old_df) > 0 else set()
-                new_ids_in_scope = set(new_df[id_column_name])
-                ids_to_delete = filtered_existing_ids - new_ids_in_scope
-
-                LOGGER.info(f"Found {len(ids_to_delete)} rows to delete in the filtered scope")
-                if ids_to_delete:
-                    self.delete_rows_from_table(
-                        table_name=table_name,
-                        ids=list(ids_to_delete),
-                        id_column_name=id_column_name,
-                        schema_name=schema_name,
-                    )
+                if new_ids_to_add:
+                    new_data = new_df[new_df[id_column_name].isin(new_ids_to_add)].copy()
+                    for col in new_data.select_dtypes(include=["datetime64[ns]", "datetimetz"]):
+                        new_data[col] = new_data[col].astype(object).where(new_data[col].notna(), None)
+                    self.insert_df_to_table(new_data, table_name, schema_name=schema_name)
+                    LOGGER.info(f"Added {len(new_ids_to_add)} new rows to table")
 
     @abstractmethod
     def _refresh_table_from_df(

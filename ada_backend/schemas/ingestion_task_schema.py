@@ -36,9 +36,9 @@ class SourceAttributes(BaseModel):
     metadata_column_names: Optional[list[str]] = None
     timestamp_column_name: Optional[str] = None
     url_pattern: Optional[str] = None
-    update_existing: Optional[bool] = False
     query_filter: Optional[str] = None
     timestamp_filter: Optional[str] = None
+    additional_timestamp_column_name: Optional[str] = None
 
 
 class IngestionTaskUpdate(IngestionTask):
