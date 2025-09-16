@@ -7,6 +7,7 @@ from prometheus_fastapi_instrumentator import PrometheusFastApiInstrumentator
 from ada_backend.admin.admin import setup_admin
 from ada_backend.instrumentation import setup_performance_instrumentation
 from ada_backend.middleware.request_context import RequestContextMiddleware
+from ada_backend.routers.categories_router import router as categories_router
 from ada_backend.routers.project_router import router as project_router
 from ada_backend.routers.template_router import router as template_router
 from ada_backend.routers.integration_router import router as integration_router
@@ -76,6 +77,10 @@ app = FastAPI(
             "description": "Endpoints for managing components",
         },
         {
+            "name": "Categories",
+            "description": "Endpoints for managing categories",
+        },
+        {
             "name": "Sources",
             "description": "Endpoints for managing organization sources, such as vectorstores",
         },
@@ -103,6 +108,7 @@ app.include_router(source_router)
 app.include_router(ingestion_task_router)
 app.include_router(s3_files_router)
 app.include_router(components_router)
+app.include_router(categories_router)
 app.include_router(graph_router)
 app.include_router(graphql_router, prefix="/graphql")
 app.include_router(trace_router)

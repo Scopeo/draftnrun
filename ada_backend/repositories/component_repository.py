@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from ada_backend.database import models as db
 from ada_backend.database.models import ParameterType, ReleaseStage, UIComponent
-from ada_backend.repositories.categories_repository import get_categories
+from ada_backend.repositories.categories_repository import fetch_associated_category_names
 from ada_backend.repositories.integration_repository import (
     delete_linked_integration,
     get_component_instance_integration_relationship,
@@ -346,7 +346,7 @@ def get_all_components_with_parameters(
                         )
                         for subcomponent_param, param_child_def in subcomponent_params
                     ],
-                    categories=get_categories(session, component.id),
+                    categories=fetch_associated_category_names(session, component.id),
                 )
             )
         except Exception as e:
