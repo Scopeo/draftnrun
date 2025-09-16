@@ -1,11 +1,11 @@
 import base64
-from datetime import datetime
 import logging
 from typing import Any, Optional
 from uuid import uuid4
 from PIL import Image
 from io import BytesIO
-import os, hashlib
+import os
+import hashlib
 
 from e2b_code_interpreter import AsyncSandbox
 from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttributes
@@ -95,8 +95,8 @@ class PythonCodeRunner(Agent):
                 if image_data:
                     fp = fp_pixel_from_base64(image_data)
                     if fp in file_fp:
-                        LOGGER.info(f"Skipping image already saved as file")
-                        # continue
+                        LOGGER.info("Skipping image already saved as file")
+                        continue
                     uuid = uuid4().hex
                     image_name = f"image_{uuid}.{image_format}"
                     image_path = output_dir / image_name
