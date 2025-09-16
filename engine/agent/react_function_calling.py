@@ -248,7 +248,7 @@ class ReActAgent(Agent):
             agent_input.messages.append(
                 ChatMessage(
                     role="tool",
-                    content=serialize_to_json(agent_output),
+                    content=agent_output.messages[0].content if agent_output.messages else None,
                     tool_call_id=tool_call_id,
                 )
             )
