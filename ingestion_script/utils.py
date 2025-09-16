@@ -2,7 +2,6 @@ import logging
 import inspect
 from typing import Optional
 from uuid import UUID
-import pandas as pd
 
 import requests
 
@@ -226,17 +225,7 @@ def build_combined_sql_filter(
     """Combine query_filter and timestamp_filter into a single SQL WHERE clause."""
     filters = []
     if query_filter:
-        # Replace NOW() and other timestamp functions with current date string in query_filter
-        current_date_string = pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S")
-        modified_query_filter = query_filter
-
-        # Replace common timestamp functions with current date string
-        timestamp_functions = ["NOW()", "now()", "CURRENT_TIMESTAMP", "current_timestamp"]
-        for func in timestamp_functions:
-            if func in modified_query_filter:
-                modified_query_filter = modified_query_filter.replace(func, f"'{current_date_string}'")
-
-        filters.append(f"({modified_query_filter})")
+        filters.append(f"({query_filter})")
     if timestamp_filter and timestamp_column_name:
         filters.append(f"({timestamp_column_name} IS NOT NULL AND {timestamp_column_name} {timestamp_filter})")
     if filters:

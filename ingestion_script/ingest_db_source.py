@@ -29,10 +29,48 @@ from ada_backend.schemas.ingestion_task_schema import SourceAttributes
 LOGGER = logging.getLogger(__name__)
 
 
+def _map_sqlalchemy_type_to_internal(type_str: str) -> str:
+    """
+    Map SQLAlchemy/reflected type string to internal type used by DBDefinition/SQLLocalService.
+    Falls back to VARCHAR when unknown; prefers DATETIME for date-like types.
+    """
+    t = type_str.upper()
+    if "TIMESTAMP" in t or "DATETIME" in t or t == "DATE":
+        return "DATETIME"
+    if t.startswith("VARCHAR") or "CHAR" in t:
+        return "VARCHAR"
+    if "TEXT" in t:
+        return "TEXT"
+    if "INT" in t:
+        return "INTEGER"
+    if any(x in t for x in ["DOUBLE", "FLOAT", "NUMERIC", "DECIMAL", "REAL"]):
+        return "FLOAT"
+    if "BOOL" in t:
+        return "BOOLEAN"
+    if "JSON" in t or "VARIANT" in t:
+        return "VARIANT"
+    if "ARRAY" in t:
+        return "ARRAY"
+    return "VARCHAR"
+
+
+def _get_source_column_type_map(
+    db_url: str,
+    table_name: str,
+    schema_name: Optional[str] = None,
+) -> dict[str, str]:
+    sql_local_service = SQLLocalService(engine_url=db_url)
+    description = sql_local_service.describe_table(table_name=table_name, schema_name=schema_name)
+    return {row["name"].lower(): _map_sqlalchemy_type_to_internal(str(row["type"])) for row in description}
+
+
 def get_db_source_definition(
     timestamp_column_name: Optional[str] = None,
     url_pattern: Optional[str] = None,
     metadata_column_names: Optional[list] = None,
+    source_db_url: Optional[str] = None,
+    source_table_name: Optional[str] = None,
+    source_schema_name: Optional[str] = None,
 ) -> DBDefinition:
     columns = [
         DBColumn(name=PROCESSED_DATETIME_FIELD, type="DATETIME", default="CURRENT_TIMESTAMP"),
@@ -40,13 +78,36 @@ def get_db_source_definition(
         DBColumn(name=FILE_ID_COLUMN_NAME, type="VARCHAR"),
         DBColumn(name=CHUNK_COLUMN_NAME, type="VARCHAR"),
     ]
+    source_type_map: dict[str, str] = {}
+    if source_db_url and source_table_name:
+        try:
+            source_type_map = _get_source_column_type_map(
+                db_url=source_db_url,
+                table_name=source_table_name,
+                schema_name=source_schema_name,
+            )
+        except Exception:
+            LOGGER.warning("Failed to introspect source table types; falling back to defaults")
+            source_type_map = {}
+
     if timestamp_column_name:
-        columns.append(DBColumn(name=timestamp_column_name, type="VARCHAR"))
+        inferred_ts_type = source_type_map.get(timestamp_column_name.lower()) if source_type_map else None
+        columns.append(
+            DBColumn(
+                name=timestamp_column_name,
+                type=inferred_ts_type or "DATETIME",
+            )
+        )
 
     if metadata_column_names:
         existing_names = {c.name for c in columns}
         columns.extend(
-            DBColumn(name=col, type="VARCHAR") for col in metadata_column_names if col not in existing_names
+            DBColumn(
+                name=col,
+                type=(source_type_map.get(col.lower(), "VARCHAR") if source_type_map else "VARCHAR"),
+            )
+            for col in metadata_column_names
+            if col not in existing_names
         )
     if url_pattern:
         columns.append(DBColumn(name=URL_COLUMN_NAME, type="VARCHAR"))
@@ -217,6 +278,9 @@ async def ingestion_database(
         timestamp_column_name=timestamp_column_name,
         url_pattern=url_pattern,
         metadata_column_names=metadata_column_names,
+        source_db_url=source_db_url,
+        source_table_name=source_table_name,
+        source_schema_name=source_schema_name,
     )
     source_type = db.SourceType.DATABASE
     LOGGER.info("Start ingestion data from the database source...")
