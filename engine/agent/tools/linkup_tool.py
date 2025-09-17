@@ -1,4 +1,3 @@
-
 from datetime import date
 from typing import Optional
 from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttributes
@@ -25,29 +24,29 @@ LINKUP_TOOL_DESCRIPTION = ToolDescription(
         "from_date": {
             "type": "string",
             "description": "The date from which the search results should be considered, "
-            "in ISO 8601 format (YYYY-MM-DD)."
+            "in ISO 8601 format (YYYY-MM-DD).",
         },
         "to_date": {
             "type": "string",
             "description": "The date until which the search results should be considered, "
-            "in ISO 8601 format (YYYY-MM-DD)."
+            "in ISO 8601 format (YYYY-MM-DD).",
         },
         "include_domains": {
             "type": "array",
             "items": {"type": "string"},
-            "description": "The domains you want to search on. By default, don't restrict the search."
+            "description": "The domains you want to search on. By default, don't restrict the search.",
         },
         "exclude_domains": {
             "type": "array",
             "items": {"type": "string"},
-            "description": "The domains you want to exclude of the search. By default, don't restrict the search."
+            "description": "The domains you want to exclude of the search. By default, don't restrict the search.",
         },
         "depth": {
             "type": "string",
             "description": "The depth format is standard or deep. "
             "standard: Returns results faster, suitable for low-latency scenarios. "
-            "deep: Takes longer but yields more comprehensive results."
-        }
+            "deep: Takes longer but yields more comprehensive results.",
+        },
     },
     required_tool_properties=["query", "depth"],
 )
@@ -88,7 +87,7 @@ class LinkupSearchTool(Agent):
             exclude_domains=exclude_domains,
             include_domains=include_domains,
             from_date=date.fromisoformat(from_date) if from_date else None,
-            to_date=date.fromisoformat(to_date) if to_date else None
+            to_date=date.fromisoformat(to_date) if to_date else None,
         )
         answer = response.answer
         sources = response.sources
@@ -122,25 +121,29 @@ class LinkupSearchTool(Agent):
         if content is None:
             raise ValueError("No content provided for the Linkup search tool.")
         span = get_current_span()
-        trace_input = {"query": query,
-                       "from_date": from_date,
-                       "to_date": to_date,
-                       "include_domains": include_domains,
-                       "exclude_domains": exclude_domains,
-                       "depth": depth}
+        trace_input = {
+            "query": query,
+            "from_date": from_date,
+            "to_date": to_date,
+            "include_domains": include_domains,
+            "exclude_domains": exclude_domains,
+            "depth": depth,
+        }
         span.set_attributes(
             {
                 SpanAttributes.OPENINFERENCE_SPAN_KIND: self.TRACE_SPAN_KIND,
                 SpanAttributes.INPUT_VALUE: json.dumps(trace_input),
             }
         )
-        response = self.search_results(query=content,
-                                       depth=depth,
-                                       output_type=output_type,
-                                       exclude_domains=exclude_domains,
-                                       include_domains=include_domains,
-                                       from_date=from_date,
-                                       to_date=to_date)
+        response = self.search_results(
+            query=content,
+            depth=depth,
+            output_type=output_type,
+            exclude_domains=exclude_domains,
+            include_domains=include_domains,
+            from_date=from_date,
+            to_date=to_date,
+        )
 
         for i, source in enumerate(response.sources):
             span.set_attributes(

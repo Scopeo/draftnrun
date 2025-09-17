@@ -5,9 +5,7 @@ from ada_backend.database.component_definition_seeding import (
     upsert_components,
 )
 from ada_backend.database.seed.seed_tool_description import TOOL_DESCRIPTION_UUIDS
-from ada_backend.database.seed.utils import (
-    COMPONENT_UUIDS
-)
+from ada_backend.database.seed.utils import COMPONENT_UUIDS
 
 
 def seed_linkup_tool_components(session: Session):
