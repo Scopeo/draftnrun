@@ -5,6 +5,7 @@ from pathlib import Path
 
 from engine.agent.pdf_generation_tool import PDFGenerationTool
 from engine.agent.agent import ComponentAttributes
+from engine.temps_folder_utils import get_output_dir
 from engine.trace.trace_manager import TraceManager
 
 
@@ -44,7 +45,7 @@ def test_pdf_generation_and_cleanup(pdf_tool, tmp_path):
     mock_html.write_pdf = Mock()
 
     with (
-        patch("engine.agent.pdf_generation_tool.get_tracing_span", return_value=mock_params),
+        patch("engine.temps_folder_utils.get_tracing_span", return_value=mock_params),
         patch("engine.agent.pdf_generation_tool.HTML", return_value=mock_html),
     ):
         # Call async function from sync test
@@ -60,7 +61,7 @@ def test_pdf_generation_and_cleanup(pdf_tool, tmp_path):
         artifacts = getattr(result, "artifacts", None) or result.__dict__.get("artifacts", {})
         pdf_filename = artifacts.get("pdf_filename")
         assert pdf_filename is not None
-        pdf_path = Path(pdf_filename)
+        pdf_path = get_output_dir() / pdf_filename
 
         # Verify that weasyprint was called correctly
         mock_html.write_pdf.assert_called_once_with(str(pdf_path))
@@ -82,7 +83,7 @@ def test_pdf_generation_with_actual_pdf(pdf_tool, tmp_path):
     mock_params = Mock()
     mock_params.uuid_for_temp_folder = str(tmp_path / "test-uuid-12345")
 
-    with patch("engine.agent.pdf_generation_tool.get_tracing_span", return_value=mock_params):
+    with patch("engine.temps_folder_utils.get_tracing_span", return_value=mock_params):
         # Call async function from sync test
         result = asyncio.run(pdf_tool._run_without_io_trace(markdown_content=MARKDOWN_CONTENT))
 
@@ -96,7 +97,7 @@ def test_pdf_generation_with_actual_pdf(pdf_tool, tmp_path):
         artifacts = getattr(result, "artifacts", None) or result.__dict__.get("artifacts", {})
         pdf_filename = artifacts.get("pdf_filename")
         assert pdf_filename is not None
-        pdf_path = Path(pdf_filename)
+        pdf_path = get_output_dir() / pdf_filename
 
         # Verify PDF file exists
         assert pdf_path.exists()
