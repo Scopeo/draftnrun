@@ -24,6 +24,7 @@ dependencies = [
     { name = "itsdangerous" },
     { name = "jsonschema-pydantic" },
     { name = "linkup-sdk" },
+    { name = "linkup-sdk" },
     { name = "llama-index" },
     { name = "markdown2" },
     { name = "more-itertools" },
