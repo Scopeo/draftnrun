@@ -4,11 +4,11 @@ import logging
 from pathlib import Path
 from typing import Any, Optional
 from uuid import uuid4
-from PIL import Image
 from io import BytesIO
 import os
 import hashlib
 
+from PIL import Image
 from e2b import EntryInfo
 from e2b_code_interpreter import AsyncSandbox
 from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttributes
