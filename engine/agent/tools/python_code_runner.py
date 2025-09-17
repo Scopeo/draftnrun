@@ -188,7 +188,7 @@ class PythonCodeRunner(Agent):
                 "error": str(execution.error) if hasattr(execution, "error") and execution.error else None,
                 "execution_count": getattr(execution, "execution_count", 1),
             }
-            records = await self._collect_new_files(sandbox, before_map, records)
+            records = await self._collect_new_files(sandbox, before_map)
         except Exception as e:
             LOGGER.error(f"E2B sandbox execution failed: {str(e)}")
             result = {
