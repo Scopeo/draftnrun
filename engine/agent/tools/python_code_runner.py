@@ -43,9 +43,10 @@ PYTHON_CODE_RUNNER_TOOL_DESCRIPTION = ToolDescription(
     },
     required_tool_properties=["python_code"],
 )
-VALID_E2B_FILE_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".csv", ".md"}
 
-SUPPORTED_PIXEL_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp", ".tiff"}
+BASIC_IMAGE_EXTS = {"png", "jpeg", "svg"}
+VALID_E2B_FILE_EXTS = BASIC_IMAGE_EXTS | {".webp", ".csv", ".md", ".json", ".txt", ".pdf"}
+SUPPORTED_PIXEL_EXTS = BASIC_IMAGE_EXTS | {".jpg", ".webp", ".gif", ".bmp", ".tiff"}
 
 
 @dataclass
@@ -103,7 +104,7 @@ class PythonCodeRunner(Agent):
         file_fp = [r.fp_pixel for r in files_records if r.fp_pixel]
 
         for result in results:
-            for image_format in ["png", "jpg", "jpeg", "svg", "gif", "webp"]:
+            for image_format in BASIC_IMAGE_EXTS:
                 image_data = getattr(result, image_format, None)
                 if image_data:
                     fp = fp_pixel_from_base64(image_data)
@@ -120,9 +121,12 @@ class PythonCodeRunner(Agent):
         return images_paths
 
     async def _collect_new_files(
-        self, sandbox: AsyncSandbox, before_map: dict[str, EntryInfo], records: list[SandboxFileRecord]
+        self,
+        sandbox: AsyncSandbox,
+        before_map: dict[str, EntryInfo],
     ) -> list[SandboxFileRecord]:
         """Collect new files created in the sandbox, save them locally, and update records."""
+
         after = await sandbox.files.list(".", depth=1)
         after_map = {e.path: e for e in after}
         new_entries = [
@@ -131,16 +135,18 @@ class PythonCodeRunner(Agent):
 
         output_dir = get_output_dir()
 
+        records = []
+
         for entry in new_entries:
-            b = await sandbox.files.read(entry.path, format="bytes")
+            file_bytes = await sandbox.files.read(entry.path, format="bytes")
             local_path = output_dir / entry.name
             with open(local_path, "wb") as f:
-                f.write(b)
+                f.write(file_bytes)
 
             fp_pixel = None
             if os.path.splitext(entry.name)[1].lower() in SUPPORTED_PIXEL_EXTS:
                 try:
-                    fp_pixel = fp_pixel_from_bytes(b)
+                    fp_pixel = fp_pixel_from_bytes(file_bytes)
                 except Exception as e:
                     LOGGER.error(f"Failed to get pixel hash for {entry.name}: {str(e)}")
 
@@ -165,7 +171,6 @@ class PythonCodeRunner(Agent):
         sandbox = shared_sandbox
         if not sandbox:
             sandbox = await AsyncSandbox.create(api_key=self.e2b_api_key)
-        records: list[SandboxFileRecord] = []
         try:
             before = await sandbox.files.list(".", depth=1)
             before_map = {e.path: e for e in before}
@@ -192,6 +197,7 @@ class PythonCodeRunner(Agent):
                 "stderr": [],
                 "error": str(e),
             }
+            records = []
         finally:
             if not shared_sandbox:
                 await sandbox.kill()
