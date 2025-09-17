@@ -181,8 +181,8 @@ ALL_SUPPORTED_MODELS = [
         ],
     },
     {
-        "name": "Qwen 3 235B (Cerebras)",
-        "reference": "cerebras:qwen-3-235b-a22b",
+        "name": "Qwen 3 235B Instruct (Cerebras)",
+        "reference": "cerebras:qwen-3-235b-a22b-instruct-2507",
         "provider": "cerebras",
         "capabilities": [
             ModelCapability.COMPLETION,
