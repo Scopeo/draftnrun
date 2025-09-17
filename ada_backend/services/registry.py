@@ -95,11 +95,7 @@ class SupportedEntityType(StrEnum):
     FILTER = "Filter"
     PROJECT_REFERENCE = "ProjectReference"
     CHUNK_PROCESSOR = "ChunkProcessor"
-
-    # Integrations
     GMAIL_SENDER = "Gmail Sender"
-    
-    # Tools
     LINKUP_SEARCH_TOOL = "Linkup Search Tool"
 
 
