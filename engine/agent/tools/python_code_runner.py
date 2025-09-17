@@ -153,6 +153,7 @@ class PythonCodeRunner(Agent):
             records.append(record)
 
         LOGGER.info(f"E2B execution completed with {len(new_entries)} new files created.")
+        return records
 
     async def execute_python_code(
         self, python_code: str, shared_sandbox: Optional[AsyncSandbox] = None
