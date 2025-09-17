@@ -67,7 +67,7 @@ def seed_db(session: Session):
         seed_gmail_components(session)
         seed_project_reference_components(session)
         seed_chunk_processor_components(session)
-        seed_linkup_components(session)
+        seed_linkup_tool_components(session)
 
         # Verify components exist
         for name, uuid_value in COMPONENT_UUIDS.items():
