@@ -610,6 +610,7 @@ class QdrantService:
         )
         if schema.metadata_fields_to_keep:
             for metadata_field in schema.metadata_fields_to_keep:
+                field_type = FieldSchema.KEYWORD  # Default type
                 if schema.metadata_field_types and metadata_field in schema.metadata_field_types:
                     internal_type = schema.metadata_field_types[metadata_field]
                     field_type = map_internal_type_to_qdrant_field_schema(internal_type)
@@ -617,7 +618,7 @@ class QdrantService:
             await self.create_index_if_needed_async(
                 collection_name=collection_name,
                 field_name=metadata_field,
-                field_schema_type=field_type if field_type else FieldSchema.KEYWORD,
+                field_schema_type=field_type,
             )
         if schema.last_edited_ts_field:
             await self.create_index_if_needed_async(
@@ -1103,6 +1104,7 @@ class QdrantService:
         )
         if schema.metadata_fields_to_keep:
             for metadata_field in schema.metadata_fields_to_keep:
+                field_type = FieldSchema.KEYWORD  # Default type
                 if schema.metadata_field_types and metadata_field in schema.metadata_field_types:
                     internal_type = schema.metadata_field_types[metadata_field]
                     field_type = map_internal_type_to_qdrant_field_schema(internal_type)
@@ -1110,7 +1112,7 @@ class QdrantService:
             await self.create_index_if_needed_async(
                 collection_name=collection_name,
                 field_name=metadata_field,
-                field_schema_type=field_type if field_type else FieldSchema.KEYWORD,
+                field_schema_type=field_type,
             )
         if schema.last_edited_ts_field:
             await self.create_index_if_needed_async(
