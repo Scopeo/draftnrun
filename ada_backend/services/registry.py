@@ -84,11 +84,7 @@ class SupportedEntityType(StrEnum):
     OCR_CALL = "OCR Call"
     INPUT = "API Input"
     FILTER = "Filter"
-
-    # Integrations
     GMAIL_SENDER = "Gmail Sender"
-    
-    # Tools
     LINKUP_SEARCH_TOOL = "Linkup Search Tool"
 
 
