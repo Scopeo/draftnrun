@@ -94,13 +94,13 @@ class PythonCodeRunner(Agent):
     def _is_file_to_save(path: str) -> bool:
         return Path(path).suffix.lower() in VALID_E2B_FILE_EXTS
 
-    def _save_images_from_results(self, execution_result: dict, files_records: list[dict]) -> list[str]:
+    def _save_images_from_results(self, execution_result: dict, files_records: list[SandboxFileRecord]) -> list[str]:
         """Extract all images from E2B execution results if any exist."""
         results = execution_result.get("results", [])
         output_dir = get_output_dir()
         images_paths: list[str] = []
 
-        file_fp = [r["fp_pixel"] for r in files_records if r.get("fp_pixel")]
+        file_fp = [r.fp_pixel for r in files_records if r.fp_pixel]
 
         for result in results:
             for image_format in ["png", "jpg", "jpeg", "svg", "gif", "webp"]:
