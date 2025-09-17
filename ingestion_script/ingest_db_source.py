@@ -23,6 +23,7 @@ from ingestion_script.utils import (
     CHUNK_COLUMN_NAME,
     FILE_ID_COLUMN_NAME,
     URL_COLUMN_NAME,
+    normalize_timestamp_functions,
 )
 from ada_backend.schemas.ingestion_task_schema import SourceAttributes
 
@@ -71,7 +72,7 @@ def get_db_source_definition(
     source_db_url: Optional[str] = None,
     source_table_name: Optional[str] = None,
     source_schema_name: Optional[str] = None,
-) -> DBDefinition:
+) -> tuple[DBDefinition, dict[str, str]]:
     columns = [
         DBColumn(name=PROCESSED_DATETIME_FIELD, type="DATETIME", default="CURRENT_TIMESTAMP"),
         DBColumn(name=CHUNK_ID_COLUMN_NAME, type="VARCHAR", is_primary_key=True),
@@ -91,11 +92,10 @@ def get_db_source_definition(
             source_type_map = {}
 
     if timestamp_column_name:
-        inferred_ts_type = source_type_map.get(timestamp_column_name.lower()) if source_type_map else None
         columns.append(
             DBColumn(
                 name=timestamp_column_name,
-                type=inferred_ts_type or "DATETIME",
+                type=source_type_map.get(timestamp_column_name.lower()) if source_type_map else "DATETIME",
             )
         )
 
@@ -112,8 +112,11 @@ def get_db_source_definition(
     if url_pattern:
         columns.append(DBColumn(name=URL_COLUMN_NAME, type="VARCHAR"))
 
-    return DBDefinition(
-        columns=columns,
+    return (
+        DBDefinition(
+            columns=columns,
+        ),
+        source_type_map,
     )
 
 
@@ -199,6 +202,7 @@ async def upload_db_source(
     query_filter: Optional[str] = None,
     timestamp_filter: Optional[str] = None,
 ):
+
     combined_filter_sql = build_combined_sql_filter(
         query_filter=query_filter,
         timestamp_filter=timestamp_filter,
@@ -206,7 +210,7 @@ async def upload_db_source(
     )
     combined_filter_qdrant = qdrant_service._build_combined_filter(
         query_filter=query_filter,
-        timestamp_filter=timestamp_filter,
+        timestamp_filter=normalize_timestamp_functions(timestamp_filter),
         timestamp_column_name=timestamp_column_name,
     )
 
@@ -266,6 +270,20 @@ async def ingestion_database(
     source_attributes: Optional[SourceAttributes] = None,
     source_id: Optional[str] = None,
 ) -> None:
+
+    db_definition, source_type_map = get_db_source_definition(
+        timestamp_column_name=timestamp_column_name,
+        url_pattern=url_pattern,
+        metadata_column_names=metadata_column_names,
+        source_db_url=source_db_url,
+        source_table_name=source_table_name,
+        source_schema_name=source_schema_name,
+    )
+    metadata_field_types = None
+    if metadata_column_names and source_type_map:
+        metadata_field_types = {
+            field: source_type_map.get(field.lower(), "VARCHAR") for field in metadata_column_names
+        }
     qdrant_schema = QdrantCollectionSchema(
         chunk_id_field=CHUNK_ID_COLUMN_NAME,
         content_field=CHUNK_COLUMN_NAME,
@@ -273,14 +291,7 @@ async def ingestion_database(
         url_id_field=URL_COLUMN_NAME if url_pattern else None,
         last_edited_ts_field=timestamp_column_name,
         metadata_fields_to_keep=(set(metadata_column_names) if metadata_column_names else None),
-    )
-    db_definition = get_db_source_definition(
-        timestamp_column_name=timestamp_column_name,
-        url_pattern=url_pattern,
-        metadata_column_names=metadata_column_names,
-        source_db_url=source_db_url,
-        source_table_name=source_table_name,
-        source_schema_name=source_schema_name,
+        metadata_field_types=metadata_field_types,
     )
     source_type = db.SourceType.DATABASE
     LOGGER.info("Start ingestion data from the database source...")

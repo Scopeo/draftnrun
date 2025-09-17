@@ -2,7 +2,7 @@ import logging
 import inspect
 from typing import Optional
 from uuid import UUID
-
+from datetime import datetime
 import requests
 
 from ada_backend.schemas.ingestion_task_schema import IngestionTaskUpdate
@@ -262,3 +262,22 @@ def get_first_available_embeddings_custom_llm() -> EmbeddingService | None:
                 trace_manager=TraceManager(project_name="ingestion"),
                 embedding_size=model_config.get("embedding_size"),
             )
+
+
+def normalize_timestamp_functions(timestamp_filter: Optional[str]) -> Optional[str]:
+    if not timestamp_filter:
+        return timestamp_filter
+
+    normalized = timestamp_filter.strip()
+    current_date_string = str(datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+    for func in [
+        "NOW()",
+        "now()",
+        "CURRENT_TIMESTAMP",
+        "current_timestamp",
+        "CURRENT_TIMESTAMP()",
+        "current_timestamp()",
+    ]:
+        if func in normalized:
+            normalized = normalized.replace(func, f"'{current_date_string}'")
+    return normalized

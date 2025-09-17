@@ -68,9 +68,26 @@ def parse_datetime(date_string: str) -> Optional[datetime]:
 
 
 class FieldSchema(Enum):
-    # TODO: add other field types when we have metadata fields types
     KEYWORD = "keyword"
     DATETIME = "datetime"
+    INTEGER = "integer"
+    FLOAT = "float"
+    BOOLEAN = "bool"
+
+
+def _map_internal_type_to_field_schema(internal_type: str) -> FieldSchema:
+    """Map internal DBDefinition types to Qdrant FieldSchema types."""
+    type_mapping = {
+        "DATETIME": FieldSchema.DATETIME,
+        "INTEGER": FieldSchema.INTEGER,
+        "FLOAT": FieldSchema.FLOAT,
+        "BOOLEAN": FieldSchema.BOOLEAN,
+        "VARCHAR": FieldSchema.KEYWORD,
+        "TEXT": FieldSchema.KEYWORD,
+        "VARIANT": FieldSchema.KEYWORD,
+        "ARRAY": FieldSchema.KEYWORD,
+    }
+    return type_mapping.get(internal_type, FieldSchema.KEYWORD)
 
 
 @dataclass
@@ -99,6 +116,7 @@ class QdrantCollectionSchema:
     url_id_field: Optional[str] = None
     last_edited_ts_field: Optional[str] = None  # To keep compatibility with Juno data
     metadata_fields_to_keep: Optional[set[str]] = None  # To keep compatibility with Juno data
+    metadata_field_types: Optional[dict[str, str]] = None
 
     def __post_init__(self):
         """
@@ -591,13 +609,15 @@ class QdrantService:
         )
         if schema.metadata_fields_to_keep:
             for metadata_field in schema.metadata_fields_to_keep:
-                if schema.last_edited_ts_field and metadata_field == schema.last_edited_ts_field:
-                    continue
-                await self.create_index_if_needed_async(
-                    collection_name=collection_name,
-                    field_name=metadata_field,
-                    field_schema_type=FieldSchema.KEYWORD,
-                )
+                if schema.metadata_field_types and metadata_field in schema.metadata_field_types:
+                    internal_type = schema.metadata_field_types[metadata_field]
+                    field_type = _map_internal_type_to_field_schema(internal_type)
+
+            await self.create_index_if_needed_async(
+                collection_name=collection_name,
+                field_name=metadata_field,
+                field_schema_type=field_type if field_type else FieldSchema.KEYWORD,
+            )
         if schema.last_edited_ts_field:
             await self.create_index_if_needed_async(
                 collection_name=collection_name,
@@ -620,24 +640,16 @@ class QdrantService:
             }
             if schema.last_edited_ts_field:
                 payload_fields.add(schema.last_edited_ts_field)
-            list_payloads = []
-            for chunk, vector in zip(current_chunk_batch, list_embeddings):
-                payload = {}
-                for field in payload_fields:
-                    value = chunk[field]
-                    # Serialize datetime-like values to strings for JSON
-                    if isinstance(value, datetime):
-                        value = value.strftime("%Y-%m-%d %H:%M:%S")
-                    elif isinstance(value, pd.Timestamp):
-                        value = value.to_pydatetime().strftime("%Y-%m-%d %H:%M:%S")
-                    payload[field] = value
-                list_payloads.append(
-                    {
-                        "id": self.get_uuid(chunk[schema.chunk_id_field]),
-                        "payload": payload,
-                        "vector": vector,
-                    }
-                )
+            list_payloads = [
+                {
+                    "id": self.get_uuid(chunk[schema.chunk_id_field]),
+                    "payload": {
+                        **{field: self._serialize_field_value(chunk[field]) for field in payload_fields},
+                    },
+                    "vector": vector,
+                }
+                for chunk, vector in zip(current_chunk_batch, list_embeddings)
+            ]
             if not await self.insert_points_in_collection_async(
                 points=list_payloads,
                 collection_name=collection_name,
@@ -681,6 +693,23 @@ class QdrantService:
         namespace = uuid.NAMESPACE_DNS
         return str(uuid.uuid5(namespace, string_id))
 
+    @staticmethod
+    def _serialize_field_value(value: Any) -> Any:
+        """
+        Serialize field values to ensure they are JSON serializable.
+        Handles pandas Timestamp objects and other non-JSON serializable types.
+        """
+        import pandas as pd
+
+        if pd.isna(value):
+            return None
+        elif isinstance(value, pd.Timestamp):
+            return value.strftime("%Y-%m-%d %H:%M:%S")
+        elif hasattr(value, "isoformat"):  # datetime objects
+            return value.isoformat()
+        else:
+            return value
+
     def _build_timestamp_filter(
         self,
         timestamp_filter: str,
@@ -689,24 +718,9 @@ class QdrantService:
 
         if not timestamp_filter or not timestamp_column_name:
             return None
-
-        # Normalize NOW()/CURRENT_TIMESTAMP tokens to a literal timestamp string
-        normalized = timestamp_filter.strip()
-        current_date_string = str(datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
-        for func in [
-            "NOW()",
-            "now()",
-            "CURRENT_TIMESTAMP",
-            "current_timestamp",
-            "CURRENT_TIMESTAMP()",
-            "current_timestamp()",
-        ]:
-            if func in normalized:
-                normalized = normalized.replace(func, f"'{current_date_string}'")
-
         # Parse the filter string to extract operator and value
         pattern = r'([><=!]+)\s*["\']?([^"\']+)["\']?'
-        match = re.match(pattern, normalized)
+        match = re.match(pattern, timestamp_filter.strip())
 
         if not match:
             LOGGER.warning(f"Invalid timestamp filter format: {timestamp_filter}")
@@ -1105,11 +1119,15 @@ class QdrantService:
         )
         if schema.metadata_fields_to_keep:
             for metadata_field in schema.metadata_fields_to_keep:
-                await self.create_index_if_needed_async(
-                    collection_name=collection_name,
-                    field_name=metadata_field,
-                    field_schema_type=FieldSchema.KEYWORD,
-                )
+                if schema.metadata_field_types and metadata_field in schema.metadata_field_types:
+                    internal_type = schema.metadata_field_types[metadata_field]
+                    field_type = _map_internal_type_to_field_schema(internal_type)
+
+            await self.create_index_if_needed_async(
+                collection_name=collection_name,
+                field_name=metadata_field,
+                field_schema_type=field_type if field_type else FieldSchema.KEYWORD,
+            )
         if schema.last_edited_ts_field:
             await self.create_index_if_needed_async(
                 collection_name=collection_name,
