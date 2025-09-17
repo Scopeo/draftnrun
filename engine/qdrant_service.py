@@ -6,6 +6,7 @@ from datetime import datetime
 import re
 from enum import Enum
 import asyncio
+import json
 
 import httpx
 import pandas as pd
@@ -75,7 +76,7 @@ class FieldSchema(Enum):
     BOOLEAN = "bool"
 
 
-def _map_internal_type_to_field_schema(internal_type: str) -> FieldSchema:
+def map_internal_type_to_qdrant_field_schema(internal_type: str) -> FieldSchema:
     """Map internal DBDefinition types to Qdrant FieldSchema types."""
     type_mapping = {
         "DATETIME": FieldSchema.DATETIME,
@@ -611,7 +612,7 @@ class QdrantService:
             for metadata_field in schema.metadata_fields_to_keep:
                 if schema.metadata_field_types and metadata_field in schema.metadata_field_types:
                     internal_type = schema.metadata_field_types[metadata_field]
-                    field_type = _map_internal_type_to_field_schema(internal_type)
+                    field_type = map_internal_type_to_qdrant_field_schema(internal_type)
 
             await self.create_index_if_needed_async(
                 collection_name=collection_name,
@@ -644,7 +645,7 @@ class QdrantService:
                 {
                     "id": self.get_uuid(chunk[schema.chunk_id_field]),
                     "payload": {
-                        **{field: self._serialize_field_value(chunk[field]) for field in payload_fields},
+                        **{field: chunk[field] for field in payload_fields},
                     },
                     "vector": vector,
                 }
@@ -692,23 +693,6 @@ class QdrantService:
         """Generate a UUID."""
         namespace = uuid.NAMESPACE_DNS
         return str(uuid.uuid5(namespace, string_id))
-
-    @staticmethod
-    def _serialize_field_value(value: Any) -> Any:
-        """
-        Serialize field values to ensure they are JSON serializable.
-        Handles pandas Timestamp objects and other non-JSON serializable types.
-        """
-        import pandas as pd
-
-        if pd.isna(value):
-            return None
-        elif isinstance(value, pd.Timestamp):
-            return value.strftime("%Y-%m-%d %H:%M:%S")
-        elif hasattr(value, "isoformat"):  # datetime objects
-            return value.isoformat()
-        else:
-            return value
 
     def _build_timestamp_filter(
         self,
@@ -1121,7 +1105,7 @@ class QdrantService:
             for metadata_field in schema.metadata_fields_to_keep:
                 if schema.metadata_field_types and metadata_field in schema.metadata_field_types:
                     internal_type = schema.metadata_field_types[metadata_field]
-                    field_type = _map_internal_type_to_field_schema(internal_type)
+                    field_type = map_internal_type_to_qdrant_field_schema(internal_type)
 
             await self.create_index_if_needed_async(
                 collection_name=collection_name,
@@ -1180,7 +1164,7 @@ class QdrantService:
     ) -> bool:
         old_df = await self.get_collection_data_async(collection_name, query_filter_qdrant)
         if old_df.empty:
-            await self.add_chunks_async(df.to_dict(orient="records"), collection_name)
+            await self.add_chunks_async(json.loads(df.to_json(orient="records", date_format="iso")), collection_name)
             LOGGER.info(f"Qdrant collection is empty. Added {len(df)} chunks to Qdrant")
             return True
 
@@ -1215,7 +1199,7 @@ class QdrantService:
             LOGGER.info(f"Deleted {len(ids_to_delete)} chunks from Qdrant")
         if len(ids_to_upsert) > 0:
             chunks_to_upsert = df[df[self.default_schema.chunk_id_field].isin(ids_to_upsert)]
-            list_payloads = chunks_to_upsert.to_dict(orient="records")
+            list_payloads = json.loads(chunks_to_upsert.to_json(orient="records", date_format="iso"))
             await self.add_chunks_async(list_payloads, collection_name)
             LOGGER.info(f"Upserted {len(ids_to_upsert)} chunks to Qdrant")
 

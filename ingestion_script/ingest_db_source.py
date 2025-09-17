@@ -23,7 +23,7 @@ from ingestion_script.utils import (
     CHUNK_COLUMN_NAME,
     FILE_ID_COLUMN_NAME,
     URL_COLUMN_NAME,
-    normalize_timestamp_functions,
+    resolve_sql_timestamp_filter,
 )
 from ada_backend.schemas.ingestion_task_schema import SourceAttributes
 
@@ -210,7 +210,7 @@ async def upload_db_source(
     )
     combined_filter_qdrant = qdrant_service._build_combined_filter(
         query_filter=query_filter,
-        timestamp_filter=normalize_timestamp_functions(timestamp_filter),
+        timestamp_filter=resolve_sql_timestamp_filter(timestamp_filter),
         timestamp_column_name=timestamp_column_name,
     )
 

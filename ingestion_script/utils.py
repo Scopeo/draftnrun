@@ -264,12 +264,12 @@ def get_first_available_embeddings_custom_llm() -> EmbeddingService | None:
             )
 
 
-def normalize_timestamp_functions(timestamp_filter: Optional[str]) -> Optional[str]:
+def resolve_sql_timestamp_filter(timestamp_filter: Optional[str]) -> Optional[str]:
     if not timestamp_filter:
         return timestamp_filter
 
-    normalized = timestamp_filter.strip()
-    current_date_string = str(datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+    filter_with_resolved_functions = timestamp_filter.strip()
+    current_date_string = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     for func in [
         "NOW()",
         "now()",
@@ -278,6 +278,6 @@ def normalize_timestamp_functions(timestamp_filter: Optional[str]) -> Optional[s
         "CURRENT_TIMESTAMP()",
         "current_timestamp()",
     ]:
-        if func in normalized:
-            normalized = normalized.replace(func, f"'{current_date_string}'")
-    return normalized
+        if func in filter_with_resolved_functions:
+            filter_with_resolved_functions = filter_with_resolved_functions.replace(func, f"'{current_date_string}'")
+    return filter_with_resolved_functions
