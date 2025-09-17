@@ -44,6 +44,7 @@ LINKUP_TOOL_DESCRIPTION = ToolDescription(
     required_tool_properties=["query"],
 )
 
+
 class LinkupSearchTool(Agent):
     TRACE_SPAN_KIND = OpenInferenceSpanKindValues.TOOL.value
 
@@ -59,8 +60,8 @@ class LinkupSearchTool(Agent):
             tool_description=tool_description,
             component_attributes=component_attributes,
         )
-        self.trace_manager=trace_manager
-        self.linkup_client=LinkupClient(api_key=linkup_api_key)
+        self.trace_manager = trace_manager
+        self.linkup_client = LinkupClient(api_key=linkup_api_key)
 
     def search_results(
         self,
@@ -72,7 +73,7 @@ class LinkupSearchTool(Agent):
         from_date: Union[date, None],
         to_date: Union[date, None],
     ) -> SourcedResponse:
-        response=self.linkup_client.search(
+        response = self.linkup_client.search(
             query,
             depth=depth,
             output_type=output_type,
@@ -81,8 +82,8 @@ class LinkupSearchTool(Agent):
             from_date=from_date,
             to_date=to_date,
         )
-        answer=response.answer
-        sources=response.sources
+        answer = response.answer
+        sources = response.sources
         source_chunks = [
             SourceChunk(
                 name=source.name,
