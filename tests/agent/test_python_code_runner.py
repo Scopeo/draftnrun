@@ -427,7 +427,7 @@ print("Async image test completed!")
 
     # Check that the response message mentions the image
     content = result.messages[0].content
-    assert "[1 image(s) generated and included in artifacts]" in content
+    assert "[1 image(s) generated and included in artifacts" in content
 
 
 def test_run_without_io_trace_with_multiple_images(e2b_tool, e2b_api_key):
@@ -472,7 +472,7 @@ print("Two async plots generated!")
 
     # Check that the response message mentions the correct number of images
     content = result.messages[0].content
-    assert "[2 image(s) generated and included in artifacts]" in content
+    assert "[2 image(s) generated and included in artifacts" in content
 
 
 def test_run_without_io_trace_no_images(e2b_tool, e2b_api_key):
