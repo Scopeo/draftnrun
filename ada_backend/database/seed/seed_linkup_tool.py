@@ -1,5 +1,3 @@
-from uuid import UUID
-
 from sqlalchemy.orm import Session
 
 from ada_backend.database import models as db
@@ -22,7 +20,7 @@ def seed_linkup_tool_components(session: Session):
         release_stage=db.ReleaseStage.BETA,
         default_tool_description_id=TOOL_DESCRIPTION_UUIDS["linkup_search_tool_description"],
     )
-    
+
     upsert_components(
         session=session,
         components=[

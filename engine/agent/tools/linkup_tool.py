@@ -1,19 +1,16 @@
 
 from datetime import date
 from typing import Union
-from openinference.semconv.trace import SpanAttributes
+from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttributes
 
 from engine.agent.agent import Agent, AgentPayload, ComponentAttributes, ToolDescription
 from engine.agent.types import ChatMessage, SourceChunk, SourcedResponse
 from engine.trace.trace_manager import TraceManager
+from engine.agent.rag.formatter import Formatter
 
 from linkup import LinkupClient
 import json
 
-from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttributes
-
-from engine.trace.trace_manager import TraceManager
-from engine.agent.rag.formatter import Formatter
 from settings import settings
 
 
@@ -47,8 +44,6 @@ LINKUP_TOOL_DESCRIPTION = ToolDescription(
     required_tool_properties=["query"],
 )
 
-
-
 class LinkupSearchTool(Agent):
     TRACE_SPAN_KIND = OpenInferenceSpanKindValues.TOOL.value
 
@@ -64,8 +59,8 @@ class LinkupSearchTool(Agent):
             tool_description=tool_description,
             component_attributes=component_attributes,
         )
-        self.trace_manager = trace_manager
-        self.linkup_client = LinkupClient(api_key=linkup_api_key)
+        self.trace_manager=trace_manager
+        self.linkup_client=LinkupClient(api_key=linkup_api_key)
 
     def search_results(
         self,
@@ -77,7 +72,7 @@ class LinkupSearchTool(Agent):
         from_date: Union[date, None],
         to_date: Union[date, None],
     ) -> SourcedResponse:
-        response = self.linkup_client.search(
+        response=self.linkup_client.search(
             query,
             depth=depth,
             output_type=output_type,
@@ -86,8 +81,8 @@ class LinkupSearchTool(Agent):
             from_date=from_date,
             to_date=to_date,
         )
-        answer = response.answer
-        sources = response.sources
+        answer=response.answer
+        sources=response.sources
         source_chunks = [
             SourceChunk(
                 name=source.name,
@@ -100,7 +95,7 @@ class LinkupSearchTool(Agent):
             )
             for source in sources
         ]
-        return SourcedResponse(response = answer, sources = source_chunks, is_successful = True)
+        return SourcedResponse(response=answer, sources=source_chunks, is_successful=True)
 
     async def _run_without_io_trace(
         self,
@@ -137,7 +132,6 @@ class LinkupSearchTool(Agent):
                     }
                 )
 
-        
         response = Formatter(add_sources=True).format(response)
         return AgentPayload(
             messages=[ChatMessage(role="assistant", content=response.response)],
