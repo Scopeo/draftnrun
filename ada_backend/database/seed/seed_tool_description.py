@@ -20,7 +20,7 @@ from engine.integrations.gmail_sender import GMAIL_SENDER_TOOL_DESCRIPTION
 from engine.agent.tools.python_code_runner import PYTHON_CODE_RUNNER_TOOL_DESCRIPTION
 from engine.agent.tools.terminal_command_runner import TERMINAL_COMMAND_RUNNER_TOOL_DESCRIPTION
 from engine.agent.pdf_generation_tool import DEFAULT_PDF_GENERATION_TOOL_DESCRIPTION
-from engine.integrations.linkup_service import LINKUP_TOOL_DESCRIPTION
+from engine.agent.tools.linkup_tool import LINKUP_TOOL_DESCRIPTION
 
 
 TOOL_DESCRIPTION_UUIDS = {

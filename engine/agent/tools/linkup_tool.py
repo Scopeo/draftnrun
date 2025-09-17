@@ -3,7 +3,8 @@ from datetime import date
 from typing import Union
 from openinference.semconv.trace import SpanAttributes
 
-from engine.agent.agent import Agent, AgentPayload, ChatMessage, ComponentAttributes, ToolDescription
+from engine.agent.agent import Agent, AgentPayload, ComponentAttributes, ToolDescription
+from engine.agent.types import ChatMessage, SourceChunk, SourcedResponse
 from engine.trace.trace_manager import TraceManager
 
 from linkup import LinkupClient
@@ -11,15 +12,6 @@ import json
 
 from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttributes
 
-from engine.agent.agent import (
-    Agent,
-    ChatMessage,
-    AgentPayload,
-    ComponentAttributes,
-    ToolDescription,
-    SourceChunk,
-    SourcedResponse,
-)
 from engine.trace.trace_manager import TraceManager
 from engine.agent.rag.formatter import Formatter
 from settings import settings
@@ -110,7 +102,7 @@ class LinkupSearchTool(Agent):
         ]
         return SourcedResponse(response = answer, sources = source_chunks, is_successful = True)
 
-    async def _run_without_trace(
+    async def _run_without_io_trace(
         self,
         *inputs: AgentPayload,
         query: str,
@@ -150,5 +142,5 @@ class LinkupSearchTool(Agent):
         return AgentPayload(
             messages=[ChatMessage(role="assistant", content=response.response)],
             artifacts={"sources": response.sources},
-                s_final=response.is_successful,
+            is_final=response.is_successful,
         )
