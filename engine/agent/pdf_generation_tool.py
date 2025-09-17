@@ -21,7 +21,7 @@ DEFAULT_PDF_GENERATION_TOOL_DESCRIPTION = ToolDescription(
             "type": "string",
             "description": (
                 "The markdown text to convert to PDF. \n"
-                "Insert the image into the markdown in src format. I recommend limiting the size of "
+                "Insert the image into the markdown in src format. It is recommended to limit the size of "
                 'images with a style like this: style="width:80%; max-width:100%; height:auto;"'
             ),
         }
