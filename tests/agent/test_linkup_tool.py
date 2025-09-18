@@ -21,7 +21,7 @@ async def linkup_tool(mock_trace_manager):
     tool = LinkupSearchTool(
         trace_manager=mock_trace_manager,
         component_attributes=ComponentAttributes(
-            component_instance_name="test_linkup_tool",
+            component_instance_name="test_linkup_tool"
         )
     )
     return tool
