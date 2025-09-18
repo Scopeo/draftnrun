@@ -16,15 +16,6 @@ You will need to install the following packages:
 - [Docker Compose](https://docs.docker.com/compose/)
 - [Supabase CLI](https://supabase.com/docs/guides/local-development/cli/getting-started?queryGroups=platform&platform=macos)
 
-
-## Library Prerequisites
-
-Install this library : libgobject-2.0
-```bash
-brew install glib gobject-introspection gtk+3
-```
-
-
 ## Install Python packages
 
 Use **UV**
