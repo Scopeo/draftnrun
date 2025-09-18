@@ -8,6 +8,7 @@ from engine.agent.tools.linkup_tool import (
 )
 from engine.agent.types import ComponentAttributes, SourceChunk
 from engine.trace.trace_manager import TraceManager
+import settings
 
 
 @pytest.fixture
