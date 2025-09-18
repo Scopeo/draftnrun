@@ -9,14 +9,13 @@ from ada_backend.schemas.input_groundtruth_schema import (
     InputGroundtruthUpdateList,
     InputGroundtruthDeleteList,
     InputGroundtruthResponseList,
-    InputGroundtruthWithVersionResponse,
+    PaginatedInputGroundtruthResponse,
     QARunRequest,
     QARunResponse,
 )
 from ada_backend.schemas.dataset_schema import (
     DatasetCreateList,
     DatasetResponse,
-    DatasetUpdateList,
     DatasetDeleteList,
     DatasetListResponse,
 )
@@ -31,7 +30,7 @@ from ada_backend.services.quality_assurance_service import (
     get_inputs_groundtruths_with_version_outputs_service,
     run_qa_service,
     create_datasets_service,
-    update_datasets_service,
+    update_dataset_service,
     delete_datasets_service,
     get_datasets_by_project_service,
 )
@@ -106,31 +105,32 @@ def create_dataset_endpoint(
 
 
 @router.patch(
-    "/projects/{project_id}/qa/datasets",
-    response_model=DatasetListResponse,
-    summary="Update Datasets",
+    "/projects/{project_id}/qa/datasets/{dataset_id}",
+    response_model=DatasetResponse,
+    summary="Update Dataset",
     tags=["Quality Assurance"],
 )
 def update_dataset_endpoint(
     project_id: UUID,
-    dataset_data: DatasetUpdateList,
+    dataset_id: UUID,
+    dataset_name: str,
     user: Annotated[
         SupabaseUser,
         Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.USER.value)),
     ],
     session: Session = Depends(get_db),
-) -> DatasetListResponse:
+) -> DatasetResponse:
     """
-    Update datasets.
+    Update dataset.
 
-    This endpoint allows users to update multiple datasets.
+    This endpoint allows users to update a single dataset.
     Only the fields provided in the request will be updated.
     """
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
 
     try:
-        return update_datasets_service(session, project_id, dataset_data)
+        return update_dataset_service(session, project_id, dataset_id, dataset_name)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
@@ -171,8 +171,8 @@ def delete_dataset_endpoint(
 
 # Input Groundtruth endpoints
 @router.get(
-    "/projects/{project_id}/qa/{dataset_id}",
-    response_model=List[InputGroundtruthWithVersionResponse],
+    "/projects/{project_id}/qa/{dataset_id}/entries",
+    response_model=PaginatedInputGroundtruthResponse,
     summary="Get Input-Groundtruth Entries by Dataset with Version Outputs",
     tags=["Quality Assurance"],
 )
@@ -186,8 +186,8 @@ def get_inputs_groundtruths_by_dataset_endpoint(
     session: Session = Depends(get_db),
     version: EnvType = Query(None, description="Version to filter by (draft or production, optional)"),
     page: int = Query(1, ge=1, description="Page number (1-based)"),
-    size: int = Query(100, ge=1, le=1000, description="Number of items per page"),
-) -> List[InputGroundtruthWithVersionResponse]:
+    page_size: int = Query(100, ge=1, le=1000, description="Number of items per page"),
+) -> PaginatedInputGroundtruthResponse:
     """
     Get all input-groundtruth entries for a dataset with version outputs using LEFT JOIN.
 
@@ -203,7 +203,7 @@ def get_inputs_groundtruths_by_dataset_endpoint(
         raise HTTPException(status_code=400, detail="User ID not found")
 
     try:
-        return get_inputs_groundtruths_with_version_outputs_service(session, dataset_id, version, page, size)
+        return get_inputs_groundtruths_with_version_outputs_service(session, dataset_id, version, page, page_size)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
@@ -211,7 +211,7 @@ def get_inputs_groundtruths_by_dataset_endpoint(
 
 
 @router.post(
-    "/projects/{project_id}/qa/{dataset_id}",
+    "/projects/{project_id}/qa/{dataset_id}/entries",
     response_model=InputGroundtruthResponseList,
     summary="Create Input-Groundtruth Entries",
     tags=["Quality Assurance"],
@@ -244,7 +244,7 @@ def create_input_groundtruth_endpoint(
 
 
 @router.patch(
-    "/projects/{project_id}/qa/{dataset_id}",
+    "/projects/{project_id}/qa/{dataset_id}/entries",
     response_model=InputGroundtruthResponseList,
     summary="Update Input-Groundtruth Entries",
     tags=["Quality Assurance"],
@@ -277,7 +277,7 @@ def update_input_groundtruth_endpoint(
 
 
 @router.delete(
-    "/projects/{project_id}/qa/{dataset_id}",
+    "/projects/{project_id}/qa/{dataset_id}/entries",
     summary="Delete Input-Groundtruth Entries",
     tags=["Quality Assurance"],
 )
