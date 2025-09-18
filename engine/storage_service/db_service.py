@@ -155,7 +155,11 @@ class DBService(ABC):
             self.insert_df_to_table(new_data, table_name, schema_name=schema_name)
 
             if not append_mode:
-                filtered_existing_ids = set(old_df[id_column_name]) if len(old_df) > 0 else set()
+                # Delete rows that are not present in the incoming data
+                query = f"SELECT {id_column_name} FROM {target_table_name};"
+                all_old_df = self._fetch_sql_query_as_dataframe(query)
+                all_old_df = convert_to_correct_pandas_type(all_old_df, id_column_name, table_definition)
+                filtered_existing_ids = set(all_old_df[id_column_name]) if len(all_old_df) > 0 else set()
                 new_ids_in_scope = set(new_df[id_column_name])
                 ids_to_delete = filtered_existing_ids - new_ids_in_scope
 
