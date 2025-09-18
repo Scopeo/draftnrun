@@ -6,6 +6,13 @@ from pydantic import BaseModel
 from ada_backend.database.models import EnvType
 
 
+class Pagination(BaseModel):
+    page: int
+    size: int
+    total_items: int
+    total_pages: int
+
+
 class InputGroundtruthCreate(BaseModel):
     """Schema for creating a new input-groundtruth entry."""
 
@@ -24,6 +31,13 @@ class InputGroundtruthWithVersionResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class PaginatedInputGroundtruthResponse(BaseModel):
+    """Schema for paginated input-groundtruth responses."""
+
+    pagination: Pagination
+    inputs_groundtruths: List[InputGroundtruthWithVersionResponse]
 
 
 # Run endpoint schemas

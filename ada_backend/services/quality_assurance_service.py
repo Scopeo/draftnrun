@@ -11,6 +11,7 @@ from ada_backend.repositories.quality_assurance_repository import (
     get_inputs_groundtruths_with_pagination,
     get_inputs_groundtruths_with_version_outputs,
     get_inputs_groundtruths_by_ids,
+    get_inputs_groundtruths_count_by_dataset,
     create_version_output,
     create_datasets,
     update_datasets,
@@ -24,6 +25,8 @@ from ada_backend.schemas.input_groundtruth_schema import (
     InputGroundtruthDeleteList,
     InputGroundtruthResponseList,
     InputGroundtruthWithVersionResponse,
+    Pagination,
+    PaginatedInputGroundtruthResponse,
     QARunRequest,
     QARunResult,
     QARunResponse,
@@ -32,7 +35,6 @@ from ada_backend.schemas.input_groundtruth_schema import (
 from ada_backend.schemas.dataset_schema import (
     DatasetCreateList,
     DatasetResponse,
-    DatasetUpdateList,
     DatasetDeleteList,
     DatasetListResponse,
 )
@@ -77,8 +79,8 @@ def get_inputs_groundtruths_with_version_outputs_service(
     dataset_id: UUID,
     version: EnvType = None,
     page: int = 1,
-    size: int = 100,
-) -> List[InputGroundtruthWithVersionResponse]:
+    page_size: int = 100,
+) -> PaginatedInputGroundtruthResponse:
     """
     Get input-groundtruth entries for a dataset with version outputs using LEFT JOIN.
 
@@ -87,14 +89,18 @@ def get_inputs_groundtruths_with_version_outputs_service(
         dataset_id (UUID): ID of the dataset
         version (EnvType, optional): Version to filter by (draft or production)
         page (int): Page number (1-based)
-        size (int): Number of items per page
+        page_size (int): Number of items per page
 
     Returns:
         List[InputGroundtruthWithVersionResponse]: List of input-groundtruth entries with version outputs
     """
     try:
-        skip = (page - 1) * size
-        results = get_inputs_groundtruths_with_version_outputs(session, dataset_id, version, skip, size)
+        skip = (page - 1) * page_size
+        number_of_inputs_outputs = get_inputs_groundtruths_count_by_dataset(session, dataset_id)
+        number_of_pages = number_of_inputs_outputs // page_size + (
+            1 if number_of_inputs_outputs % page_size > 0 else 0
+        )
+        results = get_inputs_groundtruths_with_version_outputs(session, dataset_id, version, skip, page_size)
 
         response_list = []
         for input_groundtruth, version_output in results:
@@ -107,7 +113,15 @@ def get_inputs_groundtruths_with_version_outputs_service(
                     version=version_output.version if version_output else None,
                 )
             )
-        return response_list
+        return PaginatedInputGroundtruthResponse(
+            pagination=Pagination(
+                page=page,
+                size=page_size,
+                total_items=number_of_inputs_outputs,
+                total_pages=number_of_pages,
+            ),
+            inputs_groundtruths=response_list,
+        )
     except Exception as e:
         LOGGER.error(f"Error in get_inputs_groundtruths_with_version_outputs_service: {str(e)}")
         raise ValueError(f"Failed to get input-groundtruth entries with version outputs: {str(e)}") from e
@@ -164,7 +178,6 @@ async def run_qa_service(
                     call_type=CallType.API,
                 )
 
-                # Extract the output message
                 output_content = chat_response.message
                 if chat_response.error:
                     output_content = f"Error: {chat_response.error}"
@@ -403,7 +416,7 @@ def create_datasets_service(
         created_datasets = create_datasets(
             session,
             project_id,
-            datasets_data.datasets,
+            datasets_data.datasets_name,
         )
 
         LOGGER.info(f"Created {len(created_datasets)} datasets for project {project_id}")
@@ -415,25 +428,27 @@ def create_datasets_service(
         session.close()
 
 
-def update_datasets_service(
+def update_dataset_service(
     session: Session,
     project_id: UUID,
-    datasets_data: DatasetUpdateList,
-) -> DatasetListResponse:
+    dataset_id: UUID,
+    dataset_name: str,
+) -> DatasetResponse:
     """
     Update multiple datasets.
 
     Args:
         session (Session): SQLAlchemy session
         project_id (UUID): ID of the project
-        datasets_data (DatasetUpdateList): Dataset data to update
+        dataset_id: UUID,
+        dataset_name: str,
 
     Returns:
         DatasetListResponse: The updated datasets
     """
     try:
         # Prepare updates data
-        updates_data = [(dataset.id, dataset.dataset_name) for dataset in datasets_data.datasets]
+        updates_data = [(dataset_id, dataset_name)]
 
         updated_datasets = update_datasets(
             session,
@@ -442,7 +457,7 @@ def update_datasets_service(
         )
 
         LOGGER.info(f"Updated {len(updated_datasets)} datasets for project {project_id}")
-        return DatasetListResponse(datasets=[DatasetResponse.model_validate(dataset) for dataset in updated_datasets])
+        return DatasetResponse.model_validate(updated_datasets[0])
     except Exception as e:
         LOGGER.error(f"Error in update_datasets_service: {str(e)}")
         raise ValueError(f"Failed to update datasets: {str(e)}") from e

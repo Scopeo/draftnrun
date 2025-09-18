@@ -7,7 +7,7 @@ from pydantic import BaseModel
 class DatasetCreateList(BaseModel):
     """Schema for creating multiple datasets."""
 
-    datasets: List[str]
+    datasets_name: List[str]
 
 
 class DatasetUpdateWithId(BaseModel):
@@ -15,12 +15,6 @@ class DatasetUpdateWithId(BaseModel):
 
     id: UUID
     dataset_name: Optional[str] = None
-
-
-class DatasetUpdateList(BaseModel):
-    """Schema for updating multiple datasets."""
-
-    datasets: List[DatasetUpdateWithId]
 
 
 class DatasetDeleteList(BaseModel):

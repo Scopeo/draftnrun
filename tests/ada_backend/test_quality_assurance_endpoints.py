@@ -79,9 +79,9 @@ def test_version_management():
     project_response = client.post(f"/projects/{ORGANIZATION_ID}", headers=HEADERS_JWT, json=project_payload)
     assert project_response.status_code == 200
 
-    # Verify that version endpoints no longer exist (should return 422 because 'versions' is not a valid UUID)
+    # Verify that version endpoints no longer exist (should return 404 because the endpoint doesn't exist)
     versions_response = client.get(f"/projects/{project_uuid}/qa/versions", headers=HEADERS_JWT)
-    assert versions_response.status_code == 422  # Unprocessable Entity - 'versions' is not a valid UUID
+    assert versions_response.status_code == 404  # Not Found - endpoint doesn't exist
 
     # Cleanup
     client.delete(f"/projects/{project_uuid}", headers=HEADERS_JWT)
@@ -103,7 +103,7 @@ def test_dataset_management():
 
     # Test dataset creation
     dataset_endpoint = f"/projects/{project_uuid}/qa/datasets"
-    create_payload = {"datasets": ["dataset1", "dataset2", "dataset3"]}
+    create_payload = {"datasets_name": ["dataset1", "dataset2", "dataset3"]}
 
     create_response = client.post(dataset_endpoint, headers=HEADERS_JWT, json=create_payload)
     assert create_response.status_code == 200
@@ -118,13 +118,12 @@ def test_dataset_management():
 
     # Test dataset update
     dataset_to_update = created_datasets[0]["id"]
-    update_payload = {"datasets": [{"id": dataset_to_update, "dataset_name": "updated_dataset1"}]}
+    update_endpoint = f"/projects/{project_uuid}/qa/datasets/{dataset_to_update}?dataset_name=updated_dataset1"
 
-    update_response = client.patch(dataset_endpoint, headers=HEADERS_JWT, json=update_payload)
+    update_response = client.patch(update_endpoint, headers=HEADERS_JWT)
     assert update_response.status_code == 200
-    updated_datasets = update_response.json()["datasets"]
-    assert len(updated_datasets) == 1
-    assert updated_datasets[0]["dataset_name"] == "updated_dataset1"
+    updated_dataset = update_response.json()
+    assert updated_dataset["dataset_name"] == "updated_dataset1"
 
     # Test dataset deletion
     dataset_to_delete = created_datasets[1]["id"]
@@ -162,7 +161,7 @@ def test_input_groundtruth_basic_operations():
 
     # Create a dataset
     dataset_uuid = str(uuid4())
-    dataset_payload = {"datasets": [f"input_groundtruth_dataset_{dataset_uuid}"]}
+    dataset_payload = {"datasets_name": [f"input_groundtruth_dataset_{dataset_uuid}"]}
 
     dataset_response = client.post(f"/projects/{project_uuid}/qa/datasets", headers=HEADERS_JWT, json=dataset_payload)
     assert dataset_response.status_code == 200
@@ -170,7 +169,7 @@ def test_input_groundtruth_basic_operations():
     dataset_id = dataset_data["datasets"][0]["id"]
 
     # Test input-groundtruth creation
-    input_endpoint = f"/projects/{project_uuid}/qa/{dataset_id}"
+    input_endpoint = f"/projects/{project_uuid}/qa/{dataset_id}/entries"
     create_payload = {
         "inputs_groundtruths": [
             {"input": "What is 2 + 2?", "groundtruth": "4"},
@@ -187,7 +186,7 @@ def test_input_groundtruth_basic_operations():
     # Test input-groundtruth retrieval
     get_response = client.get(input_endpoint, headers=HEADERS_JWT)
     assert get_response.status_code == 200
-    retrieved_inputs = get_response.json()
+    retrieved_inputs = get_response.json()["inputs_groundtruths"]
     assert len(retrieved_inputs) == 3
 
     # Test input-groundtruth update
@@ -215,7 +214,7 @@ def test_input_groundtruth_basic_operations():
     # Verify the input was deleted
     get_response = client.get(input_endpoint, headers=HEADERS_JWT)
     assert get_response.status_code == 200
-    remaining_inputs = get_response.json()
+    remaining_inputs = get_response.json()["inputs_groundtruths"]
     assert len(remaining_inputs) == 2  # Should now have 2 inputs instead of 3
 
     # Cleanup
@@ -365,7 +364,7 @@ def test_run_qa_endpoint():
 
     # Create a dataset
     dataset_uuid = str(uuid4())
-    dataset_payload = {"datasets": [f"qa_run_dataset_{dataset_uuid}"]}
+    dataset_payload = {"datasets_name": [f"qa_run_dataset_{dataset_uuid}"]}
 
     dataset_response = client.post(f"/projects/{project_uuid}/qa/datasets", headers=HEADERS_JWT, json=dataset_payload)
     assert dataset_response.status_code == 200
@@ -381,7 +380,9 @@ def test_run_qa_endpoint():
         ]
     }
 
-    input_response = client.post(f"/projects/{project_uuid}/qa/{dataset_id}", headers=HEADERS_JWT, json=input_payload)
+    input_response = client.post(
+        f"/projects/{project_uuid}/qa/{dataset_id}/entries", headers=HEADERS_JWT, json=input_payload
+    )
     assert input_response.status_code == 200
     input_data = input_response.json()
     assert len(input_data["inputs_groundtruths"]) == 3
@@ -452,7 +453,7 @@ def test_quality_assurance_complete_workflow():
     assert project_response.status_code == 200
 
     # Create a dataset
-    dataset_payload = {"datasets": ["complete_workflow_dataset"]}
+    dataset_payload = {"datasets_name": ["complete_workflow_dataset"]}
     dataset_response = client.post(f"/projects/{project_uuid}/qa/datasets", headers=HEADERS_JWT, json=dataset_payload)
     assert dataset_response.status_code == 200
     dataset_id = dataset_response.json()["datasets"][0]["id"]
@@ -464,14 +465,16 @@ def test_quality_assurance_complete_workflow():
             {"input": "Test input 2", "groundtruth": "Expected output 2"},
         ]
     }
-    input_response = client.post(f"/projects/{project_uuid}/qa/{dataset_id}", headers=HEADERS_JWT, json=input_payload)
+    input_response = client.post(
+        f"/projects/{project_uuid}/qa/{dataset_id}/entries", headers=HEADERS_JWT, json=input_payload
+    )
     assert input_response.status_code == 200
     input_data = input_response.json()
 
     # Test querying without version filter - should return all entries with null versions initially
-    get_response_initial = client.get(f"/projects/{project_uuid}/qa/{dataset_id}", headers=HEADERS_JWT)
+    get_response_initial = client.get(f"/projects/{project_uuid}/qa/{dataset_id}/entries", headers=HEADERS_JWT)
     assert get_response_initial.status_code == 200
-    initial_results = get_response_initial.json()
+    initial_results = get_response_initial.json()["inputs_groundtruths"]
     assert len(initial_results) == 2  # All 2 inputs should be returned
     # All should have no outputs initially (LEFT JOIN behavior)
     for result in initial_results:
@@ -482,9 +485,11 @@ def test_quality_assurance_complete_workflow():
         assert result["groundtruth"] is not None
 
     # Test filtering by version (draft) - should return 0 results initially
-    get_response_draft = client.get(f"/projects/{project_uuid}/qa/{dataset_id}?version=draft", headers=HEADERS_JWT)
+    get_response_draft = client.get(
+        f"/projects/{project_uuid}/qa/{dataset_id}/entries?version=draft", headers=HEADERS_JWT
+    )
     assert get_response_draft.status_code == 200
-    draft_results = get_response_draft.json()
+    draft_results = get_response_draft.json()["inputs_groundtruths"]
     assert len(draft_results) == 0  # No draft outputs exist yet
 
     # Run QA on draft version
@@ -499,10 +504,10 @@ def test_quality_assurance_complete_workflow():
 
     # Check that draft version outputs now exist
     get_response_draft_after = client.get(
-        f"/projects/{project_uuid}/qa/{dataset_id}?version=draft", headers=HEADERS_JWT
+        f"/projects/{project_uuid}/qa/{dataset_id}/entries?version=draft", headers=HEADERS_JWT
     )
     assert get_response_draft_after.status_code == 200
-    draft_results_after = get_response_draft_after.json()
+    draft_results_after = get_response_draft_after.json()["inputs_groundtruths"]
     # Should return exactly 1 result with draft version output
     assert len(draft_results_after) == 1
     assert draft_results_after[0]["version"] == "draft"
@@ -520,19 +525,19 @@ def test_quality_assurance_complete_workflow():
 
     # Check that production version outputs now exist
     get_response_production = client.get(
-        f"/projects/{project_uuid}/qa/{dataset_id}?version=production", headers=HEADERS_JWT
+        f"/projects/{project_uuid}/qa/{dataset_id}/entries?version=production", headers=HEADERS_JWT
     )
     assert get_response_production.status_code == 200
-    production_results = get_response_production.json()
+    production_results = get_response_production.json()["inputs_groundtruths"]
     # Should return exactly 1 result with production version output
     assert len(production_results) == 1
     assert production_results[0]["version"] == "production"
     assert production_results[0]["output"] is not None
 
     # Check that getting all versions shows both draft and production outputs
-    get_response_all = client.get(f"/projects/{project_uuid}/qa/{dataset_id}", headers=HEADERS_JWT)
+    get_response_all = client.get(f"/projects/{project_uuid}/qa/{dataset_id}/entries", headers=HEADERS_JWT)
     assert get_response_all.status_code == 200
-    all_results = get_response_all.json()
+    all_results = get_response_all.json()["inputs_groundtruths"]
     assert len(all_results) == 2
     versions_found = [r["version"] for r in all_results if r["version"] is not None]
     assert "draft" in versions_found
