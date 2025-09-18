@@ -23,36 +23,100 @@ from ingestion_script.utils import (
     CHUNK_COLUMN_NAME,
     FILE_ID_COLUMN_NAME,
     URL_COLUMN_NAME,
+    resolve_sql_timestamp_filter,
 )
 from ada_backend.schemas.ingestion_task_schema import SourceAttributes
 
 LOGGER = logging.getLogger(__name__)
 
 
+def _map_sqlalchemy_type_to_internal(type_str: str) -> str:
+    """
+    Map SQLAlchemy/reflected type string to internal type used by DBDefinition/SQLLocalService.
+    Falls back to VARCHAR when unknown; prefers DATETIME for date-like types.
+    """
+    t = type_str.upper()
+    if "TIMESTAMP" in t or "DATETIME" in t or t == "DATE":
+        return "DATETIME"
+    if t.startswith("VARCHAR") or "CHAR" in t:
+        return "VARCHAR"
+    if "TEXT" in t:
+        return "TEXT"
+    if "INT" in t:
+        return "INTEGER"
+    if any(x in t for x in ["DOUBLE", "FLOAT", "NUMERIC", "DECIMAL", "REAL"]):
+        return "FLOAT"
+    if "BOOL" in t:
+        return "BOOLEAN"
+    if "JSON" in t or "VARIANT" in t:
+        return "VARIANT"
+    if "ARRAY" in t:
+        return "ARRAY"
+    return "VARCHAR"
+
+
+def _get_source_column_type_map(
+    db_url: str,
+    table_name: str,
+    schema_name: Optional[str] = None,
+) -> dict[str, str]:
+    sql_local_service = SQLLocalService(engine_url=db_url)
+    description = sql_local_service.describe_table(table_name=table_name, schema_name=schema_name)
+    return {row["name"].lower(): _map_sqlalchemy_type_to_internal(str(row["type"])) for row in description}
+
+
 def get_db_source_definition(
     timestamp_column_name: Optional[str] = None,
     url_pattern: Optional[str] = None,
     metadata_column_names: Optional[list] = None,
-) -> DBDefinition:
+    source_db_url: Optional[str] = None,
+    source_table_name: Optional[str] = None,
+    source_schema_name: Optional[str] = None,
+) -> tuple[DBDefinition, dict[str, str]]:
     columns = [
         DBColumn(name=PROCESSED_DATETIME_FIELD, type="DATETIME", default="CURRENT_TIMESTAMP"),
         DBColumn(name=CHUNK_ID_COLUMN_NAME, type="VARCHAR", is_primary_key=True),
         DBColumn(name=FILE_ID_COLUMN_NAME, type="VARCHAR"),
         DBColumn(name=CHUNK_COLUMN_NAME, type="VARCHAR"),
     ]
+    source_type_map: dict[str, str] = {}
+    if source_db_url and source_table_name:
+        try:
+            source_type_map = _get_source_column_type_map(
+                db_url=source_db_url,
+                table_name=source_table_name,
+                schema_name=source_schema_name,
+            )
+        except Exception:
+            LOGGER.warning("Failed to introspect source table types; falling back to defaults")
+            source_type_map = {}
+
     if timestamp_column_name:
-        columns.append(DBColumn(name=timestamp_column_name, type="VARCHAR"))
+        columns.append(
+            DBColumn(
+                name=timestamp_column_name,
+                type=source_type_map.get(timestamp_column_name.lower()) if source_type_map else "DATETIME",
+            )
+        )
 
     if metadata_column_names:
         existing_names = {c.name for c in columns}
         columns.extend(
-            DBColumn(name=col, type="VARCHAR") for col in metadata_column_names if col not in existing_names
+            DBColumn(
+                name=col,
+                type=(source_type_map.get(col.lower(), "VARCHAR") if source_type_map else "VARCHAR"),
+            )
+            for col in metadata_column_names
+            if col not in existing_names
         )
     if url_pattern:
         columns.append(DBColumn(name=URL_COLUMN_NAME, type="VARCHAR"))
 
-    return DBDefinition(
-        columns=columns,
+    return (
+        DBDefinition(
+            columns=columns,
+        ),
+        source_type_map,
     )
 
 
@@ -138,6 +202,7 @@ async def upload_db_source(
     query_filter: Optional[str] = None,
     timestamp_filter: Optional[str] = None,
 ):
+
     combined_filter_sql = build_combined_sql_filter(
         query_filter=query_filter,
         timestamp_filter=timestamp_filter,
@@ -145,7 +210,7 @@ async def upload_db_source(
     )
     combined_filter_qdrant = qdrant_service._build_combined_filter(
         query_filter=query_filter,
-        timestamp_filter=timestamp_filter,
+        timestamp_filter=resolve_sql_timestamp_filter(timestamp_filter),
         timestamp_column_name=timestamp_column_name,
     )
 
@@ -205,6 +270,20 @@ async def ingestion_database(
     source_attributes: Optional[SourceAttributes] = None,
     source_id: Optional[str] = None,
 ) -> None:
+
+    db_definition, source_type_map = get_db_source_definition(
+        timestamp_column_name=timestamp_column_name,
+        url_pattern=url_pattern,
+        metadata_column_names=metadata_column_names,
+        source_db_url=source_db_url,
+        source_table_name=source_table_name,
+        source_schema_name=source_schema_name,
+    )
+    metadata_field_types = None
+    if metadata_column_names and source_type_map:
+        metadata_field_types = {
+            field: source_type_map.get(field.lower(), "VARCHAR") for field in metadata_column_names
+        }
     qdrant_schema = QdrantCollectionSchema(
         chunk_id_field=CHUNK_ID_COLUMN_NAME,
         content_field=CHUNK_COLUMN_NAME,
@@ -212,11 +291,7 @@ async def ingestion_database(
         url_id_field=URL_COLUMN_NAME if url_pattern else None,
         last_edited_ts_field=timestamp_column_name,
         metadata_fields_to_keep=(set(metadata_column_names) if metadata_column_names else None),
-    )
-    db_definition = get_db_source_definition(
-        timestamp_column_name=timestamp_column_name,
-        url_pattern=url_pattern,
-        metadata_column_names=metadata_column_names,
+        metadata_field_types=metadata_field_types,
     )
     source_type = db.SourceType.DATABASE
     LOGGER.info("Start ingestion data from the database source...")

@@ -6,6 +6,7 @@ from datetime import datetime
 import re
 from enum import Enum
 import asyncio
+import json
 
 import httpx
 import pandas as pd
@@ -68,9 +69,26 @@ def parse_datetime(date_string: str) -> Optional[datetime]:
 
 
 class FieldSchema(Enum):
-    # TODO: add other field types when we have metadata fields types
     KEYWORD = "keyword"
     DATETIME = "datetime"
+    INTEGER = "integer"
+    FLOAT = "float"
+    BOOLEAN = "bool"
+
+
+def map_internal_type_to_qdrant_field_schema(internal_type: str) -> FieldSchema:
+    """Map internal DBDefinition types to Qdrant FieldSchema types."""
+    type_mapping = {
+        "DATETIME": FieldSchema.DATETIME,
+        "INTEGER": FieldSchema.INTEGER,
+        "FLOAT": FieldSchema.FLOAT,
+        "BOOLEAN": FieldSchema.BOOLEAN,
+        "VARCHAR": FieldSchema.KEYWORD,
+        "TEXT": FieldSchema.KEYWORD,
+        "VARIANT": FieldSchema.KEYWORD,
+        "ARRAY": FieldSchema.KEYWORD,
+    }
+    return type_mapping.get(internal_type, FieldSchema.KEYWORD)
 
 
 @dataclass
@@ -99,6 +117,7 @@ class QdrantCollectionSchema:
     url_id_field: Optional[str] = None
     last_edited_ts_field: Optional[str] = None  # To keep compatibility with Juno data
     metadata_fields_to_keep: Optional[set[str]] = None  # To keep compatibility with Juno data
+    metadata_field_types: Optional[dict[str, str]] = None
 
     def __post_init__(self):
         """
@@ -591,11 +610,16 @@ class QdrantService:
         )
         if schema.metadata_fields_to_keep:
             for metadata_field in schema.metadata_fields_to_keep:
-                await self.create_index_if_needed_async(
-                    collection_name=collection_name,
-                    field_name=metadata_field,
-                    field_schema_type=FieldSchema.KEYWORD,
-                )
+                field_type = FieldSchema.KEYWORD  # Default type
+                if schema.metadata_field_types and metadata_field in schema.metadata_field_types:
+                    internal_type = schema.metadata_field_types[metadata_field]
+                    field_type = map_internal_type_to_qdrant_field_schema(internal_type)
+
+            await self.create_index_if_needed_async(
+                collection_name=collection_name,
+                field_name=metadata_field,
+                field_schema_type=field_type,
+            )
         if schema.last_edited_ts_field:
             await self.create_index_if_needed_async(
                 collection_name=collection_name,
@@ -679,7 +703,6 @@ class QdrantService:
 
         if not timestamp_filter or not timestamp_column_name:
             return None
-
         # Parse the filter string to extract operator and value
         pattern = r'([><=!]+)\s*["\']?([^"\']+)["\']?'
         match = re.match(pattern, timestamp_filter.strip())
@@ -1081,11 +1104,16 @@ class QdrantService:
         )
         if schema.metadata_fields_to_keep:
             for metadata_field in schema.metadata_fields_to_keep:
-                await self.create_index_if_needed_async(
-                    collection_name=collection_name,
-                    field_name=metadata_field,
-                    field_schema_type=FieldSchema.KEYWORD,
-                )
+                field_type = FieldSchema.KEYWORD  # Default type
+                if schema.metadata_field_types and metadata_field in schema.metadata_field_types:
+                    internal_type = schema.metadata_field_types[metadata_field]
+                    field_type = map_internal_type_to_qdrant_field_schema(internal_type)
+
+            await self.create_index_if_needed_async(
+                collection_name=collection_name,
+                field_name=metadata_field,
+                field_schema_type=field_type,
+            )
         if schema.last_edited_ts_field:
             await self.create_index_if_needed_async(
                 collection_name=collection_name,
@@ -1138,7 +1166,7 @@ class QdrantService:
     ) -> bool:
         old_df = await self.get_collection_data_async(collection_name, query_filter_qdrant)
         if old_df.empty:
-            await self.add_chunks_async(df.to_dict(orient="records"), collection_name)
+            await self.add_chunks_async(json.loads(df.to_json(orient="records", date_format="iso")), collection_name)
             LOGGER.info(f"Qdrant collection is empty. Added {len(df)} chunks to Qdrant")
             return True
 
@@ -1173,7 +1201,7 @@ class QdrantService:
             LOGGER.info(f"Deleted {len(ids_to_delete)} chunks from Qdrant")
         if len(ids_to_upsert) > 0:
             chunks_to_upsert = df[df[self.default_schema.chunk_id_field].isin(ids_to_upsert)]
-            list_payloads = chunks_to_upsert.to_dict(orient="records")
+            list_payloads = json.loads(chunks_to_upsert.to_json(orient="records", date_format="iso"))
             await self.add_chunks_async(list_payloads, collection_name)
             LOGGER.info(f"Upserted {len(ids_to_upsert)} chunks to Qdrant")
 
