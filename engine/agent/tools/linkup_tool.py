@@ -79,8 +79,8 @@ class LinkupSearchTool(Agent):
             output_type=output_type,
             exclude_domains=exclude_domains,
             include_domains=include_domains,
-            from_date=from_date,
-            to_date=to_date,
+            from_date=None if from_date is None else date.fromisoformat(from_date),
+            to_date=None if to_date is None else date.fromisoformat(to_date),
         )
         answer = response.answer
         sources = response.sources
