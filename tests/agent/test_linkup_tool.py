@@ -8,6 +8,7 @@ from engine.agent.tools.linkup_tool import (
 )
 from engine.agent.types import ComponentAttributes, SourceChunk
 from engine.trace.trace_manager import TraceManager
+import settings
 
 
 @pytest.fixture
@@ -22,7 +23,9 @@ async def linkup_tool(mock_trace_manager):
         trace_manager=mock_trace_manager,
         component_attributes=ComponentAttributes(
             component_instance_name="test_linkup_tool"
-        )
+        ),
+        tool_description=LINKUP_TOOL_DESCRIPTION,
+        linkup_api_key=settings.LINKUP_API_KEY,
     )
     return tool
 
