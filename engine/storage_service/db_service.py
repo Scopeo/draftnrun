@@ -113,22 +113,6 @@ class DBService(ABC):
                 new_df[col] = new_df[col].astype(object).where(new_df[col].notna(), None)
             self.insert_df_to_table(df=new_df, table_name=table_name, schema_name=schema_name)
         else:
-            # Delete rows that are not present in the incoming data
-            query = f"SELECT {id_column_name} FROM {target_table_name};"
-            all_old_df = self._fetch_sql_query_as_dataframe(query)
-            all_old_df = convert_to_correct_pandas_type(all_old_df, id_column_name, table_definition)
-            existing_ids = set(all_old_df[id_column_name])
-            incoming_ids = set(new_df[id_column_name])
-            ids_to_delete = existing_ids - incoming_ids
-            LOGGER.info(f"Found {len(ids_to_delete)} rows to delete in the table")
-            if ids_to_delete:
-                self.delete_rows_from_table(
-                    table_name=table_name,
-                    ids=list(ids_to_delete),
-                    id_column_name=id_column_name,
-                    schema_name=schema_name,
-                )
-
             query = (
                 f"SELECT {id_column_name}, {timestamp_column_name} FROM {target_table_name}"
                 if timestamp_column_name

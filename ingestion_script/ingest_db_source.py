@@ -234,7 +234,7 @@ async def upload_db_source(
         table_definition=db_definition,
         id_column_name=CHUNK_ID_COLUMN_NAME,
         timestamp_column_name=timestamp_column_name,
-        append_mode=update_existing,
+        append_mode=False,
         schema_name=storage_schema_name,
         sql_query_filter=combined_filter_sql,
     )
