@@ -20,9 +20,7 @@ async def linkup_tool(mock_trace_manager):
     """Create a Linkup search tool instance."""
     tool = LinkupSearchTool(
         trace_manager=mock_trace_manager,
-        component_attributes=ComponentAttributes(
-            component_instance_name="test_linkup_tool"
-        ),
+        component_attributes=ComponentAttributes(component_instance_name="test_linkup_tool"),
     )
     return tool
 
@@ -47,14 +45,15 @@ def test_query_with_params(linkup_tool):
     """Test executing simple query with parameters that returns a response in the right format."""
     query = "Who is the person who won the most Roland Garros titles ?"
 
-    result = linkup_tool.search_results(query=query,
-                                        depth="standard",
-                                        output_type="sourcedAnswer",
-                                        exclude_domains=None,
-                                        include_domains=["wikipedia.org"],
-                                        from_date='2012-10-10',
-                                        to_date='2014-10-10'
-                                        )
+    result = linkup_tool.search_results(
+        query=query,
+        depth="standard",
+        output_type="sourcedAnswer",
+        exclude_domains=None,
+        include_domains=["wikipedia.org"],
+        from_date="2012-10-10",
+        to_date="2014-10-10",
+    )
 
     assert len(result.response) > 5
     assert isinstance(result.sources[0], SourceChunk)
