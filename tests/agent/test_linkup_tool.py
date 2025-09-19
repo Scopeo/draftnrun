@@ -1,5 +1,5 @@
 import pytest
-import os
+from settings import settings
 from unittest.mock import MagicMock
 import pytest_asyncio
 from engine.agent.tools.linkup_tool import (
@@ -30,7 +30,7 @@ async def linkup_tool(mock_trace_manager):
 @pytest.fixture
 def linkup_api_key():
     """Get Linkup API key from environment or skip test if not available."""
-    api_key = os.getenv("LINKUP_API_KEY")
+    api_key = settings.LINKUP_API_KEY
     if not api_key:
         pytest.skip("LINKUP_API_KEY environment variable not set")
     return api_key
