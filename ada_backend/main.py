@@ -28,6 +28,7 @@ from settings import settings
 from logger import setup_logging
 from ada_backend.scheduler_boot import scheduler_lifespan
 
+
 setup_logging()
 
 set_trace_manager(tm=TraceManager(project_name="ada-backend"))
@@ -93,10 +94,6 @@ app = FastAPI(
         {
             "name": "Cron Jobs",
             "description": "Endpoints for managing scheduled cron jobs for organizations",
-        },
-        {
-            "name": "Quality Assurance",
-            "description": "Endpoints for managing quality assurance datasets, versions and inputs per project",
         },
     ],
 )

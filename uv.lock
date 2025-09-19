@@ -1779,19 +1779,6 @@ wheels = [
 ]
 
 [[package]]
-name = "linkup-sdk"
-version = "0.2.8"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "httpx" },
-    { name = "pydantic" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/9e/15/17f441d73d1dea76398980497bb8a3cce8a2b63dab42779610c04b6800d6/linkup_sdk-0.2.8.tar.gz", hash = "sha256:7ed45b76bb585ebf88d7bafa248e4907d116b19661880978b862c5f8b3b79686", size = 9905, upload-time = "2025-07-01T07:15:33.54Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/6c/a2/be93a8d93959e4e3756afa59c9312979ea641b90b7233acb4464a824f3c5/linkup_sdk-0.2.8-py3-none-any.whl", hash = "sha256:96acaf2c773963c21133b31d1ef18f5322ba07a34ef79c375fe75e44b9501cb6", size = 8729, upload-time = "2025-07-01T07:15:32.129Z" },
-]
-
-[[package]]
 name = "llama-cloud"
 version = "0.1.26"
 source = { registry = "https://pypi.org/simple" }
