@@ -1,7 +1,8 @@
 
 from datetime import date
-from typing import Union
+from typing import Optional
 from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttributes
+from opentelemetry.trace import get_current_span
 
 from engine.agent.agent import Agent, AgentPayload, ComponentAttributes, ToolDescription
 from engine.agent.types import ChatMessage, SourceChunk, SourcedResponse
@@ -23,35 +24,32 @@ LINKUP_TOOL_DESCRIPTION = ToolDescription(
         },
         "from_date": {
             "type": "string",
-            "description": "Filter results from a specific date (format: YYYY-MM-DD)."
-            "Web sources dating before this date will not be used."
+            "description": "The date from which the search results should be considered, "
+            "in ISO 8601 format (YYYY-MM-DD)."
         },
         "to_date": {
             "type": "string",
-            "description": "Filter results until a specific date (format: YYYY-MM-DD)."
-            "Web sources dating after this date will not be used."
+            "description": "The date until which the search results should be considered, "
+            "in ISO 8601 format (YYYY-MM-DD)."
         },
         "include_domains": {
             "type": "array",
             "items": {"type": "string"},
-            "description": "Filter results to only include specific domains."
-            "Other domains will not be used."
+            "description": "The domains you want to search on. By default, don't restrict the search."
         },
         "exclude_domains": {
             "type": "array",
             "items": {"type": "string"},
-            "description": "Filter results to exclude specific domains."
-            "These domains will not be used."
+            "description": "The domains you want to exclude of the search. By default, don't restrict the search."
         },
         "depth": {
             "type": "string",
-            "description": "The depth format is standard or deep."
-            "standard: Returns results more quickly, suitable for low-latency scenarios."
-            "deep: Continues to search iteratively if it doesn’t find sufficient information on the first attempt,"
-            "this may take longer, but often yields more comprehensive results."
+            "description": "The depth format is standard or deep. "
+            "standard: Returns results faster, suitable for low-latency scenarios. "
+            "deep: Takes longer but yields more comprehensive results."
         }
     },
-    required_tool_properties=["query"],
+    required_tool_properties=["query", "depth"],
 )
 
 
@@ -78,10 +76,10 @@ class LinkupSearchTool(Agent):
         query: str,
         depth: str,
         output_type: str,
-        exclude_domains: Union[list[str], None],
-        include_domains: Union[list[str], None],
-        from_date: Union[date, None],
-        to_date: Union[date, None],
+        exclude_domains: Optional[list[str]] = None,
+        include_domains: Optional[list[str]] = None,
+        from_date: Optional[date] = None,
+        to_date: Optional[date] = None,
     ) -> SourcedResponse:
         response = self.linkup_client.search(
             query,
@@ -112,18 +110,30 @@ class LinkupSearchTool(Agent):
         self,
         *inputs: AgentPayload,
         query: str,
-        depth: str = "standard",
+        depth: str,
         output_type: str = "sourcedAnswer",
-        exclude_domains: Union[list[str], None] = None,
-        include_domains: Union[list[str], None] = None,
-        from_date: Union[date, None] = None,
-        to_date: Union[date, None] = None,
+        exclude_domains: Optional[list[str]] = None,
+        include_domains: Optional[list[str]] = None,
+        from_date: Optional[date] = None,
+        to_date: Optional[date] = None,
     ) -> AgentPayload:
         agent_input = inputs[0]
         content = query or agent_input.last_message.content
         if content is None:
             raise ValueError("No content provided for the Linkup search tool.")
-
+        span = get_current_span()
+        trace_input = {"query": query,
+                       "from_date": from_date,
+                       "to_date": to_date,
+                       "include_domains": include_domains,
+                       "exclude_domains": exclude_domains,
+                       "depth": depth}
+        span.set_attributes(
+            {
+                SpanAttributes.OPENINFERENCE_SPAN_KIND: self.TRACE_SPAN_KIND,
+                SpanAttributes.INPUT_VALUE: json.dumps(trace_input),
+            }
+        )
         response = self.search_results(query=content,
                                        depth=depth,
                                        output_type=output_type,
@@ -132,16 +142,15 @@ class LinkupSearchTool(Agent):
                                        from_date=from_date,
                                        to_date=to_date)
 
-        with self.trace_manager.start_span("LinkupSearchResults") as span:
-            for i, source in enumerate(response.sources):
-                span.set_attributes(
-                    {
-                        SpanAttributes.OPENINFERENCE_SPAN_KIND: OpenInferenceSpanKindValues.RETRIEVER.value,
-                        f"{SpanAttributes.RETRIEVAL_DOCUMENTS}.{i}.document.content": source.content,
-                        f"{SpanAttributes.RETRIEVAL_DOCUMENTS}.{i}.document.id": source.name,
-                        f"{SpanAttributes.RETRIEVAL_DOCUMENTS}.{i}.document.metadata": json.dumps(source.metadata),
-                    }
-                )
+        for i, source in enumerate(response.sources):
+            span.set_attributes(
+                {
+                    SpanAttributes.OPENINFERENCE_SPAN_KIND: OpenInferenceSpanKindValues.RETRIEVER.value,
+                    f"{SpanAttributes.RETRIEVAL_DOCUMENTS}.{i}.document.content": source.content,
+                    f"{SpanAttributes.RETRIEVAL_DOCUMENTS}.{i}.document.id": source.name,
+                    f"{SpanAttributes.RETRIEVAL_DOCUMENTS}.{i}.document.metadata": json.dumps(source.metadata),
+                }
+            )
 
         return AgentPayload(
             messages=[ChatMessage(role="assistant", content=response.response)],
