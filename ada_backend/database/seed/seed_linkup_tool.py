@@ -17,7 +17,7 @@ def seed_linkup_tool_components(session: Session):
         description="Linkup search tool for real-time web search and data connection",
         is_agent=False,
         function_callable=True,
-        release_stage=db.ReleaseStage.BETA,
+        release_stage=db.ReleaseStage.INTERNAL,
         default_tool_description_id=TOOL_DESCRIPTION_UUIDS["linkup_search_tool_description"],
     )
 

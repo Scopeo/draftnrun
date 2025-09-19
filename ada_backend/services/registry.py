@@ -85,6 +85,7 @@ class SupportedEntityType(StrEnum):
     TERMINAL_COMMAND_RUNNER_TOOL = "Terminal Command Runner"
     PDF_GENERATION_TOOL = "PDF Generation Tool"
     SQL_TOOL = "SQLTool"
+    LINKUP_SEARCH_TOOL = "Linkup Search Tool"
     LLM_CALL_AGENT = "LLM Call"
     REACT_SQL_AGENT = "Database Query Agent"
     RUN_SQL_QUERY_TOOL = "RunSQLQueryTool"
@@ -95,8 +96,10 @@ class SupportedEntityType(StrEnum):
     FILTER = "Filter"
     PROJECT_REFERENCE = "ProjectReference"
     CHUNK_PROCESSOR = "ChunkProcessor"
+
+    # Integrations
     GMAIL_SENDER = "Gmail Sender"
-    LINKUP_SEARCH_TOOL = "Linkup Search Tool"
+
 
 
 class FactoryRegistry:
@@ -414,6 +417,12 @@ def create_factory_registry() -> FactoryRegistry:
         ),
     )
     registry.register(
+        name=SupportedEntityType.LINKUP_SEARCH_TOOL,
+        factory=AgentFactory(
+            entity_class=LinkupSearchTool,
+        ),
+    )
+    registry.register(
         name=SupportedEntityType.REACT_SQL_AGENT,
         factory=AgentFactory(
             entity_class=ReactSQLAgent,
@@ -462,13 +471,6 @@ def create_factory_registry() -> FactoryRegistry:
         name=SupportedEntityType.GMAIL_SENDER,
         factory=AgentFactory(
             entity_class=GmailSender,
-        ),
-    )
-
-    registry.register(
-        name=SupportedEntityType.LINKUP_SEARCH_TOOL,
-        factory=AgentFactory(
-            entity_class=LinkupSearchTool,
         ),
     )
 
