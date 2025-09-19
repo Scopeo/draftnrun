@@ -101,7 +101,6 @@ class SupportedEntityType(StrEnum):
     GMAIL_SENDER = "Gmail Sender"
 
 
-
 class FactoryRegistry:
     """
     A registry for factories, allowing flexible registration and instantiation
