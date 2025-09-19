@@ -6,7 +6,6 @@ from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttribu
 from engine.agent.agent import Agent, AgentPayload, ComponentAttributes, ToolDescription
 from engine.agent.types import ChatMessage, SourceChunk, SourcedResponse
 from engine.trace.trace_manager import TraceManager
-from engine.agent.rag.formatter import Formatter
 
 from linkup import LinkupClient
 import json
@@ -24,25 +23,31 @@ LINKUP_TOOL_DESCRIPTION = ToolDescription(
         },
         "from_date": {
             "type": "string",
-            "description": "Filter results from a specific date (format: YYYY-MM-DD). Web sources dating before this date will not be used."
+            "description": "Filter results from a specific date (format: YYYY-MM-DD)."
+            "Web sources dating before this date will not be used."
         },
         "to_date": {
             "type": "string",
-            "description": "Filter results until a specific date (format: YYYY-MM-DD). Web sources dating after this date will not be used."
+            "description": "Filter results until a specific date (format: YYYY-MM-DD)."
+            "Web sources dating after this date will not be used."
         },
         "include_domains": {
             "type": "array",
             "items": {"type": "string"},
-            "description": "Filter results to only include specific domains. Other domains will not be used."
+            "description": "Filter results to only include specific domains."
+            "Other domains will not be used."
         },
         "exclude_domains": {
             "type": "array",
             "items": {"type": "string"},
-            "description": "Filter results to exclude specific domains. These domains will not be used."
+            "description": "Filter results to exclude specific domains."
+            "These domains will not be used."
         },
         "depth": {
             "type": "string",
-            "description": "The depth format is standard or deep. standard: Returns results more quickly, suitable for low-latency scenarios. deep: Continues to search iteratively if it doesn’t find sufficient information on the first attempt. This may take longer, but often yields more comprehensive results."
+            "description": "The depth format is standard or deep."
+            "standard: Returns results more quickly, suitable for low-latency scenarios."
+            "deep: Continues to search iteratively if it doesn’t find sufficient information on the first attempt. This may take longer, but often yields more comprehensive results."
         }
     },
     required_tool_properties=["query"],
@@ -83,7 +88,7 @@ class LinkupSearchTool(Agent):
             output_type=output_type,
             exclude_domains=exclude_domains,
             include_domains=include_domains,
-            from_date = date.fromisoformat(from_date) if from_date else None,
+            from_date=date.fromisoformat(from_date) if from_date else None,
             to_date=date.fromisoformat(to_date) if to_date else None
         )
         answer = response.answer
