@@ -47,7 +47,8 @@ LINKUP_TOOL_DESCRIPTION = ToolDescription(
             "type": "string",
             "description": "The depth format is standard or deep."
             "standard: Returns results more quickly, suitable for low-latency scenarios."
-            "deep: Continues to search iteratively if it doesn’t find sufficient information on the first attempt. This may take longer, but often yields more comprehensive results."
+            "deep: Continues to search iteratively if it doesn’t find sufficient information on the first attempt,"
+            "this may take longer, but often yields more comprehensive results."
         }
     },
     required_tool_properties=["query"],
