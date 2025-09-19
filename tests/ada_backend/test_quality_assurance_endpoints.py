@@ -362,6 +362,10 @@ def test_run_qa_endpoint():
     )
     assert update_graph_response.status_code == 200
 
+    # Deploy the project to production so we can test the production version
+    deploy_response = client.post(f"/projects/{project_uuid}/graph/{graph_runner_id}/deploy", headers=HEADERS_JWT)
+    assert deploy_response.status_code == 200
+
     # Create a dataset
     dataset_uuid = str(uuid4())
     dataset_payload = {"datasets_name": [f"qa_run_dataset_{dataset_uuid}"]}
@@ -387,52 +391,72 @@ def test_run_qa_endpoint():
     input_data = input_response.json()
     assert len(input_data["inputs_groundtruths"]) == 3
 
-    # Test the run_qa endpoint with draft version
-    run_qa_payload = {
+    # Test the run_qa endpoint with draft version on selected inputs
+    run_qa_payload_selection = {
         "version": "draft",
         "input_ids": [input_data["inputs_groundtruths"][0]["id"], input_data["inputs_groundtruths"][1]["id"]],
     }
 
-    run_qa_response = client.post(
-        f"/projects/{project_uuid}/qa/{dataset_id}/run", headers=HEADERS_JWT, json=run_qa_payload
+    run_qa_response_selection = client.post(
+        f"/projects/{project_uuid}/qa/{dataset_id}/run", headers=HEADERS_JWT, json=run_qa_payload_selection
     )
 
-    assert run_qa_response.status_code == 200, f"Expected status code 200, got {run_qa_response.status_code}"
+    assert (
+        run_qa_response_selection.status_code == 200
+    ), f"Expected status code 200, got {run_qa_response_selection.status_code}"
 
-    qa_results = run_qa_response.json()
-    assert "results" in qa_results
-    assert "summary" in qa_results
+    qa_results_selection = run_qa_response_selection.json()
+    assert "results" in qa_results_selection
+    assert "summary" in qa_results_selection
 
     # Check that all results have input == output (dummy agent behavior)
-    for result in qa_results["results"]:
+    for result in qa_results_selection["results"]:
         assert (
             result["input"] == result["output"]
         ), f"Input and output should be the same for dummy agent. Input: {result['input']}, Output: {result['output']}"
         assert result["success"] is True, f"All results should be successful. Result: {result}"
         assert result["version"] == "draft", f"Version should be draft. Result: {result}"
 
-    # Verify summary statistics
-    summary = qa_results["summary"]
-    assert summary["total"] == 2
-    assert summary["passed"] == 2
-    assert summary["failed"] == 0
-    assert summary["success_rate"] == 100.0
+    # Verify summary statistics for selection
+    summary_selection = qa_results_selection["summary"]
+    assert summary_selection["total"] == 2
+    assert summary_selection["passed"] == 2
+    assert summary_selection["failed"] == 0
+    assert summary_selection["success_rate"] == 100.0
 
-    # Test the run_qa endpoint with production version
-    run_qa_payload_production = {
+    # Test the run_qa endpoint with run_all=True on production version
+    run_qa_payload_all = {
         "version": "production",
-        "input_ids": [input_data["inputs_groundtruths"][2]["id"]],
+        "run_all": True,
     }
 
-    run_qa_response_production = client.post(
-        f"/projects/{project_uuid}/qa/{dataset_id}/run", headers=HEADERS_JWT, json=run_qa_payload_production
+    run_qa_response_all = client.post(
+        f"/projects/{project_uuid}/qa/{dataset_id}/run", headers=HEADERS_JWT, json=run_qa_payload_all
     )
 
-    assert run_qa_response_production.status_code == 200
+    assert run_qa_response_all.status_code == 200, f"Expected status code 200, got {run_qa_response_all.status_code}"
 
-    qa_results_production = run_qa_response_production.json()
-    assert len(qa_results_production["results"]) == 1
-    assert qa_results_production["results"][0]["version"] == "production"
+    qa_results_all = run_qa_response_all.json()
+    assert "results" in qa_results_all
+    assert "summary" in qa_results_all
+
+    # Should process all 3 entries when using run_all=True
+    assert len(qa_results_all["results"]) == 3
+
+    # Check that all results have input == output (dummy agent behavior)
+    for result in qa_results_all["results"]:
+        assert (
+            result["input"] == result["output"]
+        ), f"Input and output should be the same for dummy agent. Input: {result['input']}, Output: {result['output']}"
+        assert result["success"] is True, f"All results should be successful. Result: {result}"
+        assert result["version"] == "production", f"Version should be production. Result: {result}"
+
+    # Verify summary statistics for run_all
+    summary_all = qa_results_all["summary"]
+    assert summary_all["total"] == 3
+    assert summary_all["passed"] == 3
+    assert summary_all["failed"] == 0
+    assert summary_all["success_rate"] == 100.0
 
     # Cleanup
     client.delete(f"/projects/{project_uuid}", headers=HEADERS_JWT)
