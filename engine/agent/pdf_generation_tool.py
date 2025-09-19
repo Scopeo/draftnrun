@@ -1,6 +1,5 @@
 import logging
 from datetime import datetime
-from pathlib import Path
 from typing import Any
 
 
@@ -9,18 +8,22 @@ import markdown2
 from weasyprint import HTML
 from engine.agent.agent import Agent
 from engine.agent.types import ChatMessage, AgentPayload, ToolDescription, ComponentAttributes
+from engine.temps_folder_utils import get_output_dir
 from engine.trace.trace_manager import TraceManager
-from engine.trace.span_context import get_tracing_span
 
 LOGGER = logging.getLogger(__name__)
 
 DEFAULT_PDF_GENERATION_TOOL_DESCRIPTION = ToolDescription(
     name="Markdown_to_PDF_Tool",
-    description=("A PDF generation tool that converts markdown text to PDF files."),
+    description="A PDF generation tool that converts markdown text to PDF files.",
     tool_properties={
         "markdown_content": {
             "type": "string",
-            "description": "The markdown text to convert to PDF",
+            "description": (
+                "The markdown text to convert to PDF. \n"
+                "Insert the image into the markdown in src format. It is recommended to limit the size of "
+                'images with a style like this: style="width:80%; max-width:100%; height:auto;"'
+            ),
         }
     },
     required_tool_properties=["markdown_content"],
@@ -58,23 +61,18 @@ class PDFGenerationTool(Agent):
                 is_final=True,
             )
 
-        params = get_tracing_span()
-        if not params.uuid_for_temp_folder:
-            raise ValueError("UUID for temp folder is not set")
-
-        output_dir = Path(params.uuid_for_temp_folder)
-        output_dir.mkdir(parents=True, exist_ok=True)
+        output_dir = get_output_dir()
 
         # Generate filename with timestamp
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = output_dir / f"document_{timestamp}.pdf"
+        filename = f"document_{timestamp}.pdf"
 
         html = markdown2.markdown(markdown_content)
 
         # Create HTML object and ensure proper cleanup
-        html_obj = HTML(string=html)
+        html_obj = HTML(string=html, base_url=str(output_dir))
         try:
-            html_obj.write_pdf(str(filename))
+            html_obj.write_pdf(str(output_dir / filename))
         finally:
             # Ensure any HTTP connections are properly closed
             if hasattr(html_obj, "_url_fetcher") and hasattr(html_obj._url_fetcher, "session"):
