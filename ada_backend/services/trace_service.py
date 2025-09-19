@@ -93,24 +93,23 @@ def get_attributes(span_kind: str, row: pd.Series) -> dict:
 def get_attributes_with_messages(span_kind: str, row: pd.Series) -> dict:
     input = json.loads(row["input_content"]) if row["input_content"] else []
     output = json.loads(row["output_content"]) if row["output_content"] else []
-    attributes = json.loads(row["attributes"]) if row["attributes"] else {}
     documents = []
     tool_info = {}
     model_name = ""
     try:
-        if "llm" in attributes:
-            model_name = attributes["llm"].get("model_name", "")
+        if "llm" in row["attributes"]:
+            model_name = row["attributes"]["llm"].get("model_name", "")
         if span_kind == "RETRIEVER":
             events = json.loads(row["events"])
-            if "retrieval" in attributes:
-                documents = attributes["retrieval"]["documents"]
+            if "retrieval" in row["attributes"]:
+                documents = row["attributes"]["retrieval"]["documents"]
             elif len(events) > 0:
                 documents = [{"document": event["attributes"]} for event in events]
         elif span_kind == "EMBEDDING":
-            model_name = "embedding:" + attributes["embedding"]["model_name"]
+            model_name = "embedding:" + row["attributes"]["embedding"]["model_name"]
         elif span_kind == "TOOL":
-            if "tool" in attributes:
-                tool_info = attributes["tool"]
+            if "tool" in row["attributes"]:
+                tool_info = row["attributes"]["tool"]
     except Exception as e:
         LOGGER.error(f"Error processing row {row}: {e}")
     return input, output, documents, tool_info, model_name

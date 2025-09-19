@@ -80,4 +80,5 @@ def query_trace_by_trace_id(trace_id: UUID) -> pd.DataFrame:
     df = pd.read_sql_query(query, session.bind)
     session.close()
     df = df.replace({np.nan: None})
+    df["attributes"] = df["attributes"].apply(lambda x: json.loads(x) if isinstance(x, str) else x)
     return df
