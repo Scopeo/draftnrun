@@ -5,6 +5,7 @@ import base64
 from unittest.mock import MagicMock
 import pytest_asyncio
 import asyncio
+import uuid
 
 
 from engine.agent.tools.python_code_runner import (
@@ -13,6 +14,7 @@ from engine.agent.tools.python_code_runner import (
 )
 from engine.agent.types import AgentPayload, ChatMessage, ComponentAttributes
 from engine.trace.trace_manager import TraceManager
+from engine.trace.span_context import set_tracing_span
 
 
 @pytest.fixture
@@ -45,6 +47,18 @@ def e2b_api_key():
     return api_key
 
 
+@pytest.fixture(autouse=True)
+def setup_tracing_context():
+    """Setup a unique tracing context for each test."""
+    unique_uuid = f"/tmp/{uuid.uuid4()}"
+    set_tracing_span(
+        project_id="test_project",
+        organization_id="test_org",
+        organization_llm_providers=["test_provider"],
+        uuid_for_temp_folder=unique_uuid,
+    )
+
+
 def test_tool_initialization(e2b_tool):
     """Test that the tool initializes correctly."""
     assert e2b_tool.component_attributes.component_instance_name == "test_e2b_tool"
@@ -67,7 +81,7 @@ def test_execute_simple_python_code(e2b_tool, e2b_api_key):
     """Test executing simple Python code that returns a value."""
     python_code = "print('Hello, World!'); x = 42; x"
 
-    result_data = asyncio.run(e2b_tool.execute_python_code(python_code))
+    result_data, _ = asyncio.run(e2b_tool.execute_python_code(python_code))
 
     # Check that the execution was successful
     assert "error" in result_data
@@ -103,7 +117,7 @@ result = {"area": area, "date": current_time}
 result
 """
 
-    result_data = asyncio.run(e2b_tool.execute_python_code(python_code))
+    result_data, _ = asyncio.run(e2b_tool.execute_python_code(python_code))
 
     assert "error" in result_data
     assert "stdout" in result_data
@@ -131,7 +145,7 @@ y = 0
 result = x / y  # This will raise a ZeroDivisionError
 """
 
-    result_data = asyncio.run(e2b_tool.execute_python_code(python_code))
+    result_data, _ = asyncio.run(e2b_tool.execute_python_code(python_code))
 
     assert "error" in result_data
     assert "stdout" in result_data
@@ -166,7 +180,7 @@ files = os.listdir('.')
 {"content": content, "files": files}
 """
 
-    result_data = asyncio.run(e2b_tool.execute_python_code(python_code))
+    result_data, _ = asyncio.run(e2b_tool.execute_python_code(python_code))
 
     assert "error" in result_data
     assert "stdout" in result_data
@@ -210,7 +224,7 @@ print(f"Even numbers: {even_numbers}")
 }
 """
 
-    result_data = asyncio.run(e2b_tool.execute_python_code(python_code))
+    result_data, _ = asyncio.run(e2b_tool.execute_python_code(python_code))
 
     assert "error" in result_data
     assert "stdout" in result_data
@@ -255,13 +269,13 @@ plt.show()
 print("Single plot generated!")
 """
 
-    result_data = asyncio.run(e2b_tool.execute_python_code(python_code))
+    result_data, records = asyncio.run(e2b_tool.execute_python_code(python_code))
 
     # Check that execution was successful
     assert result_data["error"] is None
 
     # Test image extraction
-    images = e2b_tool._extract_images_from_results(result_data)
+    images = e2b_tool._save_images_from_results(result_data, records)
 
     # Should have exactly one image
     assert len(images) == 1
@@ -312,13 +326,13 @@ plt.show()
 print("Three plots generated!")
 """
 
-    result_data = asyncio.run(e2b_tool.execute_python_code(python_code))
+    result_data, records = asyncio.run(e2b_tool.execute_python_code(python_code))
 
     # Check that execution was successful
     assert result_data["error"] is None
 
     # Test image extraction
-    images = e2b_tool._extract_images_from_results(result_data)
+    images = e2b_tool._save_images_from_results(result_data, records)
 
     # Should have exactly three images
     assert len(images) == 3
@@ -354,13 +368,13 @@ print("Calculations completed!")
 result
 """
 
-    result_data = asyncio.run(e2b_tool.execute_python_code(python_code))
+    result_data, records = asyncio.run(e2b_tool.execute_python_code(python_code))
 
     # Check that execution was successful
     assert result_data["error"] is None
 
     # Test image extraction
-    images = e2b_tool._extract_images_from_results(result_data)
+    images = e2b_tool._save_images_from_results(result_data, records)
 
     # Should have no images
     assert len(images) == 0
@@ -413,7 +427,7 @@ print("Async image test completed!")
 
     # Check that the response message mentions the image
     content = result.messages[0].content
-    assert "[1 image(s) generated and included in artifacts]" in content
+    assert "[1 image(s) generated and included in artifacts" in content
 
 
 def test_run_without_io_trace_with_multiple_images(e2b_tool, e2b_api_key):
@@ -458,7 +472,7 @@ print("Two async plots generated!")
 
     # Check that the response message mentions the correct number of images
     content = result.messages[0].content
-    assert "[2 image(s) generated and included in artifacts]" in content
+    assert "[2 image(s) generated and included in artifacts" in content
 
 
 def test_run_without_io_trace_no_images(e2b_tool, e2b_api_key):

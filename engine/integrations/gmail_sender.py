@@ -13,6 +13,7 @@ from ada_backend.database.setup_db import get_db
 from engine.agent.agent import Agent
 from engine.agent.types import AgentPayload, ChatMessage, ComponentAttributes, ToolDescription
 from engine.integrations.utils import get_gmail_sender_service, get_google_user_email, get_oauth_access_token
+from engine.temps_folder_utils import get_output_dir
 from engine.trace.trace_manager import TraceManager
 from settings import settings
 
@@ -60,11 +61,12 @@ GMAIL_SENDER_TOOL_DESCRIPTION = ToolDescription(
 
 def _ensure_paths(attachments: Optional[Iterable[str | Path]]) -> list[Path]:
     """Normalize and validate attachment paths."""
+    output_dir = get_output_dir()
     if not attachments:
         return []
     paths: list[Path] = []
     for att in attachments:
-        p = Path(att)
+        p = output_dir / Path(att)
         if not p.is_file():
             raise FileNotFoundError(f"Attachment not found or not a file: {p}")
         paths.append(p)

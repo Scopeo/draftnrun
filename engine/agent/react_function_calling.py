@@ -23,7 +23,6 @@ from engine.llm_services.llm_service import CompletionService
 from engine.agent.utils_prompt import fill_prompt_template_with_dictionary
 from engine.agent.tools.python_code_runner import PYTHON_CODE_RUNNER_TOOL_DESCRIPTION
 from engine.agent.tools.terminal_command_runner import TERMINAL_COMMAND_RUNNER_TOOL_DESCRIPTION
-from engine.trace.serializer import serialize_to_json
 from settings import settings
 
 
@@ -248,7 +247,7 @@ class ReActAgent(Agent):
             agent_input.messages.append(
                 ChatMessage(
                     role="tool",
-                    content=serialize_to_json(agent_output),
+                    content=agent_output.messages[0].content if agent_output.messages else None,
                     tool_call_id=tool_call_id,
                 )
             )
