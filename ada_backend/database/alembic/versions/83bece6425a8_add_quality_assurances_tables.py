@@ -1,8 +1,8 @@
 """add quality assurances tables
 
-Revision ID: db11e2d6a399
-Revises: ed8f19491923
-Create Date: 2025-09-17 18:01:44.166880
+Revision ID: 83bece6425a8
+Revises: 3253550650e4
+Create Date: 2025-09-19 14:38:58.517892
 
 """
 
@@ -13,8 +13,8 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = "db11e2d6a399"
-down_revision: Union[str, None] = "ed8f19491923"
+revision: str = "83bece6425a8"
+down_revision: Union[str, None] = "3253550650e4"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
