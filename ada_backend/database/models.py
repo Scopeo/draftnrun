@@ -358,6 +358,7 @@ class GraphRunner(Base):
     id = mapped_column(UUID(as_uuid=True), primary_key=True, index=True, default=uuid.uuid4)
     created_at = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    tag_version = mapped_column(String, nullable=True)
 
     graph_edges = relationship("GraphRunnerEdge", back_populates="graph_runner")
     nodes = relationship("GraphRunnerNode", back_populates="graph_runner")

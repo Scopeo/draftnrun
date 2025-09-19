@@ -39,13 +39,18 @@ def get_project_with_details(
     project_id: UUID,
 ) -> ProjectWithGraphRunnersSchema:
     results = (
-        session.query(db.Project, db.ProjectEnvironmentBinding)
+        session.query(db.Project, db.ProjectEnvironmentBinding, db.GraphRunner)
         .join(db.ProjectEnvironmentBinding, db.ProjectEnvironmentBinding.project_id == db.Project.id)
+        .join(db.GraphRunner, db.GraphRunner.id == db.ProjectEnvironmentBinding.graph_runner_id)
         .filter(db.Project.id == project_id)
     ).all()
     graph_runners = [
-        GraphRunnerEnvDTO(graph_runner_id=project_env_gr.graph_runner_id, env=project_env_gr.environment)
-        for _, project_env_gr in results
+        GraphRunnerEnvDTO(
+            graph_runner_id=project_env_gr.graph_runner_id,
+            env=project_env_gr.environment,
+            tag_version=graph_runner.tag_version,
+        )
+        for _, project_env_gr, graph_runner in results
     ]
     project = results[0][0] if results else None
     return ProjectWithGraphRunnersSchema(
