@@ -19,22 +19,16 @@ branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
 
-def upgrade_fk_from_component_to_version_current(
+def upgrade_fk_from_component_to_version_via_mapping(
     table_name: str,
     old_component_col: str,
     new_version_col: str,
     new_fk_name: str,
 ) -> None:
     """
-    Replace a FK to components(<old_component_col>) with a FK to component_versions(<new_version_col>),
-    mapping each row to the component's *current* version (v.is_current = true).
-
-    Steps:
-      1) Add <new_version_col> (NULL).
-      2) Build temp map component_id -> current version_id.
-      3) Backfill <new_version_col>.
-      4) Create FK to component_versions, set NOT NULL.
-      5) Drop <old_component_col>.
+    Replaces a FK to components(<old_component_col>) with a FK to
+    component_versions(<new_version_col>) based *only* on
+    release_stage_to_current_version_mappings (1:1 per component before migration).
     """
     # 1) add new nullable column
     with op.batch_alter_table(table_name) as batch:
@@ -46,24 +40,23 @@ def upgrade_fk_from_component_to_version_current(
     op.execute(
         f"""
         CREATE TEMP TABLE {tmp} AS
-        SELECT v.component_id, v.id AS current_version_id
-        FROM component_versions v
-        WHERE v.is_current = true;
-    """
+        SELECT m.component_id, m.component_version_id
+        FROM release_stage_to_current_version_mappings m;
+        """
     )
 
     # 3) backfill
     op.execute(
         f"""
         UPDATE {table_name} t
-        SET {new_version_col} = m.current_version_id
+        SET {new_version_col} = m.component_version_id
         FROM {tmp} m
         WHERE t.{old_component_col} = m.component_id
           AND t.{new_version_col} IS NULL;
-    """
+        """
     )
 
-    # 4) FK + NOT NULL + drop old column
+    # 4) FK constraint + NOT NULL + old column deletion
     with op.batch_alter_table(table_name) as batch:
         batch.create_foreign_key(
             new_fk_name,
@@ -75,7 +68,7 @@ def upgrade_fk_from_component_to_version_current(
         batch.alter_column(new_version_col, nullable=False)
         batch.drop_column(old_component_col)
 
-    # 5) cleanup
+    # 5) cleaning
     op.execute(f"DROP TABLE IF EXISTS {tmp};")
 
 
@@ -107,9 +100,8 @@ def downgrade_fk_from_version_to_component(
         f"""
         CREATE TEMP TABLE {tmp} AS
         SELECT v.id AS version_id, v.component_id
-        FROM component_versions v
-        WHERE v.is_current = true;
-    """
+        FROM component_versions v;
+        """
     )
 
     # 3) Backfill
@@ -118,8 +110,9 @@ def downgrade_fk_from_version_to_component(
         UPDATE {table_name} t
         SET {new_col} = m.component_id
         FROM {tmp} m
-        WHERE t.{old_col} = m.version_id;
-    """
+        WHERE t.{old_col} = m.version_id
+          AND t.{new_col} IS NULL;
+        """
     )
 
     # 4) Add FK to components, set NOT NULL, drop old FK and column
@@ -135,6 +128,7 @@ def downgrade_fk_from_version_to_component(
         batch.drop_constraint(fk_name_old, type_="foreignkey")
         batch.drop_column(old_col)
 
+    # 5) cleanup
     op.execute(f"DROP TABLE IF EXISTS {tmp};")
 
 
@@ -159,7 +153,6 @@ def upgrade() -> None:
             nullable=True,
         ),
         sa.Column("release_stage", sa.Text(), nullable=False, server_default="internal"),
-        sa.Column("is_current", sa.Boolean(), nullable=False, server_default=sa.text("true")),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=True),
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=True),
         sa.CheckConstraint(
@@ -174,20 +167,12 @@ def upgrade() -> None:
     ALTER TABLE component_versions
     ALTER COLUMN release_stage TYPE release_stage
     USING (release_stage::release_stage)
-"""
+    """
     )
     op.execute(
         """
     ALTER TABLE component_versions
     ALTER COLUMN release_stage SET DEFAULT 'internal'::release_stage
-"""
-    )
-
-    op.execute(
-        """
-        CREATE UNIQUE INDEX uq_component_current_version
-        ON component_versions (component_id)
-        WHERE is_current = true;
     """
     )
 
@@ -202,7 +187,6 @@ def upgrade() -> None:
             integration_id,
             default_tool_description_id,
             release_stage,
-            is_current,
             created_at,
             updated_at
         )
@@ -215,15 +199,65 @@ def upgrade() -> None:
             c.integration_id,
             c.default_tool_description_id,
             c.release_stage::release_stage,
-            TRUE,
             COALESCE(c.created_at, now()),
             COALESCE(c.updated_at, now())
         FROM components c;
         """
     )
 
+    # -------------------------------------------------------------------------
+    # Add ReleaseStageToCurrentVersionMapping table
+    # -------------------------------------------------------------------------
+    op.create_unique_constraint(
+        "uq_component_versions_component_id_id",
+        "component_versions",
+        ["component_id", "id"],
+    )
+    op.create_table(
+        "release_stage_to_current_version_mappings",
+        sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
+        sa.Column(
+            "component_id",
+            postgresql.UUID(as_uuid=True),
+            sa.ForeignKey("components.id", ondelete="CASCADE"),
+            nullable=False,
+        ),
+        sa.Column("release_stage", sa.Text(), nullable=False),
+        sa.Column("component_version_id", postgresql.UUID(as_uuid=True), nullable=False),
+        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=True),
+        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=True),
+        sa.ForeignKeyConstraint(
+            ["component_id", "component_version_id"],
+            ["component_versions.component_id", "component_versions.id"],
+            name="fk_rs_current_version",
+            ondelete="CASCADE",
+        ),
+        sa.UniqueConstraint("component_id", "release_stage", name="uq_component_release_stage"),
+    )
+    op.execute(
+        """
+    ALTER TABLE release_stage_to_current_version_mappings
+    ALTER COLUMN release_stage TYPE release_stage
+    USING (release_stage::release_stage)
+"""
+    )
+    op.execute(
+        """
+    INSERT INTO release_stage_to_current_version_mappings
+        (id, component_id, release_stage, component_version_id, created_at, updated_at)
+    SELECT
+        gen_random_uuid(),
+        v.component_id,
+        v.release_stage,
+        v.id,
+        COALESCE(v.created_at, now()),
+        COALESCE(v.updated_at, now())
+    FROM component_versions v;
+    """
+    )
+
     # component_parameter_definitions: component_id -> component_version_id
-    upgrade_fk_from_component_to_version_current(
+    upgrade_fk_from_component_to_version_via_mapping(
         table_name="component_parameter_definitions",
         old_component_col="component_id",
         new_version_col="component_version_id",
@@ -231,7 +265,7 @@ def upgrade() -> None:
     )
 
     # comp_param_child_comps_relationships: child_component_id -> child_component_version_id
-    upgrade_fk_from_component_to_version_current(
+    upgrade_fk_from_component_to_version_via_mapping(
         table_name="comp_param_child_comps_relationships",
         old_component_col="child_component_id",
         new_version_col="child_component_version_id",
@@ -239,7 +273,7 @@ def upgrade() -> None:
     )
 
     # component_instances (if you need it): component_id -> component_version_id
-    upgrade_fk_from_component_to_version_current(
+    upgrade_fk_from_component_to_version_via_mapping(
         table_name="component_instances",
         old_component_col="component_id",
         new_version_col="component_version_id",
@@ -257,6 +291,9 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    # -------------------------------------------------------------------------
+    # Add back the columns to components that were removed in upgrade()
+    # -------------------------------------------------------------------------
     release_stage_enum = sa.Enum(
         "beta", "early_access", "public", "internal", name="release_stage", native_enum=True, create_type=False
     )
@@ -322,11 +359,15 @@ def downgrade() -> None:
             integration_id = v.integration_id,
             default_tool_description_id = v.default_tool_description_id,
             release_stage = v.release_stage
-        FROM component_versions v
-        WHERE v.component_id = c.id
-          AND v.is_current = true;
+        FROM release_stage_to_current_version_mappings m
+        JOIN component_versions v ON v.id = m.component_version_id
+        WHERE c.id = m.component_id;
         """
     )
+    # -------------------------------------------------------------------------
+    # Drop ReleaseStageToCurrentVersionMapping table
+    # -------------------------------------------------------------------------
+    op.drop_table("release_stage_to_current_version_mappings")
 
     # -------------------------------------------------------------------------
     # Drop index/constraints/table component_versions
@@ -334,4 +375,9 @@ def downgrade() -> None:
     op.execute("DROP INDEX IF EXISTS uq_component_current_version;")
     op.drop_constraint("check_version_not_empty", "component_versions", type_="check")
     op.drop_constraint("check_version_format", "component_versions", type_="check")
+    op.drop_constraint(
+        "uq_component_versions_component_id_id",
+        "component_versions",
+        type_="unique",
+    )
     op.drop_table("component_versions")

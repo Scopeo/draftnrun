@@ -5,6 +5,7 @@ from enum import StrEnum
 import logging
 
 from sqlalchemy import (
+    ForeignKeyConstraint,
     Index,
     String,
     Text,
@@ -277,7 +278,6 @@ class ComponentVersion(Base):
     )
     release_stage = mapped_column(make_pg_enum(ReleaseStage), nullable=False, default=ReleaseStage.BETA)
 
-    is_current = mapped_column(Boolean, nullable=False, default=True)
     created_at = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
@@ -294,20 +294,66 @@ class ComponentVersion(Base):
     child_definitions = relationship("ComponentParameterChildRelationship", back_populates="child_component")
 
     __table_args__ = (
-        # Enforce strict "1.0.0" format, not just "a.b.c"
         CheckConstraint("version_tag ~ '^[0-9]+\\.[0-9]+\\.[0-9]+$'", name="check_version_semver"),
-        # Move from migration into model for clarity
         UniqueConstraint("component_id", "version_tag", name="uq_component_version"),
-        Index(
-            "uq_component_current_version",
-            "component_id",
-            unique=True,
-            postgresql_where=text("is_current = true"),
-        ),
     )
 
     def __str__(self):
         return f"ComponentVersion(component_id={self.component_id}, version_tag={self.version_tag})"
+
+
+class ReleaseStageToCurrentVersionMapping(Base):
+    """
+    Maps release stages to the 'current' version of a component.
+
+    Invariant DB garanti:
+      - (component_id, release_stage) est unique.
+      - component_version_id pointe sur une version qui appartient au même component_id.
+    """
+
+    __tablename__ = "release_stage_to_current_version_mappings"
+
+    id = mapped_column(UUID(as_uuid=True), primary_key=True, index=True, default=uuid.uuid4)
+
+    component_id = mapped_column(
+        UUID(as_uuid=True), ForeignKey("components.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    release_stage = mapped_column(
+        make_pg_enum(ReleaseStage),
+        nullable=False,
+    )
+    component_version_id = mapped_column(
+        UUID(as_uuid=True),
+        nullable=False,
+        index=True,
+    )
+
+    created_at = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    component_version = relationship("ComponentVersion")
+
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["component_id", "component_version_id"],
+            ["component_versions.component_id", "component_versions.id"],
+            ondelete="CASCADE",
+            name="fk_mapping_same_component",
+        ),
+        UniqueConstraint("component_id", "release_stage", name="uq_component_release_stage"),
+        Index(
+            "idx_current_by_component_stage",
+            "component_id",
+            "release_stage",
+            unique=True,
+        ),
+    )
+
+    def __str__(self) -> str:
+        return (
+            f"ReleaseStageToCurrentVersionMapping(component_id={self.component_id}, "
+            f"release_stage={self.release_stage}, component_version_id={self.component_version_id})"
+        )
 
 
 class Integration(Base):
