@@ -327,11 +327,21 @@ async def run_qa_endpoint(
     session: Session = Depends(get_db),
 ) -> QARunResponse:
     """
-    Run QA process on multiple inputs from a dataset.
+    Run QA process on inputs from a dataset.
 
-    This endpoint allows users to run a project on specific input entries from a dataset.
+    This endpoint allows users to run a project on input entries from a dataset.
+    You can either run on specific entries by providing input_ids, or run on all
+    entries in the dataset by setting run_all=True.
+
     The project will be executed using the specified version (draft or production).
     Results are stored in the VersionOutput table with the specified version.
+
+    Parameters:
+    - version: The environment version to run (draft or production)
+    - input_ids: List of specific input IDs to run (optional if run_all=True)
+    - run_all: Boolean flag to run on all entries in the dataset (optional, default=False)
+
+    Note: You must specify either input_ids OR set run_all=True, but not both.
 
     The input and output fields are stored as strings but can be easily cast to JSON
     for function processing when needed.

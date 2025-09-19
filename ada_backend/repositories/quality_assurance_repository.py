@@ -279,29 +279,29 @@ def create_datasets(
     return datasets
 
 
-def update_datasets(
+def update_dataset(
     session: Session,
-    updates_data: List[Tuple[UUID, Optional[str]]],
+    dataset_id: UUID,
+    dataset_name: Optional[str],
     project_id: UUID,
-) -> List[DatasetProject]:
-    """Update multiple datasets."""
-    updated_datasets = []
+) -> DatasetProject:
+    """Update a dataset"""
+    dataset = (
+        session.query(DatasetProject)
+        .filter(DatasetProject.id == dataset_id, DatasetProject.project_id == project_id)
+        .first()
+    )
 
-    for dataset_id, dataset_name in updates_data:
-        dataset = (
-            session.query(DatasetProject)
-            .filter(DatasetProject.id == dataset_id, DatasetProject.project_id == project_id)
-            .first()
-        )
+    if not dataset:
+        raise ValueError(f"Dataset {dataset_id} not found in project {project_id}")
 
-        if dataset and dataset_name is not None:
-            dataset.dataset_name = dataset_name
-            updated_datasets.append(dataset)
+    if dataset_name is not None:
+        dataset.dataset_name = dataset_name
 
     session.commit()
 
-    LOGGER.info(f"Updated {len(updated_datasets)} datasets for project {project_id}")
-    return updated_datasets
+    LOGGER.info(f"Updated dataset {dataset_id} with name '{dataset_name}' for project {project_id}")
+    return dataset
 
 
 def delete_datasets(

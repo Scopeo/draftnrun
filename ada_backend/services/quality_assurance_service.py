@@ -11,10 +11,11 @@ from ada_backend.repositories.quality_assurance_repository import (
     get_inputs_groundtruths_with_pagination,
     get_inputs_groundtruths_with_version_outputs,
     get_inputs_groundtruths_by_ids,
+    get_inputs_groundtruths_by_dataset,
     get_inputs_groundtruths_count_by_dataset,
     create_version_output,
     create_datasets,
-    update_datasets,
+    update_dataset,
     delete_datasets,
     get_datasets_by_project,
 )
@@ -142,22 +143,31 @@ async def run_qa_service(
         session (Session): SQLAlchemy session
         project_id (UUID): ID of the project to run
         dataset_id (UUID): ID of the dataset
-        run_request (QARunRequest): Request containing version and input_ids
+        run_request (QARunRequest): Request containing version and either input_ids or run_all flag
 
     Returns:
         QARunResponse: Results of the QA run with summary
     """
     try:
-        # Get the input-groundtruth entries by their IDs
-        input_entries = get_inputs_groundtruths_by_ids(session, run_request.input_ids)
+        # Get the input-groundtruth entries based on run_all flag or specific IDs
+        if run_request.run_all:
+            # Get all input entries for the dataset
+            number_of_dataset_inputs = get_inputs_groundtruths_count_by_dataset(session, dataset_id)
+            input_entries = get_inputs_groundtruths_by_dataset(
+                session, dataset_id, skip=0, limit=number_of_dataset_inputs
+            )
+            if not input_entries:
+                raise ValueError(f"No input entries found in dataset {dataset_id}")
+        else:
+            # Get the input-groundtruth entries by their IDs
+            input_entries = get_inputs_groundtruths_by_ids(session, run_request.input_ids)
+            if not input_entries:
+                raise ValueError("No input entries found for the provided input_ids")
 
-        if not input_entries:
-            raise ValueError("No input entries found for the provided input_ids")
-
-        # Verify all inputs belong to the specified dataset
-        for entry in input_entries:
-            if entry.dataset_id != dataset_id:
-                raise ValueError(f"Input {entry.id} does not belong to dataset {dataset_id}")
+            # Verify all inputs belong to the specified dataset
+            for entry in input_entries:
+                if entry.dataset_id != dataset_id:
+                    raise ValueError(f"Input {entry.id} does not belong to dataset {dataset_id}")
 
         results = []
         successful_runs = 0
@@ -243,7 +253,11 @@ async def run_qa_service(
             success_rate=success_rate,
         )
 
-        LOGGER.info(f"QA run completed for project {project_id}, dataset {dataset_id}, version {run_request.version}")
+        run_mode = "all entries" if run_request.run_all else f"{len(run_request.input_ids)} selected entries"
+        LOGGER.info(
+            f"QA run completed for project {project_id}, "
+            f"dataset {dataset_id}, version {run_request.version}, mode: {run_mode}"
+        )
         LOGGER.info(
             f"Total processed: {total_processed}, Successful: {successful_runs}, "
             f"Failed: {failed_runs}, Success Rate: {success_rate:.2f}%"
@@ -435,32 +449,30 @@ def update_dataset_service(
     dataset_name: str,
 ) -> DatasetResponse:
     """
-    Update multiple datasets.
+    Update a single dataset.
 
     Args:
         session (Session): SQLAlchemy session
         project_id (UUID): ID of the project
-        dataset_id: UUID,
-        dataset_name: str,
+        dataset_id (UUID): ID of the dataset to update
+        dataset_name (str): New name for the dataset
 
     Returns:
-        DatasetListResponse: The updated datasets
+        DatasetResponse: The updated dataset
     """
     try:
-        # Prepare updates data
-        updates_data = [(dataset_id, dataset_name)]
-
-        updated_datasets = update_datasets(
+        updated_dataset = update_dataset(
             session,
-            updates_data,
+            dataset_id,
+            dataset_name,
             project_id,
         )
 
-        LOGGER.info(f"Updated {len(updated_datasets)} datasets for project {project_id}")
-        return DatasetResponse.model_validate(updated_datasets[0])
+        LOGGER.info(f"Updated dataset {dataset_id} with name '{dataset_name}' for project {project_id}")
+        return DatasetResponse.model_validate(updated_dataset)
     except Exception as e:
-        LOGGER.error(f"Error in update_datasets_service: {str(e)}")
-        raise ValueError(f"Failed to update datasets: {str(e)}") from e
+        LOGGER.error(f"Error in update_dataset_service: {str(e)}")
+        raise ValueError(f"Failed to update dataset: {str(e)}") from e
     finally:
         session.close()
 
