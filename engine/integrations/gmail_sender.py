@@ -123,7 +123,7 @@ class GmailSender(Agent):
         trace_manager: TraceManager,
         component_attributes: ComponentAttributes,
         secret_integration_id: str,
-        send_as_draft: bool = True,
+        save_as_draft: bool = True,
         tool_description: ToolDescription = GMAIL_SENDER_TOOL_DESCRIPTION,
         google_client_id: Optional[str] = None,
         google_client_secret: Optional[str] = None,
@@ -142,7 +142,7 @@ class GmailSender(Agent):
         session = next(get_db())
         access_token = get_oauth_access_token(session, secret_integration_id, google_client_id, google_client_secret)
         self.service = get_gmail_sender_service(access_token)
-        self.send_as_draft = send_as_draft
+        self.save_as_draft = save_as_draft
 
         self.email_address = get_google_user_email(access_token)
 
@@ -217,7 +217,7 @@ class GmailSender(Agent):
                 SpanAttributes.INPUT_VALUE: f"Subject: {mail_subject}\n Body: {mail_body}",
             }
         )
-        if self.send_as_draft or email_recipients is None:
+        if self.save_as_draft or email_recipients is None:
             LOGGER.info("Creating draft email")
             draft = self.gmail_create_draft(mail_subject, mail_body, email_recipients, cc, bcc, email_attachments)
             if not draft:
