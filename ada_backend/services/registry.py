@@ -30,6 +30,7 @@ from engine.agent.rag.document_search import DocumentSearch
 from engine.agent.graph_runner_block import GraphRunnerBlock
 from engine.agent.chunk_processor import ChunkProcessor
 from engine.integrations.gmail_sender import GmailSender
+from engine.agent.tools.linkup_tool import LinkupSearchTool
 from engine.storage_service.local_service import SQLLocalService
 from engine.storage_service.snowflake_service.snowflake_service import SnowflakeService
 from ada_backend.services.entity_factory import (
@@ -84,6 +85,7 @@ class SupportedEntityType(StrEnum):
     TERMINAL_COMMAND_RUNNER_TOOL = "Terminal Command Runner"
     PDF_GENERATION_TOOL = "PDF Generation Tool"
     SQL_TOOL = "SQLTool"
+    LINKUP_SEARCH_TOOL = "Linkup Search Tool"
     LLM_CALL_AGENT = "LLM Call"
     REACT_SQL_AGENT = "Database Query Agent"
     RUN_SQL_QUERY_TOOL = "RunSQLQueryTool"
@@ -411,6 +413,12 @@ def create_factory_registry() -> FactoryRegistry:
             parameter_processors=[
                 completion_service_processor,
             ],
+        ),
+    )
+    registry.register(
+        name=SupportedEntityType.LINKUP_SEARCH_TOOL,
+        factory=AgentFactory(
+            entity_class=LinkupSearchTool,
         ),
     )
     registry.register(
