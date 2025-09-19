@@ -44,7 +44,7 @@ PYTHON_CODE_RUNNER_TOOL_DESCRIPTION = ToolDescription(
     required_tool_properties=["python_code"],
 )
 
-BASIC_IMAGE_EXTS = {"png", "jpeg", "svg"}
+BASIC_IMAGE_EXTS = {".png", ".jpeg", ".svg"}
 VALID_E2B_FILE_EXTS = BASIC_IMAGE_EXTS | {".webp", ".csv", ".md", ".json", ".txt", ".pdf"}
 SUPPORTED_PIXEL_EXTS = BASIC_IMAGE_EXTS | {".jpg", ".webp", ".gif", ".bmp", ".tiff"}
 
