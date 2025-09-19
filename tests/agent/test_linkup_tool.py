@@ -51,11 +51,32 @@ def test_query_with_params(linkup_tool):
         depth="standard",
         output_type="sourcedAnswer",
         exclude_domains=None,
-        include_domains=["wikipedia.org"],
+        include_domains=None,
+        from_date=None,
+        to_date=None,
+    )
+
+    # Check that the execution was successful
+    assert len(result.response) > 5
+    assert isinstance(result.sources[0], SourceChunk)
+    assert result.is_successful
+
+
+def test_to_date_from_date_params(linkup_tool):
+    """Test executing simple query that returns a response in the right format."""
+    query = "Who is the person who won the most Roland Garros titles ?"
+
+    result = linkup_tool.search_results(
+        query=query,
+        depth="standard",
+        output_type="sourcedAnswer",
+        exclude_domains=None,
+        include_domains=None,
         from_date="2012-10-10",
         to_date="2014-10-10",
     )
 
+    # Check that the execution was successful
     assert len(result.response) > 5
     assert isinstance(result.sources[0], SourceChunk)
     assert "Wikipedia" in result.sources[0].name
