@@ -36,13 +36,13 @@ def seed_gmail_components(session: Session):
         ComponentParameterDefinition(
             id=UUID("6a74e715-ea03-42d9-bc1d-a1e1450f1ff7"),
             component_id=gmail_sender_component.id,
-            name="send_as_draft",
+            name="save_as_draft",
             type=ParameterType.BOOLEAN,
             nullable=False,
             default=True,
             ui_component=UIComponent.CHECKBOX,
             ui_component_properties=UIComponentProperties(
-                label="Send as Draft",
+                label="Save as Draft",
                 description="If checked, the email will be saved as a draft instead of being sent immediately.",
             ).model_dump(exclude_unset=True, exclude_none=True),
         )
