@@ -45,6 +45,7 @@ PYTHON_CODE_RUNNER_TOOL_DESCRIPTION = ToolDescription(
 )
 
 BASIC_IMAGE_EXTS = {".png", ".jpeg", ".svg"}
+BASIC_IMAGE_SUFFIXES = {ext[1:] for ext in BASIC_IMAGE_EXTS}
 VALID_E2B_FILE_EXTS = BASIC_IMAGE_EXTS | {".webp", ".csv", ".md", ".json", ".txt", ".pdf"}
 SUPPORTED_PIXEL_EXTS = BASIC_IMAGE_EXTS | {".jpg", ".webp", ".gif", ".bmp", ".tiff"}
 
@@ -104,7 +105,7 @@ class PythonCodeRunner(Agent):
         file_fp = [r.fp_pixel for r in files_records if r.fp_pixel]
 
         for result in results:
-            for image_format in BASIC_IMAGE_EXTS:
+            for image_format in BASIC_IMAGE_SUFFIXES:
                 image_data = getattr(result, image_format, None)
                 if image_data:
                     fp = fp_pixel_from_base64(image_data)
