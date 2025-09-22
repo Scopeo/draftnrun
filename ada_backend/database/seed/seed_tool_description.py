@@ -21,6 +21,7 @@ from engine.agent.tools.python_code_runner import PYTHON_CODE_RUNNER_TOOL_DESCRI
 from engine.agent.tools.terminal_command_runner import TERMINAL_COMMAND_RUNNER_TOOL_DESCRIPTION
 from engine.agent.pdf_generation_tool import DEFAULT_PDF_GENERATION_TOOL_DESCRIPTION
 from engine.agent.tools.linkup_tool import LINKUP_TOOL_DESCRIPTION
+from engine.agent.docx_generation_tool import DEFAULT_DOCX_GENERATION_TOOL_DESCRIPTION
 
 
 TOOL_DESCRIPTION_UUIDS = {
@@ -41,6 +42,7 @@ TOOL_DESCRIPTION_UUIDS = {
     "default_llm_call_tool_description": UUID("b91d418d-a67f-40b9-9266-b01ca202747d"),
     "default_pdf_generation_tool_description": UUID("e2b11113-2222-3333-4444-555555555555"),
     "linkup_search_tool_description": UUID("d2e3f456-789a-bcde-f012-3456789abcde"),
+    "default_docx_generation_tool_description": UUID("d57c546b-9f9d-4207-bb6e-0e38b2a3bce5"),
 }
 
 
@@ -107,6 +109,10 @@ def seed_tool_description(session: Session):
         id=TOOL_DESCRIPTION_UUIDS["linkup_search_tool_description"],
         **LINKUP_TOOL_DESCRIPTION.model_dump(),
     )
+    docx_generation_tool_description = db.ToolDescription(
+        id=TOOL_DESCRIPTION_UUIDS["default_docx_generation_tool_description"],
+        **DEFAULT_DOCX_GENERATION_TOOL_DESCRIPTION.model_dump(),
+    )
     upsert_tool_descriptions(
         session=session,
         tool_descriptions=[
@@ -127,5 +133,6 @@ def seed_tool_description(session: Session):
             default_llm_call_tool_description,
             pdf_generation_tool_description,
             linkup_search_tool_description,
+            docx_generation_tool_description,
         ],
     )
