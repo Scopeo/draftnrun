@@ -435,8 +435,10 @@ def get_current_component_version_id(
     allowed_stages = STAGE_HIERARCHY.get(release_stage, [release_stage])
     rank_map = {stage: i for i, stage in enumerate(allowed_stages)}
     order_expr = case(
-        value=db.ReleaseStageToCurrentVersionMapping.release_stage,
-        whens=rank_map,
+        *[
+            (db.ReleaseStageToCurrentVersionMapping.release_stage == stg, idx)
+            for idx, stg in enumerate(allowed_stages)
+        ],
         else_=len(allowed_stages),
     )
     print(order_expr)

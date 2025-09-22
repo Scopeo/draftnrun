@@ -128,7 +128,7 @@ def clone_graph_runner(
         if not parent:
             raise ValueError("Invalid relationship: parent component instance not found")
         # TODO: Refactor to repository function that takes name and component_id or with dictionary for faster lookup
-        param_defs = get_component_parameter_definition_by_component_version(session, parent.version_id)
+        param_defs = get_component_parameter_definition_by_component_version(session, parent.component_version_id)
         param_def = next((p for p in param_defs if p.name == relation.parameter_name), None)
         if not param_def:
             raise ValueError(
