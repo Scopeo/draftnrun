@@ -139,9 +139,6 @@ class BaseConfig(BaseSettings):
     # Observability stack feature flag
     ENABLE_OBSERVABILITY_STACK: bool = False
 
-    # Evaluation settings
-    EVALUATIONS_DB_URL: Optional[str] = None
-
     @model_validator(mode="after")
     @classmethod
     def sync_db_settings(cls, values):
