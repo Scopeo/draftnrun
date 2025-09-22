@@ -440,7 +440,6 @@ def get_current_component_version_id(
         ],
         else_=len(allowed_stages),
     )
-    print(order_expr)
     stmt = (
         select(db.ReleaseStageToCurrentVersionMapping.component_version_id)
         .where(db.ReleaseStageToCurrentVersionMapping.component_id == component_id)
