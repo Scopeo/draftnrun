@@ -63,9 +63,6 @@ dependencies = [
     "croniter>=1.3.0,<2.0.0",
     "pytz>=2023.3",
     "linkup-sdk>=0.2.8"
-    "apscheduler>=3.10.0,<4.0.0",
-    "croniter>=1.3.0,<2.0.0",
-    "pytz>=2023.3",
 ]
 [dependency-groups]
 dev = [

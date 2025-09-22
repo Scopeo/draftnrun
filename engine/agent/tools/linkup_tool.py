@@ -122,18 +122,18 @@ class LinkupSearchTool(Agent):
         if content is None:
             raise ValueError("No content provided for the Linkup search tool.")
         span = get_current_span()
-        trace_input = {
-            "query": query,
-            "from_date": from_date,
-            "to_date": to_date,
-            "include_domains": include_domains,
-            "exclude_domains": exclude_domains,
-            "depth": depth,
-        }
+        trace_input = (
+            f"query: {query}\n"
+            f"from date: {from_date}\n"
+            f"to date: {to_date}\n"
+            f"include domains: {include_domains}\n"
+            f"exclude domains: {exclude_domains}\n"
+            f"depth: {depth}"
+        )
         span.set_attributes(
             {
                 SpanAttributes.OPENINFERENCE_SPAN_KIND: self.TRACE_SPAN_KIND,
-                SpanAttributes.INPUT_VALUE: json.dumps(trace_input),
+                SpanAttributes.INPUT_VALUE: trace_input,
             }
         )
         response = self.search_results(
