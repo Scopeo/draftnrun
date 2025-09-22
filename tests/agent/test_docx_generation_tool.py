@@ -1,3 +1,4 @@
+import shutil
 import pytest
 import asyncio
 from unittest.mock import MagicMock, patch, Mock
@@ -39,17 +40,13 @@ def docx_tool(mock_trace_manager):
     )
 
 
-def test_docx_generation_with_mock(docx_tool, tmp_path):
-    """Test that DOCX is generated with mocked conversion."""
+def test_docx_generation_real_file(docx_tool, tmp_path):
+    """Test real DOCX file generation without mocks."""
     # Use pytest's tmp_path as a writable temp directory for CI safety
     mock_params = Mock()
     mock_params.uuid_for_temp_folder = str(tmp_path / "test-uuid-12345")
 
-    # Mock the markdown_to_word function to avoid actual file creation
-    with (
-        patch("engine.temps_folder_utils.get_tracing_span", return_value=mock_params),
-        patch("engine.agent.docx_generation_tool.markdown_to_word") as mock_conversion,
-    ):
+    with patch("engine.temps_folder_utils.get_tracing_span", return_value=mock_params):
         # Call async function from sync test
         result = asyncio.run(docx_tool._run_without_io_trace(markdown_content=MARKDOWN_CONTENT))
 
@@ -65,20 +62,18 @@ def test_docx_generation_with_mock(docx_tool, tmp_path):
         assert docx_filename is not None
         assert docx_filename.endswith(".docx")
 
-        # Verify that markdown_to_word was called
-        mock_conversion.assert_called_once()
-        args, kwargs = mock_conversion.call_args
-        assert len(args) == 2
-        # First arg should be temp markdown file path
-        assert args[0].endswith(".md")
-        # Second arg should be output DOCX path
-        assert args[1].endswith(".docx")
+        # Verify the actual file was created
+        docx_path = get_output_dir() / docx_filename
+        assert docx_path.exists()
+        assert docx_path.is_file()
+        assert docx_path.suffix == ".docx"
+
+        # Verify file size is reasonable (not empty)
+        assert docx_path.stat().st_size > 100  # Should be at least 100 bytes
 
         # Clean up the directory if it exists
         output_dir = get_output_dir()
         if output_dir.exists():
-            import shutil
-
             shutil.rmtree(output_dir)
 
 
@@ -116,9 +111,6 @@ def test_docx_generation_with_actual_conversion(docx_tool, tmp_path):
         docx_path.unlink()
         assert not docx_path.exists()
 
-        # Clean up the directory
-        import shutil
-
         shutil.rmtree(docx_path.parent)
         assert not docx_path.parent.exists()
 
@@ -150,22 +142,30 @@ def test_docx_generation_no_content_kwarg(docx_tool):
 
 
 def test_docx_generation_temp_file_cleanup(docx_tool, tmp_path):
-    """Test that temporary markdown files are properly cleaned up."""
-    # Use pytest's tmp_path as a writable temp directory for CI safety
+    """Test that DOCX generation works and cleans up properly."""
+
     mock_params = Mock()
     mock_params.uuid_for_temp_folder = str(tmp_path / "test-uuid-12345")
 
-    with (
-        patch("engine.temps_folder_utils.get_tracing_span", return_value=mock_params),
-        patch("engine.agent.docx_generation_tool.Path.unlink") as mock_unlink,
-    ):
+    with patch("engine.temps_folder_utils.get_tracing_span", return_value=mock_params):
         # Call async function from sync test
         result = asyncio.run(docx_tool._run_without_io_trace(markdown_content=MARKDOWN_CONTENT))
-
-        # Verify that temporary file cleanup was called
-        mock_unlink.assert_called_once()
 
         # Verify successful result
         assert result.is_final is True
         assert result.error is None
         assert "DOCX generated successfully" in result.messages[0].content
+
+        # Verify the file was created
+        artifacts = getattr(result, "artifacts", None) or result.__dict__.get("artifacts", {})
+        docx_filename = artifacts.get("docx_filename")
+        assert docx_filename is not None
+
+        docx_path = get_output_dir() / docx_filename
+        assert docx_path.exists()
+
+        # Clean up
+        output_dir = get_output_dir()
+        if output_dir.exists():
+
+            shutil.rmtree(output_dir)

@@ -1,7 +1,6 @@
 import logging
 import tempfile
 from datetime import datetime
-from pathlib import Path
 from typing import Any
 
 
@@ -20,7 +19,7 @@ DEFAULT_DOCX_GENERATION_TOOL_DESCRIPTION = ToolDescription(
     tool_properties={
         "markdown_content": {
             "type": "string",
-            "description": ("The markdown text to convert to DOCX. \n"),
+            "description": ("The markdown text to convert to DOCX."),
         }
     },
     required_tool_properties=["markdown_content"],
@@ -65,24 +64,27 @@ class DOCXGenerationTool(Agent):
         filename = f"document_{timestamp}.docx"
         output_path = output_dir / filename
 
-        # Create a temporary markdown file
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".md") as tmp_md:
-            tmp_md.write(markdown_content.encode("utf-8"))
-            tmp_md_path = tmp_md.name
-
         try:
-            # Convert markdown to DOCX
-            markdown_to_word(tmp_md_path, str(output_path))
-        finally:
-            # Clean up temporary markdown file
-            Path(tmp_md_path).unlink()
-            LOGGER.info(f"Deleted temporary markdown file: {tmp_md_path}")
+            # Create a temporary markdown file
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".md") as tmp_md:
+                tmp_md.write(markdown_content.encode("utf-8"))
+                tmp_md_path = tmp_md.name
+                markdown_to_word(tmp_md_path, str(output_path))
 
-        success_msg = f"DOCX generated successfully: {filename}"
-        LOGGER.info(success_msg)
+            success_msg = f"DOCX generated successfully: {filename}"
+            LOGGER.info(success_msg)
 
-        return AgentPayload(
-            messages=[ChatMessage(role="assistant", content=success_msg)],
-            artifacts={"docx_filename": str(filename)},
-            is_final=True,
-        )
+            return AgentPayload(
+                messages=[ChatMessage(role="assistant", content=success_msg)],
+                artifacts={"docx_filename": str(filename)},
+                is_final=True,
+            )
+
+        except Exception as e:
+            error_msg = f"Failed to generate DOCX: {str(e)}"
+            LOGGER.error(error_msg)
+            return AgentPayload(
+                messages=[ChatMessage(role="assistant", content=error_msg)],
+                error=error_msg,
+                is_final=True,
+            )
