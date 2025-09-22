@@ -66,7 +66,7 @@ class DOCXGenerationTool(Agent):
 
         try:
             # Create a temporary markdown file
-            with tempfile.NamedTemporaryFile(delete=False, suffix=".md") as tmp_md:
+            with tempfile.NamedTemporaryFile(suffix=".md") as tmp_md:
                 tmp_md.write(markdown_content.encode("utf-8"))
                 tmp_md_path = tmp_md.name
                 markdown_to_word(tmp_md_path, str(output_path))
