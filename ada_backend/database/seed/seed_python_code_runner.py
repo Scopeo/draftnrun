@@ -37,7 +37,6 @@ def seed_python_code_runner_components(session: Session):
         release_stage=db.ReleaseStage.PUBLIC,
         description="Execute Python code in a secure sandbox environment.",
         default_tool_description_id=TOOL_DESCRIPTION_UUIDS["python_code_runner_tool_description"],
-        is_current=True,
     )
     upsert_component_versions(
         session=session,

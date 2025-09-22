@@ -34,7 +34,6 @@ def seed_terminal_command_runner_components(session: Session):
         release_stage=db.ReleaseStage.PUBLIC,
         description="Execute terminal commands in a secure sandbox environment.",
         default_tool_description_id=TOOL_DESCRIPTION_UUIDS["terminal_command_runner_tool_description"],
-        is_current=True,
     )
     upsert_component_versions(
         session=session,

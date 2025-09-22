@@ -41,7 +41,6 @@ def seed_smart_rag_components(session: Session):
         version_tag="1.0.0",
         release_stage=db.ReleaseStage.BETA,
         description="Document Search for searching documents from a db using documents names",
-        is_current=True,
     )
     upsert_component_versions(
         session=session,

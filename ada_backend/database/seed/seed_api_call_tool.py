@@ -37,7 +37,6 @@ def seed_api_call_components(session: Session):
         release_stage=db.ReleaseStage.PUBLIC,
         description="A generic API tool that can make HTTP requests to any API endpoint.",
         default_tool_description_id=TOOL_DESCRIPTION_UUIDS["default_api_call_tool_description"],
-        is_current=True,
     )
     upsert_component_versions(session, [api_call_component_version])
 

@@ -47,7 +47,6 @@ def seed_react_sql_components(session: Session):
         release_stage=db.ReleaseStage.PUBLIC,
         description="ReAct Agent with SQL query tools",
         default_tool_description_id=TOOL_DESCRIPTION_UUIDS["default_react_sql_tool_description"],
-        is_current=True,
     )
     upsert_component_versions(
         session=session,
