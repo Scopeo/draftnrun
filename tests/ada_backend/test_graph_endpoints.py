@@ -58,8 +58,6 @@ def test_create_empty_graph_runner():
 
     response = client.get(endpoint, headers=HEADERS_JWT)
     results = response.json()
-    print("here")
-    print(results)
     assert response.status_code == 200
     assert isinstance(results, dict)
     assert results == payload
