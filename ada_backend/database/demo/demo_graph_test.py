@@ -102,7 +102,7 @@ def build_graph_test_chatbot(
         ComponentInstanceSchema(
             id=COMPONENT_INSTANCES_IDS["retriever_instance"],
             component_id=components["retriever"],
-            version_id=components["retrieverl"],
+            version_id=components["retriever"],
             name="Retriever",
             ref=f"{agent_name}_retriever_instance",
             parameters=[
