@@ -214,7 +214,6 @@ class ComponentVersionAdmin(EnhancedModelView, model=db.ComponentVersion):
         "component",
         "version_tag",
         "description",
-        "is_current",
         "release_stage",
         "default_tool_description",
         "created_at",
@@ -222,6 +221,21 @@ class ComponentVersionAdmin(EnhancedModelView, model=db.ComponentVersion):
     ]
     column_searchable_list = ["version_tag", "description", "release_stage"]
     form_columns = ["component", "version_tag", "description", "release_stage", "default_tool_description"]
+
+
+class ReleaseStageToCurrentVersionMappingAdmin(EnhancedModelView, model=db.ReleaseStageToCurrentVersionMapping):
+    category = AdminCategory.COMPONENTS
+    icon = "fas fa-cubes"
+    column_list = [
+        "id",
+        "component",
+        "release_stage",
+        "component_version",
+        "created_at",
+        "updated_at",
+    ]
+    column_searchable_list = ["component.name", "release_stage"]
+    form_columns = ["component", "release_stage", "component_version"]
 
 
 class ComponentCategoryAdmin(EnhancedModelView, model=db.ComponentCategory):
@@ -544,6 +558,7 @@ def setup_admin(app: FastAPI):
     admin.add_view(GraphRunnerAdmin)
     admin.add_view(ComponentAdmin)
     admin.add_view(ComponentVersionAdmin)
+    admin.add_view(ReleaseStageToCurrentVersionMappingAdmin)
     admin.add_view(CategoryAdmin)
     admin.add_view(ComponentCategoryAdmin)
     admin.add_view(GraphRunnerNodeAdmin)

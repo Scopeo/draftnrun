@@ -43,7 +43,6 @@ def seed_web_search_components(session: Session):
         release_stage=db.ReleaseStage.PUBLIC,
         description="Agent that uses OpenAI to perform internet searches and answer questions based on the results.",
         default_tool_description_id=TOOL_DESCRIPTION_UUIDS["default_web_search_openai_tool_description"],
-        is_current=True,
     )
     upsert_component_versions(
         session=session,

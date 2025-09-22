@@ -4,6 +4,7 @@ import logging
 from dataclasses import dataclass
 
 from sqlalchemy.orm import Session
+from sqlalchemy import select, case
 
 from ada_backend.database import models as db
 from ada_backend.database.models import ParameterType, ReleaseStage, UIComponent, UIComponentProperties
@@ -79,6 +80,14 @@ class ComponentWithVersionDTO:
     is_protected: bool
     integration_id: Optional[UUID]
     default_tool_description_id: Optional[UUID] = None
+
+
+STAGE_HIERARCHY = {
+    ReleaseStage.INTERNAL: [ReleaseStage.INTERNAL, ReleaseStage.EARLY_ACCESS, ReleaseStage.BETA, ReleaseStage.PUBLIC],
+    ReleaseStage.BETA: [ReleaseStage.BETA, ReleaseStage.EARLY_ACCESS, ReleaseStage.PUBLIC],
+    ReleaseStage.EARLY_ACCESS: [ReleaseStage.EARLY_ACCESS, ReleaseStage.PUBLIC],
+    ReleaseStage.PUBLIC: [ReleaseStage.PUBLIC],
+}
 
 
 # --- READ operations ---
@@ -418,33 +427,47 @@ def get_tool_parameter_by_component_version(
 def get_current_component_version_id(
     session: Session,
     component_id: UUID,
+    release_stage: ReleaseStage = ReleaseStage.PUBLIC,
 ) -> Optional[UUID]:
     """
     Retrieves the current version ID of a specific component.
     """
-    query = (
-        session.query(db.ComponentVersion.id)
-        .join(db.Component, db.Component.id == db.ComponentVersion.component_id)
-        .filter(db.Component.id == component_id, db.ComponentVersion.is_current.is_(True))
+    allowed_stages = STAGE_HIERARCHY.get(release_stage, [release_stage])
+    rank_map = {stage: i for i, stage in enumerate(allowed_stages)}
+    order_expr = case(
+        value=db.ReleaseStageToCurrentVersionMapping.release_stage,
+        whens=rank_map,
+        else_=len(allowed_stages),
     )
-    return session.execute(query).scalars().first()
+    print(order_expr)
+    stmt = (
+        select(db.ReleaseStageToCurrentVersionMapping.component_version_id)
+        .where(db.ReleaseStageToCurrentVersionMapping.component_id == component_id)
+        .where(db.ReleaseStageToCurrentVersionMapping.release_stage.in_(allowed_stages))
+        .order_by(order_expr.asc())
+        .limit(1)
+    )
+
+    return session.execute(stmt).scalar_one_or_none()
 
 
 def get_current_component_versions(
     session: Session,
-    allowed_stages: Optional[List[ReleaseStage]] = None,
+    allowed_stages: Optional[List[ReleaseStage]],
 ) -> list[ComponentWithVersionDTO]:
     """
     Retrieves the current version of all components.
     """
+
     query = (
         session.query(db.Component, db.ComponentVersion)
         .join(db.Component, db.Component.id == db.ComponentVersion.component_id)
-        .filter(db.ComponentVersion.is_current.is_(True))
+        .join(
+            db.ReleaseStageToCurrentVersionMapping,
+            db.ReleaseStageToCurrentVersionMapping.component_id == db.Component.id,
+        )
+        .filter(db.ReleaseStageToCurrentVersionMapping.release_stage.in_(allowed_stages))
     )
-
-    if allowed_stages:
-        query = query.filter(db.ComponentVersion.release_stage.in_(allowed_stages))
 
     result = query.all()
 
@@ -496,7 +519,7 @@ def get_port_definitions_for_component_ids(
 
 def get_all_components_with_parameters(
     session: Session,
-    allowed_stages: Optional[List[ReleaseStage]] = None,
+    allowed_stages: Optional[List[ReleaseStage]],
 ) -> List[ComponentWithParametersDTO]:
     """
     Retrieves all components and their parameter definitions from the database.

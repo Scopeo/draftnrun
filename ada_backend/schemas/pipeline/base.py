@@ -27,7 +27,6 @@ class ComponentInstanceSchema(BaseModel):
     component_id: UUID
     version_id: Optional[UUID] = None
     version_tag: Optional[str] = None
-    is_current: Optional[bool] = None
     parameters: list[PipelineParameterSchema]
     tool_description: Optional[ToolDescriptionSchema] = None
     integration: Optional[GraphIntegrationSchema] = None

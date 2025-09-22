@@ -70,7 +70,6 @@ def get_component_instance(
         version_id=component_instance.component_version_id,
         version_tag=component_version.version_tag,
         release_stage=component_version.release_stage,
-        is_current=component_version.is_current,
         tool_description=tool_description,
         component_name=component.name,
         tool_parameter_name=tool_parameter.name if tool_parameter else None,
