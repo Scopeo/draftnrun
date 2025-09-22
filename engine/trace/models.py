@@ -71,6 +71,7 @@ class Span(Base):
     environment = mapped_column(make_pg_string_enum(EnvType), nullable=True)
     call_type = mapped_column(make_pg_string_enum(CallType), nullable=True)
     project_id = Column(String, nullable=True, index=True)
+    tag_version = Column(String, nullable=True)
 
 
 class OrganizationUsage(Base):
