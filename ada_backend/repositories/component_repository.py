@@ -433,7 +433,6 @@ def get_current_component_version_id(
     Retrieves the current version ID of a specific component.
     """
     allowed_stages = STAGE_HIERARCHY.get(release_stage, [release_stage])
-    rank_map = {stage: i for i, stage in enumerate(allowed_stages)}
     order_expr = case(
         *[
             (db.ReleaseStageToCurrentVersionMapping.release_stage == stg, idx)

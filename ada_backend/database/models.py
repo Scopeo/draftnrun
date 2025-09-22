@@ -19,7 +19,6 @@ from sqlalchemy import (
     func,
     CheckConstraint,
     UUID,
-    text,
 )
 import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import JSONB
