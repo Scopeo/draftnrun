@@ -31,7 +31,6 @@ from ada_backend.schemas.project_schema import (
 from ada_backend.services.graph.delete_graph_service import delete_graph_runner_service
 from ada_backend.segment_analytics import track_project_created, track_project_saved, track_user_get_project_list
 
-
 LOGGER = getLogger(__name__)
 
 
@@ -113,6 +112,7 @@ def create_project(
         env=EnvType.DRAFT,
     )
     LOGGER.info(f"Created draft graph runner with ID {graph_runner_id} for project {project.id}")
+
     track_project_created(user_id, organization_id, project.id, project.name)
     return ProjectWithGraphRunnersSchema(
         project_id=project.id,

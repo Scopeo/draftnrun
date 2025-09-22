@@ -680,6 +680,9 @@ class Project(Base):
     )
     envs = relationship("ProjectEnvironmentBinding", back_populates="project")
 
+    # Quality Assurance relationships
+    datasets = relationship("DatasetProject", back_populates="project", cascade="all, delete-orphan")
+
     def __str__(self):
         return f"Project({self.name})"
 
@@ -935,3 +938,73 @@ class CronRun(Base):
 
     def __str__(self):
         return f"CronRun(cron_id={self.cron_id}, status={self.status}, scheduled_for={self.scheduled_for})"
+
+
+class InputGroundtruth(Base):
+    __tablename__ = "input_groundtruth"
+    __table_args__ = {"schema": "quality_assurance"}  # Specify the quality_assurance schema
+
+    id = mapped_column(UUID(as_uuid=True), primary_key=True, index=True, server_default=func.gen_random_uuid())
+
+    dataset_id = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("quality_assurance.dataset_project.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    created_at = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    input = mapped_column(String, nullable=False)
+    groundtruth = mapped_column(String, nullable=True)
+
+    # Relationships
+    dataset = relationship("DatasetProject", back_populates="input_groundtruths")
+    version_outputs = relationship("VersionOutput", back_populates="input_groundtruth", cascade="all, delete-orphan")
+
+    def __str__(self):
+        return f"InputGroundtruth(id={self.id}, input={self.input})"
+
+
+class DatasetProject(Base):
+    __tablename__ = "dataset_project"
+    __table_args__ = {"schema": "quality_assurance"}
+
+    id = mapped_column(UUID(as_uuid=True), primary_key=True, index=True, server_default=func.gen_random_uuid())
+    project_id = mapped_column(
+        UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    dataset_name = mapped_column(String, nullable=False)
+    created_at = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    # Relationships
+    project = relationship("Project", back_populates="datasets")
+    input_groundtruths = relationship("InputGroundtruth", back_populates="dataset", cascade="all, delete-orphan")
+
+    def __str__(self):
+        return f"DatasetProject(id={self.id}, name={self.dataset_name})"
+
+
+class VersionOutput(Base):
+    __tablename__ = "version_output"
+    __table_args__ = {"schema": "quality_assurance"}
+
+    id = mapped_column(UUID(as_uuid=True), primary_key=True, index=True, server_default=func.gen_random_uuid())
+    input_id = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("quality_assurance.input_groundtruth.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    output = mapped_column(String, nullable=False)
+    version = mapped_column(make_pg_enum(EnvType), nullable=False)  # Changed from version_id to version using EnvType
+    created_at = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    # Relationships
+    input_groundtruth = relationship("InputGroundtruth", back_populates="version_outputs")
+
+    def __str__(self):
+        return f"VersionOutput(id={self.id}, input_id={self.input_id}, version={self.version})"
