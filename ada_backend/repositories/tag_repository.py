@@ -21,20 +21,27 @@ def _parse_version(tag: Optional[str]) -> Optional[tuple[int, int, int]]:
         return None
 
 
-def _to_tag(version_tuple: tuple[int, int, int]) -> str:
-    major, minor, patch = version_tuple
-    return f"v{major}.{minor}.{patch}"
-
-
 def _bump_patch(tag: Optional[str]) -> str:
     parsed = _parse_version(tag)
     if parsed is None:
         return "v0.0.1"
     major, minor, patch = parsed
-    return _to_tag((major, minor, patch + 1))
+    new_patch = patch + 1
+
+    # If patch goes over 99, bump minor and reset patch
+    if new_patch > 99:
+        new_minor = minor + 1
+        new_patch = 0
+        # If minor goes over 99, bump major and reset minor
+        if new_minor > 99:
+            major += 1
+            new_minor = 0
+        return f"v{major}.{new_minor}.{new_patch}"
+
+    return f"v{major}.{minor}.{new_patch}"
 
 
-def get_graph_runner_tag_version(session: Session, graph_runner_id: UUID) -> str:
+def get_graph_runner_tag_version(session: Session, graph_runner_id: UUID) -> Optional[str]:
     graph_runner = session.query(db.GraphRunner).filter(db.GraphRunner.id == graph_runner_id).first()
     if not graph_runner:
         raise ValueError(f"Graph runner with ID {graph_runner_id} not found.")
@@ -60,16 +67,8 @@ def get_latest_tag_version_for_project(session: Session, project_id: UUID) -> Op
     if not candidates:
         return None
     latest = max(candidates)
-    return _to_tag(latest)
-
-
-def list_tag_versions(session: Session) -> list[str]:
-    graph_runners = session.query(db.GraphRunner).all()
-    tags: list[str] = []
-    for gr in graph_runners:
-        if isinstance(gr.tag_version, str):
-            tags.append(gr.tag_version)
-    return tags
+    major, minor, patch = latest
+    return f"v{major}.{minor}.{patch}"
 
 
 def compute_next_tag_version(session: Session, project_id: UUID) -> str:
@@ -92,3 +91,16 @@ def assign_next_tag_to_graph_runner(session: Session, graph_runner_id: UUID, pro
     new_tag = compute_next_tag_version(session, project_id)
     update_graph_runner_tag_version(session, graph_runner_id, new_tag)
     return new_tag
+
+
+def list_tag_versions(session: Session, project_id: UUID) -> list[str]:
+    graph_runners = (
+        session.query(db.GraphRunner)
+        .join(
+            db.ProjectEnvironmentBinding,
+            db.ProjectEnvironmentBinding.graph_runner_id == db.GraphRunner.id,
+        )
+        .filter(db.ProjectEnvironmentBinding.project_id == project_id)
+        .all()
+    )
+    return [gr.tag_version for gr in graph_runners if gr.tag_version]

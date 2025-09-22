@@ -22,6 +22,7 @@ class TraceSpan(BaseModel):
     children: list["TraceSpan"]
     environment: EnvType | None
     call_type: CallType | None
+    tag_version: str | None
 
     @classmethod
     def from_dict(cls, data: dict) -> "TraceSpan":
@@ -43,6 +44,7 @@ class TraceSpan(BaseModel):
             children=[cls.from_dict(child) for child in data.get("children", [])],
             environment=data.get("environment"),
             call_type=data.get("call_type"),
+            tag_version=data.get("tag_version"),
         )
 
 

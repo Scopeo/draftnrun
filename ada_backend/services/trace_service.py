@@ -150,6 +150,7 @@ def build_span_trees(df: pd.DataFrame, include_messages: bool) -> List[TraceSpan
             children=[],
             environment=row.get("environment", None),
             call_type=row.get("call_type", None),
+            tag_version=row.get("tag_version", None),
         )
 
     trace_trees = []
