@@ -46,7 +46,6 @@ def seed_sql_tool_components(session: Session):
         release_stage=db.ReleaseStage.PUBLIC,
         description="SQL Tool for querying databases",
         default_tool_description_id=TOOL_DESCRIPTION_UUIDS["default_tool_description"],
-        is_current=True,
     )
     run_sql_query_tool_version = db.ComponentVersion(
         id=COMPONENT_UUIDS["run_sql_query_tool"],
@@ -55,7 +54,6 @@ def seed_sql_tool_components(session: Session):
         description="Run SQL Query Tool",
         release_stage=db.ReleaseStage.PUBLIC,
         default_tool_description_id=TOOL_DESCRIPTION_UUIDS["default_run_sql_query_tool_description"],
-        is_current=True,
     )
     upsert_component_versions(
         session=session,
