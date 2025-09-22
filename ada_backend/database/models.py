@@ -878,6 +878,7 @@ class SourceAttributes(Base):
     def __str__(self):
         return f"SourceAttributes(source_id={self.source_id})"
 
+
 class CronJob(Base):
     """
     Represents a scheduled cron job for an organization.
@@ -937,6 +938,7 @@ class CronRun(Base):
 
     def __str__(self):
         return f"CronRun(cron_id={self.cron_id}, status={self.status}, scheduled_for={self.scheduled_for})"
+
 
 class InputGroundtruth(Base):
     __tablename__ = "input_groundtruth"

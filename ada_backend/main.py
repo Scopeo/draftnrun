@@ -45,7 +45,7 @@ app = FastAPI(
         {
             "name": "Organization",
             "description": "Operations with organizations, including "
-                           "adding secrets and managing organization settings",
+            "adding secrets and managing organization settings",
         },
         {
             "name": "GraphQL",
@@ -54,7 +54,7 @@ app = FastAPI(
         {
             "name": "Projects",
             "description": "Operations with projects, including creation, "
-                           "deletion, and management of project settings",
+            "deletion, and management of project settings",
         },
         {
             "name": "Integrations",
@@ -63,12 +63,12 @@ app = FastAPI(
         {
             "name": "Templates",
             "description": "Endpoints for managing templates, including "
-                           "retrieving production templates and creating new templates",
+            "retrieving production templates and creating new templates",
         },
         {
             "name": "Graph",
             "description": "Operations with graph runner within projects, "
-                           "including updating and retrieving graph runner configurations",
+            "including updating and retrieving graph runner configurations",
         },
         {
             "name": "Metrics",
