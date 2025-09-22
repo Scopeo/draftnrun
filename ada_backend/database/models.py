@@ -19,7 +19,6 @@ from sqlalchemy import (
     func,
     CheckConstraint,
     UUID,
-    text,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship, declarative_base, mapped_column
