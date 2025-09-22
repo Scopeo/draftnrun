@@ -84,7 +84,6 @@ def create_or_update_component_instance(
             component_version_id=component_version_id,
         )
     }
-    print("param_definitions", param_definitions)
 
     for param_name, param_def in param_definitions.items():
         if param_def.type == db.ParameterType.LLM_API_KEY:
