@@ -40,7 +40,6 @@ def seed_ocr_call_components(session: Session):
         release_stage=db.ReleaseStage.PUBLIC,
         description="Extract text from PDF files using OCR (Optical Character Recognition)",
         default_tool_description_id=TOOL_DESCRIPTION_UUIDS["default_tool_description"],
-        is_current=True,
     )
     upsert_component_versions(
         session=session,

@@ -27,6 +27,7 @@ def seed_python_code_runner_components(session: Session):
         is_agent=False,
         function_callable=True,
         can_use_function_calling=False,
+        icon="tabler-brand-python",
     )
     upsert_components(session, [python_code_runner_component])
 
@@ -42,7 +43,6 @@ def seed_python_code_runner_components(session: Session):
     upsert_component_versions(
         session=session,
         component_versions=[python_code_runner_component_version],
-        icon="tabler-brand-python",
     )
 
     python_code_runner_parameter_definitions = [

@@ -83,7 +83,6 @@ def seed_rag_components(session: Session):
         version_tag="1.0.0",
         description="Synthesizer for generating outputs",
         release_stage=db.ReleaseStage.PUBLIC,
-        is_current=True,
     )
     hybrid_synthesizer_version = db.ComponentVersion(
         id=COMPONENT_UUIDS["hybrid_synthesizer"],
@@ -91,7 +90,6 @@ def seed_rag_components(session: Session):
         version_tag="1.0.0",
         description="Hybrid Synthesizer for generating outputs",
         release_stage=db.ReleaseStage.BETA,
-        is_current=True,
     )
     chunk_selector_version = db.ComponentVersion(
         id=COMPONENT_UUIDS["relevant_chunk_selector"],
@@ -99,7 +97,6 @@ def seed_rag_components(session: Session):
         version_tag="1.0.0",
         description="Chunk Selector for selecting relevant chunks",
         release_stage=db.ReleaseStage.BETA,
-        is_current=True,
     )
     retriever_version = db.ComponentVersion(
         id=COMPONENT_UUIDS["retriever"],
@@ -107,7 +104,6 @@ def seed_rag_components(session: Session):
         version_tag="1.0.0",
         description="Retriever for fetching chunks",
         release_stage=db.ReleaseStage.PUBLIC,
-        is_current=True,
     )
     cohere_reranker_version = db.ComponentVersion(
         id=COMPONENT_UUIDS["cohere_reranker"],
@@ -115,7 +111,6 @@ def seed_rag_components(session: Session):
         version_tag="1.0.0",
         description="Cohere API-based Reranker",
         release_stage=db.ReleaseStage.PUBLIC,
-        is_current=True,
     )
     rag_formatter_version = db.ComponentVersion(
         id=COMPONENT_UUIDS["formatter"],
@@ -123,7 +118,6 @@ def seed_rag_components(session: Session):
         version_tag="1.0.0",
         description="Rag formatter. Design to customize how to display sources on answer",
         release_stage=db.ReleaseStage.PUBLIC,
-        is_current=True,
     )
     vocabulary_search_version = db.ComponentVersion(
         id=COMPONENT_UUIDS["vocabulary_search"],
@@ -131,7 +125,6 @@ def seed_rag_components(session: Session):
         version_tag="1.0.0",
         description="Vocabulary Search for retrieving information from a user-defined vocabulary",
         release_stage=db.ReleaseStage.PUBLIC,
-        is_current=True,
     )
     upsert_component_versions(
         session=session,
@@ -173,7 +166,6 @@ def seed_rag_components(session: Session):
         description="RAG Agent for retrieving information from knowledge bases",
         default_tool_description_id=TOOL_DESCRIPTION_UUIDS["default_rag_tool_description"],
         release_stage=db.ReleaseStage.PUBLIC,
-        is_current=True,
     )
     hybrid_rag_agent_version = db.ComponentVersion(
         id=COMPONENT_UUIDS["hybrid_rag_agent"],
@@ -182,7 +174,6 @@ def seed_rag_components(session: Session):
         description="Hybrid RAG Agent for retrieving information from knowledge bases",
         release_stage=db.ReleaseStage.BETA,
         default_tool_description_id=TOOL_DESCRIPTION_UUIDS["default_rag_tool_description"],
-        is_current=True,
     )
     upsert_component_versions(
         session=session,

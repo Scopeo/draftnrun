@@ -40,7 +40,6 @@ def seed_gmail_components(session: Session):
         release_stage=db.ReleaseStage.INTERNAL,
         description="A component to send emails using Gmail API.",
         integration_id=INTEGRATION_UUIDS["gmail_sender"],
-        is_current=True,
         default_tool_description_id=TOOL_DESCRIPTION_UUIDS["gmail_sender_tool_description"],
     )
     upsert_component_versions(session, [gmail_sender_version])

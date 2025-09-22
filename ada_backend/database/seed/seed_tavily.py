@@ -40,7 +40,6 @@ def seed_tavily_components(session: Session):
         release_stage=db.ReleaseStage.INTERNAL,
         description="Agent that uses Tavily to perform internet searches and answer questions based on the results.",
         default_tool_description_id=TOOL_DESCRIPTION_UUIDS["tavily_tool_description"],
-        is_current=True,
     )
     upsert_component_versions(
         session=session,

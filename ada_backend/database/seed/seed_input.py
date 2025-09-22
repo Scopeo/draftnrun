@@ -44,7 +44,6 @@ def seed_input_components(session: Session):
         release_stage=db.ReleaseStage.PUBLIC,
         description="This block is triggered by an API call",
         default_tool_description_id=TOOL_DESCRIPTION_UUIDS["default_tool_description"],
-        is_current=True,
     )
     upsert_component_versions(
         session=session,

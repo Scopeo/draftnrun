@@ -69,7 +69,6 @@ def seed_ai_agent_components(session: Session):
             "AI operator provided with tools."
             " LLM calls will choose next action step by step until it decides to provide a response."
         ),
-        is_current=True,
     )
     upsert_component_versions(
         session=session,

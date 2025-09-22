@@ -34,7 +34,6 @@ def seed_project_reference_components(session: Session):
         version_tag="1.0.0",
         release_stage=db.ReleaseStage.INTERNAL,
         description="Execute another project's graph workflow as a component.",
-        is_current=True,
     )
     upsert_component_versions(session=session, component_versions=[project_reference_version])
 

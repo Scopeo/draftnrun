@@ -23,6 +23,7 @@ def seed_pdf_generation_components(session: Session):
         is_agent=False,
         function_callable=True,
         can_use_function_calling=False,
+        icon="tabler-file-type-pdf",
     )
     upsert_components(session, [pdf_generation_component])
 
@@ -33,12 +34,10 @@ def seed_pdf_generation_components(session: Session):
         release_stage=db.ReleaseStage.INTERNAL,
         description="Convert markdown text to PDF files.",
         default_tool_description_id=TOOL_DESCRIPTION_UUIDS["default_pdf_generation_tool_description"],
-        icon="tabler-file-type-pdf",
     )
     upsert_component_versions(
         session=session,
         component_versions=[pdf_generation_component_version],
-        icon="tabler-file-type-pdf",
     )
 
     upsert_components_parameter_definitions(

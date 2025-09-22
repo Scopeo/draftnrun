@@ -91,7 +91,6 @@ def seed_filter_components(session: Session):
         release_stage=db.ReleaseStage.PUBLIC,
         description="Filter: takes a json and filters it according to a given json schema",
         default_tool_description_id=TOOL_DESCRIPTION_UUIDS["default_filter_tool_description"],
-        is_current=True,
     )
     upsert_component_versions(
         session=session,
