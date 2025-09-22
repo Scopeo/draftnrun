@@ -5,6 +5,7 @@ from opentelemetry.trace import get_current_span
 
 from engine.agent.agent import Agent, AgentPayload, ComponentAttributes, ToolDescription
 from engine.agent.types import ChatMessage, SourceChunk, SourcedResponse
+from engine.trace.serializer import serialize_to_json
 from engine.trace.trace_manager import TraceManager
 
 from linkup import LinkupClient
