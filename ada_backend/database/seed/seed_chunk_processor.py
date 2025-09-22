@@ -32,6 +32,7 @@ def seed_chunk_processor_components(session: Session):
         component_id=chunk_processor.id,
         description="Process data in chunks using a project's graph workflow",
         release_stage=db.ReleaseStage.INTERNAL,
+        version_tag="1.0.0",
     )
     upsert_component_versions(
         session=session,
