@@ -5,6 +5,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.orm import Session
 
+from ada_backend.database.models import ReleaseStage
 from ada_backend.repositories.project_repository import get_project
 from ada_backend.routers.auth_router import (
     UserRights,
@@ -72,6 +73,7 @@ async def update_project_pipeline(
     user: Annotated[
         SupabaseUser, Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.WRITER.value))
     ],
+    release_stage: ReleaseStage = ReleaseStage.INTERNAL,
     session: Session = Depends(get_db),
 ) -> GraphUpdateResponse:
     """
@@ -92,6 +94,7 @@ async def update_project_pipeline(
             graph_runner_id=graph_runner_id,
             project_id=project_id,
             user_id=user.id,
+            release_stage=release_stage,
         )
     except ValueError as e:
         error_msg = str(e)

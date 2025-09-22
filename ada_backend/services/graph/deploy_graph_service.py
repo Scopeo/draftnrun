@@ -4,7 +4,7 @@ from uuid import UUID, uuid4
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
-from ada_backend.database.models import EnvType
+from ada_backend.database.models import EnvType, ReleaseStage
 from ada_backend.repositories.component_repository import (
     get_component_instance_by_id,
     get_component_parameter_definition_by_component_version,
@@ -40,6 +40,7 @@ def copy_component_instance(
     component_instance_id_to_copy: UUID,
     is_start_node: bool,
     project_id: UUID,
+    release_stage: ReleaseStage,
 ) -> UUID:
     """
     This function copies a component instance and its parameters to a new component instance.
@@ -61,7 +62,7 @@ def copy_component_instance(
         ],
         integration=component_instance.integration,
     )
-    return create_or_update_component_instance(session, new_composant_instance, project_id)
+    return create_or_update_component_instance(session, new_composant_instance, project_id, release_stage)
 
 
 def clone_graph_runner(

@@ -30,6 +30,7 @@ def create_or_update_component_instance(
     session: Session,
     instance_data: ComponentInstanceSchema,
     project_id: UUID,
+    release_stage: db.ReleaseStage,
 ) -> UUID:
     """Creates or updates a component instance with its parameters"""
     # Create tool description if needed
@@ -48,7 +49,7 @@ def create_or_update_component_instance(
     component_version_id = (
         instance_data.version_id
         if instance_data.version_id
-        else get_current_component_version_id(session, instance_data.component_id)
+        else get_current_component_version_id(session, instance_data.component_id, release_stage=release_stage)
     )
 
     component_instance = upsert_component_instance(

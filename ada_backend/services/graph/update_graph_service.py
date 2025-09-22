@@ -4,7 +4,7 @@ from uuid import UUID
 
 from sqlalchemy.orm import Session
 
-from ada_backend.database.models import EnvType
+from ada_backend.database.models import EnvType, ReleaseStage
 from ada_backend.repositories.component_repository import (
     get_component_instance_by_id,
     get_component_parameter_definition_by_component_version,
@@ -130,7 +130,7 @@ async def update_graph_service(
     # Create/update all component instances
     instance_ids = set()
     for instance in graph_project.component_instances:
-        instance_id = create_or_update_component_instance(session, instance, project_id)
+        instance_id = create_or_update_component_instance(session, instance, project_id, release_stage)
         upsert_component_node(
             session,
             graph_runner_id=graph_runner_id,
