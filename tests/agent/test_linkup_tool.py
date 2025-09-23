@@ -15,16 +15,6 @@ def mock_trace_manager():
     return MagicMock(spec=TraceManager)
 
 
-@pytest_asyncio.fixture
-async def linkup_tool(mock_trace_manager):
-    """Create a Linkup search tool instance."""
-    tool = LinkupSearchTool(
-        trace_manager=mock_trace_manager,
-        component_attributes=ComponentAttributes(component_instance_name="test_linkup_tool"),
-    )
-    yield tool
-
-
 @pytest.fixture
 def linkup_api_key():
     """Get Linkup API key in environment or skip test if not available."""
@@ -32,6 +22,17 @@ def linkup_api_key():
     if not api_key:
         pytest.skip("LINKUP_API_KEY environment variable not set")
     return api_key
+
+
+@pytest_asyncio.fixture
+async def linkup_tool(mock_trace_manager, linkup_api_key):
+    """Create a Linkup search tool instance."""
+    tool = LinkupSearchTool(
+        trace_manager=mock_trace_manager,
+        component_attributes=ComponentAttributes(component_instance_name="test_linkup_tool"),
+        linkup_api_key=linkup_api_key,
+    )
+    yield tool
 
 
 def test_tool_initialization(linkup_tool):
