@@ -28,7 +28,6 @@ from settings import settings
 from logger import setup_logging
 from ada_backend.scheduler_boot import scheduler_lifespan
 
-
 setup_logging()
 
 set_trace_manager(tm=TraceManager(project_name="ada-backend"))
@@ -98,7 +97,6 @@ app = FastAPI(
     ],
 )
 
-
 PrometheusFastApiInstrumentator().instrument(app).expose(app, endpoint="/metrics")
 
 # Setup HTTP metrics and traces instrumentation
@@ -106,7 +104,6 @@ if settings.ENABLE_OBSERVABILITY_STACK:
     setup_performance_instrumentation(app)
 
 setup_admin(app)
-
 
 app.include_router(auth_router)
 app.include_router(org_router)
