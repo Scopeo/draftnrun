@@ -76,16 +76,3 @@ def update_graph_runner_tag_version(session: Session, graph_runner_id: UUID, new
     graph_runner.tag_version = new_tag
     session.add(graph_runner)
     session.commit()
-
-
-def list_tag_versions(session: Session, project_id: UUID) -> list[str]:
-    graph_runners = (
-        session.query(db.GraphRunner)
-        .join(
-            db.ProjectEnvironmentBinding,
-            db.ProjectEnvironmentBinding.graph_runner_id == db.GraphRunner.id,
-        )
-        .filter(db.ProjectEnvironmentBinding.project_id == project_id)
-        .all()
-    )
-    return [gr.tag_version for gr in graph_runners if gr.tag_version]
