@@ -70,6 +70,11 @@ class ApiKeyType(StrEnum):
     ORGANIZATION = "organization"
 
 
+class ProjectType(StrEnum):
+    AGENT = "agent"
+    WORKFLOW = "workflow"
+
+
 class NodeType(StrEnum):
     """Enumeration of node types."""
 
@@ -726,6 +731,7 @@ class Project(Base):
 
     id = mapped_column(UUID(as_uuid=True), primary_key=True, index=True, default=uuid.uuid4)
     name = mapped_column(String, unique=False, nullable=False)
+    type = mapped_column(make_pg_enum(ProjectType), nullable=False, default=ProjectType.WORKFLOW)
     description = mapped_column(Text, nullable=True)
     organization_id = mapped_column(UUID(as_uuid=True), nullable=False)
     companion_image_url = mapped_column(String, nullable=True)
@@ -742,8 +748,24 @@ class Project(Base):
     # Quality Assurance relationships
     datasets = relationship("DatasetProject", back_populates="project", cascade="all, delete-orphan")
 
+    __mapper_args__ = {"polymorphic_on": type, "polymorphic_identity": "base"}
+
     def __str__(self):
         return f"Project({self.name})"
+
+
+class WorkflowProject(Project):
+    __tablename__ = "workflow_projects"
+    id = mapped_column(UUID(as_uuid=True), ForeignKey("projects.id"), primary_key=True)
+
+    __mapper_args__ = {"polymorphic_identity": ProjectType.WORKFLOW.value}
+
+
+class AgentProject(Project):
+    __tablename__ = "agent_projects"
+    id = mapped_column(UUID(as_uuid=True), ForeignKey("projects.id"), primary_key=True)
+
+    __mapper_args__ = {"polymorphic_identity": ProjectType.AGENT.value}
 
 
 class ProjectEnvironmentBinding(Base):
