@@ -119,8 +119,8 @@ async def run_agent(
     project_id: UUID,
     graph_runner_id: UUID,
     input_data: dict,
-    environment: Optional[EnvType] = None,
-    call_type: Optional[CallType] = None,
+    environment: EnvType,
+    call_type: CallType,
     tag_version: Optional[str] = None,
 ) -> ChatResponse:
     project_details = get_project_with_details(session, project_id=project_id)

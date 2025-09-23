@@ -49,12 +49,9 @@ def get_latest_tag_version_for_project(session: Session, project_id: UUID) -> Op
     candidates: list[tuple[int, int, int]] = []
     for gr in results:
         if gr.tag_version:
-            try:
-                version_parts = gr.tag_version[1:].split(".")
-                major, minor, patch = int(version_parts[0]), int(version_parts[1]), int(version_parts[2])
-                candidates.append((major, minor, patch))
-            except (IndexError, ValueError):
-                continue
+            version_parts = gr.tag_version[1:].split(".")
+            major, minor, patch = int(version_parts[0]), int(version_parts[1]), int(version_parts[2])
+            candidates.append((major, minor, patch))
     if not candidates:
         return None
     latest = max(candidates)
