@@ -244,16 +244,16 @@ def seed_ai_agent_components(session: Session):
                 id=UUID("e5282ccb-dcaa-4970-93c1-f6ef5018492d"),
                 component_id=base_ai_agent.id,
                 name="output_tool_properties",
-                type=ParameterType.JSON,
+                type=ParameterType.STRING,
                 nullable=True,
                 default=None,
-                ui_component=UIComponent.EDITORS,
+                ui_component=UIComponent.TEXTAREA,
                 ui_component_properties=UIComponentProperties(
                     label="Output Tool Properties",
                     description=(
                         "JSON schema defining the properties/parameters of the output tool. "
-                        "Example: {\"answer\": {\"type\": \"string\", \"description\": \"The answer content\"}, "
-                        "\"is_ending_conversation\": {\"type\": \"boolean\", \"description\": \"End conversation?\"}}"
+                        'Example: {"answer": {"type": "string", "description": "The answer content"}, '
+                        '"is_ending_conversation": {"type": "boolean", "description": "End conversation?"}}'
                     ),
                 ).model_dump(exclude_unset=True, exclude_none=True),
                 is_advanced=True,
@@ -262,16 +262,16 @@ def seed_ai_agent_components(session: Session):
                 id=UUID("db9a011f-df07-475b-91b3-59c1333ea4aa"),
                 component_id=base_ai_agent.id,
                 name="output_tool_required_properties",
-                type=ParameterType.JSON,
+                type=ParameterType.STRING,
                 nullable=True,
                 default=None,
-                ui_component=UIComponent.EDITORS,
+                ui_component=UIComponent.TEXTAREA,
                 ui_component_properties=UIComponentProperties(
                     label="Output Tool Required Properties",
                     description=(
                         "Optional JSON array of required property names. If not provided, all properties "
                         "from the tool properties will be required by default. "
-                        "Example: [\"answer\", \"is_ending_conversation\"] or leave empty to make all properties required."
+                        'Example: ["answer", "is_ending_conversation"] or leave empty to make all properties required.'
                     ),
                 ).model_dump(exclude_unset=True, exclude_none=True),
                 is_advanced=True,

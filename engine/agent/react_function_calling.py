@@ -19,6 +19,7 @@ from engine.agent.types import (
 )
 from engine.graph_runner.runnable import Runnable
 from engine.agent.history_message_handling import HistoryMessageHandler
+from engine.agent.utils import load_str_to_json
 from engine.trace.trace_manager import TraceManager
 from engine.llm_services.llm_service import CompletionService
 from engine.agent.utils_prompt import fill_prompt_template_with_dictionary
@@ -56,19 +57,19 @@ def format_output_tool_description(
 ) -> ToolDescription:
     """
     Format an output tool description for the React agent.
-    
+
     Args:
         tool_name: Name of the output tool
         tool_description: Description of what the tool does
         tool_properties: JSON schema defining the tool's parameters
         required_properties: List of required property names. If None, all properties are required.
-    
+
     Returns:
         ToolDescription for the output tool
     """
     if required_properties is None:
         required_properties = list(tool_properties.keys())
-    
+
     return ToolDescription(
         name=tool_name,
         description=tool_description,
@@ -80,7 +81,7 @@ def format_output_tool_description(
 def get_default_output_tool_description() -> ToolDescription:
     """
     Get the default output tool description for conversation answers.
-    
+
     Returns:
         Default ToolDescription for structured conversation responses
     """
@@ -95,14 +96,15 @@ def get_default_output_tool_description() -> ToolDescription:
         tool_properties={
             "answer": {
                 "type": "string",
-                "description": "The answer or response content for the user's question or request."
+                "description": "The answer or response content for the user's question or request.",
             },
             "is_ending_conversation": {
                 "type": "boolean",
-                "description": "Whether this response should end the conversation (true) or allow for follow-up questions (false)."
-            }
+                "description": "Whether this response should end the conversation (true) or "
+                               "allow for follow-up questions (false).",
+            },
         },
-        required_properties=["answer", "is_ending_conversation"]
+        required_properties=["answer", "is_ending_conversation"],
     )
 
 
@@ -165,27 +167,31 @@ class ReActAgent(Agent):
         self._date_in_system_prompt = date_in_system_prompt
         self._shared_sandbox: Optional[AsyncSandbox] = None
         self._e2b_api_key = getattr(settings, "E2B_API_KEY", None)
-        
+
         # Initialize output tool parameters
         self._output_tool_name = output_tool_name
         self._output_tool_description = output_tool_description
-        self._output_tool_properties = output_tool_properties or {}
-        self._output_tool_required_properties = output_tool_required_properties or []
-        self._output_tool_agent_description = self._get_output_tool_description()
+        # Parse JSON strings to appropriate data types
+        if isinstance(output_tool_properties, str):
+            self._output_tool_properties = load_str_to_json(output_tool_properties)
+        else:
+            self._output_tool_properties = output_tool_properties or {}
 
+        if isinstance(output_tool_required_properties, str):
+            self._output_tool_required_properties = load_str_to_json(output_tool_required_properties)
+        else:
+            self._output_tool_required_properties = output_tool_required_properties or []
+
+        self._output_tool_agent_description = self._get_output_tool_description()
 
     def _get_output_tool_description(self) -> Optional[ToolDescription]:
         """
         Get the output tool description using the same pattern as RAG.
-        
+
         Returns:
             ToolDescription if all required output tool parameters are set, None otherwise.
         """
-        if all([
-            self._output_tool_name,
-            self._output_tool_description,
-            self._output_tool_properties
-        ]):
+        if all([self._output_tool_name, self._output_tool_description, self._output_tool_properties]):
             return format_output_tool_description(
                 tool_name=self._output_tool_name,
                 tool_description=self._output_tool_description,
@@ -311,11 +317,11 @@ class ReActAgent(Agent):
             )
         agent_input = original_agent_input.model_copy(deep=True)
         history_messages_handled = self._memory_handling.get_truncated_messages_history(agent_input.messages)
-        
+
         # Determine tool choice and available tools
         tool_choice = "auto" if self._current_iteration < self._max_iterations else "none"
         available_tools = [agent.tool_description for agent in self.agent_tools]
-        
+
         # Fallback logic: if at max iterations and output tool is available, force output tool only
         if self._current_iteration >= self._max_iterations and self._output_tool_agent_description:
             LOGGER.info("Max iterations reached with output tool available. Forcing output tool call.")
@@ -325,7 +331,7 @@ class ReActAgent(Agent):
             # Normal case: add output tool to available tools
             available_tools.append(self._output_tool_agent_description)
             tool_choice = "required"
-        
+
         with self.trace_manager.start_span("Agentic reflexion") as span:
             llm_input_messages = [msg.model_dump() for msg in history_messages_handled]
             span.set_attributes(
@@ -335,7 +341,7 @@ class ReActAgent(Agent):
                     SpanAttributes.LLM_MODEL_NAME: self._completion_service._model_name,
                 }
             )
-            
+
             chat_response = await self._completion_service.function_call_async(
                 messages=llm_input_messages,
                 tools=available_tools,
