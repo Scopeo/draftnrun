@@ -32,9 +32,7 @@ def _bump_patch(tag: Optional[str]) -> str:
 
 def get_graph_runner_tag_version(session: Session, graph_runner_id: UUID) -> Optional[str]:
     graph_runner = session.query(db.GraphRunner).filter(db.GraphRunner.id == graph_runner_id).first()
-    if not graph_runner:
-        raise ValueError(f"Graph runner with ID {graph_runner_id} not found.")
-    return graph_runner.tag_version
+    return graph_runner.tag_version if graph_runner else None
 
 
 def get_latest_tag_version_for_project(session: Session, project_id: UUID) -> Optional[str]:
