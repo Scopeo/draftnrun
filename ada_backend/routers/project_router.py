@@ -35,6 +35,7 @@ from ada_backend.services.project_service import (
     delete_project_service,
     get_project_service,
     get_projects_by_organization,
+    list_tag_versions_project_service,
     update_project_service,
 )
 from ada_backend.services.trace_service import get_trace_by_project
@@ -400,6 +401,22 @@ async def chat_env(
     except Exception as e:
         LOGGER.exception("Error running agent chat_env for project %s (env=%s)", project_id, env)
         raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}") from e
+
+
+@router.get("/{project_id}/tags", response_model=List[str], tags=["Projects"])
+async def list_tag_versions(
+    project_id: UUID,
+    user: Annotated[SupabaseUser, Depends(get_user_from_supabase_token)],
+    session: Session = Depends(get_db),
+):
+    if not user.id:
+        raise HTTPException(status_code=400, detail="User ID not found")
+    try:
+        return list_tag_versions_project_service(session, project_id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Internal Server Error") from e
 
 
 @router.post("/{project_id}/tag/{tag_version}/chat", response_model=ChatResponse, tags=["Projects"])

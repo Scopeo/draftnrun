@@ -67,10 +67,7 @@ def get_graph_service(
         )
         LOGGER.info(f"Edge from {edge.source_node_id} to {edge.target_node_id}")
 
-    try:
-        tag_version = get_graph_runner_tag_version(session, graph_runner_id)
-    except Exception:
-        tag_version = None
+    tag_version = get_graph_runner_tag_version(session, graph_runner_id)
 
     return GraphGetResponse(
         component_instances=component_instances_with_definitions,

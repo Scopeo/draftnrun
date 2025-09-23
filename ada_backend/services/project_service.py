@@ -30,6 +30,7 @@ from ada_backend.schemas.project_schema import (
 )
 from ada_backend.services.graph.delete_graph_service import delete_graph_runner_service
 from ada_backend.segment_analytics import track_project_created, track_project_saved, track_user_get_project_list
+from ada_backend.repositories.tag_repository import list_tag_versions
 
 LOGGER = getLogger(__name__)
 
@@ -148,3 +149,7 @@ def update_project_service(
     return ProjectSchema(
         project_id=project_id, project_name=project_schema.project_name, description=project_schema.description
     )
+
+
+def list_tag_versions_project_service(session: Session, project_id: UUID) -> list[str]:
+    return list_tag_versions(session, project_id)
