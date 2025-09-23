@@ -16,7 +16,7 @@ from ada_backend.repositories.env_repository import (
     get_env_relationship_by_graph_runner_id,
     update_graph_runner_env,
 )
-from ada_backend.repositories.tag_repository import assign_next_tag_to_graph_runner
+from ada_backend.repositories.tag_repository import compute_next_tag_version, update_graph_runner_tag_version
 from ada_backend.repositories.graph_runner_repository import (
     get_component_nodes,
     get_graph_runner_for_env,
@@ -187,7 +187,8 @@ def deploy_graph_service(
     bind_graph_runner_to_project(
         session, graph_runner_id=new_graph_runner_id, project_id=project_id, env=EnvType.DRAFT
     )
-    assign_next_tag_to_graph_runner(session, graph_runner_id, project_id)
+    new_tag = compute_next_tag_version(session, project_id)
+    update_graph_runner_tag_version(session, graph_runner_id, new_tag)
     update_graph_runner_env(session, graph_runner_id, env=EnvType.PRODUCTION)
     LOGGER.info(f"Updated graph runner {graph_runner_id} to production")
 

@@ -22,7 +22,6 @@ from ada_backend.graphql.schema import graphql_router
 from ada_backend.routers.organization_router import router as org_router
 from ada_backend.routers.trace_router import router as trace_router
 from ada_backend.routers.cron_router import router as cron_router
-from ada_backend.routers.tag_router import router as tag_router
 from engine.trace.trace_context import set_trace_manager
 from engine.trace.trace_manager import TraceManager
 from settings import settings
@@ -125,7 +124,6 @@ app.include_router(quality_assurance_router)
 app.include_router(graphql_router, prefix="/graphql")
 app.include_router(trace_router)
 app.include_router(cron_router)
-app.include_router(tag_router)
 
 app.add_middleware(RequestContextMiddleware)
 app.add_middleware(
