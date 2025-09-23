@@ -22,7 +22,7 @@ async def linkup_tool(mock_trace_manager):
         trace_manager=mock_trace_manager,
         component_attributes=ComponentAttributes(component_instance_name="test_linkup_tool"),
     )
-    return tool
+    yield tool
 
 
 @pytest.fixture
