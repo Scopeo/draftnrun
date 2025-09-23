@@ -96,6 +96,8 @@ class SupportedEntityType(StrEnum):
     FILTER = "Filter"
     PROJECT_REFERENCE = "ProjectReference"
     CHUNK_PROCESSOR = "ChunkProcessor"
+
+    # Integrations
     GMAIL_SENDER = "Gmail Sender"
 
 
