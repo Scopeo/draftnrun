@@ -19,7 +19,7 @@ from ada_backend.schemas.project_schema import (
     ProjectCreateSchema,
 )
 from ada_backend.schemas.trace_schema import TraceSpan
-from ada_backend.services.agent_runner_service import run_agent, run_env_agent, run_tag_version_agent
+from ada_backend.services.agent_runner_service import run_agent, run_env_agent
 from ada_backend.routers.auth_router import (
     get_user_from_supabase_token,
     verify_api_key_dependency,
@@ -40,7 +40,7 @@ from ada_backend.services.project_service import (
 )
 from ada_backend.services.trace_service import get_trace_by_project
 from ada_backend.repositories.env_repository import get_env_relationship_by_graph_runner_id
-
+from ada_backend.repositories.tag_repository import get_graph_runner_tag_version
 
 LOGGER = logging.getLogger(__name__)
 
@@ -344,7 +344,7 @@ async def chat(
         env_relationship = get_env_relationship_by_graph_runner_id(session, graph_runner_id)
         environment = env_relationship.environment
         LOGGER.info(f"Determined environment {environment} for graph_runner_id {graph_runner_id}")
-
+        tag_version = get_graph_runner_tag_version(session, graph_runner_id)
         return await run_agent(
             session=session,
             project_id=project_id,
@@ -352,6 +352,7 @@ async def chat(
             input_data=input_data,
             environment=environment,
             call_type=CallType.SANDBOX,
+            tag_version=tag_version,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
@@ -417,42 +418,3 @@ async def list_tag_versions(
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
         raise HTTPException(status_code=500, detail="Internal Server Error") from e
-
-
-@router.post("/{project_id}/tag/{tag_version}/chat", response_model=ChatResponse, tags=["Projects"])
-async def chat_tag_version(
-    project_id: UUID,
-    tag_version: str,
-    user: Annotated[
-        SupabaseUser,
-        Depends(
-            user_has_access_to_project_dependency(
-                allowed_roles=UserRights.USER.value,
-            )
-        ),
-    ],
-    input_data: dict = Body(
-        ...,
-        example={
-            "messages": [
-                {"role": "user", "content": "Hello, how are you?"},
-            ]
-        },
-    ),
-    session: Session = Depends(get_db),
-) -> ChatResponse:
-    if not user.id:
-        raise HTTPException(status_code=400, detail="User ID not found")
-    try:
-        return await run_tag_version_agent(
-            session=session,
-            project_id=project_id,
-            input_data=input_data,
-            call_type=CallType.SANDBOX,
-            tag_version=tag_version,
-        )
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
-    except Exception as e:
-        LOGGER.error(f"Error running agent: {e}")
-        raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}") from e

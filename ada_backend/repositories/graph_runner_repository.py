@@ -48,26 +48,6 @@ def get_graph_runner_for_env(
     )
 
 
-def get_graph_runner_for_tag_version(
-    session: Session,
-    project_id: UUID,
-    tag_version: str,
-) -> Optional[db.GraphRunner]:
-    """Returns the GraphRunner bound to the given project and environment."""
-    return (
-        session.query(db.GraphRunner)
-        .join(
-            db.ProjectEnvironmentBinding,
-            db.GraphRunner.id == db.ProjectEnvironmentBinding.graph_runner_id,
-        )
-        .filter(
-            db.ProjectEnvironmentBinding.project_id == project_id,
-            db.GraphRunner.tag_version == tag_version,
-        )
-        .first()
-    )
-
-
 def insert_graph_runner(
     session: Session,
     graph_id: UUID,
