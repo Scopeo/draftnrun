@@ -203,6 +203,79 @@ def seed_ai_agent_components(session: Session):
                 ).model_dump(exclude_unset=True, exclude_none=True),
                 is_advanced=True,
             ),
+            db.ComponentParameterDefinition(
+                id=UUID("032658d9-487e-46c3-9d54-2024e5ecaf61"),
+                component_id=base_ai_agent.id,
+                name="output_tool_name",
+                type=ParameterType.STRING,
+                nullable=True,
+                default=None,
+                ui_component=UIComponent.TEXTFIELD,
+                ui_component_properties=UIComponentProperties(
+                    label="Output Tool Name",
+                    placeholder="conversation_answer",
+                    description=(
+                        "Optional name for the output tool. When provided along with other output tool "
+                        "parameters, creates a special output tool that the agent can use to generate "
+                        "final answers with structured format."
+                    ),
+                ).model_dump(exclude_unset=True, exclude_none=True),
+                is_advanced=True,
+            ),
+            db.ComponentParameterDefinition(
+                id=UUID("0da0b05c-df97-449c-a4bc-85ad08b953e1"),
+                component_id=base_ai_agent.id,
+                name="output_tool_description",
+                type=ParameterType.STRING,
+                nullable=True,
+                default=None,
+                ui_component=UIComponent.TEXTAREA,
+                ui_component_properties=UIComponentProperties(
+                    label="Output Tool Description",
+                    placeholder="Generate a structured answer for the conversation...",
+                    description=(
+                        "Description of what the output tool does. This will be shown to the LLM "
+                        "to help it understand when and how to use the output tool."
+                    ),
+                ).model_dump(exclude_unset=True, exclude_none=True),
+                is_advanced=True,
+            ),
+            db.ComponentParameterDefinition(
+                id=UUID("e5282ccb-dcaa-4970-93c1-f6ef5018492d"),
+                component_id=base_ai_agent.id,
+                name="output_tool_properties",
+                type=ParameterType.JSON,
+                nullable=True,
+                default=None,
+                ui_component=UIComponent.EDITORS,
+                ui_component_properties=UIComponentProperties(
+                    label="Output Tool Properties",
+                    description=(
+                        "JSON schema defining the properties/parameters of the output tool. "
+                        "Example: {\"answer\": {\"type\": \"string\", \"description\": \"The answer content\"}, "
+                        "\"is_ending_conversation\": {\"type\": \"boolean\", \"description\": \"End conversation?\"}}"
+                    ),
+                ).model_dump(exclude_unset=True, exclude_none=True),
+                is_advanced=True,
+            ),
+            db.ComponentParameterDefinition(
+                id=UUID("db9a011f-df07-475b-91b3-59c1333ea4aa"),
+                component_id=base_ai_agent.id,
+                name="output_tool_required_properties",
+                type=ParameterType.JSON,
+                nullable=True,
+                default=None,
+                ui_component=UIComponent.EDITORS,
+                ui_component_properties=UIComponentProperties(
+                    label="Output Tool Required Properties",
+                    description=(
+                        "Optional JSON array of required property names. If not provided, all properties "
+                        "from the tool properties will be required by default. "
+                        "Example: [\"answer\", \"is_ending_conversation\"] or leave empty to make all properties required."
+                    ),
+                ).model_dump(exclude_unset=True, exclude_none=True),
+                is_advanced=True,
+            ),
             *build_function_calling_service_config_definitions(
                 component_id=base_ai_agent.id,
                 params_to_seed=[
