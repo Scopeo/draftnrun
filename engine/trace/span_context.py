@@ -14,6 +14,7 @@ class TracingSpanParams:
     uuid_for_temp_folder: Optional[str] = None
     environment: Optional[EnvType] = None
     call_type: Optional[CallType] = None
+    trace_id: Optional[str] = None
 
 
 _tracing_context: ContextVar[Optional[TracingSpanParams]] = ContextVar("_tracing_context", default=None)
