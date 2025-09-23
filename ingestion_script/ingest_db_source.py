@@ -202,15 +202,20 @@ async def upload_db_source(
     query_filter: Optional[str] = None,
     timestamp_filter: Optional[str] = None,
 ):
+    # Resolve CURRENT_TIMESTAMP once and use for both SQL and Qdrant
+    resolved_timestamp_filter = resolve_sql_timestamp_filter(timestamp_filter)
+
+    if timestamp_filter and resolved_timestamp_filter:
+        LOGGER.info(f"Resolved timestamp filter from '{timestamp_filter}' to '{resolved_timestamp_filter}'")
 
     combined_filter_sql = build_combined_sql_filter(
         query_filter=query_filter,
-        timestamp_filter=timestamp_filter,
+        timestamp_filter=resolved_timestamp_filter,
         timestamp_column_name=timestamp_column_name,
     )
     combined_filter_qdrant = qdrant_service._build_combined_filter(
         query_filter=query_filter,
-        timestamp_filter=resolve_sql_timestamp_filter(timestamp_filter),
+        timestamp_filter=resolved_timestamp_filter,
         timestamp_column_name=timestamp_column_name,
     )
 
