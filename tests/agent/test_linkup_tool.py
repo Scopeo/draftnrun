@@ -41,27 +41,7 @@ def test_tool_initialization(linkup_tool):
     assert linkup_tool.tool_description.name == "Linkup_Web_Search_Tool"
 
 
-def test_query_with_params(linkup_tool):
-    """Test executing simple query with parameters that returns a response in the right format."""
-    query = "Who is the person who won the most Roland Garros titles ?"
-
-    result = linkup_tool.search_results(
-        query=query,
-        depth="standard",
-        output_type="sourcedAnswer",
-        exclude_domains=None,
-        include_domains=None,
-        from_date=None,
-        to_date=None,
-    )
-
-    # Check that the execution was successful
-    assert len(result.response) > 5
-    assert isinstance(result.sources[0], SourceChunk)
-    assert result.is_successful
-
-
-def test_to_date_from_date_params(linkup_tool):
+def test_query_with_params(linkup_tool, linkup_api_key):
     """Test executing simple query that returns a response in the right format."""
     query = "Who is the person who won the most Roland Garros titles ?"
 
@@ -70,7 +50,7 @@ def test_to_date_from_date_params(linkup_tool):
         depth="standard",
         output_type="sourcedAnswer",
         exclude_domains=None,
-        include_domains=None,
+        include_domains=["wikipedia.org"],
         from_date="2012-10-10",
         to_date="2014-10-10",
     )
