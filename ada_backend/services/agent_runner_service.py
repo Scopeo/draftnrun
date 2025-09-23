@@ -16,7 +16,6 @@ from ada_backend.repositories.graph_runner_repository import (
     get_start_components,
     graph_runner_exists,
     delete_temp_folder,
-    get_graph_runner_for_tag_version,
 )
 from ada_backend.repositories.project_repository import get_project, get_project_with_details
 from ada_backend.repositories.organization_repository import get_organization_secrets
@@ -112,27 +111,6 @@ async def run_env_agent(
         input_data=input_data,
         environment=env,
         call_type=call_type,
-    )
-
-
-# TODO: change env after
-async def run_tag_version_agent(
-    session: Session,
-    project_id: UUID,
-    input_data: dict,
-    call_type: CallType,
-    tag_version: str,
-) -> ChatResponse:
-    graph_runner = get_graph_runner_for_tag_version(session=session, project_id=project_id, tag_version=tag_version)
-    if not graph_runner:
-        raise ValueError(f"{tag_version} graph runner not found for project {project_id}.")
-    return await run_agent(
-        session=session,
-        project_id=project_id,
-        graph_runner_id=graph_runner.id,
-        input_data=input_data,
-        call_type=call_type,
-        tag_version=tag_version,
     )
 
 
