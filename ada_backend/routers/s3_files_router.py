@@ -1,4 +1,5 @@
 from fastapi import APIRouter, UploadFile, File, HTTPException, status, Depends
+import logging
 from typing import Annotated, Optional
 from uuid import UUID, uuid4
 
@@ -8,6 +9,7 @@ from ada_backend.services.s3_files_service import upload_file_to_s3, delete_file
 from ada_backend.schemas.ingestion_task_schema import S3UploadedInformation
 
 router = APIRouter(prefix="/files", tags=["S3 File Uploads"])
+LOGGER = logging.getLogger(__name__)
 
 
 @router.post("/{organization_id}/upload", response_model=list[S3UploadedInformation])
@@ -29,6 +31,11 @@ async def upload_files(
             uploaded_files.append(upload_file_to_s3(file_name=s3_filename, byte_content=content_bytes))
         return uploaded_files
     except Exception as e:
+        LOGGER.exception(
+            "Failed to upload files to S3 for organization %s (count=%s)",
+            organization_id,
+            len(files) if files else 0,
+        )
         raise HTTPException(status_code=500, detail=f"Internal Server Error: {e}")
 
 
@@ -47,4 +54,9 @@ async def delete_files(
         for file_id in file_ids:
             delete_file_from_s3(key=file_id)
     except Exception as e:
+        LOGGER.exception(
+            "Failed to delete files from S3 for organization %s (file_ids=%s)",
+            organization_id,
+            file_ids,
+        )
         raise HTTPException(status_code=500, detail=f"Internal Server Error: {e}")

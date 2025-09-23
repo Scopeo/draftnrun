@@ -1,4 +1,5 @@
 from typing import Annotated, List
+import logging
 from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
@@ -21,6 +22,7 @@ from ada_backend.services.source_service import (
 )
 
 router = APIRouter(prefix="/sources", tags=["Sources"])
+LOGGER = logging.getLogger(__name__)
 
 
 @router.get("/{organization_id}", response_model=List[DataSourceSchemaResponse])
@@ -36,6 +38,10 @@ def get_organization_sources(
     try:
         return get_sources_by_organization(session, organization_id)
     except Exception as e:
+        LOGGER.exception(
+            "Failed to get sources for organization %s",
+            organization_id,
+        )
         raise HTTPException(status_code=500, detail="Internal Server Error") from e
 
 
@@ -50,6 +56,10 @@ def create_organization_source(
         source_id = create_source_by_organization(session, organization_id, source)
         return source_id
     except Exception as e:
+        LOGGER.exception(
+            "Failed to create source for organization %s",
+            organization_id,
+        )
         raise HTTPException(status_code=500, detail="Internal Server Error") from e
 
 
@@ -67,6 +77,12 @@ def update_organization_source(
     try:
         return update_source_by_source_id(session, organization_id, source_id, user_id=user.id)
     except Exception as e:
+        LOGGER.exception(
+            "Failed to update source %s for organization %s by user %s",
+            source_id,
+            organization_id,
+            user.id,
+        )
         raise HTTPException(status_code=500, detail="Internal Server Error") from e
 
 
@@ -83,6 +99,11 @@ def update_organization_source_api_key(
         return update_source_by_source_id(session, organization_id, source_id, api_key_id=verified_api_key.api_key_id)
 
     except Exception as e:
+        LOGGER.exception(
+            "Failed to update source API key %s for organization %s",
+            source_id,
+            organization_id,
+        )
         raise HTTPException(status_code=500, detail="Internal Server Error") from e
 
 
@@ -101,4 +122,9 @@ def delete_organization_source(
         delete_source_service(session, organization_id, source_id)
         return None
     except Exception as e:
+        LOGGER.exception(
+            "Failed to delete source %s for organization %s",
+            source_id,
+            organization_id,
+        )
         raise HTTPException(status_code=500, detail="Internal Server Error") from e

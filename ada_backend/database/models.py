@@ -17,6 +17,7 @@ from sqlalchemy import (
     CheckConstraint,
     UUID,
 )
+import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship, declarative_base, mapped_column
 from cryptography.fernet import Fernet
@@ -209,6 +210,7 @@ class Component(Base):
 
     id = mapped_column(UUID(as_uuid=True), primary_key=True, index=True, default=uuid.uuid4)
     name = mapped_column(String, unique=True, nullable=False)
+    base_component = mapped_column(String, nullable=True)
     description = mapped_column(Text, nullable=True)
     is_agent = mapped_column(Boolean, nullable=False, default=False)
     integration_id = mapped_column(UUID(as_uuid=True), ForeignKey("integrations.id"), nullable=True)
@@ -217,7 +219,7 @@ class Component(Base):
     function_callable = mapped_column(Boolean, nullable=False, default=False)
     can_use_function_calling = mapped_column(Boolean, nullable=False, default=False)
     is_protected = mapped_column(Boolean, nullable=False, default=False)
-    release_stage = mapped_column(make_pg_enum(ReleaseStage), nullable=False, default=ReleaseStage.BETA)
+    release_stage = mapped_column(make_pg_enum(ReleaseStage), nullable=False, default=ReleaseStage.INTERNAL)
     default_tool_description_id = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("tool_descriptions.id"),
@@ -559,6 +561,59 @@ class BasicParameter(Base):
             else f"value={self.value}"
         )
         return f"BasicParameter({value_display})"
+
+
+class ComponentGlobalParameter(Base):
+    """
+    Parameters enforced globally for a component (shared across all instances).
+
+    Note: No organization-level scoping; values are the same across organizations.
+    Lists are represented with multiple rows of the same
+    (component_id, parameter_definition_id) with different order values.
+    """
+
+    __tablename__ = "component_global_parameters"
+
+    id = mapped_column(UUID(as_uuid=True), primary_key=True, index=True, default=uuid.uuid4)
+    component_id = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("components.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    parameter_definition_id = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("component_parameter_definitions.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    value = mapped_column(String, nullable=True)
+    order = mapped_column(Integer, nullable=True)
+
+    component = relationship("Component")
+    parameter_definition = relationship("ComponentParameterDefinition")
+    __table_args__ = (
+        # Enforce uniqueness for scalar values (order IS NULL)
+        sa.Index(
+            "uq_comp_global_param_scalar",
+            "component_id",
+            "parameter_definition_id",
+            unique=True,
+            postgresql_where=sa.text('"order" IS NULL'),
+        ),
+        # Enforce uniqueness for list values (order IS NOT NULL)
+        sa.Index(
+            "uq_comp_global_param_list",
+            "component_id",
+            "parameter_definition_id",
+            "order",
+            unique=True,
+            postgresql_where=sa.text('"order" IS NOT NULL'),
+        ),
+    )
+
+    def get_value(self):
+        """Cast string value to the typed value from its definition."""
+        return cast_value(self.parameter_definition.type, self.value)
 
 
 class ComponentSubInput(Base):

@@ -30,6 +30,13 @@ def upsert_components(
         )
 
         if existing_component:
+            if getattr(component, "release_stage", None) is None:
+                component.release_stage = existing_component.release_stage
+        else:
+            if getattr(component, "release_stage", None) is None:
+                component.release_stage = db.ReleaseStage.INTERNAL
+
+        if existing_component:
             if models_are_equal(existing_component, component):
                 LOGGER.info(f"Component {component.name} did not change, skipping.")
             else:
@@ -101,7 +108,9 @@ def upsert_components_parameter_child_relationships(
                 )
             else:
                 update_model_fields(existing_relationship, component_parameter_child_relationship)
-                f"Component parameter child relationship {component_parameter_child_relationship.id} updated."
+                LOGGER.info(
+                    f"Component parameter child relationship {component_parameter_child_relationship.id} updated."
+                )
 
         else:
             session.add(component_parameter_child_relationship)

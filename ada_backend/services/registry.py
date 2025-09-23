@@ -124,10 +124,15 @@ class FactoryRegistry:
             name (str): The name of the entity to register.
             factory (EntityFactory): The factory class responsible for creating the entity.
         """
-        if name not in SupportedEntityType:
-            raise ValueError(f"Entity type '{name}' is not supported.")
-
-        self._registry[name] = factory
+        # Allow only supported names to be registered to avoid runtime surprises.
+        # Accept both enum members and their string values.
+        normalized_name = name.value if isinstance(name, SupportedEntityType) else str(name)
+        if normalized_name not in [e.value for e in SupportedEntityType]:
+            raise ValueError(
+                f"Unsupported entity name '{normalized_name}'. Must be one of: "
+                f"{', '.join(e.value for e in SupportedEntityType)}",
+            )
+        self._registry[normalized_name] = factory
 
     def get(self, entity_name: str) -> EntityFactory:
         """

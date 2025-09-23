@@ -1,4 +1,5 @@
 from typing import Annotated
+import logging
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -18,6 +19,7 @@ from ada_backend.services.organization_service import (
 router = APIRouter(
     prefix="/org",
 )
+LOGGER = logging.getLogger(__name__)
 
 
 @router.get(
@@ -40,6 +42,10 @@ def get_secret_keys(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
+        LOGGER.exception(
+            "Failed to get organization secrets for org %s",
+            organization_id,
+        )
         raise HTTPException(status_code=500, detail="Internal Server Error") from e
 
 
@@ -65,6 +71,11 @@ async def add_or_update_secret_to_organization(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
+        LOGGER.exception(
+            "Failed to upsert organization secret %s for org %s",
+            secret_key,
+            organization_id,
+        )
         raise HTTPException(status_code=500, detail="Internal Server Error") from e
 
 
@@ -89,4 +100,9 @@ def delete_secret_from_organization(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
+        LOGGER.exception(
+            "Failed to delete organization secret %s for org %s",
+            secret_key,
+            organization_id,
+        )
         raise HTTPException(status_code=500, detail="Internal Server Error") from e

@@ -1,7 +1,7 @@
 import logging
 import json
 import string
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, Union
 
 import httpx
 from openinference.semconv.trace import OpenInferenceSpanKindValues
@@ -20,15 +20,15 @@ LOGGER = logging.getLogger(__name__)
 
 API_CALL_TOOL_DESCRIPTION = ToolDescription(
     name="api_call",
-    description="A generic API tool that can make HTTP requests to any API endpoint.",
+    description=("A generic API tool that can make HTTP requests to any API endpoint."),
     tool_properties={
         "query_param1": {
             "type": "string",
-            "description": "This the first query parameter to be sent to the API. ",
+            "description": ("This the first query parameter to be sent to the API. "),
         },
         "query_param2": {
             "type": "string",
-            "description": "This the second query parameter to be sent to the API.",
+            "description": ("This the second query parameter to be sent to the API."),
         },
     },
     required_tool_properties=[],
@@ -44,9 +44,9 @@ class APICallTool(Agent):
         component_attributes: ComponentAttributes,
         endpoint: str,
         method: str = "GET",
-        headers: Optional[str] = None,
+        headers: Optional[Union[Dict[str, Any], str]] = None,
         timeout: int = 30,
-        fixed_parameters: Optional[str] = None,
+        fixed_parameters: Optional[Union[Dict[str, Any], str]] = None,
         tool_description: ToolDescription = API_CALL_TOOL_DESCRIPTION,
     ) -> None:
         super().__init__(
@@ -57,20 +57,23 @@ class APICallTool(Agent):
         self.trace_manager = trace_manager
         self.endpoint = endpoint
         self.method = method.upper()
-        self.headers = load_str_to_json(headers) if headers else {}
+        if isinstance(headers, str):
+            self.headers = load_str_to_json(headers) if headers else {}
+        else:
+            self.headers = headers or {}
         self.timeout = timeout
-        self.fixed_parameters = load_str_to_json(fixed_parameters) if fixed_parameters else {}
+        if isinstance(fixed_parameters, str):
+            self.fixed_parameters = load_str_to_json(fixed_parameters) if fixed_parameters else {}
+        else:
+            self.fixed_parameters = fixed_parameters or {}
 
     async def make_api_call(self, **kwargs) -> Dict[str, Any]:
         """Make an HTTP request to the configured API endpoint."""
 
-        # Prepare headers
         request_headers = self.headers.copy()
 
         all_parameters = self.fixed_parameters.copy()
         all_parameters.update(kwargs)
-
-        # Format the endpoint with the parameters that are to be injected
         endpoint = self.endpoint.format(**all_parameters)
         formatter = string.Formatter()
         used_keys = {field_name for _, field_name, _, _ in formatter.parse(self.endpoint) if field_name}
@@ -118,7 +121,7 @@ class APICallTool(Agent):
         except httpx.HTTPError as e:
             LOGGER.error(f"API request failed: {str(e)}")
             return {
-                "status_code": getattr(e.response, "status_code", None) if hasattr(e, "response") else None,
+                "status_code": (getattr(e.response, "status_code", None) if hasattr(e, "response") else None),
                 "error": str(e),
                 "success": False,
             }

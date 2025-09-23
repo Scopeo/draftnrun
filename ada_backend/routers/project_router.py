@@ -67,6 +67,11 @@ def get_projects_by_organization_endpoint(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
+        LOGGER.exception(
+            "Failed to list projects for organization %s and user %s",
+            organization_id,
+            user.id,
+        )
         raise HTTPException(status_code=500, detail="Internal Server Error") from e
 
 
@@ -86,6 +91,10 @@ def get_project_endpoint(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
+        LOGGER.exception(
+            "Failed to get project %s",
+            project_id,
+        )
         raise HTTPException(status_code=500, detail="Internal Server Error") from e
 
 
@@ -105,6 +114,10 @@ def delete_project_endpoint(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
+        LOGGER.exception(
+            "Failed to delete project %s",
+            project_id,
+        )
         raise HTTPException(status_code=500, detail="Internal Server Error") from e
 
 
@@ -125,6 +138,10 @@ def update_project_endpoint(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
+        LOGGER.exception(
+            "Failed to update project %s",
+            project_id,
+        )
         raise HTTPException(status_code=500, detail="Internal Server Error") from e
 
 
@@ -145,6 +162,11 @@ def create_project_endpoint(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
+        LOGGER.exception(
+            "Failed to create project in organization %s by user %s",
+            organization_id,
+            user.id,
+        )
         raise HTTPException(status_code=500, detail=f"Internal Server Error: {e}") from e
 
 
@@ -176,7 +198,7 @@ async def run_env_agent_endpoint(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
-        LOGGER.error(f"Error running agent: {e}")
+        LOGGER.exception("Error running agent for project %s (env=%s)", project_id, env)
         raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}") from e
 
 
@@ -194,6 +216,11 @@ async def get_project_charts(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
+        LOGGER.exception(
+            "Failed to get charts for project %s (duration=%s)",
+            project_id,
+            duration,
+        )
         raise HTTPException(status_code=500, detail="Internal Server Error") from e
 
 
@@ -221,6 +248,13 @@ async def get_project_trace(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
+        LOGGER.exception(
+            "Failed to get traces (v1) for project %s (duration=%s, env=%s, call_type=%s)",
+            project_id,
+            duration,
+            environment,
+            call_type,
+        )
         raise HTTPException(status_code=500, detail="Internal Server Error") from e
 
 
@@ -248,6 +282,13 @@ async def get_project_trace_v2(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
+        LOGGER.exception(
+            "Failed to get traces (v2) for project %s (duration=%s, env=%s, call_type=%s)",
+            project_id,
+            duration,
+            environment,
+            call_type,
+        )
         raise HTTPException(status_code=500, detail="Internal Server Error") from e
 
 
@@ -265,6 +306,11 @@ async def get_project_monitoring_kpi(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
+        LOGGER.exception(
+            "Failed to get KPIs for project %s (duration=%s)",
+            project_id,
+            duration,
+        )
         raise HTTPException(status_code=500, detail="Internal Server Error") from e
 
 
@@ -309,7 +355,11 @@ async def chat(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
-        LOGGER.error(f"Error running agent: {e}")
+        LOGGER.exception(
+            "Error running agent for project %s, graph_runner %s",
+            project_id,
+            graph_runner_id,
+        )
         raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}") from e
 
 
@@ -348,5 +398,5 @@ async def chat_env(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
-        LOGGER.error(f"Error running agent: {e}")
+        LOGGER.exception("Error running agent chat_env for project %s (env=%s)", project_id, env)
         raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}") from e

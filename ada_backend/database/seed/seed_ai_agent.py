@@ -28,6 +28,7 @@ def seed_ai_agent_components(session: Session):
     base_ai_agent = db.Component(
         id=COMPONENT_UUIDS["base_ai_agent"],
         name="AI Agent",
+        base_component="AI Agent",
         description=(
             "AI operator provided with tools."
             " LLM calls will choose next action step by step until it decides to provide a response."

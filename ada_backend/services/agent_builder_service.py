@@ -17,8 +17,10 @@ from ada_backend.repositories.component_repository import (
     get_component_sub_components,
     get_tool_description,
     get_tool_description_component,
+    get_global_parameters_by_component_id,
 )
 from ada_backend.services.registry import FACTORY_REGISTRY
+from ada_backend.utils.secret_resolver import replace_secret_placeholders
 
 
 LOGGER = logging.getLogger(__name__)
@@ -177,6 +179,38 @@ def instantiate_component(
             ]
     LOGGER.debug(f"Merged input parameters: {input_params}\n")
 
+    # Apply global component parameters (non-overridable, invisible to UI)
+    try:
+        globals_ = get_global_parameters_by_component_id(
+            session,
+            component_instance.component_id,
+        )
+        grouped_globals: dict[str, list[tuple[int, Any]]] = {}
+        for gparam in globals_:
+            pname = gparam.parameter_definition.name
+            if gparam.order is not None:
+                if pname not in grouped_globals:
+                    grouped_globals[pname] = []
+                grouped_globals[pname].append((gparam.order, gparam.get_value()))
+            else:
+                # Scalar: enforce globally
+                input_params[pname] = gparam.get_value()
+        for pname, values in grouped_globals.items():
+            input_params[pname] = [v for _, v in sorted(values, key=lambda x: x[0])]
+        LOGGER.debug(f"Input parameters after applying global component parameters: {input_params}\n")
+    except Exception as e:
+        raise ValueError(
+            f"Failed to apply global component parameters for instance {component_instance.ref}: {e}"
+        ) from e
+
+    # Resolve secret placeholders for any parameter in input_params.
+    key_to_secret: dict[str, str] | None = None
+    if project_id:
+        secrets = get_organization_secrets_from_project_id(session, project_id)
+        key_to_secret = {s.key: s.secret for s in secrets}
+
+    input_params = replace_secret_placeholders(input_params, key_to_secret)
+
     # Resolve tool description if required
     tool_description = _get_tool_description(session, component_instance)
     if tool_description:
@@ -189,6 +223,13 @@ def instantiate_component(
     # Instantiate the component using its factory
     LOGGER.debug(f"Trying to create component: {component_name} with input params: {input_params}\n")
     try:
+        # Prefer explicit base_component when provided
+        base_component = getattr(component_instance.component, "base_component", None)
+        if base_component:
+            return FACTORY_REGISTRY.create(
+                entity_name=base_component,
+                **input_params,
+            )
         return FACTORY_REGISTRY.create(
             entity_name=component_name,
             **input_params,
