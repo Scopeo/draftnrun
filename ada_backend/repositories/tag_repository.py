@@ -37,26 +37,25 @@ def get_graph_runner_tag_version(session: Session, graph_runner_id: UUID) -> Opt
 
 def get_latest_tag_version_for_project(session: Session, project_id: UUID) -> Optional[str]:
     """Return the latest vX.Y.Z among this project's graph runners."""
-    results = (
-        session.query(db.GraphRunner)
+    from sqlalchemy import func, cast, Integer
+
+    # Extract major, minor, patch from tag_version and order by them
+    result = (
+        session.query(db.GraphRunner.tag_version)
         .join(
             db.ProjectEnvironmentBinding,
             db.ProjectEnvironmentBinding.graph_runner_id == db.GraphRunner.id,
         )
-        .filter(db.ProjectEnvironmentBinding.project_id == project_id)
-        .all()
+        .filter(db.ProjectEnvironmentBinding.project_id == project_id, db.GraphRunner.tag_version.isnot(None))
+        .order_by(
+            cast(func.split_part(func.substring(db.GraphRunner.tag_version, 2), ".", 1), Integer).desc(),
+            cast(func.split_part(db.GraphRunner.tag_version, ".", 2), Integer).desc(),
+            cast(func.split_part(db.GraphRunner.tag_version, ".", 3), Integer).desc(),
+        )
+        .first()
     )
-    candidates: list[tuple[int, int, int]] = []
-    for gr in results:
-        if gr.tag_version:
-            version_parts = gr.tag_version[1:].split(".")
-            major, minor, patch = int(version_parts[0]), int(version_parts[1]), int(version_parts[2])
-            candidates.append((major, minor, patch))
-    if not candidates:
-        return None
-    latest = max(candidates)
-    major, minor, patch = latest
-    return f"v{major}.{minor}.{patch}"
+
+    return result[0] if result else None
 
 
 def compute_next_tag_version(session: Session, project_id: UUID) -> str:
