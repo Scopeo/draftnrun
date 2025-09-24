@@ -17,8 +17,11 @@ from ada_backend.repositories.graph_runner_repository import (
     graph_runner_exists,
     insert_graph_runner_and_bind_to_project,
     upsert_component_node,
+    upsert_port_mapping,
+    delete_port_mappings_for_target_except,
 )
 from ada_backend.schemas.pipeline.graph_schema import GraphUpdateResponse, GraphUpdateSchema
+from ada_backend.repositories.component_repository import get_canonical_ports_for_components
 from ada_backend.services.agent_runner_service import get_agent_for_project
 from ada_backend.services.graph.delete_graph_service import delete_component_instances_from_nodes
 from ada_backend.services.pipeline.update_pipeline_service import create_or_update_component_instance
@@ -107,6 +110,7 @@ async def update_graph_service(
 
     edge_ids_to_delete = previous_edge_ids - {edge.id for edge in graph_project.edges}
     LOGGER.info("Deleting edges: {}".format(len(edge_ids_to_delete)))
+    # TODO: could use a bulk delete to avoid N+1 here
     for edge_id in edge_ids_to_delete:
         delete_edge(session, edge_id)
 
@@ -114,9 +118,80 @@ async def update_graph_service(
     if len(nodes_to_delete) > 0:
         delete_component_instances_from_nodes(session, nodes_to_delete)
 
+    # TODO: could use a bulk delete to avoid N+1 here
     for node_id in nodes_to_delete:
         delete_node(session, node_id)
     LOGGER.info("Deleted nodes: {}".format(len(nodes_to_delete)))
+
+    # --- Port mappings: upsert provided, then ensure canonical for any missing edge pair ---
+    provided_pairs: set[tuple[UUID, UUID]] = set()
+    # Track per-target port overrides to support destination-driven updates
+    provided_targets: dict[tuple[UUID, str], tuple[UUID, str]] = {}
+    if hasattr(graph_project, "port_mappings") and graph_project.port_mappings:
+        for pm in graph_project.port_mappings:
+            upsert_port_mapping(
+                session,
+                graph_runner_id=graph_runner_id,
+                source_instance_id=pm.source_instance_id,
+                source_port_name=pm.source_port_name,
+                target_instance_id=pm.target_instance_id,
+                target_port_name=pm.target_port_name,
+                dispatch_strategy=pm.dispatch_strategy,
+            )
+            provided_pairs.add((pm.source_instance_id, pm.target_instance_id))
+            provided_targets[(pm.target_instance_id, pm.target_port_name)] = (
+                pm.source_instance_id,
+                pm.source_port_name,
+            )
+
+    # Enforce destination-driven updates: for any provided target port, remove old mappings except the one just set
+    for (target_instance_id, target_port_name), (
+        keep_source_instance_id,
+        keep_source_port_name,
+    ) in provided_targets.items():
+        delete_port_mappings_for_target_except(
+            session,
+            graph_runner_id=graph_runner_id,
+            target_instance_id=target_instance_id,
+            target_port_name=target_port_name,
+            keep_source_instance_id=keep_source_instance_id,
+            keep_source_port_name=keep_source_port_name,
+        )
+
+    # Auto-create canonical mappings for edges without any mapping
+    # Gather distinct component ids present in edges
+    src_ids = []
+    dst_ids = []
+    for edge in graph_project.edges:
+        src_inst = get_component_instance_by_id(session, edge.origin)
+        dst_inst = get_component_instance_by_id(session, edge.destination)
+        if src_inst:
+            src_ids.append(src_inst.component_id)
+        if dst_inst:
+            dst_ids.append(dst_inst.component_id)
+    canonical_by_component = get_canonical_ports_for_components(session, list(set(src_ids + dst_ids)))
+
+    for edge in graph_project.edges:
+        src = edge.origin
+        dst = edge.destination
+        if (src, dst) in provided_pairs:
+            continue
+        src_comp_inst = get_component_instance_by_id(session, src)
+        dst_comp_inst = get_component_instance_by_id(session, dst)
+        if not src_comp_inst or not dst_comp_inst:
+            continue
+        src_ports = canonical_by_component.get(src_comp_inst.component_id, {})
+        dst_ports = canonical_by_component.get(dst_comp_inst.component_id, {})
+        if src_ports.get("output") and dst_ports.get("input"):
+            upsert_port_mapping(
+                session,
+                graph_runner_id=graph_runner_id,
+                source_instance_id=src,
+                source_port_name=src_ports["output"],
+                target_instance_id=dst,
+                target_port_name=dst_ports["input"],
+                dispatch_strategy="direct",
+            )
 
     await get_agent_for_project(
         session,

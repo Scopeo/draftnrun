@@ -65,7 +65,8 @@ class GmailSenderInputs(BaseModel):
     mail_body: str = Field(description="The body of the email to be sent.")
     email_recipients: Optional[list[str]] = Field(
         default=None,
-        description="List of email addresses to send the email to. If not provided, the email will be saved as a draft.",
+        description="""List of email addresses to send the email to.
+            If not provided, the email will be saved as a draft.""",
     )
     cc: Optional[list[str]] = Field(default=None, description="List of CC email addresses to send the email to.")
     bcc: Optional[list[str]] = Field(default=None, description="List of BCC email addresses to send the email to.")
@@ -137,6 +138,7 @@ def create_raw_mail_message(
 
 class GmailSender(Agent):
     TRACE_SPAN_KIND = OpenInferenceSpanKindValues.TOOL.value
+    migrated = True
 
     @classmethod
     def get_inputs_schema(cls) -> Type[BaseModel]:
@@ -262,3 +264,7 @@ class GmailSender(Agent):
             status = f"Email sent successfully with ID: {sent_message['id']}"
             message_id = sent_message["id"]
         return GmailSenderOutputs(status=status, message_id=message_id)
+
+    @classmethod
+    def get_canonical_ports(cls) -> dict[str, str | None]:
+        return {"input": "mail_body", "output": "status"}
