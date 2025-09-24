@@ -27,32 +27,46 @@ def upgrade() -> None:
     # Data migration: Copy project_id from attributes JSON to new column
     connection = op.get_bind()
 
-    # Update ALL spans: extract project_id if it exists, otherwise set to NULL
+    # Use regex to extract project_id without JSON parsing to avoid Unicode issues
     connection.execute(
         sa.text(
             """
         UPDATE spans
         SET project_id = CASE
-            WHEN attributes::text LIKE '%"project_id"%'
-            AND (attributes::json->>'project_id') IS NOT NULL
-            AND (attributes::json->>'project_id') != ''
-            AND length(trim(attributes::json->>'project_id')) > 0
-            THEN (attributes::json->>'project_id')
+            WHEN attributes ~ '"project_id"\\s*:\\s*"([^"]*)"' THEN
+                regexp_replace(
+                    (regexp_match(attributes, '"project_id"\\s*:\\s*"([^"]*)"'))[1],
+                    '\\\\u0000',
+                    '',
+                    'g'
+                )
             ELSE NULL
         END
+        WHERE attributes ~ '"project_id"\\s*:\\s*"[^"]*"'
+        AND length(trim(regexp_replace(
+            (regexp_match(attributes, '"project_id"\\s*:\\s*"([^"]*)"'))[1],
+            '\\\\u0000',
+            '',
+            'g'
+        ))) > 0
     """
         )
     )
 
     # Optional: Remove project_id from attributes JSON to clean up
-    # Only remove from spans that actually have project_id
+    # Only remove from spans that actually have project_id and were successfully migrated
     connection.execute(
         sa.text(
             """
         UPDATE spans
-        SET attributes = (attributes::jsonb - 'project_id')::text
-        WHERE attributes::text LIKE '%"project_id"%'
-        AND (attributes::json->>'project_id') IS NOT NULL
+        SET attributes = regexp_replace(
+            attributes,
+            ',"project_id"\\s*:\\s*"[^"]*"',
+            '',
+            'g'
+        )
+        WHERE project_id IS NOT NULL
+        AND attributes ~ '"project_id"\\s*:\\s*"[^"]*"'
     """
         )
     )
