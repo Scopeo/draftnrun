@@ -1,6 +1,7 @@
 from datetime import timedelta, datetime
 from uuid import UUID
 import logging
+import json
 
 import numpy as np
 import pandas as pd
@@ -31,6 +32,7 @@ def query_trace_duration(project_id: UUID, duration_days: int) -> pd.DataFrame:
     session = get_session_trace()
     df = pd.read_sql_query(query, session.bind)
     session.close()
+    df["attributes"] = df["attributes"].apply(lambda x: json.loads(x) if isinstance(x, str) else x)
     df = df.replace({np.nan: None})
     return df
 
@@ -49,6 +51,7 @@ def query_trace_messages(
     session = get_session_trace()
     df = pd.read_sql_query(query, session.bind)
     session.close()
+    df["attributes"] = df["attributes"].apply(lambda x: json.loads(x) if isinstance(x, str) else x)
     df = df.replace({np.nan: None})
     return df
 
@@ -70,6 +73,7 @@ def query_root_trace_duration(project_id: UUID, duration_days: int) -> pd.DataFr
     session = get_session_trace()
     df = pd.read_sql_query(query, session.bind)
     session.close()
+    df["attributes"] = df["attributes"].apply(lambda x: json.loads(x) if isinstance(x, str) else x)
     df = df.replace({np.nan: None})
     return df
 
@@ -82,5 +86,6 @@ def query_trace_by_trace_id(trace_id: UUID) -> pd.DataFrame:
     session = get_session_trace()
     df = pd.read_sql_query(query, session.bind)
     session.close()
+    df["attributes"] = df["attributes"].apply(lambda x: json.loads(x) if isinstance(x, str) else x)
     df = df.replace({np.nan: None})
     return df
