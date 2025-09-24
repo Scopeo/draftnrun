@@ -34,6 +34,12 @@ class WebSearchOpenAIToolOutputs(BaseModel):
 
 
 class WebSearchOpenAITool(Agent):
+    migrated = True
+
+    @classmethod
+    def get_canonical_ports(cls) -> dict[str, str | None]:
+        return {"input": "query", "output": "output"}
+
     @classmethod
     def get_inputs_schema(cls) -> Type[BaseModel]:
         return WebSearchOpenAIToolInputs

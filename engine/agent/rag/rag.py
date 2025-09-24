@@ -8,7 +8,6 @@ from engine.agent.agent import Agent
 from engine.agent.types import (
     ComponentAttributes,
     ToolDescription,
-    ChatMessage,
 )
 from engine.agent.rag.reranker import Reranker
 from engine.agent.rag.retriever import Retriever
@@ -37,6 +36,7 @@ class RAGOutputs(BaseModel):
 
 class RAG(Agent):
     TRACE_SPAN_KIND = OpenInferenceSpanKindValues.CHAIN.value
+    migrated = True
 
     @classmethod
     def get_inputs_schema(cls) -> Type[BaseModel]:
@@ -113,6 +113,10 @@ class RAG(Agent):
             is_final=sourced_response.is_successful,
             artifacts={"sources": sourced_response.sources},
         )
+
+    @classmethod
+    def get_canonical_ports(cls) -> dict[str, str | None]:
+        return {"input": "query_text", "output": "output"}
 
 
 def format_rag_tool_description(source: str) -> ToolDescription:

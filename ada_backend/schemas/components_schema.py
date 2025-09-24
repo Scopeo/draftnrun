@@ -34,9 +34,17 @@ class ComponentUseInfoSchema(BaseModel):
     categories: List[str] = []
 
 
+class PortDefinitionSchema(BaseModel):
+    name: str
+    port_type: str
+    is_canonical: bool
+    description: Optional[str] = None
+
+
 class ComponentWithParametersDTO(ComponentUseInfoSchema, ComponentDTO):
     integration: Optional[IntegrationSchema] = None
     parameters: List[ComponentParamDefDTO]
+    port_definitions: List[PortDefinitionSchema] = []
 
 
 class ComponentsResponse(BaseModel):

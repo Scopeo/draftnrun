@@ -17,6 +17,7 @@ from ada_backend.repositories.graph_runner_repository import (
     get_start_components,
     graph_runner_exists,
     delete_temp_folder,
+    list_port_mappings_for_graph,
 )
 from ada_backend.repositories.project_repository import get_project, get_project_with_details
 from ada_backend.repositories.organization_repository import get_organization_secrets
@@ -56,6 +57,18 @@ async def build_graph_runner(
     component_nodes = get_component_nodes(session, graph_runner_id)
     edges = get_edges(session, graph_runner_id)
     start_nodes = [str(node.id) for node in get_start_components(session, graph_runner_id)]
+    # Fetch port mappings for this graph
+    pms = list_port_mappings_for_graph(session, graph_runner_id)
+    port_mappings = [
+        {
+            "source_instance_id": str(pm.source_instance_id),
+            "source_port_name": pm.source_port_name,
+            "target_instance_id": str(pm.target_instance_id),
+            "target_port_name": pm.target_port_name,
+            "dispatch_strategy": pm.dispatch_strategy,
+        }
+        for pm in pms
+    ]
 
     runnables: dict[str, Runnable] = {}
     graph = nx.DiGraph()
@@ -73,7 +86,13 @@ async def build_graph_runner(
         if edge.source_node_id:
             graph.add_edge(str(edge.source_node_id), str(edge.target_node_id), order=edge.order)
 
-    return GraphRunner(graph, runnables, start_nodes, trace_manager=trace_manager)
+    return GraphRunner(
+        graph,
+        runnables,
+        start_nodes,
+        trace_manager=trace_manager,
+        port_mappings=port_mappings,
+    )
 
 
 async def get_agent_for_project(
@@ -153,7 +172,8 @@ async def run_agent(
         )
         params = get_tracing_span()
     except Exception as e:
-        raise ValueError(f"Error running agent: {str(e)}") from e
+        tb = traceback.format_exc()
+        raise ValueError(f"Error running agent: {tb}") from e
     finally:
         delete_temp_folder(uuid_for_temp_folder)
     return ChatResponse(

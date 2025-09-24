@@ -16,7 +16,6 @@ from engine.agent.types import (
     ComponentAttributes,
     ToolDescription,
     ChatMessage,
-    NodeData,
 )
 from engine.graph_runner.runnable import Runnable
 from engine.agent.history_message_handling import HistoryMessageHandler
@@ -45,12 +44,19 @@ class ReActAgentInputs(BaseModel):
 
 
 class ReActAgentOutputs(BaseModel):
-    output: ChatMessage = Field(description="The final message from the agent.")
+    output: str = Field(description="The string content of the final message from the agent.")
+    full_message: ChatMessage = Field(description="The full final message object from the agent.")
     is_final: bool = Field(default=False, description="Indicates if this is the final output of the agent.")
     artifacts: dict[str, Any] = Field(default_factory=dict, description="Artifacts produced by the agent.")
 
 
 class ReActAgent(Agent):
+    migrated = True
+
+    @classmethod
+    def get_canonical_ports(cls) -> dict[str, Optional[str]]:
+        return {"input": "messages", "output": "output"}
+
     @classmethod
     def get_inputs_schema(cls) -> Type[BaseModel]:
         return ReActAgentInputs
@@ -181,7 +187,10 @@ class ReActAgent(Agent):
         # Exact previous logic
         original_agent_input = inputs[0]
         if not isinstance(original_agent_input, AgentPayload):
-
+            # Accept BaseModel-like inputs (e.g., NodeData) defensively
+            if hasattr(original_agent_input, "model_dump") and callable(original_agent_input.model_dump):
+                original_agent_input = original_agent_input.model_dump(exclude_none=True)
+            # Ensure messages field populated from configured input key
             original_agent_input["messages"] = original_agent_input[self.input_data_field_for_messages_history]
             original_agent_input = AgentPayload(**original_agent_input)
         system_message = next((msg for msg in original_agent_input.messages if msg.role == "system"), None)
@@ -319,7 +328,10 @@ class ReActAgent(Agent):
             core_result.messages[-1] if core_result.messages else ChatMessage(role="assistant", content=None)
         )
         return ReActAgentOutputs(
-            output=final_message, is_final=core_result.is_final, artifacts=core_result.artifacts or {}
+            output=final_message.content or "",
+            full_message=final_message,
+            is_final=core_result.is_final,
+            artifacts=core_result.artifacts or {},
         )
 
 
