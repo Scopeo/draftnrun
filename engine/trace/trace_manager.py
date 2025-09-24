@@ -94,6 +94,10 @@ class TraceManager:
         """Force flush all pending spans to the exporter."""
         self.tracer_provider.force_flush()
 
+    def shutdown(self):
+        """Shutdown the tracer provider and cleanup resources."""
+        self.tracer_provider.shutdown()
+
     @classmethod
     def from_config(cls, config: dict):
         """Create a TraceManager from a configuration dictionary."""

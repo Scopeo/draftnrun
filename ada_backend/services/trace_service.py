@@ -132,10 +132,13 @@ def build_root_spans(df: pd.DataFrame) -> List[RootTraceSpan]:
 
 def get_token_usage(organization_id: UUID) -> TokenUsage:
     session = get_session_trace()
-    token_usage = session.query(db.OrganizationUsage).filter_by(organization_id=str(organization_id)).first()
-    if not token_usage:
-        return TokenUsage(organization_id=str(organization_id), total_tokens=0)
-    return TokenUsage(organization_id=token_usage.organization_id, total_tokens=token_usage.total_tokens)
+    try:
+        token_usage = session.query(db.OrganizationUsage).filter_by(organization_id=str(organization_id)).first()
+        if not token_usage:
+            return TokenUsage(organization_id=str(organization_id), total_tokens=0)
+        return TokenUsage(organization_id=token_usage.organization_id, total_tokens=token_usage.total_tokens)
+    finally:
+        session.close()
 
 
 def get_span_trace_service(user_id: UUID, trace_id: UUID) -> TraceSpan:

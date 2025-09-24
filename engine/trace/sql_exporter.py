@@ -19,13 +19,27 @@ from settings import settings
 LOGGER = logging.getLogger(__name__)
 
 
+# Global engine for connection reuse - prevents memory leak
+_engine = None
+
+def get_engine():
+    global _engine
+    if _engine is None:
+        if not settings.TRACES_DB_URL:
+            raise ValueError("TRACES_DB_URL is not set")
+        _engine = create_engine(
+            settings.TRACES_DB_URL,
+            echo=False,
+            pool_size=5,
+            max_overflow=10,
+            pool_pre_ping=True
+        )
+    return _engine
+
 def get_session_trace():
-    if not settings.TRACES_DB_URL:
-        raise ValueError("TRACES_DB_URL is not set")
-    engine = create_engine(settings.TRACES_DB_URL, echo=False)
+    engine = get_engine()
     Session = sessionmaker(bind=engine)
-    session = Session()
-    return session
+    return Session()
 
 
 def event_to_dict(event: Event) -> dict:
