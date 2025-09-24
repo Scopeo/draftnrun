@@ -26,7 +26,6 @@ from engine.agent.tools.python_code_runner import PYTHON_CODE_RUNNER_TOOL_DESCRI
 from engine.agent.tools.terminal_command_runner import TERMINAL_COMMAND_RUNNER_TOOL_DESCRIPTION
 from settings import settings
 
-
 LOGGER = logging.getLogger(__name__)
 
 INITIAL_PROMPT = (
@@ -35,65 +34,6 @@ INITIAL_PROMPT = (
 )
 DEFAULT_FALLBACK_REACT_ANSWER = "I couldn't find a solution to your problem."
 CODE_RUNNER_TOOLS = [PYTHON_CODE_RUNNER_TOOL_DESCRIPTION.name, TERMINAL_COMMAND_RUNNER_TOOL_DESCRIPTION.name]
-
-
-def format_output_tool_description(
-    tool_name: str,
-    tool_description: str,
-    tool_properties: dict,
-    required_properties: Optional[list] = None,
-) -> ToolDescription:
-    """
-    Format an output tool description for the React agent.
-
-    Args:
-        tool_name: Name of the output tool
-        tool_description: Description of what the tool does
-        tool_properties: JSON schema defining the tool's parameters
-        required_properties: List of required property names. If None, all properties are required.
-
-    Returns:
-        ToolDescription for the output tool
-    """
-    if required_properties is None:
-        required_properties = list(tool_properties.keys())
-
-    return ToolDescription(
-        name=tool_name,
-        description=tool_description,
-        tool_properties=tool_properties,
-        required_tool_properties=required_properties,
-    )
-
-
-def get_default_output_tool_description() -> ToolDescription:
-    """
-    Get the default output tool description for conversation answers.
-
-    Returns:
-        Default ToolDescription for structured conversation responses
-    """
-    return format_output_tool_description(
-        tool_name="conversation_answer",
-        tool_description=(
-            "Generate a structured answer for the conversation. Use this tool when you have "
-            "gathered enough information to provide a comprehensive response to the user's question. "
-            "This tool allows you to provide both the answer content and indicate whether the "
-            "conversation should continue or end."
-        ),
-        tool_properties={
-            "answer": {
-                "type": "string",
-                "description": "The answer or response content for the user's question or request.",
-            },
-            "is_ending_conversation": {
-                "type": "boolean",
-                "description": "Whether this response should end the conversation (true) or "
-                "allow for follow-up questions (false).",
-            },
-        },
-        required_properties=["answer", "is_ending_conversation"],
-    )
 
 
 class ReActAgent(Agent):
@@ -142,19 +82,11 @@ class ReActAgent(Agent):
         self._shared_sandbox: Optional[AsyncSandbox] = None
         self._e2b_api_key = getattr(settings, "E2B_API_KEY", None)
 
-        # Initialize output tool parameters
+        # Initialize output tool parameters (store as-is, parse later when needed)
         self._output_tool_name = output_tool_name
         self._output_tool_description = output_tool_description
-        # Parse JSON strings to appropriate data types
-        if isinstance(output_tool_properties, str):
-            self._output_tool_properties = load_str_to_json(output_tool_properties)
-        else:
-            self._output_tool_properties = output_tool_properties or {}
-
-        if isinstance(output_tool_required_properties, str):
-            self._output_tool_required_properties = load_str_to_json(output_tool_required_properties)
-        else:
-            self._output_tool_required_properties = output_tool_required_properties or []
+        self._output_tool_properties = output_tool_properties
+        self._output_tool_required_properties = output_tool_required_properties
 
         self._output_tool_agent_description = self._get_output_tool_description()
 
@@ -165,14 +97,40 @@ class ReActAgent(Agent):
         Returns:
             ToolDescription if all required output tool parameters are set, None otherwise.
         """
-        if all([self._output_tool_name, self._output_tool_description, self._output_tool_properties]):
-            return format_output_tool_description(
-                tool_name=self._output_tool_name,
-                tool_description=self._output_tool_description,
-                tool_properties=self._output_tool_properties,
-                required_properties=self._output_tool_required_properties or None,
-            )
-        return None
+        # If no output tool is configured, return None
+        if not any([self._output_tool_name, self._output_tool_description, self._output_tool_properties]):
+            return None
+
+        # If we tried to set up an output tool but missed some information, raise an error
+        missing_fields = []
+        if not self._output_tool_name:
+            missing_fields.append("output_tool_name")
+        if not self._output_tool_description:
+            missing_fields.append("output_tool_description")
+        if not self._output_tool_properties:
+            missing_fields.append("output_tool_properties")
+
+        if missing_fields:
+            raise ValueError(f"Error missing critical fields to define output structured output {missing_fields}")
+
+        # Parse JSON strings to appropriate data types
+        if isinstance(self._output_tool_properties, str):
+            parsed_properties = load_str_to_json(self._output_tool_properties)
+        else:
+            parsed_properties = self._output_tool_properties
+
+        if isinstance(self._output_tool_required_properties, str):
+            parsed_required_properties = load_str_to_json(self._output_tool_required_properties)
+        else:
+            parsed_required_properties = self._output_tool_required_properties or []
+
+        required_properties = parsed_required_properties or list(parsed_properties.keys())
+        return ToolDescription(
+            name=self._output_tool_name,
+            description=self._output_tool_description,
+            tool_properties=parsed_properties,
+            required_tool_properties=required_properties,
+        )
 
     # TODO: investigate if we can decouple the sandbox from the agent
     async def _ensure_shared_sandbox(self) -> AsyncSandbox:
@@ -254,7 +212,6 @@ class ReActAgent(Agent):
         """Runs ReActAgent. Only one input is allowed."""
         original_agent_input = inputs[0]
         if not isinstance(original_agent_input, AgentPayload):
-
             original_agent_input["messages"] = original_agent_input[self.input_data_field_for_messages_history]
             original_agent_input = AgentPayload(**original_agent_input)
         system_message = next((msg for msg in original_agent_input.messages if msg.role == "system"), None)
