@@ -1,5 +1,4 @@
 from datetime import timedelta, datetime
-import json
 from uuid import UUID
 import logging
 
@@ -13,22 +12,27 @@ LOGGER = logging.getLogger(__name__)
 
 def query_trace_duration(project_id: UUID, duration_days: int) -> pd.DataFrame:
     start_time_offset_days = (datetime.now() - timedelta(days=duration_days)).isoformat()
-    # TODO: Refactor this function to be SQL-native for better efficiency
-    query = (
-        f"SELECT * FROM spans WHERE start_time > '{start_time_offset_days}'"
-        "ORDER BY MAX(start_time) OVER (PARTITION BY trace_rowid) DESC, "
-        "trace_rowid, start_time ASC;"
+
+    query = f"""
+    WITH root_spans AS (
+        SELECT trace_rowid
+        FROM spans
+        WHERE parent_id IS NULL
+        AND project_id = '{project_id}'
+        AND start_time > '{start_time_offset_days}'
     )
+    SELECT s.*
+    FROM spans s
+    WHERE s.trace_rowid IN (SELECT trace_rowid FROM root_spans)
+    ORDER BY MAX(s.start_time) OVER (PARTITION BY s.trace_rowid) DESC,
+             s.trace_rowid, s.start_time ASC
+    """
+
     session = get_session_trace()
     df = pd.read_sql_query(query, session.bind)
     session.close()
     df = df.replace({np.nan: None})
-    df["attributes"] = df["attributes"].apply(lambda x: json.loads(x) if isinstance(x, str) else x)
-    df_expanded = df.join(pd.json_normalize(df["attributes"]))
-    trace_rowids = df_expanded[df_expanded["parent_id"].isna() & (df_expanded["project_id"] == str(project_id))][
-        "trace_rowid"
-    ].values
-    return df[df["trace_rowid"].isin(trace_rowids)]
+    return df
 
 
 def query_trace_messages(
@@ -45,30 +49,29 @@ def query_trace_messages(
     session = get_session_trace()
     df = pd.read_sql_query(query, session.bind)
     session.close()
-
+    df = df.replace({np.nan: None})
     return df
 
 
 def query_root_trace_duration(project_id: UUID, duration_days: int) -> pd.DataFrame:
     start_time_offset_days = (datetime.now() - timedelta(days=duration_days)).isoformat()
-    query = (
-        "SELECT s.*, m.input_content, m.output_content FROM spans s "
-        f"LEFT JOIN span_messages m ON m.span_id = s.span_id WHERE s.start_time > '{start_time_offset_days}' "
-        "ORDER BY MAX(s.start_time) OVER (PARTITION BY s.trace_rowid) DESC, "
-        "s.trace_rowid, s.start_time ASC;"
-    )
+
+    query = f"""
+    SELECT s.*, m.input_content, m.output_content
+    FROM spans s
+    LEFT JOIN span_messages m ON m.span_id = s.span_id
+    WHERE s.parent_id IS NULL
+    AND s.project_id = '{project_id}'
+    AND s.start_time > '{start_time_offset_days}'
+    ORDER BY MAX(s.start_time) OVER (PARTITION BY s.trace_rowid) DESC,
+             s.trace_rowid, s.start_time ASC
+    """
+
     session = get_session_trace()
     df = pd.read_sql_query(query, session.bind)
-    # TODO: Refactor this function to be SQL-native for better efficiency
     session.close()
     df = df.replace({np.nan: None})
-    # TODO: Update the table to add the project_id column to improve filtering efficiency
-    df["attributes"] = df["attributes"].apply(lambda x: json.loads(x) if isinstance(x, str) else x)
-    df_expanded = df.join(pd.json_normalize(df["attributes"]))
-    trace_rowids = df_expanded[df_expanded["parent_id"].isna() & (df_expanded["project_id"] == str(project_id))][
-        "trace_rowid"
-    ].values
-    return df[(df["trace_rowid"].isin(trace_rowids)) & (df["parent_id"].isna())]
+    return df
 
 
 def query_trace_by_trace_id(trace_id: UUID) -> pd.DataFrame:
@@ -80,5 +83,4 @@ def query_trace_by_trace_id(trace_id: UUID) -> pd.DataFrame:
     df = pd.read_sql_query(query, session.bind)
     session.close()
     df = df.replace({np.nan: None})
-    df["attributes"] = df["attributes"].apply(lambda x: json.loads(x) if isinstance(x, str) else x)
     return df

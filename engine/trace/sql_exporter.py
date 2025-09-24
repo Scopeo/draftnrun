@@ -151,6 +151,7 @@ class SQLSpanExporter(SpanExporter):
 
             environment = formatted_attributes.pop("environment", None)
             call_type = formatted_attributes.pop("call_type", None)
+            project_id = formatted_attributes.pop("project_id", None)
 
             openinference_span_kind = json_span["attributes"].get(SpanAttributes.OPENINFERENCE_SPAN_KIND, "UNKNOWN")
             span_row = models.Span(
@@ -172,6 +173,7 @@ class SQLSpanExporter(SpanExporter):
                 llm_token_count_completion=span.attributes.get(SpanAttributes.LLM_TOKEN_COUNT_COMPLETION),
                 environment=environment,
                 call_type=call_type,
+                project_id=project_id,
             )
             ancestors = (
                 select(models.Span.id, models.Span.parent_id)
