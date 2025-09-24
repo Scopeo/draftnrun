@@ -51,7 +51,6 @@ def query_trace_messages(
     session = get_session_trace()
     df = pd.read_sql_query(query, session.bind)
     session.close()
-    df["attributes"] = df["attributes"].apply(lambda x: json.loads(x) if isinstance(x, str) else x)
     df = df.replace({np.nan: None})
     return df
 
