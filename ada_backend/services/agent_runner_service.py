@@ -1,5 +1,6 @@
 from uuid import UUID
 import uuid
+from typing import Optional
 
 from sqlalchemy.orm import Session
 import networkx as nx
@@ -120,6 +121,7 @@ async def run_agent(
     input_data: dict,
     environment: EnvType,
     call_type: CallType,
+    tag_version: Optional[str] = None,
 ) -> ChatResponse:
     project_details = get_project_with_details(session, project_id=project_id)
     agent = await get_agent_for_project(
@@ -140,6 +142,7 @@ async def run_agent(
         uuid_for_temp_folder=uuid_for_temp_folder,
         environment=environment,
         call_type=call_type,
+        tag_version=tag_version,
     )
     try:
         agent_output = await agent.run(
