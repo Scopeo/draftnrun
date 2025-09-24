@@ -94,6 +94,10 @@ app = FastAPI(
             "name": "Cron Jobs",
             "description": "Endpoints for managing scheduled cron jobs for organizations",
         },
+        {
+            "name": "Quality Assurance",
+            "description": "Endpoints for managing quality assurance datasets, versions and inputs per project",
+        },
     ],
 )
 
