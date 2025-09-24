@@ -25,6 +25,7 @@ def mock_trace_manager():
     mock_span.__enter__ = MagicMock(return_value=mock_span)
     mock_span.__exit__ = MagicMock(return_value=None)
     trace_manager.start_span.return_value = mock_span
+    mock_span.to_json.return_value = '{"context": {"trace_id": "testid"}, "attributes": {}, "parent_id": null}'
     return trace_manager
 
 
