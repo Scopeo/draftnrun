@@ -16,7 +16,8 @@ from ada_backend.repositories.env_repository import (
     get_env_relationship_by_graph_runner_id,
     update_graph_runner_env,
 )
-from ada_backend.repositories.tag_repository import compute_next_tag_version, update_graph_runner_tag_version
+from ada_backend.repositories.tag_repository import update_graph_runner_tag_version
+from ada_backend.services.tag_service import compute_next_tag_version
 from ada_backend.repositories.graph_runner_repository import (
     get_component_nodes,
     get_graph_runner_for_env,
