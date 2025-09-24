@@ -6,11 +6,6 @@ from sqlalchemy import func, cast, Integer
 from ada_backend.database import models as db
 
 
-def get_graph_runner_tag_version(session: Session, graph_runner_id: UUID) -> Optional[str]:
-    graph_runner = session.query(db.GraphRunner).filter(db.GraphRunner.id == graph_runner_id).first()
-    return graph_runner.tag_version if graph_runner else None
-
-
 def get_latest_tag_version_for_project(session: Session, project_id: UUID) -> Optional[str]:
     """Return the latest vX.Y.Z among this project's graph runners."""
 

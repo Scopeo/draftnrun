@@ -39,7 +39,6 @@ from ada_backend.services.project_service import (
 )
 from ada_backend.services.trace_service import get_trace_by_project
 from ada_backend.repositories.env_repository import get_env_relationship_by_graph_runner_id
-from ada_backend.repositories.tag_repository import get_graph_runner_tag_version
 
 LOGGER = logging.getLogger(__name__)
 
@@ -343,7 +342,6 @@ async def chat(
         env_relationship = get_env_relationship_by_graph_runner_id(session, graph_runner_id)
         environment = env_relationship.environment
         LOGGER.info(f"Determined environment {environment} for graph_runner_id {graph_runner_id}")
-        tag_version = get_graph_runner_tag_version(session, graph_runner_id)
         return await run_agent(
             session=session,
             project_id=project_id,
@@ -351,7 +349,7 @@ async def chat(
             input_data=input_data,
             environment=environment,
             call_type=CallType.SANDBOX,
-            tag_version=tag_version,
+            tag_version=env_relationship.graph_runner.tag_version,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
