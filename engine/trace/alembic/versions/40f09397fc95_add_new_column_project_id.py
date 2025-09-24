@@ -59,12 +59,20 @@ def upgrade() -> None:
         sa.text(
             """
         UPDATE spans
-        SET attributes = regexp_replace(
-            attributes,
-            ',"project_id"\\s*:\\s*"[^"]*"',
-            '',
-            'g'
-        )
+        SET attributes =
+            -- First remove if it's the first field: "project_id":"value",
+            regexp_replace(
+                -- Then remove if it's not the first field: ,"project_id":"value"
+                regexp_replace(
+                    attributes,
+                    ',"project_id"\\s*:\\s*"[^"]*"',
+                    '',
+                    'g'
+                ),
+                '"project_id"\\s*:\\s*"[^"]*",',
+                '',
+                'g'
+            )
         WHERE project_id IS NOT NULL
         AND attributes ~ '"project_id"\\s*:\\s*"[^"]*"'
     """
