@@ -23,7 +23,7 @@ def seed_gmail_components(session: Session):
         id=COMPONENT_UUIDS["gmail_sender"],
         name="Gmail Sender",
         description="A component to send emails using Gmail API.",
-        is_agent=False,
+        is_agent=True,
         integration_id=INTEGRATION_UUIDS["gmail_sender"],
         function_callable=True,
         can_use_function_calling=False,

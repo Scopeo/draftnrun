@@ -3,7 +3,7 @@ import logging
 from opentelemetry import trace as trace_api
 from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttributes
 
-from engine.agent.types import ToolDescription, ComponentAttributes, AgentPayload
+from engine.agent.types import ToolDescription, ComponentAttributes, AgentPayload, NodeData
 from engine.trace.trace_manager import TraceManager
 from engine.agent.utils import load_str_to_json
 from engine.trace.serializer import serialize_to_json
@@ -36,12 +36,23 @@ class Input:
         self.component_attributes = component_attributes
         self.payload_schema = load_str_to_json(payload_schema)
 
-    # TODO: Refactor Agent I/O to use an unified input/output object:
-    async def run(self, input_data: AgentPayload | dict) -> dict:
-        if isinstance(input_data, AgentPayload):
-            input_data = input_data.model_dump()
+    def get_canonical_ports(self) -> dict[str, str | None]:
+        # Expose the canonical output as the messages list so default mappings
+        # can auto-wire to downstream components expecting chat messages.
+        return {"output": "messages"}
 
-        filtered_input = input_data.copy()
+    # TODO: Refactor Agent I/O to use an unified input/output object:
+    async def run(self, input_data: AgentPayload | dict | NodeData) -> dict:
+        # Normalize input to a plain dict
+        # TODO: Remove after I/O refactor migration
+        if isinstance(input_data, NodeData):
+            base: dict = dict(input_data.data or {})
+        elif isinstance(input_data, AgentPayload):
+            base = input_data.model_dump()
+        else:
+            base = dict(input_data)
+
+        filtered_input = base.copy()
         for k, v in self.payload_schema.items():
             if k not in filtered_input:
                 filtered_input[k] = v
@@ -50,7 +61,7 @@ class Input:
             span.set_attributes(
                 {
                     SpanAttributes.OPENINFERENCE_SPAN_KIND: OpenInferenceSpanKindValues.UNKNOWN.value,
-                    SpanAttributes.INPUT_VALUE: serialize_to_json(input_data, shorten_string=True),
+                    SpanAttributes.INPUT_VALUE: serialize_to_json(base, shorten_string=True),
                     SpanAttributes.OUTPUT_VALUE: serialize_to_json(filtered_input, shorten_string=True),
                     "component_instance_id": str(self.component_attributes.component_instance_id),
                 }

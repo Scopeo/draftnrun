@@ -1,3 +1,4 @@
+import json
 from uuid import uuid4
 from fastapi.testclient import TestClient
 
@@ -319,6 +320,14 @@ def _create_dummy_agent_workflow_config():
         ],
         "relationships": [],
         "edges": [{"id": edge_id, "origin": api_input_id, "destination": filter_id, "order": 0}],
+        "port_mappings": [
+            {
+                "source_instance_id": api_input_id,
+                "source_port_name": "messages",
+                "target_instance_id": filter_id,
+                "target_port_name": "messages",
+            }
+        ],
     }
 
 
@@ -411,8 +420,9 @@ def test_run_qa_endpoint():
 
     # Check that all results have input == output (dummy agent behavior)
     for result in qa_results_selection["results"]:
+        output_content = json.loads(result["output"])[0]["content"]
         assert (
-            result["input"] == result["output"]
+            result["input"] == output_content
         ), f"Input and output should be the same for dummy agent. Input: {result['input']}, Output: {result['output']}"
         assert result["success"] is True, f"All results should be successful. Result: {result}"
         assert result["version"] == "draft", f"Version should be draft. Result: {result}"
@@ -445,8 +455,9 @@ def test_run_qa_endpoint():
 
     # Check that all results have input == output (dummy agent behavior)
     for result in qa_results_all["results"]:
+        output_content = json.loads(result["output"])[0]["content"]
         assert (
-            result["input"] == result["output"]
+            result["input"] == output_content
         ), f"Input and output should be the same for dummy agent. Input: {result['input']}, Output: {result['output']}"
         assert result["success"] is True, f"All results should be successful. Result: {result}"
         assert result["version"] == "production", f"Version should be production. Result: {result}"

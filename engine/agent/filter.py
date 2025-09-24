@@ -5,7 +5,13 @@ from opentelemetry import trace as trace_api
 from openinference.semconv.trace import SpanAttributes, OpenInferenceSpanKindValues
 from jsonschema_pydantic import jsonschema_to_pydantic
 
-from engine.agent.types import ToolDescription, AgentPayload, ChatMessage, ComponentAttributes
+from engine.agent.types import (
+    ToolDescription,
+    AgentPayload,
+    ChatMessage,
+    ComponentAttributes,
+    NodeData,
+)
 from engine.trace.trace_manager import TraceManager
 from engine.agent.utils import load_str_to_json
 
@@ -38,8 +44,14 @@ class Filter:
         self.filtering_json_schema = load_str_to_json(filtering_json_schema)
         self.output_model = jsonschema_to_pydantic(self.filtering_json_schema)
 
-    async def run(self, output_data: AgentPayload | dict):
+    def get_canonical_ports(self) -> dict[str, str | None]:
+        # The filter expects and produces an AgentPayload shape; the most
+        # semantically useful passthrough is the messages list.
+        return {"input": "messages", "output": "messages"}
 
+    async def run(self, output_data: AgentPayload | dict | NodeData):
+        if isinstance(output_data, NodeData):
+            output_data = output_data.data or {}
         if isinstance(output_data, AgentPayload):
             output_data = output_data.model_dump()
         filtered_output = self.output_model(**output_data)

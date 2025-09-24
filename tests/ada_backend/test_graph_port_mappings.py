@@ -1,0 +1,419 @@
+# flake8: noqa: E501
+from uuid import UUID, uuid4
+
+from fastapi.testclient import TestClient
+
+from ada_backend.main import app
+from ada_backend.database.setup_db import SessionLocal
+from ada_backend.repositories.graph_runner_repository import delete_graph_runner
+from ada_backend.scripts.get_supabase_token import get_user_jwt
+from settings import settings
+
+# Test constants
+SOURCE_PORT_NAME = "output"
+TARGET_PORT_NAME = "input"
+
+client = TestClient(app)
+ORGANIZATION_ID = "37b7d67f-8f29-4fce-8085-19dea582f605"  # umbrella organization
+PROJECT_ID = "f7ddbfcb-6843-4ae9-a15b-40aa565b955b"  # graph test project
+JWT_TOKEN = get_user_jwt(settings.TEST_USER_EMAIL, settings.TEST_USER_PASSWORD)
+HEADERS_JWT = {
+    "accept": "application/json",
+    "Authorization": f"Bearer {JWT_TOKEN}",
+}
+
+
+def test_get_put_roundtrip_port_mappings_migration():
+    """
+    For an unmigrated graph (no port_mappings provided on PUT), verify that:
+    - PUT succeeds
+    - GET returns explicit auto-generated port_mappings
+    - Using that GET payload (minus non-updatable fields) on PUT works (idempotent)
+    - Subsequent GET returns the same explicit port_mappings
+    """
+
+    graph_runner_id = str(uuid4())
+    endpoint = f"/projects/{PROJECT_ID}/graph/{graph_runner_id}"
+
+    # Two component instances connected by a single edge; no port_mappings in the payload
+    src_instance_id = str(uuid4())
+    dst_instance_id = str(uuid4())
+    edge_id = str(uuid4())
+
+    payload = {
+        "component_instances": [
+            {
+                "is_agent": True,
+                "is_protected": False,
+                "function_callable": True,
+                "can_use_function_calling": False,
+                "tool_parameter_name": None,
+                "subcomponents_info": [],
+                "id": src_instance_id,
+                "name": "Source Agent",
+                "ref": "",
+                "is_start_node": True,
+                # Reuse seeded component id from existing tests
+                "component_id": "7a039611-49b3-4bfd-b09b-c0f93edf3b79",
+                "parameters": [
+                    {
+                        "value": "Reformulate the question as a customer service query :\n{input}",
+                        "name": "prompt_template",
+                        "order": None,
+                        "type": "string",
+                        "nullable": False,
+                        "default": "Answer this question: {input}",
+                        "ui_component": "Textarea",
+                        "ui_component_properties": {
+                            "label": "Prompt Template",
+                            "placeholder": "Enter the prompt here. Use {input} (or similar) to insert dynamic content -  the {} braces with a keyword are mandatory.",
+                        },
+                        "is_advanced": False,
+                    },
+                    {
+                        "value": "openai:gpt-4o-mini",
+                        "name": "completion_model",
+                        "order": None,
+                        "type": "string",
+                        "nullable": False,
+                        "default": "openai:gpt-4.1-mini",
+                        "ui_component": "Select",
+                        "ui_component_properties": {
+                            "label": "Model Name",
+                            "options": [
+                                {"value": "openai:gpt-4.1", "label": "GPT-4.1"},
+                                {"value": "openai:gpt-4.1-mini", "label": "GPT-4.1 Mini"},
+                                {"value": "openai:gpt-4.1-nano", "label": "GPT-4.1 Nano"},
+                                {"value": "openai:gpt-4o", "label": "GPT-4o"},
+                                {"value": "openai:gpt-4o-mini", "label": "GPT-4o Mini"},
+                            ],
+                        },
+                        "is_advanced": False,
+                    },
+                ],
+                "tool_description": {
+                    "name": "Graph Test Chatbot",
+                    "description": "Graph Test",
+                    "tool_properties": {},
+                    "required_tool_properties": [],
+                },
+                "component_name": "LLM Call",
+                "component_description": "Templated LLM Call",
+            },
+            {
+                "is_agent": True,
+                "is_protected": False,
+                "function_callable": True,
+                "can_use_function_calling": False,
+                "tool_parameter_name": None,
+                "subcomponents_info": [],
+                "id": dst_instance_id,
+                "name": "Target Agent",
+                "ref": "",
+                "is_start_node": False,
+                # Same seeded component as above to keep it simple
+                "component_id": "7a039611-49b3-4bfd-b09b-c0f93edf3b79",
+                "parameters": [
+                    {
+                        "value": "Add polite expressions to the question: {question} \n",
+                        "name": "prompt_template",
+                        "order": None,
+                        "type": "string",
+                        "nullable": False,
+                        "default": "Answer this question: {input}",
+                        "ui_component": "Textarea",
+                        "ui_component_properties": {
+                            "label": "Prompt Template",
+                            "placeholder": "Enter the prompt here. Use {input} (or similar) to insert dynamic content -  the {} braces with a keyword are mandatory.",
+                        },
+                        "is_advanced": False,
+                    },
+                    {
+                        "value": "openai:gpt-4o-mini",
+                        "name": "completion_model",
+                        "order": None,
+                        "type": "string",
+                        "nullable": False,
+                        "default": "openai:gpt-4.1-mini",
+                        "ui_component": "Select",
+                        "ui_component_properties": {
+                            "label": "Model Name",
+                            "options": [
+                                {"value": "openai:gpt-4.1", "label": "GPT-4.1"},
+                                {"value": "openai:gpt-4.1-mini", "label": "GPT-4.1 Mini"},
+                                {"value": "openai:gpt-4.1-nano", "label": "GPT-4.1 Nano"},
+                                {"value": "openai:gpt-4o", "label": "GPT-4o"},
+                                {"value": "openai:gpt-4o-mini", "label": "GPT-4o Mini"},
+                            ],
+                        },
+                        "is_advanced": False,
+                    },
+                ],
+                "tool_description": {
+                    "name": "Graph Test Chatbot",
+                    "description": "Graph Test",
+                    "tool_properties": {},
+                    "required_tool_properties": [],
+                },
+                "component_name": "LLM Call",
+                "component_description": "Templated LLM Call",
+            },
+        ],
+        "relationships": [],
+        "edges": [
+            {
+                "id": edge_id,
+                "origin": src_instance_id,
+                "destination": dst_instance_id,
+                "order": 0,
+            }
+        ],
+        # Intentionally omit port_mappings -> backend should synthesize defaults on save
+    }
+
+    put_resp = client.put(endpoint, headers=HEADERS_JWT, json=payload)
+    assert put_resp.status_code == 200
+    assert put_resp.json()["graph_id"] == graph_runner_id
+
+    # GET should now include explicit port_mappings created by the backend
+    get_resp = client.get(endpoint, headers=HEADERS_JWT)
+    assert get_resp.status_code == 200
+    data = get_resp.json()
+    assert "port_mappings" in data
+    assert isinstance(data["port_mappings"], list)
+    assert len(data["port_mappings"]) == 1
+    pm = data["port_mappings"][0]
+    assert pm["source_instance_id"] == src_instance_id
+    assert pm["target_instance_id"] == dst_instance_id
+    assert pm["source_port_name"] == "output"
+    assert pm["target_port_name"] == "input"
+    assert pm["dispatch_strategy"] == "direct"
+
+    # Roundtrip: PUT the GET response back (dropping non-updatable fields)
+    roundtrip_payload = {
+        k: data[k] for k in ("component_instances", "relationships", "edges", "port_mappings") if k in data
+    }
+    rt_put_resp = client.put(endpoint, headers=HEADERS_JWT, json=roundtrip_payload)
+    assert rt_put_resp.status_code == 200
+
+    # GET again; port_mappings should remain the same (idempotent)
+    get_resp2 = client.get(endpoint, headers=HEADERS_JWT)
+    assert get_resp2.status_code == 200
+    data2 = get_resp2.json()
+    assert data2.get("port_mappings") == data.get("port_mappings")
+
+    # Cleanup this graph runner
+    session = SessionLocal()
+    delete_graph_runner(session, UUID(graph_runner_id))
+
+
+def test_deploy_graph_copies_port_mappings():
+    """
+    Test that when deploying a graph, the port mappings are correctly copied
+    to the new graph runner.
+    """
+    graph_runner_id = str(uuid4())
+    endpoint = f"/projects/{PROJECT_ID}/graph/{graph_runner_id}"
+
+    # Two component instances connected by a single edge with explicit port mappings
+    src_instance_id = str(uuid4())
+    dst_instance_id = str(uuid4())
+    edge_id = str(uuid4())
+
+    payload = {
+        "component_instances": [
+            {
+                "is_agent": True,
+                "is_protected": False,
+                "function_callable": True,
+                "can_use_function_calling": False,
+                "tool_parameter_name": None,
+                "subcomponents_info": [],
+                "id": src_instance_id,
+                "name": "Source Agent",
+                "ref": "",
+                "is_start_node": True,
+                "component_id": "7a039611-49b3-4bfd-b09b-c0f93edf3b79",
+                "parameters": [
+                    {
+                        "value": "Reformulate the question as a customer service query :\n{input}",
+                        "name": "prompt_template",
+                        "order": None,
+                        "type": "string",
+                        "nullable": False,
+                        "default": "Answer this question: {input}",
+                        "ui_component": "Textarea",
+                        "ui_component_properties": {
+                            "label": "Prompt Template",
+                            "placeholder": "Enter the prompt here. Use {input} (or similar) to insert dynamic content -  the {} braces with a keyword are mandatory.",
+                        },
+                        "is_advanced": False,
+                    },
+                    {
+                        "value": "openai:gpt-4o-mini",
+                        "name": "completion_model",
+                        "order": None,
+                        "type": "string",
+                        "nullable": False,
+                        "default": "openai:gpt-4.1-mini",
+                        "ui_component": "Select",
+                        "ui_component_properties": {
+                            "label": "Model Name",
+                            "options": [
+                                {"value": "openai:gpt-4.1", "label": "GPT-4.1"},
+                                {"value": "openai:gpt-4.1-mini", "label": "GPT-4.1 Mini"},
+                                {"value": "openai:gpt-4.1-nano", "label": "GPT-4.1 Nano"},
+                                {"value": "openai:gpt-4o", "label": "GPT-4o"},
+                                {"value": "openai:gpt-4o-mini", "label": "GPT-4o Mini"},
+                            ],
+                        },
+                        "is_advanced": False,
+                    },
+                ],
+                "tool_description": {
+                    "name": "Graph Test Chatbot",
+                    "description": "Graph Test",
+                    "tool_properties": {},
+                    "required_tool_properties": [],
+                },
+                "component_name": "LLM Call",
+                "component_description": "Templated LLM Call",
+            },
+            {
+                "is_agent": True,
+                "is_protected": False,
+                "function_callable": True,
+                "can_use_function_calling": False,
+                "tool_parameter_name": None,
+                "subcomponents_info": [],
+                "id": dst_instance_id,
+                "name": "Target Agent",
+                "ref": "",
+                "is_start_node": False,
+                "component_id": "7a039611-49b3-4bfd-b09b-c0f93edf3b79",
+                "parameters": [
+                    {
+                        "value": "Add polite expressions to the question: {question} \n",
+                        "name": "prompt_template",
+                        "order": None,
+                        "type": "string",
+                        "nullable": False,
+                        "default": "Answer this question: {input}",
+                        "ui_component": "Textarea",
+                        "ui_component_properties": {
+                            "label": "Prompt Template",
+                            "placeholder": "Enter the prompt here. Use {input} (or similar) to insert dynamic content -  the {} braces with a keyword are mandatory.",
+                        },
+                        "is_advanced": False,
+                    },
+                    {
+                        "value": "openai:gpt-4o-mini",
+                        "name": "completion_model",
+                        "order": None,
+                        "type": "string",
+                        "nullable": False,
+                        "default": "openai:gpt-4.1-mini",
+                        "ui_component": "Select",
+                        "ui_component_properties": {
+                            "label": "Model Name",
+                            "options": [
+                                {"value": "openai:gpt-4.1", "label": "GPT-4.1"},
+                                {"value": "openai:gpt-4.1-mini", "label": "GPT-4.1 Mini"},
+                                {"value": "openai:gpt-4.1-nano", "label": "GPT-4.1 Nano"},
+                                {"value": "openai:gpt-4o", "label": "GPT-4o"},
+                                {"value": "openai:gpt-4o-mini", "label": "GPT-4o Mini"},
+                            ],
+                        },
+                        "is_advanced": False,
+                    },
+                ],
+                "tool_description": {
+                    "name": "Graph Test Chatbot",
+                    "description": "Graph Test",
+                    "tool_properties": {},
+                    "required_tool_properties": [],
+                },
+                "component_name": "LLM Call",
+                "component_description": "Templated LLM Call",
+            },
+        ],
+        "relationships": [],
+        "edges": [
+            {
+                "id": edge_id,
+                "origin": src_instance_id,
+                "destination": dst_instance_id,
+                "order": 0,
+            }
+        ],
+        "port_mappings": [
+            {
+                "source_instance_id": src_instance_id,
+                "source_port_name": SOURCE_PORT_NAME,
+                "target_instance_id": dst_instance_id,
+                "target_port_name": TARGET_PORT_NAME,
+                "dispatch_strategy": "direct",
+            }
+        ],
+    }
+
+    # Create the graph with explicit port mappings
+    put_resp = client.put(endpoint, headers=HEADERS_JWT, json=payload)
+    assert put_resp.status_code == 200
+    assert put_resp.json()["graph_id"] == graph_runner_id
+
+    # Verify the original graph has the port mappings
+    get_resp = client.get(endpoint, headers=HEADERS_JWT)
+    assert get_resp.status_code == 200
+    original_data = get_resp.json()
+    assert "port_mappings" in original_data
+    assert len(original_data["port_mappings"]) == 1
+    original_pm = original_data["port_mappings"][0]
+    assert original_pm["source_port_name"] == SOURCE_PORT_NAME
+    assert original_pm["target_port_name"] == TARGET_PORT_NAME
+
+    # Deploy the graph
+    deploy_resp = client.post(f"{endpoint}/deploy", headers=HEADERS_JWT)
+    assert deploy_resp.status_code == 200
+    deploy_data = deploy_resp.json()
+
+    # The deploy should return both the new draft graph and the production graph
+    assert "draft_graph_runner_id" in deploy_data
+    assert "prod_graph_runner_id" in deploy_data
+    assert deploy_data["prod_graph_runner_id"] == graph_runner_id
+
+    new_draft_graph_id = deploy_data["draft_graph_runner_id"]
+
+    # Verify the new draft graph has the same port mappings (with updated instance IDs)
+    new_draft_endpoint = f"/projects/{PROJECT_ID}/graph/{new_draft_graph_id}"
+    new_get_resp = client.get(new_draft_endpoint, headers=HEADERS_JWT)
+    assert new_get_resp.status_code == 200
+    new_data = new_get_resp.json()
+
+    assert "port_mappings" in new_data
+    assert len(new_data["port_mappings"]) == 1
+    new_pm = new_data["port_mappings"][0]
+
+    # The port mapping should have the same structure but different instance IDs
+    assert new_pm["source_port_name"] == SOURCE_PORT_NAME
+    assert new_pm["target_port_name"] == TARGET_PORT_NAME
+    assert new_pm["dispatch_strategy"] == "direct"
+
+    # The instance IDs should be different (new instances were created)
+    assert new_pm["source_instance_id"] != src_instance_id
+    assert new_pm["target_instance_id"] != dst_instance_id
+
+    # Verify the production graph also has the port mappings
+    prod_get_resp = client.get(endpoint, headers=HEADERS_JWT)
+    assert prod_get_resp.status_code == 200
+    prod_data = prod_get_resp.json()
+    assert "port_mappings" in prod_data
+    assert len(prod_data["port_mappings"]) == 1
+    prod_pm = prod_data["port_mappings"][0]
+    assert prod_pm["source_port_name"] == SOURCE_PORT_NAME
+    assert prod_pm["target_port_name"] == TARGET_PORT_NAME
+
+    # Cleanup both graph runners
+    session = SessionLocal()
+    delete_graph_runner(session, UUID(graph_runner_id))
+    delete_graph_runner(session, UUID(new_draft_graph_id))

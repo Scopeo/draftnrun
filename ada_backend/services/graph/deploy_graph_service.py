@@ -16,6 +16,7 @@ from ada_backend.repositories.env_repository import (
     get_env_relationship_by_graph_runner_id,
     update_graph_runner_env,
 )
+from ada_backend.repositories.port_mapping_repository import list_port_mappings_for_graph, insert_port_mapping
 from ada_backend.repositories.tag_repository import update_graph_runner_tag_version
 from ada_backend.services.tag_service import compute_next_tag_version
 from ada_backend.repositories.graph_runner_repository import (
@@ -78,6 +79,7 @@ def clone_graph_runner(
     # Copy all component nodes to the new graph runner
     graph_nodes = get_component_nodes(session, graph_runner_id_to_copy)
     edges = get_edges(session, graph_runner_id_to_copy)
+    port_mappings = list_port_mappings_for_graph(session, graph_runner_id_to_copy)
     ids_map = {}
     old_relationships = []
     for component_node in graph_nodes:
@@ -154,6 +156,19 @@ def clone_graph_runner(
             order=edge.order,
         )
     LOGGER.info(f"Copied edges to new graph runner with ID {new_graph_runner_id}")
+
+    for port_mapping in port_mappings:
+        insert_port_mapping(
+            session=session,
+            graph_runner_id=new_graph_runner_id,
+            source_instance_id=ids_map[port_mapping.source_instance_id],
+            source_port_definition_id=port_mapping.source_port_definition_id,
+            target_instance_id=ids_map[port_mapping.target_instance_id],
+            target_port_definition_id=port_mapping.target_port_definition_id,
+            dispatch_strategy=port_mapping.dispatch_strategy,
+        )
+
+    LOGGER.info(f"Copied port mappings to new graph runner with ID {new_graph_runner_id}")
     return new_graph_runner_id
 
 

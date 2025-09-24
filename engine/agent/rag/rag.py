@@ -1,12 +1,11 @@
 import logging
-from typing import Optional
+from typing import Optional, Type, Any
 
 from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttributes
+from pydantic import BaseModel, Field
 
 from engine.agent.agent import Agent
 from engine.agent.types import (
-    ChatMessage,
-    AgentPayload,
     ComponentAttributes,
     ToolDescription,
 )
@@ -24,8 +23,28 @@ LOGGER = logging.getLogger(__name__)
 FILTERING_CONDITION_WITH_METADATA_QDRANT = "AND"
 
 
+class RAGInputs(BaseModel):
+    query_text: str = Field(description="The search query for the knowledge base.")
+    filters: Optional[dict] = Field(default=None, description="Qdrant filter object.")
+
+
+class RAGOutputs(BaseModel):
+    output: str = Field(description="The synthesized response from the RAG pipeline.")
+    is_final: bool = Field(description="Indicates if the response is final and successful.")
+    artifacts: dict[str, Any] = Field(description="Artifacts produced by the RAG pipeline, such as sources.")
+
+
 class RAG(Agent):
     TRACE_SPAN_KIND = OpenInferenceSpanKindValues.CHAIN.value
+    migrated = True
+
+    @classmethod
+    def get_inputs_schema(cls) -> Type[BaseModel]:
+        return RAGInputs
+
+    @classmethod
+    def get_outputs_schema(cls) -> Type[BaseModel]:
+        return RAGOutputs
 
     def __init__(
         self,
@@ -55,29 +74,18 @@ class RAG(Agent):
         self._vocabulary_search = vocabulary_search
         self.input_data_field_for_messages_history = input_data_field_for_messages_history
 
-    async def _run_without_io_trace(
-        self,
-        *inputs: dict | AgentPayload,
-        query_text: Optional[str] = None,
-        filters: Optional[dict] = None,
-    ) -> AgentPayload:
-        agent_input = inputs[0]
-        if not isinstance(agent_input, AgentPayload):
-            # TODO : Will be suppressed when AgentPayload will be suppressed
-            agent_input["messages"] = agent_input[self.input_data_field_for_messages_history]
-            agent_input = AgentPayload(**agent_input)
-        content = query_text or agent_input.last_message.content
-        if content is None:
-            raise ValueError("No content provided for the RAG tool.")
+    async def _run_without_io_trace(self, inputs: RAGInputs, ctx: dict) -> RAGOutputs:
+        if not inputs.query_text:
+            raise ValueError("No query_text provided for the RAG tool.")
 
-        chunks = await self._retriever.get_chunks(query_text=content, filters=filters)
+        chunks = await self._retriever.get_chunks(query_text=inputs.query_text, filters=inputs.filters)
 
         if self._reranker is not None:
-            chunks = await self._reranker.rerank(query=content, chunks=chunks)
+            chunks = await self._reranker.rerank(query=inputs.query_text, chunks=chunks)
 
         vocabulary_context = {}
         if self._vocabulary_search is not None:
-            vocabulary_chunks = self._vocabulary_search.get_chunks(query_text=content)
+            vocabulary_chunks = self._vocabulary_search.get_chunks(query_text=inputs.query_text)
             vocabulary_context = {
                 self._vocabulary_search.vocabulary_context_prompt_key: build_context_from_vocabulary_chunks(
                     vocabulary_chunks=vocabulary_chunks
@@ -85,7 +93,7 @@ class RAG(Agent):
             }
 
         sourced_response = await self._synthesizer.get_response(
-            query_str=content,
+            query_str=inputs.query_text,
             chunks=chunks,
             optional_contexts=vocabulary_context,
         )
@@ -100,11 +108,15 @@ class RAG(Agent):
                 }
             )
 
-        return AgentPayload(
-            messages=[ChatMessage(role="assistant", content=sourced_response.response)],
+        return RAGOutputs(
+            output=sourced_response.response,
             is_final=sourced_response.is_successful,
             artifacts={"sources": sourced_response.sources},
         )
+
+    @classmethod
+    def get_canonical_ports(cls) -> dict[str, str | None]:
+        return {"input": "query_text", "output": "output"}
 
 
 def format_rag_tool_description(source: str) -> ToolDescription:

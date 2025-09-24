@@ -14,6 +14,7 @@ from ada_backend.database.component_definition_seeding import (
     upsert_components,
     upsert_components_parameter_definitions,
 )
+from ada_backend.repositories.component_repository import get_component_by_id
 from ada_backend.database.seed.seed_categories import CATEGORY_UUIDS
 from ada_backend.database.seed.seed_tool_description import TOOL_DESCRIPTION_UUIDS
 from ada_backend.database.seed.utils import COMPONENT_UUIDS
@@ -37,6 +38,23 @@ def seed_input_components(session: Session):
             input,
         ],
     )
+    # Upsert canonical port definitions for Input component
+    existing = get_component_by_id(session, input.id)
+    if existing:
+        # Ensure an OUTPUT canonical 'messages' port exists
+        port_defs = session.query(db.PortDefinition).filter(db.PortDefinition.component_id == input.id).all()
+        have_messages_output = any(pd.port_type == db.PortType.OUTPUT and pd.name == "messages" for pd in port_defs)
+        if not have_messages_output:
+            session.add(
+                db.PortDefinition(
+                    component_id=input.id,
+                    name="messages",
+                    port_type=db.PortType.OUTPUT,
+                    is_canonical=True,
+                    description="Canonical output carrying chat messages",
+                )
+            )
+            session.commit()
     upsert_components_parameter_definitions(
         session=session,
         component_parameter_definitions=[

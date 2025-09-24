@@ -234,6 +234,16 @@ def get_component_basic_parameters(
     )
 
 
+def get_component_instances_by_ids(
+    session: Session,
+    component_instance_ids: list[UUID],
+) -> dict[UUID, db.ComponentInstance]:
+    if not component_instance_ids:
+        return {}
+    rows = session.query(db.ComponentInstance).filter(db.ComponentInstance.id.in_(component_instance_ids)).all()
+    return {row.id: row for row in rows}
+
+
 def get_instance_parameters_with_definition(
     session: Session,
     component_instance_id: UUID,
@@ -337,6 +347,33 @@ def get_tool_parameter_by_component_id(
         )
         .first()
     )
+
+
+# TODO: Put in service layer or write as query
+def get_canonical_ports_for_components(
+    session: Session, component_ids: list[UUID]
+) -> dict[UUID, dict[str, Optional[str]]]:
+    if not component_ids:
+        return {}
+    ports = session.query(db.PortDefinition).filter(db.PortDefinition.component_id.in_(component_ids)).all()
+    result: dict[UUID, dict[str, Optional[str]]] = {}
+    for p in ports:
+        if p.is_canonical:
+            entry = result.setdefault(p.component_id, {})
+            if p.port_type == db.PortType.INPUT:
+                entry["input"] = p.name
+            elif p.port_type == db.PortType.OUTPUT:
+                entry["output"] = p.name
+    return result
+
+
+def get_port_definitions_for_component_ids(
+    session: Session,
+    component_ids: list[UUID],
+) -> list[db.PortDefinition]:
+    if not component_ids:
+        return []
+    return session.query(db.PortDefinition).filter(db.PortDefinition.component_id.in_(component_ids)).all()
 
 
 def get_all_components_with_parameters(
