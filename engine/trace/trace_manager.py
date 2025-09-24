@@ -68,11 +68,12 @@ class TraceManager:
         params = get_tracing_span()
 
         if params:
-            attributes["project_id"] = params.project_id
             attributes["organization_id"] = params.organization_id
             attributes["organization_llm_providers"] = params.organization_llm_providers
             attributes["conversation_id"] = params.conversation_id
-            # Add environment and call_type to attributes so SQL exporter can extract them to dedicated columns
+
+            if params.project_id:
+                attributes["project_id"] = params.project_id
             if params.environment:
                 attributes["environment"] = params.environment.value
             if params.call_type:
