@@ -101,7 +101,7 @@ def get_default_output_tool_description() -> ToolDescription:
             "is_ending_conversation": {
                 "type": "boolean",
                 "description": "Whether this response should end the conversation (true) or "
-                               "allow for follow-up questions (false).",
+                "allow for follow-up questions (false).",
             },
         },
         required_properties=["answer", "is_ending_conversation"],
