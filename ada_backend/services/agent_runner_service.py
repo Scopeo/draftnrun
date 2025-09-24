@@ -21,6 +21,7 @@ from ada_backend.repositories.organization_repository import get_organization_se
 from engine.graph_runner.runnable import Runnable
 from engine.trace.trace_context import get_trace_manager
 from engine.trace.span_context import set_tracing_span
+from engine.trace.span_context import get_tracing_span
 
 
 def get_organization_llm_providers(session: Session, organization_id: UUID) -> list[str]:
@@ -145,10 +146,14 @@ async def run_agent(
             input_data,
             is_root_execution=True,
         )
+        params = get_tracing_span()
     except Exception as e:
         raise ValueError(f"Error running agent: {str(e)}") from e
     finally:
         delete_temp_folder(uuid_for_temp_folder)
     return ChatResponse(
-        message=agent_output.last_message.content, artifacts=agent_output.artifacts, error=agent_output.error
+        message=agent_output.last_message.content,
+        artifacts=agent_output.artifacts,
+        error=agent_output.error,
+        trace_id=params.trace_id,
     )

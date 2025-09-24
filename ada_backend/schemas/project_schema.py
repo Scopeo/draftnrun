@@ -42,6 +42,7 @@ class ChatResponse(BaseModel):
     message: str
     error: Optional[str] = None
     artifacts: dict[str, Any] = Field(default_factory=dict)
+    trace_id: Optional[str] = None
 
 
 class ProjectDeleteResponse(BaseModel):

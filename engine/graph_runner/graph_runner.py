@@ -2,6 +2,7 @@ import logging
 from enum import StrEnum
 from dataclasses import dataclass
 from typing import Optional
+import json
 
 import networkx as nx
 from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttributes
@@ -11,6 +12,8 @@ from engine.agent.types import AgentPayload, ChatMessage
 from engine.graph_runner.runnable import Runnable
 from engine.trace.trace_manager import TraceManager
 from engine.trace.serializer import serialize_to_json
+from engine.trace.span_context import get_tracing_span
+
 
 LOGGER = logging.getLogger(__name__)
 
@@ -138,6 +141,11 @@ class GraphRunner:
                 }
             )
             span.set_status(trace_api.StatusCode.OK)
+
+            params = get_tracing_span()
+            if params:
+                span_json = json.loads(span.to_json())
+                params.trace_id = span_json["context"]["trace_id"]
 
             return final_output
 
