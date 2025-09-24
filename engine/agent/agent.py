@@ -1,14 +1,19 @@
 import asyncio
 import logging
 from abc import ABC, abstractmethod
-from typing import Any
+from typing import Any, Dict, Type, Optional
 
 from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttributes
 from opentelemetry import trace as trace_api
 from opentelemetry.util.types import Attributes
 from tenacity import RetryError
+from pydantic import BaseModel
 
-from engine.agent.types import AgentPayload, ToolDescription, ComponentAttributes
+from engine.agent.types import (
+    ToolDescription,
+    ComponentAttributes,
+    NodeData,
+)
 from engine.trace.trace_manager import TraceManager
 from engine.trace.serializer import serialize_to_json
 from engine.prometheus_metric import track_calls
@@ -33,8 +38,32 @@ class Agent(ABC):
         self._trace_attributes: dict[str, Any] = {}
         self._trace_events: list[str] = []
 
+    @classmethod
+    def get_inputs_schema(cls) -> Type[BaseModel]:
+        class DefaultInput(BaseModel):
+            input: Any
+
+        return DefaultInput
+
+    @classmethod
+    def get_outputs_schema(cls) -> Type[BaseModel]:
+        class DefaultOutput(BaseModel):
+            output: Any
+
+        return DefaultOutput
+
+    @classmethod
+    def get_canonical_ports(cls) -> Dict[str, Optional[str]]:
+        # ... logic to define default ports for simple A->B connections ...
+        return {"input": "input", "output": "output"}
+
     @abstractmethod
-    async def _run_without_io_trace(self, *inputs: AgentPayload, **kwargs) -> AgentPayload:
+    async def _run_without_io_trace(self, inputs: BaseModel, ctx: Dict[str, Any]) -> BaseModel:
+        """
+        The clean, abstract method that developers implement.
+        They receive a validated Pydantic object for inputs and the runtime context.
+        They must return an instance of their declared output Pydantic model.
+        """
         pass
 
     def log_trace(
@@ -68,31 +97,17 @@ class Agent(ABC):
     # - Allow for multiple named inputs and outputs
     # - Keep message history
     @track_calls
-    async def run(
-        self,
-        *inputs: AgentPayload | dict,
-        **kwargs,
-    ) -> AgentPayload:
+    async def run(self, input_node_data: NodeData) -> NodeData:
         """
-        Run the agent with the given inputs and kwargs.
-
-        Args:
-            *inputs: AgentInput - The inputs to the agent, can be multiple
-            The first input is considered the main input and is used for tracing
-            **kwargs: Any - Keyword arguments that are used for the tool call (function calling)
-
-        Returns:
-            AgentOutput: The output of the agent. Only one output it's allowed.
+        The public method called by the GraphRunner. Its signature is NodeData -> NodeData.
+        This base class implementation handles all the boilerplate validation and packaging.
         """
-        if any(isinstance(input_data, dict) for input_data in inputs):
-            LOGGER.warning("There are dictionaries in the inputs, this will be deprecated in the future")
-
         span_name = self.component_attributes.component_instance_name
         with self.trace_manager.start_span(span_name) as span:
             span.set_attributes(
                 {
                     SpanAttributes.OPENINFERENCE_SPAN_KIND: self.TRACE_SPAN_KIND,
-                    SpanAttributes.INPUT_VALUE: serialize_to_json(inputs[0], shorten_string=True),
+                    SpanAttributes.INPUT_VALUE: serialize_to_json(input_node_data.data, shorten_string=True),
                     "component_instance_id": str(self.component_attributes.component_instance_id),
                 }
             )
@@ -101,19 +116,36 @@ class Agent(ABC):
                     {
                         SpanAttributes.TOOL_NAME: self.tool_description.name,
                         SpanAttributes.TOOL_DESCRIPTION: self.tool_description.description,
-                        SpanAttributes.TOOL_PARAMETERS: serialize_to_json(kwargs, shorten_string=True),
+                        SpanAttributes.TOOL_PARAMETERS: serialize_to_json(input_node_data.data, shorten_string=True),
                     }
                 )
+
             try:
-                agent_output = await self._run_without_io_trace(*inputs, **kwargs)
+                InputModel = self.get_inputs_schema()
+                validated_inputs = InputModel(**input_node_data.data)
+
+                output_model_instance = await self._run_without_io_trace(
+                    inputs=validated_inputs, ctx=input_node_data.ctx
+                )
+
+                OutputModel = self.get_outputs_schema()
+                if not isinstance(output_model_instance, OutputModel):
+                    raise TypeError(
+                        f"Component returned type {type(output_model_instance).__name__}, "
+                        f"but expected {OutputModel.__name__}"
+                    )
+
+                output_node_data = NodeData(data=output_model_instance.model_dump(), ctx=input_node_data.ctx)
                 span.set_attributes(
                     {
-                        SpanAttributes.OUTPUT_VALUE: agent_output.last_message.content,
+                        SpanAttributes.OUTPUT_VALUE: serialize_to_json(output_node_data.data, shorten_string=True),
                     }
                 )
 
                 self._set_trace_data(span)
                 span.set_status(trace_api.StatusCode.OK)
+
+                return output_node_data
             except RetryError as e:
                 LOGGER.exception(
                     f"Error running {self.tool_description.name} Last attempt: {e.last_attempt.exception()}"
@@ -127,7 +159,5 @@ class Agent(ABC):
                 span.record_exception(e)
                 raise e
 
-            return agent_output
-
-    def run_sync(self, *inputs: AgentPayload, **kwargs) -> AgentPayload:
-        return asyncio.run(self.run(*inputs, **kwargs))
+    def run_sync(self, input_node_data: NodeData) -> NodeData:
+        return asyncio.run(self.run(input_node_data))
