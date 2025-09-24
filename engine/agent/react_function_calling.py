@@ -27,7 +27,6 @@ from engine.agent.tools.python_code_runner import PYTHON_CODE_RUNNER_TOOL_DESCRI
 from engine.agent.tools.terminal_command_runner import TERMINAL_COMMAND_RUNNER_TOOL_DESCRIPTION
 from settings import settings
 
-
 LOGGER = logging.getLogger(__name__)
 
 INITIAL_PROMPT = (
@@ -168,19 +167,11 @@ class ReActAgent(Agent):
         self._shared_sandbox: Optional[AsyncSandbox] = None
         self._e2b_api_key = getattr(settings, "E2B_API_KEY", None)
 
-        # Initialize output tool parameters
+        # Initialize output tool parameters (store as-is, parse later when needed)
         self._output_tool_name = output_tool_name
         self._output_tool_description = output_tool_description
-        # Parse JSON strings to appropriate data types
-        if isinstance(output_tool_properties, str):
-            self._output_tool_properties = load_str_to_json(output_tool_properties)
-        else:
-            self._output_tool_properties = output_tool_properties or {}
-
-        if isinstance(output_tool_required_properties, str):
-            self._output_tool_required_properties = load_str_to_json(output_tool_required_properties)
-        else:
-            self._output_tool_required_properties = output_tool_required_properties or []
+        self._output_tool_properties = output_tool_properties
+        self._output_tool_required_properties = output_tool_required_properties
 
         self._output_tool_agent_description = self._get_output_tool_description()
 
@@ -191,14 +182,40 @@ class ReActAgent(Agent):
         Returns:
             ToolDescription if all required output tool parameters are set, None otherwise.
         """
-        if all([self._output_tool_name, self._output_tool_description, self._output_tool_properties]):
-            return format_output_tool_description(
-                tool_name=self._output_tool_name,
-                tool_description=self._output_tool_description,
-                tool_properties=self._output_tool_properties,
-                required_properties=self._output_tool_required_properties or None,
-            )
-        return None
+        # If no output tool is configured, return None
+        if not any([self._output_tool_name, self._output_tool_description, self._output_tool_properties]):
+            return None
+
+        # If we tried to set up an output tool but missed some information, raise an error
+        missing_fields = []
+        if not self._output_tool_name:
+            missing_fields.append("output_tool_name")
+        if not self._output_tool_description:
+            missing_fields.append("output_tool_description")
+        if not self._output_tool_properties:
+            missing_fields.append("output_tool_properties")
+
+        if missing_fields:
+            raise ValueError(f"Error missing critical fields to define output structured output {missing_fields}")
+
+        # Parse JSON strings to appropriate data types
+        if isinstance(self._output_tool_properties, str):
+            parsed_properties = load_str_to_json(self._output_tool_properties)
+        else:
+            parsed_properties = self._output_tool_properties
+
+        if isinstance(self._output_tool_required_properties, str):
+            parsed_required_properties = load_str_to_json(self._output_tool_required_properties)
+        else:
+            parsed_required_properties = self._output_tool_required_properties or []
+
+        required_properties = parsed_required_properties or list(parsed_properties.keys())
+        return ToolDescription(
+            name=self._output_tool_name,
+            description=self._output_tool_description,
+            tool_properties=parsed_properties,
+            required_tool_properties=required_properties,
+        )
 
     # TODO: investigate if we can decouple the sandbox from the agent
     async def _ensure_shared_sandbox(self) -> AsyncSandbox:
