@@ -26,25 +26,33 @@ def upgrade() -> None:
 
     # Data migration: Copy project_id from attributes JSON to new column
     connection = op.get_bind()
+
+    # Update ALL spans: extract project_id if it exists, otherwise set to NULL
     connection.execute(
         sa.text(
             """
         UPDATE spans
-        SET project_id = (attributes::jsonb->>'project_id')
-        WHERE attributes::jsonb ? 'project_id'
-        AND (attributes::jsonb->>'project_id') IS NOT NULL
-        AND (attributes::jsonb->>'project_id') != ''
+        SET project_id = CASE
+            WHEN attributes::text LIKE '%"project_id"%'
+            AND (attributes::json->>'project_id') IS NOT NULL
+            AND (attributes::json->>'project_id') != ''
+            AND length(trim(attributes::json->>'project_id')) > 0
+            THEN (attributes::json->>'project_id')
+            ELSE NULL
+        END
     """
         )
     )
 
     # Optional: Remove project_id from attributes JSON to clean up
+    # Only remove from spans that actually have project_id
     connection.execute(
         sa.text(
             """
         UPDATE spans
         SET attributes = (attributes::jsonb - 'project_id')::text
-        WHERE attributes::jsonb ? 'project_id'
+        WHERE attributes::text LIKE '%"project_id"%'
+        AND (attributes::json->>'project_id') IS NOT NULL
     """
         )
     )
@@ -56,6 +64,7 @@ def downgrade() -> None:
 
     # Data migration rollback: Copy project_id back to attributes JSON
     connection = op.get_bind()
+    # Only restore project_id to attributes for spans that actually had one
     connection.execute(
         sa.text(
             """
@@ -66,6 +75,7 @@ def downgrade() -> None:
             to_jsonb(project_id)
         )::text
         WHERE project_id IS NOT NULL
+        AND project_id != ''
     """
         )
     )
