@@ -1,7 +1,6 @@
 from datetime import datetime, timedelta
 import logging
 from uuid import UUID
-import json
 
 import pandas as pd
 
@@ -14,64 +13,82 @@ LOGGER = logging.getLogger(__name__)
 
 
 def get_trace_metrics(project_id: UUID, duration_days: int) -> TraceKPIS:
-    start_time_offset_days = (datetime.now() - timedelta(days=2 * duration_days)).isoformat()
-    query = (
-        "SELECT trace_rowid, start_time, end_time, attributes, cumulative_llm_token_count_completion, "
-        "cumulative_llm_token_count_prompt FROM spans "
-        f"WHERE start_time >= '{start_time_offset_days}' AND parent_id IS NULL"
-    )
+    """Get trace metrics with comparison between current and previous periods using SQL aggregation."""
+    now = datetime.now()
+    current_start = now - timedelta(days=duration_days)
+    previous_start = now - timedelta(days=2 * duration_days)
+
+    query = """
+    SELECT
+        CASE
+            WHEN start_time >= %(current_start)s THEN 'current'
+            ELSE 'previous'
+        END as period,
+        COUNT(*) as request_count,
+        COALESCE(SUM(cumulative_llm_token_count_prompt + cumulative_llm_token_count_completion), 0) as total_tokens,
+        AVG(EXTRACT(EPOCH FROM (end_time - start_time))) as avg_latency_seconds
+    FROM spans
+    WHERE start_time >= %(previous_start)s
+    AND parent_id IS NULL
+    AND project_id = %(project_id)s
+    GROUP BY period
+    """
+
     session = get_session_trace()
-    df = pd.read_sql_query(query, session.bind)
-    session.close()
-    df["attributes"] = df["attributes"].apply(lambda x: json.loads(x) if isinstance(x, str) else x)
-    df_expanded = df.join(pd.json_normalize(df["attributes"]))
-    df = df_expanded[df_expanded["project_id"] == str(project_id)].copy()
-    df["end_time"] = pd.to_datetime(df["end_time"])
-    df["start_time"] = pd.to_datetime(df["start_time"])
+    try:
+        df = pd.read_sql_query(
+            query,
+            session.bind,
+            params={"current_start": current_start, "previous_start": previous_start, "project_id": str(project_id)},
+        )
+    finally:
+        session.close()
 
-    df_previous = df[df["start_time"] < (datetime.now() - timedelta(days=duration_days)).isoformat()].copy()
-    df_current = df[df["start_time"] >= (datetime.now() - timedelta(days=duration_days)).isoformat()].copy()
+    # Initialize default values
+    current_metrics = {"request_count": 0, "total_tokens": 0, "avg_latency_seconds": None}
+    previous_metrics = {"request_count": 0, "total_tokens": 0, "avg_latency_seconds": None}
 
-    tokens_previous_sum = (
-        df_previous["cumulative_llm_token_count_prompt"].sum()
-        + df_previous["cumulative_llm_token_count_completion"].sum()
-    )
-    tokens_current_sum = (
-        df_current["cumulative_llm_token_count_prompt"].sum()
-        + df_current["cumulative_llm_token_count_completion"].sum()
-    )
-    comparison_percentage = (
-        round((tokens_current_sum - tokens_previous_sum) / tokens_previous_sum * 100, 1)
-        if tokens_previous_sum != 0
-        else None
-    )
+    # Extract metrics for each period
+    for _, row in df.iterrows():
+        metrics = {
+            "request_count": int(row["request_count"]),
+            "total_tokens": int(row["total_tokens"] or 0),
+            "avg_latency_seconds": float(row["avg_latency_seconds"]) if row["avg_latency_seconds"] else None,
+        }
 
-    df_previous["latency"] = df_previous["end_time"] - df_previous["start_time"]
-    average_latency_previous = df_previous["latency"].mean().total_seconds() if not df_previous.empty else None
-    df_current["latency"] = df_current["end_time"] - df_current["start_time"]
-    average_latency_current = df_current["latency"].mean().total_seconds() if not df_current.empty else None
-    latency_comparison_percentage = (
-        round((average_latency_current - average_latency_previous) / average_latency_previous * 100, 1)
-        if all(v is not None for v in [average_latency_current, average_latency_previous])
-        and average_latency_previous != 0
-        else None
-    )
+        if row["period"] == "current":
+            current_metrics = metrics
+        else:
+            previous_metrics = metrics
 
-    nb_request_previous = len(df_previous)
-    nb_request_previous = len(df_current)
-    nb_request_comparison_percentage = (
-        round((nb_request_previous - nb_request_previous) / nb_request_previous * 100, 1)
-        if nb_request_previous != 0
-        else None
+    # Helper function to calculate percentage changes
+    def calculate_percentage_change(current: float, previous: float) -> float | None:
+        if previous == 0:
+            return None
+        return round((current - previous) / previous * 100, 1)
+
+    # Calculate comparisons
+    token_comparison = calculate_percentage_change(current_metrics["total_tokens"], previous_metrics["total_tokens"])
+
+    latency_comparison = None
+    if current_metrics["avg_latency_seconds"] and previous_metrics["avg_latency_seconds"]:
+        latency_comparison = calculate_percentage_change(
+            current_metrics["avg_latency_seconds"], previous_metrics["avg_latency_seconds"]
+        )
+
+    request_comparison = calculate_percentage_change(
+        current_metrics["request_count"], previous_metrics["request_count"]
     )
 
     return TraceKPIS(
-        tokens_count=tokens_current_sum,
-        token_comparison_percentage=comparison_percentage,
-        average_latency=round(average_latency_current, 2) if average_latency_current is not None else None,
-        latency_comparison_percentage=latency_comparison_percentage,
-        nb_request=nb_request_previous,
-        nb_request_comparison_percentage=nb_request_comparison_percentage,
+        tokens_count=current_metrics["total_tokens"],
+        token_comparison_percentage=token_comparison,
+        average_latency=(
+            round(current_metrics["avg_latency_seconds"], 2) if current_metrics["avg_latency_seconds"] else None
+        ),
+        latency_comparison_percentage=latency_comparison,
+        nb_request=current_metrics["request_count"],
+        nb_request_comparison_percentage=request_comparison,
     )
 
 
