@@ -78,18 +78,29 @@ def downgrade() -> None:
 
     # Data migration rollback: Copy project_id back to attributes JSON
     connection = op.get_bind()
+
+    # Use string manipulation to avoid JSON parsing issues with Unicode
     # Only restore project_id to attributes for spans that actually had one
     connection.execute(
         sa.text(
             """
         UPDATE spans
-        SET attributes = jsonb_set(
-            attributes::jsonb,
-            '{project_id}',
-            to_jsonb(project_id)
-        )::text
+        SET attributes = CASE
+            WHEN attributes ~ '^\\s*\\{' THEN
+                -- Insert project_id into existing JSON object
+                regexp_replace(
+                    attributes,
+                    '^(\\s*\\{)',
+                    '\\1"project_id":"' || project_id || '",',
+                    'g'
+                )
+            ELSE
+                -- Create new JSON object if attributes is not valid JSON
+                '{"project_id":"' || project_id || '",' || substring(attributes from 2) || '}'
+        END
         WHERE project_id IS NOT NULL
         AND project_id != ''
+        AND length(trim(project_id)) > 0
     """
         )
     )
