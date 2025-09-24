@@ -17,6 +17,7 @@ class TracingSpanParams:
     trace_id: Optional[str] = None
     tag_version: Optional[str] = None
 
+
 _tracing_context: ContextVar[Optional[TracingSpanParams]] = ContextVar("_tracing_context", default=None)
 
 
@@ -32,14 +33,14 @@ def set_tracing_span(
 ) -> None:
     """Set current tracing context with project/org/llm info."""
     params = TracingSpanParams(
-        project_id,
-        organization_id,
-        organization_llm_providers,
-        conversation_id,
-        uuid_for_temp_folder,
-        environment,
-        call_type,
-        tag_version,
+        project_id=project_id,
+        organization_id=organization_id,
+        organization_llm_providers=organization_llm_providers,
+        conversation_id=conversation_id,
+        uuid_for_temp_folder=uuid_for_temp_folder,
+        environment=environment,
+        call_type=call_type,
+        tag_version=tag_version,
     )
     _tracing_context.set(params)
 

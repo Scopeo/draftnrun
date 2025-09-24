@@ -231,6 +231,7 @@ async def get_project_trace(
     user: Annotated[SupabaseUser, Depends(get_user_from_supabase_token)],
     environment: Optional[EnvType] = None,
     call_type: Optional[CallType] = None,
+    tag_version: Optional[str] = None,
 ):
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
@@ -242,6 +243,7 @@ async def get_project_trace(
             include_messages=False,
             environment=environment,
             call_type=call_type,
+            tag_version=tag_version,
         )
         return response
     except ValueError as e:
@@ -265,6 +267,7 @@ async def get_project_trace_v2(
     user: Annotated[SupabaseUser, Depends(get_user_from_supabase_token)],
     environment: Optional[EnvType] = None,
     call_type: Optional[CallType] = None,
+    tag_version: Optional[str] = None,
 ):
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
@@ -276,6 +279,7 @@ async def get_project_trace_v2(
             include_messages=True,
             environment=environment,
             call_type=call_type,
+            tag_version=tag_version,
         )
         return response
     except ValueError as e:
@@ -339,8 +343,8 @@ async def chat(
         raise HTTPException(status_code=400, detail="User ID not found")
     try:
         # Get the environment for this graph runner
-        env_relationship = get_env_relationship_by_graph_runner_id(session, graph_runner_id)
-        environment = env_relationship.environment
+        project_env_binding = get_env_relationship_by_graph_runner_id(session, graph_runner_id)
+        environment = project_env_binding.environment
         LOGGER.info(f"Determined environment {environment} for graph_runner_id {graph_runner_id}")
         return await run_agent(
             session=session,
@@ -349,7 +353,7 @@ async def chat(
             input_data=input_data,
             environment=environment,
             call_type=CallType.SANDBOX,
-            tag_version=env_relationship.graph_runner.tag_version,
+            tag_version=project_env_binding.graph_runner.tag_version,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e

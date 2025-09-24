@@ -24,11 +24,12 @@ async def get_root_traces(
     user: Annotated[SupabaseUser, Depends(get_user_from_supabase_token)],
     environment: Optional[EnvType] = None,
     call_type: Optional[CallType] = None,
+    tag_version: Optional[str] = None,
 ) -> List[RootTraceSpan]:
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
     try:
-        response = get_root_traces_by_project(user.id, project_id, duration, environment, call_type)
+        response = get_root_traces_by_project(user.id, project_id, duration, environment, call_type, tag_version)
         return response
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
