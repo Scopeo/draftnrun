@@ -23,6 +23,7 @@ from engine.agent.tools.api_call_tool import APICallTool
 from engine.agent.tools.python_code_runner import PythonCodeRunner
 from engine.agent.tools.terminal_command_runner import TerminalCommandRunner
 from engine.agent.pdf_generation_tool import PDFGenerationTool
+from engine.agent.docx_generation_tool import DOCXGenerationTool
 from engine.agent.document_enhanced_llm_call import DocumentEnhancedLLMCallAgent
 from engine.agent.document_react_loader import DocumentReactLoaderAgent
 from engine.agent.ocr_call import OCRCall
@@ -84,6 +85,7 @@ class SupportedEntityType(StrEnum):
     PYTHON_CODE_RUNNER_TOOL = "Python Code Runner"
     TERMINAL_COMMAND_RUNNER_TOOL = "Terminal Command Runner"
     PDF_GENERATION_TOOL = "PDF Generation Tool"
+    DOCX_GENERATION_TOOL = "DOCX Generation Tool"
     SQL_TOOL = "SQLTool"
     LINKUP_SEARCH_TOOL = "Linkup Search Tool"
     LLM_CALL_AGENT = "LLM Call"
@@ -401,6 +403,15 @@ def create_factory_registry() -> FactoryRegistry:
         name=SupportedEntityType.PDF_GENERATION_TOOL,
         factory=AgentFactory(
             entity_class=PDFGenerationTool,
+            parameter_processors=[
+                trace_manager_processor,
+            ],
+        ),
+    )
+    registry.register(
+        name=SupportedEntityType.DOCX_GENERATION_TOOL,
+        factory=AgentFactory(
+            entity_class=DOCXGenerationTool,
             parameter_processors=[
                 trace_manager_processor,
             ],
