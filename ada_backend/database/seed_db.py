@@ -16,6 +16,7 @@ from ada_backend.database.seed.seed_ai_agent import seed_ai_agent_components
 from ada_backend.database.seed.seed_categories import seed_categories
 from ada_backend.database.seed.seed_db_service import seed_db_service_components
 from ada_backend.database.seed.integrations.seed_gmail import seed_gmail_components
+from ada_backend.database.seed.seed_linkup_tool import seed_linkup_tool_components
 from ada_backend.database.seed.seed_input import seed_input_components
 from ada_backend.database.seed.seed_filter import seed_filter_components
 from ada_backend.database.seed.seed_llm_call import seed_llm_call_components
@@ -66,6 +67,7 @@ def seed_db(session: Session):
         seed_gmail_components(session)
         seed_project_reference_components(session)
         seed_chunk_processor_components(session)
+        seed_linkup_tool_components(session)
 
         # Verify components exist
         for name, uuid_value in COMPONENT_UUIDS.items():
