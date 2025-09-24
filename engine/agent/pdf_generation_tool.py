@@ -5,7 +5,7 @@ from typing import Any
 
 from openinference.semconv.trace import OpenInferenceSpanKindValues
 import markdown2
-from weasyprint import HTML
+from weasyprint import HTML, CSS
 from engine.agent.agent import Agent
 from engine.agent.types import ChatMessage, AgentPayload, ToolDescription, ComponentAttributes
 from engine.temps_folder_utils import get_output_dir
@@ -29,6 +29,45 @@ DEFAULT_PDF_GENERATION_TOOL_DESCRIPTION = ToolDescription(
     required_tool_properties=["markdown_content"],
 )
 
+DEFAULT_CSS_FORMATTING = """
+    @page { size: A4; margin: 18mm; }
+    table { border-collapse: collapse; width: 100%; }
+        thead tr { background: #f6f8fa; }
+        th, td { border: 1px solid #d0d7de; padding: 6px 8px; vertical-align: top; }
+        th { font-weight: 600; }
+        /* Alignements éventuels générés par certains parseurs */
+        th[style*="text-align:center"], td[style*="text-align:center"] { text-align: center; }
+        th[style*="text-align:right"],  td[style*="text-align:right"]  { text-align: right; }
+        * {font-family: Arial, Helvetica, sans-serif;}
+        body {font-size: 12px;line-height: 1.45;color: #111;}
+        /* Style des renvois [2] en texte */
+        sup a[rel="footnote"] { text-decoration: none; }
+        sup a[rel="footnote"]::before { content: "["; }
+        sup a[rel="footnote"]::after  { content: "]"; }
+
+        div.footnotes { font-size: 10pt; }
+        div.footnotes hr { border: none; border-top: 1px solid #bbb; margin: 10px 0; }
+
+        h1, h2, h3 {
+            page-break-after: avoid;   /* évite de couper juste après un titre */
+            }
+
+            p {
+            orphans: 3;
+            widows: 3;                 /* évite les lignes seules en haut/bas de page */
+            }
+
+            .page-break {
+            page-break-before: always;
+            break-before: page;
+            }
+
+            /* Liens toujours bleus */
+            a, a:visited, a:hover, a:active {
+            color: #0645AD;       /* bleu standard */
+            text-decoration: underline;
+            }"""
+
 
 class PDFGenerationTool(Agent):
     TRACE_SPAN_KIND = OpenInferenceSpanKindValues.TOOL.value
@@ -37,6 +76,7 @@ class PDFGenerationTool(Agent):
         self,
         trace_manager: TraceManager,
         component_attributes: ComponentAttributes,
+        css_formatting: str = DEFAULT_CSS_FORMATTING,
         tool_description: ToolDescription = DEFAULT_PDF_GENERATION_TOOL_DESCRIPTION,
     ):
         super().__init__(
@@ -44,6 +84,7 @@ class PDFGenerationTool(Agent):
             tool_description=tool_description,
             component_attributes=component_attributes,
         )
+        self.css_formatting = css_formatting
 
     async def _run_without_io_trace(
         self,
@@ -67,12 +108,25 @@ class PDFGenerationTool(Agent):
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         filename = f"document_{timestamp}.pdf"
 
-        html = markdown2.markdown(markdown_content)
+        html = markdown2.markdown(
+            markdown_content,
+            extras=[
+                "tables",
+                "fenced-code-blocks",
+                "strike",
+                "footnotes",
+                "task_list",
+                "header-ids",
+                "cuddled-lists",
+                "toc",
+            ],
+        )
+        css = CSS(string=self.css_formatting)
 
         # Create HTML object and ensure proper cleanup
         html_obj = HTML(string=html, base_url=str(output_dir))
         try:
-            html_obj.write_pdf(str(output_dir / filename))
+            html_obj.write_pdf(str(output_dir / filename), stylesheets=[css])
         finally:
             # Ensure any HTTP connections are properly closed
             if hasattr(html_obj, "_url_fetcher") and hasattr(html_obj._url_fetcher, "session"):
