@@ -11,7 +11,6 @@ from ada_backend.repositories.graph_runner_repository import (
 )
 from ada_backend.schemas.pipeline.graph_schema import GraphGetResponse, EdgeSchema
 from ada_backend.services.pipeline.get_pipeline_service import get_component_instance, get_relationships
-from ada_backend.repositories.tag_repository import get_graph_runner_tag_version
 
 LOGGER = logging.getLogger(__name__)
 
@@ -67,11 +66,9 @@ def get_graph_service(
         )
         LOGGER.info(f"Edge from {edge.source_node_id} to {edge.target_node_id}")
 
-    tag_version = get_graph_runner_tag_version(session, graph_runner_id)
-
     return GraphGetResponse(
         component_instances=component_instances_with_definitions,
         relationships=relationships,
         edges=edges,
-        tag_version=tag_version,
+        tag_version=env_relationship.graph_runner.tag_version,
     )
