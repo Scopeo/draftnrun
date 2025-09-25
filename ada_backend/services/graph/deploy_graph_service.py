@@ -4,10 +4,10 @@ from uuid import UUID, uuid4
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
-from ada_backend.database.models import EnvType
+from ada_backend.database.models import EnvType, ReleaseStage
 from ada_backend.repositories.component_repository import (
     get_component_instance_by_id,
-    get_component_parameter_definition_by_component_id,
+    get_component_parameter_definition_by_component_version,
     upsert_sub_component_input,
 )
 from ada_backend.repositories.edge_repository import get_edges, upsert_edge
@@ -37,6 +37,7 @@ def copy_component_instance(
     component_instance_id_to_copy: UUID,
     is_start_node: bool,
     project_id: UUID,
+    release_stage: ReleaseStage,
 ) -> UUID:
     """
     This function copies a component instance and its parameters to a new component instance.
@@ -58,13 +59,14 @@ def copy_component_instance(
         ],
         integration=component_instance.integration,
     )
-    return create_or_update_component_instance(session, new_composant_instance, project_id)
+    return create_or_update_component_instance(session, new_composant_instance, project_id, release_stage)
 
 
 def clone_graph_runner(
     session: Session,
     graph_runner_id_to_copy: UUID,
     project_id: UUID,
+    release_stage: ReleaseStage = ReleaseStage.INTERNAL,
 ) -> UUID:
     """
     This function copies the graph runner and all its components and edges to a new graph runner.
@@ -85,6 +87,7 @@ def clone_graph_runner(
             component_instance_id_to_copy=component_node.component_instance_id,
             is_start_node=component_node.is_start_node,
             project_id=project_id,
+            release_stage=release_stage,
         )
         ids_map[component_node.component_instance_id] = new_instance_id
 
@@ -111,6 +114,7 @@ def clone_graph_runner(
                 component_instance_id_to_copy=relation.child_component_instance_id,
                 is_start_node=False,
                 project_id=project_id,
+                release_stage=release_stage,
             )
             ids_map[relation.child_component_instance_id] = new_child_component_instance_id
         if not (
@@ -124,7 +128,7 @@ def clone_graph_runner(
         if not parent:
             raise ValueError("Invalid relationship: parent component instance not found")
         # TODO: Refactor to repository function that takes name and component_id or with dictionary for faster lookup
-        param_defs = get_component_parameter_definition_by_component_id(session, parent.component_id)
+        param_defs = get_component_parameter_definition_by_component_version(session, parent.component_version_id)
         param_def = next((p for p in param_defs if p.name == relation.parameter_name), None)
         if not param_def:
             raise ValueError(
