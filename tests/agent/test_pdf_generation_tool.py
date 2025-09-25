@@ -2,8 +2,6 @@ import pytest
 import asyncio
 from unittest.mock import MagicMock, patch, Mock
 
-from weasyprint import CSS
-
 from engine.agent.pdf_generation_tool import DEFAULT_CSS_FORMATTING, PDFGenerationTool
 from engine.agent.agent import ComponentAttributes
 from engine.temps_folder_utils import get_output_dir
