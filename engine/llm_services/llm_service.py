@@ -72,31 +72,43 @@ class LLMService(ABC):
         self._model_name = model_name
         self._api_key = api_key
         self._base_url = base_url
-        if self._api_key is None or self._base_url is None:
+        if self._api_key is None:
             match self._provider:
                 case "openai":
                     self._api_key = settings.OPENAI_API_KEY
-                    self._base_url = None
                 case "cerebras":
                     self._api_key = settings.CEREBRAS_API_KEY
-                    self._base_url = settings.CEREBRAS_BASE_URL
                 case "google":
                     self._api_key = settings.GOOGLE_API_KEY
-                    self._base_url = settings.GOOGLE_BASE_URL
                 case "mistral":
                     self._api_key = settings.MISTRAL_API_KEY
-                    self._base_url = settings.MISTRAL_BASE_URL
                 case _:
                     config_provider = settings.custom_models.get(self._provider)
                     if config_provider is None:
                         raise ValueError(f"Provider {self._provider} not found in settings")
                     self._api_key = config_provider.get("api_key")
+                    LOGGER.debug(f"Using custom api key for provider: {self._provider}")
+                    if self._api_key is None:
+                        raise ValueError(f"API key must be provided for custom provider: {self._provider}")
+
+        if self._base_url is None:
+            match self._provider:
+                case "openai":
+                    self._base_url = None
+                case "cerebras":
+                    self._base_url = settings.CEREBRAS_BASE_URL
+                case "google":
+                    self._base_url = settings.GOOGLE_BASE_URL
+                case "mistral":
+                    self._base_url = settings.MISTRAL_BASE_URL
+                case _:
+                    config_provider = settings.custom_models.get(self._provider)
+                    if config_provider is None:
+                        raise ValueError(f"Provider {self._provider} not found in settings")
                     self._base_url = config_provider.get("base_url")
-                    LOGGER.debug(f"Using custom api key and base url for provider: {self._provider}")
-                    if self._api_key is None or self._base_url is None:
-                        raise ValueError(
-                            f"API key and base URL must be provided for custom provider: {self._provider}"
-                        )
+                    LOGGER.debug(f"Using custom base url for provider: {self._provider}")
+                    if self._base_url is None:
+                        raise ValueError(f"Base URL must be provided for custom provider: {self._provider}")
 
 
 class EmbeddingService(LLMService):

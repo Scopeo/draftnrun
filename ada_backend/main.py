@@ -11,6 +11,7 @@ from ada_backend.routers.categories_router import router as categories_router
 from ada_backend.routers.project_router import router as project_router
 from ada_backend.routers.template_router import router as template_router
 from ada_backend.routers.integration_router import router as integration_router
+from ada_backend.routers.global_secret_router import router as global_secret_router
 from ada_backend.routers.auth_router import router as auth_router
 from ada_backend.routers.source_router import router as source_router
 from ada_backend.routers.ingestion_task_router import router as ingestion_task_router
@@ -126,6 +127,7 @@ app.include_router(graphql_router, prefix="/graphql")
 app.include_router(trace_router)
 app.include_router(admin_tools_router)
 app.include_router(cron_router)
+app.include_router(global_secret_router)
 
 app.add_middleware(RequestContextMiddleware)
 app.add_middleware(
