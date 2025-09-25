@@ -51,6 +51,10 @@ def include_object(object, name, type_, reflected, compare_to):
             # Exclude UUID to NUMERIC type changes in SQLite
             return False
 
+    # Ignore APScheduler tables - they are managed by APScheduler itself
+    if type_ == "table" and name == "apscheduler_jobs":
+        return False
+
     return True  # Include all other objects
 
 
