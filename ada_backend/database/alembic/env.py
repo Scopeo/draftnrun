@@ -55,6 +55,13 @@ def include_object(object, name, type_, reflected, compare_to):
     if type_ == "table" and name == "apscheduler_jobs":
         return False
 
+    # Exclude tables in test schema
+    if type_ == "table" and str(object.schema) == "test_schema":
+        return False
+    # Exclude test schemas themselves
+    if type_ == "schema" and name == "test_schema":
+        return False
+
     return True  # Include all other objects
 
 
