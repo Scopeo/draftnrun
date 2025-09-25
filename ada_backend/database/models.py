@@ -35,12 +35,13 @@ if not settings.FERNET_KEY:
 CIPHER = Fernet(settings.FERNET_KEY)
 
 
-def make_pg_enum(enum_cls: Type[StrEnum]) -> SQLAlchemyEnum:
+def make_pg_enum(enum_cls: Type[StrEnum], schema: str = None) -> SQLAlchemyEnum:
     return SQLAlchemyEnum(
         enum_cls,
         name=camel_to_snake(enum_cls.__name__),
         values_callable=lambda x: [e.value for e in x],
         native_enum=True,
+        schema=schema,
     )
 
 
@@ -892,7 +893,7 @@ class CronJob(Base):
     name = mapped_column(String, nullable=False)
     cron_expr = mapped_column(String, nullable=False)
     tz = mapped_column(String, nullable=False)
-    entrypoint = mapped_column(make_pg_enum(CronEntrypoint), nullable=False)
+    entrypoint = mapped_column(make_pg_enum(CronEntrypoint, schema="scheduler"), nullable=False)
     payload = mapped_column(JSONB, nullable=False, default=dict)
     is_enabled = mapped_column(Boolean, nullable=False, default=True)
     created_at = mapped_column(DateTime(timezone=True), server_default=func.now())
@@ -929,7 +930,7 @@ class CronRun(Base):
     scheduled_for = mapped_column(DateTime(timezone=True), nullable=False, index=True)
     started_at = mapped_column(DateTime(timezone=True), nullable=False)
     finished_at = mapped_column(DateTime(timezone=True), nullable=True)
-    status = mapped_column(make_pg_enum(CronStatus), nullable=False)
+    status = mapped_column(make_pg_enum(CronStatus, schema="scheduler"), nullable=False)
     error = mapped_column(Text, nullable=True)
     result = mapped_column(JSONB, nullable=True)
 

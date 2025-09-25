@@ -73,6 +73,8 @@ def run_migrations_offline() -> None:
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
         include_object=include_object,  # Add the custom include_object function
+        # Enable reflection of non-public schemas
+        include_schemas=True,
     )
 
     with context.begin_transaction():
@@ -97,6 +99,8 @@ def run_migrations_online() -> None:
             connection=connection,
             target_metadata=target_metadata,
             include_object=include_object,  # Add the custom include_object function
+            # Enable reflection of non-public schemas
+            include_schemas=True,
         )
 
         with context.begin_transaction():
