@@ -17,7 +17,6 @@ from ada_backend.schemas.pipeline.graph_schema import GraphUpdateResponse
 from ada_backend.schemas.project_schema import ProjectWithGraphRunnersSchema
 from ada_backend.services.agents_service import (
     create_new_agent_service,
-    delete_agent_service,
     get_agent_by_id_service,
     get_all_agents_service,
     update_agent_service,
@@ -99,16 +98,3 @@ async def update_agent(
     except Exception as e:
         LOGGER.error(f"Error updating agent {agent_id}: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Internal error service: {str(e)}")
-
-
-@router.delete("/agents/{agent_id}", status_code=204)
-def delete_agent(
-    agent_id: UUID,
-    user: Annotated[
-        SupabaseUser, Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.WRITER.value))
-    ],
-    session: Session = Depends(get_db),
-):
-    if not user.id:
-        raise HTTPException(status_code=400, detail="User ID not found")
-    return delete_agent_service(session, agent_id)
