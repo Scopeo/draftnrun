@@ -310,6 +310,16 @@ def list_port_mappings_for_graph(session: Session, graph_runner_id: UUID) -> lis
     return session.query(db.PortMapping).filter(db.PortMapping.graph_runner_id == graph_runner_id).all()
 
 
+def delete_port_mappings_for_graph(session: Session, graph_runner_id: UUID) -> int:
+    deleted = (
+        session.query(db.PortMapping)
+        .filter(db.PortMapping.graph_runner_id == graph_runner_id)
+        .delete(synchronize_session=False)
+    )
+    session.commit()
+    return deleted
+
+
 def delete_port_mappings_for_target_except(
     session: Session,
     graph_runner_id: UUID,
