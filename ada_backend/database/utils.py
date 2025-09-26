@@ -54,13 +54,41 @@ def create_enum_if_not_exists(connection, enum_values, enum_name):
     if settings.ADA_DB_DRIVER != "postgresql":
         return
 
-    values_sql = ", ".join(f"'{value}'" for value in enum_values)
+    # Escape single quotes in enum values to prevent SQL injection
+    escaped_values = [value.replace("'", "''") for value in enum_values]
+    values_sql = ", ".join(f"'{value}'" for value in escaped_values)
 
     sql = f"""
     DO $$
     BEGIN
         IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = '{enum_name}') THEN
             CREATE TYPE {enum_name} AS ENUM ({values_sql});
+        END IF;
+    END
+    $$;
+    """
+
+    connection.execute(sa.text(sql))
+
+
+def drop_enum_if_exists(connection, enum_name):
+    """
+    Helper function to drop a PostgreSQL enum type if it exists.
+    This function can be used in migration scripts.
+
+    Args:
+        connection: SQLAlchemy connection
+        enum_name: Name of the enum type in PostgreSQL (should be lowercase)
+    """
+    # Only drop enums for PostgreSQL
+    if settings.ADA_DB_DRIVER != "postgresql":
+        return
+
+    sql = f"""
+    DO $$
+    BEGIN
+        IF EXISTS (SELECT 1 FROM pg_type WHERE typname = '{enum_name}') THEN
+            DROP TYPE {enum_name} CASCADE;
         END IF;
     END
     $$;

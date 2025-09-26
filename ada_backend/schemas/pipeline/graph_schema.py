@@ -1,10 +1,11 @@
 from typing import Optional
 from uuid import UUID
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from ada_backend.schemas.pipeline.base import ComponentRelationshipSchema, ComponentInstanceSchema
 from ada_backend.schemas.pipeline.get_pipeline_schema import ComponentInstanceReadSchema
+from ada_backend.schemas.pipeline.port_mapping_schema import PortMappingSchema
 
 
 class EdgeSchema(BaseModel):
@@ -22,6 +23,7 @@ class GraphGetResponse(BaseModel):
     component_instances: list[ComponentInstanceReadSchema]
     relationships: list[ComponentRelationshipSchema]
     edges: list[EdgeSchema]
+    port_mappings: list[PortMappingSchema] = Field(default_factory=list)
 
 
 class GraphLoadResponse(BaseModel):
@@ -38,6 +40,9 @@ class GraphUpdateSchema(BaseModel):
     component_instances: list[ComponentInstanceSchema]
     relationships: list[ComponentRelationshipSchema]
     edges: list[EdgeSchema]
+
+    # New multi-port data flow wiring. When omitted, canonical mappings will be auto-created for edges
+    port_mappings: list[PortMappingSchema] = Field(default_factory=list)
 
 
 class GraphUpdateResponse(BaseModel):
