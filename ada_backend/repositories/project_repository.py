@@ -83,7 +83,7 @@ def insert_project(
     project_type: Optional[db.ProjectType] = db.ProjectType.WORKFLOW,
 ) -> db.Project:
     if project_type == db.ProjectType.WORKFLOW:
-        project = db.Project(
+        project = db.WorkflowProject(
             id=project_id,
             name=project_name,
             description=description,
