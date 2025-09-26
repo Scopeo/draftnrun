@@ -119,12 +119,12 @@ def create_new_agent_service(
 
 
 def build_ai_agent_component(
-    ai_agent_instance_id: UUID, model_config: list[db.BasicParameter], system_prompt: str
+    ai_agent_instance_id: UUID, model_parameters: list[db.BasicParameter], system_prompt: str
 ) -> ComponentInstanceSchema:
     """
     Helper function to build the AI agent component instance with the provided model configuration and system prompt.
     """
-    parameters = model_config.copy()
+    parameters = model_parameters.copy()
     parameters.append(PipelineParameterSchema(value=system_prompt, name=SYSTEM_PROMPT_PARAMETER_NAME))
     return ComponentInstanceSchema(
         id=ai_agent_instance_id,
@@ -142,7 +142,7 @@ async def update_agent_service(
     component_instances.append(
         build_ai_agent_component(
             ai_agent_instance_id=version_id,
-            model_config=agent_data.model_parameters,
+            model_parameters=agent_data.model_parameters,
             system_prompt=agent_data.system_prompt,
         )
     )
