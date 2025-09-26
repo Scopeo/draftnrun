@@ -2,7 +2,7 @@ import pytest
 import asyncio
 from unittest.mock import MagicMock, patch, Mock
 
-from engine.agent.pdf_generation_tool import PDFGenerationTool
+from engine.agent.pdf_generation_tool import DEFAULT_CSS_FORMATTING, PDFGenerationTool
 from engine.agent.agent import ComponentAttributes
 from engine.temps_folder_utils import get_output_dir
 from engine.trace.trace_manager import TraceManager
@@ -46,7 +46,9 @@ def test_pdf_generation_and_cleanup(pdf_tool, tmp_path):
     with (
         patch("engine.temps_folder_utils.get_tracing_span", return_value=mock_params),
         patch("engine.agent.pdf_generation_tool.HTML", return_value=mock_html),
+        patch("engine.agent.pdf_generation_tool.CSS") as MockCSS,
     ):
+        mock_css_instance = MockCSS.return_value
         # Call async function from sync test
         result = asyncio.run(pdf_tool._run_without_io_trace(markdown_content=MARKDOWN_CONTENT))
 
@@ -62,8 +64,9 @@ def test_pdf_generation_and_cleanup(pdf_tool, tmp_path):
         assert pdf_filename is not None
         pdf_path = get_output_dir() / pdf_filename
 
+        MockCSS.assert_called_once_with(string=DEFAULT_CSS_FORMATTING)
         # Verify that weasyprint was called correctly
-        mock_html.write_pdf.assert_called_once_with(str(pdf_path))
+        mock_html.write_pdf.assert_called_once_with(str(pdf_path), stylesheets=[mock_css_instance])
 
         # Verify the directory was created
         assert pdf_path.parent.exists()
