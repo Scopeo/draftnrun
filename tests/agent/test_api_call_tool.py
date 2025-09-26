@@ -23,9 +23,9 @@ async def api_tool(mock_trace_manager):
         component_attributes=ComponentAttributes(component_instance_name="test_api_tool"),
         endpoint="https://api.example.com/test",
         method="GET",
-        headers='{"Content-Type": "application/json", "Authorization": "Bearer test_token"}',
+        headers={"Content-Type": "application/json", "Authorization": "Bearer test_token"},
         timeout=30,
-        fixed_parameters='{"api_version": "v2", "format": "json", "language": "en"}',
+        fixed_parameters={"api_version": "v2", "format": "json", "language": "en"},
     )
     yield tool
     # Cleanup: ensure any lingering HTTP connections are closed
@@ -158,7 +158,7 @@ def test_make_api_call_post_with_empty_params(mock_client_class, mock_trace_mana
         ),
         endpoint="https://api.example.com/test",
         method="POST",
-        headers='{"Content-Type": "application/json"}',
+        headers={"Content-Type": "application/json"},
     )
 
     mock_client = AsyncMock()
@@ -189,7 +189,7 @@ def test_make_api_call_get_with_empty_params(mock_client_class, mock_trace_manag
         ),
         endpoint="https://api.example.com/test",
         method="GET",
-        headers='{"Content-Type": "application/json"}',
+        headers={"Content-Type": "application/json"},
     )
 
     mock_client = AsyncMock()
@@ -277,3 +277,63 @@ def test_run_without_io_trace_error(api_tool):
         assert result.messages[0].role == "assistant"
         assert "API call failed" in result.messages[0].content
         assert result.artifacts["api_response"]["success"] is False
+
+
+@patch("httpx.AsyncClient")
+def test_api_call_tool_with_string_headers_and_fixed_params(mock_client_class, mock_trace_manager, mock_response):
+    tool = APICallTool(
+        trace_manager=mock_trace_manager,
+        component_attributes=ComponentAttributes(component_instance_name="test_api_tool"),
+        endpoint="https://api.example.com/test",
+        method="GET",
+        headers='{"Content-Type": "application/json", "Authorization": "Bearer test_token"}',
+        fixed_parameters='{"api_version": "v2", "format": "json"}',
+    )
+
+    mock_client = AsyncMock()
+    mock_client.request.return_value = mock_response
+    mock_client_class.return_value.__aenter__.return_value = mock_client
+
+    result = asyncio.run(tool.make_api_call(query="test"))
+
+    mock_client.request.assert_called_once_with(
+        url="https://api.example.com/test",
+        method="GET",
+        headers={"Content-Type": "application/json", "Authorization": "Bearer test_token"},
+        timeout=30,
+        params={"api_version": "v2", "format": "json", "query": "test"},
+    )
+
+    assert result["status_code"] == 200
+    assert result["data"] == {"data": "test_data"}
+    assert result["success"] is True
+
+
+@patch("httpx.AsyncClient")
+def test_api_call_tool_with_dict_headers_and_fixed_params(mock_client_class, mock_trace_manager, mock_response):
+    tool = APICallTool(
+        trace_manager=mock_trace_manager,
+        component_attributes=ComponentAttributes(component_instance_name="api_call_tool"),
+        endpoint="https://api.example.com/test",
+        method="POST",
+        headers={"Content-Type": "application/json"},
+        fixed_parameters={"api_version": "v2"},
+    )
+
+    mock_client = AsyncMock()
+    mock_client.request.return_value = mock_response
+    mock_client_class.return_value.__aenter__.return_value = mock_client
+
+    result = asyncio.run(tool.make_api_call(data={"name": "foo"}))
+
+    mock_client.request.assert_called_once_with(
+        url="https://api.example.com/test",
+        method="POST",
+        headers={"Content-Type": "application/json"},
+        timeout=30,
+        json={"api_version": "v2", "data": {"name": "foo"}},
+    )
+
+    assert result["status_code"] == 200
+    assert result["data"] == {"data": "test_data"}
+    assert result["success"] is True

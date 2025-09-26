@@ -6,19 +6,50 @@ from dataclasses import dataclass
 from sqlalchemy.orm import Session
 
 from ada_backend.database import models as db
-from ada_backend.database.models import ParameterType, ReleaseStage, UIComponent
+from ada_backend.database.models import ParameterType, ReleaseStage, UIComponent, UIComponentProperties
 from ada_backend.repositories.categories_repository import fetch_associated_category_names
 from ada_backend.repositories.integration_repository import (
     delete_linked_integration,
     get_component_instance_integration_relationship,
     get_integration,
 )
-from ada_backend.schemas.components_schema import ComponentWithParametersDTO, SubComponentParamSchema
+from ada_backend.schemas.components_schema import (
+    ComponentWithParametersDTO,
+    SubComponentParamSchema,
+)
 from ada_backend.schemas.integration_schema import IntegrationSchema
 from ada_backend.schemas.parameter_schema import ComponentParamDefDTO
 from engine.agent.types import ToolDescription
+from ada_backend.database.models import ComponentGlobalParameter
+from ada_backend.database.component_definition_seeding import (
+    upsert_components,
+    upsert_components_parameter_definitions,
+)
 
 LOGGER = logging.getLogger(__name__)
+
+
+def get_global_parameters_by_component_id(
+    session: Session,
+    component_id: UUID,
+) -> list[ComponentGlobalParameter]:
+    return session.query(ComponentGlobalParameter).filter(ComponentGlobalParameter.component_id == component_id).all()
+
+
+def has_global_parameter(
+    session: Session,
+    component_id: UUID,
+    parameter_definition_id: UUID,
+) -> bool:
+    return (
+        session.query(ComponentGlobalParameter)
+        .filter(
+            ComponentGlobalParameter.component_id == component_id,
+            ComponentGlobalParameter.parameter_definition_id == parameter_definition_id,
+        )
+        .first()
+        is not None
+    )
 
 
 @dataclass
@@ -65,6 +96,75 @@ def get_component_by_name(
         )
         .first()
     )
+
+
+def delete_component_global_parameters(
+    session: Session,
+    component_id: UUID,
+) -> None:
+    session.query(ComponentGlobalParameter).filter(ComponentGlobalParameter.component_id == component_id).delete()
+    session.commit()
+
+
+def delete_component_by_id(
+    session: Session,
+    component_id: UUID,
+) -> bool:
+    """
+    Deletes a component definition and associated global parameters.
+    Returns True if deleted, False if not found.
+    """
+    component = get_component_by_id(session, component_id)
+    if not component:
+        return False
+
+    instance_ids: List[UUID] = [
+        ci.id
+        for ci in session.query(db.ComponentInstance).filter(db.ComponentInstance.component_id == component_id).all()
+    ]
+    if instance_ids:
+        delete_component_instances(session, component_instance_ids=instance_ids)
+
+    # Delete parameter child relationships and definitions before removing component
+    definition_ids: List[UUID] = [
+        d.id
+        for d in (
+            session.query(db.ComponentParameterDefinition)
+            .filter(
+                db.ComponentParameterDefinition.component_id == component_id,
+            )
+            .all()
+        )
+    ]
+    if definition_ids:
+        (
+            session.query(db.ComponentParameterChildRelationship)
+            .filter(
+                db.ComponentParameterChildRelationship.component_parameter_definition_id.in_(definition_ids),
+            )
+            .delete(synchronize_session=False)
+        )
+
+    (
+        session.query(db.ComponentParameterDefinition)
+        .filter(
+            db.ComponentParameterDefinition.component_id == component_id,
+        )
+        .delete(synchronize_session=False)
+    )
+
+    # Remove category links
+    (
+        session.query(db.ComponentCategory)
+        .filter(db.ComponentCategory.component_id == component_id)
+        .delete(synchronize_session=False)
+    )
+
+    delete_component_global_parameters(session, component_id)
+
+    session.delete(component)
+    session.commit()
+    return True
 
 
 def get_component_parameter_definition_by_component_id(
@@ -271,6 +371,10 @@ def get_all_components_with_parameters(
                 component.id,
             )
 
+            # Hide parameters enforced globally for this component from the UI
+            global_params = get_global_parameters_by_component_id(session, component.id)
+            global_param_def_ids = {gp.parameter_definition_id for gp in global_params}
+
             subcomponent_params = get_subcomponent_param_def_by_component_id(
                 session,
                 component.id,
@@ -288,6 +392,9 @@ def get_all_components_with_parameters(
                             f"{tool_param_name}, {param.name}"
                         )
                 elif param.type != ParameterType.COMPONENT:
+                    # Skip globally enforced parameters (they are not instance-editable)
+                    if param.id in global_param_def_ids:
+                        continue
                     parameters_to_fill.append(
                         ComponentParamDefDTO(
                             id=param.id,
@@ -432,6 +539,19 @@ def upsert_basic_parameter(
     Inserts or updates a basic parameter. If a parameter with the same
     component_instance_id and parameter_definition_id exists, updates it.
     """
+    # Prevent overriding global parameters
+    parent_component_id = (
+        session.query(db.ComponentInstance.component_id)
+        .filter(db.ComponentInstance.id == component_instance_id)
+        .scalar()
+    )
+    if parent_component_id and has_global_parameter(
+        session,
+        component_id=parent_component_id,
+        parameter_definition_id=parameter_definition_id,
+    ):
+        raise ValueError("This parameter is enforced globally for the component and cannot be set per instance.")
+
     if value is None and org_secret_id is None:
         raise ValueError(
             "Either value or org_secret_id must be provided for a basic parameter.",
@@ -612,3 +732,139 @@ def delete_component_instance_parameters(
         db.BasicParameter.component_instance_id == component_instance_id,
     ).delete()
     session.commit()
+
+
+def upsert_specific_api_component_with_defaults(
+    session: Session,
+    tool_display_name: str,
+    endpoint: str,
+    method: str,
+    headers_json: Optional[str],
+    timeout_val: Optional[int],
+    fixed_params_json: Optional[str],
+) -> db.Component:
+    """
+    Ensure a specific API component exists with default parameter definitions.
+
+    Returns the component.
+    """
+    component = get_component_by_name(session, tool_display_name)
+    if not component:
+        component = db.Component(
+            name=tool_display_name,
+            base_component="API Call",
+            description=f"Preconfigured API tool for {tool_display_name}.",
+            is_agent=False,
+            function_callable=True,
+            can_use_function_calling=False,
+            release_stage=db.ReleaseStage.INTERNAL,
+        )
+        upsert_components(session, [component])
+
+    param_defs = [
+        db.ComponentParameterDefinition(
+            component_id=component.id,
+            name="endpoint",
+            type=ParameterType.STRING,
+            nullable=False,
+            default=endpoint,
+            ui_component=UIComponent.TEXTFIELD,
+            ui_component_properties=UIComponentProperties(
+                label="API Endpoint",
+                placeholder="https://api.example.com/endpoint",
+                description="The API endpoint URL to send requests to.",
+            ).model_dump(exclude_unset=True, exclude_none=True),
+        ),
+        db.ComponentParameterDefinition(
+            component_id=component.id,
+            name="method",
+            type=ParameterType.STRING,
+            nullable=False,
+            default=method,
+            ui_component=UIComponent.SELECT,
+            ui_component_properties=UIComponentProperties(
+                label="HTTP Method",
+                options=[
+                    {"label": "GET", "value": "GET"},
+                    {"label": "POST", "value": "POST"},
+                    {"label": "PUT", "value": "PUT"},
+                    {"label": "DELETE", "value": "DELETE"},
+                    {"label": "PATCH", "value": "PATCH"},
+                ],
+            ).model_dump(exclude_unset=True, exclude_none=True),
+        ),
+        db.ComponentParameterDefinition(
+            component_id=component.id,
+            name="headers",
+            type=ParameterType.JSON,
+            nullable=True,
+            default=headers_json,
+            ui_component=UIComponent.TEXTAREA,
+            ui_component_properties=UIComponentProperties(
+                label="Headers",
+                placeholder='{"Content-Type": "application/json"}',
+            ).model_dump(exclude_unset=True, exclude_none=True),
+        ),
+        db.ComponentParameterDefinition(
+            component_id=component.id,
+            name="timeout",
+            type=ParameterType.INTEGER,
+            nullable=True,
+            default=str(timeout_val) if timeout_val is not None else None,
+            ui_component=UIComponent.SLIDER,
+            ui_component_properties=UIComponentProperties(
+                label="Timeout (seconds)",
+                min=1,
+                max=120,
+                step=1,
+                placeholder="30",
+            ).model_dump(exclude_unset=True, exclude_none=True),
+            is_advanced=True,
+        ),
+        db.ComponentParameterDefinition(
+            component_id=component.id,
+            name="fixed_parameters",
+            type=ParameterType.JSON,
+            nullable=True,
+            default=fixed_params_json,
+            ui_component=UIComponent.TEXTAREA,
+            ui_component_properties=UIComponentProperties(
+                label="Fixed Parameters",
+                placeholder='{"api_version": "v2", "format": "json"}',
+            ).model_dump(exclude_unset=True, exclude_none=True),
+        ),
+    ]
+
+    upsert_components_parameter_definitions(session, param_defs)
+    return component
+
+
+def set_component_default_tool_description(
+    session: Session,
+    component_id: UUID,
+    tool_description_id: UUID,
+) -> db.Component:
+    component = get_component_by_id(session, component_id)
+    if component is None:
+        raise ValueError("Component not found when setting default tool description")
+    component.default_tool_description_id = tool_description_id
+    session.commit()
+    session.refresh(component)
+    return component
+
+
+def insert_component_global_parameter(
+    session: Session,
+    component_id: UUID,
+    parameter_definition_id: UUID,
+    value: str,
+) -> ComponentGlobalParameter:
+    global_param = ComponentGlobalParameter(
+        component_id=component_id,
+        parameter_definition_id=parameter_definition_id,
+        value=value,
+    )
+    session.add(global_param)
+    session.commit()
+    session.refresh(global_param)
+    return global_param

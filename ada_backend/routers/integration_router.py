@@ -1,4 +1,5 @@
 from typing import Annotated
+import logging
 from uuid import UUID
 
 from sqlalchemy.orm import Session
@@ -14,6 +15,7 @@ from ada_backend.schemas.integration_schema import CreateProjectIntegrationSchem
 from ada_backend.services.integration_service import add_integration_secrets_service
 
 router = APIRouter(prefix="/project", tags=["Integrations"])
+LOGGER = logging.getLogger(__name__)
 
 
 @router.put(
@@ -40,4 +42,8 @@ async def add_integration_secrets(
             create_project_integration=create_project_integration,
         )
     except Exception as e:
+        LOGGER.exception(
+            "Failed to add integration secrets for integration %s",
+            integration_id,
+        )
         raise HTTPException(status_code=500, detail="Internal Server Error") from e

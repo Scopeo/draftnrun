@@ -65,3 +65,24 @@ async def get_user_access_to_organization(
         raise ValueError("User does not have access to organization")
 
     return OrganizationAccess(org_id=organization_id, role=result["role"])
+
+
+async def is_user_super_admin(user: SupabaseUser) -> bool:
+    """
+    Check global super admin status using the same Edge Function as the frontend.
+    """
+    endpoint = f"{settings.SUPABASE_PROJECT_URL}/functions/v1/check-super-admin"
+    headers = {
+        "Authorization": f"Bearer {user.token}",
+        "Content-Type": "application/json",
+    }
+    async with httpx.AsyncClient() as client:
+        response = await client.post(
+            endpoint,
+            headers=headers,
+            timeout=10,
+        )
+    if response.status_code == 200:
+        data = response.json() if response.content else {}
+        return bool(data.get("is_super_admin", False))
+    return False

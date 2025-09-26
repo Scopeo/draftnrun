@@ -1,7 +1,7 @@
 from typing import Optional, List
 from uuid import UUID
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 from ada_backend.schemas.integration_schema import IntegrationSchema
 from ada_backend.schemas.parameter_schema import ComponentParamDefDTO
@@ -41,3 +41,17 @@ class ComponentWithParametersDTO(ComponentUseInfoSchema, ComponentDTO):
 
 class ComponentsResponse(BaseModel):
     components: list[ComponentWithParametersDTO]
+
+
+class UpdateComponentReleaseStageRequest(BaseModel):
+    release_stage: db.ReleaseStage
+
+    @field_validator("release_stage", mode="before")
+    @classmethod
+    def normalize_release_stage(cls, v):
+        if isinstance(v, str):
+            try:
+                return db.ReleaseStage(v.lower())
+            except Exception:
+                return v
+        return v

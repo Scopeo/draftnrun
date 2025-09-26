@@ -1,4 +1,5 @@
 from typing import Annotated
+import logging
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -27,6 +28,7 @@ from ada_backend.services.graph.get_graph_service import get_graph_service
 router = APIRouter(
     prefix="/projects/{project_id}/graph",
 )
+LOGGER = logging.getLogger(__name__)
 
 
 @router.get("/{graph_runner_id}", summary="Get Project Graph", response_model=GraphGetResponse, tags=["Graph"])
@@ -45,6 +47,11 @@ def get_project_graph(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
+        LOGGER.exception(
+            "Failed to get graph for project %s and runner %s",
+            project_id,
+            graph_runner_id,
+        )
         raise HTTPException(status_code=500, detail="Internal Server Error") from e
 
 

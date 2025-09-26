@@ -16,3 +16,22 @@ class DuplicateCategoryName(Exception):
 class InvalidCategoryUpdate(Exception):
     def __init__(self):
         super().__init__("At least one field (name or description) must be provided for update")
+
+
+class ComponentNotFound(Exception):
+    def __init__(self, component_id):
+        self.component_id = component_id
+        super().__init__(f"Component not found: {component_id}")
+
+
+class ProtectedComponentDeletionError(Exception):
+    def __init__(self, component_id):
+        self.component_id = component_id
+        super().__init__(f"Deletion forbidden: component {component_id} is protected and cannot be deleted")
+
+
+class InvalidReleaseStageUpdate(Exception):
+    def __init__(self, component_id, message: str | None = None):
+        detail = message or "Invalid release stage update request"
+        self.component_id = component_id
+        super().__init__(f"{detail} for component: {component_id}")

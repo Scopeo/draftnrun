@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
+import logging
 from uuid import UUID
 
 from sqlalchemy.orm import Session
@@ -13,6 +14,7 @@ from ada_backend.schemas.template_schema import TemplateResponse
 
 
 router = APIRouter(prefix="/templates", tags=["Templates"])
+LOGGER = logging.getLogger(__name__)
 
 
 @router.get("/{organization_id}", summary="Get Production Templates", tags=["Templates"])
@@ -32,4 +34,8 @@ def get_production_templates(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
+        LOGGER.exception(
+            "Failed to list templates for organization %s",
+            organization_id,
+        )
         raise HTTPException(status_code=500, detail="Internal Server Error") from e

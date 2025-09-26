@@ -33,6 +33,13 @@ async def get_root_traces(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
+        LOGGER.exception(
+            "Failed to get root traces for project %s (duration=%s, env=%s, call_type=%s)",
+            project_id,
+            duration,
+            environment,
+            call_type,
+        )
         raise HTTPException(status_code=500, detail="Internal Server Error") from e
 
 
@@ -49,4 +56,8 @@ async def get_span_trace(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
+        LOGGER.exception(
+            "Failed to get span trace for trace_id=%s",
+            trace_id,
+        )
         raise HTTPException(status_code=500, detail="Internal Server Error") from e

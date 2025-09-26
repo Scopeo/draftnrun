@@ -1,4 +1,5 @@
 from typing import Annotated
+import logging
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
@@ -21,6 +22,7 @@ from ada_backend.services.category_service import (
 from ada_backend.services.errors import CategoryNotFound, DuplicateCategoryName, InvalidCategoryUpdate
 
 router = APIRouter(tags=["Categories"])
+LOGGER = logging.getLogger(__name__)
 
 
 @router.get(path="/categories", response_model=list[CategoryResponse])
@@ -35,6 +37,7 @@ def get_all_categories(
     try:
         return get_all_categories_service(session)
     except Exception as e:
+        LOGGER.exception("Failed to list categories for user %s", user.id)
         raise HTTPException(status_code=500, detail="Internal Server Error") from e
 
 
@@ -53,6 +56,7 @@ def get_category_by_id(
     except CategoryNotFound:
         raise HTTPException(status_code=404, detail="Category not found")
     except Exception as e:
+        LOGGER.exception("Failed to get category %s", category_id)
         raise HTTPException(status_code=500, detail="Internal Server Error") from e
 
 
@@ -71,6 +75,7 @@ def create_category(
     except DuplicateCategoryName as e:
         raise HTTPException(status_code=409, detail=str(e)) from e
     except Exception as e:
+        LOGGER.exception("Failed to create category for user %s", user.id)
         raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}") from e
 
 
@@ -94,6 +99,7 @@ def update_category(
     except InvalidCategoryUpdate as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
+        LOGGER.exception("Failed to update category %s", category_id)
         raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}") from e
 
 
@@ -110,6 +116,7 @@ def delete_category(
     try:
         delete_category_service(session, category_id)
     except Exception as e:
+        LOGGER.exception("Failed to delete category %s", category_id)
         raise HTTPException(status_code=500, detail=f"Internal Server Error: {e}") from e
 
     return Response(status_code=status.HTTP_204_NO_CONTENT)
