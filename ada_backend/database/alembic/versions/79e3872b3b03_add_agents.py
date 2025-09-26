@@ -47,6 +47,12 @@ def upgrade() -> None:
         ),
         sa.PrimaryKeyConstraint("id"),
     )
+    op.execute(
+        """
+        INSERT INTO workflow_projects (id)
+        SELECT id FROM projects WHERE type = 'workflow'
+    """
+    )
     # ### end Alembic commands ###
 
 

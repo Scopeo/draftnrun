@@ -41,6 +41,7 @@ def get_component_instance(
         session,
         component_instance_id,
     )
+    print("Parameters:", parameters)
 
     component = get_component_by_id(session, component_id=component_instance.component_id)
     if component is None:

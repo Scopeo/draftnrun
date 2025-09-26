@@ -87,10 +87,33 @@ class CronRunAdmin(EnhancedModelView, model=db.CronRun):
     can_edit = False
 
 
-class ProjectAdmin(EnhancedModelView, model=db.Project):
+class WorkflowProjectAdmin(EnhancedModelView, model=db.WorkflowProject):
     category = AdminCategory.PROJECTS
     icon = "fas fa-users"
-    column_list = ["id", "name", "description", "organization_id", "companion_image_url", "created_at", "updated_at"]
+    column_list = [
+        "id",
+        "name",
+        "description",
+        "type",
+        "organization_id",
+        "companion_image_url",
+        "created_at",
+        "updated_at",
+    ]
+
+
+class AgentProjectAdmin(EnhancedModelView, model=db.AgentProject):
+    category = AdminCategory.PROJECTS
+    icon = "fas fa-users"
+    column_list = [
+        "id",
+        "name",
+        "description",
+        "organization_id",
+        "companion_image_url",
+        "created_at",
+        "updated_at",
+    ]
 
 
 class ProjectEnvironmentBinding(EnhancedModelView, model=db.ProjectEnvironmentBinding):
@@ -463,7 +486,8 @@ def setup_admin(app: FastAPI):
     )
 
     # Add views to the admin interface
-    admin.add_view(ProjectAdmin)
+    admin.add_view(WorkflowProjectAdmin)
+    admin.add_view(AgentProjectAdmin)
     admin.add_view(ProjectEnvironmentBinding)
     admin.add_view(OrganizationSecretAdmin)
     admin.add_view(ApiKeyAdmin)

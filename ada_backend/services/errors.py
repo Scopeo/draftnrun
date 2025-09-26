@@ -35,3 +35,9 @@ class InvalidReleaseStageUpdate(Exception):
         detail = message or "Invalid release stage update request"
         self.component_id = component_id
         super().__init__(f"{detail} for component: {component_id}")
+
+
+class ProjectNotFound(Exception):
+    def __init__(self, project_id: UUID):
+        self.project_id = project_id
+        super().__init__(f"Project not found: {project_id}")

@@ -23,6 +23,7 @@ from ada_backend.routers.organization_router import router as org_router
 from ada_backend.routers.trace_router import router as trace_router
 from ada_backend.routers.admin_tools_router import router as admin_tools_router
 from ada_backend.routers.cron_router import router as cron_router
+from ada_backend.routers.agent_router import router as agent_router
 from engine.trace.trace_context import set_trace_manager
 from engine.trace.trace_manager import TraceManager
 from settings import settings
@@ -56,6 +57,10 @@ app = FastAPI(
             "name": "Projects",
             "description": "Operations with projects, including creation, "
             "deletion, and management of project settings",
+        },
+        {
+            "name": "Agents",
+            "description": "Endpoints for managing agents within projects",
         },
         {
             "name": "Integrations",
@@ -113,6 +118,7 @@ setup_admin(app)
 app.include_router(auth_router)
 app.include_router(org_router)
 app.include_router(project_router)
+app.include_router(agent_router)
 app.include_router(integration_router)
 app.include_router(template_router)
 app.include_router(source_router)
