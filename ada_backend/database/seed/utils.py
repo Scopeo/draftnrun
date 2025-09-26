@@ -168,10 +168,14 @@ def build_completion_service_config_definitions(
                     type=ParameterType.FLOAT,
                     nullable=False,
                     default="1.0",
-                    ui_component=UIComponent.TEXTFIELD,
+                    ui_component=UIComponent.SLIDER,
                     ui_component_properties=UIComponentProperties(
                         label="Temperature",
                         placeholder="Enter temperature, it is different for each model, check the model documentation",
+                        min=0,
+                        max=2,
+                        step=0.01,
+                        marks=True,
                     ).model_dump(exclude_unset=True, exclude_none=True),
                     is_advanced=True,
                 )
@@ -276,10 +280,14 @@ def build_function_calling_service_config_definitions(
                     type=ParameterType.FLOAT,
                     nullable=False,
                     default="1.0",
-                    ui_component=UIComponent.TEXTFIELD,
+                    ui_component=UIComponent.SLIDER,
                     ui_component_properties=UIComponentProperties(
                         label="Temperature",
                         placeholder="Enter temperature, it is different for each model, check the model documentation",
+                        min=0,
+                        max=2,
+                        step=0.01,
+                        marks=True,
                     ).model_dump(exclude_unset=True, exclude_none=True),
                     is_advanced=True,
                 )
