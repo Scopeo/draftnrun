@@ -41,6 +41,6 @@ def get_all_components_endpoint(session: Session, release_stage: Optional[Releas
             )
         )
     for c in components:
-        c.__dict__["port_definitions"] = comp_id_to_ports.get(str(c.id), [])
+        c.port_definitions = comp_id_to_ports.get(str(c.id), [])
 
     return ComponentsResponse(components=components)

@@ -275,5 +275,5 @@ class Agent(ABC):
                 span.record_exception(e)
                 raise e
 
-    def run_sync(self, input_node_data: NodeData) -> NodeData:
-        return asyncio.run(self.run(input_node_data))
+    def run_sync(self, *inputs, **kwargs):
+        return asyncio.run(self.run(*inputs, **kwargs))
