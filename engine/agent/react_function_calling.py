@@ -18,13 +18,13 @@ from engine.agent.types import (
 )
 from engine.graph_runner.runnable import Runnable
 from engine.agent.history_message_handling import HistoryMessageHandler
+from engine.agent.utils import load_str_to_json
 from engine.trace.trace_manager import TraceManager
 from engine.llm_services.llm_service import CompletionService
 from engine.agent.utils_prompt import fill_prompt_template_with_dictionary
 from engine.agent.tools.python_code_runner import PYTHON_CODE_RUNNER_TOOL_DESCRIPTION
 from engine.agent.tools.terminal_command_runner import TERMINAL_COMMAND_RUNNER_TOOL_DESCRIPTION
 from settings import settings
-
 
 LOGGER = logging.getLogger(__name__)
 
@@ -53,6 +53,10 @@ class ReActAgent(Agent):
         last_history_messages: int = 50,
         allow_tool_shortcuts: bool = False,
         date_in_system_prompt: bool = False,
+        output_tool_name: Optional[str] = None,
+        output_tool_description: Optional[str] = None,
+        output_tool_properties: Optional[dict] = None,
+        output_tool_required_properties: Optional[list] = None,
     ) -> None:
         super().__init__(
             trace_manager=trace_manager,
@@ -77,6 +81,56 @@ class ReActAgent(Agent):
         self._date_in_system_prompt = date_in_system_prompt
         self._shared_sandbox: Optional[AsyncSandbox] = None
         self._e2b_api_key = getattr(settings, "E2B_API_KEY", None)
+
+        # Initialize output tool parameters (store as-is, parse later when needed)
+        self._output_tool_name = output_tool_name
+        self._output_tool_description = output_tool_description
+        self._output_tool_properties = output_tool_properties
+        self._output_tool_required_properties = output_tool_required_properties
+
+        self._output_tool_agent_description = self._get_output_tool_description()
+
+    def _get_output_tool_description(self) -> Optional[ToolDescription]:
+        """
+        Get the output tool description using the same pattern as RAG.
+
+        Returns:
+            ToolDescription if all required output tool parameters are set, None otherwise.
+        """
+        # If no output tool is configured, return None
+        if not any([self._output_tool_name, self._output_tool_description, self._output_tool_properties]):
+            return None
+
+        # If we tried to set up an output tool but missed some information, raise an error
+        missing_fields = []
+        if not self._output_tool_name:
+            missing_fields.append("output_tool_name")
+        if not self._output_tool_description:
+            missing_fields.append("output_tool_description")
+        if not self._output_tool_properties:
+            missing_fields.append("output_tool_properties")
+
+        if missing_fields:
+            raise ValueError(f"Error missing critical fields to define output structured output {missing_fields}")
+
+        # Parse JSON strings to appropriate data types
+        if isinstance(self._output_tool_properties, str):
+            parsed_properties = load_str_to_json(self._output_tool_properties)
+        else:
+            parsed_properties = self._output_tool_properties
+
+        if isinstance(self._output_tool_required_properties, str):
+            parsed_required_properties = load_str_to_json(self._output_tool_required_properties)
+        else:
+            parsed_required_properties = self._output_tool_required_properties or []
+
+        required_properties = parsed_required_properties or list(parsed_properties.keys())
+        return ToolDescription(
+            name=self._output_tool_name,
+            description=self._output_tool_description,
+            tool_properties=parsed_properties,
+            required_tool_properties=required_properties,
+        )
 
     # TODO: investigate if we can decouple the sandbox from the agent
     async def _ensure_shared_sandbox(self) -> AsyncSandbox:
@@ -158,7 +212,6 @@ class ReActAgent(Agent):
         """Runs ReActAgent. Only one input is allowed."""
         original_agent_input = inputs[0]
         if not isinstance(original_agent_input, AgentPayload):
-
             original_agent_input["messages"] = original_agent_input[self.input_data_field_for_messages_history]
             original_agent_input = AgentPayload(**original_agent_input)
         system_message = next((msg for msg in original_agent_input.messages if msg.role == "system"), None)
@@ -191,7 +244,21 @@ class ReActAgent(Agent):
             )
         agent_input = original_agent_input.model_copy(deep=True)
         history_messages_handled = self._memory_handling.get_truncated_messages_history(agent_input.messages)
+
+        # Determine tool choice and available tools
         tool_choice = "auto" if self._current_iteration < self._max_iterations else "none"
+        available_tools = [agent.tool_description for agent in self.agent_tools]
+
+        # Fallback logic: if at max iterations and output tool is available, force output tool only
+        if self._current_iteration >= self._max_iterations and self._output_tool_agent_description:
+            LOGGER.info("Max iterations reached with output tool available. Forcing output tool call.")
+            tool_choice = "required"
+            available_tools = [self._output_tool_agent_description]  # Only output tool
+        elif self._output_tool_agent_description:
+            # Normal case: add output tool to available tools
+            available_tools.append(self._output_tool_agent_description)
+            tool_choice = "required"
+
         with self.trace_manager.start_span("Agentic reflexion") as span:
             llm_input_messages = [msg.model_dump() for msg in history_messages_handled]
             span.set_attributes(
@@ -201,9 +268,10 @@ class ReActAgent(Agent):
                     SpanAttributes.LLM_MODEL_NAME: self._completion_service._model_name,
                 }
             )
+
             chat_response = await self._completion_service.function_call_async(
                 messages=llm_input_messages,
-                tools=[agent.tool_description for agent in self.agent_tools],
+                tools=available_tools,
                 tool_choice=tool_choice,
             )
 
@@ -229,6 +297,19 @@ class ReActAgent(Agent):
                     messages=[ChatMessage(role="assistant", content=chat_response.choices[0].message.content)],
                     is_final=True,
                     artifacts=artifacts,
+                )
+
+        # Check if there's a unique output tool call
+        if self._output_tool_name and len(all_tool_calls) == 1:
+            output_tool_call = all_tool_calls[0]
+            if output_tool_call.function.name == self._output_tool_name:
+                LOGGER.info(f"Output tool called: {output_tool_call.function.name}")
+                # Handle output tool call like a chat response
+                tool_arguments = json.loads(output_tool_call.function.arguments)
+                await self._cleanup_shared_sandbox()
+                return AgentPayload(
+                    messages=[ChatMessage(role="assistant", content=json.dumps(tool_arguments))],
+                    is_final=True,
                 )
 
         agent_outputs, processed_tool_calls = await self._process_tool_calls(
