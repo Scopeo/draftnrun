@@ -87,6 +87,35 @@ async def get_user_from_supabase_token(
         raise HTTPException(status_code=401, detail="Failed to validate Supabase token") from e
 
 
+async def _ensure_access(
+    project_id: UUID,
+    user: Annotated[SupabaseUser, Depends(get_user_from_supabase_token)],
+    allowed_roles: set[str],
+    session: Session = Depends(get_db),
+) -> SupabaseUser:
+    try:
+        project = get_project(session, project_id)
+        if not project:
+            raise HTTPException(status_code=404, detail="Project not found")
+        access = await get_user_access_to_organization(
+            user=user,
+            organization_id=project.organization_id,
+        )
+
+        LOGGER.info(f"User {user.id=} has access to project {project_id=} with role {access.role=}")
+        if access.role not in allowed_roles:
+            raise HTTPException(
+                status_code=403,
+                detail="You don't have access to this project",
+            )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=403,
+            detail=str(e),
+        ) from e
+    return user
+
+
 def user_has_access_to_project_dependency(allowed_roles: set[str]):
     """
     Dependency that checks if a user has access to a project and returns the user if they do.
@@ -98,27 +127,28 @@ def user_has_access_to_project_dependency(allowed_roles: set[str]):
         user: Annotated[SupabaseUser, Depends(get_user_from_supabase_token)],
         session: Session = Depends(get_db),
     ) -> SupabaseUser:
-        try:
-            project = get_project(session, project_id)
-            if not project:
-                raise HTTPException(status_code=404, detail="Project not found")
-            access = await get_user_access_to_organization(
-                user=user,
-                organization_id=project.organization_id,
-            )
+        return await _ensure_access(
+            project_id,
+            user,
+            allowed_roles,
+            session,
+        )
 
-            LOGGER.info(f"User {user.id=} has access to project {project_id=} with role {access.role=}")
-            if access.role not in allowed_roles:
-                raise HTTPException(
-                    status_code=403,
-                    detail="You don't have access to this project",
-                )
-        except ValueError as e:
-            raise HTTPException(
-                status_code=403,
-                detail=str(e),
-            ) from e
-        return user
+    return wrapper
+
+
+def user_has_access_to_agent_dependency(allowed_roles: set[str]):
+    async def wrapper(
+        agent_id: UUID,  # = project_id dans ton modèle
+        user: Annotated[SupabaseUser, Depends(get_user_from_supabase_token)],
+        session: Session = Depends(get_db),
+    ) -> SupabaseUser:
+        return await _ensure_access(
+            agent_id,
+            user,
+            allowed_roles,
+            session,
+        )
 
     return wrapper
 
