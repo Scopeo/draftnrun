@@ -8,7 +8,6 @@ from ada_backend.database.seed.utils import COMPONENT_UUIDS
 from ada_backend.repositories.agent_repository import add_ai_agent_component_to_graph, get_agents_by_organization
 from ada_backend.repositories.env_repository import bind_graph_runner_to_project
 from ada_backend.repositories.graph_runner_repository import insert_graph_runner
-from ada_backend.repositories.parameters_repository import get_specific_basic_parameter
 from ada_backend.repositories.project_repository import get_project, insert_project
 from ada_backend.schemas.agent_schema import AgentUpdateSchema, ProjectAgentSchema, AgentInfoSchema
 from ada_backend.schemas.parameter_schema import PipelineParameterSchema
