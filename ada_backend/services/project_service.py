@@ -35,7 +35,6 @@ LOGGER = getLogger(__name__)
 
 
 def get_project_service(session: Session, project_id: UUID) -> ProjectWithGraphRunnersSchema:
-    print("Fetching project with ID:", project_id)  # Debug print
     project_with_detail = get_project_with_details(session, project_id=project_id)
     return project_with_detail
 
