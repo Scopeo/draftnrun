@@ -2,7 +2,6 @@ import logging
 import re
 
 import sqlalchemy as sa
-from sqlalchemy.dialects import postgresql
 
 from engine.agent.types import ToolDescription
 from settings import settings
