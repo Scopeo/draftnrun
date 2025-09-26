@@ -51,6 +51,17 @@ def include_object(object, name, type_, reflected, compare_to):
             # Exclude UUID to NUMERIC type changes in SQLite
             return False
 
+    # Ignore APScheduler tables - they are managed by APScheduler itself
+    if type_ == "table" and name == "apscheduler_jobs":
+        return False
+
+    # Exclude tables in test schema
+    if type_ == "table" and str(object.schema) == "test_schema":
+        return False
+    # Exclude test schemas themselves
+    if type_ == "schema" and name == "test_schema":
+        return False
+
     return True  # Include all other objects
 
 
@@ -73,6 +84,8 @@ def run_migrations_offline() -> None:
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
         include_object=include_object,  # Add the custom include_object function
+        # Enable reflection of non-public schemas
+        include_schemas=True,
     )
 
     with context.begin_transaction():
@@ -97,6 +110,8 @@ def run_migrations_online() -> None:
             connection=connection,
             target_metadata=target_metadata,
             include_object=include_object,  # Add the custom include_object function
+            # Enable reflection of non-public schemas
+            include_schemas=True,
         )
 
         with context.begin_transaction():
