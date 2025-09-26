@@ -5,7 +5,7 @@ import strawberry
 from strawberry.types import Info
 
 from ada_backend.graphql.types.project_types import ProjectType, GraphRunnerEnvType
-from ada_backend.services.project_service import get_project_service, get_projects_by_organization
+from ada_backend.services.project_service import get_project_service, get_workflows_by_organization
 
 
 # TODO: Put query resolvers in separate files
@@ -37,7 +37,7 @@ class Query:
 
     @strawberry.field
     def projects_by_organization(self, info: Info, org_id: UUID) -> list[ProjectType]:
-        projects = get_projects_by_organization(session=info.context.db, organization_id=org_id)
+        projects = get_workflows_by_organization(session=info.context.db, organization_id=org_id)
         return [
             ProjectType(
                 id=project.project_id,

@@ -31,10 +31,10 @@ from ada_backend.routers.auth_router import (
 from ada_backend.services.charts_service import get_charts_by_project
 from ada_backend.services.metrics.monitor_kpis_service import get_monitoring_kpis_by_project
 from ada_backend.services.project_service import (
-    create_project,
+    create_workflow,
     delete_project_service,
     get_project_service,
-    get_projects_by_organization,
+    get_workflows_by_organization_service,
     update_project_service,
 )
 from ada_backend.services.trace_service import get_trace_by_project
@@ -47,8 +47,9 @@ LOGGER = logging.getLogger(__name__)
 router = APIRouter(prefix="/projects")
 
 
-@router.get("/org/{organization_id}", response_model=List[ProjectResponse], tags=["Projects"])
-def get_projects_by_organization_endpoint(
+# TODO: move to workflow_router
+@router.get("/org/{organization_id}", response_model=List[ProjectResponse], tags=["Workflows"])
+def get_workflows_by_organization_endpoint(
     organization_id: UUID,
     user: Annotated[
         SupabaseUser,
@@ -63,7 +64,7 @@ def get_projects_by_organization_endpoint(
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
     try:
-        return get_projects_by_organization(session, organization_id, user.id)
+        return get_workflows_by_organization_service(session, organization_id, user.id)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
@@ -72,11 +73,12 @@ def get_projects_by_organization_endpoint(
             organization_id,
             user.id,
         )
-        raise HTTPException(status_code=500, detail="Internal Server Error") from e
+        raise HTTPException(status_code=500, detail=f"Internal Server Error :{e}") from e
 
 
-@router.get("/{project_id}", response_model=ProjectWithGraphRunnersSchema, tags=["Projects"])
-def get_project_endpoint(
+# TODO: move to workflow_router
+@router.get("/{project_id}", response_model=ProjectWithGraphRunnersSchema, tags=["Workflows"])
+def get_workflow_endpoint(
     project_id: UUID,
     user: Annotated[
         SupabaseUser,
@@ -145,8 +147,9 @@ def update_project_endpoint(
         raise HTTPException(status_code=500, detail="Internal Server Error") from e
 
 
-@router.post("/{organization_id}", response_model=ProjectWithGraphRunnersSchema, tags=["Projects"])
-def create_project_endpoint(
+# TODO: move to workflow_router
+@router.post("/{organization_id}", response_model=ProjectWithGraphRunnersSchema, tags=["Workflows"])
+def create_workflow_endpoint(
     organization_id: UUID,
     project: ProjectCreateSchema,
     user: Annotated[
@@ -158,7 +161,7 @@ def create_project_endpoint(
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
     try:
-        return create_project(session, user.id, organization_id, project)
+        return create_workflow(session, user.id, organization_id, project)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
