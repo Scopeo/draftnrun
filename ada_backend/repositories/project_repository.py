@@ -56,6 +56,7 @@ def get_project_with_details(
     return ProjectWithGraphRunnersSchema(
         project_id=project.id if project else None,
         project_name=project.name if project else None,
+        project_type=project.type if project else None,
         graph_runners=graph_runners,
         companion_image_url=project.companion_image_url if project else None,
         description=project.description if project else None,
@@ -65,6 +66,7 @@ def get_project_with_details(
     )
 
 
+# TODO: move to workflow_repository
 def get_workflows_by_organization(
     session: Session,
     organization_id: UUID,

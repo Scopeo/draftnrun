@@ -74,8 +74,9 @@ def get_workflows_by_organization_endpoint(
         raise HTTPException(status_code=500, detail=f"Internal Server Error :{e}") from e
 
 
+# TODO: move to workflow_router
 @router.get("/{project_id}", response_model=ProjectWithGraphRunnersSchema, tags=["Projects"])
-def get_project_endpoint(
+def get_workflow_endpoint(
     project_id: UUID,
     user: Annotated[
         SupabaseUser,

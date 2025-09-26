@@ -11,15 +11,6 @@ def get_agents_by_organization(session: Session, organization_id: UUID) -> list[
     return session.query(db.AgentProject).filter(db.AgentProject.organization_id == organization_id).all()
 
 
-def delete_agent(session, agent_id) -> bool:
-    agent = session.query(db.AgentProject).filter(db.AgentProject.id == agent_id).first()
-    if agent:
-        session.delete(agent)
-        session.commit()
-        return True
-    return False
-
-
 def add_ai_agent_component_to_graph(session: Session, graph_runner_id: UUID) -> db.ComponentInstance:
     """
     Adds an AI agent component as a start node to the graph runner.
