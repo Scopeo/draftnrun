@@ -1,6 +1,6 @@
 import logging
 
-from typing import Type
+from typing import Type, Any
 from pydantic import BaseModel, Field
 
 
@@ -21,11 +21,11 @@ DEFAULT_STATIC_RESPONDER_TOOL_DESCRIPTION = ToolDescription(
 
 
 class StaticResponderInputs(BaseModel):
-    input: str = Field(description="Input it's ignored.")
+    input: Any = Field(description="Input it's ignored.")
 
 
 class StaticResponderOutputs(BaseModel):
-    input_from_previous: str = Field(description="Propagated input from the previous node.")
+    input_from_previous: Any = Field(description="Propagated input from the previous node.")
     static_message: str = Field(description="The message that will be returned.")
 
 
