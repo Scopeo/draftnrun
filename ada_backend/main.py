@@ -60,6 +60,10 @@ app = FastAPI(
             "deletion, and management of project settings",
         },
         {
+            "name": "Workflows",
+            "description": "Endpoints for managing workflows within projects",
+        },
+        {
             "name": "Agents",
             "description": "Endpoints for managing agents within projects",
         },

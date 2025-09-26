@@ -5,7 +5,7 @@ import strawberry
 from strawberry.types import Info
 
 from ada_backend.graphql.types.project_types import GraphRunnerEnvType, ProjectType
-from ada_backend.services.project_service import create_project
+from ada_backend.services.project_service import create_workflow
 from ada_backend.schemas.project_schema import ProjectSchema
 
 
@@ -26,7 +26,7 @@ class Mutation:
         description: Optional[str] = None,
         companion_image_url: Optional[str] = None,
     ) -> ProjectType:
-        project_w_gr_schema = create_project(
+        project_w_gr_schema = create_workflow(
             session=info.context.db,
             organization_id=org_id,
             project_schema=ProjectSchema(

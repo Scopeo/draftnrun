@@ -72,7 +72,8 @@ def delete_project_service(session: Session, project_id: UUID) -> ProjectDeleteR
     )
 
 
-def create_project(
+# TODO: move to workflow_service
+def create_workflow(
     session: Session,
     user_id: UUID,
     organization_id: UUID,

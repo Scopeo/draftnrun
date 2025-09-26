@@ -168,8 +168,3 @@ async def update_agent_service(
         graph_project=graph_update_schema,
         user_id=user_id,
     )
-
-
-def delete_agent_service(session, agent_id):
-    # Implementation to delete an agent from the database
-    pass
