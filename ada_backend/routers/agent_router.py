@@ -7,9 +7,9 @@ from sqlalchemy.orm import Session
 
 from ada_backend.database.setup_db import get_db
 from ada_backend.routers.auth_router import (
+    user_has_access_to_agent_dependency,
     user_has_access_to_organization_dependency,
     UserRights,
-    user_has_access_to_project_dependency,
 )
 from ada_backend.schemas.agent_schema import AgentUpdateSchema, ProjectAgentSchema, AgentInfoSchema
 from ada_backend.schemas.auth_schema import SupabaseUser
@@ -50,9 +50,7 @@ def get_all_agents(
 def get_agent_by_id(
     agent_id: UUID,
     version_id: UUID,
-    user: Annotated[
-        SupabaseUser, Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.READER.value))
-    ],
+    user: Annotated[SupabaseUser, Depends(user_has_access_to_agent_dependency(allowed_roles=UserRights.READER.value))],
     session: Session = Depends(get_db),
 ) -> AgentInfoSchema:
     if not user.id:
@@ -89,9 +87,7 @@ async def update_agent(
     agent_id: UUID,
     version_id: UUID,
     agent_data: AgentUpdateSchema,
-    user: Annotated[
-        SupabaseUser, Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.WRITER.value))
-    ],
+    user: Annotated[SupabaseUser, Depends(user_has_access_to_agent_dependency(allowed_roles=UserRights.WRITER.value))],
     session: Session = Depends(get_db),
 ) -> GraphUpdateResponse:
     if not user.id:
