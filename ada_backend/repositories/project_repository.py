@@ -65,11 +65,11 @@ def get_project_with_details(
     )
 
 
-def get_projects_by_organization_service(
+def get_workflows_by_organization(
     session: Session,
     organization_id: UUID,
-) -> list[db.Project]:
-    return session.query(db.Project).filter(db.Project.organization_id == organization_id).all()
+) -> list[db.WorkflowProject]:
+    return session.query(db.WorkflowProject).filter(db.WorkflowProject.organization_id == organization_id).all()
 
 
 # --- CREATE operations ---
@@ -80,14 +80,28 @@ def insert_project(
     organization_id: UUID,
     description: Optional[str] = None,
     companion_image_url: Optional[str] = None,
+    project_type: Optional[db.ProjectType] = db.ProjectType.WORKFLOW,
 ) -> db.Project:
-    project = db.Project(
-        id=project_id,
-        name=project_name,
-        description=description,
-        organization_id=organization_id,
-        companion_image_url=companion_image_url,
-    )
+    if project_type == db.ProjectType.WORKFLOW:
+        project = db.Project(
+            id=project_id,
+            name=project_name,
+            description=description,
+            organization_id=organization_id,
+            companion_image_url=companion_image_url,
+            type=project_type,
+        )
+    elif project_type == db.ProjectType.AGENT:
+        project = db.AgentProject(
+            id=project_id,
+            name=project_name,
+            description=description,
+            organization_id=organization_id,
+            companion_image_url=companion_image_url,
+            type=project_type,
+        )
+    else:
+        raise ValueError(f"Invalid project_type: {project_type!r}")
     session.add(project)
     session.commit()
     session.refresh(project)

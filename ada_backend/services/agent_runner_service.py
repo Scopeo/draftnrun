@@ -9,6 +9,7 @@ from ada_backend.database.models import EnvType, OrgSecretType, CallType
 from ada_backend.repositories.edge_repository import get_edges
 from ada_backend.schemas.project_schema import ChatResponse
 from ada_backend.services.agent_builder_service import instantiate_component
+from ada_backend.services.errors import ProjectNotFound
 from engine.graph_runner.graph_runner import GraphRunner
 from ada_backend.repositories.graph_runner_repository import (
     get_component_nodes,
@@ -82,7 +83,7 @@ async def get_agent_for_project(
 ) -> GraphRunner:
     project = get_project(session, project_id=project_id)
     if not project:
-        raise ValueError(f"Project {project_id} not found.")
+        raise ProjectNotFound(project_id)
 
     if graph_runner_exists(session, graph_id=graph_runner_id):
         return await build_graph_runner(

@@ -199,8 +199,8 @@ def cast_value(
         return json.loads(unresolved_value)
     elif parameter_type == ParameterType.LLM_API_KEY:
         return unresolved_value
-    elif parameter_type == ParameterType.COMPONENT:
-        raise ValueError("Parameter type COMPONENT is not supported for BasicParameters")
+    elif parameter_type == ParameterType.COMPONENT or parameter_type == ParameterType.TOOL:
+        raise ValueError("Parameter type COMPONENT or TOOL is not supported for BasicParameters")
     else:
         raise ValueError(f"Unsupported value type: {parameter_type}")
 
