@@ -113,23 +113,7 @@ class Worker:
                 env["FERNET_KEY"] = fernet_key
                 logger.info("generated_fernet_key_for_subprocess")
 
-            # Set Google API key from credentials.env if not present
-            if source_type == "GOOGLE_DRIVE" and "GOOGLE_API_KEY" not in env:
-                # Try to read from credentials.env if available
-                creds_path = Path(__file__).parents[2] / "credentials.env"
-                if creds_path.exists():
-                    try:
-                        with open(creds_path, "r") as f:
-                            for line in f:
-                                if line.strip() and not line.strip().startswith("#"):
-                                    if "=" in line:
-                                        key, value = line.strip().split("=", 1)
-                                        if key.strip() == "GOOGLE_API_KEY":
-                                            env["GOOGLE_API_KEY"] = value.strip()
-                                            logger.info("loaded_google_api_key_from_credentials")
-                                            break
-                    except Exception as e:
-                        logger.error("error_reading_credentials: {}".format(str(e)))
+            # Use API base URL default; do not load secrets from credentials.env
 
             # Set API_BASE_URL to http for localhost connections
             if "API_BASE_URL" not in env:

@@ -218,3 +218,72 @@ def get_settings() -> BaseConfig:
 
 
 settings = get_settings()
+
+
+class _SettingsProxy:
+    """
+    Proxy to resolve uppercase attributes from DB-backed global secrets first,
+    then fall back to the underlying pydantic settings.
+
+    Critical bootstrap keys bypass DB lookup to avoid circular initialization.
+    """
+
+    _DELEGATE_ATTR = "_delegate"
+    _SAFE_DIRECT_ONLY = {
+        "FERNET_KEY",
+        "ADA_DB_URL",
+        "ADA_DB_DRIVER",
+        "ADA_DB_HOST",
+        "ADA_DB_PORT",
+        "ADA_DB_USER",
+        "ADA_DB_PASSWORD",
+        "ADA_DB_NAME",
+    }
+
+    def __init__(self, delegate: BaseConfig) -> None:
+        object.__setattr__(self, self._DELEGATE_ATTR, delegate)
+
+    def __getattr__(self, name: str):
+        delegate = object.__getattribute__(self, self._DELEGATE_ATTR)
+        # Only consider DB lookup for ALL-CAPS names
+        if not name.isupper():
+            return getattr(delegate, name)
+
+        if name in object.__getattribute__(self, "_SAFE_DIRECT_ONLY"):
+            return getattr(delegate, name, None)
+
+        # Try DB global secret first
+        try:
+            # Late import to avoid circular imports during bootstrap
+            from ada_backend.database.setup_db import SessionLocal  # type: ignore
+            from ada_backend.services.global_secret_service import resolve_from_db  # type: ignore
+
+            session = SessionLocal()
+            try:
+                value = resolve_from_db(session, key=name)
+                if value is not None:
+                    return value
+            finally:
+                session.close()
+        except Exception:
+            # Do not fail settings access if DB is unavailable; fall back silently
+            pass
+
+        # Fallback to underlying value (env/pydantic)
+        return getattr(delegate, name, None)
+
+    def __setattr__(self, name: str, value: Any) -> None:
+        if name == self._DELEGATE_ATTR:
+            object.__setattr__(self, name, value)
+        else:
+            setattr(object.__getattribute__(self, self._DELEGATE_ATTR), name, value)
+
+    def __delattr__(self, name: str) -> None:
+        # Allow unittest.mock to delete attributes during patch teardown
+        if name == self._DELEGATE_ATTR:
+            raise AttributeError("Cannot delete delegate attribute")
+        delattr(object.__getattribute__(self, self._DELEGATE_ATTR), name)
+
+
+# Replace settings with a proxy that performs DB-first resolution for uppercase keys
+settings = _SettingsProxy(settings)
