@@ -1,8 +1,6 @@
 import asyncio
 import uuid
 
-import pytest
-
 from ada_backend.database.models import ParameterType
 from ada_backend.services import agents_service
 from ada_backend.schemas.pipeline.base import ComponentInstanceSchema
