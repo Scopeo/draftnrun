@@ -1,3 +1,4 @@
+import asyncio
 import uuid
 
 import pytest
@@ -125,8 +126,7 @@ def test_get_agent_by_id_service_with_components(monkeypatch):
     assert res.tools == []
 
 
-@pytest.mark.asyncio
-async def test_update_agent_service_builds_graph_and_calls_update(monkeypatch):
+def test_update_agent_service_builds_graph_and_calls_update(monkeypatch):
     session = object()
     user_id = uuid.uuid4()
     agent_id = uuid.uuid4()
@@ -146,7 +146,7 @@ async def test_update_agent_service_builds_graph_and_calls_update(monkeypatch):
 
     called = {}
 
-    async def fake_update_graph_service(*args, **kwargs):
+    def fake_update_graph_service(*args, **kwargs):
         # capture values for assertions (support kwargs and positional args)
         if kwargs:
             called["session"] = kwargs.get("session")
@@ -165,7 +165,7 @@ async def test_update_agent_service_builds_graph_and_calls_update(monkeypatch):
 
     monkeypatch.setattr(agents_service, "update_graph_service", fake_update_graph_service)
 
-    res = await agents_service.update_agent_service(session, user_id, agent_id, version_id, agent_data)
+    res = asyncio.run(agents_service.update_agent_service(session, user_id, agent_id, version_id, agent_data))
 
     # verify update_graph_service was called with expected values
     assert called["session"] is session
