@@ -111,6 +111,7 @@ async def run_env_agent(
         input_data=input_data,
         environment=env,
         call_type=call_type,
+        tag_version=graph_runner.tag_version,
     )
 
 
