@@ -20,6 +20,7 @@ from ada_backend.repositories.graph_runner_repository import (
     upsert_port_mapping,
     delete_port_mappings_for_graph,
 )
+from ada_backend.database import models as db
 from ada_backend.schemas.pipeline.graph_schema import GraphUpdateResponse, GraphUpdateSchema
 from ada_backend.repositories.component_repository import get_canonical_ports_for_components
 from ada_backend.services.agent_runner_service import get_agent_for_project
@@ -126,18 +127,25 @@ async def update_graph_service(
     # --- Port mappings: full replacement (PUT) ---
     delete_port_mappings_for_graph(session, graph_runner_id)
     provided_pairs = set()
+
     if hasattr(graph_project, "port_mappings") and graph_project.port_mappings:
-        for pm in graph_project.port_mappings:
-            upsert_port_mapping(
-                session,
-                graph_runner_id=graph_runner_id,
-                source_instance_id=pm.source_instance_id,
-                source_port_name=pm.source_port_name,
-                target_instance_id=pm.target_instance_id,
-                target_port_name=pm.target_port_name,
-                dispatch_strategy=pm.dispatch_strategy,
+        new_mappings = []
+        for pm_schema in graph_project.port_mappings:
+            new_mappings.append(
+                db.PortMapping(
+                    graph_runner_id=graph_runner_id,
+                    source_instance_id=pm_schema.source_instance_id,
+                    source_port_name=pm_schema.source_port_name,
+                    target_instance_id=pm_schema.target_instance_id,
+                    target_port_name=pm_schema.target_port_name,
+                    dispatch_strategy=pm_schema.dispatch_strategy or "direct",
+                )
             )
-            provided_pairs.add((pm.source_instance_id, pm.target_instance_id))
+            provided_pairs.add((pm_schema.source_instance_id, pm_schema.target_instance_id))
+
+        if new_mappings:
+            session.bulk_save_objects(new_mappings)
+            session.commit()
 
     # Validate that every edge has at least one corresponding port mapping.
     actual_edges = {(edge.origin, edge.destination) for edge in graph_project.edges}

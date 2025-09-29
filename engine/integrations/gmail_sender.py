@@ -8,7 +8,7 @@ import mimetypes
 from googleapiclient.errors import HttpError
 from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttributes
 from opentelemetry.trace import get_current_span
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, validator
 
 from ada_backend.database.setup_db import get_db
 from engine.agent.agent import Agent
@@ -73,6 +73,12 @@ class GmailSenderInputs(BaseModel):
     email_attachments: Optional[list[str]] = Field(
         default=None, description="List of file paths to attach to the email."
     )
+
+    @validator("email_recipients", pre=True)
+    def validate_email_recipients(cls, v):
+        if isinstance(v, str):
+            return [v]
+        return v
 
 
 class GmailSenderOutputs(BaseModel):
