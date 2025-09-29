@@ -30,6 +30,43 @@ from ada_backend.schemas.pipeline.base import ToolDescriptionSchema
 LOGGER = logging.getLogger(__name__)
 
 
+@dataclass
+class InstanceParameterWithDefinition:
+    id: UUID
+    name: str
+    value: str
+    type: ParameterType
+    nullable: bool
+    default: Optional[str] = None
+    ui_component: Optional[UIComponent] = None
+    ui_component_properties: Optional[dict] = None
+    is_advanced: bool = False
+
+
+@dataclass
+class ComponentWithVersionDTO:
+    component_id: UUID
+    name: str
+    description: Optional[str]
+    version_id: UUID
+    version_tag: str
+    release_stage: ReleaseStage
+    is_agent: bool
+    function_callable: Optional[str]
+    can_use_function_calling: bool
+    is_protected: bool
+    integration_id: Optional[UUID]
+    default_tool_description_id: Optional[UUID] = None
+
+
+STAGE_HIERARCHY = {
+    ReleaseStage.INTERNAL: [ReleaseStage.INTERNAL, ReleaseStage.EARLY_ACCESS, ReleaseStage.BETA, ReleaseStage.PUBLIC],
+    ReleaseStage.BETA: [ReleaseStage.BETA, ReleaseStage.EARLY_ACCESS, ReleaseStage.PUBLIC],
+    ReleaseStage.EARLY_ACCESS: [ReleaseStage.EARLY_ACCESS, ReleaseStage.PUBLIC],
+    ReleaseStage.PUBLIC: [ReleaseStage.PUBLIC],
+}
+
+
 def get_global_parameters_by_component_id(
     session: Session,
     component_id: UUID,
@@ -53,43 +90,6 @@ def has_global_parameter(
     )
 
 
-@dataclass
-class InstanceParameterWithDefinition:
-    id: UUID
-    name: str
-    value: str
-    type: ParameterType
-    nullable: bool
-    default: Optional[str] = None
-    ui_component: Optional[UIComponent] = None
-    ui_component_properties: Optional[dict] = None
-    is_advanced: bool = False
-
-
-@dataclass
-class ComponentWithVersionDTO:
-    id: UUID
-    name: str
-    description: Optional[str]
-    version_id: UUID
-    version_tag: str
-    release_stage: ReleaseStage
-    is_agent: bool
-    function_callable: Optional[str]
-    can_use_function_calling: bool
-    is_protected: bool
-    integration_id: Optional[UUID]
-    default_tool_description_id: Optional[UUID] = None
-
-
-STAGE_HIERARCHY = {
-    ReleaseStage.INTERNAL: [ReleaseStage.INTERNAL, ReleaseStage.EARLY_ACCESS, ReleaseStage.BETA, ReleaseStage.PUBLIC],
-    ReleaseStage.BETA: [ReleaseStage.BETA, ReleaseStage.EARLY_ACCESS, ReleaseStage.PUBLIC],
-    ReleaseStage.EARLY_ACCESS: [ReleaseStage.EARLY_ACCESS, ReleaseStage.PUBLIC],
-    ReleaseStage.PUBLIC: [ReleaseStage.PUBLIC],
-}
-
-
 # --- READ operations ---
 def get_component_by_id(
     session: Session,
@@ -102,6 +102,22 @@ def get_component_by_id(
         session.query(db.Component)
         .filter(
             db.Component.id == component_id,
+        )
+        .first()
+    )
+
+
+def get_component_by_name(
+    session: Session,
+    component_name: str,
+) -> Optional[db.Component]:
+    """
+    Retrieves a specific component by its name.
+    """
+    return (
+        session.query(db.Component)
+        .filter(
+            db.Component.name == component_name,
         )
         .first()
     )
@@ -473,7 +489,7 @@ def get_current_component_versions(
 
     return [
         ComponentWithVersionDTO(
-            id=comp.id,
+            component_id=comp.id,
             name=comp.name,
             description=ver.description,
             version_id=ver.id,
@@ -546,7 +562,7 @@ def get_all_components_with_parameters(
             )
 
             # Hide parameters enforced globally for this component from the UI
-            global_params = get_global_parameters_by_component_id(session, component.id)
+            global_params = get_global_parameters_by_component_id(session, component_with_version.component_id)
             global_param_def_ids = {gp.parameter_definition_id for gp in global_params}
 
             subcomponent_params = get_subcomponent_param_def_by_component_version(
