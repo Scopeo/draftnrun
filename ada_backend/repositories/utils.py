@@ -31,7 +31,6 @@ def create_component_instance(
     component = session.query(Component).filter(Component.id == component_id).first()
     # Fetch parameter definitions for this component
     parameter_definitions = get_component_parameter_definition_by_component_id(session, component_id)
-    print("Parameter Definitions:", parameter_definitions)  # Debug print
 
     if component_instance_id is None:
         component_instance_id = uuid.uuid4()
@@ -41,9 +40,8 @@ def create_component_instance(
             component_instance_id=component_instance_id,
             parameter_definition_id=definition.id,
             value=definition.default if isinstance(definition.default, str) else json.dumps(definition.default),
-            order=index,
         )
-        for index, definition in enumerate(parameter_definitions)
+        for definition in parameter_definitions
         if definition.type
         not in [
             ParameterType.COMPONENT,
