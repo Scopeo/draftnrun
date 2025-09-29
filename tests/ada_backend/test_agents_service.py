@@ -144,7 +144,7 @@ def test_update_agent_service_builds_graph_and_calls_update(monkeypatch):
 
     called = {}
 
-    def fake_update_graph_service(*args, **kwargs):
+    async def fake_update_graph_service(*args, **kwargs):
         # capture values for assertions (support kwargs and positional args)
         if kwargs:
             called["session"] = kwargs.get("session")
