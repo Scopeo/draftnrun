@@ -805,6 +805,34 @@ class OrganizationSecret(Base):
         return CIPHER.decrypt(self.encrypted_secret.encode()).decode()
 
 
+class GlobalSecret(Base):
+    """
+    Stores global secrets (key-value pairs) for the application, ensuring
+    secure storage via encryption. These act as DB-backed settings-level
+    credentials (e.g. OPENAI_API_KEY) available to all organizations
+    unless overridden at the organization level.
+    """
+
+    __tablename__ = "global_secrets"
+
+    id = mapped_column(UUID(as_uuid=True), primary_key=True, index=True, default=uuid.uuid4)
+    key = mapped_column(String, nullable=False, unique=True, index=True)
+    encrypted_secret = mapped_column(String, nullable=False)
+    created_at = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    def __str__(self):
+        return f"GlobalSecret(key={self.key})"
+
+    def set_secret(self, secret: str) -> None:
+        """Encrypts the provided secret and stores it."""
+        self.encrypted_secret = CIPHER.encrypt(secret.encode()).decode()
+
+    def get_secret(self) -> str:
+        """Decrypts and returns the stored secret."""
+        return CIPHER.decrypt(self.encrypted_secret.encode()).decode()
+
+
 class ApiKey(Base):
     __tablename__ = "api_keys"
     id = mapped_column(UUID(as_uuid=True), primary_key=True, index=True, default=uuid.uuid4)

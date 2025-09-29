@@ -42,6 +42,13 @@ async def create_specific_api_tool(
             session=session,
             payload=payload,
         )
+    except HTTPException as e:
+        LOGGER.exception(
+            "HTTPException while creating specific API tool: %s | payload=%s",
+            e,
+            payload.model_dump() if hasattr(payload, "model_dump") else getattr(payload, "dict", lambda: payload)(),
+        )
+        raise e
     except ValueError as e:
         LOGGER.exception(
             "Validation error while creating specific API tool: %s | payload=%s",
