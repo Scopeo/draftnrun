@@ -27,7 +27,7 @@ def test_get_span_trace_service_success(monkeypatch):
                 "output_content": json.dumps([]),
                 "events": json.dumps([]),
                 "attributes": {},
-                "status_code": 0,
+                "status_code": "OK",
                 "cumulative_llm_token_count_prompt": 0,
                 "cumulative_llm_token_count_completion": 0,
             }
