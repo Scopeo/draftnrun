@@ -1,3 +1,5 @@
+from collections import defaultdict
+from typing import DefaultDict
 import uuid
 from uuid import UUID
 import logging
@@ -11,12 +13,17 @@ from ada_backend.database.seed.seed_ai_agent import (
     SYSTEM_PROMPT_PARAMETER_NAME,
 )
 from ada_backend.database.seed.utils import COMPONENT_UUIDS
-from ada_backend.repositories.agent_repository import get_agents_by_organization
+from ada_backend.repositories.agent_repository import fetch_agents_with_graph_runners_by_organization
 from ada_backend.repositories.env_repository import bind_graph_runner_to_project
 from ada_backend.repositories.graph_runner_repository import insert_graph_runner, upsert_component_node
 from ada_backend.repositories.project_repository import get_project, insert_project
 from ada_backend.repositories.utils import create_component_instance
-from ada_backend.schemas.agent_schema import AgentUpdateSchema, ProjectAgentSchema, AgentInfoSchema
+from ada_backend.schemas.agent_schema import (
+    AgentUpdateSchema,
+    AgentWithGraphRunnersSchema,
+    ProjectAgentSchema,
+    AgentInfoSchema,
+)
 from ada_backend.schemas.parameter_schema import PipelineParameterSchema
 from ada_backend.schemas.pipeline.base import ComponentInstanceSchema, ComponentRelationshipSchema
 from ada_backend.schemas.pipeline.graph_schema import GraphUpdateResponse, GraphUpdateSchema
@@ -31,16 +38,29 @@ from ada_backend.services.graph.update_graph_service import update_graph_service
 LOGGER = logging.getLogger(__name__)
 
 
-def get_all_agents_service(session: Session, organization_id: UUID) -> list[ProjectAgentSchema]:
-    agents = get_agents_by_organization(session, organization_id)
-    return [
-        ProjectAgentSchema(
-            id=agent.id,
-            name=agent.name,
-            description=agent.description,
+def get_all_agents_service(session: Session, organization_id: UUID) -> list[AgentWithGraphRunnersSchema]:
+    agents_with_graph_runners_rows = fetch_agents_with_graph_runners_by_organization(session, organization_id)
+    by_agent: DefaultDict[UUID, dict] = defaultdict(lambda: {"agent": None, "grs": []})
+    for agent, peb in agents_with_graph_runners_rows:
+        bucket = by_agent[agent.id]
+        bucket["agent"] = agent
+        bucket["grs"].append(
+            GraphRunnerEnvDTO(
+                graph_runner_id=peb.graph_runner_id,
+                env=peb.environment,
+            )
         )
-        for agent in agents
-    ]
+    result: list[AgentWithGraphRunnersSchema] = []
+    for data in by_agent.values():
+        result.append(
+            AgentWithGraphRunnersSchema(
+                id=data["agent"].id,
+                name=data["agent"].name,
+                description=data["agent"].description,
+                graph_runners=data["grs"],
+            )
+        )
+    return result
 
 
 def get_agent_by_id_service(session: Session, agent_id: UUID, version_id: UUID) -> AgentInfoSchema:
@@ -48,7 +68,6 @@ def get_agent_by_id_service(session: Session, agent_id: UUID, version_id: UUID) 
     if not project:
         return ProjectNotFound(agent_id)
     graph_response = get_graph_service(session, project_id=agent_id, graph_runner_id=version_id)
-    print(graph_response)
     model_parameters: list[PipelineParameterSchema] = []
     tools: list[ComponentInstanceSchema] = []
     for component_instance in graph_response.component_instances:

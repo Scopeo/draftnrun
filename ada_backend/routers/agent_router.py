@@ -1,5 +1,5 @@
 from uuid import UUID
-from typing import Annotated, List
+from typing import Annotated
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -11,7 +11,12 @@ from ada_backend.routers.auth_router import (
     user_has_access_to_organization_dependency,
     UserRights,
 )
-from ada_backend.schemas.agent_schema import AgentUpdateSchema, ProjectAgentSchema, AgentInfoSchema
+from ada_backend.schemas.agent_schema import (
+    AgentUpdateSchema,
+    AgentWithGraphRunnersSchema,
+    ProjectAgentSchema,
+    AgentInfoSchema,
+)
 from ada_backend.schemas.auth_schema import SupabaseUser
 from ada_backend.schemas.pipeline.graph_schema import GraphUpdateResponse
 from ada_backend.schemas.project_schema import ProjectWithGraphRunnersSchema
@@ -28,14 +33,14 @@ router = APIRouter(tags=["Agents"])
 LOGGER = logging.getLogger(__name__)
 
 
-@router.get("/org/{organization_id}/agents", response_model=List[ProjectAgentSchema])
+@router.get("/org/{organization_id}/agents", response_model=list[AgentWithGraphRunnersSchema])
 def get_all_agents(
     organization_id: UUID,
     user: Annotated[
         SupabaseUser, Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.READER.value))
     ],
     session: Session = Depends(get_db),
-) -> List[ProjectAgentSchema]:
+) -> list[AgentWithGraphRunnersSchema]:
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
     try:
