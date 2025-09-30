@@ -3,6 +3,8 @@ import pytest
 
 from ada_backend.services.graph.get_graph_service import get_graph_service
 from ada_backend.schemas.pipeline.graph_schema import GraphGetResponse, EdgeSchema
+from ada_backend.schemas.pipeline.get_pipeline_schema import ComponentInstanceReadSchema
+from ada_backend.schemas.parameter_schema import PipelineParameterReadSchema
 
 
 class DummyComponentNode:
@@ -25,9 +27,30 @@ class DummyEnvRel:
 
 
 class DummyComponentInstance:
-    def __init__(self, id):
+    def __init__(self, id, is_start_node=False):
         self.id = id
-        self.definition = None
+        self.is_start_node = is_start_node
+        # minimal compatible fields for ComponentInstanceReadSchema
+        self.component_id = id
+        self.name = "dummy"
+        self.component_name = "dummy_component"
+        self.component_description = "desc"
+        self.parameters = [
+            PipelineParameterReadSchema(
+                id=id,
+                name="p",
+                type="string",
+                nullable=False,
+                default=None,
+                order=None,
+                value=None,
+            )
+        ]
+        self.tool_description = None
+        self.integration = None
+        # fields from ComponentUseInfoSchema
+        self.is_agent = True
+        self.subcomponents_info = []
 
 
 def test_get_graph_service_graph_not_found(monkeypatch):
@@ -110,7 +133,21 @@ def test_get_graph_service_success(monkeypatch):
 
     # get_component_instance should return a simple object; patch the imported function path
     def fake_get_component_instance(s, ci_id, is_start_node=False):
-        return DummyComponentInstance(ci_id)
+        # build a minimal ComponentInstanceReadSchema compatible object
+        dummy = DummyComponentInstance(ci_id, is_start_node=is_start_node)
+        return ComponentInstanceReadSchema(
+            id=dummy.id,
+            name=dummy.name,
+            is_start_node=dummy.is_start_node,
+            component_id=dummy.component_id,
+            parameters=dummy.parameters,
+            tool_description=dummy.tool_description,
+            integration=dummy.integration,
+            is_agent=dummy.is_agent,
+            subcomponents_info=dummy.subcomponents_info,
+            component_name=dummy.component_name,
+            component_description=dummy.component_description,
+        )
 
     monkeypatch.setattr(
         "ada_backend.services.graph.get_graph_service.get_component_instance",

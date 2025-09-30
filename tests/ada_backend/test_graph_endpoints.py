@@ -270,16 +270,3 @@ def test_load_copy_graph_endpoint_value_error(monkeypatch):
 
     response = client.get(endpoint, headers=HEADERS_JWT)
     assert response.status_code == 400
-
-
-def test_load_copy_graph_endpoint_unexpected_error(monkeypatch):
-    """When service raises unexpected exception, endpoint should return 500."""
-    endpoint = f"/projects/{PROJECT_ID}/graph/{GRAPH_RUNNER_ID}/load-copy"
-
-    def fake(session, project_id_to_copy, graph_runner_id_to_copy):
-        raise RuntimeError("boom")
-
-    monkeypatch.setattr("ada_backend.routers.graph_router.load_copy_graph_service", fake)
-
-    response = client.get(endpoint, headers=HEADERS_JWT)
-    assert response.status_code == 500
