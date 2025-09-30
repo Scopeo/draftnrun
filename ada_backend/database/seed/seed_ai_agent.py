@@ -35,7 +35,7 @@ AI_MODEL_PARAMETER_IDS = {
     "input_data_field_for_messages_history": UUID("bf56e90a-5e2b-4777-9ef4-34838b8973b6"),
     "first_history_messages": UUID("4ca78b43-4484-4a9d-bdab-e6dbdaff6da1"),
     COMPLETION_MODEL_IN_DB: UUID("e2d157b4-f26d-41b4-9e47-62b5b041a9ff"),
-    "api_key": UUID("e6caae01-d5ee-4afd-a995-e5ae9dbf3fbc"),
+    "last_history_messages": UUID("e6caae01-d5ee-4afd-a995-e5ae9dbf3fbc"),
 }
 
 
@@ -162,7 +162,7 @@ def seed_ai_agent_components(session: Session):
                 is_advanced=True,
             ),
             db.ComponentParameterDefinition(
-                id=UUID("e6caae01-d5ee-4afd-a995-e5ae9dbf3fbc"),
+                id=AI_MODEL_PARAMETER_IDS["last_history_messages"],
                 component_id=base_ai_agent.id,
                 name="last_history_messages",
                 type=ParameterType.INTEGER,
@@ -212,7 +212,7 @@ def seed_ai_agent_components(session: Session):
                     ),
                     ParameterLLMConfig(
                         param_name="api_key",
-                        param_id=AI_MODEL_PARAMETER_IDS["api_key"],
+                        param_id=UUID("78d5d921-9501-44b3-9939-7d7ebf063513"),
                     ),
                     ParameterLLMConfig(
                         param_name=TEMPERATURE_IN_DB,
