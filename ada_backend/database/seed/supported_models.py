@@ -198,6 +198,7 @@ ALL_SUPPORTED_MODELS = [
             ModelCapability.COMPLETION,
             ModelCapability.CONSTRAINED_OUTPUT,
             ModelCapability.FUNCTION_CALLING,
+            # Model is reasoning by default
         ],
     },
     {
@@ -208,7 +209,7 @@ ALL_SUPPORTED_MODELS = [
             ModelCapability.COMPLETION,
             ModelCapability.CONSTRAINED_OUTPUT,
             ModelCapability.FUNCTION_CALLING,
-            # TO DO : handle cerebras for reasoning
+            # TODO : handle cerebras for reasoning
         ],
     },
     # Mistral Models
