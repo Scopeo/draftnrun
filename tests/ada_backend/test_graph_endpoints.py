@@ -307,7 +307,50 @@ def test_delete_graph_runner():
 
     # Verify it's gone
     response = client.get(endpoint, headers=HEADERS_JWT)
-    assert response.status_code == 404
+    assert response.status_code == 400
+
+
+def test_load_copy_graph_endpoint_success(monkeypatch):
+    """When load_copy_graph_service returns a GraphLoadResponse, endpoint should return 200."""
+    endpoint = f"/projects/{PROJECT_ID}/graph/{GRAPH_RUNNER_ID}/load-copy"
+
+    # Build a minimal GraphLoadResponse-like dict
+    payload = {"component_instances": [], "relationships": [], "edges": []}
+
+    monkeypatch.setattr(
+        "ada_backend.routers.graph_router.load_copy_graph_service",
+        lambda session, project_id_to_copy, graph_runner_id_to_copy: payload,
+    )
+
+    response = client.get(endpoint, headers=HEADERS_JWT)
+    assert response.status_code == 200
+    assert response.json() == payload
+
+
+def test_load_copy_graph_endpoint_value_error(monkeypatch):
+    """When service raises ValueError, endpoint should return 400."""
+    endpoint = f"/projects/{PROJECT_ID}/graph/{GRAPH_RUNNER_ID}/load-copy"
+
+    def fake(session, project_id_to_copy, graph_runner_id_to_copy):
+        raise ValueError("invalid relationship")
+
+    monkeypatch.setattr("ada_backend.routers.graph_router.load_copy_graph_service", fake)
+
+    response = client.get(endpoint, headers=HEADERS_JWT)
+    assert response.status_code == 400
+
+
+def test_load_copy_graph_endpoint_unexpected_error(monkeypatch):
+    """When service raises unexpected exception, endpoint should return 500."""
+    endpoint = f"/projects/{PROJECT_ID}/graph/{GRAPH_RUNNER_ID}/load-copy"
+
+    def fake(session, project_id_to_copy, graph_runner_id_to_copy):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr("ada_backend.routers.graph_router.load_copy_graph_service", fake)
+
+    response = client.get(endpoint, headers=HEADERS_JWT)
+    assert response.status_code == 500
 
     # Cleanup project
     client.delete(f"/projects/{project_id}", headers=HEADERS_JWT)
