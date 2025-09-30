@@ -68,11 +68,12 @@ def get_workflows_by_organization_endpoint(
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
         LOGGER.exception(
-            "Failed to list projects for organization %s and user %s",
+            "Failed to list projects for organization %s and user %s : %s",
             organization_id,
             user.id,
+            str(e),
         )
-        raise HTTPException(status_code=500, detail=f"Internal Server Error :{e}") from e
+        raise HTTPException(status_code=500, detail="Internal Server Error")
 
 
 # TODO: move to workflow_router

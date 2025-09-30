@@ -61,11 +61,11 @@ app = FastAPI(
         },
         {
             "name": "Workflows",
-            "description": "Endpoints for managing workflows within projects",
+            "description": "Provides endpoints for managing workflows within workflow projects",
         },
         {
             "name": "Agents",
-            "description": "Endpoints for managing agents within projects",
+            "description": "Provides endpoints for managing agents within agent projects",
         },
         {
             "name": "Integrations",

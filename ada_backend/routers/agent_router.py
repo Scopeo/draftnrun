@@ -21,7 +21,7 @@ from ada_backend.services.agents_service import (
     get_all_agents_service,
     update_agent_service,
 )
-from ada_backend.services.errors import ProjectNotFound
+from ada_backend.services.errors import GraphNotFound, ProjectNotFound
 
 router = APIRouter(tags=["Agents"])
 
@@ -42,7 +42,7 @@ def get_all_agents(
         return get_all_agents_service(session, organization_id)
     except Exception as e:
         LOGGER.error(f"Error fetching agents for organization {organization_id}: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Internal error service: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal error service")
 
 
 @router.get("/agents/{agent_id}/version/{version_id}", response_model=AgentInfoSchema)
@@ -57,10 +57,14 @@ def get_agent_by_id(
     try:
         return get_agent_by_id_service(session, agent_id, version_id)
     except ProjectNotFound:
-        raise HTTPException(status_code=404, detail="Agent not found")
+        raise HTTPException(status_code=404, detail=f"Agent not found : {agent_id}")
+    except GraphNotFound:
+        raise HTTPException(status_code=404, detail=f"Agent version not found : {version_id}")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
         LOGGER.error(f"Error fetching agent {agent_id}: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Internal error service: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal error service")
 
 
 @router.post("/org/{organization_id}/agents", response_model=ProjectWithGraphRunnersSchema)
@@ -78,7 +82,7 @@ def create_agent(
         return create_new_agent_service(session, user.id, organization_id, agent_data)
     except Exception as e:
         LOGGER.error(f"Error creating agent for organization {organization_id}: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Internal error service: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal error service")
 
 
 @router.put("/agents/{agent_id}/version/{version_id}", response_model=GraphUpdateResponse)
@@ -94,7 +98,7 @@ async def update_agent(
     try:
         return await update_agent_service(session, user.id, agent_id, version_id, agent_data)
     except ProjectNotFound:
-        raise HTTPException(status_code=404, detail="Agent not found")
+        raise HTTPException(status_code=404, detail=f"Agent not found: {agent_id}")
     except Exception as e:
         LOGGER.error(f"Error updating agent {agent_id}: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Internal error service: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal error service")

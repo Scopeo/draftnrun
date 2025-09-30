@@ -4,11 +4,18 @@ import logging
 
 from sqlalchemy.orm import Session
 
+from ada_backend.database.seed.seed_ai_agent import (
+    AGENT_TOOLS_PARAMETER_NAME,
+    AI_MODEL_PARAMETER_IDS,
+    SYSTEM_PROMPT_PARAMETER_DEF_ID,
+    SYSTEM_PROMPT_PARAMETER_NAME,
+)
 from ada_backend.database.seed.utils import COMPONENT_UUIDS
-from ada_backend.repositories.agent_repository import add_ai_agent_component_to_graph, get_agents_by_organization
+from ada_backend.repositories.agent_repository import get_agents_by_organization
 from ada_backend.repositories.env_repository import bind_graph_runner_to_project
-from ada_backend.repositories.graph_runner_repository import insert_graph_runner
+from ada_backend.repositories.graph_runner_repository import insert_graph_runner, upsert_component_node
 from ada_backend.repositories.project_repository import get_project, insert_project
+from ada_backend.repositories.utils import create_component_instance
 from ada_backend.schemas.agent_schema import AgentUpdateSchema, ProjectAgentSchema, AgentInfoSchema
 from ada_backend.schemas.parameter_schema import PipelineParameterSchema
 from ada_backend.schemas.pipeline.base import ComponentInstanceSchema, ComponentRelationshipSchema
@@ -22,9 +29,6 @@ from ada_backend.services.graph.update_graph_service import update_graph_service
 
 
 LOGGER = logging.getLogger(__name__)
-
-SYSTEM_PROMPT_PARAMETER_DEF_ID = UUID("1cd1cd58-f066-4cf5-a0f5-9b2018fc4c6a")
-SYSTEM_PROMPT_PARAMETER_NAME = "initial_prompt"
 
 
 def get_all_agents_service(session: Session, organization_id: UUID) -> list[ProjectAgentSchema]:
@@ -44,24 +48,15 @@ def get_agent_by_id_service(session: Session, agent_id: UUID, version_id: UUID) 
     if not project:
         return ProjectNotFound(agent_id)
     graph_response = get_graph_service(session, project_id=agent_id, graph_runner_id=version_id)
-    model_parameters = []
-    tools = []
+    print(graph_response)
+    model_parameters: list[PipelineParameterSchema] = []
+    tools: list[ComponentInstanceSchema] = []
     for component_instance in graph_response.component_instances:
-        if component_instance.component_id == COMPONENT_UUIDS["base_ai_agent"]:
+        if component_instance.is_start_node and component_instance.component_id == COMPONENT_UUIDS["base_ai_agent"]:
             for param in component_instance.parameters:
                 if param.id == SYSTEM_PROMPT_PARAMETER_DEF_ID:
                     system_prompt = param.value if param.value else param.default
-                elif param.id in [
-                    UUID("89efb2e1-9228-44db-91d6-871a41042067"),
-                    UUID("5bdece0d-bbc1-4cc7-a192-c4b7298dc163"),
-                    UUID("f7dbbe12-e6ff-5bfe-b006-f6bf0e9cbf4d"),
-                    UUID("3f8aa317-215a-4075-80ba-efca2a3d83ca"),
-                    UUID("bf56e90a-5e2b-4777-9ef4-34838b8973b6"),
-                    UUID("c22c1ce8-993f-4b6e-bccc-e70b8e87d04a"),
-                    UUID("4ca78b43-4484-4a9d-bdab-e6dbdaff6da1"),
-                    UUID("e2d157b4-f26d-41b4-9e47-62b5b041a9ff"),
-                    UUID("e6caae01-d5ee-4afd-a995-e5ae9dbf3fbc"),
-                ]:  # model parameters
+                elif param.id in AI_MODEL_PARAMETER_IDS.values():  # model parameters
                     model_parameters.append(param)
         else:  # consider all other components as tools
             tools.append(component_instance)
@@ -73,6 +68,30 @@ def get_agent_by_id_service(session: Session, agent_id: UUID, version_id: UUID) 
         model_parameters=model_parameters,
         tools=tools,
     )
+
+
+def add_ai_agent_component_to_graph(session: Session, graph_runner_id: UUID) -> db.ComponentInstance:
+    """
+    Adds an AI agent component as a start node to the graph runner.
+
+    Args:
+        session (Session): SQLAlchemy session
+        graph_runner_id (UUID): ID of the graph runner
+
+    Returns:
+        ComponentInstance: The created AI agent component instance
+    """
+    ai_agent_component = create_component_instance(
+        session, component_id=COMPONENT_UUIDS["base_ai_agent"], name="AI Agent", component_instance_id=graph_runner_id
+    )
+
+    upsert_component_node(
+        session=session,
+        graph_runner_id=graph_runner_id,
+        component_instance_id=ai_agent_component.id,
+        is_start_node=True,
+    )
+    return ai_agent_component
 
 
 def create_new_agent_service(
@@ -154,7 +173,7 @@ async def update_agent_service(
             ComponentRelationshipSchema(
                 parent_component_instance_id=version_id,
                 child_component_instance_id=tool.id,
-                parameter_name="agent_tools",
+                parameter_name=AGENT_TOOLS_PARAMETER_NAME,
                 order=index,
             )
         )

@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from ada_backend.database.models import ApiKeyType
 from ada_backend.repositories.project_repository import get_project
 from ada_backend.context import get_request_context
+from ada_backend.services.errors import ProjectNotFound
 from settings import settings
 from ada_backend.database.setup_db import get_db
 from ada_backend.services.api_key_service import (
@@ -96,7 +97,7 @@ async def _ensure_access(
     try:
         project = get_project(session, project_id)
         if not project:
-            raise HTTPException(status_code=404, detail="Project not found")
+            raise ProjectNotFound(project_id)
         access = await get_user_access_to_organization(
             user=user,
             organization_id=project.organization_id,
@@ -109,10 +110,11 @@ async def _ensure_access(
                 detail="You don't have access to this project",
             )
     except ValueError as e:
+        LOGGER.error(f"Access check failed for user {user.id} on project {project_id}: {str(e)}")
         raise HTTPException(
             status_code=403,
-            detail=str(e),
-        ) from e
+            detail=f"Access check failed on project {project_id}",
+        )
     return user
 
 

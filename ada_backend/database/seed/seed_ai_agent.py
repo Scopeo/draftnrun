@@ -24,6 +24,21 @@ from ada_backend.database.seed.constants import (
 )
 
 
+SYSTEM_PROMPT_PARAMETER_DEF_ID = UUID("1cd1cd58-f066-4cf5-a0f5-9b2018fc4c6a")
+SYSTEM_PROMPT_PARAMETER_NAME = "initial_prompt"
+AGENT_TOOLS_PARAMETER_NAME = "agent_tools"
+AI_MODEL_PARAMETER_IDS = {
+    "max_iterations": UUID("89efb2e1-9228-44db-91d6-871a41042067"),
+    TEMPERATURE_IN_DB: UUID("5bdece0d-bbc1-4cc7-a192-c4b7298dc163"),
+    "date_in_system_prompt": UUID("f7dbbe12-e6ff-5bfe-b006-f6bf0e9cbf4d"),
+    "allow_tool_shortcuts": UUID("3f8aa317-215a-4075-80ba-efca2a3d83ca"),
+    "input_data_field_for_messages_history": UUID("bf56e90a-5e2b-4777-9ef4-34838b8973b6"),
+    "first_history_messages": UUID("4ca78b43-4484-4a9d-bdab-e6dbdaff6da1"),
+    COMPLETION_MODEL_IN_DB: UUID("e2d157b4-f26d-41b4-9e47-62b5b041a9ff"),
+    "api_key": UUID("e6caae01-d5ee-4afd-a995-e5ae9dbf3fbc"),
+}
+
+
 def seed_ai_agent_components(session: Session):
     base_ai_agent = db.Component(
         id=COMPONENT_UUIDS["base_ai_agent"],
@@ -52,13 +67,13 @@ def seed_ai_agent_components(session: Session):
             db.ComponentParameterDefinition(
                 id=UUID("521cfedb-e3f1-4953-9372-1c6a0cfdba6f"),
                 component_id=base_ai_agent.id,
-                name="agent_tools",
+                name=AGENT_TOOLS_PARAMETER_NAME,
                 type=ParameterType.TOOL,
                 nullable=False,
                 is_advanced=False,
             ),
             db.ComponentParameterDefinition(
-                id=UUID("3f8aa317-215a-4075-80ba-efca2a3d83ca"),
+                id=AI_MODEL_PARAMETER_IDS["allow_tool_shortcuts"],
                 component_id=base_ai_agent.id,
                 name="allow_tool_shortcuts",
                 type=ParameterType.BOOLEAN,
@@ -71,7 +86,7 @@ def seed_ai_agent_components(session: Session):
                 is_advanced=True,
             ),
             db.ComponentParameterDefinition(
-                id=UUID("89efb2e1-9228-44db-91d6-871a41042067"),
+                id=AI_MODEL_PARAMETER_IDS["max_iterations"],
                 component_id=base_ai_agent.id,
                 name="max_iterations",
                 type=ParameterType.INTEGER,
@@ -84,9 +99,9 @@ def seed_ai_agent_components(session: Session):
                 is_advanced=True,
             ),
             db.ComponentParameterDefinition(
-                id=UUID("1cd1cd58-f066-4cf5-a0f5-9b2018fc4c6a"),
+                id=SYSTEM_PROMPT_PARAMETER_DEF_ID,
                 component_id=base_ai_agent.id,
-                name="initial_prompt",
+                name=SYSTEM_PROMPT_PARAMETER_NAME,
                 type=ParameterType.STRING,
                 nullable=True,
                 default=(
@@ -109,7 +124,7 @@ def seed_ai_agent_components(session: Session):
                 ).model_dump(exclude_unset=True, exclude_none=True),
             ),
             db.ComponentParameterDefinition(
-                id=UUID("bf56e90a-5e2b-4777-9ef4-34838b8973b6"),
+                id=AI_MODEL_PARAMETER_IDS["input_data_field_for_messages_history"],
                 component_id=base_ai_agent.id,
                 name="input_data_field_for_messages_history",
                 type=ParameterType.STRING,
@@ -123,7 +138,7 @@ def seed_ai_agent_components(session: Session):
                 is_advanced=True,
             ),
             db.ComponentParameterDefinition(
-                id=UUID("4ca78b43-4484-4a9d-bdab-e6dbdaff6da1"),
+                id=AI_MODEL_PARAMETER_IDS["first_history_messages"],
                 component_id=base_ai_agent.id,
                 name="first_history_messages",
                 type=ParameterType.INTEGER,
@@ -171,7 +186,7 @@ def seed_ai_agent_components(session: Session):
                 is_advanced=True,
             ),
             db.ComponentParameterDefinition(
-                id=UUID("f7dbbe12-e6ff-5bfe-b006-f6bf0e9cbf4d"),
+                id=AI_MODEL_PARAMETER_IDS["date_in_system_prompt"],
                 component_id=base_ai_agent.id,
                 name="date_in_system_prompt",
                 type=ParameterType.BOOLEAN,
@@ -193,15 +208,15 @@ def seed_ai_agent_components(session: Session):
                 params_to_seed=[
                     ParameterLLMConfig(
                         param_name=COMPLETION_MODEL_IN_DB,
-                        param_id=UUID("e2d157b4-f26d-41b4-9e47-62b5b041a9ff"),
+                        param_id=AI_MODEL_PARAMETER_IDS[COMPLETION_MODEL_IN_DB],
                     ),
                     ParameterLLMConfig(
                         param_name="api_key",
-                        param_id=UUID("78d5d921-9501-44b3-9939-7d7ebf063513"),
+                        param_id=AI_MODEL_PARAMETER_IDS["api_key"],
                     ),
                     ParameterLLMConfig(
                         param_name=TEMPERATURE_IN_DB,
-                        param_id=UUID("5bdece0d-bbc1-4cc7-a192-c4b7298dc163"),
+                        param_id=AI_MODEL_PARAMETER_IDS[TEMPERATURE_IN_DB],
                     ),
                 ],
             ),
