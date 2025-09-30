@@ -24,7 +24,14 @@ DEFAULT_PDF_GENERATION_TOOL_DESCRIPTION = ToolDescription(
                 "Insert the image into the markdown in src format. It is recommended to limit the size of "
                 'images with a style like this: style="width:80%; max-width:100%; height:auto;"'
             ),
-        }
+        },
+        "filename": {
+            "type": "string",
+            "description": (
+                "Optional. The desired filename for the generated PDF file. If not provided, a default "
+                "filename with a timestamp will be used."
+            ),
+        },
     },
     required_tool_properties=["markdown_content"],
 )
@@ -125,6 +132,7 @@ class PDFGenerationTool(Agent):
         **kwargs: Any,
     ) -> AgentPayload:
         markdown_content = kwargs.get("markdown_content", "")
+        filename = kwargs.get("filename", None)
 
         if not markdown_content:
             error_msg = "No markdown content provided"
@@ -137,9 +145,9 @@ class PDFGenerationTool(Agent):
 
         output_dir = get_output_dir()
 
-        # Generate filename with timestamp
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"document_{timestamp}.pdf"
+        if not filename:
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"document_{timestamp}.pdf"
 
         html = markdown2.markdown(
             markdown_content,

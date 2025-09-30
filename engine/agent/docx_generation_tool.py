@@ -20,7 +20,14 @@ DEFAULT_DOCX_GENERATION_TOOL_DESCRIPTION = ToolDescription(
         "markdown_content": {
             "type": "string",
             "description": ("The markdown text to convert to DOCX."),
-        }
+        },
+        "filename": {
+            "type": "string",
+            "description": (
+                "Optional. The desired filename for the generated DOCX file. If not provided, a default "
+                "filename with a timestamp will be used."
+            ),
+        },
     },
     required_tool_properties=["markdown_content"],
 )
@@ -47,6 +54,7 @@ class DOCXGenerationTool(Agent):
         **kwargs: Any,
     ) -> AgentPayload:
         markdown_content = kwargs.get("markdown_content", "")
+        filename = kwargs.get("filename", None)
 
         if not markdown_content:
             error_msg = "No markdown content provided"
@@ -57,11 +65,12 @@ class DOCXGenerationTool(Agent):
                 is_final=True,
             )
 
+        if not filename:
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"document_{timestamp}.docx"
+
         output_dir = get_output_dir()
 
-        # Generate filename with timestamp
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"document_{timestamp}.docx"
         output_path = output_dir / filename
 
         # Create a temporary markdown file
