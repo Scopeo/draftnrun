@@ -59,12 +59,16 @@ def test_get_all_agents_service(monkeypatch):
 
     dummy_agents = [DummyAgent(uuid.uuid4(), "A1", "desc1"), DummyAgent(uuid.uuid4(), "A2", None)]
 
-    def fake_get_agents_by_organization(session_arg, organization_id_arg):
+    def fake_fetch_agents_with_graph_runners_by_organization(session_arg, organization_id_arg):
         assert session_arg is session
         assert organization_id_arg == org_id
         return dummy_agents
 
-    monkeypatch.setattr(agents_service, "get_agents_by_organization", fake_get_agents_by_organization)
+    monkeypatch.setattr(
+        agents_service,
+        "fetch_agents_with_graph_runners_by_organization",
+        fake_fetch_agents_with_graph_runners_by_organization,
+    )
 
     result = agents_service.get_all_agents_service(session, org_id)
     assert len(result) == 2
