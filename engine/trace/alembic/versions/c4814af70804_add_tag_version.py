@@ -23,15 +23,6 @@ def upgrade() -> None:
 
     op.add_column("spans", sa.Column("tag_version", sa.String(), nullable=True))
 
-    # Update existing spans with tag_version v0.0.1 for production environments
-    op.execute(
-        """
-        UPDATE spans
-        SET tag_version = 'v0.0.1'
-        WHERE environment = 'production'
-    """
-    )
-
 
 def downgrade() -> None:
     op.drop_column("spans", "tag_version")
