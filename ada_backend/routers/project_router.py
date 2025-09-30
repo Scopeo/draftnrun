@@ -29,6 +29,7 @@ from ada_backend.routers.auth_router import (
     UserRights,
 )
 from ada_backend.services.charts_service import get_charts_by_project
+from ada_backend.services.errors import ProjectNotFound
 from ada_backend.services.metrics.monitor_kpis_service import get_monitoring_kpis_by_project
 from ada_backend.services.project_service import (
     create_workflow,
@@ -90,6 +91,8 @@ def get_workflow_endpoint(
         raise HTTPException(status_code=400, detail="User ID not found")
     try:
         return get_project_service(session, project_id)
+    except ProjectNotFound:
+        raise HTTPException(status_code=404, detail=f"Project not found : {project_id}")
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:

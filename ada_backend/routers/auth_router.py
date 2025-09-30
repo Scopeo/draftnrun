@@ -109,6 +109,8 @@ async def _ensure_access(
                 status_code=403,
                 detail="You don't have access to this project",
             )
+    except ProjectNotFound:
+        raise HTTPException(status_code=404, detail=f"Project not found : {project_id}")
     except ValueError as e:
         LOGGER.error(f"Access check failed for user {user.id} on project {project_id}: {str(e)}")
         raise HTTPException(

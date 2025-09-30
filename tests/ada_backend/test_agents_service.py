@@ -33,10 +33,11 @@ class DummyGraphResponse:
 
 
 class DummyComponentInstance:
-    def __init__(self, id, component_id, parameters=None):
+    def __init__(self, id, component_id, parameters=None, is_start_node=False):
         self.id = id
         self.component_id = component_id
         self.parameters = parameters or []
+        self.is_start_node = is_start_node
 
 
 def test_build_ai_agent_component_appends_system_prompt():
@@ -107,7 +108,7 @@ def test_get_agent_by_id_service_with_components(monkeypatch):
         nullable=False,
         is_advanced=False,
     )
-    comp_instance = DummyComponentInstance(uuid.uuid4(), base_ai_component_id, parameters=[pp])
+    comp_instance = DummyComponentInstance(uuid.uuid4(), base_ai_component_id, parameters=[pp], is_start_node=True)
 
     def fake_get_graph_service(session_arg, project_id, graph_runner_id):
         assert project_id == agent_id
