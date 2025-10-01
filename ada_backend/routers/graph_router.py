@@ -45,10 +45,10 @@ def get_project_graph(
         raise HTTPException(status_code=400, detail="User ID not found")
     try:
         return get_graph_service(sqlaclhemy_db_session, project_id, graph_runner_id)
-    except ProjectNotFound:
-        raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
-    except GraphNotFound:
-        raise HTTPException(status_code=404, detail=f"Graph not found: {graph_runner_id}")
+    except ProjectNotFound as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    except GraphNotFound as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:

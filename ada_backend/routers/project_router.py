@@ -91,8 +91,8 @@ def get_workflow_endpoint(
         raise HTTPException(status_code=400, detail="User ID not found")
     try:
         return get_project_service(session, project_id)
-    except ProjectNotFound:
-        raise HTTPException(status_code=404, detail=f"Project not found : {project_id}")
+    except ProjectNotFound as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:

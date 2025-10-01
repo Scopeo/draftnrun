@@ -41,13 +41,13 @@ LOGGER = logging.getLogger(__name__)
 def get_all_agents_service(session: Session, organization_id: UUID) -> list[AgentWithGraphRunnersSchema]:
     agents_with_graph_runners_rows = fetch_agents_with_graph_runners_by_organization(session, organization_id)
     by_agent: DefaultDict[UUID, dict] = defaultdict(lambda: {"agent": None, "grs": []})
-    for agent, peb in agents_with_graph_runners_rows:
+    for agent, project_env_binding in agents_with_graph_runners_rows:
         bucket = by_agent[agent.id]
         bucket["agent"] = agent
         bucket["grs"].append(
             GraphRunnerEnvDTO(
-                graph_runner_id=peb.graph_runner_id,
-                env=peb.environment,
+                graph_runner_id=project_env_binding.graph_runner_id,
+                env=project_env_binding.environment,
             )
         )
     result: list[AgentWithGraphRunnersSchema] = []

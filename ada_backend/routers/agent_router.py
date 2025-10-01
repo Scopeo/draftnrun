@@ -7,9 +7,9 @@ from sqlalchemy.orm import Session
 
 from ada_backend.database.setup_db import get_db
 from ada_backend.routers.auth_router import (
-    user_has_access_to_agent_dependency,
     user_has_access_to_organization_dependency,
     UserRights,
+    user_has_access_to_project_dependency,
 )
 from ada_backend.schemas.agent_schema import (
     AgentUpdateSchema,
@@ -50,26 +50,28 @@ def get_all_agents(
         raise HTTPException(status_code=500, detail="Internal error service")
 
 
-@router.get("/agents/{agent_id}/version/{version_id}", response_model=AgentInfoSchema)
+@router.get("/agents/{project_id}/version/{version_id}", response_model=AgentInfoSchema)
 def get_agent_by_id(
-    agent_id: UUID,
+    project_id: UUID,
     version_id: UUID,
-    user: Annotated[SupabaseUser, Depends(user_has_access_to_agent_dependency(allowed_roles=UserRights.READER.value))],
+    user: Annotated[
+        SupabaseUser, Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.READER.value))
+    ],
     session: Session = Depends(get_db),
 ) -> AgentInfoSchema:
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
     try:
-        return get_agent_by_id_service(session, agent_id, version_id)
-    except ProjectNotFound:
-        raise HTTPException(status_code=404, detail=f"Agent not found : {agent_id}")
-    except GraphNotFound:
-        raise HTTPException(status_code=404, detail=f"Agent version not found : {version_id}")
+        return get_agent_by_id_service(session, project_id, version_id)
+    except ProjectNotFound as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    except GraphNotFound as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
-        LOGGER.error(f"Error fetching agent {agent_id}: {str(e)}")
-        raise HTTPException(status_code=500, detail="Internal error service")
+        LOGGER.error(f"Error fetching agent {project_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal error service") from e
 
 
 @router.post("/org/{organization_id}/agents", response_model=ProjectWithGraphRunnersSchema)
@@ -87,23 +89,25 @@ def create_agent(
         return create_new_agent_service(session, user.id, organization_id, agent_data)
     except Exception as e:
         LOGGER.error(f"Error creating agent for organization {organization_id}: {str(e)}")
-        raise HTTPException(status_code=500, detail="Internal error service")
+        raise HTTPException(status_code=500, detail="Internal error service") from e
 
 
-@router.put("/agents/{agent_id}/version/{version_id}", response_model=GraphUpdateResponse)
+@router.put("/agents/{project_id}/version/{version_id}", response_model=GraphUpdateResponse)
 async def update_agent(
-    agent_id: UUID,
+    project_id: UUID,
     version_id: UUID,
     agent_data: AgentUpdateSchema,
-    user: Annotated[SupabaseUser, Depends(user_has_access_to_agent_dependency(allowed_roles=UserRights.WRITER.value))],
+    user: Annotated[
+        SupabaseUser, Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.WRITER.value))
+    ],
     session: Session = Depends(get_db),
 ) -> GraphUpdateResponse:
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
     try:
-        return await update_agent_service(session, user.id, agent_id, version_id, agent_data)
-    except ProjectNotFound:
-        raise HTTPException(status_code=404, detail=f"Agent not found: {agent_id}")
+        return await update_agent_service(session, user.id, project_id, version_id, agent_data)
+    except ProjectNotFound as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
     except Exception as e:
-        LOGGER.error(f"Error updating agent {agent_id}: {str(e)}")
-        raise HTTPException(status_code=500, detail="Internal error service")
+        LOGGER.error(f"Error updating agent {project_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal error service") from e
