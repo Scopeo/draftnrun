@@ -116,6 +116,11 @@ def generate_s3_upload_presigned_urls_service(
             content_type=upload_file_request.content_type,
         )
         upload_urls.append(
-            S3UploadURL(presigned_url=presigned_url, key=key, content_type=upload_file_request.content_type)
+            S3UploadURL(
+                filename=upload_file_request.filename,
+                presigned_url=presigned_url,
+                key=key,
+                content_type=upload_file_request.content_type,
+            )
         )
     return upload_urls
