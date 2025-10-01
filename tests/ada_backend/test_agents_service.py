@@ -59,10 +59,19 @@ def test_get_all_agents_service(monkeypatch):
 
     dummy_agents = [DummyAgent(uuid.uuid4(), "A1", "desc1"), DummyAgent(uuid.uuid4(), "A2", None)]
 
+    class DummyBinding:
+        def __init__(self, graph_runner_id, environment):
+            self.graph_runner_id = graph_runner_id
+            self.environment = environment
+
     def fake_fetch_agents_with_graph_runners_by_organization(session_arg, organization_id_arg):
         assert session_arg is session
         assert organization_id_arg == org_id
-        return dummy_agents
+        # return pairs (agent, binding) as the real repository does
+        return [
+            (dummy_agents[0], DummyBinding(uuid.uuid4(), "draft")),
+            (dummy_agents[1], DummyBinding(uuid.uuid4(), "draft")),
+        ]
 
     monkeypatch.setattr(
         agents_service,
