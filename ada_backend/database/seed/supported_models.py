@@ -190,6 +190,28 @@ ALL_SUPPORTED_MODELS = [
             ModelCapability.FUNCTION_CALLING,
         ],
     },
+    {
+        "name": "Qwen 3 32B (Cerebras)",
+        "reference": "cerebras:qwen-3-32b",
+        "provider": "cerebras",
+        "capabilities": [
+            ModelCapability.COMPLETION,
+            ModelCapability.CONSTRAINED_OUTPUT,
+            ModelCapability.FUNCTION_CALLING,
+            # Model is reasoning by default
+        ],
+    },
+    {
+        "name": "OpenAI GPT OSS (Cerebras)",
+        "reference": "cerebras:gpt-oss-120b",
+        "provider": "cerebras",
+        "capabilities": [
+            ModelCapability.COMPLETION,
+            ModelCapability.CONSTRAINED_OUTPUT,
+            ModelCapability.FUNCTION_CALLING,
+            # TODO : handle cerebras for reasoning
+        ],
+    },
     # Mistral Models
     {
         "name": "Mistral Large 2411",
