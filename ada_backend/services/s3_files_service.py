@@ -7,7 +7,7 @@ import boto3
 from ada_backend.schemas.ingestion_task_schema import (
     S3UploadedInformation,
 )
-from ada_backend.schemas.s3_file_schema import UploadFileRequest, UploadURL
+from ada_backend.schemas.s3_file_schema import UploadFileRequest, S3UploadURL
 from data_ingestion.boto3_client import (
     get_s3_boto3_client,
     upload_file_to_bucket,
@@ -78,7 +78,7 @@ def generate_presigned_upload_url(
     content_type: str,
     bucket_name: str = settings.S3_BUCKET_NAME,
     expiration: int = 1000,
-) -> UploadURL:
+) -> str:
     """
     Generates a pre-signed URL to upload a file directly from the frontend.
     """
@@ -94,7 +94,7 @@ def generate_presigned_upload_url(
         )
 
         LOGGER.info(f"Generated presigned URL for {key}")
-        return UploadURL(presigned_url=url, key=key)
+        return url
 
     except Exception as e:
         LOGGER.error(f"Error generating presigned URL: {str(e)}")
@@ -104,7 +104,7 @@ def generate_presigned_upload_url(
 def generate_s3_upload_presigned_urls_service(
     organization_id: UUID,
     upload_file_requests: list[UploadFileRequest],
-) -> list[UploadURL]:
+) -> list[S3UploadURL]:
     s3_client = get_s3_client_and_ensure_bucket()
     upload_urls = []
     for upload_file_request in upload_file_requests:
@@ -115,5 +115,7 @@ def generate_s3_upload_presigned_urls_service(
             key=key,
             content_type=upload_file_request.content_type,
         )
-        upload_urls.append(presigned_url)
+        upload_urls.append(
+            S3UploadURL(presigned_url=presigned_url, key=key, content_type=upload_file_request.content_type)
+        )
     return upload_urls

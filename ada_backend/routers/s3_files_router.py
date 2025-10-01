@@ -5,7 +5,7 @@ from uuid import UUID, uuid4
 
 from ada_backend.schemas.auth_schema import SupabaseUser
 from ada_backend.routers.auth_router import user_has_access_to_organization_dependency, UserRights
-from ada_backend.schemas.s3_file_schema import UploadFileRequest, UploadURL
+from ada_backend.schemas.s3_file_schema import UploadFileRequest, S3UploadURL
 from ada_backend.services.s3_files_service import (
     generate_s3_upload_presigned_urls_service,
     upload_file_to_s3,
@@ -20,7 +20,7 @@ LOGGER = logging.getLogger(__name__)
 @router.post(
     "/organizations/{organization_id}/files/upload-urls",
     summary="Get S3 Upload Presigned URLs",
-    response_model=list[UploadURL],
+    response_model=list[S3UploadURL],
 )
 async def generate_s3_upload_presigned_urls(
     organization_id: UUID,
@@ -28,7 +28,7 @@ async def generate_s3_upload_presigned_urls(
         SupabaseUser, Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.READER.value))
     ],
     upload_file_requests: list[UploadFileRequest],
-):
+) -> list[S3UploadURL]:
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
 
