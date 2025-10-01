@@ -212,6 +212,7 @@ class ReActAgent(Agent):
         """Runs ReActAgent. Only one input is allowed."""
         original_agent_input = inputs[0]
         if not isinstance(original_agent_input, AgentPayload):
+
             original_agent_input["messages"] = original_agent_input[self.input_data_field_for_messages_history]
             original_agent_input = AgentPayload(**original_agent_input)
         system_message = next((msg for msg in original_agent_input.messages if msg.role == "system"), None)
@@ -244,21 +245,7 @@ class ReActAgent(Agent):
             )
         agent_input = original_agent_input.model_copy(deep=True)
         history_messages_handled = self._memory_handling.get_truncated_messages_history(agent_input.messages)
-
-        # Determine tool choice and available tools
         tool_choice = "auto" if self._current_iteration < self._max_iterations else "none"
-        available_tools = [agent.tool_description for agent in self.agent_tools]
-
-        # Fallback logic: if at max iterations and output tool is available, force output tool only
-        if self._current_iteration >= self._max_iterations and self._output_tool_agent_description:
-            LOGGER.info("Max iterations reached with output tool available. Forcing output tool call.")
-            tool_choice = "required"
-            available_tools = [self._output_tool_agent_description]  # Only output tool
-        elif self._output_tool_agent_description:
-            # Normal case: add output tool to available tools
-            available_tools.append(self._output_tool_agent_description)
-            tool_choice = "required"
-
         with self.trace_manager.start_span("Agentic reflexion") as span:
             llm_input_messages = [msg.model_dump() for msg in history_messages_handled]
             span.set_attributes(
@@ -268,11 +255,11 @@ class ReActAgent(Agent):
                     SpanAttributes.LLM_MODEL_NAME: self._completion_service._model_name,
                 }
             )
-
             chat_response = await self._completion_service.function_call_async(
                 messages=llm_input_messages,
-                tools=available_tools,
+                tools=[agent.tool_description for agent in self.agent_tools],
                 tool_choice=tool_choice,
+                structured_output_tool=self._output_tool_agent_description,
             )
 
             span.set_attributes(
@@ -297,19 +284,6 @@ class ReActAgent(Agent):
                     messages=[ChatMessage(role="assistant", content=chat_response.choices[0].message.content)],
                     is_final=True,
                     artifacts=artifacts,
-                )
-
-        # Check if there's a unique output tool call
-        if self._output_tool_name and len(all_tool_calls) == 1:
-            output_tool_call = all_tool_calls[0]
-            if output_tool_call.function.name == self._output_tool_name:
-                LOGGER.info(f"Output tool called: {output_tool_call.function.name}")
-                # Handle output tool call like a chat response
-                tool_arguments = json.loads(output_tool_call.function.arguments)
-                await self._cleanup_shared_sandbox()
-                return AgentPayload(
-                    messages=[ChatMessage(role="assistant", content=json.dumps(tool_arguments))],
-                    is_final=True,
                 )
 
         agent_outputs, processed_tool_calls = await self._process_tool_calls(
