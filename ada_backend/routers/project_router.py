@@ -74,7 +74,7 @@ def get_workflows_by_organization_endpoint(
             user.id,
             str(e),
         )
-        raise HTTPException(status_code=500, detail="Internal Server Error")
+        raise HTTPException(status_code=500, detail="Internal Server Error") from e
 
 
 # TODO: move to workflow_router
