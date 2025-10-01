@@ -1,11 +1,13 @@
 import logging
 from functools import lru_cache
+from uuid import UUID, uuid4
 
 import boto3
 
 from ada_backend.schemas.ingestion_task_schema import (
     S3UploadedInformation,
 )
+from ada_backend.schemas.s3_file_schema import UploadFileRequest, UploadURL
 from data_ingestion.boto3_client import (
     get_s3_boto3_client,
     upload_file_to_bucket,
@@ -68,3 +70,50 @@ def delete_file_from_s3(
     except Exception as e:
         LOGGER.error(f"Error deleting file from S3: {str(e)}")
         raise ValueError(f"Failed to delete file from S3: {str(e)}")
+
+
+def generate_presigned_upload_url(
+    s3_client: boto3.client,
+    key: str,
+    content_type: str,
+    bucket_name: str = settings.S3_BUCKET_NAME,
+    expiration: int = 1000,
+) -> UploadURL:
+    """
+    Generates a pre-signed URL to upload a file directly from the frontend.
+    """
+    try:
+        url = s3_client.generate_presigned_url(
+            ClientMethod="put_object",
+            Params={
+                "Bucket": bucket_name,
+                "Key": key,
+                "ContentType": content_type,
+            },
+            ExpiresIn=expiration,
+        )
+
+        LOGGER.info(f"Generated presigned URL for {key}")
+        return UploadURL(presigned_url=url, key=key)
+
+    except Exception as e:
+        LOGGER.error(f"Error generating presigned URL: {str(e)}")
+        raise ValueError(f"Couldn't get a presigned URL: {str(e)}") from e
+
+
+def generate_s3_upload_presigned_urls_service(
+    organization_id: UUID,
+    upload_file_requests: list[UploadFileRequest],
+) -> list[UploadURL]:
+    s3_client = get_s3_client_and_ensure_bucket()
+    upload_urls = []
+    for upload_file_request in upload_file_requests:
+        s3_filename = f"{organization_id}/{uuid4()}_{upload_file_request.filename}"
+        key = sanitize_filename(s3_filename)
+        presigned_url = generate_presigned_upload_url(
+            s3_client=s3_client,
+            key=key,
+            content_type=upload_file_request.content_type,
+        )
+        upload_urls.append(presigned_url)
+    return upload_urls
