@@ -16,6 +16,8 @@ from ada_backend.repositories.env_repository import (
     get_env_relationship_by_graph_runner_id,
     update_graph_runner_env,
 )
+from ada_backend.repositories.tag_repository import update_graph_runner_tag_version
+from ada_backend.services.tag_service import compute_next_tag_version
 from ada_backend.repositories.graph_runner_repository import (
     get_component_nodes,
     get_graph_runner_for_env,
@@ -155,7 +157,11 @@ def clone_graph_runner(
     return new_graph_runner_id
 
 
-def deploy_graph_service(session: Session, graph_runner_id: UUID, project_id: UUID):
+def deploy_graph_service(
+    session: Session,
+    graph_runner_id: UUID,
+    project_id: UUID,
+):
     if not graph_runner_exists(session, graph_id=graph_runner_id):
         raise HTTPException(status_code=404, detail="Graph runner not found")
 
@@ -182,7 +188,8 @@ def deploy_graph_service(session: Session, graph_runner_id: UUID, project_id: UU
     bind_graph_runner_to_project(
         session, graph_runner_id=new_graph_runner_id, project_id=project_id, env=EnvType.DRAFT
     )
-
+    new_tag = compute_next_tag_version(session, project_id)
+    update_graph_runner_tag_version(session, graph_runner_id, new_tag)
     update_graph_runner_env(session, graph_runner_id, env=EnvType.PRODUCTION)
     LOGGER.info(f"Updated graph runner {graph_runner_id} to production")
 

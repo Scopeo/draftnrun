@@ -78,6 +78,8 @@ class TraceManager:
                 attributes["environment"] = params.environment.value
             if params.call_type:
                 attributes["call_type"] = params.call_type.value
+            if params.tag_version:
+                attributes["tag_version"] = params.tag_version
         # Handle trace isolation for root spans
         if isolate_context:
             kwargs["context"] = Context()

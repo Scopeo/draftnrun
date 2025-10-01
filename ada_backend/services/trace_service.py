@@ -150,6 +150,7 @@ def build_span_trees(df: pd.DataFrame, include_messages: bool) -> List[TraceSpan
             children=[],
             environment=row.get("environment", None),
             call_type=row.get("call_type", None),
+            tag_version=row.get("tag_version", None),
         )
 
     trace_trees = []
@@ -204,6 +205,7 @@ def get_trace_by_project(
     include_messages: bool = False,
     environment: Optional[EnvType] = None,
     call_type: Optional[CallType] = None,
+    tag_version: Optional[str] = None,
 ) -> List[TraceSpan]:
     df_span = query_trace_duration(project_id, duration)
     track_project_observability_loaded(user_id, project_id)
@@ -220,6 +222,9 @@ def get_trace_by_project(
 
     if call_type is not None:
         df_span = df_span[df_span["call_type"] == call_type.value]
+
+    if tag_version is not None:
+        df_span = df_span[df_span["tag_version"] == tag_version]
 
     return build_span_trees(df_span, include_messages=include_messages)
 
@@ -249,6 +254,7 @@ def get_root_traces_by_project(
     duration: int,
     environment: Optional[EnvType] = None,
     call_type: Optional[CallType] = None,
+    tag_version: Optional[str] = None,
 ) -> List[RootTraceSpan]:
     df_span = query_root_trace_duration(project_id, duration)
     track_project_observability_loaded(user_id, project_id)
@@ -259,5 +265,8 @@ def get_root_traces_by_project(
 
     if call_type is not None:
         df_span = df_span[df_span["call_type"] == call_type.value]
+
+    if tag_version is not None:
+        df_span = df_span[df_span["tag_version"] == tag_version]
 
     return build_root_spans(df_span)

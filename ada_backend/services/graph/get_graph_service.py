@@ -23,12 +23,12 @@ def get_graph_service(
     if not graph_runner_exists(session, graph_runner_id):
         raise ValueError(f"Graph with ID {graph_runner_id} not found.")
 
-    env_relationship = get_env_relationship_by_graph_runner_id(session, graph_runner_id)
-    if not env_relationship:
+    project_env_binding = get_env_relationship_by_graph_runner_id(session, graph_runner_id)
+    if not project_env_binding:
         raise ValueError(f"Graph with ID {graph_runner_id} is not bound to any project.")
-    if env_relationship.project_id != project_id:
+    if project_env_binding.project_id != project_id:
         raise ValueError(
-            f"Graph with ID {graph_runner_id} is bound to project {env_relationship.project_id}, not {project_id}."
+            f"Graph with ID {graph_runner_id} is bound to project {project_env_binding.project_id}, not {project_id}."
         )
 
     # TODO: Add the get_graph_runner_nodes function when we will handle nested graphs
@@ -70,4 +70,5 @@ def get_graph_service(
         component_instances=component_instances_with_definitions,
         relationships=relationships,
         edges=edges,
+        tag_version=project_env_binding.graph_runner.tag_version,
     )

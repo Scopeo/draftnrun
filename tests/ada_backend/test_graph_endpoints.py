@@ -47,6 +47,7 @@ def test_create_empty_graph_runner():
         "component_instances": [],
         "relationships": [],
         "edges": [],
+        "tag_version": None,
     }
 
     response = client.put(endpoint, headers=HEADERS_JWT, json=payload)
