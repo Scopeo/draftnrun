@@ -13,11 +13,12 @@ from ada_backend.repositories.quality_assurance_repository import (
     get_inputs_groundtruths_by_ids,
     get_inputs_groundtruths_by_dataset,
     get_inputs_groundtruths_count_by_dataset,
-    create_version_output,
+    upsert_version_output,
     create_datasets,
     update_dataset,
     delete_datasets,
     get_datasets_by_project,
+    clear_version_outputs_for_input_ids,
 )
 from ada_backend.schemas.input_groundtruth_schema import (
     InputGroundtruthResponse,
@@ -192,8 +193,8 @@ async def run_qa_service(
                 if chat_response.error:
                     output_content = f"Error: {chat_response.error}"
 
-                # Store result in VersionOutput table
-                create_version_output(
+                # Upsert result in VersionOutput table
+                upsert_version_output(
                     session=session,
                     input_id=input_entry.id,
                     output=output_content,
@@ -216,9 +217,9 @@ async def run_qa_service(
             except Exception as e:
                 LOGGER.error(f"Error processing input {input_entry.id}: {str(e)}")
 
-                # Store error result in VersionOutput table
+                # Upsert error result in VersionOutput table
                 error_output = f"Error: {str(e)}"
-                _ = create_version_output(
+                _ = upsert_version_output(
                     session=session,
                     input_id=input_entry.id,
                     output=error_output,
@@ -337,6 +338,11 @@ def update_inputs_groundtruths_service(
             updates_data,
             dataset_id,
         )
+
+        # If any input texts were updated, clear corresponding version outputs across all versions
+        input_ids_changed = [ig.id for ig in inputs_groundtruths_data.inputs_groundtruths if ig.input is not None]
+        if input_ids_changed:
+            clear_version_outputs_for_input_ids(session, input_ids_changed)
 
         LOGGER.info(
             f"Updated {len(updated_inputs_groundtruths)} input-groundtruth " f"entries for dataset {dataset_id}"

@@ -188,13 +188,31 @@ def delete_inputs_groundtruths(
     return deleted_count
 
 
-def create_version_output(
+def upsert_version_output(
     session: Session,
     input_id: UUID,
     output: str,
     version: EnvType,
 ) -> VersionOutput:
-    """Create a version output entry."""
+    """Create or update a version output entry for the given input and version.
+
+    If a `VersionOutput` for the `(input_id, version)` pair exists, update its `output`.
+    Otherwise, create a new one.
+    """
+    # Find existing version output for this input and version
+    existing: Optional[VersionOutput] = (
+        session.query(VersionOutput)
+        .filter(VersionOutput.input_id == input_id, VersionOutput.version == version)
+        .first()
+    )
+
+    if existing:
+        existing.output = output
+        session.commit()
+        session.refresh(existing)
+        LOGGER.info(f"Updated version output for input {input_id} and version {version}")
+        return existing
+
     version_output = VersionOutput(
         input_id=input_id,
         output=output,
@@ -209,30 +227,78 @@ def create_version_output(
     return version_output
 
 
-def create_version_outputs(
+def upsert_version_outputs(
     session: Session,
     version_outputs_data: List[Tuple[UUID, str, EnvType]],
 ) -> List[VersionOutput]:
-    """Create multiple version output entries."""
-    version_outputs = []
+    """Create or update multiple version output entries.
 
+    For each tuple `(input_id, output, version)`, update the existing row matching
+    `(input_id, version)`, or create it if missing.
+    """
+    results: List[VersionOutput] = []
+
+    # Perform upserts one by one to respect existing code style and simplicity
     for input_id, output, version in version_outputs_data:
-        version_output = VersionOutput(
-            input_id=input_id,
-            output=output,
-            version=version,
+        existing: Optional[VersionOutput] = (
+            session.query(VersionOutput)
+            .filter(VersionOutput.input_id == input_id, VersionOutput.version == version)
+            .first()
         )
-        version_outputs.append(version_output)
 
-    session.add_all(version_outputs)
+        if existing:
+            existing.output = output
+            results.append(existing)
+        else:
+            results.append(
+                VersionOutput(
+                    input_id=input_id,
+                    output=output,
+                    version=version,
+                )
+            )
+
+    # Separate creations from updates for a single commit
+    to_create = [vo for vo in results if vo.id is None]
+    if to_create:
+        session.add_all(to_create)
+
     session.commit()
 
-    # Refresh all objects to get their IDs
-    for version_output in version_outputs:
-        session.refresh(version_output)
+    # Refresh all objects to ensure we return persisted instances with IDs
+    for vo in results:
+        session.refresh(vo)
 
-    LOGGER.info(f"Created {len(version_outputs)} version output entries")
-    return version_outputs
+    LOGGER.info(f"Upserted {len(results)} version output entries")
+    return results
+
+
+def clear_version_outputs_for_input_ids(
+    session: Session,
+    input_ids: List[UUID],
+) -> int:
+    """Set output to empty string for all version outputs linked to given inputs.
+
+    Args:
+        session: SQLAlchemy session
+        input_ids: List of input IDs whose version outputs should be cleared
+
+    Returns:
+        Number of version output rows affected
+    """
+    if not input_ids:
+        return 0
+
+    # Set output to empty string for all versions (draft/production) for those inputs
+    updated_count = (
+        session.query(VersionOutput)
+        .filter(VersionOutput.input_id.in_(input_ids))
+        .update({VersionOutput.output: ""}, synchronize_session=False)
+    )
+
+    session.commit()
+    LOGGER.info(f"Cleared outputs for {updated_count} version output rows (inputs: {len(input_ids)})")
+    return updated_count
 
 
 # Dataset functions
