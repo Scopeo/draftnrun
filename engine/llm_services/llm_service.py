@@ -12,6 +12,9 @@ from openinference.semconv.trace import SpanAttributes
 
 from engine.llm_services.utils import (
     check_usage,
+    extract_data_from_json_answer,
+    extract_structured_output_from_tool_calls,
+    get_structured_response_without_tools,
     make_messages_compatible_for_mistral,
     make_mistral_ocr_compatible,
 )
@@ -391,7 +394,6 @@ class CompletionService(LLMService):
         response_format["strict"] = True
         response_format["type"] = "json_schema"
         response_format = OutputFormatModel(**response_format).model_dump(exclude_none=True, exclude_unset=True)
-
         span = get_current_span()
         span.set_attributes({SpanAttributes.LLM_INVOCATION_PARAMETERS: json.dumps(self._invocation_parameters)})
         match self._provider:
@@ -423,7 +425,7 @@ class CompletionService(LLMService):
                     }
                 )
                 return response.output_text
-            case "cerebras" | "google" | "mistral":  # all the providers that are using openai chat completion go here
+            case "cerebras" | "google":  # all the providers that are using openai chat completion go here
                 import openai
 
                 schema = response_format.get("schema", {})
@@ -451,6 +453,42 @@ class CompletionService(LLMService):
                     stream=stream,
                     response_format=response_format,
                 )
+            case "mistral":
+                import openai
+
+                schema = response_format.get("schema", {})
+                name = response_format.get("name", "response")
+
+                response_format = {
+                    "type": "json_schema",
+                    "json_schema": {
+                        "name": name,
+                        "schema": schema,
+                    },
+                }
+
+                if isinstance(messages, str):
+                    messages = [{"role": "user", "content": messages}]
+
+                # Make messages compatible for Mistral API
+                mistral_compatible_messages = make_messages_compatible_for_mistral(messages)
+
+                client = openai.AsyncOpenAI(
+                    api_key=self._api_key,
+                    base_url=self._base_url,
+                )
+                response = await client.chat.completions.create(
+                    model=self._model_name,
+                    messages=mistral_compatible_messages,
+                    temperature=self._invocation_parameters.get("temperature"),
+                    stream=stream,
+                    response_format=response_format,
+                )
+
+                # Post-process response to handle models that return schema instead of data
+                raw_content = response.choices[0].message.content
+                processed_content = extract_data_from_json_answer(raw_content, schema)
+
                 span.set_attributes(
                     {
                         SpanAttributes.LLM_TOKEN_COUNT_COMPLETION: response.usage.completion_tokens,
@@ -458,7 +496,7 @@ class CompletionService(LLMService):
                         SpanAttributes.LLM_TOKEN_COUNT_TOTAL: response.usage.total_tokens,
                     }
                 )
-                return response.choices[0].message.content
+                return processed_content
             case _:
                 raise ValueError(f"Invalid provider for constrained complete with json schema: {self._provider}")
 
@@ -479,6 +517,7 @@ class CompletionService(LLMService):
         stream: bool = False,
         tools: Optional[list[ToolDescription]] = None,
         tool_choice: str = "auto",
+        structured_output_tool: Optional[ToolDescription] = None,
     ) -> ChatCompletion:
         if tools is None:
             tools = []
@@ -492,14 +531,31 @@ class CompletionService(LLMService):
                 import openai
 
                 client = openai.AsyncOpenAI(api_key=self._api_key, base_url=self._base_url)
-                response = await client.chat.completions.create(
-                    model=self._model_name,
-                    messages=messages,
-                    tools=openai_tools,
-                    temperature=self._invocation_parameters.get("temperature"),
-                    stream=stream,
-                    tool_choice=tool_choice,
-                )
+                if structured_output_tool is not None and tool_choice == "none":
+                    # Handle structured output tool
+                    response = await get_structured_response_without_tools(
+                        completion_service=self,
+                        structured_output_tool=structured_output_tool,
+                        messages=messages,
+                        stream=stream,
+                        model_name=self._model_name,
+                    )
+                    # Return immediately to avoid duplicated spans in the trace (done in the constrained function)
+                    return response
+                else:
+                    if structured_output_tool is not None:
+                        tool_choice = "required"
+                        openai_tools.append(structured_output_tool.openai_format)
+                    response = await client.chat.completions.create(
+                        model=self._model_name,
+                        messages=messages,
+                        tools=openai_tools,
+                        temperature=self._invocation_parameters.get("temperature"),
+                        stream=stream,
+                        tool_choice=tool_choice,
+                    )
+                    if structured_output_tool is not None:
+                        extract_structured_output_from_tool_calls(response, structured_output_tool)
                 span.set_attributes(
                     {
                         SpanAttributes.LLM_TOKEN_COUNT_COMPLETION: response.usage.completion_tokens,
@@ -517,14 +573,31 @@ class CompletionService(LLMService):
                     api_key=self._api_key,
                     base_url=self._base_url,
                 )
-                response = await client.chat.completions.create(
-                    model=self._model_name,
-                    messages=mistral_compatible_messages,
-                    tools=openai_tools,
-                    temperature=self._invocation_parameters.get("temperature"),
-                    stream=stream,
-                    tool_choice=tool_choice,
-                )
+                if structured_output_tool is not None and tool_choice == "none":
+                    # Handle structured output tool
+                    response = await get_structured_response_without_tools(
+                        completion_service=self,
+                        structured_output_tool=structured_output_tool,
+                        messages=messages,
+                        stream=stream,
+                        model_name=self._model_name,
+                    )
+                    # Return immediately to avoid duplicated spans in the trace
+                    return response
+                else:
+                    if structured_output_tool is not None:
+                        tool_choice = "required"
+                        openai_tools.append(structured_output_tool.openai_format)
+                    response = await client.chat.completions.create(
+                        model=self._model_name,
+                        messages=mistral_compatible_messages,
+                        tools=openai_tools,
+                        temperature=self._invocation_parameters.get("temperature"),
+                        stream=stream,
+                        tool_choice=tool_choice,
+                    )
+                    if structured_output_tool is not None:
+                        extract_structured_output_from_tool_calls(response, structured_output_tool)
                 span.set_attributes(
                     {
                         SpanAttributes.LLM_TOKEN_COUNT_COMPLETION: response.usage.completion_tokens,
@@ -540,14 +613,31 @@ class CompletionService(LLMService):
                     api_key=self._api_key,
                     base_url=self._base_url,
                 )
-                response = await client.chat.completions.create(
-                    model=self._model_name,
-                    messages=messages,
-                    tools=openai_tools,
-                    temperature=self._invocation_parameters.get("temperature"),
-                    stream=stream,
-                    tool_choice=tool_choice,
-                )
+                if structured_output_tool is not None and tool_choice == "none":
+                    # Handle structured output tool
+                    response = await get_structured_response_without_tools(
+                        completion_service=self,
+                        structured_output_tool=structured_output_tool,
+                        messages=messages,
+                        stream=stream,
+                        model_name=self._model_name,
+                    )
+                    # Return immediately to avoid duplicated spans in the trace
+                    return response
+                else:
+                    if structured_output_tool is not None:
+                        tool_choice = "required"
+                        openai_tools.append(structured_output_tool.openai_format)
+                    response = await client.chat.completions.create(
+                        model=self._model_name,
+                        messages=messages,
+                        tools=openai_tools,
+                        temperature=self._invocation_parameters.get("temperature"),
+                        stream=stream,
+                        tool_choice=tool_choice,
+                    )
+                    if structured_output_tool is not None:
+                        extract_structured_output_from_tool_calls(response, structured_output_tool)
                 span.set_attributes(
                     {
                         SpanAttributes.LLM_TOKEN_COUNT_COMPLETION: response.usage.completion_tokens,
