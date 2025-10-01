@@ -44,7 +44,7 @@ async def generate_s3_upload_presigned_urls(
 
 
 # TODO: Refactor endpoint to be more RESTful:
-#       use POST /organizations/{organization_id}/files/upload-urls
+#       use POST /organizations/{organization_id}/files
 #       instead of /files/{organization_id}/upload
 @router.post("/files/{organization_id}/upload", response_model=list[S3UploadedInformation])
 async def upload_files(
@@ -74,7 +74,7 @@ async def upload_files(
 
 
 # TODO: Refactor endpoint to be more RESTful:
-#       use POST /organizations/{organization_id}/files/upload-urls
+#       use DELETE /organizations/{organization_id}/files
 #       instead of /files/{organization_id}/upload
 @router.post("/{organization_id}/delete", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_files(
