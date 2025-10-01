@@ -111,7 +111,6 @@ def generate_s3_upload_presigned_urls_service(
         s3_filename = f"{organization_id}/{uuid4()}_{upload_file_request.filename}"
         key = sanitize_filename(s3_filename)
         presigned_url = generate_presigned_upload_url(
-            filename=upload_file_request.filename,
             s3_client=s3_client,
             key=key,
             content_type=upload_file_request.content_type,
