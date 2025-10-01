@@ -40,7 +40,7 @@ async def generate_s3_upload_presigned_urls(
             organization_id,
             len(upload_file_requests),
         )
-        raise HTTPException(status_code=500, detail=f"Internal Server Error") from e
+        raise HTTPException(status_code=500, detail="Internal Server Error") from e
 
 
 # TODO: Refactor endpoint to be more RESTful:
