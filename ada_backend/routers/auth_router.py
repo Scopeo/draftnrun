@@ -11,7 +11,6 @@ from sqlalchemy.orm import Session
 from ada_backend.database.models import ApiKeyType
 from ada_backend.repositories.project_repository import get_project
 from ada_backend.context import get_request_context
-from ada_backend.services.errors import ProjectNotFound
 from settings import settings
 from ada_backend.database.setup_db import get_db
 from ada_backend.services.api_key_service import (
