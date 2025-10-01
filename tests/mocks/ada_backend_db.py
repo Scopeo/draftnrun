@@ -51,8 +51,19 @@ def populate_ada_backend_db_with_mock_data(session: Session):
     """
 
     # --- Projects ---
-    project_1 = db.Project(id=MOCK_UUIDS["project_1"], name="Project A", description="First test project.")
-    project_2 = db.Project(id=MOCK_UUIDS["project_2"], name="Project B", description="Second test project.")
+    # Provide an organization_id to satisfy the NOT NULL constraint on projects.organization_id
+    project_1 = db.Project(
+        id=MOCK_UUIDS["project_1"],
+        name="Project A",
+        description="First test project.",
+        organization_id=uuid4(),
+    )
+    project_2 = db.Project(
+        id=MOCK_UUIDS["project_2"],
+        name="Project B",
+        description="Second test project.",
+        organization_id=uuid4(),
+    )
     session.add_all([project_1, project_2])
     session.commit()
 
