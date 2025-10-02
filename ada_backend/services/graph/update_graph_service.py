@@ -9,6 +9,7 @@ from ada_backend.repositories.component_repository import (
     get_component_instance_by_id,
     get_component_parameter_definition_by_component_id,
     upsert_sub_component_input,
+    get_component_instances_by_ids,
 )
 from ada_backend.repositories.edge_repository import delete_edge, get_edges, upsert_edge
 from ada_backend.repositories.graph_runner_repository import (
@@ -147,13 +148,66 @@ async def update_graph_service(
             session.bulk_save_objects(new_mappings)
             session.commit()
 
-    # Validate that every edge has at least one corresponding port mapping.
+    # Ensure that every edge has at least one corresponding port mapping.
+    # If not provided, auto-generate canonical default mapping: source.output -> target.input
     actual_edges = {(edge.origin, edge.destination) for edge in graph_project.edges}
     unmapped_edges = actual_edges - provided_pairs
+
     if unmapped_edges:
-        raise ValueError(
-            f"All edges must have at least one port mapping. The following edges are unmapped: {unmapped_edges}"
+        # Build a lookup from instance_id -> component_id using the request payload first
+        instance_to_component: dict[UUID, UUID] = {}
+        for inst in graph_project.component_instances:
+            if inst.id and inst.component_id:
+                instance_to_component[inst.id] = inst.component_id
+
+        # Backfill missing via DB if any instance ids are not present in payload
+        missing_instance_ids = {iid for pair in unmapped_edges for iid in pair if iid not in instance_to_component}
+        if missing_instance_ids:
+            db_instances = get_component_instances_by_ids(session, list(missing_instance_ids))
+            for iid, db_inst in db_instances.items():
+                instance_to_component[iid] = db_inst.component_id
+
+        # Collect component ids to fetch canonical ports
+        component_ids = list(
+            {instance_to_component[s] for s, t in unmapped_edges}
+            | {instance_to_component[t] for s, t in unmapped_edges}
         )
+
+        canonical_ports_by_component = get_canonical_ports_for_components(session, component_ids)
+
+        auto_mappings: list[db.PortMapping] = []
+        for source_iid, target_iid in unmapped_edges:
+            if source_iid not in instance_to_component or target_iid not in instance_to_component:
+                raise ValueError(
+                    "Unable to infer component ids for one or more unmapped edges; please provide explicit port_mappings."
+                )
+
+            source_cid = instance_to_component[source_iid]
+            target_cid = instance_to_component[target_iid]
+
+            source_ports = canonical_ports_by_component.get(source_cid, {})
+            target_ports = canonical_ports_by_component.get(target_cid, {})
+
+            source_port_name = source_ports.get("output") or "output"
+            target_port_name = target_ports.get("input") or "input"
+
+            auto_mappings.append(
+                db.PortMapping(
+                    graph_runner_id=graph_runner_id,
+                    source_instance_id=source_iid,
+                    source_port_name=source_port_name,
+                    target_instance_id=target_iid,
+                    target_port_name=target_port_name,
+                    dispatch_strategy="direct",
+                )
+            )
+
+        if auto_mappings:
+            session.bulk_save_objects(auto_mappings)
+            session.commit()
+
+        # After auto-generation, all edges should now be mapped
+        provided_pairs.update(unmapped_edges)
 
     await get_agent_for_project(
         session,
