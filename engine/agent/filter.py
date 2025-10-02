@@ -44,6 +44,11 @@ class Filter:
         self.filtering_json_schema = load_str_to_json(filtering_json_schema)
         self.output_model = jsonschema_to_pydantic(self.filtering_json_schema)
 
+    def get_canonical_ports(self) -> dict[str, str | None]:
+        # The filter expects and produces an AgentPayload shape; the most
+        # semantically useful passthrough is the messages list.
+        return {"input": "messages", "output": "messages"}
+
     async def run(self, output_data: AgentPayload | dict | NodeData):
         if isinstance(output_data, NodeData):
             output_data = output_data.data or {}

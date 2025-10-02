@@ -37,7 +37,9 @@ class Input:
         self.payload_schema = load_str_to_json(payload_schema)
 
     def get_canonical_ports(self) -> dict[str, str | None]:
-        return {"output": "output"}
+        # Expose the canonical output as the messages list so default mappings
+        # can auto-wire to downstream components expecting chat messages.
+        return {"output": "messages"}
 
     # TODO: Refactor Agent I/O to use an unified input/output object:
     async def run(self, input_data: AgentPayload | dict | NodeData) -> dict:
