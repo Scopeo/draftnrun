@@ -1,12 +1,30 @@
 import asyncio
+from typing import Any
+from unittest.mock import MagicMock, patch
+
 import networkx as nx
 import pytest
+from pydantic import BaseModel
 
 from engine.agent.agent import Agent
-from engine.agent.types import AgentPayload, ChatMessage, ComponentAttributes, NodeData, ToolDescription
 from engine.agent.static_responder import StaticResponder
+from engine.agent.types import AgentPayload, ChatMessage, ComponentAttributes, ToolDescription
 from engine.graph_runner.graph_runner import GraphRunner
 from engine.trace.trace_manager import TraceManager
+from tests.mocks.dummy_agent import DummyAgent
+
+
+@pytest.fixture(autouse=True)
+def patch_prometheus_metrics():
+    """Patch prometheus metrics used by @track_calls to avoid None params in tests."""
+    with (
+        patch("engine.prometheus_metric.get_tracing_span") as mock_get_span,
+        patch("engine.prometheus_metric.agent_calls") as mock_agent_calls,
+    ):
+        mock_get_span.return_value = MagicMock(project_id="test_project")
+        counter = MagicMock()
+        mock_agent_calls.labels.return_value = counter
+        yield
 
 
 class EchoAgent(Agent):
@@ -18,29 +36,25 @@ class EchoAgent(Agent):
 
     migrated = True
 
+    # Define stable schemas at module/class scope to avoid dynamic re-creation mismatches
+
+    class Inputs(BaseModel):  # type: ignore
+        input: Any
+
+    class Outputs(BaseModel):  # type: ignore
+        output: Any
+
     @classmethod
     def get_canonical_ports(cls):
         return {"input": "input", "output": "output"}
 
     @classmethod
     def get_inputs_schema(cls):
-        from pydantic import BaseModel
-        from typing import Any
-
-        class Inputs(BaseModel):
-            input: Any
-
-        return Inputs
+        return EchoAgent.Inputs
 
     @classmethod
     def get_outputs_schema(cls):
-        from pydantic import BaseModel
-        from typing import Any
-
-        class Outputs(BaseModel):
-            output: Any
-
-        return Outputs
+        return EchoAgent.Outputs
 
     def __init__(self, trace_manager: TraceManager, component_name: str = "echo"):
         super().__init__(
@@ -55,12 +69,10 @@ class EchoAgent(Agent):
         )
 
     async def _run_without_io_trace(self, inputs, ctx):
-        Outputs = self.get_outputs_schema()
-        return Outputs(output=f"got:{inputs.input}")
+        return EchoAgent.Outputs(output=f"got:{inputs.input}")
 
 
-@pytest.mark.asyncio
-async def test_start_node_passthrough_with_static_responder():
+def test_start_node_passthrough_with_static_responder():
     tm = TraceManager(project_name="test")
     # Single node graph: start node should receive initial input via passthrough
     g = nx.DiGraph()
@@ -75,13 +87,12 @@ async def test_start_node_passthrough_with_static_responder():
     }
 
     gr = GraphRunner(graph=g, runnables=runnables, start_nodes=["A"], trace_manager=tm)
-    result = await gr.run({"input": "hello"})
+    result = asyncio.run(gr.run({"input": "hello"}))
     assert isinstance(result, AgentPayload)
     assert result.messages[0].content == "static"
 
 
-@pytest.mark.asyncio
-async def test_synthesized_default_mapping_single_predecessor():
+def test_synthesized_default_mapping_single_predecessor():
     tm = TraceManager(project_name="test")
     g = nx.DiGraph()
     g.add_nodes_from(["A", "B"])
@@ -97,14 +108,13 @@ async def test_synthesized_default_mapping_single_predecessor():
 
     # No explicit mappings; GraphRunner should synthesize A(static_message)->B(input)
     gr = GraphRunner(graph=g, runnables=runnables, start_nodes=["A"], trace_manager=tm)
-    result = await gr.run({"input": "ignored"})
+    result = asyncio.run(gr.run({"input": "ignored"}))
     assert isinstance(result, AgentPayload)
     # EchoAgent should receive input "foo" and return got:foo
     assert result.messages[0].content == "got:foo"
 
 
-@pytest.mark.asyncio
-async def test_explicit_direct_mapping_takes_effect():
+def test_explicit_direct_mapping_takes_effect():
     tm = TraceManager(project_name="test")
     g = nx.DiGraph()
     g.add_nodes_from(["A", "B"])
@@ -129,13 +139,12 @@ async def test_explicit_direct_mapping_takes_effect():
     ]
 
     gr = GraphRunner(graph=g, runnables=runnables, start_nodes=["A"], trace_manager=tm, port_mappings=mappings)
-    result = await gr.run({"input": "ignored"})
+    result = asyncio.run(gr.run({"input": "ignored"}))
     assert isinstance(result, AgentPayload)
     assert result.messages[0].content == "got:bar"
 
 
-@pytest.mark.asyncio
-async def test_multiple_predecessors_without_mappings_raises():
+def test_multiple_predecessors_without_mappings_raises():
     tm = TraceManager(project_name="test")
     g = nx.DiGraph()
     g.add_nodes_from(["A", "B", "C"])
@@ -159,9 +168,7 @@ async def test_multiple_predecessors_without_mappings_raises():
         GraphRunner(graph=g, runnables=runnables, start_nodes=["A", "B"], trace_manager=tm)
 
 
-@pytest.mark.asyncio
-async def test_legacy_dummy_agent_interop():
-    from tests.mocks.dummy_agent import DummyAgent
+def test_legacy_dummy_agent_interop():
 
     tm = TraceManager(project_name="test")
 
@@ -175,7 +182,7 @@ async def test_legacy_dummy_agent_interop():
 
     gr = GraphRunner(graph=g, runnables=runnables, start_nodes=["A"], trace_manager=tm)
     payload = AgentPayload(messages=[ChatMessage(role="user", content="hi")])
-    result = await gr.run(payload)
+    result = asyncio.run(gr.run(payload))
     assert isinstance(result, AgentPayload)
     # DummyAgent outputs "[X] hi" as legacy payload, GraphRunner converts to NodeData with key 'output'.
     # Synthesized mapping passes that into EchoAgent input → got:[X] hi
