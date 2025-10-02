@@ -24,9 +24,10 @@ class AgentInfoSchema(BaseModel):
     tools: list[ComponentInstanceReadSchema] = []
 
 
-class AgentUpdateSchema(AgentInfoSchema):
+class AgentUpdateSchema(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
+    system_prompt: str
     model_parameters: list[PipelineParameterSchema] = []
     tools: list[ComponentInstanceSchema] = []
 
