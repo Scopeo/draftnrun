@@ -320,6 +320,14 @@ def _create_dummy_agent_workflow_config():
         ],
         "relationships": [],
         "edges": [{"id": edge_id, "origin": api_input_id, "destination": filter_id, "order": 0}],
+        "port_mappings": [
+            {
+                "source_instance_id": api_input_id,
+                "source_port_name": "messages",
+                "target_instance_id": filter_id,
+                "target_port_name": "messages",
+            }
+        ],
     }
 
 
