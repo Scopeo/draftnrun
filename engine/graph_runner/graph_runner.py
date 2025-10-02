@@ -151,8 +151,8 @@ class GraphRunner:
                     SpanAttributes.INPUT_VALUE: trace_input,
                 }
             )
-            # Normalize legacy AgentPayload inputs to dict for internal runner
-            # TODO: Check if needed
+            # Legacy compatibility shim: accept AgentPayload and normalize to dict for internal runner.
+            # Remove once all callers provide dict inputs.
             if isinstance(input_data, AgentPayload):
                 normalized_input: dict[str, Any] = input_data.model_dump(exclude_unset=True, exclude_none=True)
             else:
@@ -248,7 +248,11 @@ class GraphRunner:
         return {}
 
     def _collect_outputs(self) -> AgentPayload:
-        """Collect outputs from leaf nodes and convert to legacy AgentPayload."""
+        """Legacy compatibility shim: collect outputs and convert to AgentPayload.
+
+        New multi-port graphs should eventually return structured data instead of
+        forcing a single assistant message. This will be revisited post-migration.
+        """
         leaf_nodes: list[str] = []
         for node_id in self.graph.nodes():
             if self.graph.out_degree(node_id) == 0 and node_id != self._input_node_id:
@@ -263,6 +267,7 @@ class GraphRunner:
         if not leaf_pairs:
             return AgentPayload(messages=[ChatMessage(role="assistant", content="")])
 
+        # Legacy compatibility shim: reduce a NodeData to a single string for message content
         def pick_canonical_output(node_id: str, node_data: NodeData) -> str:
             runnable = self.runnables.get(node_id)
             preferred_key: str | None = None
