@@ -13,7 +13,7 @@ from openinference.semconv.trace import SpanAttributes
 from engine.llm_services.utils import (
     check_usage,
     extract_data_from_json_answer,
-    extract_structured_output_from_tool_calls,
+    ensure_structured_output_response,
     get_structured_response_without_tools,
     make_messages_compatible_for_mistral,
     make_mistral_ocr_compatible,
@@ -453,6 +453,18 @@ class CompletionService(LLMService):
                     stream=stream,
                     response_format=response_format,
                 )
+                # Post-process response to handle models that return schema instead of data
+                raw_content = response.choices[0].message.content
+                processed_content = extract_data_from_json_answer(raw_content, schema)
+
+                span.set_attributes(
+                    {
+                        SpanAttributes.LLM_TOKEN_COUNT_COMPLETION: response.usage.completion_tokens,
+                        SpanAttributes.LLM_TOKEN_COUNT_PROMPT: response.usage.prompt_tokens,
+                        SpanAttributes.LLM_TOKEN_COUNT_TOTAL: response.usage.total_tokens,
+                    }
+                )
+                return processed_content
             case "mistral":
                 import openai
 
@@ -526,126 +538,70 @@ class CompletionService(LLMService):
 
         span = get_current_span()
         span.set_attributes({SpanAttributes.LLM_INVOCATION_PARAMETERS: json.dumps(self._invocation_parameters)})
+
+        # Check for structured output tool early return
+        if structured_output_tool is not None and tool_choice == "none":
+            # Call the constrained complete with json schema to force a structured output answer
+            response = await get_structured_response_without_tools(
+                completion_service=self,
+                structured_output_tool=structured_output_tool,
+                messages=messages,
+                stream=stream,
+            )
+            # Return immediately to avoid duplicated spans in the trace (done in the constrained function)
+            return response
+
         match self._provider:
             case "openai" | "google":
                 import openai
 
                 client = openai.AsyncOpenAI(api_key=self._api_key, base_url=self._base_url)
-                if structured_output_tool is not None and tool_choice == "none":
-                    # Handle structured output tool
-                    response = await get_structured_response_without_tools(
-                        completion_service=self,
-                        structured_output_tool=structured_output_tool,
-                        messages=messages,
-                        stream=stream,
-                        model_name=self._model_name,
-                    )
-                    # Return immediately to avoid duplicated spans in the trace (done in the constrained function)
-                    return response
-                else:
-                    if structured_output_tool is not None:
-                        tool_choice = "required"
-                        openai_tools.append(structured_output_tool.openai_format)
-                    response = await client.chat.completions.create(
-                        model=self._model_name,
-                        messages=messages,
-                        tools=openai_tools,
-                        temperature=self._invocation_parameters.get("temperature"),
-                        stream=stream,
-                        tool_choice=tool_choice,
-                    )
-                    if structured_output_tool is not None:
-                        extract_structured_output_from_tool_calls(response, structured_output_tool)
-                span.set_attributes(
-                    {
-                        SpanAttributes.LLM_TOKEN_COUNT_COMPLETION: response.usage.completion_tokens,
-                        SpanAttributes.LLM_TOKEN_COUNT_PROMPT: response.usage.prompt_tokens,
-                        SpanAttributes.LLM_TOKEN_COUNT_TOTAL: response.usage.total_tokens,
-                    }
-                )
-                return response
+
             case "mistral":
                 import openai
 
                 mistral_compatible_messages = make_messages_compatible_for_mistral(messages)
+                client = openai.AsyncOpenAI(api_key=self._api_key, base_url=self._base_url)
+                messages = mistral_compatible_messages  # Use formatted messages
 
-                client = openai.AsyncOpenAI(
-                    api_key=self._api_key,
-                    base_url=self._base_url,
-                )
-                if structured_output_tool is not None and tool_choice == "none":
-                    # Handle structured output tool
-                    response = await get_structured_response_without_tools(
-                        completion_service=self,
-                        structured_output_tool=structured_output_tool,
-                        messages=messages,
-                        stream=stream,
-                        model_name=self._model_name,
-                    )
-                    # Return immediately to avoid duplicated spans in the trace
-                    return response
-                else:
-                    if structured_output_tool is not None:
-                        tool_choice = "required"
-                        openai_tools.append(structured_output_tool.openai_format)
-                    response = await client.chat.completions.create(
-                        model=self._model_name,
-                        messages=mistral_compatible_messages,
-                        tools=openai_tools,
-                        temperature=self._invocation_parameters.get("temperature"),
-                        stream=stream,
-                        tool_choice=tool_choice,
-                    )
-                    if structured_output_tool is not None:
-                        extract_structured_output_from_tool_calls(response, structured_output_tool)
-                span.set_attributes(
-                    {
-                        SpanAttributes.LLM_TOKEN_COUNT_COMPLETION: response.usage.completion_tokens,
-                        SpanAttributes.LLM_TOKEN_COUNT_PROMPT: response.usage.prompt_tokens,
-                        SpanAttributes.LLM_TOKEN_COUNT_TOTAL: response.usage.total_tokens,
-                    }
-                )
-                return response
             case _:
                 import openai
 
-                client = openai.AsyncOpenAI(
-                    api_key=self._api_key,
-                    base_url=self._base_url,
-                )
-                if structured_output_tool is not None and tool_choice == "none":
-                    # Handle structured output tool
-                    response = await get_structured_response_without_tools(
-                        completion_service=self,
-                        structured_output_tool=structured_output_tool,
-                        messages=messages,
-                        stream=stream,
-                        model_name=self._model_name,
-                    )
-                    # Return immediately to avoid duplicated spans in the trace
-                    return response
-                else:
-                    if structured_output_tool is not None:
-                        tool_choice = "required"
-                        openai_tools.append(structured_output_tool.openai_format)
-                    response = await client.chat.completions.create(
-                        model=self._model_name,
-                        messages=messages,
-                        tools=openai_tools,
-                        temperature=self._invocation_parameters.get("temperature"),
-                        stream=stream,
-                        tool_choice=tool_choice,
-                    )
-                    if structured_output_tool is not None:
-                        extract_structured_output_from_tool_calls(response, structured_output_tool)
-                span.set_attributes(
-                    {
-                        SpanAttributes.LLM_TOKEN_COUNT_COMPLETION: response.usage.completion_tokens,
-                        SpanAttributes.LLM_TOKEN_COUNT_PROMPT: response.usage.prompt_tokens,
-                        SpanAttributes.LLM_TOKEN_COUNT_TOTAL: response.usage.total_tokens,
-                    }
-                )
-                return response
+                client = openai.AsyncOpenAI(api_key=self._api_key, base_url=self._base_url)
+
+        # If structured output, we force tool choice to required
+        if structured_output_tool is not None:
+            tool_choice = "required"
+            openai_tools.append(structured_output_tool.openai_format)
+
+        response = await client.chat.completions.create(
+            model=self._model_name,
+            messages=messages,
+            tools=openai_tools,
+            temperature=self._invocation_parameters.get("temperature"),
+            stream=stream,
+            tool_choice=tool_choice,
+        )
+
+        # Sometimes, models call multiple tools including the structured output tool
+        # We need to ensure the response is formatted as structured output
+        # This handles both tool calls and fallback to backup LLM method
+        if structured_output_tool is not None:
+            response = await ensure_structured_output_response(
+                response=response,
+                structured_output_tool=structured_output_tool,
+                completion_service=self,
+                stream=stream,
+            )
+
+        span.set_attributes(
+            {
+                SpanAttributes.LLM_TOKEN_COUNT_COMPLETION: response.usage.completion_tokens,
+                SpanAttributes.LLM_TOKEN_COUNT_PROMPT: response.usage.prompt_tokens,
+                SpanAttributes.LLM_TOKEN_COUNT_TOTAL: response.usage.total_tokens,
+            }
+        )
+        return response
 
 
 class WebSearchService(LLMService):

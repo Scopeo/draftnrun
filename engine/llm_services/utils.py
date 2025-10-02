@@ -41,6 +41,7 @@ def chat_completion_to_response(
             if content is None:
                 raise ValueError("Tool message cannot have None content")
             # Convert tool response to assistant message
+            # Tool messages are not handled for json_constrained response API call
             assistant_message = {"role": "assistant", "content": content}
             response_messages.append(assistant_message)
             continue
@@ -48,9 +49,6 @@ def chat_completion_to_response(
         # Clean the message by removing tool-related fields
         clean_message = {k: v for k, v in message.items() if k not in ["tool_calls", "tool_call_id"]}
         response_messages.append(clean_message)
-
-    print("filtered response_messages")
-    print(response_messages)
 
     for message in response_messages:
         if "content" in message and isinstance(message["content"], list) and "role" in message:
@@ -195,13 +193,13 @@ def build_openai_responses_kwargs(
             LOGGER.info(f"Temperature set to 1 for the {model_name} model.")
             kwargs["temperature"] = 1
     return kwargs
-=======
-def create_mock_chat_completion(content: str, model_name: str) -> Any:
+
+def create_chat_completion_with_structured_output(structured_output: str, model_name: str) -> Any:
     """
-    Create a mock ChatCompletion object for structured output responses.
+    Create a fake ChatCompletion object for structured output responses.
 
     Args:
-        content: The structured content to include in the response
+        structured_output: The structured content to include in the response
         model_name: The model name to include in the response
 
     Returns:
@@ -210,7 +208,11 @@ def create_mock_chat_completion(content: str, model_name: str) -> Any:
     return ChatCompletion(
         id=f"chatcmpl-{uuid.uuid4()}",
         choices=[
-            Choice(index=0, message=ChatCompletionMessage(role="assistant", content=content), finish_reason="stop")
+            Choice(
+                index=0,
+                message=ChatCompletionMessage(role="assistant", content=structured_output),
+                finish_reason="stop",
+            )
         ],
         created=int(time.time()),
         model=model_name,
@@ -273,7 +275,6 @@ async def get_structured_response_without_tools(
     structured_output_tool,
     messages: list[dict] | str,
     stream: bool = False,
-    model_name: str = None,
 ) -> Any:
     """
     Get a structured response when explicitly choosing to answer without tools (tool_choice="none").
@@ -283,37 +284,61 @@ async def get_structured_response_without_tools(
         structured_output_tool: The structured output tool description
         messages: The messages to send to the LLM
         stream: Whether to stream the response
-        model_name: The model name for the mock response
 
     Returns:
         A ChatCompletion object with the structured content
     """
+    LOGGER.info("Getting structured response without tools using LLM constrained method")
     structured_json_output = convert_tool_description_to_output_format(structured_output_tool)
     structured_content = await completion_service.constrained_complete_with_json_schema_async(
         messages=messages,
         stream=stream,
         response_format=structured_json_output,
     )
-    response = create_mock_chat_completion(structured_content, model_name)
+    response = create_chat_completion_with_structured_output(structured_content, completion_service._model_name)
     return response
 
 
-def extract_structured_output_from_tool_calls(response, structured_output_tool) -> None:
+async def ensure_structured_output_response(response, structured_output_tool, completion_service, stream):
     """
-    Extract and return only the structured output tool's result when it's chosen among multiple tool calls.
+    Ensure the response is formatted as structured output.
+
+    If the structured output tool was called, extract its result.
+    If no tools were called, use backup LLM method to force structured formatting.
 
     Args:
         response: The ChatCompletion response object to modify
         structured_output_tool: The structured output tool description
+        completion_service: The completion service instance
+        stream: Whether to stream the response
+
+    Returns:
+        A ChatCompletion object with structured content
     """
     tools_called = response.choices[0].message.tool_calls
     if not tools_called:
-        raise ValueError("No tools were called by the function calling with structured output tool")
+        LOGGER.error("No tools were called in the response, using backup llm method to format the answer")
+        content = response.choices[0].message.content
+        # If content is None, we can't use it as messages, so we need to handle this case
+        if content is None:
+            LOGGER.error("Response content is None, cannot format structured output")
+            raise ValueError("Cannot format structured output: response content is None as well as tools called")
+        response = await get_structured_response_without_tools(
+            completion_service=completion_service,
+            structured_output_tool=structured_output_tool,
+            messages=content,
+            stream=stream,
+        )
+        return response
 
     for call in tools_called:
         if call.function.name == structured_output_tool.name:
+            # Return the arguments of the structured output tool as the final response
+            # Discard the other tool call results
             try:
                 response.choices[0].message.content = json.dumps(call.function.arguments)
                 response.choices[0].message.tool_calls = None
+                return response
             except Exception as e:
                 raise ValueError(f"Error parsing structured output tool response with error {e}")
+    return response

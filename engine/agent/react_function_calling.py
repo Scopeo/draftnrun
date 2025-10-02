@@ -140,8 +140,8 @@ class ReActAgent(Agent):
         date_in_system_prompt: bool = False,
         output_tool_name: Optional[str] = None,
         output_tool_description: Optional[str] = None,
-        output_tool_properties: Optional[dict] = None,
-        output_tool_required_properties: Optional[list] = None,
+        output_tool_properties: Optional[dict|str] = None,
+        output_tool_required_properties: Optional[str|list] = None,
     ) -> None:
         super().__init__(
             trace_manager=trace_manager,
