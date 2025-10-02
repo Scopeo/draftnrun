@@ -17,8 +17,46 @@ class DummyGraphRunner:
         self.id = id
 
 
+class DummySession:
+    """A minimal stub of SQLAlchemy Session supporting chained query() calls used in tests.
+
+    Methods return self for chaining and `first()` returns None by default. Tests monkeypatch repository
+    functions so this stub only needs to prevent AttributeError when accidental DB calls occur.
+    """
+
+    def query(self, *args, **kwargs):
+        return self
+
+    def join(self, *args, **kwargs):
+        return self
+
+    def filter(self, *args, **kwargs):
+        return self
+
+    def order_by(self, *args, **kwargs):
+        return self
+
+    def first(self):
+        return None
+
+    def all(self):
+        return []
+
+    def execute(self, *args, **kwargs):
+        return self
+
+    def scalar(self):
+        return False
+
+    def add(self, *args, **kwargs):
+        return None
+
+    def commit(self):
+        return None
+
+
 def test_deploy_graph_service_graph_not_found(monkeypatch):
-    session = object()
+    session = DummySession()
     graph_runner_id = uuid.uuid4()
     project_id = uuid.uuid4()
 
@@ -32,7 +70,7 @@ def test_deploy_graph_service_graph_not_found(monkeypatch):
 
 
 def test_deploy_graph_service_env_not_bound(monkeypatch):
-    session = object()
+    session = DummySession()
     graph_runner_id = uuid.uuid4()
     project_id = uuid.uuid4()
 
@@ -50,7 +88,7 @@ def test_deploy_graph_service_env_not_bound(monkeypatch):
 
 
 def test_deploy_graph_service_already_production(monkeypatch):
-    session = object()
+    session = DummySession()
     graph_runner_id = uuid.uuid4()
     project_id = uuid.uuid4()
 
@@ -68,7 +106,7 @@ def test_deploy_graph_service_already_production(monkeypatch):
 
 
 def test_deploy_graph_service_success_no_previous(monkeypatch):
-    session = object()
+    session = DummySession()
     graph_runner_id = uuid.uuid4()
     project_id = uuid.uuid4()
 
@@ -108,7 +146,7 @@ def test_deploy_graph_service_success_no_previous(monkeypatch):
 
 
 def test_deploy_graph_service_success_with_previous(monkeypatch):
-    session = object()
+    session = DummySession()
     graph_runner_id = uuid.uuid4()
     project_id = uuid.uuid4()
 
