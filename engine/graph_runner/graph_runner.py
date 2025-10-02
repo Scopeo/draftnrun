@@ -397,14 +397,21 @@ class GraphRunner:
             # Determine canonical ports with sensible defaults
             source_port_name: str | None = None
             target_port_name: str | None = None
-            if source_runnable:
-                ports = source_runnable.get_canonical_ports()  # type: ignore[attr-defined]
-                if isinstance(ports, dict):
-                    source_port_name = ports.get("output")
-            if target_runnable:
-                ports = target_runnable.get_canonical_ports()  # type: ignore[attr-defined]
-                if isinstance(ports, dict):
-                    target_port_name = ports.get("input")
+            # TODO: Remove hasattr check when all components are migrated
+            if source_runnable and hasattr(source_runnable, "get_canonical_ports"):
+                try:
+                    ports = source_runnable.get_canonical_ports()  # type: ignore[attr-defined]
+                    if isinstance(ports, dict):
+                        source_port_name = ports.get("output")
+                except Exception:
+                    source_port_name = None
+            if target_runnable and hasattr(target_runnable, "get_canonical_ports"):
+                try:
+                    ports = target_runnable.get_canonical_ports()  # type: ignore[attr-defined]
+                    if isinstance(ports, dict):
+                        target_port_name = ports.get("input")
+                except Exception:
+                    target_port_name = None
 
             source_port_name = source_port_name or "output"
             target_port_name = target_port_name or "input"

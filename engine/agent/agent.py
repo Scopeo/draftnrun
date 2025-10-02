@@ -201,11 +201,15 @@ class Agent(ABC):
                         span.set_status(trace_api.StatusCode.OK)
                         return output_node_data
                     else:
-                        legacy_arg = (
-                            AgentPayload(**input_node_data.data)
-                            if "messages" in input_node_data.data
-                            else input_node_data.data
-                        )
+                        data = input_node_data.data or {}
+                        if "messages" in data:
+                            legacy_arg = AgentPayload(**data)
+                        else:
+                            content = data.get("input")
+                            if isinstance(content, str):
+                                legacy_arg = AgentPayload(messages=[ChatMessage(role="user", content=content)])
+                            else:
+                                legacy_arg = AgentPayload(messages=[])
                         legacy_output = await self._run_without_io_trace(legacy_arg)
                         output_node_data = self._convert_legacy_to_node_data(legacy_output, input_node_data.ctx)
                         span.set_attributes(
@@ -243,6 +247,22 @@ class Agent(ABC):
                 if self.migrated:
                     InputModel = self.get_inputs_schema()
                     data = self._collect_inputs_from_legacy(args, kwargs)
+
+                    ports = self.get_canonical_ports()
+                    input_port_name = ports.get("input")
+                    if (
+                        input_port_name
+                        and input_port_name not in data
+                        and "messages" in data
+                        and isinstance(data["messages"], list)
+                        and data["messages"]
+                    ):
+                        last_message = data["messages"][-1]
+                        if isinstance(last_message, ChatMessage):
+                            data[input_port_name] = last_message.content or ""
+                        elif isinstance(last_message, dict):
+                            data[input_port_name] = last_message.get("content", "")
+
                     validated_inputs = InputModel(**data)
                     output_model_instance = await self._run_without_io_trace(inputs=validated_inputs, ctx={})
                     OutputModel = self.get_outputs_schema()
