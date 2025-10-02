@@ -102,6 +102,8 @@ class GraphRunner:
         self.tasks: dict[str, Task] = {}
         self._input_node_id = "__input__"
         self._add_virtual_input_node()
+        # Synthesize explicit default mappings for single-predecessor nodes without mappings
+        self._synthesize_default_mappings()
         self._validate_graph()
 
     def _initialize_execution(self, input_data: dict[str, Any]) -> None:
@@ -149,7 +151,14 @@ class GraphRunner:
                     SpanAttributes.INPUT_VALUE: trace_input,
                 }
             )
-            final_output = await self._run_without_io_trace(input_data)
+            # Normalize legacy AgentPayload inputs to dict for internal runner
+            # TODO: Check if needed
+            if isinstance(input_data, AgentPayload):
+                normalized_input: dict[str, Any] = input_data.model_dump(exclude_unset=True, exclude_none=True)
+            else:
+                normalized_input = input_data  # type: ignore[assignment]
+            final_output = await self._run_without_io_trace(normalized_input)
+
             trace_output = serialize_to_json(final_output, shorten_string=True)
             span.set_attributes(
                 {
@@ -196,19 +205,22 @@ class GraphRunner:
             )
 
     def _gather_inputs(self, node_id: str) -> dict[str, Any]:
-        """Assembles the input data for a node based on its explicit port mappings."""
+        """Assembles the input data for a node based on explicit mappings,
+        keeping start-node passthrough. Default mapping synthesis happens during
+        initialization so mappings should be explicit here.
+        """
         input_data: dict[str, Any] = {}
         mappings_for_target = self._mappings_by_target.get(node_id, [])
         predecessors = list(self.graph.predecessors(node_id))
         is_start_node = self._input_node_id in predecessors
 
         if not mappings_for_target:
-            # If node is start, pass through initial input; otherwise, return empty and warn.
-            if is_start_node:
+            # If node is start and has no other deps, pass through initial input
+            real_predecessors = [p for p in predecessors if p != self._input_node_id]
+            if is_start_node and not real_predecessors:
                 input_task_result = self.tasks[self._input_node_id].result
                 return input_task_result.data if input_task_result else {}
-            if self.graph.in_degree(node_id) > 0:
-                LOGGER.warning(f"Node '{node_id}' has predecessors but no port mappings. It will receive empty input.")
+            # Otherwise, no explicit mappings → no inputs
             return {}
 
         direct_mappings = [pm for pm in mappings_for_target if pm.dispatch_strategy == "direct"]
@@ -336,6 +348,79 @@ class GraphRunner:
         #                 f"Port mappings exist with no corresponding edge in the graph: {extra_mappings}"
         #             )
         #         raise ValueError(f"Graph structure inconsistency detected: {'; '.join(error_messages)}")
+
+    def _synthesize_default_mappings(self) -> None:
+        """Create explicit direct port mappings for nodes with exactly one real predecessor
+        when no mappings are provided. Uses canonical ports from runnables.
+
+        - Skips start nodes that only depend on the virtual input node (passthrough).
+        - Raises an error if a node has multiple real predecessors and no mappings.
+        """
+        new_mappings: list[PortMapping] = []
+        for node_id in self.graph.nodes():
+            if node_id == self._input_node_id:
+                continue
+            existing = self._mappings_by_target.get(node_id, [])
+            if existing:
+                continue
+
+            predecessors = list(self.graph.predecessors(node_id))
+            is_start_node = self._input_node_id in predecessors
+            real_predecessors = [p for p in predecessors if p != self._input_node_id]
+
+            # Start-node passthrough remains implicit
+            if is_start_node and not real_predecessors:
+                continue
+
+            if len(real_predecessors) == 0:
+                # No inputs available; nothing to synthesize
+                continue
+
+            if len(real_predecessors) > 1:
+                raise ValueError(
+                    "Node '{node}' has multiple incoming connections from {preds} without explicit port mappings. "
+                    "Please specify which outputs should connect to which inputs.".format(
+                        node=node_id, preds=real_predecessors
+                    )
+                )
+
+            pred_id = real_predecessors[0]
+            source_runnable = self.runnables.get(pred_id)
+            target_runnable = self.runnables.get(node_id)
+
+            # Determine canonical ports with sensible defaults
+            source_port_name: str | None = None
+            target_port_name: str | None = None
+            if source_runnable:
+                ports = source_runnable.get_canonical_ports()  # type: ignore[attr-defined]
+                if isinstance(ports, dict):
+                    source_port_name = ports.get("output")
+            if target_runnable:
+                ports = target_runnable.get_canonical_ports()  # type: ignore[attr-defined]
+                if isinstance(ports, dict):
+                    target_port_name = ports.get("input")
+
+            source_port_name = source_port_name or "output"
+            target_port_name = target_port_name or "input"
+
+            new_mappings.append(
+                PortMapping(
+                    source_instance_id=str(pred_id),
+                    source_port_name=source_port_name,
+                    target_instance_id=str(node_id),
+                    target_port_name=target_port_name,
+                    dispatch_strategy="direct",
+                )
+            )
+
+        if not new_mappings:
+            return
+
+        # Extend mappings and rebuild the index for consistency
+        self.port_mappings.extend(new_mappings)
+        self._mappings_by_target = {}
+        for pm in self.port_mappings:
+            self._mappings_by_target.setdefault(pm.target_instance_id, []).append(pm)
 
 
 # --- Backward Compatibility Shims ---
