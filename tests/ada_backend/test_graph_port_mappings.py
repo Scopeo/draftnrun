@@ -1,3 +1,4 @@
+# flake8: noqa: E501
 from uuid import UUID, uuid4
 from unittest.mock import patch
 

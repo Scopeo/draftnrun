@@ -18,7 +18,6 @@ from ada_backend.repositories.graph_runner_repository import (
     graph_runner_exists,
     insert_graph_runner_and_bind_to_project,
     upsert_component_node,
-    upsert_port_mapping,
     delete_port_mappings_for_graph,
 )
 from ada_backend.database import models as db

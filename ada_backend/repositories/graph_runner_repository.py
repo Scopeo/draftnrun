@@ -267,45 +267,6 @@ def delete_temp_folder(uuid_for_temp_folder: str) -> None:
 
 
 # --- Port mapping operations ---
-def upsert_port_mapping(
-    session: Session,
-    graph_runner_id: UUID,
-    source_instance_id: UUID,
-    source_port_name: str,
-    target_instance_id: UUID,
-    target_port_name: str,
-    dispatch_strategy: str = "direct",
-) -> db.PortMapping:
-    existing = (
-        session.query(db.PortMapping)
-        .filter(
-            db.PortMapping.graph_runner_id == graph_runner_id,
-            db.PortMapping.source_instance_id == source_instance_id,
-            db.PortMapping.target_instance_id == target_instance_id,
-            db.PortMapping.source_port_name == source_port_name,
-            db.PortMapping.target_port_name == target_port_name,
-        )
-        .first()
-    )
-    if existing:
-        existing.dispatch_strategy = dispatch_strategy
-        session.commit()
-        session.refresh(existing)
-        return existing
-    pm = db.PortMapping(
-        graph_runner_id=graph_runner_id,
-        source_instance_id=source_instance_id,
-        source_port_name=source_port_name,
-        target_instance_id=target_instance_id,
-        target_port_name=target_port_name,
-        dispatch_strategy=dispatch_strategy,
-    )
-    session.add(pm)
-    session.commit()
-    session.refresh(pm)
-    return pm
-
-
 def list_port_mappings_for_graph(session: Session, graph_runner_id: UUID) -> list[db.PortMapping]:
     return session.query(db.PortMapping).filter(db.PortMapping.graph_runner_id == graph_runner_id).all()
 
