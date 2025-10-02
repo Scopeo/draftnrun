@@ -50,10 +50,10 @@ def get_all_agents(
         raise HTTPException(status_code=500, detail="Internal error service")
 
 
-@router.get("/agents/{project_id}/version/{version_id}", response_model=AgentInfoSchema)
+@router.get("/agents/{project_id}/versions/{graph_runner_id}", response_model=AgentInfoSchema)
 def get_agent_by_id(
     project_id: UUID,
-    version_id: UUID,
+    graph_runner_id: UUID,
     user: Annotated[
         SupabaseUser, Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.READER.value))
     ],
@@ -62,7 +62,7 @@ def get_agent_by_id(
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
     try:
-        return get_agent_by_id_service(session, project_id, version_id)
+        return get_agent_by_id_service(session, project_id, graph_runner_id)
     except ProjectNotFound as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
     except GraphNotFound as e:
@@ -92,10 +92,10 @@ def create_agent(
         raise HTTPException(status_code=500, detail="Internal error service") from e
 
 
-@router.put("/agents/{project_id}/version/{version_id}", response_model=GraphUpdateResponse)
+@router.put("/agents/{project_id}/versions/{graph_runner_id}", response_model=GraphUpdateResponse)
 async def update_agent(
     project_id: UUID,
-    version_id: UUID,
+    graph_runner_id: UUID,
     agent_data: AgentUpdateSchema,
     user: Annotated[
         SupabaseUser, Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.WRITER.value))
@@ -105,7 +105,7 @@ async def update_agent(
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
     try:
-        return await update_agent_service(session, user.id, project_id, version_id, agent_data)
+        return await update_agent_service(session, user.id, project_id, graph_runner_id, agent_data)
     except ProjectNotFound as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
     except Exception as e:

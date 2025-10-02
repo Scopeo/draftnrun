@@ -88,14 +88,14 @@ def test_get_all_agents_service(monkeypatch):
 def test_get_agent_by_id_service_project_not_found(monkeypatch):
     session = object()
     agent_id = uuid.uuid4()
-    version_id = uuid.uuid4()
+    graph_runner_id = uuid.uuid4()
 
     def fake_get_project(session_arg, project_id):
         return None
 
     monkeypatch.setattr(agents_service, "get_project", fake_get_project)
 
-    res = agents_service.get_agent_by_id_service(session, agent_id, version_id)
+    res = agents_service.get_agent_by_id_service(session, agent_id, graph_runner_id)
     # Should return ProjectNotFound exception instance
     assert isinstance(res, agents_service.ProjectNotFound)
 
@@ -103,7 +103,7 @@ def test_get_agent_by_id_service_project_not_found(monkeypatch):
 def test_get_agent_by_id_service_with_components(monkeypatch):
     session = object()
     agent_id = uuid.uuid4()
-    version_id = uuid.uuid4()
+    graph_runner_id = uuid.uuid4()
 
     proj = DummyProject(agent_id, "AgentName", uuid.uuid4())
 
@@ -125,13 +125,13 @@ def test_get_agent_by_id_service_with_components(monkeypatch):
 
     def fake_get_graph_service(session_arg, project_id, graph_runner_id):
         assert project_id == agent_id
-        assert graph_runner_id == version_id
+        assert graph_runner_id == graph_runner_id
         return DummyGraphResponse(component_instances=[comp_instance])
 
     monkeypatch.setattr(agents_service, "get_project", fake_get_project)
     monkeypatch.setattr(agents_service, "get_graph_service", fake_get_graph_service)
 
-    res = agents_service.get_agent_by_id_service(session, agent_id, version_id)
+    res = agents_service.get_agent_by_id_service(session, agent_id, graph_runner_id)
     assert res.name == proj.name
     assert res.system_prompt == "foo"
     assert isinstance(res.model_parameters, list)
@@ -142,7 +142,7 @@ def test_update_agent_service_builds_graph_and_calls_update(monkeypatch):
     session = object()
     user_id = uuid.uuid4()
     agent_id = uuid.uuid4()
-    version_id = uuid.uuid4()
+    graph_runner_id = uuid.uuid4()
 
     # prepare agent_data with one tool and one model parameter
     tool_id = uuid.uuid4()
@@ -177,11 +177,11 @@ def test_update_agent_service_builds_graph_and_calls_update(monkeypatch):
 
     monkeypatch.setattr(agents_service, "update_graph_service", fake_update_graph_service)
 
-    res = asyncio.run(agents_service.update_agent_service(session, user_id, agent_id, version_id, agent_data))
+    res = asyncio.run(agents_service.update_agent_service(session, user_id, agent_id, graph_runner_id, agent_data))
 
     # verify update_graph_service was called with expected values
     assert called["session"] is session
-    assert called["graph_runner_id"] == version_id
+    assert called["graph_runner_id"] == graph_runner_id
     assert called["project_id"] == agent_id
     assert called["user_id"] == user_id
 
@@ -189,13 +189,13 @@ def test_update_agent_service_builds_graph_and_calls_update(monkeypatch):
     # relationships should include one entry linking version_id to the tool
     assert len(graph_project.relationships) == 1
     rel = graph_project.relationships[0]
-    assert rel.parent_component_instance_id == version_id
+    assert rel.parent_component_instance_id == graph_runner_id
     assert rel.child_component_instance_id == tool_id
 
     # component_instances should contain the provided tool and the built AI agent
     assert any(ci.id == tool_id for ci in graph_project.component_instances)
     # AI agent instance should have id equal to version_id and contain system prompt param
-    ai_instances = [ci for ci in graph_project.component_instances if ci.id == version_id]
+    ai_instances = [ci for ci in graph_project.component_instances if ci.id == graph_runner_id]
     assert len(ai_instances) == 1
     ai = ai_instances[0]
     assert any(
@@ -203,4 +203,4 @@ def test_update_agent_service_builds_graph_and_calls_update(monkeypatch):
     )
     # response should be GraphUpdateResponse with graph_id == version_id
     assert isinstance(res, GraphUpdateResponse)
-    assert res.graph_id == version_id
+    assert res.graph_id == graph_runner_id

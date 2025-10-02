@@ -63,11 +63,11 @@ def get_all_agents_service(session: Session, organization_id: UUID) -> list[Agen
     return result
 
 
-def get_agent_by_id_service(session: Session, agent_id: UUID, version_id: UUID) -> AgentInfoSchema:
+def get_agent_by_id_service(session: Session, agent_id: UUID, graph_runner_id: UUID) -> AgentInfoSchema:
     project = get_project(session, project_id=agent_id)
     if not project:
         return ProjectNotFound(agent_id)
-    graph_response = get_graph_service(session, project_id=agent_id, graph_runner_id=version_id)
+    graph_response = get_graph_service(session, project_id=agent_id, graph_runner_id=graph_runner_id)
     model_parameters: list[PipelineParameterSchema] = []
     tools: list[ComponentInstanceSchema] = []
     for component_instance in graph_response.component_instances:
@@ -175,12 +175,12 @@ def build_ai_agent_component(
 
 
 async def update_agent_service(
-    session: Session, user_id: UUID, agent_id: UUID, version_id: UUID, agent_data: AgentUpdateSchema
+    session: Session, user_id: UUID, agent_id: UUID, graph_runner_id: UUID, agent_data: AgentUpdateSchema
 ) -> GraphUpdateResponse:
     component_instances = agent_data.tools.copy()
     component_instances.append(
         build_ai_agent_component(
-            ai_agent_instance_id=version_id,
+            ai_agent_instance_id=graph_runner_id,
             model_parameters=agent_data.model_parameters,
             system_prompt=agent_data.system_prompt,
         )
@@ -190,7 +190,7 @@ async def update_agent_service(
     for index, tool in enumerate(agent_data.tools):
         relationships.append(
             ComponentRelationshipSchema(
-                parent_component_instance_id=version_id,
+                parent_component_instance_id=graph_runner_id,
                 child_component_instance_id=tool.id,
                 parameter_name=AGENT_TOOLS_PARAMETER_NAME,
                 order=index,
@@ -201,7 +201,7 @@ async def update_agent_service(
     )
     return await update_graph_service(
         session=session,
-        graph_runner_id=version_id,
+        graph_runner_id=graph_runner_id,
         project_id=agent_id,
         graph_project=graph_update_schema,
         user_id=user_id,
