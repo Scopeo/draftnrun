@@ -1,0 +1,67 @@
+# Supabase functions (Deno - not needed for Python backend)
+supabase/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.coverage/
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+.cursor/
+.DS_Store
+
+# Logs
+logs/
+*.log
+
+# Data and testing
+data/
+vectorstore/
+tests/
+notebooks/
+
+# Config files with secrets
+credentials.env
+sql_credentials.env
+custom_models.json
+ada_ingestion_system/.env
+
+# Documentation
+*.md
+docs/
+documentation/
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# CI/CD
+.github/
+
+# Docker compose and local services
+services/
+docker-compose.yml
+
+# Monitoring
+monitoring/
+config/grafana/
+config/prometheus/
+config/tempo.yaml
+
