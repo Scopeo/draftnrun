@@ -48,6 +48,7 @@ def get_graph_runner_for_env(
     )
 
 
+# TODO: move logic to service
 def insert_graph_runner(
     session: Session,
     graph_id: UUID,
@@ -222,6 +223,7 @@ def delete_graph_runner(session: Session, graph_id: UUID) -> None:
     session.commit()
 
 
+# TODO: move to service
 def add_input_component_to_graph(session: Session, graph_runner_id: UUID) -> db.ComponentInstance:
     """
     Adds an input component as a start node to the graph runner.

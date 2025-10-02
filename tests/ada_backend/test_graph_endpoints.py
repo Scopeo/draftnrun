@@ -239,4 +239,4 @@ def test_delete_graph_runner():
 
     endpoint = f"/projects/{PROJECT_ID}/graph/{GRAPH_RUNNER_ID}"
     response = client.get(endpoint, headers=HEADERS_JWT)
-    assert response.status_code == 400
+    assert response.status_code == 404

@@ -237,7 +237,7 @@ def instantiate_component(
     except Exception as e:
         raise ValueError(
             f"Failed to instantiate component '{component_name}' "
-            f"with instance ID {component_instance.ref}: {e}\n"
+            f"with instance ID {component_instance.id}: {e}\n"
             f"Input parameters: {input_params}"
         ) from e
 

@@ -2,7 +2,7 @@ from typing import Any, List, Optional
 from uuid import UUID
 from pydantic import BaseModel, Field
 
-from ada_backend.database.models import EnvType
+from ada_backend.database.models import EnvType, ProjectType
 from ada_backend.schemas.template_schema import InputTemplate
 
 
@@ -36,6 +36,7 @@ class GraphRunnerEnvDTO(BaseModel):
 
 
 class ProjectWithGraphRunnersSchema(ProjectResponse):
+    project_type: Optional[ProjectType] = None
     graph_runners: List[GraphRunnerEnvDTO] = Field(default_factory=list)
 
 

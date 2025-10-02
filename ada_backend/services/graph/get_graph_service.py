@@ -10,6 +10,7 @@ from ada_backend.repositories.graph_runner_repository import (
     graph_runner_exists,
 )
 from ada_backend.schemas.pipeline.graph_schema import GraphGetResponse, EdgeSchema
+from ada_backend.services.errors import GraphNotFound
 from ada_backend.services.pipeline.get_pipeline_service import get_component_instance, get_relationships
 
 LOGGER = logging.getLogger(__name__)
@@ -21,7 +22,7 @@ def get_graph_service(
     graph_runner_id: UUID,
 ) -> GraphGetResponse:
     if not graph_runner_exists(session, graph_runner_id):
-        raise ValueError(f"Graph with ID {graph_runner_id} not found.")
+        raise GraphNotFound(graph_runner_id)
 
     project_env_binding = get_env_relationship_by_graph_runner_id(session, graph_runner_id)
     if not project_env_binding:
