@@ -36,6 +36,9 @@ class Input:
         self.component_attributes = component_attributes
         self.payload_schema = load_str_to_json(payload_schema)
 
+    def get_canonical_ports(self) -> dict[str, str | None]:
+        return {"output": "output"}
+
     # TODO: Refactor Agent I/O to use an unified input/output object:
     async def run(self, input_data: AgentPayload | dict | NodeData) -> dict:
         # Normalize input to a plain dict
