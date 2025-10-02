@@ -82,6 +82,7 @@ def get_agent_by_id_service(session: Session, agent_id: UUID, graph_runner_id: U
 
     return AgentInfoSchema(
         name=project.name,
+        description=project.description,
         organization_id=project.organization_id,
         system_prompt=system_prompt,
         model_parameters=model_parameters,
