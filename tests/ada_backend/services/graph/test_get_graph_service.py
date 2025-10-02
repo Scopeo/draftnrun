@@ -22,8 +22,14 @@ class DummyEdge:
 
 
 class DummyEnvRel:
-    def __init__(self, project_id):
+    class _GraphRunnerStub:
+        def __init__(self, tag_version: str | None = None):
+            self.tag_version = tag_version
+
+    def __init__(self, project_id, tag_version: str | None = None):
         self.project_id = project_id
+        # Provide a minimal graph_runner relationship expected by service code
+        self.graph_runner = DummyEnvRel._GraphRunnerStub(tag_version=tag_version)
 
 
 class DummyComponentInstance:
@@ -120,7 +126,7 @@ def test_get_graph_service_success(monkeypatch):
     # env relationship points to our project
     monkeypatch.setattr(
         "ada_backend.services.graph.get_graph_service.get_env_relationship_by_graph_runner_id",
-        lambda s, gid: DummyEnvRel(project_id=project_id),
+        lambda s, gid: DummyEnvRel(project_id=project_id, tag_version="v1"),
     )
 
     # two component nodes
