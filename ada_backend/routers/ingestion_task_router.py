@@ -26,10 +26,10 @@ from ada_backend.schemas.ingestion_task_schema import (
 )
 
 
-router = APIRouter(prefix="/ingestion_task", tags=["Ingestion Task"])
+router = APIRouter(tags=["Ingestion Task"])
 
 
-@router.get("/{organization_id}", response_model=List[IngestionTaskResponse])
+@router.get("/ingestion_task/{organization_id}", response_model=List[IngestionTaskResponse])
 def get_organization_sources(
     organization_id: UUID,
     user: Annotated[
@@ -45,7 +45,7 @@ def get_organization_sources(
         raise HTTPException(status_code=500, detail="Internal Server Error") from e
 
 
-@router.post("/{organization_id}", status_code=status.HTTP_201_CREATED)
+@router.post("/ingestion_task/{organization_id}", status_code=status.HTTP_201_CREATED)
 def create_organization_task(
     organization_id: UUID,
     ingestion_task_data: IngestionTaskQueue,
@@ -65,8 +65,8 @@ def create_organization_task(
         raise HTTPException(status_code=500, detail="Internal Server Error") from e
 
 
-@router.post("/{organization_id}/api-key", status_code=status.HTTP_201_CREATED)
-def create_organization_task_api_key(
+@router.post("/organizations/{organization_id}/ingestion_tasks/api-key-auths", status_code=status.HTTP_201_CREATED)
+def create_ingestion_task_with_api_key(
     organization_id: UUID,
     ingestion_task_data: IngestionTaskQueue,
     verified_api_key: VerifiedApiKey = Depends(verify_api_key_dependency),
@@ -86,7 +86,7 @@ def create_organization_task_api_key(
         raise HTTPException(status_code=500, detail="Internal Server Error") from e
 
 
-@router.patch("/{organization_id}", status_code=status.HTTP_200_OK)
+@router.patch("/ingestion_task/{organization_id}", status_code=status.HTTP_200_OK)
 def update_organization_task(
     organization_id: UUID,
     verified_ingestion_api_key: Annotated[None, Depends(verify_ingestion_api_key_dependency)],
@@ -102,7 +102,7 @@ def update_organization_task(
         raise HTTPException(status_code=500, detail="Internal Server Error") from e
 
 
-@router.delete("/{organization_id}/{source_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/ingestion_task/{organization_id}/{source_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_organization_task(
     organization_id: UUID,
     source_id: UUID,
