@@ -151,8 +151,9 @@ class GraphRunner:
                     SpanAttributes.INPUT_VALUE: trace_input,
                 }
             )
-            # Legacy compatibility shim: accept AgentPayload and normalize to dict for internal runner.
-            # Remove once all callers provide dict inputs.
+            # Legacy compatibility shim: accept AgentPayload or dict and normalize to dict for internal runner.
+            # Long-term target: GraphRunner.run should accept NodeData only; remove when callers stop
+            # passing AgentPayload/dict and provide NodeData instead.
             if isinstance(input_data, AgentPayload):
                 normalized_input: dict[str, Any] = input_data.model_dump(exclude_unset=True, exclude_none=True)
             else:
