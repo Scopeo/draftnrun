@@ -1,6 +1,7 @@
 from uuid import UUID
 import uuid
 from typing import Optional
+import traceback
 
 from sqlalchemy.orm import Session
 import networkx as nx

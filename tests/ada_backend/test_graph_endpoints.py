@@ -60,7 +60,8 @@ def test_create_empty_graph_runner():
     results = response.json()
     assert response.status_code == 200
     assert isinstance(results, dict)
-    assert results == payload
+    # GET should include port_mappings even if none were provided
+    assert results == {**payload, "port_mappings": []}
 
 
 def test_update_graph_runner():

@@ -69,7 +69,42 @@ def test_get_put_roundtrip_port_mappings_migration():
                 "is_start_node": True,
                 # Reuse seeded component id from existing tests
                 "component_id": "7a039611-49b3-4bfd-b09b-c0f93edf3b79",
-                "parameters": [],
+                "parameters": [
+                    {
+                        "value": "Reformulate the question as a customer service query :\n{input}",
+                        "name": "prompt_template",
+                        "order": None,
+                        "type": "string",
+                        "nullable": False,
+                        "default": "Answer this question: {input}",
+                        "ui_component": "Textarea",
+                        "ui_component_properties": {
+                            "label": "Prompt Template",
+                            "placeholder": "Enter the prompt here. Use {input} (or similar) to insert dynamic content -  the {} braces with a keyword are mandatory.",
+                        },
+                        "is_advanced": False,
+                    },
+                    {
+                        "value": "openai:gpt-4o-mini",
+                        "name": "completion_model",
+                        "order": None,
+                        "type": "string",
+                        "nullable": False,
+                        "default": "openai:gpt-4.1-mini",
+                        "ui_component": "Select",
+                        "ui_component_properties": {
+                            "label": "Model Name",
+                            "options": [
+                                {"value": "openai:gpt-4.1", "label": "GPT-4.1"},
+                                {"value": "openai:gpt-4.1-mini", "label": "GPT-4.1 Mini"},
+                                {"value": "openai:gpt-4.1-nano", "label": "GPT-4.1 Nano"},
+                                {"value": "openai:gpt-4o", "label": "GPT-4o"},
+                                {"value": "openai:gpt-4o-mini", "label": "GPT-4o Mini"},
+                            ],
+                        },
+                        "is_advanced": False,
+                    },
+                ],
                 "tool_description": {
                     "name": "Graph Test Chatbot",
                     "description": "Graph Test",
@@ -92,7 +127,42 @@ def test_get_put_roundtrip_port_mappings_migration():
                 "is_start_node": False,
                 # Same seeded component as above to keep it simple
                 "component_id": "7a039611-49b3-4bfd-b09b-c0f93edf3b79",
-                "parameters": [],
+                "parameters": [
+                    {
+                        "value": "Add polite expressions to the question: {question} \n",
+                        "name": "prompt_template",
+                        "order": None,
+                        "type": "string",
+                        "nullable": False,
+                        "default": "Answer this question: {input}",
+                        "ui_component": "Textarea",
+                        "ui_component_properties": {
+                            "label": "Prompt Template",
+                            "placeholder": "Enter the prompt here. Use {input} (or similar) to insert dynamic content -  the {} braces with a keyword are mandatory.",
+                        },
+                        "is_advanced": False,
+                    },
+                    {
+                        "value": "openai:gpt-4o-mini",
+                        "name": "completion_model",
+                        "order": None,
+                        "type": "string",
+                        "nullable": False,
+                        "default": "openai:gpt-4.1-mini",
+                        "ui_component": "Select",
+                        "ui_component_properties": {
+                            "label": "Model Name",
+                            "options": [
+                                {"value": "openai:gpt-4.1", "label": "GPT-4.1"},
+                                {"value": "openai:gpt-4.1-mini", "label": "GPT-4.1 Mini"},
+                                {"value": "openai:gpt-4.1-nano", "label": "GPT-4.1 Nano"},
+                                {"value": "openai:gpt-4o", "label": "GPT-4o"},
+                                {"value": "openai:gpt-4o-mini", "label": "GPT-4o Mini"},
+                            ],
+                        },
+                        "is_advanced": False,
+                    },
+                ],
                 "tool_description": {
                     "name": "Graph Test Chatbot",
                     "description": "Graph Test",
