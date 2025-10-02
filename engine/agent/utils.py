@@ -6,6 +6,8 @@ from datetime import datetime
 from pathlib import Path
 import logging
 
+from engine.temps_folder_utils import get_output_dir
+
 from fuzzywuzzy import fuzz, process
 
 
@@ -114,14 +116,12 @@ def load_str_to_json(str_to_parse: str) -> dict:
 
 
 def prepare_markdown_output_path(
-    kwargs: dict,
-    *,
+    markdown_content: str,
+    filename: Optional[str] = None,
     output_dir_getter: Optional[Callable[[], Path]] = None,
     default_extension: str = ".docx",
 ) -> Tuple[str, Path, str]:
     """Prepare and validate markdown content and compute output path."""
-    markdown_content = kwargs.get("markdown_content", "")
-    filename = kwargs.get("filename", None)
 
     if not markdown_content:
         raise ValueError("No markdown content provided")
@@ -138,11 +138,9 @@ def prepare_markdown_output_path(
     # Resolve output directory
     if output_dir_getter is None:
         try:
-            from engine.temps_folder_utils import get_output_dir
-
             output_dir_getter = get_output_dir
-        except Exception:
-            raise RuntimeError("No output_dir_getter provided and failed to import get_output_dir")
+        except Exception as e:
+            raise RuntimeError("No output_dir_getter provided and failed to import get_output_dir") from e
 
     output_dir = output_dir_getter()
     output_path = output_dir / filename

@@ -133,7 +133,10 @@ class PDFGenerationTool(Agent):
     ) -> AgentPayload:
         try:
             markdown_content, output_path, filename = prepare_markdown_output_path(
-                kwargs, output_dir_getter=get_output_dir, default_extension=".pdf"
+                markdown_content=kwargs.get("markdown_content", ""),
+                filename=kwargs.get("filename", None),
+                output_dir_getter=get_output_dir,
+                default_extension=".pdf",
             )
         except ValueError as ve:
             error_msg = str(ve)
