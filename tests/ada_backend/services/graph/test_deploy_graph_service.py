@@ -130,6 +130,12 @@ def test_deploy_graph_service_success_no_previous(monkeypatch):
         lambda session, graph_runner_id_to_copy, project_id: new_id,
     )
 
+    # avoid touching DB for tag update
+    monkeypatch.setattr(
+        "ada_backend.services.graph.deploy_graph_service.update_graph_runner_tag_version",
+        lambda *a, **k: None,
+    )
+
     # bind and update just need to be present; patch to no-op
     monkeypatch.setattr(
         "ada_backend.services.graph.deploy_graph_service.bind_graph_runner_to_project", lambda *a, **k: None
@@ -175,6 +181,11 @@ def test_deploy_graph_service_success_with_previous(monkeypatch):
     # make update_graph_runner_env a no-op
     monkeypatch.setattr(
         "ada_backend.services.graph.deploy_graph_service.update_graph_runner_env", lambda *a, **k: None
+    )
+    # avoid touching DB for tag update
+    monkeypatch.setattr(
+        "ada_backend.services.graph.deploy_graph_service.update_graph_runner_tag_version",
+        lambda *a, **k: None,
     )
 
     res = deploy_graph_service(session, graph_runner_id, project_id)
