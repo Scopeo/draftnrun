@@ -23,6 +23,7 @@ from ada_backend.repositories.port_mapping_repository import (
     delete_port_mappings_for_graph,
     get_output_port_definition_id,
     get_input_port_definition_id,
+    get_port_definition_by_id,
 )
 from ada_backend.database import models as db
 from ada_backend.schemas.pipeline.graph_schema import GraphUpdateResponse, GraphUpdateSchema
@@ -45,6 +46,22 @@ def get_component_id_by_instance_id(session: Session, instance_id: UUID) -> UUID
     if not instance:
         raise ValueError(f"Component instance {instance_id} not found")
     return instance.component_id
+
+
+def validate_port_definition_types(session: Session, source_port_def_id: UUID, target_port_def_id: UUID) -> None:
+    """Validate that source is OUTPUT and target is INPUT"""
+    source_port = get_port_definition_by_id(session, source_port_def_id)
+    target_port = get_port_definition_by_id(session, target_port_def_id)
+
+    if not source_port:
+        raise ValueError(f"Source port definition {source_port_def_id} not found")
+    if not target_port:
+        raise ValueError(f"Target port definition {target_port_def_id} not found")
+
+    if source_port.port_type != db.PortType.OUTPUT:
+        raise ValueError(f"Source port must be OUTPUT type, got {source_port.port_type}")
+    if target_port.port_type != db.PortType.INPUT:
+        raise ValueError(f"Target port must be INPUT type, got {target_port.port_type}")
 
 
 # TODO: Refactor to rollback if instantiation failed.
@@ -183,6 +200,8 @@ def _ensure_port_mappings_for_edges(
                     f"Input port '{pm_schema.target_port_name}' not found for component {target_component_id}"
                 )
 
+            validate_port_definition_types(session, source_port_def_id, target_port_def_id)
+
             new_mappings.append(
                 db.PortMapping(
                     graph_runner_id=graph_runner_id,
@@ -246,6 +265,9 @@ def _ensure_port_mappings_for_edges(
         target_port_def_id = get_input_port_definition_id(session, target_cid, target_port_name)
         if not target_port_def_id:
             raise ValueError(f"Input port '{target_port_name}' not found for component {target_cid}")
+
+        # Validate port definition types
+        validate_port_definition_types(session, source_port_def_id, target_port_def_id)
 
         auto_mappings.append(
             db.PortMapping(

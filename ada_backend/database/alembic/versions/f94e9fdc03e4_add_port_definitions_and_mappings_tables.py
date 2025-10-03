@@ -62,19 +62,6 @@ def upgrade() -> None:
     # Add unique constraint to port_definitions
     op.create_unique_constraint("unique_component_port", "port_definitions", ["component_id", "name", "port_type"])
 
-    # Add check constraints to ensure source is OUTPUT and target is INPUT
-    op.create_check_constraint(
-        "check_source_is_output",
-        "port_mappings",
-        "source_port_definition_id IN (SELECT id FROM port_definitions WHERE port_type = 'OUTPUT')",
-    )
-
-    op.create_check_constraint(
-        "check_target_is_input",
-        "port_mappings",
-        "target_port_definition_id IN (SELECT id FROM port_definitions WHERE port_type = 'INPUT')",
-    )
-
 
 def downgrade() -> None:
     op.drop_table("port_mappings")
