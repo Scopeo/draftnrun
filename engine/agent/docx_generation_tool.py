@@ -1,6 +1,5 @@
 import logging
 import tempfile
-from datetime import datetime
 from typing import Any
 
 
@@ -9,6 +8,7 @@ from md2docx_python.src.md2docx_python import markdown_to_word
 from engine.agent.agent import Agent
 from engine.agent.types import ChatMessage, AgentPayload, ToolDescription, ComponentAttributes
 from engine.temps_folder_utils import get_output_dir
+from engine.agent.utils import prepare_markdown_output_path
 from engine.trace.trace_manager import TraceManager
 
 LOGGER = logging.getLogger(__name__)
@@ -20,7 +20,14 @@ DEFAULT_DOCX_GENERATION_TOOL_DESCRIPTION = ToolDescription(
         "markdown_content": {
             "type": "string",
             "description": ("The markdown text to convert to DOCX."),
-        }
+        },
+        "filename": {
+            "type": "string",
+            "description": (
+                "Optional. The desired filename for the generated DOCX file. If not provided, a default "
+                "filename with a timestamp will be used."
+            ),
+        },
     },
     required_tool_properties=["markdown_content"],
 )
@@ -46,23 +53,29 @@ class DOCXGenerationTool(Agent):
         *inputs: AgentPayload,
         **kwargs: Any,
     ) -> AgentPayload:
-        markdown_content = kwargs.get("markdown_content", "")
-
-        if not markdown_content:
-            error_msg = "No markdown content provided"
+        try:
+            markdown_content, output_path, filename = prepare_markdown_output_path(
+                markdown_content=kwargs.get("markdown_content", ""),
+                filename=kwargs.get("filename", None),
+                output_dir_getter=get_output_dir,
+                default_extension=".docx",
+            )
+        except ValueError as ve:
+            error_msg = str(ve)
             LOGGER.error(error_msg)
             return AgentPayload(
                 messages=[ChatMessage(role="assistant", content=error_msg)],
                 error=error_msg,
                 is_final=True,
             )
-
-        output_dir = get_output_dir()
-
-        # Generate filename with timestamp
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"document_{timestamp}.docx"
-        output_path = output_dir / filename
+        except Exception as e:
+            error_msg = f"Failed to prepare output path: {e}"
+            LOGGER.error(error_msg)
+            return AgentPayload(
+                messages=[ChatMessage(role="assistant", content=error_msg)],
+                error=error_msg,
+                is_final=True,
+            )
 
         # Create a temporary markdown file
         with tempfile.NamedTemporaryFile(delete=False, suffix=".md") as tmp_md:
