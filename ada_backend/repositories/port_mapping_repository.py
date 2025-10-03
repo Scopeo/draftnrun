@@ -66,7 +66,7 @@ def get_input_port_definition_id(session: Session, component_id: UUID, port_name
 
 def get_port_definition_by_id(session: Session, port_def_id: UUID) -> db.PortDefinition | None:
     """Get port definition by ID, returns None if not found"""
-    return session.query(db.PortDefinition).get(port_def_id)
+    return session.query(db.PortDefinition).filter(db.PortDefinition.id == port_def_id).first()
 
 
 def insert_port_mapping(
