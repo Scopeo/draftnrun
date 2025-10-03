@@ -30,8 +30,7 @@ def upsert_components(
         )
 
         if existing_component:
-            if getattr(component, "release_stage", None) is None:
-                component.release_stage = existing_component.release_stage
+            component.release_stage = existing_component.release_stage
         else:
             if getattr(component, "release_stage", None) is None:
                 component.release_stage = db.ReleaseStage.INTERNAL
