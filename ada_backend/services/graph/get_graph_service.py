@@ -8,8 +8,8 @@ from ada_backend.repositories.env_repository import get_env_relationship_by_grap
 from ada_backend.repositories.graph_runner_repository import (
     get_component_nodes,
     graph_runner_exists,
-    list_port_mappings_for_graph,
 )
+from ada_backend.repositories.port_mapping_repository import list_port_mappings_for_graph
 from ada_backend.schemas.pipeline.graph_schema import GraphGetResponse, EdgeSchema
 from ada_backend.services.errors import GraphNotFound
 from ada_backend.schemas.pipeline.port_mapping_schema import PortMappingSchema

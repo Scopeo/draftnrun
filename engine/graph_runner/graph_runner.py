@@ -336,25 +336,6 @@ class GraphRunner:
         if set(self.runnables.keys()) != set(self.graph.nodes()) - {self._input_node_id}:
             raise ValueError("All runnables must be in the graph")
 
-        # Validate that the dependency graph (edges) is consistent with the data-flow graph (mappings).
-        # if self.port_mappings:
-        #     derived_edges = {(pm.source_instance_id, pm.target_instance_id) for pm in self.port_mappings}
-        #     actual_edges = {(u, v) for u, v in self.graph.edges() if u != self._input_node_id}
-
-        #     if derived_edges != actual_edges:
-        #         unmapped_edges = actual_edges - derived_edges
-        #         extra_mappings = derived_edges - actual_edges
-        #         error_messages = []
-        #         if unmapped_edges:
-        #             error_messages.append(
-        #                 f"Edges exist in the graph with no corresponding port mappings: {unmapped_edges}"
-        #             )
-        #         if extra_mappings:
-        #             error_messages.append(
-        #                 f"Port mappings exist with no corresponding edge in the graph: {extra_mappings}"
-        #             )
-        #         raise ValueError(f"Graph structure inconsistency detected: {'; '.join(error_messages)}")
-
     def _synthesize_default_mappings(self) -> None:
         """Create explicit direct port mappings for nodes with exactly one real predecessor
         when no mappings are provided. Uses canonical ports from runnables.

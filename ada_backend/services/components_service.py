@@ -52,20 +52,20 @@ def get_all_components_endpoint(
         allowed_stages=allowed_stages,
     )
 
-    component_ids = [c.id for c in components]
+    component_ids = [component.id for component in components]
     ports = get_port_definitions_for_component_ids(session, component_ids)
     comp_id_to_ports: dict[str, list[PortDefinitionSchema]] = {}
-    for p in ports:
-        comp_id_to_ports.setdefault(str(p.component_id), []).append(
+    for port in ports:
+        comp_id_to_ports.setdefault(str(port.component_id), []).append(
             PortDefinitionSchema(
-                name=p.name,
-                port_type=p.port_type.value,
-                is_canonical=p.is_canonical,
-                description=p.description,
+                name=port.name,
+                port_type=port.port_type.value,
+                is_canonical=port.is_canonical,
+                description=port.description,
             )
         )
-    for c in components:
-        c.port_definitions = comp_id_to_ports.get(str(c.id), [])
+    for component in components:
+        component.port_definitions = comp_id_to_ports.get(str(component.id), [])
 
     return ComponentsResponse(components=components)
 

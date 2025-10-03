@@ -18,8 +18,8 @@ from ada_backend.repositories.graph_runner_repository import (
     graph_runner_exists,
     insert_graph_runner_and_bind_to_project,
     upsert_component_node,
-    delete_port_mappings_for_graph,
 )
+from ada_backend.repositories.port_mapping_repository import delete_port_mappings_for_graph
 from ada_backend.database import models as db
 from ada_backend.schemas.pipeline.graph_schema import GraphUpdateResponse, GraphUpdateSchema
 from ada_backend.repositories.component_repository import get_canonical_ports_for_components

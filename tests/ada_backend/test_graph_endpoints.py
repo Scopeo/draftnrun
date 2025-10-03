@@ -9,6 +9,7 @@ from ada_backend.main import app
 from ada_backend.repositories.graph_runner_repository import delete_graph_runner
 from ada_backend.scripts.get_supabase_token import get_user_jwt
 from settings import settings
+from tests.mocks.cipher import mock_cipher
 
 client = TestClient(app)
 ORGANIZATION_ID = "37b7d67f-8f29-4fce-8085-19dea582f605"  # umbrella organization
@@ -20,22 +21,6 @@ HEADERS_JWT = {
 }
 
 GRAPH_RUNNER_ID = str(uuid4())
-
-
-# Mock cipher for testing
-class MockCipher:
-    def encrypt(self, data: bytes) -> bytes:
-        return data
-
-    def decrypt(self, data: bytes) -> bytes:
-        return data
-
-
-# Apply the mock cipher to all tests
-@pytest.fixture(autouse=True)
-def mock_cipher():
-    with patch("ada_backend.database.models.CIPHER", MockCipher()):
-        yield
 
 
 def test_create_empty_graph_runner():

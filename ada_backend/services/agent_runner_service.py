@@ -18,8 +18,8 @@ from ada_backend.repositories.graph_runner_repository import (
     get_start_components,
     graph_runner_exists,
     delete_temp_folder,
-    list_port_mappings_for_graph,
 )
+from ada_backend.repositories.port_mapping_repository import list_port_mappings_for_graph
 from ada_backend.repositories.project_repository import get_project, get_project_with_details
 from ada_backend.repositories.organization_repository import get_organization_secrets
 from engine.graph_runner.runnable import Runnable

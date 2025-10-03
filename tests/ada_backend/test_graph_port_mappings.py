@@ -10,6 +10,7 @@ from ada_backend.database.setup_db import SessionLocal
 from ada_backend.repositories.graph_runner_repository import delete_graph_runner
 from ada_backend.scripts.get_supabase_token import get_user_jwt
 from settings import settings
+from tests.mocks.cipher import mock_cipher
 
 
 client = TestClient(app)
@@ -20,22 +21,6 @@ HEADERS_JWT = {
     "accept": "application/json",
     "Authorization": f"Bearer {JWT_TOKEN}",
 }
-
-
-# Mock cipher for testing
-class MockCipher:
-    def encrypt(self, data: bytes) -> bytes:
-        return data
-
-    def decrypt(self, data: bytes) -> bytes:
-        return data
-
-
-# Apply the mock cipher to all tests in this module
-@pytest.fixture(autouse=True)
-def mock_cipher():
-    with patch("ada_backend.database.models.CIPHER", MockCipher()):
-        yield
 
 
 def test_get_put_roundtrip_port_mappings_migration():
