@@ -42,3 +42,25 @@ def delete_port_mappings_for_target_except(
     deleted = q.delete(synchronize_session=False)
     session.commit()
     return deleted
+
+
+def insert_port_mapping(
+    session: Session,
+    graph_runner_id: UUID,
+    source_instance_id: UUID,
+    source_port_name: str,
+    target_instance_id: UUID,
+    target_port_name: str,
+    dispatch_strategy: str,
+) -> db.PortMapping:
+    mapping = db.PortMapping(
+        graph_runner_id=graph_runner_id,
+        source_instance_id=source_instance_id,
+        source_port_name=source_port_name,
+        target_instance_id=target_instance_id,
+        target_port_name=target_port_name,
+        dispatch_strategy=dispatch_strategy or "direct",
+    )
+    session.add(mapping)
+    session.commit()
+    return mapping
