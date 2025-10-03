@@ -1,8 +1,15 @@
-from typing import Optional, Any
+from typing import Optional, Any, Dict
 from enum import StrEnum
 from pydantic import BaseModel, Field
 from openai.types.chat import ChatCompletionMessageToolCall
 from uuid import UUID
+
+
+class NodeData(BaseModel):
+    """The universal data packet flowing between nodes."""
+
+    data: Dict[str, Any] = Field(default_factory=dict)
+    ctx: Dict[str, Any] = Field(default_factory=dict)
 
 
 class ChatMessage(BaseModel):

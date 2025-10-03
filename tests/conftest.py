@@ -37,6 +37,7 @@ from tests.mocks.source_chunks import (
 from tests.mocks.db_service import postgres_service, sample_table_definition
 from tests.mocks.utils import timestamp_with_random_suffix
 from tests.mocks.ada_backend_db import ada_backend_mock_session, test_db, ada_backend_seed_session
+from tests.mocks.cipher import mock_cipher
 
 
 @pytest.fixture(autouse=True)

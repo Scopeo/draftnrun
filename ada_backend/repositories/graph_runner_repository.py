@@ -216,6 +216,18 @@ def delete_node(session: Session, node_id: UUID):
         raise ValueError(f"Node with ID {node_id} does not exist in the graph runner.")
 
 
+def bulk_delete_nodes(session: Session, node_ids: list[UUID]) -> int:
+    if not node_ids:
+        return 0
+    deleted = (
+        session.query(db.GraphRunnerNode)
+        .filter(db.GraphRunnerNode.node_id.in_(node_ids))
+        .delete(synchronize_session=False)
+    )
+    session.commit()
+    return deleted
+
+
 def delete_graph_runner(session: Session, graph_id: UUID) -> None:
     """Delete a GraphRunner with the given ID."""
     LOGGER.info(f"Deleting graph runner with id {graph_id}")

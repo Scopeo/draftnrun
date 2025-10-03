@@ -1,8 +1,6 @@
 from uuid import UUID, uuid4
-from unittest.mock import patch
 
 from fastapi.testclient import TestClient
-import pytest
 
 from ada_backend.database.setup_db import SessionLocal
 from ada_backend.main import app
@@ -20,22 +18,6 @@ HEADERS_JWT = {
 }
 
 GRAPH_RUNNER_ID = str(uuid4())
-
-
-# Mock cipher for testing
-class MockCipher:
-    def encrypt(self, data: bytes) -> bytes:
-        return data
-
-    def decrypt(self, data: bytes) -> bytes:
-        return data
-
-
-# Apply the mock cipher to all tests
-@pytest.fixture(autouse=True)
-def mock_cipher():
-    with patch("ada_backend.database.models.CIPHER", MockCipher()):
-        yield
 
 
 def test_create_empty_graph_runner():
@@ -60,7 +42,8 @@ def test_create_empty_graph_runner():
     results = response.json()
     assert response.status_code == 200
     assert isinstance(results, dict)
-    assert results == payload
+    # GET should include port_mappings even if none were provided
+    assert results == {**payload, "port_mappings": []}
 
 
 def test_update_graph_runner():

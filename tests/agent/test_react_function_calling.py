@@ -185,8 +185,10 @@ def test_initial_prompt_insertion(agent_calls_mock, get_span_mock, react_agent, 
     agent_calls_mock.labels.return_value = counter_mock
 
     react_agent.run_sync(agent_input)
-    assert agent_input.messages[0].role == "system"
-    assert agent_input.messages[0].content == INITIAL_PROMPT
+    mock_llm_service.function_call_async.assert_called_once()
+    called_messages = mock_llm_service.function_call_async.call_args.kwargs["messages"]
+    assert called_messages[0]["role"] == "system"
+    assert called_messages[0]["content"] == INITIAL_PROMPT
 
 
 @patch("engine.prometheus_metric.get_tracing_span")
@@ -267,10 +269,12 @@ def test_date_in_system_prompt_enabled(
         react_agent.run_sync(agent_input)
 
         # Check that the system message contains the date at the beginning
-        system_message = agent_input.messages[0]
-        assert system_message.role == "system"
-        assert system_message.content.startswith("Current date and time: 2024-01-15 10:30:00")
-        assert INITIAL_PROMPT in system_message.content
+        mock_llm_service.function_call_async.assert_called_once()
+        called_messages = mock_llm_service.function_call_async.call_args.kwargs["messages"]
+        system_message = called_messages[0]
+        assert system_message["role"] == "system"
+        assert system_message.get("content").startswith("Current date and time: 2024-01-15 10:30:00")
+        assert INITIAL_PROMPT in system_message.get("content")
 
 
 @patch("engine.prometheus_metric.get_tracing_span")
@@ -294,7 +298,9 @@ def test_date_in_system_prompt_disabled(
     react_agent.run_sync(agent_input)
 
     # Check that the system message does not contain the date
-    system_message = agent_input.messages[0]
-    assert system_message.role == "system"
-    assert "Current date and time:" not in system_message.content
-    assert system_message.content == INITIAL_PROMPT
+    mock_llm_service.function_call_async.assert_called_once()
+    called_messages = mock_llm_service.function_call_async.call_args.kwargs["messages"]
+    system_message = called_messages[0]
+    assert system_message["role"] == "system"
+    assert "Current date and time:" not in system_message.get("content")
+    assert system_message.get("content") == INITIAL_PROMPT

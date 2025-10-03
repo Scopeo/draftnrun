@@ -117,11 +117,12 @@ def test_rag_run(
     output = rag.run_sync(message_to_process)
     assert output.last_message.content == response_text
     assert isinstance(output.artifacts["sources"], list)
-    assert all(isinstance(source, SourceChunk) for source in output.artifacts["sources"])
-    assert output.artifacts["sources"][0].name == results[0].payload["name"]
-    assert output.artifacts["sources"][0].content == results[0].payload["content"]
-    assert output.artifacts["sources"][1].name == results[1].payload["name"]
-    assert output.artifacts["sources"][1].content == results[1].payload["content"]
+    rehydrated_sources = [SourceChunk(**s) if isinstance(s, dict) else s for s in output.artifacts["sources"]]
+    assert all(isinstance(source, SourceChunk) for source in rehydrated_sources)
+    assert rehydrated_sources[0].name == results[0].payload["name"]
+    assert rehydrated_sources[0].content == results[0].payload["content"]
+    assert rehydrated_sources[1].name == results[1].payload["name"]
+    assert rehydrated_sources[1].content == results[1].payload["content"]
 
 
 @patch("engine.prometheus_metric.get_tracing_span")
@@ -165,11 +166,12 @@ def test_vocabulary_rag_run(
         == "Test Response [1][2]\nSources:\n[1] <url1|SourceChunk_1>\n[2] <url2|SourceChunk_2>\n"
     )
     assert isinstance(output.artifacts["sources"], list)
-    assert all(isinstance(source, SourceChunk) for source in output.artifacts["sources"])
-    assert output.artifacts["sources"][0].name == results[0].payload["name"]
-    assert output.artifacts["sources"][0].content == results[0].payload["content"]
-    assert output.artifacts["sources"][1].name == results[1].payload["name"]
-    assert output.artifacts["sources"][1].content == results[1].payload["content"]
+    rehydrated_sources = [SourceChunk(**s) if isinstance(s, dict) else s for s in output.artifacts["sources"]]
+    assert all(isinstance(source, SourceChunk) for source in rehydrated_sources)
+    assert rehydrated_sources[0].name == results[0].payload["name"]
+    assert rehydrated_sources[0].content == results[0].payload["content"]
+    assert rehydrated_sources[1].name == results[1].payload["name"]
+    assert rehydrated_sources[1].content == results[1].payload["content"]
     assert (
         mock_llm_service.last_prompt == "**Source 1:**\nResult 1\n\n**Source 2:**\nResult 2 ---"
         "\n**Glossary definition of term1:**\ndefinition1\n\n**Glossary definition of term2:"

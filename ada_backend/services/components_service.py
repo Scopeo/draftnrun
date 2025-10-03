@@ -8,8 +8,9 @@ from ada_backend.repositories.component_repository import (
     get_all_components_with_parameters,
     get_component_by_id,
     delete_component_by_id,
+    get_port_definitions_for_component_ids,
 )
-from ada_backend.schemas.components_schema import ComponentsResponse
+from ada_backend.schemas.components_schema import ComponentsResponse, PortDefinitionSchema
 from ada_backend.services.errors import (
     ComponentNotFound,
     ProtectedComponentDeletionError,
@@ -50,6 +51,22 @@ def get_all_components_endpoint(
         session,
         allowed_stages=allowed_stages,
     )
+
+    component_ids = [component.id for component in components]
+    ports = get_port_definitions_for_component_ids(session, component_ids)
+    comp_id_to_ports: dict[str, list[PortDefinitionSchema]] = {}
+    for port in ports:
+        comp_id_to_ports.setdefault(str(port.component_id), []).append(
+            PortDefinitionSchema(
+                name=port.name,
+                port_type=port.port_type.value,
+                is_canonical=port.is_canonical,
+                description=port.description,
+            )
+        )
+    for component in components:
+        component.port_definitions = comp_id_to_ports.get(str(component.id), [])
+
     return ComponentsResponse(components=components)
 
 

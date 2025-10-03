@@ -147,6 +147,11 @@ class CronStatus(StrEnum):
     RUNNING = "running"
 
 
+class PortType(StrEnum):
+    INPUT = "INPUT"
+    OUTPUT = "OUTPUT"
+
+
 class SelectOption(BaseModel):
     """Option for Select and similar UI components"""
 
@@ -235,6 +240,11 @@ class Component(Base):
     definitions = relationship(
         "ComponentParameterDefinition",
         back_populates="component",
+    )
+    port_definitions = relationship(
+        "PortDefinition",
+        back_populates="component",
+        cascade="all, delete-orphan",
     )
     child_definitions = relationship("ComponentParameterChildRelationship", back_populates="child_component")
     categories = relationship(
@@ -367,6 +377,7 @@ class GraphRunner(Base):
 
     graph_edges = relationship("GraphRunnerEdge", back_populates="graph_runner")
     nodes = relationship("GraphRunnerNode", back_populates="graph_runner")
+    port_mappings = relationship("PortMapping", back_populates="graph_runner")
 
     __table_args__ = (CheckConstraint("tag_version ~ '^v[0-9]+\\.[0-9]+\\.[0-9]+$'", name="check_tag_version_semver"),)
 
@@ -470,6 +481,18 @@ class ComponentInstance(Base):
         "ComponentSubInput",
         foreign_keys="ComponentSubInput.child_component_instance_id",
         back_populates="child_component_instance",
+        cascade="all, delete-orphan",
+    )
+    source_port_mappings = relationship(
+        "PortMapping",
+        foreign_keys="PortMapping.source_instance_id",
+        back_populates="source_instance",
+        cascade="all, delete-orphan",
+    )
+    target_port_mappings = relationship(
+        "PortMapping",
+        foreign_keys="PortMapping.target_instance_id",
+        back_populates="target_instance",
         cascade="all, delete-orphan",
     )
     relationships = relationship(
@@ -703,6 +726,78 @@ class GraphRunnerEdge(Base):
             f"GraphRunnerEdge(input={self.source_node_id}, output={self.target_node_id}, "
             f"order={self.order}, graph={self.graph_runner_id})"
         )
+
+
+class PortDefinition(Base):
+    """Stores the I/O schema for each component type."""
+
+    __tablename__ = "port_definitions"
+
+    id = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    component_id = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("components.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    name = mapped_column(String, nullable=False)
+    port_type = mapped_column(make_pg_enum(PortType), nullable=False)
+    is_canonical = mapped_column(Boolean, nullable=False, default=False)
+    description = mapped_column(Text, nullable=True)
+    component = relationship("Component", back_populates="port_definitions")
+
+
+class PortMapping(Base):
+    """Stores the specific wiring for a GraphRunner instance."""
+
+    __tablename__ = "port_mappings"
+
+    id = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    graph_runner_id = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("graph_runners.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    source_instance_id = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("component_instances.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    source_port_definition_id = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("port_definitions.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    target_instance_id = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("component_instances.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    target_port_definition_id = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("port_definitions.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    dispatch_strategy = mapped_column(String, nullable=False, default="direct")
+
+    graph_runner = relationship("GraphRunner", back_populates="port_mappings")
+    source_instance = relationship(
+        "ComponentInstance",
+        foreign_keys=[source_instance_id],
+        back_populates="source_port_mappings",
+    )
+    target_instance = relationship(
+        "ComponentInstance",
+        foreign_keys=[target_instance_id],
+        back_populates="target_port_mappings",
+    )
+    source_port_definition = relationship(
+        "PortDefinition",
+        foreign_keys=[source_port_definition_id],
+    )
+    target_port_definition = relationship(
+        "PortDefinition",
+        foreign_keys=[target_port_definition_id],
+    )
 
 
 class ToolDescription(Base):

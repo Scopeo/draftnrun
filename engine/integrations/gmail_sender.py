@@ -2,16 +2,17 @@ import base64
 import logging
 from email.message import EmailMessage
 from pathlib import Path
-from typing import Optional, Iterable
+from typing import Optional, Iterable, Type
 import mimetypes
 
 from googleapiclient.errors import HttpError
 from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttributes
 from opentelemetry.trace import get_current_span
+from pydantic import BaseModel, Field, validator
 
 from ada_backend.database.setup_db import get_db
 from engine.agent.agent import Agent
-from engine.agent.types import AgentPayload, ChatMessage, ComponentAttributes, ToolDescription
+from engine.agent.types import ComponentAttributes, ToolDescription
 from engine.integrations.utils import get_gmail_sender_service, get_google_user_email, get_oauth_access_token
 from engine.temps_folder_utils import get_output_dir
 from engine.trace.trace_manager import TraceManager
@@ -57,6 +58,32 @@ GMAIL_SENDER_TOOL_DESCRIPTION = ToolDescription(
     },
     required_tool_properties=["mail_subject", "mail_body"],
 )
+
+
+class GmailSenderInputs(BaseModel):
+    mail_subject: str = Field(description="The subject of the email to be sent.")
+    mail_body: str = Field(description="The body of the email to be sent.")
+    email_recipients: Optional[list[str]] = Field(
+        default=None,
+        description="""List of email addresses to send the email to.
+            If not provided, the email will be saved as a draft.""",
+    )
+    cc: Optional[list[str]] = Field(default=None, description="List of CC email addresses to send the email to.")
+    bcc: Optional[list[str]] = Field(default=None, description="List of BCC email addresses to send the email to.")
+    email_attachments: Optional[list[str]] = Field(
+        default=None, description="List of file paths to attach to the email."
+    )
+
+    @validator("email_recipients", pre=True)
+    def validate_email_recipients(cls, v):
+        if isinstance(v, str):
+            return [v]
+        return v
+
+
+class GmailSenderOutputs(BaseModel):
+    status: str = Field(description="The status of the email operation.")
+    message_id: str = Field(description="The ID of the sent message or draft.")
 
 
 def _ensure_paths(attachments: Optional[Iterable[str | Path]]) -> list[Path]:
@@ -117,6 +144,15 @@ def create_raw_mail_message(
 
 class GmailSender(Agent):
     TRACE_SPAN_KIND = OpenInferenceSpanKindValues.TOOL.value
+    migrated = True
+
+    @classmethod
+    def get_inputs_schema(cls) -> Type[BaseModel]:
+        return GmailSenderInputs
+
+    @classmethod
+    def get_outputs_schema(cls) -> Type[BaseModel]:
+        return GmailSenderOutputs
 
     def __init__(
         self,
@@ -199,31 +235,42 @@ class GmailSender(Agent):
             raise RuntimeError(f"Failed to send email: {error}")
         return sent_message
 
-    async def _run_without_io_trace(
-        self,
-        *inputs: AgentPayload,
-        mail_subject: Optional[str] = None,
-        mail_body: Optional[str] = None,
-        email_recipients: Optional[list[str]] = None,
-        cc: Optional[list[str]] = None,
-        bcc: Optional[list[str]] = None,
-        email_attachments: Optional[Iterable[str | Path]] = None,
-    ) -> AgentPayload:
-        if not mail_subject or not mail_body:
+    async def _run_without_io_trace(self, inputs: GmailSenderInputs, ctx: dict) -> GmailSenderOutputs:
+        if not inputs.mail_subject or not inputs.mail_body:
             raise ValueError("Both email_subject and email_body must be provided")
         span = get_current_span()
         span.set_attributes(
             {
-                SpanAttributes.INPUT_VALUE: f"Subject: {mail_subject}\n Body: {mail_body}",
+                SpanAttributes.INPUT_VALUE: f"Subject: {inputs.mail_subject}\n Body: {inputs.mail_body}",
             }
         )
-        if self.save_as_draft or email_recipients is None:
+        if self.save_as_draft or not inputs.email_recipients:
             LOGGER.info("Creating draft email")
-            draft = self.gmail_create_draft(mail_subject, mail_body, email_recipients, cc, bcc, email_attachments)
+            draft = self.gmail_create_draft(
+                email_subject=inputs.mail_subject,
+                email_body=inputs.mail_body,
+                email_recipients=inputs.email_recipients,
+                cc=inputs.cc,
+                bcc=inputs.bcc,
+                attachments=inputs.email_attachments,
+            )
             if not draft:
                 raise RuntimeError("Failed to create draft email")
-            output_message = f"Draft created successfully with ID: {draft['id']}"
+            status = f"Draft created successfully with ID: {draft['id']}"
+            message_id = draft["id"]
         else:
-            send_message = self.gmail_send_email(mail_subject, mail_body, email_recipients, cc, bcc, email_attachments)
-            output_message = f"Email sent successfully with ID: {send_message['id']}"
-        return AgentPayload(messages=[ChatMessage(role="assistant", content=output_message)])
+            sent_message = self.gmail_send_email(
+                email_subject=inputs.mail_subject,
+                email_body=inputs.mail_body,
+                email_recipients=inputs.email_recipients,
+                cc=inputs.cc,
+                bcc=inputs.bcc,
+                attachments=inputs.email_attachments,
+            )
+            status = f"Email sent successfully with ID: {sent_message['id']}"
+            message_id = sent_message["id"]
+        return GmailSenderOutputs(status=status, message_id=message_id)
+
+    @classmethod
+    def get_canonical_ports(cls) -> dict[str, str | None]:
+        return {"input": "mail_body", "output": "status"}

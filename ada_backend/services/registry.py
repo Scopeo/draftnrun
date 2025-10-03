@@ -55,6 +55,7 @@ from ada_backend.database.seed.constants import (
     VERBOSITY_IN_DB,
     REASONING_IN_DB,
 )
+from engine.agent.static_responder import StaticResponder
 
 
 class SupportedEntityType(StrEnum):
@@ -94,6 +95,7 @@ class SupportedEntityType(StrEnum):
     DOCUMENT_ENHANCED_LLM_CALL = "Document Enhanced LLM Agent"
     DOCUMENT_REACT_LOADER_AGENT = "Document AI Agent"
     OCR_CALL = "OCR Call"
+    STATIC_RESPONDER = "Static Responder"
     INPUT = "API Input"
     FILTER = "Filter"
     PROJECT_REFERENCE = "ProjectReference"
@@ -465,6 +467,12 @@ def create_factory_registry() -> FactoryRegistry:
             parameter_processors=[
                 completion_service_processor,
             ],
+        ),
+    )
+    registry.register(
+        name=SupportedEntityType.STATIC_RESPONDER,
+        factory=AgentFactory(
+            entity_class=StaticResponder,
         ),
     )
 
