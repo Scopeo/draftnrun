@@ -1,15 +1,12 @@
 from uuid import UUID, uuid4
-from unittest.mock import patch
 
 from fastapi.testclient import TestClient
-import pytest
 
 from ada_backend.database.setup_db import SessionLocal
 from ada_backend.main import app
 from ada_backend.repositories.graph_runner_repository import delete_graph_runner
 from ada_backend.scripts.get_supabase_token import get_user_jwt
 from settings import settings
-from tests.mocks.cipher import mock_cipher
 
 client = TestClient(app)
 ORGANIZATION_ID = "37b7d67f-8f29-4fce-8085-19dea582f605"  # umbrella organization
