@@ -10,6 +10,7 @@ from ada_backend.repositories.component_repository import (
     get_component_parameter_definition_by_component_id,
     upsert_sub_component_input,
     get_component_instances_by_ids,
+    get_canonical_ports_for_components,
 )
 from ada_backend.repositories.edge_repository import delete_edge, get_edges, upsert_edge
 from ada_backend.repositories.graph_runner_repository import (
@@ -27,10 +28,6 @@ from ada_backend.repositories.port_mapping_repository import (
 )
 from ada_backend.database import models as db
 from ada_backend.schemas.pipeline.graph_schema import GraphUpdateResponse, GraphUpdateSchema
-from ada_backend.repositories.component_repository import (
-    get_canonical_ports_for_components,
-    get_component_instance_by_id,
-)
 from ada_backend.services.agent_runner_service import get_agent_for_project
 from ada_backend.services.graph.delete_graph_service import delete_component_instances_from_nodes
 from ada_backend.services.pipeline.update_pipeline_service import create_or_update_component_instance
@@ -40,8 +37,8 @@ from ada_backend.segment_analytics import track_project_saved
 LOGGER = logging.getLogger(__name__)
 
 
-def get_component_id_by_instance_id(session: Session, instance_id: UUID) -> UUID:
-    """Get component ID for a given component instance ID"""
+def resolve_component_id_from_instance_id(session: Session, instance_id: UUID) -> UUID:
+    """Resolve component ID from a component instance ID"""
     instance = get_component_instance_by_id(session, instance_id)
     if not instance:
         raise ValueError(f"Component instance {instance_id} not found")
@@ -182,8 +179,8 @@ def _ensure_port_mappings_for_edges(
         new_mappings: list[db.PortMapping] = []
         for pm_schema in graph_project.port_mappings:
             # Get component IDs for the instances
-            source_component_id = get_component_id_by_instance_id(session, pm_schema.source_instance_id)
-            target_component_id = get_component_id_by_instance_id(session, pm_schema.target_instance_id)
+            source_component_id = resolve_component_id_from_instance_id(session, pm_schema.source_instance_id)
+            target_component_id = resolve_component_id_from_instance_id(session, pm_schema.target_instance_id)
 
             # Resolve port names to port definition IDs
             source_port_def_id = get_output_port_definition_id(
