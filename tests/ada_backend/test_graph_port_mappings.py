@@ -9,6 +9,9 @@ from ada_backend.repositories.graph_runner_repository import delete_graph_runner
 from ada_backend.scripts.get_supabase_token import get_user_jwt
 from settings import settings
 
+# Test constants
+SOURCE_PORT_NAME = "output"
+TARGET_PORT_NAME = "input"
 
 client = TestClient(app)
 ORGANIZATION_ID = "37b7d67f-8f29-4fce-8085-19dea582f605"  # umbrella organization
@@ -346,9 +349,9 @@ def test_deploy_graph_copies_port_mappings():
         "port_mappings": [
             {
                 "source_instance_id": src_instance_id,
-                "source_port_name": "custom_output",
+                "source_port_name": SOURCE_PORT_NAME,
                 "target_instance_id": dst_instance_id,
-                "target_port_name": "custom_input",
+                "target_port_name": TARGET_PORT_NAME,
                 "dispatch_strategy": "direct",
             }
         ],
@@ -366,8 +369,8 @@ def test_deploy_graph_copies_port_mappings():
     assert "port_mappings" in original_data
     assert len(original_data["port_mappings"]) == 1
     original_pm = original_data["port_mappings"][0]
-    assert original_pm["source_port_name"] == "custom_output"
-    assert original_pm["target_port_name"] == "custom_input"
+    assert original_pm["source_port_name"] == SOURCE_PORT_NAME
+    assert original_pm["target_port_name"] == TARGET_PORT_NAME
 
     # Deploy the graph
     deploy_resp = client.post(f"{endpoint}/deploy", headers=HEADERS_JWT)
@@ -392,8 +395,8 @@ def test_deploy_graph_copies_port_mappings():
     new_pm = new_data["port_mappings"][0]
 
     # The port mapping should have the same structure but different instance IDs
-    assert new_pm["source_port_name"] == "custom_output"
-    assert new_pm["target_port_name"] == "custom_input"
+    assert new_pm["source_port_name"] == SOURCE_PORT_NAME
+    assert new_pm["target_port_name"] == TARGET_PORT_NAME
     assert new_pm["dispatch_strategy"] == "direct"
 
     # The instance IDs should be different (new instances were created)
@@ -407,8 +410,8 @@ def test_deploy_graph_copies_port_mappings():
     assert "port_mappings" in prod_data
     assert len(prod_data["port_mappings"]) == 1
     prod_pm = prod_data["port_mappings"][0]
-    assert prod_pm["source_port_name"] == "custom_output"
-    assert prod_pm["target_port_name"] == "custom_input"
+    assert prod_pm["source_port_name"] == SOURCE_PORT_NAME
+    assert prod_pm["target_port_name"] == TARGET_PORT_NAME
 
     # Cleanup both graph runners
     session = SessionLocal()
