@@ -17,4 +17,3 @@ class MockCipher:
 def mock_cipher():
     with patch("ada_backend.database.models.CIPHER", MockCipher()):
         yield
-
