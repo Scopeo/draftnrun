@@ -18,13 +18,13 @@ from engine.agent.types import (
 )
 from engine.graph_runner.runnable import Runnable
 from engine.agent.history_message_handling import HistoryMessageHandler
+from engine.agent.utils import load_str_to_json
 from engine.trace.trace_manager import TraceManager
 from engine.llm_services.llm_service import CompletionService
 from engine.agent.utils_prompt import fill_prompt_template_with_dictionary
 from engine.agent.tools.python_code_runner import PYTHON_CODE_RUNNER_TOOL_DESCRIPTION
 from engine.agent.tools.terminal_command_runner import TERMINAL_COMMAND_RUNNER_TOOL_DESCRIPTION
 from settings import settings
-
 
 LOGGER = logging.getLogger(__name__)
 
@@ -53,6 +53,10 @@ class ReActAgent(Agent):
         last_history_messages: int = 50,
         allow_tool_shortcuts: bool = False,
         date_in_system_prompt: bool = False,
+        output_tool_name: Optional[str] = None,
+        output_tool_description: Optional[str] = None,
+        output_tool_properties: Optional[dict|str] = None,
+        output_tool_required_properties: Optional[str|list] = None,
     ) -> None:
         super().__init__(
             trace_manager=trace_manager,
@@ -77,6 +81,56 @@ class ReActAgent(Agent):
         self._date_in_system_prompt = date_in_system_prompt
         self._shared_sandbox: Optional[AsyncSandbox] = None
         self._e2b_api_key = getattr(settings, "E2B_API_KEY", None)
+
+        # Initialize output tool parameters (store as-is, parse later when needed)
+        self._output_tool_name = output_tool_name
+        self._output_tool_description = output_tool_description
+        self._output_tool_properties = output_tool_properties
+        self._output_tool_required_properties = output_tool_required_properties
+
+        self._output_tool_agent_description = self._get_output_tool_description()
+
+    def _get_output_tool_description(self) -> Optional[ToolDescription]:
+        """
+        Get the output tool description using the same pattern as RAG.
+
+        Returns:
+            ToolDescription if all required output tool parameters are set, None otherwise.
+        """
+        # If no output tool is configured, return None
+        if not any([self._output_tool_name, self._output_tool_description, self._output_tool_properties]):
+            return None
+
+        # If we tried to set up an output tool but missed some information, raise an error
+        missing_fields = []
+        if not self._output_tool_name:
+            missing_fields.append("output_tool_name")
+        if not self._output_tool_description:
+            missing_fields.append("output_tool_description")
+        if not self._output_tool_properties:
+            missing_fields.append("output_tool_properties")
+
+        if missing_fields:
+            raise ValueError(f"Error missing critical fields to define output structured output {missing_fields}")
+
+        # Parse JSON strings to appropriate data types
+        if isinstance(self._output_tool_properties, str):
+            parsed_properties = load_str_to_json(self._output_tool_properties)
+        else:
+            parsed_properties = self._output_tool_properties
+
+        if isinstance(self._output_tool_required_properties, str):
+            parsed_required_properties = load_str_to_json(self._output_tool_required_properties)
+        else:
+            parsed_required_properties = self._output_tool_required_properties or []
+
+        required_properties = parsed_required_properties or list(parsed_properties.keys())
+        return ToolDescription(
+            name=self._output_tool_name,
+            description=self._output_tool_description,
+            tool_properties=parsed_properties,
+            required_tool_properties=required_properties,
+        )
 
     # TODO: investigate if we can decouple the sandbox from the agent
     async def _ensure_shared_sandbox(self) -> AsyncSandbox:
@@ -205,6 +259,7 @@ class ReActAgent(Agent):
                 messages=llm_input_messages,
                 tools=[agent.tool_description for agent in self.agent_tools],
                 tool_choice=tool_choice,
+                structured_output_tool=self._output_tool_agent_description,
             )
 
             span.set_attributes(
