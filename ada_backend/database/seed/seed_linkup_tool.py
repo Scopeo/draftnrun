@@ -5,7 +5,7 @@ from ada_backend.database.component_definition_seeding import (
     upsert_components,
 )
 from ada_backend.database.seed.seed_tool_description import TOOL_DESCRIPTION_UUIDS
-from ada_backend.database.seed.utils import COMPONENT_UUIDS
+from ada_backend.database.seed.utils import COMPONENT_UUIDS, ICON_NAMES
 
 
 def seed_linkup_tool_components(session: Session):
@@ -17,6 +17,7 @@ def seed_linkup_tool_components(session: Session):
         function_callable=True,
         release_stage=db.ReleaseStage.PUBLIC,
         default_tool_description_id=TOOL_DESCRIPTION_UUIDS["linkup_search_tool_description"],
+        icon=ICON_NAMES["linkup"],
     )
 
     upsert_components(

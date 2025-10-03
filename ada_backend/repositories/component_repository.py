@@ -482,6 +482,7 @@ def get_all_components_with_parameters(
                     can_use_function_calling=component.can_use_function_calling,
                     tool_description=tool_description,
                     parameters=parameters_to_fill,
+                    icon=component.icon,
                     subcomponents_info=[
                         SubComponentParamSchema(
                             id=param_child_def.child_component_id,
