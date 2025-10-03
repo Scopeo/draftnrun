@@ -44,21 +44,41 @@ def delete_port_mappings_for_target_except(
     return deleted
 
 
+def get_output_port_definition_id(session: Session, component_id: UUID, port_name: str) -> UUID | None:
+    """Get port definition ID for OUTPUT port, returns None if not found"""
+    result = (
+        session.query(db.PortDefinition.id)
+        .filter_by(component_id=component_id, name=port_name, port_type=db.PortType.OUTPUT)
+        .first()
+    )
+    return result[0] if result else None
+
+
+def get_input_port_definition_id(session: Session, component_id: UUID, port_name: str) -> UUID | None:
+    """Get port definition ID for INPUT port, returns None if not found"""
+    result = (
+        session.query(db.PortDefinition.id)
+        .filter_by(component_id=component_id, name=port_name, port_type=db.PortType.INPUT)
+        .first()
+    )
+    return result[0] if result else None
+
+
 def insert_port_mapping(
     session: Session,
     graph_runner_id: UUID,
     source_instance_id: UUID,
-    source_port_name: str,
+    source_port_definition_id: UUID,
     target_instance_id: UUID,
-    target_port_name: str,
+    target_port_definition_id: UUID,
     dispatch_strategy: str,
 ) -> db.PortMapping:
     mapping = db.PortMapping(
         graph_runner_id=graph_runner_id,
         source_instance_id=source_instance_id,
-        source_port_name=source_port_name,
+        source_port_definition_id=source_port_definition_id,
         target_instance_id=target_instance_id,
-        target_port_name=target_port_name,
+        target_port_definition_id=target_port_definition_id,
         dispatch_strategy=dispatch_strategy or "direct",
     )
     session.add(mapping)

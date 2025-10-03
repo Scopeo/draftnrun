@@ -162,9 +162,9 @@ def clone_graph_runner(
             session=session,
             graph_runner_id=new_graph_runner_id,
             source_instance_id=ids_map[port_mapping.source_instance_id],
-            source_port_name=port_mapping.source_port_name,
+            source_port_definition_id=port_mapping.source_port_definition_id,
             target_instance_id=ids_map[port_mapping.target_instance_id],
-            target_port_name=port_mapping.target_port_name,
+            target_port_definition_id=port_mapping.target_port_definition_id,
             dispatch_strategy=port_mapping.dispatch_strategy,
         )
 

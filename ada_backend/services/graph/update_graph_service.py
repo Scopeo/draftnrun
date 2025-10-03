@@ -19,10 +19,17 @@ from ada_backend.repositories.graph_runner_repository import (
     insert_graph_runner_and_bind_to_project,
     upsert_component_node,
 )
-from ada_backend.repositories.port_mapping_repository import delete_port_mappings_for_graph
+from ada_backend.repositories.port_mapping_repository import (
+    delete_port_mappings_for_graph,
+    get_output_port_definition_id,
+    get_input_port_definition_id,
+)
 from ada_backend.database import models as db
 from ada_backend.schemas.pipeline.graph_schema import GraphUpdateResponse, GraphUpdateSchema
-from ada_backend.repositories.component_repository import get_canonical_ports_for_components
+from ada_backend.repositories.component_repository import (
+    get_canonical_ports_for_components,
+    get_component_instance_by_id,
+)
 from ada_backend.services.agent_runner_service import get_agent_for_project
 from ada_backend.services.graph.delete_graph_service import delete_component_instances_from_nodes
 from ada_backend.services.pipeline.update_pipeline_service import create_or_update_component_instance
@@ -30,6 +37,14 @@ from ada_backend.segment_analytics import track_project_saved
 
 
 LOGGER = logging.getLogger(__name__)
+
+
+def get_component_id_by_instance_id(session: Session, instance_id: UUID) -> UUID:
+    """Get component ID for a given component instance ID"""
+    instance = get_component_instance_by_id(session, instance_id)
+    if not instance:
+        raise ValueError(f"Component instance {instance_id} not found")
+    return instance.component_id
 
 
 # TODO: Refactor to rollback if instantiation failed.
@@ -149,13 +164,32 @@ def _ensure_port_mappings_for_edges(
     if hasattr(graph_project, "port_mappings") and graph_project.port_mappings:
         new_mappings: list[db.PortMapping] = []
         for pm_schema in graph_project.port_mappings:
+            # Get component IDs for the instances
+            source_component_id = get_component_id_by_instance_id(session, pm_schema.source_instance_id)
+            target_component_id = get_component_id_by_instance_id(session, pm_schema.target_instance_id)
+
+            # Resolve port names to port definition IDs
+            source_port_def_id = get_output_port_definition_id(
+                session, source_component_id, pm_schema.source_port_name
+            )
+            if not source_port_def_id:
+                raise ValueError(
+                    f"Output port '{pm_schema.source_port_name}' not found for component {source_component_id}"
+                )
+
+            target_port_def_id = get_input_port_definition_id(session, target_component_id, pm_schema.target_port_name)
+            if not target_port_def_id:
+                raise ValueError(
+                    f"Input port '{pm_schema.target_port_name}' not found for component {target_component_id}"
+                )
+
             new_mappings.append(
                 db.PortMapping(
                     graph_runner_id=graph_runner_id,
                     source_instance_id=pm_schema.source_instance_id,
-                    source_port_name=pm_schema.source_port_name,
+                    source_port_definition_id=source_port_def_id,
                     target_instance_id=pm_schema.target_instance_id,
-                    target_port_name=pm_schema.target_port_name,
+                    target_port_definition_id=target_port_def_id,
                     dispatch_strategy=pm_schema.dispatch_strategy or "direct",
                 )
             )
@@ -204,13 +238,22 @@ def _ensure_port_mappings_for_edges(
         source_port_name = source_ports.get("output") or "output"
         target_port_name = target_ports.get("input") or "input"
 
+        # Resolve port names to port definition IDs
+        source_port_def_id = get_output_port_definition_id(session, source_cid, source_port_name)
+        if not source_port_def_id:
+            raise ValueError(f"Output port '{source_port_name}' not found for component {source_cid}")
+
+        target_port_def_id = get_input_port_definition_id(session, target_cid, target_port_name)
+        if not target_port_def_id:
+            raise ValueError(f"Input port '{target_port_name}' not found for component {target_cid}")
+
         auto_mappings.append(
             db.PortMapping(
                 graph_runner_id=graph_runner_id,
                 source_instance_id=source_iid,
-                source_port_name=source_port_name,
+                source_port_definition_id=source_port_def_id,
                 target_instance_id=target_iid,
-                target_port_name=target_port_name,
+                target_port_definition_id=target_port_def_id,
                 dispatch_strategy="direct",
             )
         )

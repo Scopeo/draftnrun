@@ -76,9 +76,9 @@ def get_graph_service(
         port_mappings.append(
             PortMappingSchema(
                 source_instance_id=pm.source_instance_id,
-                source_port_name=pm.source_port_name,
+                source_port_name=pm.source_port_definition.name,
                 target_instance_id=pm.target_instance_id,
-                target_port_name=pm.target_port_name,
+                target_port_name=pm.target_port_definition.name,
                 dispatch_strategy=pm.dispatch_strategy,
             )
         )

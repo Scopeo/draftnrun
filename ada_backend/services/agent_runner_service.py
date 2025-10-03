@@ -63,9 +63,9 @@ async def build_graph_runner(
     port_mappings = [
         {
             "source_instance_id": str(pm.source_instance_id),
-            "source_port_name": pm.source_port_name,
+            "source_port_name": pm.source_port_definition.name,
             "target_instance_id": str(pm.target_instance_id),
-            "target_port_name": pm.target_port_name,
+            "target_port_name": pm.target_port_definition.name,
             "dispatch_strategy": pm.dispatch_strategy,
         }
         for pm in pms

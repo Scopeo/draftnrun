@@ -762,13 +762,21 @@ class PortMapping(Base):
         ForeignKey("component_instances.id", ondelete="CASCADE"),
         nullable=False,
     )
-    source_port_name = mapped_column(String, nullable=False)
+    source_port_definition_id = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("port_definitions.id", ondelete="CASCADE"),
+        nullable=False,
+    )
     target_instance_id = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("component_instances.id", ondelete="CASCADE"),
         nullable=False,
     )
-    target_port_name = mapped_column(String, nullable=False)
+    target_port_definition_id = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("port_definitions.id", ondelete="CASCADE"),
+        nullable=False,
+    )
     dispatch_strategy = mapped_column(String, nullable=False, default="direct")
 
     graph_runner = relationship("GraphRunner", back_populates="port_mappings")
@@ -781,6 +789,14 @@ class PortMapping(Base):
         "ComponentInstance",
         foreign_keys=[target_instance_id],
         back_populates="target_port_mappings",
+    )
+    source_port_definition = relationship(
+        "PortDefinition",
+        foreign_keys=[source_port_definition_id],
+    )
+    target_port_definition = relationship(
+        "PortDefinition",
+        foreign_keys=[target_port_definition_id],
     )
 
 
