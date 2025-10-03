@@ -20,6 +20,7 @@ from ada_backend.schemas.pipeline.graph_schema import (
 )
 from ada_backend.database.setup_db import get_db
 
+from ada_backend.services.errors import GraphNotFound, ProjectNotFound
 from ada_backend.services.graph.deploy_graph_service import deploy_graph_service
 from ada_backend.services.graph.load_copy_graph_service import load_copy_graph_service
 from ada_backend.services.graph.update_graph_service import update_graph_service
@@ -44,6 +45,10 @@ def get_project_graph(
         raise HTTPException(status_code=400, detail="User ID not found")
     try:
         return get_graph_service(sqlaclhemy_db_session, project_id, graph_runner_id)
+    except ProjectNotFound as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    except GraphNotFound as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:

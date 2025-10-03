@@ -9,7 +9,7 @@ from ada_backend.repositories.organization_repository import (
     get_organization_secrets,
     upsert_organization_secret,
 )
-from ada_backend.repositories.project_repository import get_projects_by_organization_service
+from ada_backend.repositories.project_repository import get_workflows_by_organization
 from ada_backend.schemas.organization_schema import OrganizationSecretResponse, OrganizationGetSecretKeysResponse
 from ada_backend.services.graph.get_graph_service import get_graph_service
 from ada_backend.services.graph.update_graph_service import update_graph_service
@@ -19,7 +19,7 @@ LOGGER = logging.getLogger(__name__)
 
 
 async def update_api_key_in_organization(session: Session, organization_id: UUID):
-    org_projects = get_projects_by_organization_service(session, organization_id)
+    org_projects = get_workflows_by_organization(session, organization_id)
     for project in org_projects:
         graph_runners = get_graph_runners_by_project(session, project.id)
         for graph_runner in graph_runners:

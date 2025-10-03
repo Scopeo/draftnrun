@@ -14,7 +14,7 @@ from ada_backend.repositories.graph_runner_repository import (
 from ada_backend.services.graph.deploy_graph_service import clone_graph_runner
 from ada_backend.repositories.project_repository import (
     get_project_with_details,
-    get_projects_by_organization_service,
+    get_workflows_by_organization,
     delete_project,
     insert_project,
     update_project,
@@ -39,14 +39,15 @@ def get_project_service(session: Session, project_id: UUID) -> ProjectWithGraphR
     return project_with_detail
 
 
-def get_projects_by_organization(
+# TODO: move to workflow_service
+def get_workflows_by_organization_service(
     session: Session,
     organization_id: UUID,
     user_id: UUID = None,
 ) -> list[ProjectResponse]:
     if user_id:
         track_user_get_project_list(user_id, organization_id)
-    projects = get_projects_by_organization_service(session, organization_id)
+    projects = get_workflows_by_organization(session, organization_id)
     return [
         ProjectResponse(
             project_id=project.id,
@@ -71,7 +72,8 @@ def delete_project_service(session: Session, project_id: UUID) -> ProjectDeleteR
     )
 
 
-def create_project(
+# TODO: move to workflow_service
+def create_workflow(
     session: Session,
     user_id: UUID,
     organization_id: UUID,
@@ -119,6 +121,7 @@ def create_project(
         project_name=project.name,
         description=project.description,
         organization_id=organization_id,
+        project_type=project.type,
         companion_image_url=project.companion_image_url,
         created_at=str(project.created_at),
         updated_at=str(project.updated_at),

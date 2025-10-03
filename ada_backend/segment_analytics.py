@@ -62,6 +62,20 @@ def track_project_created(user_id: UUID, organization_id: UUID, project_id: UUID
 
 
 @non_breaking_track
+def track_agent_created(user_id: UUID, organization_id: UUID, agent_id: UUID, agent_name: str):
+    analytics.track(
+        user_id=str(user_id),
+        event="Agent Created",
+        properties={
+            "env": settings.ENV,
+            "organization_id": str(organization_id),
+            "agent_id": str(agent_id),
+            "agent_name": agent_name,
+        },
+    )
+
+
+@non_breaking_track
 def track_project_loaded(user_id: UUID, project_id: UUID):
     analytics.track(
         user_id=str(user_id),

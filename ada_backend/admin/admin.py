@@ -90,7 +90,16 @@ class CronRunAdmin(EnhancedModelView, model=db.CronRun):
 class ProjectAdmin(EnhancedModelView, model=db.Project):
     category = AdminCategory.PROJECTS
     icon = "fas fa-users"
-    column_list = ["id", "name", "description", "organization_id", "companion_image_url", "created_at", "updated_at"]
+    column_list = [
+        "id",
+        "name",
+        "description",
+        "type",
+        "organization_id",
+        "companion_image_url",
+        "created_at",
+        "updated_at",
+    ]
 
 
 class ProjectEnvironmentBinding(EnhancedModelView, model=db.ProjectEnvironmentBinding):
