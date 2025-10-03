@@ -1,7 +1,7 @@
 """Add port definitions and mappings tables
 
 Revision ID: f94e9fdc03e4
-Revises: 1eb7c34db2a7
+Revises: 79e3872b3b03
 Create Date: 2025-09-24 03:55:39.848809
 
 """
@@ -17,7 +17,7 @@ from ada_backend.database.utils import create_enum_if_not_exists, drop_enum_if_e
 
 # revision identifiers, used by Alembic.
 revision: str = "f94e9fdc03e4"
-down_revision: Union[str, None] = "1eb7c34db2a7"
+down_revision: Union[str, None] = "79e3872b3b03"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
