@@ -12,11 +12,11 @@ from openinference.semconv.trace import SpanAttributes
 
 from engine.llm_services.utils import (
     check_usage,
-    extract_data_from_json_answer,
-    ensure_structured_output_response,
-    get_structured_response_without_tools,
+    validate_and_extract_json_response,
     make_messages_compatible_for_mistral,
     make_mistral_ocr_compatible,
+    convert_tool_description_to_output_format,
+    create_chat_completion_with_structured_output,
 )
 from engine.trace.trace_manager import TraceManager
 from engine.agent.types import ToolDescription
@@ -396,6 +396,7 @@ class CompletionService(LLMService):
         response_format = OutputFormatModel(**response_format).model_dump(exclude_none=True, exclude_unset=True)
         span = get_current_span()
         span.set_attributes({SpanAttributes.LLM_INVOCATION_PARAMETERS: json.dumps(self._invocation_parameters)})
+        print(messages)
         match self._provider:
             case "openai":
                 import openai
@@ -455,7 +456,7 @@ class CompletionService(LLMService):
                 )
                 # Post-process response to handle models that return schema instead of data
                 raw_content = response.choices[0].message.content
-                processed_content = extract_data_from_json_answer(raw_content, schema)
+                processed_content = validate_and_extract_json_response(raw_content, schema)
 
                 span.set_attributes(
                     {
@@ -499,7 +500,7 @@ class CompletionService(LLMService):
 
                 # Post-process response to handle models that return schema instead of data
                 raw_content = response.choices[0].message.content
-                processed_content = extract_data_from_json_answer(raw_content, schema)
+                processed_content = validate_and_extract_json_response(raw_content, schema)
 
                 span.set_attributes(
                     {
@@ -531,6 +532,127 @@ class CompletionService(LLMService):
         tool_choice: str = "auto",
         structured_output_tool: Optional[ToolDescription] = None,
     ) -> ChatCompletion:
+        """
+        Main function calling dispatcher that routes to appropriate implementation.
+        """
+        if structured_output_tool is not None:
+            return await self.function_call_with_structured_output_async(
+                messages=messages,
+                stream=stream,
+                tools=tools,
+                tool_choice=tool_choice,
+                structured_output_tool=structured_output_tool,
+            )
+        else:
+            return await self.function_call_without_structured_output_async(
+                messages=messages,
+                stream=stream,
+                tools=tools,
+                tool_choice=tool_choice,
+            )
+
+    @with_async_usage_check
+    async def function_call_without_structured_output_async(
+        self,
+        messages: list[dict] | str,
+        stream: bool = False,
+        tools: Optional[list[ToolDescription]] = None,
+        tool_choice: str = "auto",
+    ) -> ChatCompletion:
+        """
+        Function calling without structured output
+        """
+        if tools is None:
+            tools = []
+
+        openai_tools = [tool.openai_format for tool in tools]
+
+        span = get_current_span()
+        span.set_attributes({SpanAttributes.LLM_INVOCATION_PARAMETERS: json.dumps(self._invocation_parameters)})
+
+        match self._provider:
+            case "openai" | "google":
+                import openai
+
+                client = openai.AsyncOpenAI(api_key=self._api_key, base_url=self._base_url)
+                response = await client.chat.completions.create(
+                    model=self._model_name,
+                    messages=messages,
+                    tools=openai_tools,
+                    temperature=self._invocation_parameters.get("temperature"),
+                    stream=stream,
+                    tool_choice=tool_choice,
+                )
+                span.set_attributes(
+                    {
+                        SpanAttributes.LLM_TOKEN_COUNT_COMPLETION: response.usage.completion_tokens,
+                        SpanAttributes.LLM_TOKEN_COUNT_PROMPT: response.usage.prompt_tokens,
+                        SpanAttributes.LLM_TOKEN_COUNT_TOTAL: response.usage.total_tokens,
+                    }
+                )
+                return response
+
+            case "mistral":
+                import openai
+
+                mistral_compatible_messages = make_messages_compatible_for_mistral(messages)
+                client = openai.AsyncOpenAI(
+                    api_key=self._api_key,
+                    base_url=self._base_url,
+                )
+                response = await client.chat.completions.create(
+                    model=self._model_name,
+                    messages=mistral_compatible_messages,
+                    tools=openai_tools,
+                    temperature=self._invocation_parameters.get("temperature"),
+                    stream=stream,
+                    tool_choice=tool_choice,
+                )
+                span.set_attributes(
+                    {
+                        SpanAttributes.LLM_TOKEN_COUNT_COMPLETION: response.usage.completion_tokens,
+                        SpanAttributes.LLM_TOKEN_COUNT_PROMPT: response.usage.prompt_tokens,
+                        SpanAttributes.LLM_TOKEN_COUNT_TOTAL: response.usage.total_tokens,
+                    }
+                )
+                return response
+
+            case _:
+                import openai
+
+                client = openai.AsyncOpenAI(
+                    api_key=self._api_key,
+                    base_url=self._base_url,
+                )
+                response = await client.chat.completions.create(
+                    model=self._model_name,
+                    messages=messages,
+                    tools=openai_tools,
+                    temperature=self._invocation_parameters.get("temperature"),
+                    stream=stream,
+                    tool_choice=tool_choice,
+                )
+                span.set_attributes(
+                    {
+                        SpanAttributes.LLM_TOKEN_COUNT_COMPLETION: response.usage.completion_tokens,
+                        SpanAttributes.LLM_TOKEN_COUNT_PROMPT: response.usage.prompt_tokens,
+                        SpanAttributes.LLM_TOKEN_COUNT_TOTAL: response.usage.total_tokens,
+                    }
+                )
+                return response
+
+    @with_async_usage_check
+    async def function_call_with_structured_output_async(
+        self,
+        messages: list[dict] | str,
+        stream: bool = False,
+        tools: Optional[list[ToolDescription]] = None,
+        tool_choice: str = "auto",
+        structured_output_tool: Optional[ToolDescription] = None,
+    ) -> ChatCompletion:
+        """
+        Function calling with structured output support.
+        """
         if tools is None:
             tools = []
 
@@ -540,10 +662,9 @@ class CompletionService(LLMService):
         span.set_attributes({SpanAttributes.LLM_INVOCATION_PARAMETERS: json.dumps(self._invocation_parameters)})
 
         # Check for structured output tool early return
-        if structured_output_tool is not None and tool_choice == "none":
+        if tool_choice == "none":
             # Call the constrained complete with json schema to force a structured output answer
-            response = await get_structured_response_without_tools(
-                completion_service=self,
+            response = await self._get_structured_response_without_tools(
                 structured_output_tool=structured_output_tool,
                 messages=messages,
                 stream=stream,
@@ -569,10 +690,8 @@ class CompletionService(LLMService):
 
                 client = openai.AsyncOpenAI(api_key=self._api_key, base_url=self._base_url)
 
-        # If structured output, we force tool choice to required
-        if structured_output_tool is not None:
-            tool_choice = "required"
-            openai_tools.append(structured_output_tool.openai_format)
+        tool_choice = "required"
+        openai_tools.append(structured_output_tool.openai_format)
 
         response = await client.chat.completions.create(
             model=self._model_name,
@@ -583,17 +702,16 @@ class CompletionService(LLMService):
             tool_choice=tool_choice,
         )
 
-        # Sometimes, models call multiple tools including the structured output tool
-        # We need to ensure the response is formatted as structured output
-        # This handles both tool calls and fallback to backup LLM method
-        if structured_output_tool is not None:
-            response = await ensure_structured_output_response(
-                response=response,
-                structured_output_tool=structured_output_tool,
-                completion_service=self,
-                stream=stream,
-            )
-
+        # Ensure that the answer we provide is either:
+        # - called tools if no structured output tool was called
+        # - structured output if the structured output tool was called in the tools
+        # - enforce a structured output if no tools were called (should not happen unless LLM error)
+        response = await self.ensure_tools_or_structured_output_response(
+            response=response,
+            original_messages=messages,
+            structured_output_tool=structured_output_tool,
+            stream=stream,
+        )
         span.set_attributes(
             {
                 SpanAttributes.LLM_TOKEN_COUNT_COMPLETION: response.usage.completion_tokens,
@@ -601,6 +719,83 @@ class CompletionService(LLMService):
                 SpanAttributes.LLM_TOKEN_COUNT_TOTAL: response.usage.total_tokens,
             }
         )
+        return response
+
+    async def _get_structured_response_without_tools(
+        self,
+        structured_output_tool: ToolDescription,
+        messages: list[dict] | str,
+        stream: bool = False,
+    ) -> ChatCompletion:
+        """
+        Get a structured response when explicitly choosing to answer without tools (tool_choice="none").
+        This method calls the regular function calling and then processes the result.
+        """
+        LOGGER.info("Getting structured response without tools using LLM constrained method")
+        structured_json_output = convert_tool_description_to_output_format(structured_output_tool)
+        structured_content = await self.constrained_complete_with_json_schema_async(
+            messages=messages,
+            stream=stream,
+            response_format=structured_json_output,
+        )
+        response = create_chat_completion_with_structured_output(structured_content, self._model_name)
+        return response
+
+    async def ensure_tools_or_structured_output_response(
+        self,
+        response: ChatCompletion,
+        original_messages: list[dict],
+        structured_output_tool: ToolDescription,
+        stream: bool = False,
+    ) -> ChatCompletion:
+        """
+        Ensure the response is formatted as structured output.
+
+        If the structured output tool was called, extract its result.
+        If no tools were called, use backup LLM method to force structured formatting.
+
+        Args:
+            response: The ChatCompletion response object to modify
+            original_messages: The original messages sent to the LLM
+            structured_output_tool: The structured output tool description
+            stream: Whether to stream the response
+
+        Returns:
+            A ChatCompletion object with structured content
+        """
+        tools_called = response.choices[0].message.tool_calls
+        # If no tools were called, use backup method to force structured formatting from the response message
+        if not tools_called:
+            LOGGER.info(
+                "No tools were called, using backup LLM method to format structured output on the whole conversation"
+            )
+            assistant_message = {
+                "role": response.choices[0].message.role,
+                "content": response.choices[0].message.content,
+            }
+            messages = original_messages + [assistant_message]
+            return await self._get_structured_response_without_tools(
+                structured_output_tool=structured_output_tool,
+                messages=messages,
+                stream=stream,
+            )
+
+        if len(tools_called) > 1:
+            tools_called_without_structured_output = []
+            for call in tools_called:
+                if call.function.name == structured_output_tool.name:
+                    continue
+                tools_called_without_structured_output.append(call)
+            response.choices[0].message.tool_calls = tools_called_without_structured_output
+        else:
+            if tools_called[0].function.name == structured_output_tool.name:
+                try:
+                    # Return the arguments of the structured output tool as the final response
+                    response.choices[0].message.content = json.dumps(tools_called[0].function.arguments)
+                    response.choices[0].message.tool_calls = None
+                    return response
+                except Exception as e:
+                    raise ValueError(f"Error parsing structured output tool response: {e}")
         return response
 
 

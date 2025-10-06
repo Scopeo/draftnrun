@@ -36,6 +36,11 @@ INITIAL_PROMPT = (
 DEFAULT_FALLBACK_REACT_ANSWER = "I couldn't find a solution to your problem."
 CODE_RUNNER_TOOLS = [PYTHON_CODE_RUNNER_TOOL_DESCRIPTION.name, TERMINAL_COMMAND_RUNNER_TOOL_DESCRIPTION.name]
 
+OUTPUT_TOOL_NAME = "chat_formatting_output_tool"
+OUTPUT_TOOL_DESCRIPTION = (
+    "Default tool to be use by the agent to answer in a structured format if no other tool" " is called"
+)
+
 
 class ReActAgentInputs(BaseModel):
     messages: list[ChatMessage] = Field(description="The history of messages in the conversation.")
@@ -138,10 +143,7 @@ class ReActAgent(Agent):
         last_history_messages: int = 50,
         allow_tool_shortcuts: bool = False,
         date_in_system_prompt: bool = False,
-        output_tool_name: Optional[str] = None,
-        output_tool_description: Optional[str] = None,
-        output_tool_properties: Optional[dict|str] = None,
-        output_tool_required_properties: Optional[str|list] = None,
+        output_format: Optional[str | dict] = None,
     ) -> None:
         super().__init__(
             trace_manager=trace_manager,
@@ -167,12 +169,7 @@ class ReActAgent(Agent):
         self._shared_sandbox: Optional[AsyncSandbox] = None
         self._e2b_api_key = getattr(settings, "E2B_API_KEY", None)
 
-        # Initialize output tool parameters (store as-is, parse later when needed)
-        self._output_tool_name = output_tool_name
-        self._output_tool_description = output_tool_description
-        self._output_tool_properties = output_tool_properties
-        self._output_tool_required_properties = output_tool_required_properties
-
+        self._output_format = output_format
         self._output_tool_agent_description = self._get_output_tool_description()
 
     def _get_output_tool_description(self) -> Optional[ToolDescription]:
@@ -183,37 +180,20 @@ class ReActAgent(Agent):
             ToolDescription if all required output tool parameters are set, None otherwise.
         """
         # If no output tool is configured, return None
-        if not any([self._output_tool_name, self._output_tool_description, self._output_tool_properties]):
+        if not any([self._output_format]):
             return None
 
-        # If we tried to set up an output tool but missed some information, raise an error
-        missing_fields = []
-        if not self._output_tool_name:
-            missing_fields.append("output_tool_name")
-        if not self._output_tool_description:
-            missing_fields.append("output_tool_description")
-        if not self._output_tool_properties:
-            missing_fields.append("output_tool_properties")
-
-        if missing_fields:
-            raise ValueError(f"Error missing critical fields to define output structured output {missing_fields}")
-
         # Parse JSON strings to appropriate data types
-        if isinstance(self._output_tool_properties, str):
-            parsed_properties = load_str_to_json(self._output_tool_properties)
+        if isinstance(self._output_format, str):
+            parsed_output_tool_properies = load_str_to_json(self._output_format)
         else:
-            parsed_properties = self._output_tool_properties
+            parsed_output_tool_properies = self._output_format
 
-        if isinstance(self._output_tool_required_properties, str):
-            parsed_required_properties = load_str_to_json(self._output_tool_required_properties)
-        else:
-            parsed_required_properties = self._output_tool_required_properties or []
-
-        required_properties = parsed_required_properties or list(parsed_properties.keys())
+        required_properties = list(parsed_output_tool_properies.keys())
         return ToolDescription(
-            name=self._output_tool_name,
-            description=self._output_tool_description,
-            tool_properties=parsed_properties,
+            name=OUTPUT_TOOL_NAME,
+            description=OUTPUT_TOOL_DESCRIPTION,
+            tool_properties=parsed_output_tool_properies,
             required_tool_properties=required_properties,
         )
 

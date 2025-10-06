@@ -10,8 +10,39 @@ from openai.types.chat.chat_completion import Choice
 from ada_backend.services.trace_service import TOKEN_LIMIT, get_token_usage
 from engine.trace.span_context import get_tracing_span
 
-
 LOGGER = logging.getLogger(__name__)
+
+
+def convert_tool_messages_to_assistant_messages(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """
+    Convert tool messages to assistant messages for response API compatibility.
+    Tool messages are not supported in the response API, so we convert them to assistant messages.
+    """
+    converted_messages = []
+    for message in messages:
+        role = message.get("role")
+        content = message.get("content")
+        tool_calls = message.get("tool_calls")
+
+        # Skip assistant messages with None content and non-empty tool_calls
+        if role == "assistant" and content is None and tool_calls:
+            continue
+
+        # Handle tool messages - convert to assistant messages
+        if role == "tool":
+            if content is None:
+                raise ValueError("Tool message cannot have None content")
+            # Convert tool response to assistant message
+            # Tool messages are not handled for json_constrained response API call
+            assistant_message = {"role": "assistant", "content": content}
+            converted_messages.append(assistant_message)
+            continue
+
+        # Clean the message by removing tool-related fields
+        clean_message = {k: v for k, v in message.items() if k not in ["tool_calls", "tool_call_id"]}
+        converted_messages.append(clean_message)
+
+    return converted_messages
 
 
 def chat_completion_to_response(
@@ -24,31 +55,10 @@ def chat_completion_to_response(
     if isinstance(chat_completion_messages, str):
         return chat_completion_messages
 
-    response_messages = []
-    print("chat_completion_messages")
-    print(chat_completion_messages)
-    for message in chat_completion_messages:
-        role = message.get("role")
-        content = message.get("content")
-        tool_calls = message.get("tool_calls")
+    response_messages = chat_completion_messages.copy()
 
-        # Skip assistant messages with None content and non-empty tool_calls
-        if role == "assistant" and content is None and tool_calls:
-            continue
-
-        # Handle tool messages
-        if role == "tool":
-            if content is None:
-                raise ValueError("Tool message cannot have None content")
-            # Convert tool response to assistant message
-            # Tool messages are not handled for json_constrained response API call
-            assistant_message = {"role": "assistant", "content": content}
-            response_messages.append(assistant_message)
-            continue
-
-        # Clean the message by removing tool-related fields
-        clean_message = {k: v for k, v in message.items() if k not in ["tool_calls", "tool_call_id"]}
-        response_messages.append(clean_message)
+    # Remove tools messages/artifacts and make them as assistant messages
+    response_messages = convert_tool_messages_to_assistant_messages(response_messages)
 
     for message in response_messages:
         if "content" in message and isinstance(message["content"], list) and "role" in message:
@@ -132,7 +142,6 @@ def check_usage(provider: str) -> None:
 
 
 def make_mistral_ocr_compatible(payload_json: dict) -> list[dict]:
-
     if "messages" not in payload_json or not payload_json["messages"]:
         return None
 
@@ -194,6 +203,7 @@ def build_openai_responses_kwargs(
             kwargs["temperature"] = 1
     return kwargs
 
+
 def create_chat_completion_with_structured_output(structured_output: str, model_name: str) -> Any:
     """
     Create a fake ChatCompletion object for structured output responses.
@@ -203,7 +213,7 @@ def create_chat_completion_with_structured_output(structured_output: str, model_
         model_name: The model name to include in the response
 
     Returns:
-        A ChatCompletion object with the provided content
+        A ChatCompletion object with a json structured message
     """
     return ChatCompletion(
         id=f"chatcmpl-{uuid.uuid4()}",
@@ -244,16 +254,20 @@ def convert_tool_description_to_output_format(tool_description) -> str:
     return json.dumps(output_format)
 
 
-def extract_data_from_json_answer(raw_content: str, expected_schema: dict) -> str:
+def validate_and_extract_json_response(raw_content: str, expected_schema: dict) -> str:
     """
-    Extract actual data from response when model returns schema instead of data.
+    Validate and extract JSON response data when model returns schema instead of actual data.
+
+    Some models return the schema structure instead of the actual data values.
+    This function checks if the response matches the expected schema structure
+    and extracts just the data properties if so.
 
     Args:
         raw_content: The raw response content from the LLM
-        expected_schema: The expected schema structure
+        expected_schema: The expected schema structure with properties
 
     Returns:
-        Processed content with just the data if schema was returned, otherwise original content
+        JSON string with just the data properties if schema was returned, otherwise original content
     """
     try:
         parsed_response = json.loads(raw_content)
@@ -261,12 +275,14 @@ def extract_data_from_json_answer(raw_content: str, expected_schema: dict) -> st
             response_properties = parsed_response["properties"]
             expected_properties = expected_schema.get("properties", {})
 
+            # Check if the response contains the same properties as expected schema
             if set(response_properties.keys()) == set(expected_properties.keys()):
+                # Return just the data properties, not the full schema
                 return json.dumps(response_properties)
         return raw_content
 
     except (json.JSONDecodeError, TypeError, AttributeError):
-        LOGGER.error(f"Error extracting data from json formatted response: {raw_content}")
+        LOGGER.error(f"Error validating JSON response format: {raw_content}")
         return raw_content
 
 
