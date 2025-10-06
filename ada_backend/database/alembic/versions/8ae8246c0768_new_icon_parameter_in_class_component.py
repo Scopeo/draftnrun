@@ -1,8 +1,8 @@
-"""nouvel element icon dans classe Component
+"""new icon parameter in class Component
 
-Revision ID: a07730e953c1
-Revises: 1eb7c34db2a7
-Create Date: 2025-10-03 14:51:14.984373
+Revision ID: 8ae8246c0768
+Revises: 79e3872b3b03
+Create Date: 2025-10-06 11:15:58.215024
 
 """
 from typing import Sequence, Union
@@ -12,8 +12,8 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = 'a07730e953c1'
-down_revision: Union[str, None] = '1eb7c34db2a7'
+revision: str = '8ae8246c0768'
+down_revision: Union[str, None] = '79e3872b3b03'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
