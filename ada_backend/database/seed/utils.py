@@ -88,8 +88,6 @@ COMPONENT_UUIDS: dict[str, UUID] = {
     "static_responder": UUID("1F7334BE-7164-4440-BBF3-E986EED0388F"),
 }
 
-ICON_NAMES: dict[str] = {"linkup": "streamline-ultimate:network-search"}
-
 DEFAULT_MODEL = "openai:gpt-5-mini"
 
 # Get models by capability and convert to select options
