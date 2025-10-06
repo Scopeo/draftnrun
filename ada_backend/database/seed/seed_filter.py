@@ -105,8 +105,7 @@ def seed_filter_components(session: Session):
             ),
         ],
     )
-    # TODO: Delete manual port seeding after Filter component is migrated
-    # Upsert canonical port definitions for Filter component
+    # LEGACY: Manual port seeding for unmigrated Filter component
     existing = session.query(db.Component).filter(db.Component.id == filter.id).first()
     if existing:
         # Ensure INPUT and OUTPUT canonical 'messages' ports exist

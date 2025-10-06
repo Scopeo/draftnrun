@@ -38,7 +38,7 @@ def seed_input_components(session: Session):
             input,
         ],
     )
-    # Upsert canonical port definitions for Input component
+    # LEGACY: Manual port seeding for unmigrated Input component
     existing = get_component_by_id(session, input.id)
     if existing:
         # Ensure an OUTPUT canonical 'messages' port exists

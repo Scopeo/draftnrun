@@ -1,9 +1,10 @@
-import json
 import logging
+from typing import Type
 
 from opentelemetry import trace as trace_api
 from openinference.semconv.trace import SpanAttributes, OpenInferenceSpanKindValues
 from jsonschema_pydantic import jsonschema_to_pydantic
+from pydantic import BaseModel
 
 from engine.agent.types import (
     ToolDescription,
@@ -14,6 +15,7 @@ from engine.agent.types import (
 )
 from engine.trace.trace_manager import TraceManager
 from engine.agent.utils import load_str_to_json
+from engine.trace.serializer import serialize_to_json
 
 LOGGER = logging.getLogger(__name__)
 
@@ -31,6 +33,10 @@ DEFAULT_FILTER_TOOL_DESCRIPTION = ToolDescription(
 
 
 class Filter:
+    # LEGACY: Mark as unmigrated for retro-compatibility
+    # TODO: Remove after migration to Agent base class
+    migrated: bool = False
+
     def __init__(
         self,
         trace_manager: TraceManager,
@@ -48,6 +54,22 @@ class Filter:
         # The filter expects and produces an AgentPayload shape; the most
         # semantically useful passthrough is the messages list.
         return {"input": "messages", "output": "messages"}
+
+    # LEGACY: Schema methods for retro-compatibility with type discovery
+    # TODO: Remove after migration to Agent base class
+    @classmethod
+    def get_inputs_schema(cls) -> Type[BaseModel]:
+        """Filter component accepts AgentPayload structure."""
+        from engine.legacy_compatibility import create_legacy_filter_input_schema
+
+        return create_legacy_filter_input_schema()
+
+    @classmethod
+    def get_outputs_schema(cls) -> Type[BaseModel]:
+        """Filter component outputs AgentPayload structure."""
+        from engine.legacy_compatibility import create_legacy_filter_output_schema
+
+        return create_legacy_filter_output_schema()
 
     async def run(self, output_data: AgentPayload | dict | NodeData):
         if isinstance(output_data, NodeData):
@@ -71,8 +93,8 @@ class Filter:
             span.set_attributes(
                 {
                     SpanAttributes.OPENINFERENCE_SPAN_KIND: OpenInferenceSpanKindValues.UNKNOWN.value,
-                    SpanAttributes.INPUT_VALUE: json.dumps(output_data),
-                    SpanAttributes.OUTPUT_VALUE: json.dumps(filtered_dict),
+                    SpanAttributes.INPUT_VALUE: serialize_to_json(output_data, shorten_string=True),
+                    SpanAttributes.OUTPUT_VALUE: serialize_to_json(filtered_dict, shorten_string=True),
                 }
             )
             span.set_status(trace_api.StatusCode.OK)

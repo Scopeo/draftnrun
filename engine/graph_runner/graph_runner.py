@@ -1,6 +1,4 @@
 import logging
-from enum import StrEnum
-from dataclasses import dataclass
 from typing import Optional, Any
 import json
 
@@ -8,60 +6,24 @@ import networkx as nx
 from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttributes
 from opentelemetry import trace as trace_api
 
-from engine.agent.types import AgentPayload, ChatMessage, NodeData
+from engine.agent.types import AgentPayload, NodeData
+from engine.coercion_matrix import create_default_coercion_matrix, CoercionMatrix
 from engine.graph_runner.runnable import Runnable
+from engine.graph_runner.types import Task, TaskState, PortMapping
+from engine.graph_runner.port_management import (
+    get_target_field_type,
+    get_source_type_for_mapping,
+    apply_function_call_strategy,
+    validate_port_mappings,
+    synthesize_default_mappings,
+)
+from engine import legacy_compatibility
 from engine.trace.trace_manager import TraceManager
 from engine.trace.serializer import serialize_to_json
 from engine.trace.span_context import get_tracing_span
 
 
 LOGGER = logging.getLogger(__name__)
-
-
-class TaskState(StrEnum):
-    NOT_READY = "not_ready"
-    READY = "ready"
-    COMPLETED = "completed"
-
-
-@dataclass
-class Task:
-    """Tracks task data and state."""
-
-    pending_deps: int
-    state: TaskState = TaskState.NOT_READY
-    result: Optional[NodeData] = None
-
-    def decrement_pending_deps(self):
-        """Decrement pending dependencies, marking the task as ready
-        if dependencies are now satisfied."""
-        if self.state != TaskState.NOT_READY:
-            raise ValueError("Cannot decrement pending dependencies for a non-ready task")
-
-        if self.pending_deps <= 0:
-            raise ValueError("Pending dependencies cannot be negative")
-        self.pending_deps -= 1
-
-        if self.pending_deps == 0:
-            self.state = TaskState.READY
-
-    def complete(self, result: NodeData):
-        """Mark the task as completed with a result."""
-        if self.state != TaskState.READY:
-            raise ValueError("Cannot complete a non-ready task")
-        self.state = TaskState.COMPLETED
-        self.result = result
-
-
-@dataclass
-class PortMapping:
-    """A structured representation of a connection between two nodes' ports."""
-
-    source_instance_id: str
-    source_port_name: str
-    target_instance_id: str
-    target_port_name: str
-    dispatch_strategy: str = "direct"
 
 
 class GraphRunner:
@@ -75,12 +37,15 @@ class GraphRunner:
         trace_manager: TraceManager,
         *,
         port_mappings: list[dict[str, Any]] | None = None,
+        coercion_matrix: CoercionMatrix | None = None,
     ):
         self.trace_manager = trace_manager
         self.graph = graph
         self.runnables = runnables
         self.start_nodes = start_nodes
         self.run_context: dict[str, Any] = {}
+        # Initialize coercion matrix - use provided one or create default
+        self.coercion_matrix = coercion_matrix or create_default_coercion_matrix()
 
         # Convert raw mapping dicts into structured PortMapping objects.
         self.port_mappings: list[PortMapping] = [
@@ -105,6 +70,7 @@ class GraphRunner:
         # Synthesize explicit default mappings for single-predecessor nodes without mappings
         self._synthesize_default_mappings()
         self._validate_graph()
+        validate_port_mappings(self.port_mappings, self.runnables)
 
     def _initialize_execution(self, input_data: dict[str, Any]) -> None:
         """Initialize the execution state including dependencies and input data."""
@@ -186,7 +152,7 @@ class GraphRunner:
             node_inputs_data = self._gather_inputs(node_id)
             input_packet = NodeData(data=node_inputs_data, ctx=self.run_context)
             result_any = await runnable.run(input_packet)
-            result_packet = _normalize_output_to_node_data(result_any, self.run_context)
+            result_packet = legacy_compatibility.normalize_output_to_node_data(result_any, self.run_context)
             task.complete(result_packet)
             self.run_context.update(result_packet.ctx or {})
             LOGGER.debug(f"Node '{node_id}' completed execution with result: {result_packet}")
@@ -194,7 +160,7 @@ class GraphRunner:
             for successor in self.graph.successors(node_id):
                 self.tasks[successor].decrement_pending_deps()
 
-        return self._collect_outputs()
+        return legacy_compatibility.collect_legacy_outputs(self.graph, self.tasks, self._input_node_id, self.runnables)
 
     def _add_virtual_input_node(self):
         """Add a virtual input node and connect it to all start nodes."""
@@ -234,7 +200,33 @@ class GraphRunner:
             ):
                 task_result = self.tasks[port_mapping.source_instance_id].result
                 if task_result and port_mapping.source_port_name in task_result.data:
-                    input_data[port_mapping.target_port_name] = task_result.data[port_mapping.source_port_name]
+                    source_value = task_result.data[port_mapping.source_port_name]
+
+                    # Check if target component is unmigrated (doesn't have migrated attribute)
+                    target_component = self.runnables.get(node_id)
+                    is_unmigrated = target_component and not hasattr(target_component, "migrated")
+
+                    if is_unmigrated:
+                        # For unmigrated components, pass the entire output structure
+                        # instead of trying to extract individual fields
+                        input_data = task_result.data
+                    else:
+                        # For migrated components, use coercion system
+                        target_type = (
+                            get_target_field_type(target_component, port_mapping.target_port_name)
+                            if target_component
+                            else str
+                        )
+
+                        # Get source type for accurate coercion
+                        source_type = get_source_type_for_mapping(port_mapping, source_value, self.runnables)
+                        LOGGER.debug(
+                            f"Coercing {port_mapping.source_instance_id}.{port_mapping.source_port_name} "
+                            f"({source_type}) → {port_mapping.target_instance_id}.{port_mapping.target_port_name} "
+                            f"({target_type})"
+                        )
+                        coerced_value = self.coercion_matrix.coerce(source_value, target_type, source_type)
+                        input_data[port_mapping.target_port_name] = coerced_value
                 else:
                     LOGGER.warning(
                         f"Source port '{port_mapping.source_port_name}' not found in output of "
@@ -248,87 +240,10 @@ class GraphRunner:
             if port_mapping.dispatch_strategy == "function_call"
         ]
         if function_call_port_mappings:
-            structured_values = self._apply_function_call_strategy(node_id, function_call_port_mappings)
+            structured_values = apply_function_call_strategy(node_id, function_call_port_mappings)
             input_data.update(structured_values)
 
         return input_data
-
-    def _apply_function_call_strategy(self, target_node_id: str, port_mappings: list[PortMapping]) -> dict[str, Any]:
-        """Placeholder for transforming unstructured data into structured inputs."""
-        LOGGER.warning("dispatch_strategy 'function_call' is not implemented yet.")
-        return {}
-
-    def _collect_outputs(self) -> AgentPayload:
-        """Legacy compatibility shim: collect outputs and convert to AgentPayload.
-
-        New multi-port graphs should eventually return structured data instead of
-        forcing a single assistant message. This will be revisited post-migration.
-        """
-        leaf_nodes: list[str] = []
-        for node_id in self.graph.nodes():
-            if self.graph.out_degree(node_id) == 0 and node_id != self._input_node_id:
-                leaf_nodes.append(node_id)
-
-        leaf_pairs: list[tuple[str, NodeData]] = []
-        for node_id in leaf_nodes:
-            task = self.tasks.get(node_id)
-            if task and task.state == TaskState.COMPLETED and task.result is not None:
-                leaf_pairs.append((node_id, task.result))
-
-        if not leaf_pairs:
-            return AgentPayload(messages=[ChatMessage(role="assistant", content="")])
-
-        # Legacy compatibility shim: reduce a NodeData to a single string for message content
-        def pick_canonical_output(node_id: str, node_data: NodeData) -> str:
-            runnable = self.runnables.get(node_id)
-            preferred_key: str | None = None
-            if runnable and hasattr(runnable, "get_canonical_ports"):
-                try:
-                    ports = runnable.get_canonical_ports()
-                    preferred_key = ports.get("output") if isinstance(ports, dict) else None
-                except Exception:
-                    preferred_key = None
-            data = node_data.data or {}
-            value = None
-            if preferred_key and preferred_key in data:
-                value = data.get(preferred_key)
-            if value is None:
-                value = data.get("output", data.get("response"))
-
-            # Handle dicts that look like ChatMessages (from model_dump)
-            if isinstance(value, dict) and "content" in value and isinstance(value.get("content"), str):
-                return value["content"]  # type: ignore
-
-            # Handle actual ChatMessage objects
-            if isinstance(value, ChatMessage):
-                return value.content or ""
-
-            # Handle plain strings
-            if isinstance(value, str):
-                return value
-
-            # Fallback: serialize the value of the port, or the whole data dict if no value found
-            if value is not None:
-                return serialize_to_json(value, shorten_string=True)
-
-            return serialize_to_json(data, shorten_string=True)
-
-        if len(leaf_pairs) == 1:
-            node_id, nd = leaf_pairs[0]
-            content = pick_canonical_output(node_id, nd)
-            data = nd.data or {}
-            return AgentPayload(
-                messages=[ChatMessage(role="assistant", content=content)],
-                is_final=bool(data.get("is_final", False)),
-                artifacts=data.get("artifacts", {}) or {},
-            )
-
-        # Multiple leaves: concatenate
-        message_content = ""
-        for i, (node_id, nd) in enumerate(leaf_pairs, start=1):
-            content = pick_canonical_output(node_id, nd)
-            message_content += f"Result from output {i}:\n{content}\n\n"
-        return AgentPayload(messages=[ChatMessage(role="assistant", content=message_content.strip())])
 
     def reset(self):
         """Reset the graph runner state to allow reuse.
@@ -353,69 +268,7 @@ class GraphRunner:
         - Skips start nodes that only depend on the virtual input node (passthrough).
         - Raises an error if a node has multiple real predecessors and no mappings.
         """
-        new_mappings: list[PortMapping] = []
-        for node_id in self.graph.nodes():
-            if node_id == self._input_node_id:
-                continue
-            existing = self._mappings_by_target.get(node_id, [])
-            if existing:
-                continue
-
-            predecessors = list(self.graph.predecessors(node_id))
-            is_start_node = self._input_node_id in predecessors
-            real_predecessors = [p for p in predecessors if p != self._input_node_id]
-
-            # Start-node passthrough remains implicit
-            if is_start_node and not real_predecessors:
-                continue
-
-            if len(real_predecessors) == 0:
-                # No inputs available; nothing to synthesize
-                continue
-
-            if len(real_predecessors) > 1:
-                raise ValueError(
-                    "Node '{node}' has multiple incoming connections from {preds} without explicit port mappings. "
-                    "Please specify which outputs should connect to which inputs.".format(
-                        node=node_id, preds=real_predecessors
-                    )
-                )
-
-            pred_id = real_predecessors[0]
-            source_runnable = self.runnables.get(pred_id)
-            target_runnable = self.runnables.get(node_id)
-
-            # Determine canonical ports with sensible defaults
-            source_port_name: str | None = None
-            target_port_name: str | None = None
-            # TODO: Remove hasattr check when all components are migrated
-            if source_runnable and hasattr(source_runnable, "get_canonical_ports"):
-                try:
-                    ports = source_runnable.get_canonical_ports()  # type: ignore[attr-defined]
-                    if isinstance(ports, dict):
-                        source_port_name = ports.get("output")
-                except Exception:
-                    source_port_name = None
-            if target_runnable and hasattr(target_runnable, "get_canonical_ports"):
-                try:
-                    ports = target_runnable.get_canonical_ports()  # type: ignore[attr-defined]
-                    if isinstance(ports, dict):
-                        target_port_name = ports.get("input")
-                except Exception:
-                    target_port_name = None
-
-            source_port_name = source_port_name or "output"
-            target_port_name = target_port_name or "input"
-
-            new_mappings.append(
-                PortMapping(
-                    source_instance_id=str(pred_id),
-                    source_port_name=source_port_name,
-                    target_instance_id=str(node_id),
-                    target_port_name=target_port_name,
-                    dispatch_strategy="direct",
-                )
-            )
+        new_mappings = synthesize_default_mappings(self.graph, self.runnables, self._input_node_id, self.port_mappings)
 
         if not new_mappings:
             return
@@ -425,20 +278,3 @@ class GraphRunner:
         self._mappings_by_target = {}
         for pm in self.port_mappings:
             self._mappings_by_target.setdefault(pm.target_instance_id, []).append(pm)
-
-
-# --- Backward Compatibility Shims ---
-
-
-def _normalize_output_to_node_data(result: Any, run_context: dict[str, Any]) -> NodeData:
-    """Backward-compatibility: normalize runnable outputs to NodeData.
-
-    Supports NodeData, AgentPayload, and dict outputs from legacy components.
-    """
-    if isinstance(result, NodeData):
-        return result
-    if isinstance(result, AgentPayload):
-        return NodeData(data=result.model_dump(exclude_unset=True, exclude_none=True), ctx=run_context)
-    if isinstance(result, dict):
-        return NodeData(data=result, ctx=run_context)
-    raise TypeError(f"Unsupported runnable output type: {type(result)}")

@@ -16,6 +16,7 @@ from engine.agent.types import (
     AgentPayload,
     ChatMessage,
 )
+from engine import legacy_compatibility
 from engine.trace.trace_manager import TraceManager
 from engine.trace.serializer import serialize_to_json
 from engine.prometheus_metric import track_calls
@@ -105,49 +106,6 @@ class Agent(ABC):
     async def _legacy_run_without_io_trace(self, *inputs: AgentPayload | dict, **kwargs) -> AgentPayload:
         raise NotImplementedError("Legacy components must implement this method or keep old signature with adapter.")
 
-    # TODO: Remove after I/O refactor migration
-    def _convert_typed_output_to_legacy(self, output_model: BaseModel) -> AgentPayload:
-        data = output_model.model_dump()
-        message: ChatMessage
-        content = data.get("output")
-        if isinstance(content, ChatMessage):
-            message = content
-        elif isinstance(content, str):
-            message = ChatMessage(role="assistant", content=content)
-        else:
-            # Fallback when no 'output' string provided (e.g., GmailSender)
-            message = ChatMessage(role="assistant", content=serialize_to_json(data, shorten_string=True))
-
-        return AgentPayload(
-            messages=[message],
-            is_final=bool(data.get("is_final", False)),
-            artifacts=data.get("artifacts", {}) or {},
-        )
-
-    # TODO: Remove after I/O refactor migration
-    def _convert_legacy_to_node_data(self, payload: AgentPayload | dict, ctx: dict) -> NodeData:
-        if isinstance(payload, AgentPayload):
-            data = {
-                "output": payload.last_message.content if payload.messages else None,
-                "is_final": payload.is_final,
-                "artifacts": payload.artifacts,
-            }
-        else:
-            data = payload
-        return NodeData(data=data, ctx=ctx)
-
-    # TODO: Remove after I/O refactor migration
-    def _collect_inputs_from_legacy(self, args: tuple, kwargs: dict) -> dict:
-        data: dict[str, Any] = {}
-        if kwargs:
-            data.update(kwargs)
-        for item in args:
-            if isinstance(item, AgentPayload):
-                data.update(item.model_dump(exclude_unset=True, exclude_none=True))
-            elif isinstance(item, dict):
-                data.update(item)
-        return data
-
     @track_calls
     async def run(self, *args, **kwargs):
         # Dispatcher supporting both NodeData and legacy AgentPayload calls
@@ -211,7 +169,9 @@ class Agent(ABC):
                             else:
                                 legacy_arg = AgentPayload(messages=[])
                         legacy_output = await self._run_without_io_trace(legacy_arg)
-                        output_node_data = self._convert_legacy_to_node_data(legacy_output, input_node_data.ctx)
+                        output_node_data = legacy_compatibility.convert_legacy_to_node_data(
+                            legacy_output, input_node_data.ctx
+                        )
                         span.set_attributes(
                             {
                                 SpanAttributes.OUTPUT_VALUE: serialize_to_json(
@@ -246,7 +206,7 @@ class Agent(ABC):
 
                 if self.migrated:
                     InputModel = self.get_inputs_schema()
-                    data = self._collect_inputs_from_legacy(args, kwargs)
+                    data = legacy_compatibility.collect_inputs_from_legacy(args, kwargs)
 
                     ports = self.get_canonical_ports()
                     input_port_name = ports.get("input")
@@ -257,6 +217,7 @@ class Agent(ABC):
                         and isinstance(data["messages"], list)
                         and data["messages"]
                     ):
+                        # Transform legacy messages to component input field
                         last_message = data["messages"][-1]
                         if isinstance(last_message, ChatMessage):
                             data[input_port_name] = last_message.content or ""
@@ -271,7 +232,7 @@ class Agent(ABC):
                             f"Component returned type {type(output_model_instance).__name__}, "
                             f"but expected {OutputModel.__name__}"
                         )
-                    legacy_output = self._convert_typed_output_to_legacy(output_model_instance)
+                    legacy_output = legacy_compatibility.convert_typed_output_to_legacy(output_model_instance)
                 else:
                     legacy_output = await self._run_without_io_trace(*args, **kwargs)
 

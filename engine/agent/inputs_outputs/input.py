@@ -1,7 +1,9 @@
 import logging
+from typing import Type
 
 from opentelemetry import trace as trace_api
 from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttributes
+from pydantic import BaseModel
 
 from engine.agent.types import ToolDescription, ComponentAttributes, AgentPayload, NodeData
 from engine.trace.trace_manager import TraceManager
@@ -24,6 +26,10 @@ DEFAULT_INPUT_TOOL_DESCRIPTION = ToolDescription(
 
 
 class Input:
+    # LEGACY: Mark as unmigrated for retro-compatibility
+    # TODO: Remove after migration to Agent base class
+    migrated: bool = False
+
     def __init__(
         self,
         trace_manager: TraceManager,
@@ -40,6 +46,22 @@ class Input:
         # Expose the canonical output as the messages list so default mappings
         # can auto-wire to downstream components expecting chat messages.
         return {"output": "messages"}
+
+    # LEGACY: Schema methods for retro-compatibility with type discovery
+    # TODO: Remove after migration to Agent base class
+    @classmethod
+    def get_inputs_schema(cls) -> Type[BaseModel]:
+        """Input component accepts any input data."""
+        from engine.legacy_compatibility import create_legacy_input_schema
+
+        return create_legacy_input_schema()
+
+    @classmethod
+    def get_outputs_schema(cls) -> Type[BaseModel]:
+        """Input component outputs messages list (canonical port)."""
+        from engine.legacy_compatibility import create_legacy_input_output_schema
+
+        return create_legacy_input_output_schema()
 
     # TODO: Refactor Agent I/O to use an unified input/output object:
     async def run(self, input_data: AgentPayload | dict | NodeData) -> dict:
@@ -67,4 +89,12 @@ class Input:
                 }
             )
             span.set_status(trace_api.StatusCode.OK)
+
+        # Return the canonical output format based on canonical ports
+        canonical_ports = self.get_canonical_ports()
+        if canonical_ports.get("output") == "messages" and "messages" in filtered_input:
+            messages = filtered_input["messages"]
+            # Input component outputs list[dict] as declared in legacy schema
+            return {"messages": messages}
+
         return filtered_input
