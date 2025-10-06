@@ -36,6 +36,7 @@ def seed_sql_tool_components(session: Session):
         function_callable=True,
         release_stage=db.ReleaseStage.PUBLIC,
         default_tool_description_id=TOOL_DESCRIPTION_UUIDS["default_run_sql_query_tool_description"],
+        icon="mdi:sql-query",
     )
     upsert_components(
         session=session,

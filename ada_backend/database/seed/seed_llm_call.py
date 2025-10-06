@@ -36,6 +36,7 @@ def seed_llm_call_components(session: Session):
         function_callable=True,
         release_stage=db.ReleaseStage.PUBLIC,
         default_tool_description_id=TOOL_DESCRIPTION_UUIDS["default_llm_call_tool_description"],
+        icon="fluent:person-chat-16-regular",
     )
     upsert_components(
         session=session,
