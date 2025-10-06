@@ -10,40 +10,40 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Connexion à EC2 et git pull
-        uses: appleboy/ssh-action@master
-        with:
-          host: ${{ secrets.EC2_HOST_SCOPEO_PREPROD }}
-          username: ec2-user
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          port: 22
-          script: |
-            cd /home/ec2-user/draftnrun
-            git remote set-url origin git@github.com:scopeo/draftnrun.git
-            git reset --hard HEAD
-            git pull origin main
+    - name: Connexion à EC2 et git pull
+      uses: appleboy/ssh-action@master
+      with:
+        host: ${{ secrets.EC2_HOST_SCOPEO }}
+        username: ec2-user
+        key: ${{ secrets.SSH_PRIVATE_KEY }}
+        port: 22
+        script: |
+          cd /home/ec2-user/draftnrun
+          git remote set-url origin git@github.com:scopeo/draftnrun.git
+          git reset --hard HEAD
+          git pull origin main
 
-      - name: SSH Remote Commands
-        uses: appleboy/ssh-action@master
-        with:
-          host: ${{ secrets.EC2_HOST_SCOPEO_PREPROD }}
-          username: ec2-user
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          port: 22
-          script: |
-            set -e
-            cd /home/ec2-user/draftnrun
+    - name: SSH Remote Commands
+      uses: appleboy/ssh-action@master
+      with:
+        host: ${{ secrets.EC2_HOST_SCOPEO }}
+        username: ec2-user
+        key: ${{ secrets.SSH_PRIVATE_KEY }}
+        port: 22
+        script: |
+          set -e
+          cd /home/ec2-user/draftnrun
 
-            echo "📦 Install dependencies"
-            pip install --upgrade uv
-            uv sync
+          echo "📦 Install dependencies"
+          pip install --upgrade uv
+          uv sync
 
-            echo "👁️ Re-setup the traces database"
-            make trace-db-upgrade
+          echo "👁️ Re-setup the traces database"
+          make trace-db-upgrade
 
-            echo "🔄 Re-setup the database"
-            make db-upgrade
-            make db-seed
+          echo "🔄 Re-setup the database"
+          make db-upgrade
+          make db-seed
 
-            echo "Reload Gunicorn with zero downtime"
-            sudo systemctl restart gunicorn
+          echo "Reload Gunicorn with zero downtime"
+          sudo systemctl restart gunicorn

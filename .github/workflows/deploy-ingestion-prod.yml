@@ -16,15 +16,15 @@ jobs:
       - name: Setup, CD to App Directory, and Fetch Latest Code
         uses: appleboy/ssh-action@v1.0.3
         with:
-          host: ${{ secrets.EC2_HOST_INGESTION_PREPROD }}
+          host: ${{ secrets.EC2_HOST_INGESTION_PROD }}
           username: ec2-user
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: 22
           script: |
             set -e
             APP_DIR="/home/ec2-user/ingestion"
-            echo "--- Starting Staging Deployment ---"
-            echo "Target Host: ${{ secrets.EC2_HOST_INGESTION_PREPROD }}"
+            echo "--- Starting Prod Deployment ---"
+            echo "Target Host: ${{ secrets.EC2_HOST_INGESTION_PROD }}"
             echo "Application Directory: $APP_DIR"
             cd $APP_DIR
             echo "Current directory: $(pwd)"
