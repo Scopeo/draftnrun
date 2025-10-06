@@ -62,6 +62,9 @@ class RootTraceSpan(BaseModel):
     cumulative_llm_token_count_completion: int
     llm_token_count_prompt: int | None
     llm_token_count_completion: int | None
+    environment: EnvType | None
+    call_type: CallType | None
+    tag_version: str | None
 
 
 class TokenUsage(BaseModel):

@@ -14,7 +14,7 @@ import sqlalchemy as sa
 from sqlalchemy.orm import Session
 
 from engine.trace.nested_utils import split_nested_keys
-from engine.trace.sql_exporter import get_messages_from_span
+from engine.trace.sql_exporter import extract_messages_from_attributes
 
 
 # revision identifiers, used by Alembic.
@@ -49,7 +49,7 @@ def upgrade() -> None:
     spans = session.execute(sa.select(spans_table)).mappings().all()
     for span in spans:
         formatted_attributes = split_nested_keys(json.loads(span["attributes"]))
-        input, output = get_messages_from_span(formatted_attributes)
+        input, output, _ = extract_messages_from_attributes(formatted_attributes)
         session.execute(
             messages_table.insert().values(
                 span_id=span["span_id"],
