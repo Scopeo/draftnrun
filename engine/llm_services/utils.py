@@ -159,5 +159,6 @@ def build_openai_responses_kwargs(
         if reasoning is not None:
             kwargs["reasoning"] = {"effort": reasoning}
         if temperature is not None:
+            LOGGER.info(f"Temperature set to 1 for the {model_name} model.")
             kwargs["temperature"] = 1
     return kwargs
