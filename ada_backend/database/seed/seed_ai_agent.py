@@ -216,10 +216,10 @@ def seed_ai_agent_components(session: Session):
                     label="Output Format",
                     placeholder=json.dumps(
                         {
-                            "answer": {"type": "string", "description": "The answer of the agent"},
+                            "answer": {"type": "string", "description": "The imposed format of the agent's answer."},
                             "is_ending_conversation": {
                                 "type": "boolean",
-                                "description": "Boolean detecting if " "the conversation is over or not",
+                                "description": "Boolean detecting if the conversation is over or not",
                             },
                         },
                         indent=4,

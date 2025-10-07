@@ -16,7 +16,7 @@ from engine.llm_services.utils import (
     make_messages_compatible_for_mistral,
     make_mistral_ocr_compatible,
     convert_tool_description_to_output_format,
-    create_chat_completion_with_structured_output,
+    wrap_str_content_into_chat_completion_message,
 )
 from engine.trace.trace_manager import TraceManager
 from engine.agent.types import ToolDescription
@@ -664,7 +664,7 @@ class CompletionService(LLMService):
         # Check for structured output tool early return
         if tool_choice == "none":
             # Call the constrained complete with json schema to force a structured output answer
-            response = await self._get_structured_response_without_tools(
+            response = await self._constrained_complete_structured_response_without_tools(
                 structured_output_tool=structured_output_tool,
                 messages=messages,
                 stream=stream,
@@ -721,7 +721,7 @@ class CompletionService(LLMService):
         )
         return response
 
-    async def _get_structured_response_without_tools(
+    async def _constrained_complete_structured_response_without_tools(
         self,
         structured_output_tool: ToolDescription,
         messages: list[dict] | str,
@@ -738,7 +738,7 @@ class CompletionService(LLMService):
             stream=stream,
             response_format=structured_json_output,
         )
-        response = create_chat_completion_with_structured_output(structured_content, self._model_name)
+        response = wrap_str_content_into_chat_completion_message(structured_content, self._model_name)
         return response
 
     async def ensure_tools_or_structured_output_response(
@@ -774,7 +774,7 @@ class CompletionService(LLMService):
                 "content": response.choices[0].message.content,
             }
             messages = original_messages + [assistant_message]
-            return await self._get_structured_response_without_tools(
+            return await self._constrained_complete_structured_response_without_tools(
                 structured_output_tool=structured_output_tool,
                 messages=messages,
                 stream=stream,

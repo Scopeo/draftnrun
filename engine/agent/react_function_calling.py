@@ -38,7 +38,7 @@ CODE_RUNNER_TOOLS = [PYTHON_CODE_RUNNER_TOOL_DESCRIPTION.name, TERMINAL_COMMAND_
 
 OUTPUT_TOOL_NAME = "chat_formatting_output_tool"
 OUTPUT_TOOL_DESCRIPTION = (
-    "Default tool to be use by the agent to answer in a structured format if no other tool" " is called"
+    "Default tool to be used by the agent to answer in a structured format if no other tool is called"
 )
 
 

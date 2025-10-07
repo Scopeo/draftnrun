@@ -204,7 +204,7 @@ def build_openai_responses_kwargs(
     return kwargs
 
 
-def create_chat_completion_with_structured_output(structured_output: str, model_name: str) -> Any:
+def wrap_str_content_into_chat_completion_message(structured_output: str, model_name: str) -> Any:
     """
     Create a fake ChatCompletion object for structured output responses.
 
@@ -311,7 +311,7 @@ async def get_structured_response_without_tools(
         stream=stream,
         response_format=structured_json_output,
     )
-    response = create_chat_completion_with_structured_output(structured_content, completion_service._model_name)
+    response = wrap_str_content_into_chat_completion_message(structured_content, completion_service._model_name)
     return response
 
 
