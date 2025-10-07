@@ -1,4 +1,3 @@
-from typing import Optional
 import uuid
 import json
 
@@ -9,10 +8,8 @@ from ada_backend.database.models import (
     ComponentInstance,
     ComponentParameterDefinition,
     ParameterType,
-    ComponentVersion,
 )
 from ada_backend.database.seed.utils import COMPONENT_UUIDS
-from ada_backend.repositories.component_repository import get_component_parameter_definition_by_component_id
 
 
 def create_component_instance(session: Session, component_version_id: uuid.UUID, name: str) -> ComponentInstance:
