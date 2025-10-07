@@ -72,26 +72,30 @@ class Worker:
                     safe_attrs["source_db_url"] = "***REDACTED***" if safe_attrs["source_db_url"] else "MISSING"
                 safe_payload["source_attributes"] = safe_attrs
 
-            logger.info(
-                "processing_task",
+            # Bind a task-scoped logger carrying correlation context
+            task_logger = logger.bind(
                 ingestion_id=ingestion_id,
-                source_type=source_type,
+                task_id=task_id,
                 organization_id=organization_id,
-                parameters=safe_payload,
+                source_type=source_type,
+                source_name=source_name,
+                source_id=source_id,
             )
+
+            task_logger.info("task_start", parameters=safe_payload)
 
             # Get the ada_backend path - assumes a standard structure
             ada_backend_path = Path(__file__).parents[2] / "ada_backend"
             script_path = ada_backend_path / "scripts" / "main.py"
             if not script_path.exists():
-                logger.error("script_not_found", path=str(script_path))
+                task_logger.error("script_not_found", path=str(script_path))
                 # Try alternative path
                 alt_script_path = Path(__file__).parents[2] / "ingestion_script" / "main.py"
                 if alt_script_path.exists():
                     script_path = alt_script_path
-                    logger.info("using_alternative_script_path", path=str(script_path))
+                    task_logger.info("using_alternative_script_path", path=str(script_path))
                 else:
-                    logger.error(
+                    task_logger.error(
                         "all_script_paths_not_found", primary=str(script_path), alternative=str(alt_script_path)
                     )
                     return
@@ -111,14 +115,14 @@ class Worker:
                 # Generate a secure Fernet key (32 url-safe base64-encoded bytes)
                 fernet_key = base64.urlsafe_b64encode(secrets.token_bytes(32)).decode()
                 env["FERNET_KEY"] = fernet_key
-                logger.info("generated_fernet_key_for_subprocess")
+                task_logger.info("generated_fernet_key_for_subprocess")
 
             # Use API base URL default; do not load secrets from credentials.env
 
             # Set API_BASE_URL to http for localhost connections
             if "API_BASE_URL" not in env:
                 env["API_BASE_URL"] = DEFAULT_API_BASE_URL
-                logger.info("using_default_api_base_url", url=DEFAULT_API_BASE_URL)
+                task_logger.info("using_default_api_base_url", url=DEFAULT_API_BASE_URL)
             # TODO: Find alternative (end)
 
             # Determine the script module path based on the script location
@@ -144,7 +148,13 @@ class Worker:
             ]
 
             # Execute the command
-            logger.info("executing_command", cmd=" ".join(cmd))
+            task_logger.info(
+                "subprocess_spawn",
+                cmd=" ".join(cmd),
+                module_path=module_path,
+                cwd=str(Path(__file__).parents[2]),
+            )
+            start_time = time.time()
             process = subprocess.Popen(
                 cmd,
                 stdout=subprocess.PIPE,
@@ -155,26 +165,34 @@ class Worker:
 
             # Stream and log output
             stdout, stderr = process.communicate()
+            duration_s = round(time.time() - start_time, 3)
 
             if stdout:
-                logger.info("script_stdout", output=stdout.decode())
+                task_logger.info("script_stdout", output=stdout.decode())
             if stderr:
                 stderr_text = stderr.decode()
                 # Parse and format error for better readability
                 error_summary = self._parse_error_message(stderr_text)
-                logger.error("script_error_summary", **error_summary)
-                logger.error("script_stderr", output=stderr_text)
+                task_logger.error("script_error_summary", **error_summary)
+                task_logger.error("script_stderr", output=stderr_text)
 
             if process.returncode != 0:
-                logger.error("script_failed", return_code=process.returncode)
+                task_logger.error("script_failed", return_code=process.returncode, duration_s=duration_s)
             else:
-                logger.info("task_completed", ingestion_id=ingestion_id)
+                task_logger.info("task_completed", duration_s=duration_s)
 
         except Exception as e:
-            logger.error("task_error", error=str(e), exc_info=True)
+            # Ensure unexpected exceptions are clearly surfaced
+            logger.error(
+                "task_exception",
+                error=str(e),
+                payload_keys=list(payload.keys()) if isinstance(payload, dict) else "non-dict-payload",
+                exc_info=True,
+            )
         finally:
             with self.lock:
                 self.current_threads -= 1
+                logger.info("task_teardown", current_threads=self.current_threads)
 
     def _parse_error_message(self, stderr_text: str) -> dict:
         """Parse error messages to provide a cleaner summary."""
@@ -227,49 +245,48 @@ class Worker:
 
     def log_redis_state(self):
         """Log current Redis state including queue contents."""
-        logger.info("Begin Redis state logging")
+        logger.info("redis_state_begin")
 
         try:
             # Test Redis connection
             ping_result = redis_client.ping()
-            logger.info("Redis connectivity test: {}".format(ping_result))
+            logger.info("redis_ping_ok", result=ping_result)
 
             # Get queue length
             queue_length = redis_client.llen(QUEUE_NAME)
-            logger.info("Current queue length: {}".format(queue_length))
+            logger.info("redis_queue_length", queue=QUEUE_NAME, length=queue_length)
 
             # Get queue contents (up to 10 items)
             queue_items = redis_client.lrange(QUEUE_NAME, 0, 9)
-            logger.info("Queue items retrieved: {}".format(len(queue_items)))
+            logger.info("redis_queue_items_sampled", count=len(queue_items))
 
             if queue_items:
-                logger.info("Queue preview (up to 10 items):")
                 for i, item in enumerate(queue_items):
                     try:
                         parsed = json.loads(item)
-                        logger.info("  Item {}: {}".format(i, json.dumps(parsed)))
+                        logger.info("redis_queue_item", index=i, item=parsed)
                     except json.JSONDecodeError:
-                        logger.info("  Item {} (not valid JSON): {}...".format(i, item[:100]))
+                        logger.info("redis_queue_item_not_json", index=i, preview=item[:100])
                     except Exception as e:
-                        logger.info("  Error processing item {}: {}".format(i, str(e)))
+                        logger.error("redis_queue_item_error", index=i, error=str(e))
             else:
-                logger.info("Queue is empty")
+                logger.info("redis_queue_empty")
 
             # Get other Redis keys
             try:
                 all_keys = redis_client.keys("*")
-                logger.info("All Redis keys: {}".format(all_keys))
+                logger.info("redis_keys", keys=all_keys)
             except Exception as key_error:
-                logger.error("Failed to get Redis keys: {}".format(str(key_error)))
+                logger.error("redis_keys_error", error=str(key_error))
 
         except redis.ConnectionError as ce:
-            logger.error("Redis connection error during state logging: {}".format(str(ce)))
+            logger.error("redis_connection_error", error=str(ce))
         except redis.AuthenticationError as ae:
-            logger.error("Redis authentication error during state logging: {}".format(str(ae)))
+            logger.error("redis_auth_error", error=str(ae))
         except Exception as e:
-            logger.error("Error logging Redis state: {}".format(str(e)), exc_info=True)
+            logger.error("redis_state_error", error=str(e), exc_info=True)
 
-        logger.info("End Redis state logging")
+        logger.info("redis_state_end")
 
     def should_process_locally(self) -> bool:
         """Determine if the current worker should process the task locally."""
@@ -287,13 +304,25 @@ class Worker:
 
     def run(self) -> None:
         """Main worker loop."""
+        logger.info(
+            "worker_started",
+            redis_host=REDIS_HOST,
+            redis_port=REDIS_PORT,
+            queue=QUEUE_NAME,
+            max_concurrent=self.max_concurrent,
+        )
         while True:
             try:
                 # Block until a task is available
                 _, data = redis_client.blpop(QUEUE_NAME)
 
                 try:
+                    logger.info("task_received_raw", size_bytes=len(data))
                     payload = json.loads(data)
+                    logger.info(
+                        "task_payload_parsed",
+                        has_ingestion_id=isinstance(payload, dict) and ("ingestion_id" in payload),
+                    )
                 except json.JSONDecodeError as e:
                     logger.error("invalid_json", error=str(e))
                     continue
@@ -310,9 +339,10 @@ class Worker:
                     logger.info("task_queued_for_external_processing", ingestion_id=payload["ingestion_id"])
 
             except redis.ConnectionError:
+                logger.error("redis_connection_lost", action="sleep_and_retry")
                 time.sleep(5)
             except Exception as e:
-                logger.error("unexpected_error", error=str(e))
+                logger.error("worker_unexpected_error", error=str(e), exc_info=True)
                 time.sleep(1)
 
 
