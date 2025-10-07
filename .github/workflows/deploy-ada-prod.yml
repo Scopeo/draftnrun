@@ -1,14 +1,16 @@
 name: Deploy Ada prod
 
 on:
+  push:
+    branches:
+      - main
   workflow_dispatch:
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-    - name: Connect to EC2 and git pull
-      if: startsWith(github.ref, 'refs/tags/')
+    - name: Connexion à EC2 et git pull
       uses: appleboy/ssh-action@master
       with:
         host: ${{ secrets.EC2_HOST_SCOPEO }}
@@ -18,8 +20,8 @@ jobs:
         script: |
           cd /home/ec2-user/draftnrun
           git remote set-url origin git@github.com:scopeo/draftnrun.git
-          git fetch origin ${{ github.ref_name }}
-          git reset --hard FETCH_HEAD
+          git reset --hard HEAD
+          git pull origin main
 
     - name: SSH Remote Commands
       uses: appleboy/ssh-action@master

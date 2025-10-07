@@ -1,6 +1,9 @@
 name: Deploy ADA Ingestion Worker to Production
 
 on:
+  push:
+    branches:
+      - main
   workflow_dispatch:
 
 jobs:
@@ -11,7 +14,6 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Setup, CD to App Directory, and Fetch Latest Code
-        if: startsWith(github.ref, 'refs/tags/')
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.EC2_HOST_INGESTION_PROD }}
@@ -21,7 +23,7 @@ jobs:
           script: |
             set -e
             APP_DIR="/home/ec2-user/ingestion"
-            echo "--- Starting Production Deployment ---"
+            echo "--- Starting Prod Deployment ---"
             echo "Target Host: ${{ secrets.EC2_HOST_INGESTION_PROD }}"
             echo "Application Directory: $APP_DIR"
             cd $APP_DIR
