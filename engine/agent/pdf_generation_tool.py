@@ -1,5 +1,4 @@
 import logging
-from datetime import datetime
 from typing import Any
 
 
@@ -9,6 +8,7 @@ from weasyprint import HTML, CSS
 from engine.agent.agent import Agent
 from engine.agent.types import ChatMessage, AgentPayload, ToolDescription, ComponentAttributes
 from engine.temps_folder_utils import get_output_dir
+from engine.agent.utils import prepare_markdown_output_path
 from engine.trace.trace_manager import TraceManager
 
 LOGGER = logging.getLogger(__name__)
@@ -24,7 +24,14 @@ DEFAULT_PDF_GENERATION_TOOL_DESCRIPTION = ToolDescription(
                 "Insert the image into the markdown in src format. It is recommended to limit the size of "
                 'images with a style like this: style="width:80%; max-width:100%; height:auto;"'
             ),
-        }
+        },
+        "filename": {
+            "type": "string",
+            "description": (
+                "Optional. The desired filename for the generated PDF file. If not provided, a default "
+                "filename with a timestamp will be used."
+            ),
+        },
     },
     required_tool_properties=["markdown_content"],
 )
@@ -124,22 +131,29 @@ class PDFGenerationTool(Agent):
         *inputs: AgentPayload,
         **kwargs: Any,
     ) -> AgentPayload:
-        markdown_content = kwargs.get("markdown_content", "")
-
-        if not markdown_content:
-            error_msg = "No markdown content provided"
+        try:
+            markdown_content, output_path, filename = prepare_markdown_output_path(
+                markdown_content=kwargs.get("markdown_content", ""),
+                filename=kwargs.get("filename", None),
+                output_dir_getter=get_output_dir,
+                default_extension=".pdf",
+            )
+        except ValueError as ve:
+            error_msg = str(ve)
             LOGGER.error(error_msg)
             return AgentPayload(
                 messages=[ChatMessage(role="assistant", content=error_msg)],
                 error=error_msg,
                 is_final=True,
             )
-
-        output_dir = get_output_dir()
-
-        # Generate filename with timestamp
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"document_{timestamp}.pdf"
+        except Exception as e:
+            error_msg = f"Failed to prepare output path: {e}"
+            LOGGER.error(error_msg)
+            return AgentPayload(
+                messages=[ChatMessage(role="assistant", content=error_msg)],
+                error=error_msg,
+                is_final=True,
+            )
 
         html = markdown2.markdown(
             markdown_content,
@@ -157,9 +171,9 @@ class PDFGenerationTool(Agent):
         css = CSS(string=self.css_formatting)
 
         # Create HTML object and ensure proper cleanup
-        html_obj = HTML(string=html, base_url=str(output_dir))
+        html_obj = HTML(string=html, base_url=str(output_path.parent))
         try:
-            html_obj.write_pdf(str(output_dir / filename), stylesheets=[css])
+            html_obj.write_pdf(str(output_path), stylesheets=[css])
         finally:
             # Ensure any HTTP connections are properly closed
             if hasattr(html_obj, "_url_fetcher") and hasattr(html_obj._url_fetcher, "session"):
