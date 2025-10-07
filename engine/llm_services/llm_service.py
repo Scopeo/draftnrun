@@ -216,6 +216,7 @@ class CompletionService(LLMService):
                     self._model_name,
                     self._invocation_parameters.get("verbosity"),
                     self._invocation_parameters.get("reasoning"),
+                    self._invocation_parameters.get("temperature"),
                     {"model": self._model_name, "input": messages, "stream": stream},
                 )
                 response = await client.responses.create(**kwargs_create)
@@ -289,6 +290,7 @@ class CompletionService(LLMService):
                     self._model_name,
                     self._invocation_parameters.get("verbosity"),
                     self._invocation_parameters.get("reasoning"),
+                    self._invocation_parameters.get("temperature"),
                     {"input": messages, "model": self._model_name, "stream": stream, "text_format": response_format},
                 )
 
@@ -402,6 +404,7 @@ class CompletionService(LLMService):
                     self._model_name,
                     self._invocation_parameters.get("verbosity"),
                     self._invocation_parameters.get("reasoning"),
+                    self._invocation_parameters.get("temperature"),
                     {
                         "input": messages,
                         "model": self._model_name,

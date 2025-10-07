@@ -145,6 +145,7 @@ def build_openai_responses_kwargs(
     model_name: str,
     verbosity: str | None,
     reasoning: str | None,
+    temperature: float | None,
     base_kwargs: dict,
 ) -> dict:
     """
@@ -157,4 +158,6 @@ def build_openai_responses_kwargs(
             kwargs["text"] = {"verbosity": verbosity}
         if reasoning is not None:
             kwargs["reasoning"] = {"effort": reasoning}
+        if temperature is None:
+            kwargs["temperature"] = 1
     return kwargs
