@@ -11,11 +11,9 @@ from ada_backend.schemas.trace_schema import RootTraceSpan, TraceSpan, TokenUsag
 from ada_backend.services.metrics.utils import (
     query_root_trace_duration,
     query_trace_by_trace_id,
-    query_trace_duration,
-    query_trace_messages,
 )
 from engine.trace import models as db
-from engine.trace.sql_exporter import get_session_trace, parse_str_or_dict
+from engine.trace.sql_exporter import get_session_trace
 from ada_backend.segment_analytics import track_project_observability_loaded, track_span_observability_loaded
 from ada_backend.database.models import EnvType, CallType
 
