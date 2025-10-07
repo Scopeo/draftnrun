@@ -291,8 +291,6 @@ class CompletionService(LLMService):
                     self._invocation_parameters.get("reasoning"),
                     {"input": messages, "model": self._model_name, "stream": stream, "text_format": response_format},
                 )
-                print("kwargs")
-                print(kwargs)
 
                 client = openai.AsyncOpenAI(api_key=self._api_key)
                 response = await client.responses.parse(**kwargs)
