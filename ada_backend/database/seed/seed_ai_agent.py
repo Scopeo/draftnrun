@@ -46,7 +46,6 @@ AI_MODEL_PARAMETER_IDS = {
 
 # Parameter Group UUIDs
 PARAMETER_GROUP_UUIDS = {
-    "basic_config": UUID("a1b2c3d4-e5f6-7890-abcd-ef1234567890"),
     "advanced_settings": UUID("b2c3d4e5-f6a7-8901-bcde-f12345678901"),
     "history_management": UUID("c3d4e5f6-a7b8-9012-cdef-123456789012"),
 }
@@ -294,19 +293,12 @@ def seed_ai_agent_parameter_groups(session: Session):
     # Create parameter groups
     parameter_groups = [
         db.ParameterGroup(
-            id=PARAMETER_GROUP_UUIDS["basic_config"],
-            name="basic_config",
-            description="Essential agent configuration including tools, prompts, and model selection"
-        ),
-        db.ParameterGroup(
             id=PARAMETER_GROUP_UUIDS["advanced_settings"],
-            name="advanced_settings", 
-            description="Advanced agent behavior and iteration control settings"
+            name="Advanced behavior settings"
         ),
         db.ParameterGroup(
             id=PARAMETER_GROUP_UUIDS["history_management"],
-            name="history_management",
-            description="Message history and context management configuration"
+            name="Management of conversation history"
         )
     ]
     
@@ -315,7 +307,6 @@ def seed_ai_agent_parameter_groups(session: Session):
         existing_group = session.query(db.ParameterGroup).filter_by(id=group.id).first()
         if existing_group:
             existing_group.name = group.name
-            existing_group.description = group.description
         else:
             session.add(group)
     
@@ -324,22 +315,14 @@ def seed_ai_agent_parameter_groups(session: Session):
     # Create component-parameter group relationships
     component_parameter_groups = [
         db.ComponentParameterGroup(
-            component_id=COMPONENT_UUIDS["base_ai_agent"],
-            parameter_group_id=PARAMETER_GROUP_UUIDS["basic_config"],
-            order_index=1,
-            default_expanded=True
-        ),
-        db.ComponentParameterGroup(
             component_id=COMPONENT_UUIDS["base_ai_agent"], 
             parameter_group_id=PARAMETER_GROUP_UUIDS["advanced_settings"],
-            order_index=2,
-            default_expanded=False
+            order_index=1
         ),
         db.ComponentParameterGroup(
             component_id=COMPONENT_UUIDS["base_ai_agent"],
             parameter_group_id=PARAMETER_GROUP_UUIDS["history_management"], 
-            order_index=3,
-            default_expanded=False
+            order_index=2
         )
     ]
     
@@ -351,7 +334,6 @@ def seed_ai_agent_parameter_groups(session: Session):
         ).first()
         if existing_cpg:
             existing_cpg.order_index = cpg.order_index
-            existing_cpg.default_expanded = cpg.default_expanded
         else:
             session.add(cpg)
     
@@ -359,20 +341,6 @@ def seed_ai_agent_parameter_groups(session: Session):
     
     # Update existing parameter definitions to link them to groups
     parameter_group_assignments = {
-        # Basic Config Group
-        UUID("521cfedb-e3f1-4953-9372-1c6a0cfdba6f"): {  # agent_tools
-            "parameter_group_id": PARAMETER_GROUP_UUIDS["basic_config"],
-            "group_order": 1
-        },
-        SYSTEM_PROMPT_PARAMETER_DEF_ID: {  # initial_prompt
-            "parameter_group_id": PARAMETER_GROUP_UUIDS["basic_config"],
-            "group_order": 2
-        },
-        AI_MODEL_PARAMETER_IDS[COMPLETION_MODEL_IN_DB]: {  # completion_model
-            "parameter_group_id": PARAMETER_GROUP_UUIDS["basic_config"],
-            "group_order": 3
-        },
-        
         # Advanced Settings Group
         AI_MODEL_PARAMETER_IDS["allow_tool_shortcuts"]: {
             "parameter_group_id": PARAMETER_GROUP_UUIDS["advanced_settings"],

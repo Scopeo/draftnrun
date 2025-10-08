@@ -632,15 +632,13 @@ class ParameterGroup(Base):
 
     id = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     name = mapped_column(String, nullable=False)
-    description = mapped_column(Text, nullable=True)
 
     parameters = relationship("ComponentParameterDefinition", back_populates="parameter_group")
 
 
 class ComponentParameterGroup(Base):
     """Component-specific configuration for parameter groups.
-    Help define for a given component the order of the groups as well as their states
-    during loading of a component (hidden or shown first)
+    Help define for a given component the order of the groups.
     """
 
     __tablename__ = "component_parameter_groups"
@@ -653,7 +651,6 @@ class ComponentParameterGroup(Base):
         nullable=False
     )
     order_index = mapped_column(Integer, nullable=False, default=0)
-    default_expanded = mapped_column(Boolean, nullable=False, default=True)
 
     component = relationship("Component", back_populates="parameter_groups")
     parameter_group = relationship("ParameterGroup")
