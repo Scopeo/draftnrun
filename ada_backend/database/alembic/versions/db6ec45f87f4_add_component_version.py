@@ -280,6 +280,32 @@ def upgrade() -> None:
         new_fk_name="fk_component_instances_component_version",
     )
 
+    # component_global_parameters: component_id -> component_version_id
+    upgrade_fk_from_component_to_version_via_mapping(
+        table_name="component_global_parameters",
+        old_component_col="component_id",
+        new_version_col="component_version_id",
+        new_fk_name="fk_cgp_component_version_id",
+    )
+    # Rebuild unique indexes on component_global_parameters to use component_version_id
+    # Drop old partial unique indexes if they still exist (defensive)
+    op.execute('DROP INDEX IF EXISTS "uq_comp_global_param_list"')
+    op.execute('DROP INDEX IF EXISTS "uq_comp_global_param_scalar"')
+    op.create_index(
+        "uq_comp_global_param_list",
+        "component_global_parameters",
+        ["component_version_id", "parameter_definition_id", "order"],
+        unique=True,
+        postgresql_where=sa.text('"order" IS NOT NULL'),
+    )
+    op.create_index(
+        "uq_comp_global_param_scalar",
+        "component_global_parameters",
+        ["component_version_id", "parameter_definition_id"],
+        unique=True,
+        postgresql_where=sa.text('"order" IS NULL'),
+    )
+
     # -------------------------------------------------------------------------
     # Cleaning : remove from components the columns that are now versioned
     # -------------------------------------------------------------------------
@@ -346,6 +372,31 @@ def downgrade() -> None:
         new_col="component_id",
         fk_name_old="fk_component_instances_component_version",
         fk_name_new="fk_component_instances_component",
+    )
+    downgrade_fk_from_version_to_component(
+        table_name="component_global_parameters",
+        old_col="component_version_id",
+        new_col="component_id",
+        fk_name_old="fk_cgp_component_version_id",
+        fk_name_new="component_global_parameters_component_id_fkey",
+    )
+
+    # Restore component_global_parameters unique indexes keyed by component_id
+    op.execute('DROP INDEX IF EXISTS "uq_comp_global_param_list"')
+    op.execute('DROP INDEX IF EXISTS "uq_comp_global_param_scalar"')
+    op.create_index(
+        "uq_comp_global_param_list",
+        "component_global_parameters",
+        ["component_id", "parameter_definition_id", "order"],
+        unique=True,
+        postgresql_where=sa.text('"order" IS NOT NULL'),
+    )
+    op.create_index(
+        "uq_comp_global_param_scalar",
+        "component_global_parameters",
+        ["component_id", "parameter_definition_id"],
+        unique=True,
+        postgresql_where=sa.text('"order" IS NULL'),
     )
 
     # -------------------------------------------------------------------------
