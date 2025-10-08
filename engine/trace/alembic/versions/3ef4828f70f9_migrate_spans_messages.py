@@ -101,18 +101,14 @@ def try_parse(x):
 
 
 def upgrade() -> None:
-    session = get_session_trace()
-
+    connection = op.get_bind()
     print("- Adding temporary column attributes_jsonb...")
-    session.execute(
-        sa.text(
-            """
+    op.execute(
+        """
         ALTER TABLE spans
         ADD COLUMN IF NOT EXISTS attributes_jsonb JSONB;
     """
-        )
     )
-    session.commit()
     total_updated = 0
 
     last_id = 0
@@ -128,7 +124,7 @@ def upgrade() -> None:
     while True:
         df = pd.read_sql_query(
             sa.text("SELECT id, attributes FROM spans WHERE id > :last_id ORDER BY id ASC LIMIT :lim"),
-            session.bind,
+            connection,
             params={"last_id": last_id, "lim": batch_size},
         )
         if df.empty:
@@ -153,17 +149,15 @@ def upgrade() -> None:
             rows = changed.to_dict(orient="records")
 
             print("- Updating rows in the database (executemany)...")
-            session.execute(
+            connection.execute(
                 stmt,
                 rows,
             )
-            session.commit()
             total_updated += len(changed)
             last_id = int(df["id"].iloc[-1])
             print(f"→ Batch up to id={last_id}, casted: {len(changed)} lines (total: {total_updated})")
-    session.execute(
-        sa.text(
-            """
+    op.execute(
+        """
         UPDATE spans
         SET attributes_jsonb =
             (
@@ -181,24 +175,18 @@ def upgrade() -> None:
            OR (attributes_jsonb ? 'input')
            OR (attributes_jsonb ? 'output');
         """
-        )
     )
-    session.commit()
     print("- Converting attributes (TEXT) -> JSONB using attributes_jsonb...")
-    session.execute(
-        sa.text(
-            """
+    op.execute(
+        """
             ALTER TABLE spans
             ALTER COLUMN attributes TYPE JSONB
             USING attributes_jsonb;
             """
-        )
     )
-    session.commit()
 
     print("- Dropping temporary column attributes_jsonb...")
-    session.execute(sa.text("ALTER TABLE spans DROP COLUMN IF EXISTS attributes_jsonb;"))
-    session.commit()
+    op.execute("ALTER TABLE spans DROP COLUMN IF EXISTS attributes_jsonb;")
 
     print(f"✓ Done. Total rows updated: {total_updated}")
 
