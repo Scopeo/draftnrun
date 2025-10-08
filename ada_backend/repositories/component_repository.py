@@ -67,22 +67,26 @@ STAGE_HIERARCHY = {
 }
 
 
-def get_global_parameters_by_component_id(
+def get_global_parameters_by_component_version_id(
     session: Session,
-    component_id: UUID,
+    component_version_id: UUID,
 ) -> list[ComponentGlobalParameter]:
-    return session.query(ComponentGlobalParameter).filter(ComponentGlobalParameter.component_id == component_id).all()
+    return (
+        session.query(ComponentGlobalParameter)
+        .filter(ComponentGlobalParameter.component_version_id == component_version_id)
+        .all()
+    )
 
 
 def has_global_parameter(
     session: Session,
-    component_id: UUID,
+    component_version_id: UUID,
     parameter_definition_id: UUID,
 ) -> bool:
     return (
         session.query(ComponentGlobalParameter)
         .filter(
-            ComponentGlobalParameter.component_id == component_id,
+            ComponentGlobalParameter.component_version_id == component_version_id,
             ComponentGlobalParameter.parameter_definition_id == parameter_definition_id,
         )
         .first()
@@ -366,6 +370,25 @@ def get_component_name_from_instance(
     return result[0] if result else None
 
 
+def get_base_component_from_version(
+    session: Session,
+    component_version_id: UUID,
+) -> Optional[str]:
+    """
+    Retrieves the base component name associated with a specific component version.
+    """
+    result = (
+        session.query(db.Component.base_component)
+        .join(
+            db.ComponentVersion,
+            db.Component.id == db.ComponentVersion.component_id,
+        )
+        .filter(db.ComponentVersion.id == component_version_id)
+        .first()
+    )
+    return result[0] if result else None
+
+
 def get_tool_description(
     session: Session,
     component_instance_id: UUID,
@@ -569,7 +592,7 @@ def get_all_components_with_parameters(
             )
 
             # Hide parameters enforced globally for this component from the UI
-            global_params = get_global_parameters_by_component_id(session, component_with_version.component_id)
+            global_params = get_global_parameters_by_component_version_id(session, component_with_version.component_id)
             global_param_def_ids = {gp.parameter_definition_id for gp in global_params}
 
             subcomponent_params = get_subcomponent_param_def_by_component_version(
@@ -743,14 +766,14 @@ def upsert_basic_parameter(
     component_instance_id and parameter_definition_id exists, updates it.
     """
     # Prevent overriding global parameters
-    parent_component_id = (
-        session.query(db.ComponentInstance.component_id)
+    parent_component_version_id = (
+        session.query(db.ComponentInstance.component_version_id)
         .filter(db.ComponentInstance.id == component_instance_id)
         .scalar()
     )
-    if parent_component_id and has_global_parameter(
+    if parent_component_version_id and has_global_parameter(
         session,
-        component_id=parent_component_id,
+        component_version_id=parent_component_version_id,
         parameter_definition_id=parameter_definition_id,
     ):
         raise ValueError("This parameter is enforced globally for the component and cannot be set per instance.")

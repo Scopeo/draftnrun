@@ -134,7 +134,10 @@ def add_ai_agent_component_to_graph(session: Session, graph_runner_id: UUID) -> 
         ComponentInstance: The created AI agent component instance
     """
     ai_agent_component = create_component_instance(
-        session, component_id=COMPONENT_UUIDS["base_ai_agent"], name="AI Agent", component_instance_id=graph_runner_id
+        session,
+        component_version_id=COMPONENT_UUIDS["base_ai_agent"],
+        name="AI Agent",
+        component_instance_id=graph_runner_id,
     )
 
     upsert_component_node(

@@ -13,13 +13,14 @@ from ada_backend.schemas.pipeline.base import ToolDescriptionSchema
 from engine.agent.types import ComponentAttributes, ToolDescription
 from ada_backend.database.models import ComponentInstance
 from ada_backend.repositories.component_repository import (
+    get_base_component_from_version,
     get_component_instance_by_id,
     get_component_basic_parameters,
     get_component_name_from_instance,
     get_component_sub_components,
     get_tool_description,
     get_tool_description_component,
-    get_global_parameters_by_component_id,
+    get_global_parameters_by_component_version_id,
 )
 from ada_backend.services.registry import FACTORY_REGISTRY
 from ada_backend.utils.secret_resolver import replace_secret_placeholders
@@ -184,9 +185,9 @@ def instantiate_component(
 
     # Apply global component parameters (non-overridable, invisible to UI)
     try:
-        globals_ = get_global_parameters_by_component_id(
+        globals_ = get_global_parameters_by_component_version_id(
             session,
-            component_instance.component_id,
+            component_instance.component_version_id,
         )
         grouped_globals: dict[str, list[tuple[int, Any]]] = {}
         for gparam in globals_:
@@ -232,7 +233,7 @@ def instantiate_component(
     LOGGER.debug(f"Trying to create component: {component_name} with input params: {input_params}\n")
     try:
         # Prefer explicit base_component when provided
-        base_component = getattr(component_instance.component, "base_component", None)
+        base_component = get_base_component_from_version(session, component_instance.component_version_id)
         if base_component:
             return FACTORY_REGISTRY.create(
                 entity_name=base_component,
