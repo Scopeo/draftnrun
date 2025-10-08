@@ -104,7 +104,6 @@ def create_workflow(
         organization_id=organization_id,
         project_name=project_schema.project_name,
         description=project_schema.description,
-        companion_image_url=project_schema.companion_image_url,
     )
 
     bind_graph_runner_to_project(
@@ -122,7 +121,6 @@ def create_workflow(
         description=project.description,
         organization_id=organization_id,
         project_type=project.type,
-        companion_image_url=project.companion_image_url,
         created_at=str(project.created_at),
         updated_at=str(project.updated_at),
         graph_runners=[
@@ -145,7 +143,6 @@ def update_project_service(
         project_id=project_id,
         project_name=project_schema.project_name,
         description=project_schema.description,
-        companion_image_url=project_schema.companion_image_url,
     )
     track_project_saved(user_id, project_id)
     return ProjectSchema(

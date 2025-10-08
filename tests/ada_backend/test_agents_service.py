@@ -17,11 +17,10 @@ class DummyAgent:
 
 
 class DummyProject:
-    def __init__(self, id, name, organization_id, companion_image_url=None):
+    def __init__(self, id, name, organization_id):
         self.id = id
         self.name = name
         self.organization_id = organization_id
-        self.companion_image_url = companion_image_url
         self.created_at = "2025-01-01T00:00:00"
         self.updated_at = "2025-01-01T00:00:00"
         self.description = None

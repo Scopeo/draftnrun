@@ -24,7 +24,6 @@ class Mutation:
         name: str,
         org_id: UUID,
         description: Optional[str] = None,
-        companion_image_url: Optional[str] = None,
     ) -> ProjectType:
         project_w_gr_schema = create_workflow(
             session=info.context.db,
@@ -33,7 +32,6 @@ class Mutation:
                 project_id=id,
                 project_name=name,
                 description=description,
-                companion_image_url=companion_image_url,
             ),
         )
         return ProjectType(

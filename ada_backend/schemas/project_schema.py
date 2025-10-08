@@ -10,7 +10,6 @@ class ProjectSchema(BaseModel):
     project_id: UUID
     project_name: str
     description: Optional[str] = None
-    companion_image_url: Optional[str] = None
 
 
 class ProjectCreateSchema(ProjectSchema):
@@ -20,7 +19,6 @@ class ProjectCreateSchema(ProjectSchema):
 class ProjectUpdateSchema(BaseModel):
     project_name: Optional[str] = None
     description: Optional[str] = None
-    companion_image_url: Optional[str] = None
 
 
 class ProjectResponse(ProjectSchema):

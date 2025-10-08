@@ -18,7 +18,6 @@ class ProjectType:
     id: UUID
     name: str
     description: Optional[str]
-    companion_image_url: Optional[str]
     organization_id: UUID
     created_at: datetime
     updated_at: datetime

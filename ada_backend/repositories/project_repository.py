@@ -58,7 +58,6 @@ def get_project_with_details(
         project_name=project.name if project else None,
         project_type=project.type if project else None,
         graph_runners=graph_runners,
-        companion_image_url=project.companion_image_url if project else None,
         description=project.description if project else None,
         organization_id=project.organization_id if project else None,
         created_at=str(project.created_at) if project else None,
@@ -81,7 +80,6 @@ def insert_project(
     project_name: str,
     organization_id: UUID,
     description: Optional[str] = None,
-    companion_image_url: Optional[str] = None,
     project_type: Optional[db.ProjectType] = db.ProjectType.WORKFLOW,
 ) -> db.Project:
     if project_type == db.ProjectType.WORKFLOW:
@@ -90,7 +88,6 @@ def insert_project(
             name=project_name,
             description=description,
             organization_id=organization_id,
-            companion_image_url=companion_image_url,
             type=project_type,
         )
     elif project_type == db.ProjectType.AGENT:
@@ -99,7 +96,6 @@ def insert_project(
             name=project_name,
             description=description,
             organization_id=organization_id,
-            companion_image_url=companion_image_url,
             type=project_type,
         )
     else:
@@ -116,7 +112,7 @@ def update_project(
     project_id: UUID,
     project_name: Optional[str] = None,
     description: Optional[str] = None,
-    companion_image_url: Optional[str] = None,
+
 ) -> db.Project:
     project = get_project(session, project_id=project_id)
     if not project:
@@ -125,8 +121,6 @@ def update_project(
         project.name = project_name
     if description:
         project.description = description
-    if companion_image_url:
-        project.companion_image_url = companion_image_url
     session.commit()
     session.refresh(project)
     return project
