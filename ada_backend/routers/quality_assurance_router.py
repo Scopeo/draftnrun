@@ -1,6 +1,7 @@
 from typing import Annotated, List
 from uuid import UUID
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks, status
+from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
 from ada_backend.schemas.auth_schema import SupabaseUser
@@ -34,7 +35,7 @@ from ada_backend.services.quality_assurance_service import (
     delete_datasets_service,
     get_datasets_by_project_service,
 )
-from ada_backend.database.setup_db import get_db
+from ada_backend.database.setup_db import get_db, SessionLocal
 from ada_backend.database.models import EnvType
 
 router = APIRouter(tags=["QualityAssurance"])
@@ -325,6 +326,7 @@ async def run_qa_endpoint(
         Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.USER.value)),
     ],
     session: Session = Depends(get_db),
+    background_tasks: BackgroundTasks = None,
 ) -> QARunResponse:
     """
     Run QA process on inputs from a dataset.
@@ -350,7 +352,26 @@ async def run_qa_endpoint(
         raise HTTPException(status_code=400, detail="User ID not found")
 
     try:
-        return await run_qa_service(session, project_id, dataset_id, run_request)
+
+        async def _run_qa_background(project_id_bg: UUID, dataset_id_bg: UUID, run_request_bg: QARunRequest):
+            bg_session = SessionLocal()
+            await run_qa_service(bg_session, project_id_bg, dataset_id_bg, run_request_bg)
+
+        # Schedule background task
+        background_tasks.add_task(_run_qa_background, project_id, dataset_id, run_request)
+
+        run_mode = "all entries" if run_request.run_all else f"{len(run_request.input_ids or [])} selected entries"
+        return JSONResponse(
+            status_code=status.HTTP_202_ACCEPTED,
+            content={
+                "message": "QA run accepted and scheduled",
+                "project_id": str(project_id),
+                "dataset_id": str(dataset_id),
+                "version": str(run_request.version),
+                "mode": run_mode,
+            },
+        )
+
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
