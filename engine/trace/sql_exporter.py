@@ -69,32 +69,34 @@ def parse_str_or_dict(input_str: str | list) -> str | dict | list:
         return input_str
 
 
-def get_messages_from_span(attributes: dict) -> tuple[list[dict], list[dict]]:
+def extract_messages_from_attributes(attributes: dict) -> tuple[list[dict], list[dict], dict]:
     try:
         input = []
         output = []
         if "llm" in attributes:
             if "input_messages" in attributes["llm"]:
-                input = parse_str_or_dict(attributes["llm"]["input_messages"])
+                input_messages = attributes["llm"].pop("input_messages")
+                input = parse_str_or_dict(input_messages)
                 input = input if isinstance(input, list) else [input]
             if "output_messages" in attributes["llm"]:
-                output = parse_str_or_dict(attributes["llm"]["output_messages"])
+                output_messages = attributes["llm"].pop("output_messages")
+                output = parse_str_or_dict(output_messages)
                 output = output if isinstance(output, list) else [output]
 
-        if input is None or len(input) == 0:
-            if "input" in attributes:
-                input = parse_str_or_dict(attributes["input"].get("value", []))
-            if not isinstance(input, list):
-                input = [input]
-        if output is None or len(output) == 0:
-            if "output" in attributes:
-                output = parse_str_or_dict(attributes["output"].get("value", []))
-            if not isinstance(output, list):
-                output = [output]
-        return input, output
+        if "input" in attributes:
+            input_attributes = attributes.pop("input")
+            if input is None or len(input) == 0:
+                input = parse_str_or_dict(input_attributes.get("value", []))
+                input = input if isinstance(input, list) else [input]
+        if "output" in attributes:
+            output_attributes = attributes.pop("output")
+            if output is None or len(output) == 0:
+                output = parse_str_or_dict(output_attributes.get("value", []))
+                output = output if isinstance(output, list) else [output]
+        return input, output, attributes
     except Exception as e:
         LOGGER.error(f"Error processing span attributes {attributes}: {e}")
-        return [], []
+        return [], [], attributes
 
 
 class SQLSpanExporter(SpanExporter):
@@ -153,6 +155,7 @@ class SQLSpanExporter(SpanExporter):
             call_type = formatted_attributes.pop("call_type", None)
             project_id = formatted_attributes.pop("project_id", None)
             tag_version = formatted_attributes.pop("tag_version", None)
+            input, output, formatted_attributes = extract_messages_from_attributes(formatted_attributes)
 
             openinference_span_kind = json_span["attributes"].get(SpanAttributes.OPENINFERENCE_SPAN_KIND, "UNKNOWN")
             span_row = models.Span(
@@ -163,7 +166,7 @@ class SQLSpanExporter(SpanExporter):
                 name=span.name,
                 start_time=datetime.fromtimestamp(span.start_time / 1e9, tz=timezone.utc),
                 end_time=datetime.fromtimestamp(span.end_time / 1e9, tz=timezone.utc),
-                attributes=json.dumps(formatted_attributes),
+                attributes=formatted_attributes,
                 events=json.dumps([event_to_dict(event) for event in span.events]),
                 status_code=span.status.status_code,
                 status_message=span.status.description or "",
@@ -199,7 +202,6 @@ class SQLSpanExporter(SpanExporter):
             )
             self.session.add(span_row)
 
-            input, output = get_messages_from_span(formatted_attributes)
             self.session.add(
                 models.SpanMessage(
                     span_id=span_row.span_id,

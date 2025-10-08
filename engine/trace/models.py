@@ -5,6 +5,7 @@ from sqlalchemy import Text, Column, Integer, String, TIMESTAMP, Enum as SQLAlch
 from sqlalchemy.orm import declarative_base, mapped_column
 from opentelemetry.trace.status import StatusCode
 from openinference.semconv.trace import OpenInferenceSpanKindValues
+from sqlalchemy.dialects.postgresql import JSONB
 
 from ada_backend.database.models import EnvType, CallType
 
@@ -52,7 +53,7 @@ class Span(Base):
     start_time = Column(TIMESTAMP(timezone=True), nullable=False, index=True)
     end_time = Column(TIMESTAMP(timezone=True), nullable=False)
 
-    attributes = Column(Text, nullable=False)
+    attributes = Column(JSONB, nullable=False)
     events = Column(Text, nullable=False)
 
     status_code = mapped_column(

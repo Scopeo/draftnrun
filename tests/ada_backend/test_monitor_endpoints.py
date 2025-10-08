@@ -3,7 +3,7 @@ from fastapi.testclient import TestClient
 from ada_backend.main import app
 
 from ada_backend.schemas.project_schema import ChatResponse
-from ada_backend.schemas.trace_schema import TraceSpan
+from ada_backend.schemas.trace_schema import RootTraceSpan
 from ada_backend.scripts.get_supabase_token import get_user_jwt
 from engine.trace.trace_context import set_trace_manager
 from engine.trace.trace_manager import TraceManager
@@ -34,10 +34,10 @@ def test_monitor_endpoint():
     trace_manager.force_flush()
 
     duration = 7
-    url = f"/projects/{project_id}/trace?duration={duration}"
+    url = f"/projects/{project_id}/traces?duration={duration}"
     response = client.get(url, headers=headers)
     results = response.json()
-    keys_trace_span = [field_name[0] for field_name in TraceSpan.model_fields.items()]
+    keys_trace_span = [field_name[0] for field_name in RootTraceSpan.model_fields.items()]
 
     assert response.status_code == 200
     assert len(results) > 0

@@ -1,4 +1,4 @@
-from typing import Annotated, List, Optional
+from typing import Annotated, List
 from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Body
 from sqlalchemy.orm import Session
@@ -18,7 +18,6 @@ from ada_backend.schemas.project_schema import (
     ProjectUpdateSchema,
     ProjectCreateSchema,
 )
-from ada_backend.schemas.trace_schema import TraceSpan
 from ada_backend.services.agent_runner_service import run_agent, run_env_agent
 from ada_backend.routers.auth_router import (
     get_user_from_supabase_token,
@@ -38,7 +37,6 @@ from ada_backend.services.project_service import (
     get_workflows_by_organization_service,
     update_project_service,
 )
-from ada_backend.services.trace_service import get_trace_by_project
 from ada_backend.repositories.env_repository import get_env_relationship_by_graph_runner_id
 
 LOGGER = logging.getLogger(__name__)
@@ -226,78 +224,6 @@ async def get_project_charts(
             "Failed to get charts for project %s (duration=%s)",
             project_id,
             duration,
-        )
-        raise HTTPException(status_code=500, detail="Internal Server Error") from e
-
-
-# TODO: Delete this endpoint
-@router.get("/{project_id}/trace", response_model=List[TraceSpan], tags=["Metrics"], deprecated=True)
-async def get_project_trace(
-    project_id: UUID,
-    duration: int,
-    user: Annotated[SupabaseUser, Depends(get_user_from_supabase_token)],
-    environment: Optional[EnvType] = None,
-    call_type: Optional[CallType] = None,
-    tag_version: Optional[str] = None,
-):
-    if not user.id:
-        raise HTTPException(status_code=400, detail="User ID not found")
-    try:
-        response = get_trace_by_project(
-            user.id,
-            project_id,
-            duration,
-            include_messages=False,
-            environment=environment,
-            call_type=call_type,
-            tag_version=tag_version,
-        )
-        return response
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
-    except Exception as e:
-        LOGGER.exception(
-            "Failed to get traces (v1) for project %s (duration=%s, env=%s, call_type=%s)",
-            project_id,
-            duration,
-            environment,
-            call_type,
-        )
-        raise HTTPException(status_code=500, detail="Internal Server Error") from e
-
-
-# TODO: Delete this endpoint
-@router.get("/{project_id}/v2/trace", response_model=List[TraceSpan], tags=["Metrics"], deprecated=True)
-async def get_project_trace_v2(
-    project_id: UUID,
-    duration: int,
-    user: Annotated[SupabaseUser, Depends(get_user_from_supabase_token)],
-    environment: Optional[EnvType] = None,
-    call_type: Optional[CallType] = None,
-    tag_version: Optional[str] = None,
-):
-    if not user.id:
-        raise HTTPException(status_code=400, detail="User ID not found")
-    try:
-        response = get_trace_by_project(
-            user.id,
-            project_id,
-            duration,
-            include_messages=True,
-            environment=environment,
-            call_type=call_type,
-            tag_version=tag_version,
-        )
-        return response
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
-    except Exception as e:
-        LOGGER.exception(
-            "Failed to get traces (v2) for project %s (duration=%s, env=%s, call_type=%s)",
-            project_id,
-            duration,
-            environment,
-            call_type,
         )
         raise HTTPException(status_code=500, detail="Internal Server Error") from e
 
