@@ -29,6 +29,7 @@ def seed_api_call_components(session: Session):
         can_use_function_calling=False,
         release_stage=db.ReleaseStage.PUBLIC,
         default_tool_description_id=TOOL_DESCRIPTION_UUIDS["default_api_call_tool_description"],
+        icon="tabler-api",
     )
     upsert_components(session, [api_call_component])
 
