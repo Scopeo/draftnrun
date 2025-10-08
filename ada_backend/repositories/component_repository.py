@@ -624,9 +624,7 @@ def get_all_components_with_parameters(
                 ParameterGroupSchema(
                     id=pg.parameter_group.id,
                     name=pg.parameter_group.name,
-                    description=pg.parameter_group.description,
                     order_index=pg.order_index,
-                    default_expanded=pg.default_expanded,
                 )
                 for pg in parameter_groups
             ]

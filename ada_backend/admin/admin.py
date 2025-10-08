@@ -304,13 +304,11 @@ class ParameterGroupAdmin(EnhancedModelView, model=db.ParameterGroup):
     column_list = [
         "id",
         "name",
-        "description",
     ]
     form_columns = [
         "name",
-        "description",
     ]
-    column_searchable_list = ["name", "description"]
+    column_searchable_list = ["name"]
 
 
 class ComponentParameterGroupAdmin(EnhancedModelView, model=db.ComponentParameterGroup):
@@ -321,15 +319,12 @@ class ComponentParameterGroupAdmin(EnhancedModelView, model=db.ComponentParamete
         "component",
         "parameter_group",
         "order_index",
-        "default_expanded",
     ]
     form_columns = [
         "component",
         "parameter_group",
         "order_index",
-        "default_expanded",
     ]
-    column_filters = ["default_expanded"]
     column_searchable_list = ["component.name", "parameter_group.name"]
 
 

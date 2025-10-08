@@ -1,8 +1,8 @@
 """add group parameters tables
 
-Revision ID: e7cabbc42eac
+Revision ID: 12506b31123b
 Revises: 79e3872b3b03
-Create Date: 2025-10-07 14:57:57.260520
+Create Date: 2025-10-08 15:31:13.186820
 
 """
 from typing import Sequence, Union
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = 'e7cabbc42eac'
+revision: str = '12506b31123b'
 down_revision: Union[str, None] = '79e3872b3b03'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -23,7 +23,6 @@ def upgrade() -> None:
     op.create_table('parameter_groups',
     sa.Column('id', sa.UUID(), nullable=False),
     sa.Column('name', sa.String(), nullable=False),
-    sa.Column('description', sa.Text(), nullable=True),
     sa.PrimaryKeyConstraint('id')
     )
     op.create_table('component_parameter_groups',
@@ -31,7 +30,6 @@ def upgrade() -> None:
     sa.Column('component_id', sa.UUID(), nullable=False),
     sa.Column('parameter_group_id', sa.UUID(), nullable=False),
     sa.Column('order_index', sa.Integer(), nullable=False),
-    sa.Column('default_expanded', sa.Boolean(), nullable=False),
     sa.ForeignKeyConstraint(['component_id'], ['components.id'], ondelete='CASCADE'),
     sa.ForeignKeyConstraint(['parameter_group_id'], ['parameter_groups.id'], name='fk_component_parameter_groups_parameter_group_id', ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('id'),
