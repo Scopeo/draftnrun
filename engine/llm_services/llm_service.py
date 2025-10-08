@@ -396,7 +396,6 @@ class CompletionService(LLMService):
         response_format = OutputFormatModel(**response_format).model_dump(exclude_none=True, exclude_unset=True)
         span = get_current_span()
         span.set_attributes({SpanAttributes.LLM_INVOCATION_PARAMETERS: json.dumps(self._invocation_parameters)})
-        print(messages)
         match self._provider:
             case "openai":
                 import openai
@@ -559,9 +558,7 @@ class CompletionService(LLMService):
         tools: Optional[list[ToolDescription]] = None,
         tool_choice: str = "auto",
     ) -> ChatCompletion:
-        """
-        Function calling without structured output
-        """
+        """"""
         if tools is None:
             tools = []
 
@@ -663,7 +660,6 @@ class CompletionService(LLMService):
 
         # Check for structured output tool early return
         if tool_choice == "none":
-            # Call the constrained complete with json schema to force a structured output answer
             response = await self._constrained_complete_structured_response_without_tools(
                 structured_output_tool=structured_output_tool,
                 messages=messages,
