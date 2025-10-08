@@ -155,9 +155,11 @@ def get_component_parameter_definition_by_component_version(
 
 def delete_component_global_parameters(
     session: Session,
-    component_id: UUID,
+    component_version_id: UUID,
 ) -> None:
-    session.query(ComponentGlobalParameter).filter(ComponentGlobalParameter.component_id == component_id).delete()
+    session.query(ComponentGlobalParameter).filter(
+        ComponentGlobalParameter.component_version_id == component_version_id
+    ).delete()
     session.commit()
 
 
@@ -175,7 +177,10 @@ def delete_component_by_id(
 
     instance_ids: List[UUID] = [
         ci.id
-        for ci in session.query(db.ComponentInstance).filter(db.ComponentInstance.component_id == component_id).all()
+        for ci in session.query(db.ComponentInstance)
+        .join(db.ComponentVersion, db.ComponentInstance.component_version_id == db.ComponentVersion.id)
+        .filter(db.ComponentVersion.component_id == component_id)
+        .all()
     ]
     if instance_ids:
         delete_component_instances(session, component_instance_ids=instance_ids)
@@ -185,8 +190,9 @@ def delete_component_by_id(
         d.id
         for d in (
             session.query(db.ComponentParameterDefinition)
+            .join(db.ComponentVersion, db.ComponentParameterDefinition.component_version_id == db.ComponentVersion.id)
             .filter(
-                db.ComponentParameterDefinition.component_id == component_id,
+                db.ComponentVersion.component_id == component_id,
             )
             .all()
         )
@@ -202,8 +208,9 @@ def delete_component_by_id(
 
     (
         session.query(db.ComponentParameterDefinition)
+        .join(db.ComponentVersion, db.ComponentParameterDefinition.component_version_id == db.ComponentVersion.id)
         .filter(
-            db.ComponentParameterDefinition.component_id == component_id,
+            db.ComponentVersion.component_id == component_id,
         )
         .delete(synchronize_session=False)
     )
@@ -962,7 +969,7 @@ def upsert_specific_api_component_with_defaults(
     headers_json: Optional[str],
     timeout_val: Optional[int],
     fixed_params_json: Optional[str],
-) -> db.Component:
+) -> db.ComponentVersion:
     """
     Ensure a specific API component exists with default parameter definitions.
 
@@ -973,17 +980,23 @@ def upsert_specific_api_component_with_defaults(
         component = db.Component(
             name=tool_display_name,
             base_component="API Call",
-            description=f"Preconfigured API tool for {tool_display_name}.",
             is_agent=False,
             function_callable=True,
             can_use_function_calling=False,
-            release_stage=db.ReleaseStage.INTERNAL,
         )
         upsert_components(session, [component])
+        component_version = db.ComponentVersion(
+            component_id=component.id,
+            description=f"Preconfigured API tool for {tool_display_name}.",
+            release_stage=db.ReleaseStage.INTERNAL,
+        )
+        session.add(component_version)
+        session.commit()
+        session.refresh(component_version)
 
     param_defs = [
         db.ComponentParameterDefinition(
-            component_id=component.id,
+            component_version_id=component_version.id,
             name="endpoint",
             type=ParameterType.STRING,
             nullable=False,
@@ -996,7 +1009,7 @@ def upsert_specific_api_component_with_defaults(
             ).model_dump(exclude_unset=True, exclude_none=True),
         ),
         db.ComponentParameterDefinition(
-            component_id=component.id,
+            component_version_id=component_version.id,
             name="method",
             type=ParameterType.STRING,
             nullable=False,
@@ -1014,7 +1027,7 @@ def upsert_specific_api_component_with_defaults(
             ).model_dump(exclude_unset=True, exclude_none=True),
         ),
         db.ComponentParameterDefinition(
-            component_id=component.id,
+            component_version_id=component_version.id,
             name="headers",
             type=ParameterType.JSON,
             nullable=True,
@@ -1026,7 +1039,7 @@ def upsert_specific_api_component_with_defaults(
             ).model_dump(exclude_unset=True, exclude_none=True),
         ),
         db.ComponentParameterDefinition(
-            component_id=component.id,
+            component_version_id=component_version.id,
             name="timeout",
             type=ParameterType.INTEGER,
             nullable=True,
@@ -1042,7 +1055,7 @@ def upsert_specific_api_component_with_defaults(
             is_advanced=True,
         ),
         db.ComponentParameterDefinition(
-            component_id=component.id,
+            component_version_id=component_version.id,
             name="fixed_parameters",
             type=ParameterType.JSON,
             nullable=True,
@@ -1056,31 +1069,31 @@ def upsert_specific_api_component_with_defaults(
     ]
 
     upsert_components_parameter_definitions(session, param_defs)
-    return component
+    return component_version
 
 
-def set_component_default_tool_description(
+def set_component_version_default_tool_description(
     session: Session,
-    component_id: UUID,
+    component_version_id: UUID,
     tool_description_id: UUID,
-) -> db.Component:
-    component = get_component_by_id(session, component_id)
-    if component is None:
-        raise ValueError("Component not found when setting default tool description")
-    component.default_tool_description_id = tool_description_id
+) -> db.ComponentVersion:
+    component_version = get_component_version_by_id(session, component_version_id)
+    if component_version is None:
+        raise ValueError("Component version not found when setting default tool description")
+    component_version.default_tool_description_id = tool_description_id
     session.commit()
-    session.refresh(component)
-    return component
+    session.refresh(component_version)
+    return component_version
 
 
 def insert_component_global_parameter(
     session: Session,
-    component_id: UUID,
+    component_version_id: UUID,
     parameter_definition_id: UUID,
     value: str,
 ) -> ComponentGlobalParameter:
     global_param = ComponentGlobalParameter(
-        component_id=component_id,
+        component_version_id=component_version_id,
         parameter_definition_id=parameter_definition_id,
         value=value,
     )

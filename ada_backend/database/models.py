@@ -712,9 +712,9 @@ class ComponentGlobalParameter(Base):
     __tablename__ = "component_global_parameters"
 
     id = mapped_column(UUID(as_uuid=True), primary_key=True, index=True, default=uuid.uuid4)
-    component_id = mapped_column(
+    component_version_id = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("components.id", ondelete="CASCADE"),
+        ForeignKey("component_versions.id", ondelete="CASCADE"),
         nullable=False,
     )
     parameter_definition_id = mapped_column(
@@ -726,13 +726,13 @@ class ComponentGlobalParameter(Base):
     value = mapped_column(String, nullable=True)
     order = mapped_column(Integer, nullable=True)
 
-    component = relationship("Component")
+    component_version = relationship("ComponentVersion")
     parameter_definition = relationship("ComponentParameterDefinition")
     __table_args__ = (
         # Enforce uniqueness for scalar values (order IS NULL)
         sa.Index(
             "uq_comp_global_param_scalar",
-            "component_id",
+            "component_version_id",
             "parameter_definition_id",
             unique=True,
             postgresql_where=sa.text('"order" IS NULL'),
@@ -740,7 +740,7 @@ class ComponentGlobalParameter(Base):
         # Enforce uniqueness for list values (order IS NOT NULL)
         sa.Index(
             "uq_comp_global_param_list",
-            "component_id",
+            "component_version_id",
             "parameter_definition_id",
             "order",
             unique=True,

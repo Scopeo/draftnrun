@@ -30,12 +30,6 @@ def upsert_components(
         )
 
         if existing_component:
-            component.release_stage = existing_component.release_stage
-        else:
-            if getattr(component, "release_stage", None) is None:
-                component.release_stage = db.ReleaseStage.INTERNAL
-
-        if existing_component:
             if models_are_equal(existing_component, component):
                 LOGGER.info(f"Component {component.name} did not change, skipping.")
             else:
@@ -65,6 +59,12 @@ def upsert_component_versions(
             )
             .first()
         )
+        if existing_component_version:
+            component_version.release_stage = existing_component_version.release_stage
+        else:
+            if getattr(component_version, "release_stage", None) is None:
+                component_version.release_stage = db.ReleaseStage.INTERNAL
+
         if existing_component_version:
             if models_are_equal(existing_component_version, component_version):
                 LOGGER.info(f"Component version {component_version.id} did not change, skipping.")
