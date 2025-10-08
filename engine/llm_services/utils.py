@@ -138,3 +138,27 @@ def make_mistral_ocr_compatible(payload_json: dict) -> list[dict]:
                 }
 
     return None
+
+
+# TODO: Quick fix for GPT-5 models, remove when we have better solution
+def build_openai_responses_kwargs(
+    model_name: str,
+    verbosity: str | None,
+    reasoning: str | None,
+    temperature: float | None,
+    base_kwargs: dict,
+) -> dict:
+    """
+    Return kwargs for OpenAI Responses API, adding verbosity/reasoning only for GPT-5 models.
+    """
+    kwargs = dict(base_kwargs)
+    is_gpt5 = "gpt-5" in (model_name or "").lower()
+    if is_gpt5:
+        if verbosity is not None:
+            kwargs["text"] = {"verbosity": verbosity}
+        if reasoning is not None:
+            kwargs["reasoning"] = {"effort": reasoning}
+        if temperature is not None:
+            LOGGER.info(f"Temperature set to 1 for the {model_name} model.")
+            kwargs["temperature"] = 1
+    return kwargs

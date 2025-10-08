@@ -24,7 +24,7 @@ from engine.llm_services.constrained_output_models import (
     convert_json_str_to_pydantic,
 )
 from settings import settings
-from engine.llm_services.utils import chat_completion_to_response
+from engine.llm_services.utils import chat_completion_to_response, build_openai_responses_kwargs
 from openai.types.chat import ChatCompletion
 
 LOGGER = logging.getLogger(__name__)
@@ -212,14 +212,14 @@ class CompletionService(LLMService):
                     self._api_key = settings.OPENAI_API_KEY
                 messages = chat_completion_to_response(messages)
                 client = openai.AsyncOpenAI(api_key=self._api_key)
-                response = await client.responses.create(
-                    model=self._model_name,
-                    input=messages,
-                    temperature=self._invocation_parameters.get("temperature"),
-                    stream=stream,
-                    text={"verbosity": self._invocation_parameters.get("verbosity")},
-                    reasoning={"effort": self._invocation_parameters.get("reasoning")},
+                kwargs_create = build_openai_responses_kwargs(
+                    self._model_name,
+                    self._invocation_parameters.get("verbosity"),
+                    self._invocation_parameters.get("reasoning"),
+                    self._invocation_parameters.get("temperature"),
+                    {"model": self._model_name, "input": messages, "stream": stream},
                 )
+                response = await client.responses.create(**kwargs_create)
                 span.set_attributes(
                     {
                         SpanAttributes.LLM_TOKEN_COUNT_COMPLETION: response.usage.output_tokens,
@@ -286,15 +286,13 @@ class CompletionService(LLMService):
 
                 # Transform messages for OpenAI response API
                 messages = chat_completion_to_response(messages)
-                kwargs = {
-                    "input": messages,
-                    "model": self._model_name,
-                    "temperature": self._invocation_parameters.get("temperature"),
-                    "stream": stream,
-                    "text_format": response_format,
-                    "reasoning": {"effort": self._invocation_parameters.get("reasoning")},
-                    "text": {"verbosity": self._invocation_parameters.get("verbosity")},
-                }
+                kwargs = build_openai_responses_kwargs(
+                    self._model_name,
+                    self._invocation_parameters.get("verbosity"),
+                    self._invocation_parameters.get("reasoning"),
+                    self._invocation_parameters.get("temperature"),
+                    {"input": messages, "model": self._model_name, "stream": stream, "text_format": response_format},
+                )
 
                 client = openai.AsyncOpenAI(api_key=self._api_key)
                 response = await client.responses.parse(**kwargs)
@@ -402,14 +400,18 @@ class CompletionService(LLMService):
 
                 # Transform messages for OpenAI response API
                 messages = chat_completion_to_response(messages)
-                kwargs = {
-                    "input": messages,
-                    "model": self._model_name,
-                    "temperature": self._invocation_parameters.get("temperature"),
-                    "stream": stream,
-                    "text": {"format": response_format, "verbosity": self._invocation_parameters.get("verbosity")},
-                    "reasoning": {"effort": self._invocation_parameters.get("reasoning")},
-                }
+                kwargs = build_openai_responses_kwargs(
+                    self._model_name,
+                    self._invocation_parameters.get("verbosity"),
+                    self._invocation_parameters.get("reasoning"),
+                    self._invocation_parameters.get("temperature"),
+                    {
+                        "input": messages,
+                        "model": self._model_name,
+                        "stream": stream,
+                        "text": {"format": response_format},
+                    },
+                )
 
                 client = openai.AsyncOpenAI(api_key=self._api_key)
                 response = await client.responses.parse(**kwargs)
