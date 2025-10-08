@@ -137,7 +137,7 @@ def clone_graph_runner(
         if not param_def:
             raise ValueError(
                 f"Parameter '{relation.parameter_name}' not found in "
-                f"component definitions for component '{parent.component.name}'"
+                f"component definitions for component '{parent.component_version_id}'"
             )
 
         # Create relationship
