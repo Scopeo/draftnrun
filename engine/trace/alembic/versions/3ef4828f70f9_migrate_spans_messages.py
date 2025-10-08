@@ -14,8 +14,6 @@ import pandas as pd
 from alembic import op
 import sqlalchemy as sa
 
-from engine.trace.sql_exporter import get_session_trace
-
 
 # revision identifiers, used by Alembic.
 revision: str = "3ef4828f70f9"
