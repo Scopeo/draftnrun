@@ -35,9 +35,7 @@ class PipelineParameterSchema(ParameterBase, WithValue):
 class ParameterGroupSchema(BaseModel):
     id: UUID
     name: str
-    description: Optional[str] = None
     order_index: int
-    default_expanded: bool
 
 
 class ComponentParamDefDTO(ParameterDefinition):
