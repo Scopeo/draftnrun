@@ -99,6 +99,7 @@ def seed_rag_components(session: Session):
         function_callable=True,
         release_stage=db.ReleaseStage.PUBLIC,
         default_tool_description_id=TOOL_DESCRIPTION_UUIDS["default_rag_tool_description"],
+        icon="tabler-report-search",
     )
     hybrid_rag_agent = db.Component(
         id=COMPONENT_UUIDS["hybrid_rag_agent"],

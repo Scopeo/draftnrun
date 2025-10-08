@@ -29,7 +29,7 @@ def seed_python_code_runner_components(session: Session):
         can_use_function_calling=False,
         release_stage=db.ReleaseStage.PUBLIC,
         default_tool_description_id=TOOL_DESCRIPTION_UUIDS["python_code_runner_tool_description"],
-        icon="akar-icons:python-fill",
+        icon="tabler-brand-python",
     )
     upsert_components(session, [python_code_runner_component])
 
