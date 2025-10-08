@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from ada_backend.database.models import ReleaseStage
 from ada_backend.repositories.component_repository import (
     STAGE_HIERARCHY,
+    delete_component_by_id,
     get_all_components_with_parameters,
     get_component_by_id,
     delete_component_by_id,
