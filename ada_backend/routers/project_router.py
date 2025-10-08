@@ -1,4 +1,4 @@
-from typing import Annotated, List, Optional
+from typing import Annotated, List
 from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Body
 from sqlalchemy.orm import Session
@@ -18,7 +18,6 @@ from ada_backend.schemas.project_schema import (
     ProjectUpdateSchema,
     ProjectCreateSchema,
 )
-from ada_backend.schemas.trace_schema import TraceSpan
 from ada_backend.services.agent_runner_service import run_agent, run_env_agent
 from ada_backend.routers.auth_router import (
     get_user_from_supabase_token,
