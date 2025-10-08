@@ -18,7 +18,7 @@ from ada_backend.schemas.components_schema import (
     SubComponentParamSchema,
 )
 from ada_backend.schemas.integration_schema import IntegrationSchema
-from ada_backend.schemas.parameter_schema import ComponentParamDefDTO
+from ada_backend.schemas.parameter_schema import ComponentParamDefDTO, ParameterGroupSchema
 from engine.agent.types import ToolDescription
 from ada_backend.database.models import ComponentGlobalParameter
 from ada_backend.database.component_definition_seeding import (
@@ -179,6 +179,39 @@ def get_component_parameter_definition_by_component_id(
         .filter(
             db.ComponentParameterDefinition.component_id == component_id,
         )
+        .all()
+    )
+
+
+def get_component_parameter_groups(
+    session: Session,
+    component_id: UUID,
+) -> list[db.ComponentParameterGroup]:
+    """
+    Retrieves parameter groups for a given component.
+    """
+    return (
+        session.query(db.ComponentParameterGroup)
+        .filter(db.ComponentParameterGroup.component_id == component_id)
+        .order_by(db.ComponentParameterGroup.order_index)
+        .all()
+    )
+
+
+def get_component_parameters_with_groups(
+    session: Session,
+    component_id: UUID,
+) -> list[tuple[db.ComponentParameterDefinition, Optional[db.ParameterGroup]]]:
+    """
+    Retrieves parameter definitions with their associated parameter groups.
+    """
+    return (
+        session.query(db.ComponentParameterDefinition, db.ParameterGroup)
+        .outerjoin(
+            db.ParameterGroup,
+            db.ComponentParameterDefinition.parameter_group_id == db.ParameterGroup.id
+        )
+        .filter(db.ComponentParameterDefinition.component_id == component_id)
         .all()
     )
 
@@ -417,6 +450,19 @@ def get_all_components_with_parameters(
                 component.id,
             )
 
+            # Get parameter groups for this component
+            parameter_groups = get_component_parameter_groups(session, component.id)
+            parameter_groups_dto = [
+                ParameterGroupSchema(
+                    id=pg.parameter_group.id,
+                    name=pg.parameter_group.name,
+                    description=pg.parameter_group.description,
+                    order_index=pg.order_index,
+                    default_expanded=pg.default_expanded,
+                )
+                for pg in parameter_groups
+            ]
+
             parameters_to_fill = []
             tool_param_name = None
             for param in parameters:
@@ -432,6 +478,12 @@ def get_all_components_with_parameters(
                     # Skip globally enforced parameters (they are not instance-editable)
                     if param.id in global_param_def_ids:
                         continue
+                    
+                    # Get parameter group name if parameter belongs to a group
+                    parameter_group_name = None
+                    if param.parameter_group:
+                        parameter_group_name = param.parameter_group.name
+                    
                     parameters_to_fill.append(
                         ComponentParamDefDTO(
                             id=param.id,
@@ -444,6 +496,9 @@ def get_all_components_with_parameters(
                             ui_component_properties=param.ui_component_properties,
                             is_advanced=param.is_advanced,
                             order=param.order,
+                            parameter_group_id=param.parameter_group_id,
+                            group_order=param.group_order,
+                            parameter_group_name=parameter_group_name,
                         )
                     )
 
@@ -482,6 +537,7 @@ def get_all_components_with_parameters(
                     can_use_function_calling=component.can_use_function_calling,
                     tool_description=tool_description,
                     parameters=parameters_to_fill,
+                    parameter_groups=parameter_groups_dto,
                     subcomponents_info=[
                         SubComponentParamSchema(
                             id=param_child_def.child_component_id,

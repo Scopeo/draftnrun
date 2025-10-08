@@ -253,6 +253,11 @@ class Component(Base):
         back_populates="component",
         cascade="all, delete-orphan",
     )
+    parameter_groups = relationship(
+        "ComponentParameterGroup",
+        back_populates="component",
+        cascade="all, delete-orphan",
+    )
 
     def __str__(self):
         return f"Component({self.name})"
@@ -513,6 +518,7 @@ class ComponentInstance(Base):
     def __str__(self):
         return f"ComponentInstance(ref={self.ref})"
 
+
 class ParameterGroup(Base):
     """Global parameter group definitions that can be reused across components."""
 
@@ -544,7 +550,7 @@ class ComponentParameterGroup(Base):
     default_expanded = mapped_column(Boolean, nullable=False, default=True)
 
     component = relationship("Component", back_populates="parameter_groups")
-    parameter_groups = relationship("ComponentParameterGroup", back_populates="component", cascade="all, delete-orphan")
+    parameter_group = relationship("ParameterGroup")
 
     __table_args__ = (
         sa.UniqueConstraint("component_id", "parameter_group_id", name="uq_component_parameter_group"),
