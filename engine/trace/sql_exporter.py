@@ -150,7 +150,6 @@ class SQLSpanExporter(SpanExporter):
             formatted_attributes = (
                 split_nested_keys(json_span["attributes"]) if isinstance(json_span["attributes"], dict) else {}
             )
-            print(formatted_attributes)
 
             environment = formatted_attributes.pop("environment", None)
             call_type = formatted_attributes.pop("call_type", None)
@@ -167,7 +166,7 @@ class SQLSpanExporter(SpanExporter):
                 name=span.name,
                 start_time=datetime.fromtimestamp(span.start_time / 1e9, tz=timezone.utc),
                 end_time=datetime.fromtimestamp(span.end_time / 1e9, tz=timezone.utc),
-                attributes=json.dumps(formatted_attributes),
+                attributes=formatted_attributes,
                 events=json.dumps([event_to_dict(event) for event in span.events]),
                 status_code=span.status.status_code,
                 status_message=span.status.description or "",
