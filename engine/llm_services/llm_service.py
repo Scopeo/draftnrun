@@ -558,7 +558,6 @@ class CompletionService(LLMService):
         tools: Optional[list[ToolDescription]] = None,
         tool_choice: str = "auto",
     ) -> ChatCompletion:
-        """"""
         if tools is None:
             tools = []
 
@@ -647,9 +646,6 @@ class CompletionService(LLMService):
         tool_choice: str = "auto",
         structured_output_tool: Optional[ToolDescription] = None,
     ) -> ChatCompletion:
-        """
-        Function calling with structured output support.
-        """
         if tools is None:
             tools = []
 

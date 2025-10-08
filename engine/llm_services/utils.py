@@ -57,7 +57,7 @@ def chat_completion_to_response(
 
     response_messages = chat_completion_messages.copy()
 
-    # Remove tools messages/artifacts and make them as assistant messages
+    # Remove tools messages/additional provider api response parameters and make them as assistant messages
     response_messages = convert_tool_messages_to_assistant_messages(response_messages)
 
     for message in response_messages:
