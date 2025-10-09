@@ -10,7 +10,7 @@ from ada_backend.repositories.component_repository import (
     get_component_parameter_definition_by_component_version,
     upsert_sub_component_input,
     get_component_instances_by_ids,
-    get_canonical_ports_for_components,
+    get_canonical_ports_for_component_versions,
 )
 from ada_backend.repositories.edge_repository import delete_edge, get_edges, upsert_edge
 from ada_backend.repositories.env_repository import get_env_relationship_by_graph_runner_id
@@ -267,31 +267,35 @@ def _ensure_port_mappings_for_edges(
     if not unmapped_edges:
         return
 
-    instance_to_component: dict[UUID, UUID] = {}
+    instance_to_component_version: dict[UUID, UUID] = {}
     for inst in graph_project.component_instances:
         if inst.id and inst.component_id:
-            instance_to_component[inst.id] = inst.component_id
+            instance_to_component_version[inst.id] = inst.component_id
 
-    missing_instance_ids = {iid for pair in unmapped_edges for iid in pair if iid not in instance_to_component}
+    missing_instance_ids = {iid for pair in unmapped_edges for iid in pair if iid not in instance_to_component_version}
     if missing_instance_ids:
         db_instances = get_component_instances_by_ids(session, list(missing_instance_ids))
         for iid, db_inst in db_instances.items():
-            instance_to_component[iid] = db_inst.component_id
+            instance_to_component_version[iid] = db_inst.component_version_id
 
-    component_ids = list(
-        {instance_to_component[s] for s, t in unmapped_edges} | {instance_to_component[t] for s, t in unmapped_edges}
+    component_version_ids = list(
+        {instance_to_component_version[s] for s, t in unmapped_edges}
+        | {instance_to_component_version[t] for s, t in unmapped_edges}
     )
-    canonical_ports_by_component = get_canonical_ports_for_components(session, component_ids)
+    canonical_ports_by_component = get_canonical_ports_for_component_versions(session, component_version_ids)
 
     auto_generated_mappings: list[db.PortMapping] = []
     for source_instance_id, target_instance_id in unmapped_edges:
-        if source_instance_id not in instance_to_component or target_instance_id not in instance_to_component:
+        if (
+            source_instance_id not in instance_to_component_version
+            or target_instance_id not in instance_to_component_version
+        ):
             raise ValueError(
                 "Unable to infer component ids for one or more unmapped edges; please provide explicit port_mappings."
             )
 
-        source_component_id = instance_to_component[source_instance_id]
-        target_component_id = instance_to_component[target_instance_id]
+        source_component_id = instance_to_component_version[source_instance_id]
+        target_component_id = instance_to_component_version[target_instance_id]
 
         source_ports = canonical_ports_by_component.get(source_component_id, {})
         target_ports = canonical_ports_by_component.get(target_component_id, {})

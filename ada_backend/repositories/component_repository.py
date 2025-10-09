@@ -536,16 +536,20 @@ def get_current_component_versions(
 
 
 # TODO: Put in service layer or write as query
-def get_canonical_ports_for_components(
-    session: Session, component_ids: list[UUID]
+def get_canonical_ports_for_component_versions(
+    session: Session, component_version_ids: list[UUID]
 ) -> dict[UUID, dict[str, Optional[str]]]:
-    if not component_ids:
+    if not component_version_ids:
         return {}
-    ports = session.query(db.PortDefinition).filter(db.PortDefinition.component_id.in_(component_ids)).all()
+    ports = (
+        session.query(db.PortDefinition)
+        .filter(db.PortDefinition.component_version_id.in_(component_version_ids))
+        .all()
+    )
     result: dict[UUID, dict[str, Optional[str]]] = {}
     for p in ports:
         if p.is_canonical:
-            entry = result.setdefault(p.component_id, {})
+            entry = result.setdefault(p.component_version_id, {})
             if p.port_type == db.PortType.INPUT:
                 entry["input"] = p.name
             elif p.port_type == db.PortType.OUTPUT:
@@ -553,13 +557,17 @@ def get_canonical_ports_for_components(
     return result
 
 
-def get_port_definitions_for_component_ids(
+def get_port_definitions_for_component_version_ids(
     session: Session,
-    component_ids: list[UUID],
+    component_version_ids: list[UUID],
 ) -> list[db.PortDefinition]:
-    if not component_ids:
+    if not component_version_ids:
         return []
-    return session.query(db.PortDefinition).filter(db.PortDefinition.component_id.in_(component_ids)).all()
+    return (
+        session.query(db.PortDefinition)
+        .filter(db.PortDefinition.component_version_id.in_(component_version_ids))
+        .all()
+    )
 
 
 def get_all_components_with_parameters(

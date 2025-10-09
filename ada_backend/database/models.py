@@ -287,7 +287,7 @@ class ComponentVersion(Base):
     )
     port_definitions = relationship(
         "PortDefinition",
-        back_populates="component",
+        back_populates="component_version",
         cascade="all, delete-orphan",
     )
     child_definitions = relationship("ComponentParameterChildRelationship", back_populates="child_component")
@@ -839,16 +839,16 @@ class PortDefinition(Base):
     __tablename__ = "port_definitions"
 
     id = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    component_id = mapped_column(
+    component_version_id = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("components.id", ondelete="CASCADE"),
+        ForeignKey("component_versions.id", ondelete="CASCADE"),
         nullable=False,
     )
     name = mapped_column(String, nullable=False)
     port_type = mapped_column(make_pg_enum(PortType), nullable=False)
     is_canonical = mapped_column(Boolean, nullable=False, default=False)
     description = mapped_column(Text, nullable=True)
-    component = relationship("Component", back_populates="port_definitions")
+    component_version = relationship("ComponentVersion", back_populates="port_definitions")
 
     __table_args__ = (sa.UniqueConstraint("component_id", "name", "port_type", name="unique_component_port"),)
 
