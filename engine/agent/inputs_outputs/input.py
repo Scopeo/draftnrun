@@ -64,15 +64,18 @@ class Input:
         return create_legacy_input_output_schema()
 
     # TODO: Refactor Agent I/O to use an unified input/output object:
-    async def run(self, input_data: AgentPayload | dict | NodeData) -> dict:
+    async def run(self, input_data: AgentPayload | dict | NodeData) -> NodeData:
         # Normalize input to a plain dict
         # TODO: Remove after I/O refactor migration
         if isinstance(input_data, NodeData):
             base: dict = dict(input_data.data or {})
+            incoming_ctx = input_data.ctx.copy()
         elif isinstance(input_data, AgentPayload):
             base = input_data.model_dump()
+            incoming_ctx = {}
         else:
             base = dict(input_data)
+            incoming_ctx = {}
 
         filtered_input = base.copy()
         for k, v in self.payload_schema.items():
@@ -90,11 +93,40 @@ class Input:
             )
             span.set_status(trace_api.StatusCode.OK)
 
-        # Return the canonical output format based on canonical ports
-        canonical_ports = self.get_canonical_ports()
-        if canonical_ports.get("output") == "messages" and "messages" in filtered_input:
-            messages = filtered_input["messages"]
-            # Input component outputs list[dict] as declared in legacy schema
-            return {"messages": messages}
+        # Extract template vars (everything except messages and file-related fields)
+        template_vars = {}
+        file_content = {}
+        file_urls = {}
 
-        return filtered_input
+        for k, v in filtered_input.items():
+            if k == "messages":
+                continue
+            elif k == "template_vars" and isinstance(v, dict):
+                # {"template_vars": {"username": "John"}}
+                template_vars.update({tk: str(tv) for tk, tv in v.items()})
+            elif k == "file_urls" and isinstance(v, dict):
+                # {"file_urls": {"cs_book": "url"}}
+                file_urls.update(v)
+            elif k.endswith("_file_content") or k.endswith("_file_data"):
+                # LEGACY: Individual file content fields (deprecated)
+                file_content[k] = v
+            elif k.endswith("_file_url") or k.endswith("_url"):
+                # LEGACY: Individual file URL fields (deprecated)
+                file_urls[k] = v
+            else:
+                # LEGACY: Flat template variables (deprecated)
+                # {"username": "John", "company": "Acme"}
+                # TODO: Remove this support once all frontends use nested structure
+                template_vars[k] = str(v)
+
+        # Build context
+        ctx = incoming_ctx
+        ctx["template_vars"] = template_vars
+        if file_content:
+            ctx["file_content"] = file_content
+        if file_urls:
+            ctx["file_urls"] = file_urls
+
+        # Return NodeData with messages in data and template_vars in ctx
+        messages = filtered_input.get("messages", [])
+        return NodeData(data={"messages": messages}, ctx=ctx)

@@ -109,7 +109,7 @@ def build_graph_test_chatbot(
             parameters=[
                 PipelineParameterSchema(
                     name="prompt_template",
-                    value="Evaluate the pertinence of the answer. \n Question: {input} \n Answer: {answer} \n",
+                    value="Evaluate the pertinence of the following answer:\n{input}",
                 ),
                 PipelineParameterSchema(name=COMPLETION_MODEL_IN_DB, value="openai:gpt-4o-mini"),
             ],
@@ -160,13 +160,13 @@ def build_graph_test_chatbot(
             source_instance_id=COMPONENT_INSTANCES_IDS["rag_agent_instance"],
             source_port_name="output",
             target_instance_id=COMPONENT_INSTANCES_IDS["evaluation_instance"],
-            target_port_name="input",
+            target_port_name="messages",
         ),
         PortMappingSchema(
             source_instance_id=COMPONENT_INSTANCES_IDS["llm_call_instance"],
             source_port_name="output",
             target_instance_id=COMPONENT_INSTANCES_IDS["evaluation_instance"],
-            target_port_name="input",
+            target_port_name="messages",
         ),
     ]
     return GraphUpdateSchema(

@@ -432,6 +432,52 @@ class SourceAttributesAdmin(EnhancedModelView, model=db.SourceAttributes):
     ]
 
 
+class PortDefinitionAdmin(EnhancedModelView, model=db.PortDefinition):
+    category = AdminCategory.COMPONENTS
+    icon = "fas fa-plug"
+    column_list = [
+        "id",
+        "component",
+        "name",
+        "port_type",
+        "is_canonical",
+        "description",
+    ]
+    column_searchable_list = ["name", "description"]
+    column_filters = ["port_type", "is_canonical", "component.name"]
+    form_columns = [
+        "component",
+        "name",
+        "port_type",
+        "is_canonical",
+        "description",
+    ]
+
+
+class PortMappingAdmin(EnhancedModelView, model=db.PortMapping):
+    category = AdminCategory.COMPONENTS
+    icon = "fas fa-network-wired"
+    column_list = [
+        "id",
+        "graph_runner",
+        "source_instance",
+        "source_port_definition",
+        "target_instance",
+        "target_port_definition",
+        "dispatch_strategy",
+    ]
+    column_searchable_list = ["dispatch_strategy"]
+    column_filters = ["dispatch_strategy", "graph_runner.id"]
+    form_columns = [
+        "graph_runner",
+        "source_instance",
+        "source_port_definition",
+        "target_instance",
+        "target_port_definition",
+        "dispatch_strategy",
+    ]
+
+
 class AdminAuth(AuthenticationBackend):
     """Basic username/password authentication for admin interface."""
 
@@ -494,6 +540,8 @@ def setup_admin(app: FastAPI):
     admin.add_view(SourceAdmin)
     admin.add_view(IngestionTaskAdmin)
     admin.add_view(SourceAttributesAdmin)
+    admin.add_view(PortDefinitionAdmin)
+    admin.add_view(PortMappingAdmin)
     admin.add_view(CronJobAdmin)
     admin.add_view(CronRunAdmin)
 

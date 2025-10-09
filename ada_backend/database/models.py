@@ -747,6 +747,8 @@ class PortDefinition(Base):
     description = mapped_column(Text, nullable=True)
     component = relationship("Component", back_populates="port_definitions")
 
+    __table_args__ = (sa.UniqueConstraint("component_id", "name", "port_type", name="unique_component_port"),)
+
 
 class PortMapping(Base):
     """Stores the specific wiring for a GraphRunner instance."""

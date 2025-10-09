@@ -3,9 +3,9 @@ import base64
 from unittest.mock import MagicMock
 from unittest.mock import AsyncMock
 
-from engine.agent.llm_call_agent import LLMCallAgent
+from engine.agent.llm_call_agent import LLMCallAgent, LLMCallInputs
 from engine.agent.utils import load_str_to_json
-from engine.agent.types import AgentPayload, ComponentAttributes
+from engine.agent.types import ComponentAttributes
 from engine.llm_services.utils import chat_completion_to_response
 
 
@@ -110,10 +110,12 @@ def llm_call_with_output_format():
 
 @pytest.mark.anyio
 async def test_agent_input_combinations(llm_call_with_output_format, input_payload):
-    response = await llm_call_with_output_format._run_without_io_trace(input_payload)
+    # Convert dict to LLMCallInputs Pydantic model
+    inputs = LLMCallInputs.model_validate(input_payload)
+    response = await llm_call_with_output_format._run_without_io_trace(inputs, ctx={})
 
-    # Check that the question was passed in the messages
-    assert isinstance(response, AgentPayload)
+    # Check that the response is the correct type
+    assert isinstance(response.output, str)
 
     # Check that response_format was passed
     response_format = llm_call_with_output_format.output_format
@@ -125,9 +127,11 @@ async def test_agent_input_combinations(llm_call_with_output_format, input_paylo
 
 @pytest.mark.anyio
 async def test_chat_completion_to_response(llm_call_with_output_format, input_payload_with_file):
-    response = await llm_call_with_output_format._run_without_io_trace(input_payload_with_file)
-    # Check that the question was passed in the messages
-    assert isinstance(response, AgentPayload)
+    # Convert dict to LLMCallInputs Pydantic model
+    inputs = LLMCallInputs.model_validate(input_payload_with_file)
+    response = await llm_call_with_output_format._run_without_io_trace(inputs, ctx={})
+    # Check that the response is the correct type
+    assert isinstance(response.output, str)
 
     llm_service_input_messages = (
         llm_call_with_output_format._completion_service.constrained_complete_with_json_schema_async.call_args[1][

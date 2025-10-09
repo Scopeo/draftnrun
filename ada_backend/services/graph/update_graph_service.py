@@ -144,6 +144,9 @@ async def update_graph_service(
     for edge_id in edge_ids_to_delete:
         delete_edge(session, edge_id)
 
+    # Port mappings: ensure explicit wiring for all edges (save-time defaults)
+    _ensure_port_mappings_for_edges(session, graph_runner_id, graph_project)
+
     nodes_to_delete = previous_graph_nodes - instance_ids
     if len(nodes_to_delete) > 0:
         delete_component_instances_from_nodes(session, nodes_to_delete)
@@ -152,9 +155,6 @@ async def update_graph_service(
     for node_id in nodes_to_delete:
         delete_node(session, node_id)
     LOGGER.info("Deleted nodes: {}".format(len(nodes_to_delete)))
-
-    # --- Port mappings: ensure explicit wiring for all edges (save-time defaults) ---
-    _ensure_port_mappings_for_edges(session, graph_runner_id, graph_project)
 
     await get_agent_for_project(
         session,

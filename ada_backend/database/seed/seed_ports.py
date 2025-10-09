@@ -13,9 +13,12 @@ LOGGER = logging.getLogger(__name__)
 def seed_port_definitions(session: Session):
     """
     Seeds or updates port definitions by introspecting Agent classes from the FACTORY_REGISTRY.
-    This function performs an upsert operation.
+    This function performs an upsert operation and cleans up orphaned ports.
     """
     LOGGER.info("Starting to seed/update port definitions from code...")
+
+    # Track which ports should exist for each component
+    expected_ports_by_component = {}
 
     for component_name, factory in FACTORY_REGISTRY._registry.items():
         agent_class = factory.entity_class
@@ -36,6 +39,15 @@ def seed_port_definitions(session: Session):
         except Exception as e:
             LOGGER.error(f"Could not retrieve schemas for {component_name}: {e}")
             continue
+
+        # Track expected ports for this component
+        expected_ports = set()
+        for field_name in inputs_schema.model_fields.keys():
+            expected_ports.add((field_name, db.PortType.INPUT))
+        for field_name in outputs_schema.model_fields.keys():
+            expected_ports.add((field_name, db.PortType.OUTPUT))
+
+        expected_ports_by_component[component.id] = expected_ports
 
         # Upsert input ports
         for field_name, field_info in inputs_schema.model_fields.items():
@@ -82,4 +94,14 @@ def seed_port_definitions(session: Session):
                 )
                 session.add(port)
                 LOGGER.info(f"  - Creating OUTPUT port: {field_name}")
+
+    LOGGER.info("Cleaning up orphaned port definitions...")
+    for component_id, expected_ports in expected_ports_by_component.items():
+        existing_ports = session.query(db.PortDefinition).filter_by(component_id=component_id).all()
+        for port in existing_ports:
+            port_key = (port.name, port.port_type)
+            if port_key not in expected_ports:
+                LOGGER.info(f"  - Deleting orphaned port: {port.name} ({port.port_type})")
+                session.delete(port)
+
     session.commit()
