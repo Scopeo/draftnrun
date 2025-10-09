@@ -25,11 +25,24 @@ async def get_root_traces(
     environment: Optional[EnvType] = None,
     call_type: Optional[CallType] = None,
     tag_version: Optional[str] = None,
+    version_name: Optional[str] = None,
+    tag_name: Optional[str] = None,
+    change_log: Optional[str] = None,
 ) -> List[RootTraceSpan]:
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
     try:
-        response = get_root_traces_by_project(user.id, project_id, duration, environment, call_type, tag_version)
+        response = get_root_traces_by_project(
+            user.id,
+            project_id,
+            duration,
+            environment,
+            call_type,
+            tag_version,
+            version_name,
+            tag_name,
+            change_log,
+        )
         return response
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e

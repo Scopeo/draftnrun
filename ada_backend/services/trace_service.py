@@ -156,6 +156,9 @@ def get_root_traces_by_project(
     environment: Optional[EnvType] = None,
     call_type: Optional[CallType] = None,
     tag_version: Optional[str] = None,
+    version_name: Optional[str] = None,
+    tag_name: Optional[str] = None,
+    change_log: Optional[str] = None,
 ) -> List[RootTraceSpan]:
     df_span = query_root_trace_duration(project_id, duration)
     track_project_observability_loaded(user_id, project_id)
@@ -178,5 +181,14 @@ def get_root_traces_by_project(
 
     if tag_version is not None:
         df_span = df_span[df_span["tag_version"] == tag_version]
+
+    if version_name is not None:
+        df_span = df_span[df_span["version_name"] == version_name]
+
+    if tag_name is not None:
+        df_span = df_span[df_span["tag_name"] == tag_name]
+
+    if change_log is not None:
+        df_span = df_span[df_span["change_log"] == change_log]
 
     return build_root_spans(df_span)
