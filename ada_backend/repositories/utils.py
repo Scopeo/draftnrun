@@ -1,3 +1,4 @@
+from typing import Optional
 import uuid
 import json
 
@@ -12,7 +13,9 @@ from ada_backend.database.models import (
 from ada_backend.database.seed.utils import COMPONENT_UUIDS
 
 
-def create_component_instance(session: Session, component_version_id: uuid.UUID, name: str) -> ComponentInstance:
+def create_component_instance(
+    session: Session, component_version_id: uuid.UUID, name: str, component_instance_id: Optional[uuid.UUID] = None
+) -> ComponentInstance:
     """
     Creates a new component instance for the given component ID.
 
@@ -31,7 +34,7 @@ def create_component_instance(session: Session, component_version_id: uuid.UUID,
         .all()
     )
 
-    component_instance_id = uuid.uuid4()
+    component_instance_id = component_instance_id or uuid.uuid4()
     basic_parameters = [
         BasicParameter(
             id=uuid.uuid4(),
