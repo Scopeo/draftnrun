@@ -6,7 +6,13 @@ import logging
 
 import pandas as pd
 
-from ada_backend.schemas.trace_schema import RootTraceSpan, TraceSpan, TokenUsage
+from ada_backend.schemas.trace_schema import (
+    RootTraceSpan,
+    TraceSpan,
+    TokenUsage,
+    PaginatedRootTracesResponse,
+    Pagination,
+)
 from ada_backend.services.metrics.utils import (
     query_root_trace_duration,
     query_trace_by_trace_id,
@@ -154,7 +160,9 @@ def get_root_traces_by_project(
     environment: Optional[EnvType] = None,
     call_type: Optional[CallType] = None,
     tag_version: Optional[str] = None,
-) -> List[RootTraceSpan]:
+    page: int = 1,
+    page_size: int = 100,
+) -> PaginatedRootTracesResponse:
     df_span = query_root_trace_duration(project_id, duration)
     track_project_observability_loaded(user_id, project_id)
     LOGGER.info(f"Querying root spans for project {project_id} with duration {duration} days")
@@ -177,4 +185,18 @@ def get_root_traces_by_project(
     if tag_version is not None:
         df_span = df_span[df_span["tag_version"] == tag_version]
 
-    return build_root_spans(df_span)
+    total_items = len(df_span)
+    if page_size <= 0:
+        page_size = 100
+    if page <= 0:
+        page = 1
+    start = (page - 1) * page_size
+    end = start + page_size
+    df_page = df_span.iloc[start:end]
+
+    traces = build_root_spans(df_page)
+    total_pages = (total_items + page_size - 1) // page_size
+    return PaginatedRootTracesResponse(
+        pagination=Pagination(page=page, size=page_size, total_items=total_items, total_pages=total_pages),
+        traces=traces,
+    )
