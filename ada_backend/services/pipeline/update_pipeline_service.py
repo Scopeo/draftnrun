@@ -14,7 +14,6 @@ from ada_backend.database import models as db
 from ada_backend.repositories.component_repository import (
     get_component_by_id,
     get_component_parameter_definition_by_component_version,
-    get_current_component_version_id,
     upsert_component_instance,
     upsert_basic_parameter,
     get_or_create_tool_description,

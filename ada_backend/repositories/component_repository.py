@@ -469,33 +469,6 @@ def get_tool_parameter_by_component_version(
     )
 
 
-def get_current_component_version_id(
-    session: Session,
-    component_id: UUID,
-    release_stage: ReleaseStage = ReleaseStage.PUBLIC,
-) -> Optional[UUID]:
-    """
-    Retrieves the current version ID of a specific component.
-    """
-    allowed_stages = STAGE_HIERARCHY.get(release_stage, [release_stage])
-    order_expr = case(
-        *[
-            (db.ReleaseStageToCurrentVersionMapping.release_stage == stg, idx)
-            for idx, stg in enumerate(allowed_stages)
-        ],
-        else_=len(allowed_stages),
-    )
-    stmt = (
-        select(db.ReleaseStageToCurrentVersionMapping.component_version_id)
-        .where(db.ReleaseStageToCurrentVersionMapping.component_id == component_id)
-        .where(db.ReleaseStageToCurrentVersionMapping.release_stage.in_(allowed_stages))
-        .order_by(order_expr.asc())
-        .limit(1)
-    )
-
-    return session.execute(stmt).scalar_one_or_none()
-
-
 def get_current_component_versions(
     session: Session,
     allowed_stages: Optional[List[ReleaseStage]],
