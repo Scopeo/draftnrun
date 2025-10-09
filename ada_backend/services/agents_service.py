@@ -203,6 +203,7 @@ def build_ai_agent_component(
     return ComponentInstanceSchema(
         id=ai_agent_instance_id,
         component_id=COMPONENT_UUIDS["base_ai_agent"],
+        component_version_id=COMPONENT_UUIDS["base_ai_agent"],
         name="AI Agent",
         parameters=parameters,
         is_start_node=True,

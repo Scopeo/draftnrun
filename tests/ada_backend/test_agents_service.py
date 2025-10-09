@@ -155,7 +155,9 @@ def test_update_agent_service_builds_graph_and_calls_update(monkeypatch):
 
     # prepare agent_data with one tool and one model parameter
     tool_id = uuid.uuid4()
-    tool_instance = ComponentInstanceSchema(id=tool_id, component_id=uuid.uuid4(), parameters=[])
+    tool_instance = ComponentInstanceSchema(
+        id=tool_id, component_id=uuid.uuid4(), parameters=[], component_version_id=uuid.uuid4()
+    )
     model_param = PipelineParameterSchema(name="model_param", value="v1")
     agent_data = AgentUpdateSchema(
         name="A",

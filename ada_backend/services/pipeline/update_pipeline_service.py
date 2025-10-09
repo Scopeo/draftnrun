@@ -30,7 +30,6 @@ def create_or_update_component_instance(
     session: Session,
     instance_data: ComponentInstanceSchema,
     project_id: UUID,
-    release_stage: db.ReleaseStage,
 ) -> UUID:
     """Creates or updates a component instance with its parameters"""
     # Create tool description if needed
@@ -45,16 +44,9 @@ def create_or_update_component_instance(
             id=instance_data.tool_description.id if instance_data.tool_description.id else None,
         )
 
-    # Create/update instance (will create new if id is None, or upsert if id exists)
-    component_version_id = (
-        instance_data.component_version_id
-        if instance_data.component_version_id
-        else get_current_component_version_id(session, instance_data.component_id, release_stage=release_stage)
-    )
-
     component_instance = upsert_component_instance(
         session=session,
-        component_version_id=component_version_id,
+        component_version_id=instance_data.component_version_id,
         name=instance_data.name,
         ref=instance_data.ref,
         tool_description_id=tool_description.id if tool_description else None,
@@ -82,7 +74,7 @@ def create_or_update_component_instance(
         p.name: p
         for p in get_component_parameter_definition_by_component_version(
             session,
-            component_version_id=component_version_id,
+            component_version_id=instance_data.component_version_id,
         )
     }
 
