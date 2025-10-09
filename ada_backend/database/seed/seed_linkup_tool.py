@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from ada_backend.database import models as db
 from ada_backend.database.component_definition_seeding import (
     upsert_components,
+    upsert_component_versions,
     upsert_component_categories,
 )
 from ada_backend.database.seed.seed_categories import CATEGORY_UUIDS
@@ -14,11 +15,8 @@ def seed_linkup_tool_components(session: Session):
     linkup_tool = db.Component(
         id=COMPONENT_UUIDS["linkup_search_tool"],
         name="Linkup Search Tool",
-        description="Linkup search tool for real-time web search and data connection",
         is_agent=False,
         function_callable=True,
-        release_stage=db.ReleaseStage.PUBLIC,
-        default_tool_description_id=TOOL_DESCRIPTION_UUIDS["linkup_search_tool_description"],
         icon="tabler-world-search",
     )
 
@@ -28,6 +26,15 @@ def seed_linkup_tool_components(session: Session):
             linkup_tool,
         ],
     )
+    linkup_tool_version = db.ComponentVersion(
+        id=COMPONENT_UUIDS["linkup_search_tool"],
+        component_id=COMPONENT_UUIDS["linkup_search_tool"],
+        version_tag="0.0.1",
+        release_stage=db.ReleaseStage.PUBLIC,
+        description="Linkup search tool for real-time web search and data connection",
+        default_tool_description_id=TOOL_DESCRIPTION_UUIDS["linkup_search_tool_description"],
+    )
+    upsert_component_versions(session, [linkup_tool_version])
     upsert_component_categories(
         session=session,
         component_id=linkup_tool.id,
