@@ -39,6 +39,7 @@ def seed_static_responder_components(session: Session):
         version_tag="0.0.1",
         release_stage=db.ReleaseStage.PUBLIC,
         description="A static responder tool that responds with a static message.",
+        default_tool_description_id=TOOL_DESCRIPTION_UUIDS["default_tool_description"],
     )
     upsert_component_versions(
         session=session,

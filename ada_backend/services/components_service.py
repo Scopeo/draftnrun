@@ -9,7 +9,6 @@ from ada_backend.repositories.component_repository import (
     delete_component_by_id,
     get_all_components_with_parameters,
     get_component_by_id,
-    delete_component_by_id,
     get_port_definitions_for_component_version_ids,
 )
 from ada_backend.schemas.components_schema import ComponentsResponse, PortDefinitionSchema
@@ -69,5 +68,6 @@ def update_component_release_stage_service(
     component = get_component_by_id(session, component_id)
     if component is None:
         raise ComponentNotFound(component_id)
+    component.release_stage = release_stage
     session.add(component)
     session.commit()
