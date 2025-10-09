@@ -27,6 +27,7 @@ def seed_sql_tool_components(session: Session):
         function_callable=True,
         release_stage=db.ReleaseStage.PUBLIC,
         default_tool_description_id=TOOL_DESCRIPTION_UUIDS["default_tool_description"],
+        icon="tabler-database-search",
     )
     run_sql_query_tool = db.Component(
         id=COMPONENT_UUIDS["run_sql_query_tool"],

@@ -35,6 +35,7 @@ def seed_react_sql_components(session: Session):
         can_use_function_calling=True,
         release_stage=db.ReleaseStage.PUBLIC,
         default_tool_description_id=TOOL_DESCRIPTION_UUIDS["default_react_sql_tool_description"],
+        icon="tabler-database-cog",
     )
     upsert_components(
         session=session,
