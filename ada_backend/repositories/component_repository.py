@@ -146,7 +146,6 @@ def get_component_version_by_id(
 def get_component_parameter_definition_by_component_version(
     session: Session,
     component_version_id: UUID,
-    name: str,
 ) -> Optional[db.Component]:
     return (
         session.query(db.ComponentParameterDefinition)
