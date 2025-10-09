@@ -48,6 +48,7 @@ class Span(Base):
 
     span_id = Column(String, nullable=False, unique=True)
     parent_id = Column(String, nullable=True, index=True)
+    graph_runner_id = Column(String, nullable=True, index=True)
     name = Column(String, nullable=False)
     span_kind = mapped_column(make_pg_string_enum(OpenInferenceSpanKindValues), nullable=False)
     start_time = Column(TIMESTAMP(timezone=True), nullable=False, index=True)
@@ -73,6 +74,9 @@ class Span(Base):
     call_type = mapped_column(make_pg_string_enum(CallType), nullable=True)
     project_id = Column(String, nullable=True, index=True)
     tag_version = Column(String, nullable=True)
+    version_name = Column(String, nullable=True)
+    tag_name = Column(String, nullable=True)
+    change_log = Column(String, nullable=True)
 
 
 class OrganizationUsage(Base):

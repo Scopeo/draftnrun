@@ -19,7 +19,7 @@ from sqlalchemy import (
 )
 import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.orm import relationship, declarative_base, mapped_column
+from sqlalchemy.orm import relationship, declarative_base, mapped_column, validates
 from cryptography.fernet import Fernet
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -376,12 +376,27 @@ class GraphRunner(Base):
     created_at = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     tag_version = mapped_column(String, nullable=True)
+    version_name = mapped_column(String, nullable=True)
+    tag_name = mapped_column(String, nullable=True)
+    change_log = mapped_column(String, nullable=True)
 
     graph_edges = relationship("GraphRunnerEdge", back_populates="graph_runner")
     nodes = relationship("GraphRunnerNode", back_populates="graph_runner")
     port_mappings = relationship("PortMapping", back_populates="graph_runner")
 
-    __table_args__ = (CheckConstraint("tag_version ~ '^v[0-9]+\\.[0-9]+\\.[0-9]+$'", name="check_tag_version_semver"),)
+    __table_args__ = (
+        CheckConstraint(
+            "tag_version ~ '^[0-9]+\\.[0-9]+\\.[0-9]+$'",
+            name="check_tag_version_semver",
+        ),
+    )
+
+    @validates("tag_version", "version_name")
+    def _update_tag_name(self, key, value):
+        new_tag_version = value if key == "tag_version" else self.tag_version
+        new_version_name = value if key == "version_name" else self.version_name
+        self.tag_name = f"{new_tag_version}-{new_version_name}" if new_tag_version and new_version_name else None
+        return value
 
     def __str__(self):
         return f"Graph Runner({self.id})"
