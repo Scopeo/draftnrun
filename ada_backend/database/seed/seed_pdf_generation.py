@@ -45,7 +45,7 @@ def seed_pdf_generation_components(session: Session):
         component_parameter_definitions=[
             db.ComponentParameterDefinition(
                 id=UUID("ce261f44-fa83-4962-82c4-4deacad44d65"),
-                component_id=pdf_generation_component.id,
+                component_version_id=pdf_generation_component_version.id,
                 name="css_formatting",
                 type=ParameterType.STRING,
                 default=DEFAULT_CSS_FORMATTING,
