@@ -161,9 +161,11 @@ def get_root_traces_by_project(
     duration: int,
     environment: Optional[EnvType] = None,
     call_type: Optional[CallType] = None,
-    tag_version: Optional[str] = None,
     page: int = 1,
     page_size: int = 20,
+    version_name: Optional[str] = None,
+    tag_name: Optional[str] = None,
+    change_log: Optional[str] = None,
 ) -> PaginatedRootTracesResponse:
     df_span = query_root_trace_duration(project_id, duration)
     track_project_observability_loaded(user_id, project_id)
@@ -184,8 +186,15 @@ def get_root_traces_by_project(
         after_filter_count = len(df_span)
         LOGGER.info(f"Rows before filter: {before_filter_count}, after filter: {after_filter_count}")
 
-    if tag_version is not None:
-        df_span = df_span[df_span["tag_version"] == tag_version]
+    if version_name is not None:
+        df_span = df_span[df_span["version_name"] == version_name]
+
+    if tag_name is not None:
+        df_span = df_span[df_span["tag_name"] == tag_name]
+
+    if change_log is not None:
+        df_span = df_span[df_span["change_log"] == change_log]
+
 
     total_items = len(df_span)
     if page_size <= 0:

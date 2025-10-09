@@ -24,10 +24,13 @@ async def get_root_traces(
     user: Annotated[SupabaseUser, Depends(get_user_from_supabase_token)],
     environment: Optional[EnvType] = None,
     call_type: Optional[CallType] = None,
-    tag_version: Optional[str] = None,
     page: int = Query(1, ge=1, description="Page number (1-based)"),
     page_size: int = Query(20, ge=1, le=1000, description="Number of items per page"),
+    version_name: Optional[str] = None,
+    tag_name: Optional[str] = None,
+    change_log: Optional[str] = None,
 ) -> PaginatedRootTracesResponse:
+
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
     try:
@@ -37,9 +40,11 @@ async def get_root_traces(
             duration,
             environment,
             call_type,
-            tag_version,
             page,
             page_size,
+            version_name,
+            tag_name,
+            change_log,
         )
         return response
     except ValueError as e:
