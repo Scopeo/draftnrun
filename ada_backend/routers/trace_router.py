@@ -16,7 +16,6 @@ LOGGER = logging.getLogger(__name__)
 router = APIRouter()
 
 
-# TODO: filter trace by graph_runner_id
 @router.get("/projects/{project_id}/traces", response_model=PaginatedRootTracesResponse, tags=["Metrics"])
 async def get_root_traces(
     project_id: UUID,
@@ -29,8 +28,8 @@ async def get_root_traces(
     version_name: Optional[str] = None,
     tag_name: Optional[str] = None,
     change_log: Optional[str] = None,
+    graph_runner_id: Optional[UUID] = None,
 ) -> PaginatedRootTracesResponse:
-
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
     try:
@@ -45,6 +44,7 @@ async def get_root_traces(
             version_name,
             tag_name,
             change_log,
+            graph_runner_id,
         )
         return response
     except ValueError as e:

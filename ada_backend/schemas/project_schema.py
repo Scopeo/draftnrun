@@ -30,8 +30,6 @@ class ProjectResponse(ProjectSchema):
 class GraphRunnerEnvDTO(BaseModel):
     graph_runner_id: UUID
     env: Optional[EnvType] = None
-    tag_version: Optional[str] = None
-    version_name: Optional[str] = None
     tag_name: Optional[str] = None
     change_log: Optional[str] = None
 

@@ -131,6 +131,9 @@ def build_root_spans(df: pd.DataFrame) -> List[RootTraceSpan]:
                 call_type=row.get("call_type", None),
                 tag_version=row.get("tag_version", None),
                 graph_runner_id=row.get("graph_runner_id", None),
+                version_name=row.get("version_name", None),
+                tag_name=row.get("tag_name", None),
+                change_log=row.get("change_log", None),
             )
         )
 
@@ -166,6 +169,7 @@ def get_root_traces_by_project(
     version_name: Optional[str] = None,
     tag_name: Optional[str] = None,
     change_log: Optional[str] = None,
+    graph_runner_id: Optional[UUID] = None,
 ) -> PaginatedRootTracesResponse:
     df_span = query_root_trace_duration(project_id, duration)
     track_project_observability_loaded(user_id, project_id)
@@ -195,6 +199,8 @@ def get_root_traces_by_project(
     if change_log is not None:
         df_span = df_span[df_span["change_log"] == change_log]
 
+    if graph_runner_id is not None:
+        df_span = df_span[df_span["graph_runner_id"] == str(graph_runner_id)]
 
     total_items = len(df_span)
     if page_size <= 0:
