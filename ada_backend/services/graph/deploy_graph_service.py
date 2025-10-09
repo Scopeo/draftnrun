@@ -40,7 +40,6 @@ def copy_component_instance(
     component_instance_id_to_copy: UUID,
     is_start_node: bool,
     project_id: UUID,
-    release_stage: ReleaseStage,
 ) -> UUID:
     """
     This function copies a component instance and its parameters to a new component instance.
@@ -54,6 +53,7 @@ def copy_component_instance(
     new_composant_instance = ComponentInstanceSchema(
         name=component_instance.name,
         component_id=component_instance.component_id,
+        component_version_id=component_instance.component_version_id,
         tool_description=component_instance.tool_description,
         is_start_node=is_start_node,
         parameters=[
@@ -62,14 +62,13 @@ def copy_component_instance(
         ],
         integration=component_instance.integration,
     )
-    return create_or_update_component_instance(session, new_composant_instance, project_id, release_stage)
+    return create_or_update_component_instance(session, new_composant_instance, project_id)
 
 
 def clone_graph_runner(
     session: Session,
     graph_runner_id_to_copy: UUID,
     project_id: UUID,
-    release_stage: ReleaseStage = ReleaseStage.INTERNAL,
 ) -> UUID:
     """
     This function copies the graph runner and all its components and edges to a new graph runner.
@@ -91,7 +90,6 @@ def clone_graph_runner(
             component_instance_id_to_copy=component_node.component_instance_id,
             is_start_node=component_node.is_start_node,
             project_id=project_id,
-            release_stage=release_stage,
         )
         ids_map[component_node.component_instance_id] = new_instance_id
 
@@ -118,7 +116,6 @@ def clone_graph_runner(
                 component_instance_id_to_copy=relation.child_component_instance_id,
                 is_start_node=False,
                 project_id=project_id,
-                release_stage=release_stage,
             )
             ids_map[relation.child_component_instance_id] = new_child_component_instance_id
         if not (

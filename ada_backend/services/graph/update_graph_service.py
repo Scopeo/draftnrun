@@ -130,7 +130,7 @@ async def update_graph_service(
     # Create/update all component instances
     instance_ids = set()
     for instance in graph_project.component_instances:
-        instance_id = create_or_update_component_instance(session, instance, project_id, release_stage)
+        instance_id = create_or_update_component_instance(session, instance, project_id)
         upsert_component_node(
             session,
             graph_runner_id=graph_runner_id,

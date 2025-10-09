@@ -73,7 +73,6 @@ async def update_project_pipeline(
     user: Annotated[
         SupabaseUser, Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.WRITER.value))
     ],
-    release_stage: ReleaseStage = ReleaseStage.INTERNAL,
     session: Session = Depends(get_db),
 ) -> GraphUpdateResponse:
     """
@@ -94,7 +93,6 @@ async def update_project_pipeline(
             graph_runner_id=graph_runner_id,
             project_id=project_id,
             user_id=user.id,
-            release_stage=release_stage,
         )
     except ValueError as e:
         error_msg = str(e)
