@@ -50,10 +50,6 @@ def seed_projects(session: Session):
         name="Graph Test Project",
         description="Graph Test Project",
         organization_id=DEFAULT_ORGANIZATION_ID,
-        companion_image_url=(
-            "https://pjnpfnqwglwxvpaookdh.supabase.co/storage/v1/object/public/ada-public/"
-            "companion_images/arthur_createur_de_companions_sur_mesure.png"
-        ),
         type=db.ProjectType.WORKFLOW,
     )
     react_sql_agent_project = db.Project(
@@ -61,10 +57,6 @@ def seed_projects(session: Session):
         name="React SQL Agent",
         description="React SQL Agent based on data gouv data (population : marriage, naissance, death)",
         organization_id=UUID("01b6554c-4884-409f-a0e1-22e394bee989"),
-        companion_image_url=(
-            "https://pjnpfnqwglwxvpaookdh.supabase.co/storage/v1/object/public/"
-            "ada-public/companion_images/mia_administration_des_ventes.png"
-        ),
         type=db.ProjectType.WORKFLOW,
     )
 

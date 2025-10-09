@@ -146,7 +146,6 @@ def create_new_agent_service(
         description=project.description,
         organization_id=organization_id,
         project_type=project.type,
-        companion_image_url=project.companion_image_url,
         created_at=str(project.created_at),
         updated_at=str(project.updated_at),
         graph_runners=[

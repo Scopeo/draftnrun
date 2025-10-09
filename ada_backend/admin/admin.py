@@ -96,7 +96,6 @@ class ProjectAdmin(EnhancedModelView, model=db.Project):
         "description",
         "type",
         "organization_id",
-        "companion_image_url",
         "created_at",
         "updated_at",
     ]
