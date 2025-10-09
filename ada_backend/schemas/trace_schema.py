@@ -23,6 +23,7 @@ class TraceSpan(BaseModel):
     environment: EnvType | None
     call_type: CallType | None
     tag_version: str | None
+    graph_runner_id: str | None
 
     @classmethod
     def from_dict(cls, data: dict) -> "TraceSpan":
@@ -45,6 +46,7 @@ class TraceSpan(BaseModel):
             environment=data.get("environment"),
             call_type=data.get("call_type"),
             tag_version=data.get("tag_version"),
+            graph_runner_id=data.get("graph_runner_id"),
         )
 
 
@@ -65,6 +67,10 @@ class RootTraceSpan(BaseModel):
     environment: EnvType | None
     call_type: CallType | None
     tag_version: str | None
+    graph_runner_id: str | None
+    version_name: str | None
+    change_log: str | None
+    tag_name: str | None
 
 
 class TokenUsage(BaseModel):

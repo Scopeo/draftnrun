@@ -282,6 +282,9 @@ async def chat(
             environment=environment,
             call_type=CallType.SANDBOX,
             tag_version=project_env_binding.graph_runner.tag_version,
+            version_name=project_env_binding.graph_runner.version_name,
+            change_log=project_env_binding.graph_runner.change_log,
+            tag_name=project_env_binding.graph_runner.tag_name,
         )
     except ValueError as e:
         LOGGER.error(

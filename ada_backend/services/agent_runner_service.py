@@ -133,6 +133,9 @@ async def run_env_agent(
         environment=env,
         call_type=call_type,
         tag_version=graph_runner.tag_version,
+        version_name=graph_runner.version_name,
+        change_log=graph_runner.change_log,
+        tag_name=graph_runner.tag_name,
     )
 
 
@@ -144,6 +147,9 @@ async def run_agent(
     environment: EnvType,
     call_type: CallType,
     tag_version: Optional[str] = None,
+    version_name: Optional[str] = None,
+    change_log: Optional[str] = None,
+    tag_name: Optional[str] = None,
 ) -> ChatResponse:
     project_details = get_project_with_details(session, project_id=project_id)
     if not project_details:
@@ -167,6 +173,10 @@ async def run_agent(
         environment=environment,
         call_type=call_type,
         tag_version=tag_version,
+        graph_runner_id=str(graph_runner_id),
+        version_name=version_name,
+        change_log=change_log,
+        tag_name=tag_name,
     )
     try:
         agent_output = await agent.run(
