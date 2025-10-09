@@ -186,7 +186,7 @@ async def run_qa_service(
                     project_id=project_id,
                     env=run_request.version,
                     input_data=input_data,
-                    call_type=CallType.API,
+                    call_type=CallType.QA,
                 )
 
                 output_content = chat_response.message

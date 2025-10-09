@@ -6,8 +6,13 @@ import requests
 import numpy as np
 import pandas as pd
 
+from ada_backend.database.models import CallType
 from ada_backend.schemas.chart_schema import Chart, ChartData, ChartType, ChartsResponse, Dataset
-from ada_backend.services.metrics.utils import query_trace_duration
+from ada_backend.services.metrics.utils import (
+    query_trace_duration,
+    calculate_calls_per_day,
+    count_conversations_per_day,
+)
 from settings import settings
 
 
@@ -87,40 +92,28 @@ def get_prometheus_agent_calls_chart(project_id: UUID, duration_days: int) -> Ch
     )
 
 
-def get_agent_usage_chart(project_id: UUID, duration_days: int) -> list[Chart]:
+def get_agent_usage_chart(project_id: UUID, duration_days: int, call_type: CallType | None = None) -> list[Chart]:
     current_date = datetime.now(tz=timezone.utc)
     start_date = current_date - timedelta(days=duration_days)
     all_dates_df = pd.DataFrame(
         pd.date_range(start=start_date.date(), end=current_date.date(), freq="D", tz=timezone.utc), columns=["date"]
     )
 
-    df = query_trace_duration(project_id, duration_days)
+    df = query_trace_duration(project_id, duration_days, call_type)
     df["date"] = pd.to_datetime(df["start_time"]).dt.normalize()
     datasets = []
-    df_with_conversation_id = df[
-        df["attributes"].apply(
-            lambda x: isinstance(x, dict) and "conversation_id" in x and x["conversation_id"] is not None
-        )
-    ].copy()
-    if not df_with_conversation_id.empty:
-        df_with_conversation_id["conversation_id"] = df_with_conversation_id["attributes"].apply(
-            lambda x: x.get("conversation_id")
-        )
-        conversation_id_usage = (
-            df_with_conversation_id.groupby("date")["conversation_id"]
-            .nunique()
-            .reset_index(name="unique_conversation_ids")
-        )
-        conversation_id_usage = pd.merge(all_dates_df, conversation_id_usage, on="date", how="left").fillna(0)
-        conversation_id_usage["unique_conversation_ids"] = conversation_id_usage["unique_conversation_ids"].astype(int)
-        conversation_id_usage["date"] = conversation_id_usage["date"].dt.date.astype(str)
-        conversation_id_usage = conversation_id_usage.sort_values(by="date", ascending=True)
-        datasets.append(
-            Dataset(
-                label="Number of conversations per day", data=conversation_id_usage["unique_conversation_ids"].tolist()
-            )
-        )
 
+    agent_usage = calculate_calls_per_day(df, all_dates_df)
+    datasets.append(Dataset(label="Number of calls per day", data=agent_usage["count"].tolist()))
+
+    conversation_id_usage = count_conversations_per_day(df, all_dates_df)
+    datasets.append(
+        Dataset(
+            label="Number of conversations per day", data=conversation_id_usage["unique_conversation_ids"].tolist()
+        )
+    )
+
+    # Calculate token usage
     df[["llm_token_count_prompt", "llm_token_count_completion"]] = df[
         ["llm_token_count_prompt", "llm_token_count_completion"]
     ].fillna(0)
@@ -135,16 +128,6 @@ def get_agent_usage_chart(project_id: UUID, duration_days: int) -> list[Chart]:
     token_usage["date"] = pd.to_datetime(token_usage["date"]).dt.date
     token_usage = token_usage.sort_values(by="date", ascending=True)
     token_usage["date"] = token_usage["date"].astype(str)
-
-    df = df[df["parent_id"].isna()].copy()
-    agent_usage = df.groupby("date").size().reset_index(name="count")
-    agent_usage = pd.merge(all_dates_df, agent_usage, on="date", how="left").fillna(0)
-    agent_usage["count"] = agent_usage["count"].astype(int)
-    agent_usage["date"] = pd.to_datetime(agent_usage["date"]).dt.date
-    agent_usage = agent_usage.sort_values(by="date", ascending=True)
-    agent_usage["date"] = agent_usage["date"].astype(str)
-
-    datasets.append(Dataset(label="Number of calls per day", data=agent_usage["count"].tolist()))
 
     return [
         Chart(
@@ -181,8 +164,8 @@ def get_agent_usage_chart(project_id: UUID, duration_days: int) -> list[Chart]:
     ]
 
 
-def get_latence_chart(project_id: UUID, duration_days: int) -> Chart:
-    df = query_trace_duration(project_id, duration_days)
+def get_latence_chart(project_id: UUID, duration_days: int, call_type: CallType | None = None) -> Chart:
+    df = query_trace_duration(project_id, duration_days, call_type)
     df = df[df["parent_id"].isna()]
     df["start_time"] = pd.to_datetime(df["start_time"])
     df["end_time"] = pd.to_datetime(df["end_time"])
@@ -203,8 +186,8 @@ def get_latence_chart(project_id: UUID, duration_days: int) -> Chart:
     )
 
 
-def get_tokens_distribution_chart(project_id: UUID, duration_days: int) -> Chart:
-    df = query_trace_duration(project_id, duration_days)
+def get_tokens_distribution_chart(project_id: UUID, duration_days: int, call_type: CallType | None = None) -> Chart:
+    df = query_trace_duration(project_id, duration_days, call_type)
     input_data = df[df["llm_token_count_prompt"].notna()]["llm_token_count_prompt"]
     output_data = df[df["llm_token_count_completion"].notna()]["llm_token_count_completion"]
 
@@ -229,14 +212,14 @@ def get_tokens_distribution_chart(project_id: UUID, duration_days: int) -> Chart
     )
 
 
-async def get_charts_by_project(project_id: UUID, duration_days: int) -> ChartsResponse:
+async def get_charts_by_project(project_id: UUID, duration_days: int, call_type: CallType | None = None) -> ChartsResponse:
     response = ChartsResponse(
         charts=(
-            get_agent_usage_chart(project_id, duration_days)
+            get_agent_usage_chart(project_id, duration_days, call_type)
             + [
-                get_latence_chart(project_id, duration_days),
+                get_latence_chart(project_id, duration_days, call_type),
                 # get_prometheus_agent_calls_chart(project_id, duration_days),
-                get_tokens_distribution_chart(project_id, duration_days),
+                get_tokens_distribution_chart(project_id, duration_days, call_type),
             ]
         )
     )
