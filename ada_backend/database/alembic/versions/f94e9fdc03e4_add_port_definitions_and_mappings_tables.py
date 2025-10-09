@@ -17,7 +17,7 @@ from ada_backend.database.utils import create_enum_if_not_exists, drop_enum_if_e
 
 # revision identifiers, used by Alembic.
 revision: str = "f94e9fdc03e4"
-down_revision: Union[str, None] = "8ae8246c0768"
+down_revision: Union[str, None] = "79e3872b3b03"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
