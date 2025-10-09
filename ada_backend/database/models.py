@@ -19,7 +19,7 @@ from sqlalchemy import (
 )
 import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.orm import relationship, declarative_base, mapped_column, validates
+from sqlalchemy.orm import relationship, declarative_base, mapped_column
 from cryptography.fernet import Fernet
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -390,13 +390,6 @@ class GraphRunner(Base):
             name="check_tag_version_semver",
         ),
     )
-
-    @validates("tag_version", "version_name")
-    def _update_tag_name(self, key, value):
-        new_tag_version = value if key == "tag_version" else self.tag_version
-        new_version_name = value if key == "version_name" else self.version_name
-        self.tag_name = f"{new_tag_version}-{new_version_name}" if new_tag_version and new_version_name else None
-        return value
 
     def __str__(self):
         return f"Graph Runner({self.id})"

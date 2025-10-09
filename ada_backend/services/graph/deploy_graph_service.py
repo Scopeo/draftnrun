@@ -17,8 +17,7 @@ from ada_backend.repositories.env_repository import (
     update_graph_runner_env,
 )
 from ada_backend.repositories.port_mapping_repository import list_port_mappings_for_graph, insert_port_mapping
-from ada_backend.repositories.tag_repository import update_graph_runner_tag_version
-from ada_backend.services.tag_service import compute_next_tag_version
+from ada_backend.services.tag_service import compute_next_tag_version, update_graph_runner_tag_fields
 from ada_backend.repositories.graph_runner_repository import (
     get_component_nodes,
     get_graph_runner_for_env,
@@ -210,6 +209,12 @@ def deploy_graph_service(
     bind_graph_runner_to_project(
         session, graph_runner_id=new_graph_runner_id, project_id=project_id, env=EnvType.DRAFT
     )
+
+    new_tag = compute_next_tag_version(session, project_id)
+    # Only update tag_version here; version_name/change_log may be set elsewhere
+    update_graph_runner_tag_fields(session, graph_runner_id, tag_version=new_tag)
+    update_graph_runner_env(session, graph_runner_id, env=EnvType.PRODUCTION)
+    LOGGER.info(f"Updated graph runner {graph_runner_id} to production")
 
     return GraphDeployResponse(
         project_id=project_id,
