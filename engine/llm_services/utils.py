@@ -278,7 +278,7 @@ def validate_and_extract_json_response(raw_content: str, expected_schema: dict) 
             # Check if the response contains the same properties as expected schema
             if set(response_properties.keys()) == set(expected_properties.keys()):
                 # Return just the data properties, not the full schema
-                return json.dumps(response_properties)
+                return json.dumps(response_properties, ensure_ascii=False)
         return raw_content
 
     except (json.JSONDecodeError, TypeError, AttributeError):
@@ -352,7 +352,7 @@ async def ensure_structured_output_response(response, structured_output_tool, co
             # Return the arguments of the structured output tool as the final response
             # Discard the other tool call results
             try:
-                response.choices[0].message.content = json.dumps(call.function.arguments)
+                response.choices[0].message.content = json.dumps(call.function.arguments, ensure_ascii=False)
                 response.choices[0].message.tool_calls = None
                 return response
             except Exception as e:

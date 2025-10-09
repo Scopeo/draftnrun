@@ -783,7 +783,9 @@ class CompletionService(LLMService):
             if tools_called[0].function.name == structured_output_tool.name:
                 try:
                     # Return the arguments of the structured output tool as the final response
-                    response.choices[0].message.content = json.dumps(tools_called[0].function.arguments)
+                    response.choices[0].message.content = json.dumps(
+                        tools_called[0].function.arguments, ensure_ascii=False
+                    )
                     response.choices[0].message.tool_calls = None
                     return response
                 except Exception as e:

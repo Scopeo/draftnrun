@@ -53,6 +53,8 @@ class ReActAgentOutputs(BaseModel):
     full_message: ChatMessage = Field(description="The full final message object from the agent.")
     is_final: bool = Field(default=False, description="Indicates if this is the final output of the agent.")
     artifacts: dict[str, Any] = Field(default_factory=dict, description="Artifacts produced by the agent.")
+
+
 def format_output_tool_description(
     tool_name: str,
     tool_description: str,
