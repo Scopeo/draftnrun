@@ -19,6 +19,7 @@ def seed_docx_generation_components(session: Session):
         can_use_function_calling=False,
         release_stage=db.ReleaseStage.INTERNAL,
         default_tool_description_id=TOOL_DESCRIPTION_UUIDS["default_docx_generation_tool_description"],
+        icon="tabler-file-type-docx",
     )
     upsert_components(session, [docx_generation_component])
     upsert_component_categories(
