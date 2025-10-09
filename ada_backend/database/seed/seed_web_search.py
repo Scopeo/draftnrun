@@ -25,7 +25,6 @@ def seed_web_search_components(session: Session):
     web_search_openai_agent = db.Component(
         id=COMPONENT_UUIDS["web_search_openai_agent"],
         name="Internet Search with OpenAI",
-        description="Performs internet search using OpenAI",
         is_agent=True,
         function_callable=True,
         icon="tabler-brand-openai",

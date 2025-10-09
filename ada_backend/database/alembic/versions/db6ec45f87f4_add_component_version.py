@@ -287,6 +287,14 @@ def upgrade() -> None:
         new_version_col="component_version_id",
         new_fk_name="fk_cgp_component_version_id",
     )
+
+    # port_definitions: component_id -> component_version_id
+    upgrade_fk_from_component_to_version_via_mapping(
+        table_name="port_definitions",
+        old_component_col="component_id",
+        new_version_col="component_version_id",
+        new_fk_name="fk_port_definitions_component_version",
+    )
     # Rebuild unique indexes on component_global_parameters to use component_version_id
     # Drop old partial unique indexes if they still exist (defensive)
     op.execute('DROP INDEX IF EXISTS "uq_comp_global_param_list"')
@@ -379,6 +387,14 @@ def downgrade() -> None:
         new_col="component_id",
         fk_name_old="fk_cgp_component_version_id",
         fk_name_new="component_global_parameters_component_id_fkey",
+    )
+
+    downgrade_fk_from_version_to_component(
+        table_name="port_definitions",
+        old_col="component_version_id",
+        new_col="component_id",
+        fk_name_old="fk_port_definitions_component_version",
+        fk_name_new="fk_port_definitions_component",
     )
 
     # Restore component_global_parameters unique indexes keyed by component_id

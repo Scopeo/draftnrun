@@ -25,12 +25,14 @@ def seed_port_definitions(session: Session):
         if not issubclass(agent_class, Agent):
             continue
 
-        component = session.query(db.Component).filter_by(name=component_name).first()
-        if not component:
+        component_version = (
+            session.query(db.ComponentVersion).join(db.Component).filter_by(name=component_name).first()
+        )
+        if not component_version:
             LOGGER.warning(f"Component '{component_name}' not found in the database for port seeding. Skipping.")
             continue
 
-        LOGGER.info(f"Processing component for ports: {component.name}")
+        LOGGER.info(f"Processing component for ports: {component_version.component.name}")
 
         try:
             inputs_schema = agent_class.get_inputs_schema()
@@ -53,7 +55,7 @@ def seed_port_definitions(session: Session):
         for field_name, field_info in inputs_schema.model_fields.items():
             port = (
                 session.query(db.PortDefinition)
-                .filter_by(component_id=component.id, name=field_name, port_type=db.PortType.INPUT)
+                .filter_by(component_version_id=component_version.id, name=field_name, port_type=db.PortType.INPUT)
                 .first()
             )
             is_canonical = canonical_ports.get("input") == field_name
@@ -63,7 +65,7 @@ def seed_port_definitions(session: Session):
                 LOGGER.info(f"  - Updating INPUT port: {field_name}")
             else:
                 port = db.PortDefinition(
-                    component_id=component.id,
+                    component_version_id=component_version.id,
                     name=field_name,
                     port_type=db.PortType.INPUT,
                     is_canonical=is_canonical,
@@ -76,7 +78,7 @@ def seed_port_definitions(session: Session):
         for field_name, field_info in outputs_schema.model_fields.items():
             port = (
                 session.query(db.PortDefinition)
-                .filter_by(component_id=component.id, name=field_name, port_type=db.PortType.OUTPUT)
+                .filter_by(component_version_id=component_version.id, name=field_name, port_type=db.PortType.OUTPUT)
                 .first()
             )
             is_canonical = canonical_ports.get("output") == field_name
@@ -86,7 +88,7 @@ def seed_port_definitions(session: Session):
                 LOGGER.info(f"  - Updating OUTPUT port: {field_name}")
             else:
                 port = db.PortDefinition(
-                    component_id=component.id,
+                    component_version_id=component_version.id,
                     name=field_name,
                     port_type=db.PortType.OUTPUT,
                     is_canonical=is_canonical,
