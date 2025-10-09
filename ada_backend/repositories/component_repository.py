@@ -48,7 +48,7 @@ class ComponentWithVersionDTO:
     component_id: UUID
     name: str
     description: Optional[str]
-    version_id: UUID
+    component_version_id: UUID
     version_tag: str
     release_stage: ReleaseStage
     is_agent: bool
@@ -521,7 +521,7 @@ def get_current_component_versions(
             component_id=comp.id,
             name=comp.name,
             description=ver.description,
-            version_id=ver.id,
+            component_version_id=ver.id,
             version_tag=ver.version_tag,
             release_stage=ver.release_stage,
             is_agent=comp.is_agent,
@@ -595,7 +595,7 @@ def get_all_components_with_parameters(
         try:
             parameters = get_component_parameter_definition_by_component_version(
                 session,
-                component_with_version.version_id,
+                component_with_version.component_version_id,
             )
 
             # Hide parameters enforced globally for this component from the UI
@@ -604,7 +604,7 @@ def get_all_components_with_parameters(
 
             subcomponent_params = get_subcomponent_param_def_by_component_version(
                 session,
-                component_with_version.version_id,
+                component_with_version.component_version_id,
             )
 
             parameters_to_fill = []
@@ -638,7 +638,7 @@ def get_all_components_with_parameters(
                     )
 
             default_tool_description_db = get_tool_description_component(
-                session=session, component_version_id=component_with_version.version_id
+                session=session, component_version_id=component_with_version.component_version_id
             )
             tool_description = (
                 ToolDescriptionSchema(
@@ -658,7 +658,7 @@ def get_all_components_with_parameters(
                 ComponentWithParametersDTO(
                     id=component_with_version.component_id,
                     name=component_with_version.name,
-                    version_id=component_with_version.version_id,
+                    component_version_id=component_with_version.component_version_id,
                     version_tag=component_with_version.version_tag,
                     description=component_with_version.description,
                     is_agent=component_with_version.is_agent,
@@ -680,7 +680,7 @@ def get_all_components_with_parameters(
                     icon=component.icon,
                     subcomponents_info=[
                         SubComponentParamSchema(
-                            version_id=param_child_def.child_component_version_id,
+                            component_version_id=param_child_def.child_component_version_id,
                             parameter_name=subcomponent_param.name,
                             is_optional=subcomponent_param.nullable,
                         )

@@ -17,13 +17,13 @@ class ComponentSchema(BaseModel):
 class SubComponentParamSchema(BaseModel):
     """Give information of a subcomponent"""
 
-    version_id: UUID
+    component_version_id: UUID
     parameter_name: str
     is_optional: bool
 
 
 class ComponentUseInfoSchema(BaseModel):
-    version_id: UUID
+    component_version_id: UUID
     version_tag: str
     is_agent: bool
     is_protected: bool = False

@@ -47,8 +47,8 @@ def create_or_update_component_instance(
 
     # Create/update instance (will create new if id is None, or upsert if id exists)
     component_version_id = (
-        instance_data.version_id
-        if instance_data.version_id
+        instance_data.component_version_id
+        if instance_data.component_version_id
         else get_current_component_version_id(session, instance_data.component_id, release_stage=release_stage)
     )
 
