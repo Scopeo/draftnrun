@@ -211,11 +211,12 @@ async def get_project_charts(
     project_id: UUID,
     duration: int,
     user: Annotated[SupabaseUser, Depends(get_user_from_supabase_token)],
+    call_type: CallType | None = None,
 ):
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
     try:
-        response = await get_charts_by_project(project_id, duration)
+        response = await get_charts_by_project(project_id, duration, call_type)
         return response
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
@@ -233,11 +234,12 @@ async def get_project_monitoring_kpi(
     project_id: UUID,
     duration: int,
     user: Annotated[SupabaseUser, Depends(get_user_from_supabase_token)],
+    call_type: CallType | None = None,
 ):
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
     try:
-        response = get_monitoring_kpis_by_project(user.id, project_id, duration)
+        response = get_monitoring_kpis_by_project(user.id, project_id, duration, call_type)
         return response
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e

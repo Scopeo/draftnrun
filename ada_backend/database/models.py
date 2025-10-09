@@ -90,6 +90,7 @@ class EnvType(StrEnum):
 class CallType(StrEnum):
     API = "api"
     SANDBOX = "sandbox"
+    QA = "qa"
 
 
 class UIComponent(StrEnum):

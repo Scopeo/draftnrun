@@ -161,11 +161,20 @@ def get_root_traces_by_project(
     track_project_observability_loaded(user_id, project_id)
     LOGGER.info(f"Querying root spans for project {project_id} with duration {duration} days")
 
+    # Debug: Log call_type distribution before filtering
+    if not df_span.empty and "call_type" in df_span.columns:
+        call_type_counts = df_span["call_type"].value_counts(dropna=False)
+        LOGGER.info(f"Call type distribution before filter: {call_type_counts.to_dict()}")
+
     if environment is not None:
         df_span = df_span[df_span["environment"] == environment.value]
 
     if call_type is not None:
+        LOGGER.info(f"Filtering by call_type: {call_type.value}")
+        before_filter_count = len(df_span)
         df_span = df_span[df_span["call_type"] == call_type.value]
+        after_filter_count = len(df_span)
+        LOGGER.info(f"Rows before filter: {before_filter_count}, after filter: {after_filter_count}")
 
     if tag_version is not None:
         df_span = df_span[df_span["tag_version"] == tag_version]

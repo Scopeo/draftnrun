@@ -4,6 +4,7 @@ from uuid import UUID
 
 import pandas as pd
 
+from ada_backend.database.models import CallType
 from ada_backend.schemas.monitor_schema import KPI, KPISResponse, TraceKPIS
 from engine.trace.sql_exporter import get_session_trace
 from ada_backend.segment_analytics import track_project_monitoring_loaded
@@ -12,13 +13,18 @@ from ada_backend.segment_analytics import track_project_monitoring_loaded
 LOGGER = logging.getLogger(__name__)
 
 
-def get_trace_metrics(project_id: UUID, duration_days: int) -> TraceKPIS:
+def get_trace_metrics(project_id: UUID, duration_days: int, call_type: CallType | None = None) -> TraceKPIS:
     """Get trace metrics with comparison between current and previous periods using SQL aggregation."""
     now = datetime.now()
     current_start = now - timedelta(days=duration_days)
     previous_start = now - timedelta(days=2 * duration_days)
 
-    query = """
+    # Build the call_type filter clause
+    call_type_filter = ""
+    if call_type is not None:
+        call_type_filter = "AND call_type = %(call_type)s"
+
+    query = f"""
     SELECT
         CASE
             WHEN start_time >= %(current_start)s THEN 'current'
@@ -31,15 +37,24 @@ def get_trace_metrics(project_id: UUID, duration_days: int) -> TraceKPIS:
     WHERE start_time >= %(previous_start)s
     AND parent_id IS NULL
     AND project_id = %(project_id)s
+    {call_type_filter}
     GROUP BY period
     """
 
     session = get_session_trace()
     try:
+        params = {
+            "current_start": current_start,
+            "previous_start": previous_start,
+            "project_id": str(project_id),
+        }
+        if call_type is not None:
+            params["call_type"] = call_type.value
+
         df = pd.read_sql_query(
             query,
             session.bind,
-            params={"current_start": current_start, "previous_start": previous_start, "project_id": str(project_id)},
+            params=params,
         )
     finally:
         session.close()
@@ -92,8 +107,10 @@ def get_trace_metrics(project_id: UUID, duration_days: int) -> TraceKPIS:
     )
 
 
-def get_monitoring_kpis_by_project(user_id: UUID, project_id: UUID, duration_days: int) -> KPISResponse:
-    trace_kpis = get_trace_metrics(project_id, duration_days)
+def get_monitoring_kpis_by_project(
+    user_id: UUID, project_id: UUID, duration_days: int, call_type: CallType | None = None
+) -> KPISResponse:
+    trace_kpis = get_trace_metrics(project_id, duration_days, call_type)
     LOGGER.info(f"Trace metrics for project {project_id} and duration {duration_days} days retrieved successfully.")
     track_project_monitoring_loaded(user_id, project_id)
     return KPISResponse(
