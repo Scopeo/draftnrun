@@ -9,8 +9,10 @@ from ada_backend.repositories.graph_runner_repository import (
     get_component_nodes,
     graph_runner_exists,
 )
+from ada_backend.repositories.port_mapping_repository import list_port_mappings_for_graph
 from ada_backend.schemas.pipeline.graph_schema import GraphGetResponse, EdgeSchema
 from ada_backend.services.errors import GraphNotFound
+from ada_backend.schemas.pipeline.port_mapping_schema import PortMappingSchema
 from ada_backend.services.pipeline.get_pipeline_service import get_component_instance, get_relationships
 
 LOGGER = logging.getLogger(__name__)
@@ -38,6 +40,7 @@ def get_graph_service(
     component_instances_with_definitions = []
     relationships = []
     edges = []
+    port_mappings = []
 
     for component_node in component_nodes:
         component_instances_with_definitions.append(
@@ -67,9 +70,23 @@ def get_graph_service(
         )
         LOGGER.info(f"Edge from {edge.source_node_id} to {edge.target_node_id}")
 
+    # Include port mappings at top-level so GET->PUT roundtrips
+    pms = list_port_mappings_for_graph(session, graph_runner_id)
+    for pm in pms:
+        port_mappings.append(
+            PortMappingSchema(
+                source_instance_id=pm.source_instance_id,
+                source_port_name=pm.source_port_definition.name,
+                target_instance_id=pm.target_instance_id,
+                target_port_name=pm.target_port_definition.name,
+                dispatch_strategy=pm.dispatch_strategy,
+            )
+        )
+
     return GraphGetResponse(
         component_instances=component_instances_with_definitions,
         relationships=relationships,
         edges=edges,
         tag_version=project_env_binding.graph_runner.tag_version,
+        port_mappings=port_mappings,
     )

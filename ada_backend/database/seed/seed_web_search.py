@@ -25,7 +25,7 @@ def seed_web_search_components(session: Session):
         id=COMPONENT_UUIDS["web_search_openai_agent"],
         name="Internet Search with OpenAI",
         description="Performs internet search using OpenAI",
-        is_agent=False,
+        is_agent=True,
         function_callable=True,
         release_stage=db.ReleaseStage.PUBLIC,
         default_tool_description_id=TOOL_DESCRIPTION_UUIDS["default_web_search_openai_tool_description"],

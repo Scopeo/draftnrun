@@ -4,7 +4,6 @@ import re
 import sqlalchemy as sa
 
 from engine.agent.types import ToolDescription
-from settings import settings
 
 LOGGER = logging.getLogger(__name__)
 
@@ -40,32 +39,60 @@ def models_are_equal(current_state, new_state):
     return True
 
 
-def create_enum_if_not_exists(connection, enum_values, enum_name):
+def create_enum_if_not_exists(
+    connection,
+    enum_values,
+    enum_name,
+    schema="public",
+):
     """
-    Helper function to create a PostgreSQL enum type if it doesn't exist.
-    This function can be used in migration scripts.
-
-    Args:
-        connection: SQLAlchemy connection
-        enum_values: List of string values for the enum
-        enum_name: Name of the enum type in PostgreSQL (should be lowercase)
+    Create a PostgreSQL enum type if it doesn't exist in the given schema.
     """
-    # Only create enums for PostgreSQL
-    if settings.ADA_DB_DRIVER != "postgresql":
-        return
-
-    values_sql = ", ".join(f"'{value}'" for value in enum_values)
+    # escape enum values
+    escaped_values = [v.replace("'", "''") for v in enum_values]
+    values_sql = ", ".join(f"'{v}'" for v in escaped_values)
 
     sql = f"""
     DO $$
     BEGIN
-        IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = '{enum_name}') THEN
-            CREATE TYPE {enum_name} AS ENUM ({values_sql});
+        IF NOT EXISTS (
+            SELECT 1
+            FROM pg_type t
+            JOIN pg_namespace n ON n.oid = t.typnamespace
+            WHERE t.typname = '{enum_name}'
+              AND n.nspname = '{schema}'
+        ) THEN
+            CREATE TYPE {schema}.{enum_name} AS ENUM ({values_sql});
         END IF;
     END
     $$;
     """
+    connection.execute(sa.text(sql))
 
+
+def drop_enum_if_exists(
+    connection,
+    enum_name,
+    schema="public",
+):
+    """
+    Drop a PostgreSQL enum type if it exists in the given schema.
+    """
+    sql = f"""
+    DO $$
+    BEGIN
+        IF EXISTS (
+            SELECT 1
+            FROM pg_type t
+            JOIN pg_namespace n ON n.oid = t.typnamespace
+            WHERE t.typname = '{enum_name}'
+              AND n.nspname = '{schema}'
+        ) THEN
+            DROP TYPE {schema}.{enum_name} CASCADE;
+        END IF;
+    END
+    $$;
+    """
     connection.execute(sa.text(sql))
 
 

@@ -2,12 +2,13 @@ import logging
 import json
 import asyncio
 from datetime import datetime
-from typing import Optional
+from typing import Optional, Type, Any
 
 from opentelemetry import trace as trace_api
 from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttributes
 from openai.types.chat import ChatCompletionMessageToolCall
 from e2b_code_interpreter import AsyncSandbox
+from pydantic import BaseModel, Field
 
 from engine.agent.agent import Agent
 from engine.agent.types import (
@@ -36,7 +37,34 @@ DEFAULT_FALLBACK_REACT_ANSWER = "I couldn't find a solution to your problem."
 CODE_RUNNER_TOOLS = [PYTHON_CODE_RUNNER_TOOL_DESCRIPTION.name, TERMINAL_COMMAND_RUNNER_TOOL_DESCRIPTION.name]
 
 
+class ReActAgentInputs(BaseModel):
+    messages: list[ChatMessage] = Field(description="The history of messages in the conversation.")
+    # Allow any other fields to be passed through
+    model_config = {"extra": "allow"}
+
+
+class ReActAgentOutputs(BaseModel):
+    output: str = Field(description="The string content of the final message from the agent.")
+    full_message: ChatMessage = Field(description="The full final message object from the agent.")
+    is_final: bool = Field(default=False, description="Indicates if this is the final output of the agent.")
+    artifacts: dict[str, Any] = Field(default_factory=dict, description="Artifacts produced by the agent.")
+
+
 class ReActAgent(Agent):
+    migrated = True
+
+    @classmethod
+    def get_canonical_ports(cls) -> dict[str, Optional[str]]:
+        return {"input": "messages", "output": "output"}
+
+    @classmethod
+    def get_inputs_schema(cls) -> Type[BaseModel]:
+        return ReActAgentInputs
+
+    @classmethod
+    def get_outputs_schema(cls) -> Type[BaseModel]:
+        return ReActAgentOutputs
+
     def __init__(
         self,
         completion_service: CompletionService,
@@ -97,6 +125,7 @@ class ReActAgent(Agent):
             finally:
                 self._shared_sandbox = None
 
+    # --- ORIGINAL CORE LOGIC (unchanged) ---
     async def _run_tool_call(
         self, *original_agent_inputs: AgentPayload, tool_call: ChatCompletionMessageToolCall
     ) -> tuple[str, AgentPayload]:
@@ -154,11 +183,14 @@ class ReActAgent(Agent):
                 tool_outputs[tool_call_id] = tool_output
         return tool_outputs, tools_to_process
 
-    async def _run_without_io_trace(self, *inputs: AgentPayload | dict, **kwargs) -> AgentPayload:
-        """Runs ReActAgent. Only one input is allowed."""
+    async def _run_core(self, *inputs: AgentPayload | dict, **kwargs) -> AgentPayload:
+        # Exact previous logic
         original_agent_input = inputs[0]
         if not isinstance(original_agent_input, AgentPayload):
-
+            # Accept BaseModel-like inputs (e.g., NodeData) defensively
+            if hasattr(original_agent_input, "model_dump") and callable(original_agent_input.model_dump):
+                original_agent_input = original_agent_input.model_dump(exclude_none=True)
+            # Ensure messages field populated from configured input key
             original_agent_input["messages"] = original_agent_input[self.input_data_field_for_messages_history]
             original_agent_input = AgentPayload(**original_agent_input)
         system_message = next((msg for msg in original_agent_input.messages if msg.role == "system"), None)
@@ -272,7 +304,7 @@ class ReActAgent(Agent):
                 message=(f"Number of successful tool outputs: {successful_output_count}. " f"Running the agent again.")
             )
             self._current_iteration += 1
-            return await self._run_without_io_trace(agent_input)
+            return await self._run_core(agent_input)
         else:
             LOGGER.error(
                 f"Reached the maximum number of iterations ({self._max_iterations}) and still asks for tools."
@@ -284,6 +316,23 @@ class ReActAgent(Agent):
                 messages=[ChatMessage(role="assistant", content=DEFAULT_FALLBACK_REACT_ANSWER)],
                 is_final=False,
             )
+
+    # --- Thin adapter to typed I/O ---
+    async def _run_without_io_trace(self, inputs: ReActAgentInputs, ctx: dict) -> ReActAgentOutputs:
+        # Map typed inputs to the original call style
+        payload_dict = inputs.model_dump(exclude_none=True)
+        agent_payload = AgentPayload(**payload_dict) if "messages" in payload_dict else payload_dict
+        core_result = await self._run_core(agent_payload)
+        # Map original output back to typed outputs
+        final_message = (
+            core_result.messages[-1] if core_result.messages else ChatMessage(role="assistant", content=None)
+        )
+        return ReActAgentOutputs(
+            output=final_message.content or "",
+            full_message=final_message,
+            is_final=core_result.is_final,
+            artifacts=core_result.artifacts or {},
+        )
 
 
 def get_dummy_ai_agent_description() -> ToolDescription:

@@ -3,7 +3,8 @@ from typing import Optional
 from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttributes
 from opentelemetry.trace import get_current_span
 
-from engine.agent.agent import Agent, AgentPayload, ComponentAttributes, ToolDescription
+from engine.agent.agent import Agent
+from engine.agent.types import AgentPayload, ComponentAttributes, ToolDescription
 from engine.agent.types import ChatMessage, SourceChunk, SourcedResponse
 from engine.trace.trace_manager import TraceManager
 
