@@ -31,7 +31,7 @@ def seed_project_reference_components(session: Session):
     project_reference_version = db.ComponentVersion(
         id=COMPONENT_UUIDS["project_reference"],
         component_id=COMPONENT_UUIDS["project_reference"],
-        version_tag="1.0.0",
+        version_tag="0.0.1",
         release_stage=db.ReleaseStage.INTERNAL,
         description="Execute another project's graph workflow as a component.",
     )

@@ -39,7 +39,7 @@ def seed_web_search_components(session: Session):
     web_search_openai_agent_version = db.ComponentVersion(
         id=COMPONENT_UUIDS["web_search_openai_agent"],
         component_id=COMPONENT_UUIDS["web_search_openai_agent"],
-        version_tag="1.0.0",
+        version_tag="0.0.1",
         release_stage=db.ReleaseStage.PUBLIC,
         description="Agent that uses OpenAI to perform internet searches and answer questions based on the results.",
         default_tool_description_id=TOOL_DESCRIPTION_UUIDS["default_web_search_openai_tool_description"],
