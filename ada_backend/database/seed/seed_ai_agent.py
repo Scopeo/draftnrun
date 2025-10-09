@@ -62,7 +62,7 @@ def seed_ai_agent_components(session: Session):
     base_ai_agent_version = db.ComponentVersion(
         id=COMPONENT_UUIDS["base_ai_agent"],
         component_id=COMPONENT_UUIDS["base_ai_agent"],
-        version_tag="1.0.0",
+        version_tag="0.0.1",
         release_stage=db.ReleaseStage.PUBLIC,
         default_tool_description_id=TOOL_DESCRIPTION_UUIDS["default_ai_agent_description"],
         description=(

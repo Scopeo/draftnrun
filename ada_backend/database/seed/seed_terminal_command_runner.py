@@ -32,7 +32,7 @@ def seed_terminal_command_runner_components(session: Session):
     terminal_command_runner_version = db.ComponentVersion(
         id=COMPONENT_UUIDS["terminal_command_runner"],
         component_id=COMPONENT_UUIDS["terminal_command_runner"],
-        version_tag="1.0.0",
+        version_tag="0.0.1",
         release_stage=db.ReleaseStage.PUBLIC,
         description="Execute terminal commands in a secure sandbox environment.",
         default_tool_description_id=TOOL_DESCRIPTION_UUIDS["terminal_command_runner_tool_description"],

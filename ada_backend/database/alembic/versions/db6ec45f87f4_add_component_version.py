@@ -193,7 +193,7 @@ def upgrade() -> None:
         SELECT
             c.id,
             c.id,
-            '1.0.0',
+            '0.0.1',
             NULL,
             c.description,
             c.integration_id,

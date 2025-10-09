@@ -30,7 +30,7 @@ def seed_pdf_generation_components(session: Session):
     pdf_generation_component_version = db.ComponentVersion(
         id=COMPONENT_UUIDS["pdf_generation"],
         component_id=COMPONENT_UUIDS["pdf_generation"],
-        version_tag="1.0.0",
+        version_tag="0.0.1",
         release_stage=db.ReleaseStage.INTERNAL,
         description="Convert markdown text to PDF files.",
         default_tool_description_id=TOOL_DESCRIPTION_UUIDS["default_pdf_generation_tool_description"],
