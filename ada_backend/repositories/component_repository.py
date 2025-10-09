@@ -4,7 +4,6 @@ import logging
 from dataclasses import dataclass
 
 from sqlalchemy.orm import Session
-from sqlalchemy import select, case
 
 from ada_backend.database import models as db
 from ada_backend.database.models import ParameterType, ReleaseStage, UIComponent, UIComponentProperties
