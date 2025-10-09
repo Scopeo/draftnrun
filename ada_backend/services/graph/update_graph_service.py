@@ -38,12 +38,12 @@ from ada_backend.segment_analytics import track_project_saved
 LOGGER = logging.getLogger(__name__)
 
 
-def resolve_component_id_from_instance_id(session: Session, instance_id: UUID) -> UUID:
-    """Resolve component ID from a component instance ID"""
+def resolve_component_version_id_from_instance_id(session: Session, instance_id: UUID) -> UUID:
+    """Resolve component version ID from a component instance ID"""
     instance = get_component_instance_by_id(session, instance_id)
     if not instance:
         raise ValueError(f"Component instance {instance_id} not found")
-    return instance.component_id
+    return instance.component_version_id
 
 
 def validate_port_definition_types(session: Session, source_port_def_id: UUID, target_port_def_id: UUID) -> None:
@@ -224,22 +224,28 @@ def _ensure_port_mappings_for_edges(
         new_mappings: list[db.PortMapping] = []
         for pm_schema in graph_project.port_mappings:
             # Get component IDs for the instances
-            source_component_id = resolve_component_id_from_instance_id(session, pm_schema.source_instance_id)
-            target_component_id = resolve_component_id_from_instance_id(session, pm_schema.target_instance_id)
+            source_component_version_id = resolve_component_version_id_from_instance_id(
+                session, pm_schema.source_instance_id
+            )
+            target_component_version_id = resolve_component_version_id_from_instance_id(
+                session, pm_schema.target_instance_id
+            )
 
             # Resolve port names to port definition IDs
             source_port_def_id = get_output_port_definition_id(
-                session, source_component_id, pm_schema.source_port_name
+                session, source_component_version_id, pm_schema.source_port_name
             )
             if not source_port_def_id:
                 raise ValueError(
-                    f"Output port '{pm_schema.source_port_name}' not found for component {source_component_id}"
+                    f"Output port '{pm_schema.source_port_name}' not found for component {source_component_version_id}"
                 )
 
-            target_port_def_id = get_input_port_definition_id(session, target_component_id, pm_schema.target_port_name)
+            target_port_def_id = get_input_port_definition_id(
+                session, target_component_version_id, pm_schema.target_port_name
+            )
             if not target_port_def_id:
                 raise ValueError(
-                    f"Input port '{pm_schema.target_port_name}' not found for component {target_component_id}"
+                    f"Input port '{pm_schema.target_port_name}' not found for component {target_component_version_id}"
                 )
 
             validate_port_definition_types(session, source_port_def_id, target_port_def_id)
@@ -294,23 +300,23 @@ def _ensure_port_mappings_for_edges(
                 "Unable to infer component ids for one or more unmapped edges; please provide explicit port_mappings."
             )
 
-        source_component_id = instance_to_component_version[source_instance_id]
-        target_component_id = instance_to_component_version[target_instance_id]
+        source_component_version_id = instance_to_component_version[source_instance_id]
+        target_component_version_id = instance_to_component_version[target_instance_id]
 
-        source_ports = canonical_ports_by_component.get(source_component_id, {})
-        target_ports = canonical_ports_by_component.get(target_component_id, {})
+        source_ports = canonical_ports_by_component.get(source_component_version_id, {})
+        target_ports = canonical_ports_by_component.get(target_component_version_id, {})
 
         source_port_name = source_ports.get("output") or "output"
         target_port_name = target_ports.get("input") or "input"
 
         # Resolve port names to port definition IDs
-        source_port_def_id = get_output_port_definition_id(session, source_component_id, source_port_name)
+        source_port_def_id = get_output_port_definition_id(session, source_component_version_id, source_port_name)
         if not source_port_def_id:
-            raise ValueError(f"Output port '{source_port_name}' not found for component {source_component_id}")
+            raise ValueError(f"Output port '{source_port_name}' not found for component {source_component_version_id}")
 
-        target_port_def_id = get_input_port_definition_id(session, target_component_id, target_port_name)
+        target_port_def_id = get_input_port_definition_id(session, target_component_version_id, target_port_name)
         if not target_port_def_id:
-            raise ValueError(f"Input port '{target_port_name}' not found for component {target_component_id}")
+            raise ValueError(f"Input port '{target_port_name}' not found for component {target_component_version_id}")
 
         # Validate port definition types
         validate_port_definition_types(session, source_port_def_id, target_port_def_id)
