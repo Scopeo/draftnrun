@@ -64,8 +64,6 @@ def get_project_with_details(
         GraphRunnerEnvDTO(
             graph_runner_id=graph_runner.id,
             env=env_binding.environment if env_binding else None,
-            tag_version=graph_runner.tag_version,
-            version_name=graph_runner.version_name,
             tag_name=graph_runner.tag_name,
             change_log=graph_runner.change_log,
         )

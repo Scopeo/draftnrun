@@ -16,7 +16,6 @@ LOGGER = logging.getLogger(__name__)
 router = APIRouter()
 
 
-# TODO: filter trace by graph_runner_id
 @router.get("/projects/{project_id}/traces", response_model=List[RootTraceSpan], tags=["Metrics"])
 async def get_root_traces(
     project_id: UUID,
@@ -24,10 +23,7 @@ async def get_root_traces(
     user: Annotated[SupabaseUser, Depends(get_user_from_supabase_token)],
     environment: Optional[EnvType] = None,
     call_type: Optional[CallType] = None,
-    tag_version: Optional[str] = None,
-    version_name: Optional[str] = None,
-    tag_name: Optional[str] = None,
-    change_log: Optional[str] = None,
+    graph_runner_id: Optional[UUID] = None,
 ) -> List[RootTraceSpan]:
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
@@ -38,10 +34,7 @@ async def get_root_traces(
             duration,
             environment,
             call_type,
-            tag_version,
-            version_name,
-            tag_name,
-            change_log,
+            graph_runner_id,
         )
         return response
     except ValueError as e:
