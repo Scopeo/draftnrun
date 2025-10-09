@@ -648,7 +648,7 @@ def get_all_components_with_parameters(
             # Create ComponentWithParametersDTO
             result.append(
                 ComponentWithParametersDTO(
-                    id=component_with_version.id,
+                    id=component_with_version.component_id,
                     name=component_with_version.name,
                     version_id=component_with_version.version_id,
                     version_tag=component_with_version.version_tag,
@@ -678,7 +678,7 @@ def get_all_components_with_parameters(
                         )
                         for subcomponent_param, param_child_def in subcomponent_params
                     ],
-                    categories=fetch_associated_category_names(session, component_with_version.id),
+                    categories=fetch_associated_category_names(session, component_with_version.component_id),
                 )
             )
         except Exception as e:
