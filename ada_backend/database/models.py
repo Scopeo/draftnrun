@@ -522,7 +522,7 @@ class ComponentParameterDefinition(Base):
     parameter_group_id = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("parameter_groups.id", name="fk_component_parameter_definitions_parameter_group_id"),
-        nullable=True
+        nullable=True,
     )
     group_order = mapped_column(Integer, nullable=True)
 
@@ -648,16 +648,14 @@ class ComponentParameterGroup(Base):
     parameter_group_id = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("parameter_groups.id", ondelete="CASCADE", name="fk_component_parameter_groups_parameter_group_id"),
-        nullable=False
+        nullable=False,
     )
     order_index = mapped_column(Integer, nullable=False, default=0)
 
     component = relationship("Component", back_populates="parameter_groups")
     parameter_group = relationship("ParameterGroup")
 
-    __table_args__ = (
-        sa.UniqueConstraint("component_id", "parameter_group_id", name="uq_component_parameter_group"),
-    )
+    __table_args__ = (sa.UniqueConstraint("component_id", "parameter_group_id", name="uq_component_parameter_group"),)
 
 
 class GraphRunnerNode(Base):

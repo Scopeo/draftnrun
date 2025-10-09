@@ -273,10 +273,7 @@ def get_component_parameters_with_groups(
     """
     return (
         session.query(db.ComponentParameterDefinition, db.ParameterGroup)
-        .outerjoin(
-            db.ParameterGroup,
-            db.ComponentParameterDefinition.parameter_group_id == db.ParameterGroup.id
-        )
+        .outerjoin(db.ParameterGroup, db.ComponentParameterDefinition.parameter_group_id == db.ParameterGroup.id)
         .filter(db.ComponentParameterDefinition.component_id == component_id)
         .all()
     )
@@ -644,12 +641,12 @@ def get_all_components_with_parameters(
                     # Skip globally enforced parameters (they are not instance-editable)
                     if param.id in global_param_def_ids:
                         continue
-                    
+
                     # Get parameter group name if parameter belongs to a group
                     parameter_group_name = None
                     if param.parameter_group:
                         parameter_group_name = param.parameter_group.name
-                    
+
                     parameters_to_fill.append(
                         ComponentParamDefDTO(
                             id=param.id,

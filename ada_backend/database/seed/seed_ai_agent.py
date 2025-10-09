@@ -46,7 +46,7 @@ AI_MODEL_PARAMETER_IDS = {
 
 # Parameter Group UUIDs
 PARAMETER_GROUP_UUIDS = {
-    "advanced_settings": UUID("b2c3d4e5-f6a7-8901-bcde-f12345678901"),
+    "agent_behavior_settings": UUID("b2c3d4e5-f6a7-8901-bcde-f12345678901"),
     "history_management": UUID("c3d4e5f6-a7b8-9012-cdef-123456789012"),
 }
 
@@ -289,19 +289,13 @@ def seed_ai_agent_components(session: Session):
 
 def seed_ai_agent_parameter_groups(session: Session):
     """Seed parameter groups for AI Agent component."""
-    
+
     # Create parameter groups
     parameter_groups = [
-        db.ParameterGroup(
-            id=PARAMETER_GROUP_UUIDS["advanced_settings"],
-            name="Advanced behavior settings"
-        ),
-        db.ParameterGroup(
-            id=PARAMETER_GROUP_UUIDS["history_management"],
-            name="Management of conversation history"
-        )
+        db.ParameterGroup(id=PARAMETER_GROUP_UUIDS["agent_behavior_settings"], name="Agent behavior settings"),
+        db.ParameterGroup(id=PARAMETER_GROUP_UUIDS["history_management"], name="Management of conversation history"),
     ]
-    
+
     # Upsert parameter groups
     for group in parameter_groups:
         existing_group = session.query(db.ParameterGroup).filter_by(id=group.id).first()
@@ -309,76 +303,76 @@ def seed_ai_agent_parameter_groups(session: Session):
             existing_group.name = group.name
         else:
             session.add(group)
-    
+
     session.flush()  # Ensure groups are saved before creating relationships
-    
+
     # Create component-parameter group relationships
     component_parameter_groups = [
         db.ComponentParameterGroup(
-            component_id=COMPONENT_UUIDS["base_ai_agent"], 
-            parameter_group_id=PARAMETER_GROUP_UUIDS["advanced_settings"],
-            order_index=1
+            component_id=COMPONENT_UUIDS["base_ai_agent"],
+            parameter_group_id=PARAMETER_GROUP_UUIDS["agent_behavior_settings"],
+            order_index=1,
         ),
         db.ComponentParameterGroup(
             component_id=COMPONENT_UUIDS["base_ai_agent"],
-            parameter_group_id=PARAMETER_GROUP_UUIDS["history_management"], 
-            order_index=2
-        )
+            parameter_group_id=PARAMETER_GROUP_UUIDS["history_management"],
+            order_index=2,
+        ),
     ]
-    
+
     # Upsert component parameter groups
     for cpg in component_parameter_groups:
-        existing_cpg = session.query(db.ComponentParameterGroup).filter_by(
-            component_id=cpg.component_id,
-            parameter_group_id=cpg.parameter_group_id
-        ).first()
+        existing_cpg = (
+            session.query(db.ComponentParameterGroup)
+            .filter_by(component_id=cpg.component_id, parameter_group_id=cpg.parameter_group_id)
+            .first()
+        )
         if existing_cpg:
             existing_cpg.order_index = cpg.order_index
         else:
             session.add(cpg)
-    
+
     session.flush()  # Ensure relationships are saved before updating parameters
-    
+
     # Update existing parameter definitions to link them to groups
     parameter_group_assignments = {
         # Advanced Settings Group
         AI_MODEL_PARAMETER_IDS["allow_tool_shortcuts"]: {
-            "parameter_group_id": PARAMETER_GROUP_UUIDS["advanced_settings"],
-            "group_order": 1
+            "parameter_group_id": PARAMETER_GROUP_UUIDS["agent_behavior_settings"],
+            "group_order": 1,
         },
         AI_MODEL_PARAMETER_IDS["max_iterations"]: {
-            "parameter_group_id": PARAMETER_GROUP_UUIDS["advanced_settings"],
-            "group_order": 2
+            "parameter_group_id": PARAMETER_GROUP_UUIDS["agent_behavior_settings"],
+            "group_order": 2,
         },
         AI_MODEL_PARAMETER_IDS[TEMPERATURE_IN_DB]: {
-            "parameter_group_id": PARAMETER_GROUP_UUIDS["advanced_settings"],
-            "group_order": 3
+            "parameter_group_id": PARAMETER_GROUP_UUIDS["agent_behavior_settings"],
+            "group_order": 3,
         },
-        
         # History Management Group
         AI_MODEL_PARAMETER_IDS["input_data_field_for_messages_history"]: {
             "parameter_group_id": PARAMETER_GROUP_UUIDS["history_management"],
-            "group_order": 1
+            "group_order": 1,
         },
         AI_MODEL_PARAMETER_IDS["first_history_messages"]: {
             "parameter_group_id": PARAMETER_GROUP_UUIDS["history_management"],
-            "group_order": 2
+            "group_order": 2,
         },
         AI_MODEL_PARAMETER_IDS["last_history_messages"]: {
             "parameter_group_id": PARAMETER_GROUP_UUIDS["history_management"],
-            "group_order": 3
+            "group_order": 3,
         },
         AI_MODEL_PARAMETER_IDS["date_in_system_prompt"]: {
             "parameter_group_id": PARAMETER_GROUP_UUIDS["history_management"],
-            "group_order": 4
-        }
+            "group_order": 4,
+        },
     }
-    
+
     # Update parameter definitions with group assignments
     for param_id, group_info in parameter_group_assignments.items():
         param_def = session.query(db.ComponentParameterDefinition).filter_by(id=param_id).first()
         if param_def:
             param_def.parameter_group_id = group_info["parameter_group_id"]
             param_def.group_order = group_info["group_order"]
-    
+
     session.commit()
