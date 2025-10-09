@@ -3,6 +3,7 @@ from typing import Optional
 from sqlalchemy.orm import Session
 from uuid import UUID
 
+from ada_backend.database import models as db
 from ada_backend.repositories.tag_repository import get_latest_tag_version_for_project
 
 
@@ -24,3 +25,40 @@ def compute_next_tag_version(session: Session, project_id: UUID) -> str:
     """Return the next tag for the project by bumping the latest patch (defaults to 0.0.1)."""
     latest = get_latest_tag_version_for_project(session, project_id)
     return _bump_patch(latest)
+
+
+def compose_tag_name(tag_version: Optional[str], version_name: Optional[str]) -> Optional[str]:
+    """Compose the tag name from tag_version and version_name, or return None if incomplete."""
+    if tag_version and version_name:
+        return f"{tag_version}-{version_name}"
+    return None
+
+
+def update_graph_runner_tag_fields(
+    session: Session,
+    graph_runner_id: UUID,
+    *,
+    tag_version: Optional[str] = None,
+    version_name: Optional[str] = None,
+    change_log: Optional[str] = None,
+) -> None:
+    """Update GraphRunner tag-related fields in one place and keep tag_name consistent.
+
+    Any parameter left as None will keep its current value.
+    """
+    graph_runner = session.query(db.GraphRunner).filter(db.GraphRunner.id == graph_runner_id).first()
+    if not graph_runner:
+        return
+
+    if tag_version is not None:
+        graph_runner.tag_version = tag_version
+    if version_name is not None:
+        graph_runner.version_name = version_name
+    if change_log is not None:
+        graph_runner.change_log = change_log
+
+    # Keep tag_name in sync with current values
+    graph_runner.tag_name = compose_tag_name(graph_runner.tag_version, graph_runner.version_name)
+
+    session.add(graph_runner)
+    session.commit()
