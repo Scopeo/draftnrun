@@ -5,7 +5,6 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.orm import Session
 
-from ada_backend.database.models import ReleaseStage
 from ada_backend.repositories.project_repository import get_project
 from ada_backend.routers.auth_router import (
     UserRights,
