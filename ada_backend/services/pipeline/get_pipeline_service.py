@@ -67,7 +67,7 @@ def get_component_instance(
         ref=component_instance.ref,
         is_start_node=is_start_node,
         component_id=component.id,
-        version_id=component_instance.component_version_id,
+        component_version_id=component_instance.component_version_id,
         version_tag=component_version.version_tag,
         release_stage=component_version.release_stage,
         tool_description=tool_description,
@@ -81,7 +81,7 @@ def get_component_instance(
         icon=component.icon,
         subcomponents_info=[
             SubComponentParamSchema(
-                version_id=param_child_def.child_component_version_id,
+                component_version_id=param_child_def.child_component_version_id,
                 parameter_name=subcomponent_param.name,
                 is_optional=subcomponent_param.nullable,
             )

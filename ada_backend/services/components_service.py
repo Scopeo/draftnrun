@@ -31,7 +31,7 @@ def get_all_components_endpoint(
         allowed_stages = list(STAGE_HIERARCHY.keys())
     components = get_all_components_with_parameters(session, allowed_stages=allowed_stages)
 
-    component_version_ids = [component.version_id for component in components]
+    component_version_ids = [component.component_version_id for component in components]
     ports = get_port_definitions_for_component_version_ids(session, component_version_ids)
     comp_id_to_ports: dict[str, list[PortDefinitionSchema]] = {}
     for port in ports:
@@ -44,7 +44,7 @@ def get_all_components_endpoint(
             )
         )
     for component in components:
-        component.port_definitions = comp_id_to_ports.get(str(component.version_id), [])
+        component.port_definitions = comp_id_to_ports.get(str(component.component_version_id), [])
 
     return ComponentsResponse(components=components)
 

@@ -93,13 +93,13 @@ def downgrade_fk_from_version_to_component(
     with op.batch_alter_table(table_name) as batch:
         batch.add_column(sa.Column(new_col, postgresql.UUID(as_uuid=True), nullable=True))
 
-    # 2) Build a temporary map: version_id → component_id
+    # 2) Build a temporary map: component_version_id → component_id
     tmp = f"_cv_rev_map_{table_name}"
     op.execute(f"DROP TABLE IF EXISTS {tmp};")
     op.execute(
         f"""
         CREATE TEMP TABLE {tmp} AS
-        SELECT v.id AS version_id, v.component_id
+        SELECT v.id AS component_version_id, v.component_id
         FROM component_versions v;
         """
     )
@@ -110,7 +110,7 @@ def downgrade_fk_from_version_to_component(
         UPDATE {table_name} t
         SET {new_col} = m.component_id
         FROM {tmp} m
-        WHERE t.{old_col} = m.version_id
+        WHERE t.{old_col} = m.component_version_id
           AND t.{new_col} IS NULL;
         """
     )

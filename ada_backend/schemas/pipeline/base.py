@@ -25,8 +25,7 @@ class ComponentInstanceSchema(BaseModel):
     ref: Optional[str] = None
     is_start_node: bool = False
     component_id: UUID
-    version_id: Optional[UUID] = None
-    version_tag: Optional[str] = None
+    component_version_id: UUID
     parameters: list[PipelineParameterSchema]
     tool_description: Optional[ToolDescriptionSchema] = None
     integration: Optional[GraphIntegrationSchema] = None

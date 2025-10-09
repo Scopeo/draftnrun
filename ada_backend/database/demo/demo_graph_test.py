@@ -62,7 +62,7 @@ def build_graph_test_chatbot(
             id=COMPONENT_INSTANCES_IDS["llm_call_instance"],
             name="LLM Call",
             component_id=components["llm_call"],
-            version_id=components["llm_call"],
+            component_version_id=components["llm_call"],
             ref=f"{agent_name}_llm_call_instance",
             is_start_node=True,
             parameters=[
@@ -78,7 +78,7 @@ def build_graph_test_chatbot(
             id=COMPONENT_INSTANCES_IDS["rag_agent_instance"],
             name="RAG",
             component_id=components["rag_agent"],
-            version_id=components["rag_agent"],
+            component_version_id=components["rag_agent"],
             ref=f"{agent_name}_rag_agent_instance",
             parameters=[],
             tool_description=ToolDescriptionSchema(
@@ -91,7 +91,7 @@ def build_graph_test_chatbot(
         ComponentInstanceSchema(
             id=COMPONENT_INSTANCES_IDS["synthesizer_instance"],
             component_id=components["synthesizer"],
-            version_id=components["synthesizer"],
+            component_version_id=components["synthesizer"],
             name="Synthesizer",
             ref=f"{agent_name}_synthesizer_instance",
             parameters=[
@@ -102,7 +102,7 @@ def build_graph_test_chatbot(
         ComponentInstanceSchema(
             id=COMPONENT_INSTANCES_IDS["retriever_instance"],
             component_id=components["retriever"],
-            version_id=components["retriever"],
+            component_version_id=components["retriever"],
             name="Retriever",
             ref=f"{agent_name}_retriever_instance",
             parameters=[
@@ -116,7 +116,7 @@ def build_graph_test_chatbot(
             id=COMPONENT_INSTANCES_IDS["evaluation_instance"],
             name="Evaluation",
             component_id=components["llm_call"],
-            version_id=components["llm_call"],
+            component_version_id=components["llm_call"],
             ref=f"{agent_name}_evaluation_instance",
             parameters=[
                 PipelineParameterSchema(

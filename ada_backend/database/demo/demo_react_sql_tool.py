@@ -59,7 +59,7 @@ def build_react_sql_agent_chatbot(components: dict[str, UUID], graph_runner_id: 
             id=COMPONENT_INSTANCES_IDS["react_sql_agent"],
             name="ReAct SQL Agent",
             component_id=components["react_sql_agent"],
-            version_id=components["react_sql_agent"],
+            component_version_id=components["react_sql_agent"],
             is_start_node=True,
             parameters=[
                 PipelineParameterSchema(name=COMPLETION_MODEL_IN_DB, value="openai:gpt-4o-mini"),
@@ -77,7 +77,7 @@ def build_react_sql_agent_chatbot(components: dict[str, UUID], graph_runner_id: 
             id=COMPONENT_INSTANCES_IDS["snowflake_service"],
             name="Snowflake DB Service",
             component_id=components["snowflake_db_service"],
-            version_id=components["snowflake_db_service"],
+            component_version_id=components["snowflake_db_service"],
             parameters=[
                 PipelineParameterSchema(
                     name="database_name",
