@@ -89,4 +89,7 @@ def get_graph_service(
         edges=edges,
         tag_version=project_env_binding.graph_runner.tag_version,
         port_mappings=port_mappings,
+        version_name=project_env_binding.graph_runner.version_name,
+        tag_name=project_env_binding.graph_runner.tag_name,
+        change_log=project_env_binding.graph_runner.change_log,
     )
