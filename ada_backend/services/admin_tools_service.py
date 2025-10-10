@@ -1,6 +1,5 @@
 import json
 from typing import Optional
-import uuid
 
 from sqlalchemy.orm import Session
 

@@ -41,11 +41,11 @@ def downgrade() -> None:
             FROM tool_descriptions td
             JOIN duplicates d ON td.name = d.name AND td.created_at = d.earliest_created_at
         )
-        UPDATE components 
+        UPDATE components
         SET default_tool_description_id = k.keep_id
         FROM keep_ids k
         WHERE components.default_tool_description_id IN (
-            SELECT id FROM tool_descriptions td 
+            SELECT id FROM tool_descriptions td
             WHERE td.name = k.name AND td.id != k.keep_id
         )
     """
@@ -64,11 +64,11 @@ def downgrade() -> None:
             FROM tool_descriptions td
             JOIN duplicates d ON td.name = d.name AND td.created_at = d.earliest_created_at
         )
-        UPDATE component_instances 
+        UPDATE component_instances
         SET tool_description_id = k.keep_id
         FROM keep_ids k
         WHERE component_instances.tool_description_id IN (
-            SELECT id FROM tool_descriptions td 
+            SELECT id FROM tool_descriptions td
             WHERE td.name = k.name AND td.id != k.keep_id
         )
     """
@@ -77,7 +77,7 @@ def downgrade() -> None:
     # Now delete the duplicate tool_descriptions (keeping the one with earliest created_at for each name)
     op.execute(
         """
-        DELETE FROM tool_descriptions 
+        DELETE FROM tool_descriptions
         WHERE id NOT IN (
             SELECT td.id
             FROM tool_descriptions td
