@@ -708,6 +708,8 @@ def get_or_create_tool_description(
         )
         .first()
     )
+
+    # TODO: remove when front sends id
     # If found, check if the JSON fields match
     if tool_description:
         # Compare the actual JSON values

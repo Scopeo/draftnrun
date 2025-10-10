@@ -33,7 +33,6 @@ def create_or_update_component_instance(
     # Create tool description if needed
     tool_description = None
     if instance_data.tool_description:
-        print(instance_data.tool_description)
         tool_description = get_or_create_tool_description(
             session=session,
             name=instance_data.tool_description.name,
