@@ -45,8 +45,6 @@ def test_create_empty_graph_runner():
         "component_instances": [],
         "relationships": [],
         "edges": [],
-        "tag_version": None,
-        "version_name": None,
         "tag_name": None,
         "change_log": None,
     }

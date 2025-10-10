@@ -15,11 +15,8 @@ class TracingSpanParams:
     environment: Optional[EnvType] = None
     call_type: Optional[CallType] = None
     trace_id: Optional[str] = None
-    tag_version: Optional[str] = None
     graph_runner_id: Optional[str] = None
-    version_name: Optional[str] = None
     tag_name: Optional[str] = None
-    change_log: Optional[str] = None
 
 
 _tracing_context: ContextVar[Optional[TracingSpanParams]] = ContextVar("_tracing_context", default=None)
@@ -33,10 +30,7 @@ def set_tracing_span(
     uuid_for_temp_folder: Optional[str] = None,
     environment: Optional[EnvType] = None,
     call_type: Optional[CallType] = None,
-    tag_version: Optional[str] = None,
     graph_runner_id: Optional[str] = None,
-    version_name: Optional[str] = None,
-    change_log: Optional[str] = None,
     tag_name: Optional[str] = None,
 ) -> None:
     """Set current tracing context with project/org/llm info."""
@@ -48,10 +42,7 @@ def set_tracing_span(
         uuid_for_temp_folder=uuid_for_temp_folder,
         environment=environment,
         call_type=call_type,
-        tag_version=tag_version,
         graph_runner_id=graph_runner_id,
-        version_name=version_name,
-        change_log=change_log,
         tag_name=tag_name,
     )
     _tracing_context.set(params)

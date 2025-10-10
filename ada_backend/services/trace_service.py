@@ -85,8 +85,8 @@ def build_span_trees(df: pd.DataFrame) -> List[TraceSpan]:
             children=[],
             environment=row.get("environment", None),
             call_type=row.get("call_type", None),
-            tag_version=row.get("tag_version", None),
             graph_runner_id=row.get("graph_runner_id", None),
+            tag_name=row.get("tag_name", None)
         )
 
     trace_trees = []
@@ -129,11 +129,8 @@ def build_root_spans(df: pd.DataFrame) -> List[RootTraceSpan]:
                 llm_token_count_completion=row.get("llm_token_count_completion", None),
                 environment=row.get("environment", None),
                 call_type=row.get("call_type", None),
-                tag_version=row.get("tag_version", None),
                 graph_runner_id=row.get("graph_runner_id", None),
-                version_name=row.get("version_name", None),
                 tag_name=row.get("tag_name", None),
-                change_log=row.get("change_log", None),
             )
         )
 
