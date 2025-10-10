@@ -1,4 +1,5 @@
 from uuid import UUID
+import json
 
 from sqlalchemy.orm import Session
 
@@ -199,6 +200,34 @@ def seed_ai_agent_components(session: Session):
                         "When enabled, the current date and time will be automatically added to the"
                         " beginning of the system prompt."
                         " This can help the AI agent be aware of the current date for time-sensitive tasks."
+                    ),
+                ).model_dump(exclude_unset=True, exclude_none=True),
+                is_advanced=True,
+            ),
+            db.ComponentParameterDefinition(
+                id=UUID("e5282ccb-dcaa-4970-93c1-f6ef5018492d"),
+                component_id=base_ai_agent.id,
+                name="output_format",
+                type=ParameterType.STRING,
+                nullable=True,
+                default=None,
+                ui_component=UIComponent.TEXTAREA,
+                ui_component_properties=UIComponentProperties(
+                    label="Output Format",
+                    placeholder=json.dumps(
+                        {
+                            "answer": {"type": "string", "description": "The imposed format of the agent's answer."},
+                            "is_ending_conversation": {
+                                "type": "boolean",
+                                "description": "Boolean detecting if the conversation is over or not",
+                            },
+                        },
+                        indent=4,
+                    ),
+                    description=(
+                        "JSON schema defining the properties/parameters of the output tool. "
+                        'Example: {"answer": {"type": "string", "description": "The answer content"}, '
+                        '"is_ending_conversation": {"type": "boolean", "description": "End conversation?"}}'
                     ),
                 ).model_dump(exclude_unset=True, exclude_none=True),
                 is_advanced=True,

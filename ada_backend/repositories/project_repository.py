@@ -112,7 +112,6 @@ def update_project(
     project_id: UUID,
     project_name: Optional[str] = None,
     description: Optional[str] = None,
-
 ) -> db.Project:
     project = get_project(session, project_id=project_id)
     if not project:

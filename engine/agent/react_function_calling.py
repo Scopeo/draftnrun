@@ -19,13 +19,13 @@ from engine.agent.types import (
 )
 from engine.graph_runner.runnable import Runnable
 from engine.agent.history_message_handling import HistoryMessageHandler
+from engine.agent.utils import load_str_to_json
 from engine.trace.trace_manager import TraceManager
 from engine.llm_services.llm_service import CompletionService
 from engine.agent.utils_prompt import fill_prompt_template_with_dictionary
 from engine.agent.tools.python_code_runner import PYTHON_CODE_RUNNER_TOOL_DESCRIPTION
 from engine.agent.tools.terminal_command_runner import TERMINAL_COMMAND_RUNNER_TOOL_DESCRIPTION
 from settings import settings
-
 
 LOGGER = logging.getLogger(__name__)
 
@@ -35,6 +35,11 @@ INITIAL_PROMPT = (
 )
 DEFAULT_FALLBACK_REACT_ANSWER = "I couldn't find a solution to your problem."
 CODE_RUNNER_TOOLS = [PYTHON_CODE_RUNNER_TOOL_DESCRIPTION.name, TERMINAL_COMMAND_RUNNER_TOOL_DESCRIPTION.name]
+
+OUTPUT_TOOL_NAME = "chat_formatting_output_tool"
+OUTPUT_TOOL_DESCRIPTION = (
+    "Default tool to be used by the agent to answer in a structured format if no other tool is called"
+)
 
 
 class ReActAgentInputs(BaseModel):
@@ -48,6 +53,65 @@ class ReActAgentOutputs(BaseModel):
     full_message: ChatMessage = Field(description="The full final message object from the agent.")
     is_final: bool = Field(default=False, description="Indicates if this is the final output of the agent.")
     artifacts: dict[str, Any] = Field(default_factory=dict, description="Artifacts produced by the agent.")
+
+
+def format_output_tool_description(
+    tool_name: str,
+    tool_description: str,
+    tool_properties: dict,
+    required_properties: Optional[list] = None,
+) -> ToolDescription:
+    """
+    Format an output tool description for the React agent.
+
+    Args:
+        tool_name: Name of the output tool
+        tool_description: Description of what the tool does
+        tool_properties: JSON schema defining the tool's parameters
+        required_properties: List of required property names. If None, all properties are required.
+
+    Returns:
+        ToolDescription for the output tool
+    """
+    if required_properties is None:
+        required_properties = list(tool_properties.keys())
+
+    return ToolDescription(
+        name=tool_name,
+        description=tool_description,
+        tool_properties=tool_properties,
+        required_tool_properties=required_properties,
+    )
+
+
+def get_default_output_tool_description() -> ToolDescription:
+    """
+    Get the default output tool description for conversation answers.
+
+    Returns:
+        Default ToolDescription for structured conversation responses
+    """
+    return format_output_tool_description(
+        tool_name="conversation_answer",
+        tool_description=(
+            "Generate a structured answer for the conversation. Use this tool when you have "
+            "gathered enough information to provide a comprehensive response to the user's question. "
+            "This tool allows you to provide both the answer content and indicate whether the "
+            "conversation should continue or end."
+        ),
+        tool_properties={
+            "answer": {
+                "type": "string",
+                "description": "The answer or response content for the user's question or request.",
+            },
+            "is_ending_conversation": {
+                "type": "boolean",
+                "description": "Whether this response should end the conversation (true) or "
+                "allow for follow-up questions (false).",
+            },
+        },
+        required_properties=["answer", "is_ending_conversation"],
+    )
 
 
 class ReActAgent(Agent):
@@ -81,6 +145,7 @@ class ReActAgent(Agent):
         last_history_messages: int = 50,
         allow_tool_shortcuts: bool = False,
         date_in_system_prompt: bool = False,
+        output_format: Optional[str | dict] = None,
     ) -> None:
         super().__init__(
             trace_manager=trace_manager,
@@ -105,6 +170,34 @@ class ReActAgent(Agent):
         self._date_in_system_prompt = date_in_system_prompt
         self._shared_sandbox: Optional[AsyncSandbox] = None
         self._e2b_api_key = getattr(settings, "E2B_API_KEY", None)
+
+        self._output_format = output_format
+        self._output_tool_agent_description = self._get_output_tool_description()
+
+    def _get_output_tool_description(self) -> Optional[ToolDescription]:
+        """
+        Get the output tool description using the same pattern as RAG.
+
+        Returns:
+            ToolDescription if all required output tool parameters are set, None otherwise.
+        """
+        # If no output tool is configured, return None
+        if not any([self._output_format]):
+            return None
+
+        # Parse JSON strings to appropriate data types
+        if isinstance(self._output_format, str):
+            parsed_output_tool_properies = load_str_to_json(self._output_format)
+        else:
+            parsed_output_tool_properies = self._output_format
+
+        required_properties = list(parsed_output_tool_properies.keys())
+        return ToolDescription(
+            name=OUTPUT_TOOL_NAME,
+            description=OUTPUT_TOOL_DESCRIPTION,
+            tool_properties=parsed_output_tool_properies,
+            required_tool_properties=required_properties,
+        )
 
     # TODO: investigate if we can decouple the sandbox from the agent
     async def _ensure_shared_sandbox(self) -> AsyncSandbox:
@@ -237,6 +330,7 @@ class ReActAgent(Agent):
                 messages=llm_input_messages,
                 tools=[agent.tool_description for agent in self.agent_tools],
                 tool_choice=tool_choice,
+                structured_output_tool=self._output_tool_agent_description,
             )
 
             span.set_attributes(
