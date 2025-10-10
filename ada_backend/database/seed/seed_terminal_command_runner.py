@@ -12,6 +12,7 @@ from ada_backend.database.component_definition_seeding import (
     upsert_component_versions,
     upsert_components,
     upsert_components_parameter_definitions,
+    upsert_release_stage_to_current_version_mapping,
 )
 from ada_backend.database.seed.utils import COMPONENT_UUIDS
 from ada_backend.database.seed.seed_tool_description import TOOL_DESCRIPTION_UUIDS
@@ -63,3 +64,11 @@ def seed_terminal_command_runner_components(session: Session):
     ]
 
     upsert_components_parameter_definitions(session, terminal_command_runner_parameter_definitions)
+
+    # Create release stage mapping
+    upsert_release_stage_to_current_version_mapping(
+        session=session,
+        component_id=terminal_command_runner_version.component_id,
+        release_stage=terminal_command_runner_version.release_stage,
+        component_version_id=terminal_command_runner_version.id,
+    )

@@ -9,6 +9,7 @@ from ada_backend.database.component_definition_seeding import (
     upsert_components,
     upsert_components_parameter_child_relationships,
     upsert_components_parameter_definitions,
+    upsert_release_stage_to_current_version_mapping,
 )
 from ada_backend.database.seed.seed_tool_description import TOOL_DESCRIPTION_UUIDS
 from ada_backend.database.seed.utils import (
@@ -133,4 +134,18 @@ def seed_sql_tool_components(session: Session):
                 ],
             ),
         ],
+    )
+
+    # Create release stage mappings
+    upsert_release_stage_to_current_version_mapping(
+        session=session,
+        component_id=sql_tool_version.component_id,
+        release_stage=sql_tool_version.release_stage,
+        component_version_id=sql_tool_version.id,
+    )
+    upsert_release_stage_to_current_version_mapping(
+        session=session,
+        component_id=run_sql_query_tool_version.component_id,
+        release_stage=run_sql_query_tool_version.release_stage,
+        component_version_id=run_sql_query_tool_version.id,
     )

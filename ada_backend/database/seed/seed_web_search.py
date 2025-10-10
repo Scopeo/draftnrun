@@ -8,6 +8,7 @@ from ada_backend.database.component_definition_seeding import (
     upsert_component_versions,
     upsert_components,
     upsert_components_parameter_definitions,
+    upsert_release_stage_to_current_version_mapping,
 )
 from ada_backend.database.seed.seed_categories import CATEGORY_UUIDS
 from ada_backend.database.seed.seed_tool_description import TOOL_DESCRIPTION_UUIDS
@@ -70,4 +71,12 @@ def seed_web_search_components(session: Session):
         session=session,
         component_id=web_search_openai_agent.id,
         category_ids=[CATEGORY_UUIDS["query"]],
+    )
+
+    # Create release stage mapping
+    upsert_release_stage_to_current_version_mapping(
+        session=session,
+        component_id=web_search_openai_agent_version.component_id,
+        release_stage=web_search_openai_agent_version.release_stage,
+        component_version_id=web_search_openai_agent_version.id,
     )

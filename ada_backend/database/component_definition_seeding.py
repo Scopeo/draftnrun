@@ -50,6 +50,10 @@ def upsert_component_versions(
     If a component version already exists and has same attributes, it will be skipped.
     If it exists but has different attributes, it will be updated.
     If it does not exist, it will be inserted.
+
+    Note: This function does NOT automatically create release stage mappings.
+    Use upsert_release_stage_to_current_version_mapping() to manually specify
+    which version should be current for each release stage.
     """
     for component_version in component_versions:
         existing_component_version = (
@@ -233,6 +237,62 @@ def upsert_categories(
         else:
             session.add(category)
             LOGGER.info(f"Category {category.name} inserted.")
+    session.commit()
+
+
+def upsert_release_stage_to_current_version_mapping(
+    session: Session,
+    component_id: UUID,
+    release_stage: db.ReleaseStage,
+    component_version_id: UUID,
+) -> None:
+    """
+    Upserts a single release stage to current version mapping in the database.
+    This allows manual control over which component version is considered "current"
+    for a specific release stage. This is required for get_current_component_versions to work properly.
+
+    Args:
+        session: SQLAlchemy session
+        component_id: ID of the component
+        release_stage: The release stage (PUBLIC, BETA, EARLY_ACCESS, INTERNAL)
+        component_version_id: ID of the component version to set as current for this stage
+    """
+    # Check if mapping already exists
+    existing_mapping = (
+        session.query(db.ReleaseStageToCurrentVersionMapping)
+        .filter(
+            db.ReleaseStageToCurrentVersionMapping.component_id == component_id,
+            db.ReleaseStageToCurrentVersionMapping.release_stage == release_stage,
+        )
+        .first()
+    )
+
+    if existing_mapping:
+        # Update the mapping to point to the specified version
+        if existing_mapping.component_version_id != component_version_id:
+            existing_mapping.component_version_id = component_version_id
+            LOGGER.info(
+                f"Updated release stage mapping for component {component_id} "
+                f"stage {release_stage} to version {component_version_id}"
+            )
+        else:
+            LOGGER.info(
+                f"Release stage mapping for component {component_id} "
+                f"stage {release_stage} already points to correct version, skipping."
+            )
+    else:
+        # Create new mapping
+        new_mapping = db.ReleaseStageToCurrentVersionMapping(
+            component_id=component_id,
+            release_stage=release_stage,
+            component_version_id=component_version_id,
+        )
+        session.add(new_mapping)
+        LOGGER.info(
+            f"Created release stage mapping for component {component_id} "
+            f"stage {release_stage} to version {component_version_id}"
+        )
+
     session.commit()
 
 

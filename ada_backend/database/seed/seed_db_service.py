@@ -12,6 +12,7 @@ from ada_backend.database.component_definition_seeding import (
     upsert_component_versions,
     upsert_components,
     upsert_components_parameter_definitions,
+    upsert_release_stage_to_current_version_mapping,
 )
 from ada_backend.database.seed.utils import COMPONENT_UUIDS
 
@@ -111,4 +112,18 @@ def seed_db_service_components(session: Session):
                 is_advanced=True,
             ),
         ],
+    )
+
+    # Create release stage mappings
+    upsert_release_stage_to_current_version_mapping(
+        session=session,
+        component_id=sql_db_service_version.component_id,
+        release_stage=sql_db_service_version.release_stage,
+        component_version_id=sql_db_service_version.id,
+    )
+    upsert_release_stage_to_current_version_mapping(
+        session=session,
+        component_id=snowflake_db_service_version.component_id,
+        release_stage=snowflake_db_service_version.release_stage,
+        component_version_id=snowflake_db_service_version.id,
     )
