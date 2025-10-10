@@ -11,8 +11,8 @@ from ada_backend.schemas.chart_schema import ChartsResponse
 from ada_backend.schemas.monitor_schema import KPISResponse
 from ada_backend.schemas.project_schema import (
     ChatResponse,
+    GraphRunnerEnvDTO,
     ProjectDeleteResponse,
-    ProjectResponse,
     ProjectSchema,
     ProjectWithGraphRunnersSchema,
     ProjectUpdateSchema,
@@ -33,6 +33,7 @@ from ada_backend.services.metrics.monitor_kpis_service import get_monitoring_kpi
 from ada_backend.services.project_service import (
     create_workflow,
     delete_project_service,
+    get_graph_runners_by_project_service,
     get_project_service,
     get_workflows_by_organization_service,
     update_project_service,
@@ -46,7 +47,7 @@ router = APIRouter(prefix="/projects")
 
 
 # TODO: move to workflow_router
-@router.get("/org/{organization_id}", response_model=List[ProjectResponse], tags=["Workflows"])
+@router.get("/org/{organization_id}", response_model=List[ProjectSchema], tags=["Workflows"])
 def get_workflows_by_organization_endpoint(
     organization_id: UUID,
     user: Annotated[
@@ -96,6 +97,30 @@ def get_workflow_endpoint(
     except Exception as e:
         LOGGER.exception(
             "Failed to get project %s",
+            project_id,
+        )
+        raise HTTPException(status_code=500, detail="Internal Server Error") from e
+
+
+# New endpoint to get graph runners for a specific project
+@router.get("/{project_id}/graph-runners", response_model=List[GraphRunnerEnvDTO], tags=["Workflows"])
+def get_project_graph_runners_endpoint(
+    project_id: UUID,
+    user: Annotated[
+        SupabaseUser,
+        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.USER.value)),
+    ],
+    session: Session = Depends(get_db),
+):
+    if not user.id:
+        raise HTTPException(status_code=400, detail="User ID not found")
+    try:
+        return get_graph_runners_by_project_service(session, project_id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except Exception as e:
+        LOGGER.exception(
+            "Failed to get graph runners for project %s",
             project_id,
         )
         raise HTTPException(status_code=500, detail="Internal Server Error") from e

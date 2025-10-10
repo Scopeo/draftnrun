@@ -1,6 +1,5 @@
 from collections import defaultdict
 from typing import DefaultDict
-import uuid
 from uuid import UUID
 import logging
 
@@ -41,13 +40,14 @@ LOGGER = logging.getLogger(__name__)
 def get_all_agents_service(session: Session, organization_id: UUID) -> list[AgentWithGraphRunnersSchema]:
     agents_with_graph_runners_rows = fetch_agents_with_graph_runners_by_organization(session, organization_id)
     by_agent: DefaultDict[UUID, dict] = defaultdict(lambda: {"agent": None, "grs": []})
-    for agent, project_env_binding in agents_with_graph_runners_rows:
+    for agent, graph_runner, project_env_binding in agents_with_graph_runners_rows:
         bucket = by_agent[agent.id]
         bucket["agent"] = agent
         bucket["grs"].append(
             GraphRunnerEnvDTO(
-                graph_runner_id=project_env_binding.graph_runner_id,
-                env=project_env_binding.environment,
+                graph_runner_id=graph_runner.id,
+                env=project_env_binding.environment if project_env_binding else None,
+                tag_version=graph_runner.tag_version,
             )
         )
     result: list[AgentWithGraphRunnersSchema] = []
@@ -125,9 +125,11 @@ def create_new_agent_service(
         organization_id=organization_id,
         project_type=db.ProjectType.AGENT,
     )
+    # For agents, use the agent ID (project ID) as the graph_runner_id
+    # This maintains the convention: agent_id == graph_runner_id == ai_agent_component_id
     graph_runner = insert_graph_runner(
         session=session,
-        graph_id=uuid.uuid4(),
+        graph_id=agent_data.id,  # Use agent_data.id instead of uuid.uuid4()
         add_input=False,
     )
     graph_runner_id = graph_runner.id

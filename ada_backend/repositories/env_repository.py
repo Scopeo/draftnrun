@@ -6,6 +6,22 @@ from ada_backend.database.models import EnvType
 from ada_backend.database import models as db
 
 
+def get_project_env_binding(
+    session: Session, project_id: UUID, graph_runner_id: UUID
+) -> db.ProjectEnvironmentBinding | None:
+    """
+    Return the environment binding for a given project and graph runner, or None if missing.
+    """
+    return (
+        session.query(db.ProjectEnvironmentBinding)
+        .filter(
+            db.ProjectEnvironmentBinding.graph_runner_id == graph_runner_id,
+            db.ProjectEnvironmentBinding.project_id == project_id,
+        )
+        .first()
+    )
+
+
 def get_env_relationship_by_graph_runner_id(session: Session, graph_runner_id: UUID) -> db.ProjectEnvironmentBinding:
     env_relationship = (
         session.query(db.ProjectEnvironmentBinding)

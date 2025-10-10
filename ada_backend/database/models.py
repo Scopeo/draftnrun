@@ -191,7 +191,7 @@ def cast_value(
     parameter_type: ParameterType,
     unresolved_value: str,
 ) -> str | int | float | bool | dict:
-    if parameter_type != ParameterType.STRING and (unresolved_value == "None" or unresolved_value is None):
+    if unresolved_value is None or unresolved_value == "None" or unresolved_value == "null":
         return None
     if parameter_type == ParameterType.STRING:
         return unresolved_value

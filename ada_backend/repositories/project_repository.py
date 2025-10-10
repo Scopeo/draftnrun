@@ -38,30 +38,49 @@ def get_project_with_details(
     session: Session,
     project_id: UUID,
 ) -> ProjectWithGraphRunnersSchema:
+    # Get the project
+    project = session.query(db.Project).filter(db.Project.id == project_id).first()
+
+    if not project:
+        raise ValueError(f"Project {project_id} not found")
+
+    # Get ALL graph_runners associated with this project
+    # Use a left outer join to get all graph_runners, even those without environment bindings
     results = (
-        session.query(db.Project, db.ProjectEnvironmentBinding, db.GraphRunner)
-        .join(db.ProjectEnvironmentBinding, db.ProjectEnvironmentBinding.project_id == db.Project.id)
-        .join(db.GraphRunner, db.GraphRunner.id == db.ProjectEnvironmentBinding.graph_runner_id)
-        .filter(db.Project.id == project_id)
+        session.query(db.GraphRunner, db.ProjectEnvironmentBinding)
+        .outerjoin(
+            db.ProjectEnvironmentBinding,
+            (db.GraphRunner.id == db.ProjectEnvironmentBinding.graph_runner_id)
+            & (db.ProjectEnvironmentBinding.project_id == project_id),
+        )
+        .filter(
+            db.GraphRunner.id.in_(
+                session.query(db.ProjectEnvironmentBinding.graph_runner_id).filter(
+                    db.ProjectEnvironmentBinding.project_id == project_id
+                )
+            )
+        )
+        .order_by(db.GraphRunner.created_at)  # Order by creation date
     ).all()
+
     graph_runners = [
         GraphRunnerEnvDTO(
-            graph_runner_id=project_env_gr.graph_runner_id,
-            env=project_env_gr.environment,
+            graph_runner_id=graph_runner.id,
+            env=project_env_binding.environment if project_env_binding else None,
             tag_version=graph_runner.tag_version,
         )
-        for _, project_env_gr, graph_runner in results
+        for graph_runner, project_env_binding in results
     ]
-    project = results[0][0] if results else None
+
     return ProjectWithGraphRunnersSchema(
-        project_id=project.id if project else None,
-        project_name=project.name if project else None,
-        project_type=project.type if project else None,
+        project_id=project.id,
+        project_name=project.name,
+        project_type=project.type,
         graph_runners=graph_runners,
-        description=project.description if project else None,
-        organization_id=project.organization_id if project else None,
-        created_at=str(project.created_at) if project else None,
-        updated_at=str(project.updated_at) if project else None,
+        description=project.description,
+        organization_id=project.organization_id,
+        created_at=str(project.created_at),
+        updated_at=str(project.updated_at),
     )
 
 
