@@ -31,6 +31,7 @@ def seed_input_components(session: Session):
         is_protected=True,
         release_stage=db.ReleaseStage.PUBLIC,
         default_tool_description_id=TOOL_DESCRIPTION_UUIDS["default_tool_description"],
+        icon="tabler-square-rounded-arrow-right",
     )
     upsert_components(
         session=session,

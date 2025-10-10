@@ -21,6 +21,7 @@ def seed_project_reference_components(session: Session):
         is_agent=True,
         function_callable=False,
         release_stage=db.ReleaseStage.INTERNAL,
+        icon="tabler-link",
     )
 
     upsert_components(
