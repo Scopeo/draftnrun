@@ -55,6 +55,8 @@ def build_graph_test_chatbot(
         "evaluation_instance": uuid4(),
     }
 
+    rag_tool_description = format_rag_tool_description(source="customer_service")
+
     instances = [
         ComponentInstanceSchema(
             id=COMPONENT_INSTANCES_IDS["llm_call_instance"],
@@ -77,7 +79,12 @@ def build_graph_test_chatbot(
             component_id=components["rag_agent"],
             ref=f"{agent_name}_rag_agent_instance",
             parameters=[],
-            tool_description=format_rag_tool_description(source="customer_service"),
+            tool_description=ToolDescriptionSchema(
+                name=rag_tool_description.name,
+                description=rag_tool_description.description,
+                tool_properties=rag_tool_description.tool_properties,
+                required_tool_properties=rag_tool_description.required_tool_properties,
+            ),
         ),
         ComponentInstanceSchema(
             id=COMPONENT_INSTANCES_IDS["synthesizer_instance"],
