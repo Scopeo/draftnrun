@@ -15,7 +15,6 @@ TARGET_PORT_NAME = "messages"
 
 client = TestClient(app)
 ORGANIZATION_ID = "37b7d67f-8f29-4fce-8085-19dea582f605"  # umbrella organization
-PROJECT_ID = "f7ddbfcb-6843-4ae9-a15b-40aa565b955b"  # graph test project
 JWT_TOKEN = get_user_jwt(settings.TEST_USER_EMAIL, settings.TEST_USER_PASSWORD)
 HEADERS_JWT = {
     "accept": "application/json",
@@ -31,9 +30,26 @@ def test_get_put_roundtrip_port_mappings_migration():
     - Using that GET payload (minus non-updatable fields) on PUT works (idempotent)
     - Subsequent GET returns the same explicit port_mappings
     """
+    # Create a unique project for this test to avoid constraint violations
+    project_id = str(uuid4())
+    project_payload = {
+        "project_id": project_id,
+        "project_name": f"port_mappings_test_{project_id}",
+        "description": "Test project for port mappings migration",
+    }
+    project_response = client.post(f"/projects/{ORGANIZATION_ID}", headers=HEADERS_JWT, json=project_payload)
+    assert project_response.status_code == 200
 
-    graph_runner_id = str(uuid4())
-    endpoint = f"/projects/{PROJECT_ID}/graph/{graph_runner_id}"
+    # Get the auto-created draft graph runner ID
+    project_details = client.get(f"/projects/{project_id}", headers=HEADERS_JWT).json()
+    graph_runner_id = None
+    for gr in project_details["graph_runners"]:
+        if gr["env"] == "draft":
+            graph_runner_id = gr["graph_runner_id"]
+            break
+    assert graph_runner_id is not None, "Draft graph runner should be auto-created"
+
+    endpoint = f"/projects/{project_id}/graph/{graph_runner_id}"
 
     # Two component instances connected by a single edge; no port_mappings in the payload
     src_instance_id = str(uuid4())
@@ -202,9 +218,10 @@ def test_get_put_roundtrip_port_mappings_migration():
     data2 = get_resp2.json()
     assert data2.get("port_mappings") == data.get("port_mappings")
 
-    # Cleanup this graph runner
+    # Cleanup this graph runner and project
     session = SessionLocal()
     delete_graph_runner(session, UUID(graph_runner_id))
+    client.delete(f"/projects/{project_id}", headers=HEADERS_JWT)
 
 
 def test_deploy_graph_copies_port_mappings():
@@ -212,8 +229,26 @@ def test_deploy_graph_copies_port_mappings():
     Test that when deploying a graph, the port mappings are correctly copied
     to the new graph runner.
     """
-    graph_runner_id = str(uuid4())
-    endpoint = f"/projects/{PROJECT_ID}/graph/{graph_runner_id}"
+    # Create a unique project for this test to avoid constraint violations
+    project_id = str(uuid4())
+    project_payload = {
+        "project_id": project_id,
+        "project_name": f"deploy_port_mappings_test_{project_id}",
+        "description": "Test project for deploy port mappings",
+    }
+    project_response = client.post(f"/projects/{ORGANIZATION_ID}", headers=HEADERS_JWT, json=project_payload)
+    assert project_response.status_code == 200
+
+    # Get the auto-created draft graph runner ID
+    project_details = client.get(f"/projects/{project_id}", headers=HEADERS_JWT).json()
+    graph_runner_id = None
+    for gr in project_details["graph_runners"]:
+        if gr["env"] == "draft":
+            graph_runner_id = gr["graph_runner_id"]
+            break
+    assert graph_runner_id is not None, "Draft graph runner should be auto-created"
+
+    endpoint = f"/projects/{project_id}/graph/{graph_runner_id}"
 
     # Two component instances connected by a single edge with explicit port mappings
     src_instance_id = str(uuid4())
@@ -385,7 +420,7 @@ def test_deploy_graph_copies_port_mappings():
     new_draft_graph_id = deploy_data["draft_graph_runner_id"]
 
     # Verify the new draft graph has the same port mappings (with updated instance IDs)
-    new_draft_endpoint = f"/projects/{PROJECT_ID}/graph/{new_draft_graph_id}"
+    new_draft_endpoint = f"/projects/{project_id}/graph/{new_draft_graph_id}"
     new_get_resp = client.get(new_draft_endpoint, headers=HEADERS_JWT)
     assert new_get_resp.status_code == 200
     new_data = new_get_resp.json()
@@ -413,7 +448,8 @@ def test_deploy_graph_copies_port_mappings():
     assert prod_pm["source_port_name"] == SOURCE_PORT_NAME
     assert prod_pm["target_port_name"] == TARGET_PORT_NAME
 
-    # Cleanup both graph runners
+    # Cleanup both graph runners and project
     session = SessionLocal()
     delete_graph_runner(session, UUID(graph_runner_id))
     delete_graph_runner(session, UUID(new_draft_graph_id))
+    client.delete(f"/projects/{project_id}", headers=HEADERS_JWT)

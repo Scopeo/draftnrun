@@ -58,6 +58,12 @@ def test_get_all_agents_service(monkeypatch):
 
     dummy_agents = [DummyAgent(uuid.uuid4(), "A1", "desc1"), DummyAgent(uuid.uuid4(), "A2", None)]
 
+    class DummyGraphRunner:
+        def __init__(self, id, tag_version=None):
+            self.id = id
+            self.tag_version = tag_version
+            self.created_at = "2025-01-01T00:00:00"
+
     class DummyBinding:
         def __init__(self, graph_runner_id, environment):
             self.graph_runner_id = graph_runner_id
@@ -66,10 +72,12 @@ def test_get_all_agents_service(monkeypatch):
     def fake_fetch_agents_with_graph_runners_by_organization(session_arg, organization_id_arg):
         assert session_arg is session
         assert organization_id_arg == org_id
-        # return pairs (agent, binding) as the real repository does
+        # return triples (agent, graph_runner, binding) as the real repository does
+        gr1 = DummyGraphRunner(uuid.uuid4(), "v1")
+        gr2 = DummyGraphRunner(uuid.uuid4(), "v2")
         return [
-            (dummy_agents[0], DummyBinding(uuid.uuid4(), "draft")),
-            (dummy_agents[1], DummyBinding(uuid.uuid4(), "draft")),
+            (dummy_agents[0], gr1, DummyBinding(gr1.id, "draft")),
+            (dummy_agents[1], gr2, DummyBinding(gr2.id, "draft")),
         ]
 
     monkeypatch.setattr(

@@ -13,6 +13,7 @@ from ada_backend.repositories.component_repository import (
     get_canonical_ports_for_components,
 )
 from ada_backend.repositories.edge_repository import delete_edge, get_edges, upsert_edge
+from ada_backend.repositories.env_repository import get_env_relationship_by_graph_runner_id
 from ada_backend.repositories.graph_runner_repository import (
     delete_node,
     get_component_nodes,
@@ -61,6 +62,38 @@ def validate_port_definition_types(session: Session, source_port_def_id: UUID, t
         raise ValueError(f"Target port must be INPUT type, got {target_port.port_type}")
 
 
+def validate_graph_is_draft(session: Session, graph_runner_id: UUID) -> None:
+    """
+    Validate that the graph runner is in draft mode (env='draft' AND tag_version=null).
+    Only draft versions can be modified.
+
+    Raises:
+        ValueError: If the graph runner is not in draft mode
+    """
+    try:
+        env_relationship = get_env_relationship_by_graph_runner_id(session, graph_runner_id)
+    except ValueError:
+        return
+
+    # Get the graph runner to check tag_version
+    graph_runner = session.query(db.GraphRunner).filter(db.GraphRunner.id == graph_runner_id).first()
+    if not graph_runner:
+        raise ValueError(f"Graph runner {graph_runner_id} not found")
+
+    # Check if this is the draft version (env='draft' AND tag_version=null)
+    is_draft = env_relationship.environment == EnvType.DRAFT and graph_runner.tag_version is None
+
+    if not is_draft:
+        env_name = env_relationship.environment.value if env_relationship.environment else None
+        tag = graph_runner.tag_version or None
+        raise ValueError(
+            f"Cannot modify graph runner {graph_runner_id}: only draft versions"
+            "(env='draft' AND tag_version=null) can be modified. "
+            f"Current state: env='{env_name}', tag_version='{tag}'. "
+            f"Please switch to the draft version to make changes."
+        )
+
+
 # TODO: Refactor to rollback if instantiation failed.
 async def update_graph_service(
     session: Session,
@@ -69,15 +102,27 @@ async def update_graph_service(
     graph_project: GraphUpdateSchema,
     env: Optional[EnvType] = None,
     user_id: UUID = None,
+    bypass_validation: bool = False,
 ) -> GraphUpdateResponse:
     """
     Creates or updates a complete graph runner including all component instances,
     their parameters, and relationships.
+
+    Args:
+        bypass_validation: If True, skip draft mode validation (use for seeding/migrations only)
     """
     if not graph_runner_exists(session, graph_runner_id):
         LOGGER.info("Creating new graph")
         env = env if env else EnvType.DRAFT
         insert_graph_runner_and_bind_to_project(session, graph_runner_id, project_id=project_id, env=env)
+    else:
+        # Validate that the graph runner is in draft mode before allowing modifications
+        if not bypass_validation:
+            validate_graph_is_draft(session, graph_runner_id)
+            LOGGER.info(f"Updating existing graph {graph_runner_id} (validated as draft)")
+        else:
+            LOGGER.warning(f"Updating graph {graph_runner_id} with validation bypassed (seeding/migration mode)")
+
     # TODO: Add the get_graph_runner_nodes function when we will handle nested graphs
     previous_graph_nodes = set(node.id for node in get_component_nodes(session, graph_runner_id))
     previous_edge_ids = set(edge.id for edge in get_edges(session, graph_runner_id))

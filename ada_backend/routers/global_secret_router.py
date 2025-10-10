@@ -48,7 +48,8 @@ async def upsert_global_settings_secret(
         upsert_for_admin(session, key=payload.key, secret=payload.secret)
         return {"status": "ok"}
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
+        LOGGER.error(f"Failed to upsert global secret with key {payload.key}: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=400, detail="Bad request") from e
 
 
 @router.delete("/{key}")

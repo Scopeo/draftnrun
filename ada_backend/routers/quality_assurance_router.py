@@ -1,5 +1,7 @@
-from typing import Annotated, List
+from typing import Annotated, Dict, List
 from uuid import UUID
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
@@ -28,6 +30,7 @@ from ada_backend.services.quality_assurance_service import (
     update_inputs_groundtruths_service,
     delete_inputs_groundtruths_service,
     get_inputs_groundtruths_with_version_outputs_service,
+    get_outputs_by_graph_runner_service,
     run_qa_service,
     create_datasets_service,
     update_dataset_service,
@@ -35,9 +38,9 @@ from ada_backend.services.quality_assurance_service import (
     get_datasets_by_project_service,
 )
 from ada_backend.database.setup_db import get_db
-from ada_backend.database.models import EnvType
 
 router = APIRouter(tags=["QualityAssurance"])
+LOGGER = logging.getLogger(__name__)
 
 
 # Dataset endpoints
@@ -67,9 +70,11 @@ def get_datasets_by_project_endpoint(
     try:
         return get_datasets_by_project_service(session, project_id)
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
+        LOGGER.error(f"Failed to get datasets for project {project_id}: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=400, detail="Bad request") from e
     except Exception as e:
-        raise HTTPException(status_code=500, detail="Internal Server Error") from e
+        LOGGER.error(f"Failed to get datasets for project {project_id}: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @router.post(
@@ -99,9 +104,11 @@ def create_dataset_endpoint(
     try:
         return create_datasets_service(session, project_id, dataset_data)
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
+        LOGGER.error(f"Failed to create datasets for project {project_id}: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=400, detail="Bad request") from e
     except Exception as e:
-        raise HTTPException(status_code=500, detail="Internal Server Error") from e
+        LOGGER.error(f"Failed to create datasets for project {project_id}: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @router.patch(
@@ -132,9 +139,11 @@ def update_dataset_endpoint(
     try:
         return update_dataset_service(session, project_id, dataset_id, dataset_name)
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
+        LOGGER.error(f"Failed to update dataset {dataset_id}: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=400, detail="Bad request") from e
     except Exception as e:
-        raise HTTPException(status_code=500, detail="Internal Server Error") from e
+        LOGGER.error(f"Failed to update dataset {dataset_id}: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @router.delete(
@@ -164,16 +173,18 @@ def delete_dataset_endpoint(
         deleted_count = delete_datasets_service(session, project_id, delete_data)
         return {"message": f"Deleted {deleted_count} datasets successfully"}
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
+        LOGGER.error(f"Failed to delete datasets for project {project_id}: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=400, detail="Bad request") from e
     except Exception as e:
-        raise HTTPException(status_code=500, detail="Internal Server Error") from e
+        LOGGER.error(f"Failed to delete datasets for project {project_id}: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 # Input Groundtruth endpoints
 @router.get(
-    "/projects/{project_id}/qa/{dataset_id}/entries",
+    "/projects/{project_id}/qa/datasets/{dataset_id}/entries",
     response_model=PaginatedInputGroundtruthResponse,
-    summary="Get Input-Groundtruth Entries by Dataset with Version Outputs",
+    summary="Get Input-Groundtruth Entries by Dataset",
     tags=["Quality Assurance"],
 )
 def get_inputs_groundtruths_by_dataset_endpoint(
@@ -184,34 +195,70 @@ def get_inputs_groundtruths_by_dataset_endpoint(
         Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.USER.value)),
     ],
     session: Session = Depends(get_db),
-    version: EnvType = Query(None, description="Version to filter by (draft or production, optional)"),
     page: int = Query(1, ge=1, description="Page number (1-based)"),
     page_size: int = Query(100, ge=1, le=1000, description="Number of items per page"),
 ) -> PaginatedInputGroundtruthResponse:
     """
-    Get all input-groundtruth entries for a dataset with version outputs using LEFT JOIN.
+    Get all input-groundtruth entries for a dataset WITHOUT outputs.
 
-    This endpoint allows users to retrieve input-groundtruth pairs specific to a dataset
-    for quality assurance purposes. The data is paginated to handle large datasets efficiently.
-
-    If a version is specified (draft or production), it will filter the results to show outputs
-    for that specific version.
-    If no version is specified, it will show all input-groundtruth entries with their associated outputs.
-    Output and version fields will be null if no matching version output is found.
+    This endpoint returns only the base input-groundtruth pairs for a dataset.
+    Use the /outputs endpoint to get outputs for a specific graph_runner.
     """
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
 
     try:
-        return get_inputs_groundtruths_with_version_outputs_service(session, dataset_id, version, page, page_size)
+        return get_inputs_groundtruths_with_version_outputs_service(session, dataset_id, page, page_size)
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
+        LOGGER.error(f"Failed to get input-groundtruth entries for dataset {dataset_id}: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=400, detail="Bad request") from e
     except Exception as e:
-        raise HTTPException(status_code=500, detail="Internal Server Error") from e
+        LOGGER.error(f"Failed to get input-groundtruth entries for dataset {dataset_id}: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error") from e
+
+
+@router.get(
+    "/projects/{project_id}/qa/datasets/{dataset_id}/outputs",
+    response_model=Dict[UUID, str],
+    summary="Get Outputs for a Graph Runner",
+    tags=["Quality Assurance"],
+)
+def get_outputs_endpoint(
+    project_id: UUID,
+    dataset_id: UUID,
+    user: Annotated[
+        SupabaseUser,
+        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.USER.value)),
+    ],
+    session: Session = Depends(get_db),
+    graph_runner_id: UUID = Query(..., description="Graph runner ID to get outputs for"),
+) -> Dict[UUID, str]:
+    """
+    Get outputs for a specific graph_runner.
+
+    Returns a dictionary mapping input_id (UUID) to output (string) for the specified graph_runner.
+    """
+    if not user.id:
+        raise HTTPException(status_code=400, detail="User ID not found")
+
+    try:
+        return get_outputs_by_graph_runner_service(session, dataset_id, graph_runner_id)
+    except ValueError as e:
+        LOGGER.error(
+            f"Failed to get outputs for graph runner {graph_runner_id} and dataset {dataset_id}: {str(e)}",
+            exc_info=True,
+        )
+        raise HTTPException(status_code=400, detail="Bad request") from e
+    except Exception as e:
+        LOGGER.error(
+            f"Failed to get outputs for graph runner {graph_runner_id} and dataset {dataset_id}: {str(e)}",
+            exc_info=True,
+        )
+        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @router.post(
-    "/projects/{project_id}/qa/{dataset_id}/entries",
+    "/projects/{project_id}/qa/datasets/{dataset_id}/entries",
     response_model=InputGroundtruthResponseList,
     summary="Create Input-Groundtruth Entries",
     tags=["Quality Assurance"],
@@ -238,13 +285,15 @@ def create_input_groundtruth_endpoint(
     try:
         return create_inputs_groundtruths_service(session, dataset_id, input_groundtruth_data)
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
+        LOGGER.error(f"Failed to create input-groundtruth entries for dataset {dataset_id}: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=400, detail="Bad request") from e
     except Exception as e:
-        raise HTTPException(status_code=500, detail="Internal Server Error") from e
+        LOGGER.error(f"Failed to create input-groundtruth entries for dataset {dataset_id}: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @router.patch(
-    "/projects/{project_id}/qa/{dataset_id}/entries",
+    "/projects/{project_id}/qa/datasets/{dataset_id}/entries",
     response_model=InputGroundtruthResponseList,
     summary="Update Input-Groundtruth Entries",
     tags=["Quality Assurance"],
@@ -271,13 +320,15 @@ def update_input_groundtruth_endpoint(
     try:
         return update_inputs_groundtruths_service(session, dataset_id, input_groundtruth_data)
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
+        LOGGER.error(f"Failed to update input-groundtruth entries for dataset {dataset_id}: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=400, detail="Bad request") from e
     except Exception as e:
-        raise HTTPException(status_code=500, detail="Internal Server Error") from e
+        LOGGER.error(f"Failed to update input-groundtruth entries for dataset {dataset_id}: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @router.delete(
-    "/projects/{project_id}/qa/{dataset_id}/entries",
+    "/projects/{project_id}/qa/datasets/{dataset_id}/entries",
     summary="Delete Input-Groundtruth Entries",
     tags=["Quality Assurance"],
 )
@@ -304,14 +355,16 @@ def delete_input_groundtruth_endpoint(
         deleted_count = delete_inputs_groundtruths_service(session, dataset_id, delete_data)
         return {"message": f"Deleted {deleted_count} input-groundtruth entries successfully"}
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
+        LOGGER.error(f"Failed to delete input-groundtruth entries for dataset {dataset_id}: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=400, detail="Bad request") from e
     except Exception as e:
-        raise HTTPException(status_code=500, detail="Internal Server Error") from e
+        LOGGER.error(f"Failed to delete input-groundtruth entries for dataset {dataset_id}: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 # QA Run endpoint
 @router.post(
-    "/projects/{project_id}/qa/{dataset_id}/run",
+    "/projects/{project_id}/qa/datasets/{dataset_id}/run",
     response_model=QARunResponse,
     summary="Run QA Process on Dataset Inputs",
     tags=["Quality Assurance"],
@@ -333,15 +386,16 @@ async def run_qa_endpoint(
     You can either run on specific entries by providing input_ids, or run on all
     entries in the dataset by setting run_all=True.
 
-    The project will be executed using the specified version (draft or production).
-    Results are stored in the VersionOutput table with the specified version.
+    The project will be executed using the specified graph_runner_id to run a specific version.
+    Results are stored in the VersionOutput table.
 
     Parameters:
-    - version: The environment version to run (draft or production)
+    - graph_runner_id: Specific graph runner ID to execute (required)
     - input_ids: List of specific input IDs to run (optional if run_all=True)
     - run_all: Boolean flag to run on all entries in the dataset (optional, default=False)
 
-    Note: You must specify either input_ids OR set run_all=True, but not both.
+    Note:
+    - You must specify either input_ids OR set run_all=True, but not both.
 
     The input and output fields are stored as strings but can be easily cast to JSON
     for function processing when needed.
@@ -352,6 +406,12 @@ async def run_qa_endpoint(
     try:
         return await run_qa_service(session, project_id, dataset_id, run_request)
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
+        LOGGER.error(
+            f"Failed to run QA process on dataset {dataset_id} for project {project_id}: {str(e)}", exc_info=True
+        )
+        raise HTTPException(status_code=400, detail="Bad request") from e
     except Exception as e:
-        raise HTTPException(status_code=500, detail="Internal Server Error") from e
+        LOGGER.error(
+            f"Failed to run QA process on dataset {dataset_id} for project {project_id}: {str(e)}", exc_info=True
+        )
+        raise HTTPException(status_code=500, detail="Internal server error") from e

@@ -50,14 +50,15 @@ def get_project_graph(
     except GraphNotFound as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
-    except Exception as e:
-        LOGGER.exception(
-            "Failed to get graph for project %s and runner %s",
-            project_id,
-            graph_runner_id,
+        LOGGER.error(
+            f"Failed to get graph for project {project_id} and runner {graph_runner_id}: {str(e)}", exc_info=True
         )
-        raise HTTPException(status_code=500, detail="Internal Server Error") from e
+        raise HTTPException(status_code=400, detail="Bad request") from e
+    except Exception as e:
+        LOGGER.error(
+            f"Failed to get graph for project {project_id} and runner {graph_runner_id}: {str(e)}", exc_info=True
+        )
+        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @router.put(
@@ -92,7 +93,14 @@ async def update_project_pipeline(
             user_id=user.id,
         )
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
+        error_msg = str(e)
+        LOGGER.error(
+            f"Failed to update graph for project {project_id} runner {graph_runner_id}: {error_msg}", exc_info=True
+        )
+        # Check if this is a draft mode validation error
+        if "only draft versions" in error_msg.lower():
+            raise HTTPException(status_code=403, detail="Only the draft version can be modified") from e
+        raise HTTPException(status_code=400, detail="Bad request") from e
 
 
 @router.post(
@@ -119,7 +127,10 @@ def deploy_graph(
             project_id=project_id,
         )
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
+        LOGGER.error(
+            f"Failed to deploy graph for project {project_id} runner {graph_runner_id}: {str(e)}", exc_info=True
+        )
+        raise HTTPException(status_code=400, detail="Bad request") from e
 
 
 @router.get(
@@ -149,4 +160,7 @@ def load_copy_graph_runner(
             graph_runner_id_to_copy=graph_runner_id,
         )
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
+        LOGGER.error(
+            f"Failed to load copy of graph for project {project_id} runner {graph_runner_id}: {str(e)}", exc_info=True
+        )
+        raise HTTPException(status_code=400, detail="Bad request") from e

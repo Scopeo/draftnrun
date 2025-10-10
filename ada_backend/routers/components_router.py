@@ -40,8 +40,8 @@ def _get_all_components_with_error_handling(session: Session, release_stage: Opt
     try:
         return get_all_components_endpoint(session, release_stage)
     except Exception as e:
-        LOGGER.exception("Failed to get components %s", log_context)
-        raise HTTPException(status_code=500, detail="Internal Server Error") from e
+        LOGGER.error(f"Failed to get components {log_context}: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @router.get("/{organization_id}", response_model=ComponentsResponse)
@@ -98,12 +98,12 @@ async def delete_component(
     except HTTPException:
         raise
     except ComponentNotFound as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
+        raise HTTPException(status_code=404, detail="Resource not found") from e
     except ProtectedComponentDeletionError as e:
         raise HTTPException(status_code=403, detail=str(e)) from e
     except Exception as e:
-        LOGGER.exception("Failed to delete component %s: %s", component_id, e)
-        raise HTTPException(status_code=500, detail="Internal Server Error")
+        LOGGER.error(f"Failed to delete component {component_id}: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @router.put("/{component_id}/release-stage")
@@ -129,14 +129,10 @@ async def update_component_release_stage(
     except HTTPException:
         raise
     except ComponentNotFound as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
+        raise HTTPException(status_code=404, detail="Resource not found") from e
     except Exception as e:
-        LOGGER.exception(
-            "Failed to update component %s release stage to %s",
-            component_id,
-            payload.release_stage,
+        LOGGER.error(
+            f"Failed to update component {component_id} release stage to {payload.release_stage}: {str(e)}",
+            exc_info=True,
         )
-        raise HTTPException(
-            status_code=500,
-            detail="Internal Server Error",
-        ) from e
+        raise HTTPException(status_code=500, detail="Internal server error") from e

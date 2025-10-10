@@ -1,5 +1,6 @@
 from typing import Annotated, List
 from uuid import UUID
+import logging
 
 from sqlalchemy.orm import Session
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -26,6 +27,9 @@ from ada_backend.schemas.ingestion_task_schema import (
 )
 
 
+LOGGER = logging.getLogger(__name__)
+
+
 router = APIRouter(tags=["Ingestion Task"])
 
 
@@ -42,7 +46,8 @@ def get_organization_sources(
     try:
         return get_ingestion_task_by_organization_id(session, organization_id)
     except Exception as e:
-        raise HTTPException(status_code=500, detail="Internal Server Error") from e
+        LOGGER.error(f"Failed to get ingestion tasks for organization {organization_id}: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @router.post("/ingestion_task/{organization_id}", status_code=status.HTTP_201_CREATED)
@@ -62,7 +67,8 @@ def create_organization_task(
         )
         return task_id
     except Exception as e:
-        raise HTTPException(status_code=500, detail="Internal Server Error") from e
+        LOGGER.error(f"Failed to create ingestion task for organization {organization_id}: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @router.post("/organizations/{organization_id}/ingestion_tasks/api-key-auths", status_code=status.HTTP_201_CREATED)
@@ -83,7 +89,10 @@ def create_ingestion_task_with_api_key(
         )
         return task_id
     except Exception as e:
-        raise HTTPException(status_code=500, detail="Internal Server Error") from e
+        LOGGER.error(
+            f"Failed to create ingestion task for organization {organization_id} via API key: {str(e)}", exc_info=True
+        )
+        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @router.patch("/ingestion_task/{organization_id}", status_code=status.HTTP_200_OK)
@@ -99,7 +108,8 @@ def update_organization_task(
         )
         return None
     except Exception as e:
-        raise HTTPException(status_code=500, detail="Internal Server Error") from e
+        LOGGER.error(f"Failed to update ingestion task for organization {organization_id}: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @router.delete("/ingestion_task/{organization_id}/{source_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -117,4 +127,7 @@ def delete_organization_task(
         delete_ingestion_task_by_id(session, organization_id=organization_id, id=source_id)
         return None
     except Exception as e:
-        raise HTTPException(status_code=500, detail="Internal Server Error") from e
+        LOGGER.error(
+            f"Failed to delete ingestion task {source_id} for organization {organization_id}: {str(e)}", exc_info=True
+        )
+        raise HTTPException(status_code=500, detail="Internal server error") from e

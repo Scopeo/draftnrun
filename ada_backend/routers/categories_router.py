@@ -37,8 +37,8 @@ def get_all_categories(
     try:
         return get_all_categories_service(session)
     except Exception as e:
-        LOGGER.exception("Failed to list categories for user %s", user.id)
-        raise HTTPException(status_code=500, detail="Internal Server Error") from e
+        LOGGER.error(f"Failed to list categories: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @router.get("/categories/{category_id}", response_model=CategoryResponse)
@@ -54,10 +54,10 @@ def get_category_by_id(
     try:
         return get_category_by_id_service(session, category_id)
     except CategoryNotFound:
-        raise HTTPException(status_code=404, detail="Category not found")
+        raise HTTPException(status_code=404, detail="Resource not found")
     except Exception as e:
-        LOGGER.exception("Failed to get category %s", category_id)
-        raise HTTPException(status_code=500, detail="Internal Server Error") from e
+        LOGGER.error(f"Failed to get category {category_id}: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @router.post("/categories", response_model=CategoryResponse, summary="Create a new category")
@@ -75,8 +75,8 @@ def create_category(
     except DuplicateCategoryName as e:
         raise HTTPException(status_code=409, detail=str(e)) from e
     except Exception as e:
-        LOGGER.exception("Failed to create category for user %s", user.id)
-        raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}") from e
+        LOGGER.error(f"Failed to create category: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @router.patch("/categories/{category_id}", response_model=CategoryResponse, summary="Update a category")
@@ -99,8 +99,8 @@ def update_category(
     except InvalidCategoryUpdate as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
-        LOGGER.exception("Failed to update category %s", category_id)
-        raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}") from e
+        LOGGER.error(f"Failed to update category {category_id}: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @router.delete("/categories/{category_id}")
@@ -116,7 +116,7 @@ def delete_category(
     try:
         delete_category_service(session, category_id)
     except Exception as e:
-        LOGGER.exception("Failed to delete category %s", category_id)
-        raise HTTPException(status_code=500, detail=f"Internal Server Error: {e}") from e
+        LOGGER.error(f"Failed to delete category {category_id}: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error") from e
 
     return Response(status_code=status.HTTP_204_NO_CONTENT)

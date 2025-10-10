@@ -1,5 +1,5 @@
 import logging
-from typing import List
+from typing import Dict, List
 from uuid import UUID
 
 from sqlalchemy.orm import Session
@@ -8,8 +8,6 @@ from ada_backend.repositories.quality_assurance_repository import (
     create_inputs_groundtruths,
     update_inputs_groundtruths,
     delete_inputs_groundtruths,
-    get_inputs_groundtruths_with_pagination,
-    get_inputs_groundtruths_with_version_outputs,
     get_inputs_groundtruths_by_ids,
     get_inputs_groundtruths_by_dataset,
     get_inputs_groundtruths_count_by_dataset,
@@ -19,6 +17,7 @@ from ada_backend.repositories.quality_assurance_repository import (
     delete_datasets,
     get_datasets_by_project,
     clear_version_outputs_for_input_ids,
+    get_outputs_by_graph_runner,
 )
 from ada_backend.schemas.input_groundtruth_schema import (
     InputGroundtruthResponse,
@@ -26,7 +25,6 @@ from ada_backend.schemas.input_groundtruth_schema import (
     InputGroundtruthUpdateList,
     InputGroundtruthDeleteList,
     InputGroundtruthResponseList,
-    InputGroundtruthWithVersionResponse,
     Pagination,
     PaginatedInputGroundtruthResponse,
     QARunRequest,
@@ -40,61 +38,29 @@ from ada_backend.schemas.dataset_schema import (
     DatasetDeleteList,
     DatasetListResponse,
 )
-from ada_backend.services.agent_runner_service import run_env_agent
-from ada_backend.database.models import EnvType, CallType
+from ada_backend.services.agent_runner_service import run_agent
+from ada_backend.database.models import CallType
+from ada_backend.repositories.env_repository import get_env_relationship_by_graph_runner_id
 
 LOGGER = logging.getLogger(__name__)
-
-
-# Input Groundtruth services
-def get_inputs_groundtruths_by_dataset_service(
-    session: Session,
-    dataset_id: UUID,
-    page: int = 1,
-    size: int = 100,
-) -> List[InputGroundtruthResponse]:
-    """
-    Get input-groundtruth entries for a dataset with pagination.
-
-    Args:
-        session (Session): SQLAlchemy session
-        dataset_id (UUID): ID of the dataset
-        page (int): Page number (1-based)
-        size (int): Number of items per page
-
-    Returns:
-        List[InputGroundtruthResponse]: List of input-groundtruth entries
-    """
-    try:
-        inputs_groundtruths, _ = get_inputs_groundtruths_with_pagination(session, dataset_id, page, size)
-
-        return [InputGroundtruthResponse.model_validate(ig) for ig in inputs_groundtruths]
-    except Exception as e:
-        LOGGER.error(f"Error in get_inputs_groundtruths_by_dataset_service: {str(e)}")
-        raise ValueError(f"Failed to get input-groundtruth entries: {str(e)}") from e
-    finally:
-        session.close()
 
 
 def get_inputs_groundtruths_with_version_outputs_service(
     session: Session,
     dataset_id: UUID,
-    version: EnvType = None,
     page: int = 1,
     page_size: int = 100,
 ) -> PaginatedInputGroundtruthResponse:
-    """
-    Get input-groundtruth entries for a dataset with version outputs using LEFT JOIN.
+    """Get input-groundtruth entries for a dataset without version outputs.
 
     Args:
-        session (Session): SQLAlchemy session
-        dataset_id (UUID): ID of the dataset
-        version (EnvType, optional): Version to filter by (draft or production)
-        page (int): Page number (1-based)
-        page_size (int): Number of items per page
+        session: SQLAlchemy session
+        dataset_id: ID of the dataset
+        page: Page number (1-based)
+        page_size: Number of items per page
 
     Returns:
-        List[InputGroundtruthWithVersionResponse]: List of input-groundtruth entries with version outputs
+        Paginated list of input-groundtruth entries without outputs
     """
     try:
         skip = (page - 1) * page_size
@@ -102,19 +68,10 @@ def get_inputs_groundtruths_with_version_outputs_service(
         number_of_pages = number_of_inputs_outputs // page_size + (
             1 if number_of_inputs_outputs % page_size > 0 else 0
         )
-        results = get_inputs_groundtruths_with_version_outputs(session, dataset_id, version, skip, page_size)
+        inputs = get_inputs_groundtruths_by_dataset(session, dataset_id, skip, page_size)
 
-        response_list = []
-        for input_groundtruth, version_output in results:
-            response_list.append(
-                InputGroundtruthWithVersionResponse(
-                    input_id=input_groundtruth.id,
-                    input=input_groundtruth.input,
-                    groundtruth=input_groundtruth.groundtruth,
-                    output=version_output.output if version_output else None,
-                    version=version_output.version if version_output else None,
-                )
-            )
+        response_list = [InputGroundtruthResponse.model_validate(input_groundtruth) for input_groundtruth in inputs]
+
         return PaginatedInputGroundtruthResponse(
             pagination=Pagination(
                 page=page,
@@ -127,8 +84,29 @@ def get_inputs_groundtruths_with_version_outputs_service(
     except Exception as e:
         LOGGER.error(f"Error in get_inputs_groundtruths_with_version_outputs_service: {str(e)}")
         raise ValueError(f"Failed to get input-groundtruth entries with version outputs: {str(e)}") from e
-    finally:
-        session.close()
+
+
+def get_outputs_by_graph_runner_service(
+    session: Session,
+    dataset_id: UUID,
+    graph_runner_id: UUID,
+) -> Dict[UUID, str]:
+    """Get outputs for a specific graph_runner.
+
+    Args:
+        session: SQLAlchemy session
+        dataset_id: ID of the dataset
+        graph_runner_id: ID of the graph runner
+
+    Returns:
+        Dictionary mapping input_id (as UUID) to output (as string)
+    """
+    try:
+        outputs = get_outputs_by_graph_runner(session, dataset_id, graph_runner_id)
+        return {input_id: output for input_id, output in outputs}
+    except Exception as e:
+        LOGGER.error(f"Error in get_outputs_by_graph_runner_service: {str(e)}")
+        raise ValueError(f"Failed to get outputs for graph runner: {str(e)}") from e
 
 
 async def run_qa_service(
@@ -137,22 +115,19 @@ async def run_qa_service(
     dataset_id: UUID,
     run_request: QARunRequest,
 ) -> QARunResponse:
-    """
-    Run QA process on multiple inputs and store results in VersionOutput table.
+    """Run QA process on multiple inputs and store results in VersionOutput table.
 
     Args:
-        session (Session): SQLAlchemy session
-        project_id (UUID): ID of the project to run
-        dataset_id (UUID): ID of the dataset
-        run_request (QARunRequest): Request containing version and either input_ids or run_all flag
+        session: SQLAlchemy session
+        project_id: ID of the project to run
+        dataset_id: ID of the dataset
+        run_request: Request containing graph_runner_id and either input_ids or run_all flag
 
     Returns:
-        QARunResponse: Results of the QA run with summary
+        Results of the QA run with summary
     """
     try:
-        # Get the input-groundtruth entries based on run_all flag or specific IDs
         if run_request.run_all:
-            # Get all input entries for the dataset
             number_of_dataset_inputs = get_inputs_groundtruths_count_by_dataset(session, dataset_id)
             input_entries = get_inputs_groundtruths_by_dataset(
                 session, dataset_id, skip=0, limit=number_of_dataset_inputs
@@ -160,12 +135,10 @@ async def run_qa_service(
             if not input_entries:
                 raise ValueError(f"No input entries found in dataset {dataset_id}")
         else:
-            # Get the input-groundtruth entries by their IDs
             input_entries = get_inputs_groundtruths_by_ids(session, run_request.input_ids)
             if not input_entries:
                 raise ValueError("No input entries found for the provided input_ids")
 
-            # Verify all inputs belong to the specified dataset
             for entry in input_entries:
                 if entry.dataset_id != dataset_id:
                     raise ValueError(f"Input {entry.id} does not belong to dataset {dataset_id}")
@@ -174,18 +147,23 @@ async def run_qa_service(
         successful_runs = 0
         failed_runs = 0
 
-        # Process each input entry
+        try:
+            env_relationship = get_env_relationship_by_graph_runner_id(
+                session=session, graph_runner_id=run_request.graph_runner_id
+            )
+            environment = env_relationship.environment
+        except ValueError as e:
+            raise ValueError(f"Graph runner {run_request.graph_runner_id} not found or not bound to project") from e
         for input_entry in input_entries:
             try:
-                # Prepare input data for the agent (similar to chat endpoint)
                 input_data = {"messages": [{"role": "user", "content": input_entry.input}]}
 
-                # Run the agent using the specified version (draft or production)
-                chat_response = await run_env_agent(
+                chat_response = await run_agent(
                     session=session,
                     project_id=project_id,
-                    env=run_request.version,
+                    graph_runner_id=run_request.graph_runner_id,
                     input_data=input_data,
+                    environment=environment,
                     call_type=CallType.QA,
                 )
 
@@ -193,22 +171,20 @@ async def run_qa_service(
                 if chat_response.error:
                     output_content = f"Error: {chat_response.error}"
 
-                # Upsert result in VersionOutput table
                 upsert_version_output(
                     session=session,
                     input_id=input_entry.id,
                     output=output_content,
-                    version=run_request.version,
+                    graph_runner_id=run_request.graph_runner_id,
                 )
 
-                # TODO : Add a score to determine success or failure
                 result = QARunResult(
                     input_id=input_entry.id,
                     input=input_entry.input,
                     groundtruth=input_entry.groundtruth,
                     output=output_content,
-                    version=run_request.version,
-                    success=True,  # Everyone passes for now
+                    graph_runner_id=run_request.graph_runner_id,
+                    success=True,
                     error=None,
                 )
 
@@ -217,22 +193,20 @@ async def run_qa_service(
             except Exception as e:
                 LOGGER.error(f"Error processing input {input_entry.id}: {str(e)}")
 
-                # Upsert error result in VersionOutput table
                 error_output = f"Error: {str(e)}"
-                _ = upsert_version_output(
+                upsert_version_output(
                     session=session,
                     input_id=input_entry.id,
                     output=error_output,
-                    version=run_request.version,
+                    graph_runner_id=run_request.graph_runner_id,
                 )
 
-                # Prepare error result
                 result = QARunResult(
                     input_id=input_entry.id,
                     input=input_entry.input,
                     groundtruth=input_entry.groundtruth,
                     output=error_output,
-                    version=run_request.version,
+                    graph_runner_id=run_request.graph_runner_id,
                     success=False,
                     error=str(e),
                 )
@@ -242,11 +216,8 @@ async def run_qa_service(
             results.append(result)
 
         total_processed = len(results)
-
-        # Calculate success rate
         success_rate = (successful_runs / total_processed * 100) if total_processed > 0 else 0.0
 
-        # Create summary
         summary = QARunSummary(
             total=total_processed,
             passed=successful_runs,
@@ -257,7 +228,7 @@ async def run_qa_service(
         run_mode = "all entries" if run_request.run_all else f"{len(run_request.input_ids)} selected entries"
         LOGGER.info(
             f"QA run completed for project {project_id}, "
-            f"dataset {dataset_id}, version {run_request.version}, mode: {run_mode}"
+            f"dataset {dataset_id}, graph_runner_id {run_request.graph_runner_id}, mode: {run_mode}"
         )
         LOGGER.info(
             f"Total processed: {total_processed}, Successful: {successful_runs}, "
@@ -272,8 +243,6 @@ async def run_qa_service(
     except Exception as e:
         LOGGER.error(f"Error in run_qa_service: {str(e)}")
         raise ValueError(f"Failed to run QA process: {str(e)}") from e
-    finally:
-        session.close()
 
 
 def create_inputs_groundtruths_service(
@@ -309,8 +278,6 @@ def create_inputs_groundtruths_service(
     except Exception as e:
         LOGGER.error(f"Error in create_inputs_groundtruths_service: {str(e)}")
         raise ValueError(f"Failed to create input-groundtruth entries: {str(e)}") from e
-    finally:
-        session.close()
 
 
 def update_inputs_groundtruths_service(
@@ -354,8 +321,6 @@ def update_inputs_groundtruths_service(
     except Exception as e:
         LOGGER.error(f"Error in update_inputs_groundtruths_service: {str(e)}")
         raise ValueError(f"Failed to update input-groundtruth entries: {str(e)}") from e
-    finally:
-        session.close()
 
 
 def delete_inputs_groundtruths_service(
@@ -387,11 +352,8 @@ def delete_inputs_groundtruths_service(
     except Exception as e:
         LOGGER.error(f"Error in delete_inputs_groundtruths_service: {str(e)}")
         raise ValueError(f"Failed to delete input-groundtruth entries: {str(e)}") from e
-    finally:
-        session.close()
 
 
-# Dataset services
 def get_datasets_by_project_service(
     session: Session,
     project_id: UUID,
@@ -412,8 +374,6 @@ def get_datasets_by_project_service(
     except Exception as e:
         LOGGER.error(f"Error in get_datasets_by_project_service: {str(e)}")
         raise ValueError(f"Failed to get datasets: {str(e)}") from e
-    finally:
-        session.close()
 
 
 def create_datasets_service(
@@ -444,8 +404,6 @@ def create_datasets_service(
     except Exception as e:
         LOGGER.error(f"Error in create_datasets_service: {str(e)}")
         raise ValueError(f"Failed to create datasets: {str(e)}") from e
-    finally:
-        session.close()
 
 
 def update_dataset_service(
@@ -479,8 +437,6 @@ def update_dataset_service(
     except Exception as e:
         LOGGER.error(f"Error in update_dataset_service: {str(e)}")
         raise ValueError(f"Failed to update dataset: {str(e)}") from e
-    finally:
-        session.close()
 
 
 def delete_datasets_service(
@@ -511,5 +467,3 @@ def delete_datasets_service(
     except Exception as e:
         LOGGER.error(f"Error in delete_datasets_service: {str(e)}")
         raise ValueError(f"Failed to delete datasets: {str(e)}") from e
-    finally:
-        session.close()

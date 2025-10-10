@@ -10,21 +10,37 @@ from settings import settings
 
 client = TestClient(app)
 ORGANIZATION_ID = "37b7d67f-8f29-4fce-8085-19dea582f605"  # umbrella organization
-PROJECT_ID = "f7ddbfcb-6843-4ae9-a15b-40aa565b955b"  # graph test project
 JWT_TOKEN = get_user_jwt(settings.TEST_USER_EMAIL, settings.TEST_USER_PASSWORD)
 HEADERS_JWT = {
     "accept": "application/json",
     "Authorization": f"Bearer {JWT_TOKEN}",
 }
 
-GRAPH_RUNNER_ID = str(uuid4())
-
 
 def test_create_empty_graph_runner():
     """
     Create a empty graph runner.
     """
-    endpoint = f"/projects/{PROJECT_ID}/graph/{GRAPH_RUNNER_ID}"
+    # Create a unique project for this test to avoid constraint violations
+    project_id = str(uuid4())
+    project_payload = {
+        "project_id": project_id,
+        "project_name": f"empty_graph_test_{project_id}",
+        "description": "Test project for empty graph runner",
+    }
+    project_response = client.post(f"/projects/{ORGANIZATION_ID}", headers=HEADERS_JWT, json=project_payload)
+    assert project_response.status_code == 200
+
+    # Get the auto-created draft graph runner ID
+    project_details = client.get(f"/projects/{project_id}", headers=HEADERS_JWT).json()
+    graph_runner_id = None
+    for gr in project_details["graph_runners"]:
+        if gr["env"] == "draft":
+            graph_runner_id = gr["graph_runner_id"]
+            break
+    assert graph_runner_id is not None, "Draft graph runner should be auto-created"
+
+    endpoint = f"/projects/{project_id}/graph/{graph_runner_id}"
     payload = {
         "component_instances": [],
         "relationships": [],
@@ -36,7 +52,7 @@ def test_create_empty_graph_runner():
 
     assert response.status_code == 200
     assert isinstance(response.json(), dict)
-    assert response.json()["graph_id"] == GRAPH_RUNNER_ID
+    assert response.json()["graph_id"] == graph_runner_id
 
     response = client.get(endpoint, headers=HEADERS_JWT)
     results = response.json()
@@ -45,12 +61,34 @@ def test_create_empty_graph_runner():
     # GET should include port_mappings even if none were provided
     assert results == {**payload, "port_mappings": []}
 
+    # Cleanup
+    client.delete(f"/projects/{project_id}", headers=HEADERS_JWT)
+
 
 def test_update_graph_runner():
     """
     Update the graph runner.
     """
-    endpoint = f"/projects/{PROJECT_ID}/graph/{GRAPH_RUNNER_ID}"
+    # Create a unique project for this test to avoid constraint violations
+    project_id = str(uuid4())
+    project_payload = {
+        "project_id": project_id,
+        "project_name": f"update_graph_test_{project_id}",
+        "description": "Test project for updating graph runner",
+    }
+    project_response = client.post(f"/projects/{ORGANIZATION_ID}", headers=HEADERS_JWT, json=project_payload)
+    assert project_response.status_code == 200
+
+    # Get the auto-created draft graph runner ID
+    project_details = client.get(f"/projects/{project_id}", headers=HEADERS_JWT).json()
+    graph_runner_id = None
+    for gr in project_details["graph_runners"]:
+        if gr["env"] == "draft":
+            graph_runner_id = gr["graph_runner_id"]
+            break
+    assert graph_runner_id is not None, "Draft graph runner should be auto-created"
+
+    endpoint = f"/projects/{project_id}/graph/{graph_runner_id}"
     component_instance_1_id = str(uuid4())
     component_instance_2_id = str(uuid4())
     edge_id = str(uuid4())
@@ -200,7 +238,7 @@ def test_update_graph_runner():
 
     assert response.status_code == 200
     assert isinstance(response.json(), dict)
-    assert response.json()["graph_id"] == GRAPH_RUNNER_ID
+    assert response.json()["graph_id"] == graph_runner_id
 
     response = client.get(endpoint, headers=HEADERS_JWT)
     results = response.json()
@@ -214,12 +252,43 @@ def test_update_graph_runner():
     assert results["relationships"] == payload["relationships"]
     assert results["edges"] == payload["edges"]
 
+    # Cleanup
+    client.delete(f"/projects/{project_id}", headers=HEADERS_JWT)
+
 
 def test_delete_graph_runner():
+    # Create a unique project for this test to avoid constraint violations
+    project_id = str(uuid4())
+    project_payload = {
+        "project_id": project_id,
+        "project_name": f"delete_graph_test_{project_id}",
+        "description": "Test project for deleting graph runner",
+    }
+    project_response = client.post(f"/projects/{ORGANIZATION_ID}", headers=HEADERS_JWT, json=project_payload)
+    assert project_response.status_code == 200
+
+    # Get the auto-created draft graph runner ID
+    project_details = client.get(f"/projects/{project_id}", headers=HEADERS_JWT).json()
+    graph_runner_id = None
+    for gr in project_details["graph_runners"]:
+        if gr["env"] == "draft":
+            graph_runner_id = gr["graph_runner_id"]
+            break
+    assert graph_runner_id is not None, "Draft graph runner should be auto-created"
+
+    # Verify the graph runner exists
+    endpoint = f"/projects/{project_id}/graph/{graph_runner_id}"
+    response = client.get(endpoint, headers=HEADERS_JWT)
+    assert response.status_code == 200
+
+    # Now delete it
     session = SessionLocal()
-    graph_id = UUID(GRAPH_RUNNER_ID)
+    graph_id = UUID(graph_runner_id)
     delete_graph_runner(session, graph_id)
 
-    endpoint = f"/projects/{PROJECT_ID}/graph/{GRAPH_RUNNER_ID}"
+    # Verify it's gone
     response = client.get(endpoint, headers=HEADERS_JWT)
     assert response.status_code == 404
+
+    # Cleanup project
+    client.delete(f"/projects/{project_id}", headers=HEADERS_JWT)

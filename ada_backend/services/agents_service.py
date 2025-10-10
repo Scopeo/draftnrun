@@ -1,6 +1,5 @@
 from collections import defaultdict
 from typing import DefaultDict
-import uuid
 from uuid import UUID
 import logging
 
@@ -40,53 +39,81 @@ LOGGER = logging.getLogger(__name__)
 
 def get_all_agents_service(session: Session, organization_id: UUID) -> list[AgentWithGraphRunnersSchema]:
     agents_with_graph_runners_rows = fetch_agents_with_graph_runners_by_organization(session, organization_id)
-    by_agent: DefaultDict[UUID, dict] = defaultdict(lambda: {"agent": None, "grs": []})
-    for agent, project_env_binding in agents_with_graph_runners_rows:
-        bucket = by_agent[agent.id]
-        bucket["agent"] = agent
-        bucket["grs"].append(
+    agents_grouped_by_id: DefaultDict[UUID, dict] = defaultdict(lambda: {"agent": None, "graph_runners": []})
+    for agent, graph_runner, project_env_binding in agents_with_graph_runners_rows:
+        agent_group = agents_grouped_by_id[agent.id]
+        agent_group["agent"] = agent
+        agent_group["graph_runners"].append(
             GraphRunnerEnvDTO(
-                graph_runner_id=project_env_binding.graph_runner_id,
-                env=project_env_binding.environment,
+                graph_runner_id=graph_runner.id,
+                env=project_env_binding.environment if project_env_binding else None,
+                tag_version=graph_runner.tag_version,
             )
         )
-    result: list[AgentWithGraphRunnersSchema] = []
-    for data in by_agent.values():
-        result.append(
-            AgentWithGraphRunnersSchema(
-                id=data["agent"].id,
-                name=data["agent"].name,
-                description=data["agent"].description,
-                graph_runners=data["grs"],
-            )
+
+    return [
+        AgentWithGraphRunnersSchema(
+            id=agent_data["agent"].id,
+            name=agent_data["agent"].name,
+            description=agent_data["agent"].description,
+            graph_runners=agent_data["graph_runners"],
         )
-    return result
+        for agent_data in agents_grouped_by_id.values()
+    ]
+
+
+def _extract_system_prompt_and_model_params(
+    component_instance: ComponentInstanceSchema,
+) -> tuple[str, list[PipelineParameterSchema]]:
+    """
+    Extract system prompt and model parameters from an AI agent component instance.
+
+    Args:
+        component_instance: The AI agent component instance
+
+    Returns:
+        Tuple of (system_prompt, model_parameters)
+    """
+    system_prompt = ""
+    model_parameters = []
+
+    for param in component_instance.parameters:
+        if param.id == SYSTEM_PROMPT_PARAMETER_DEF_ID:
+            system_prompt = param.value if param.value else param.default
+        elif param.id in AI_MODEL_PARAMETER_IDS.values():
+            model_parameters.append(param)
+
+    return system_prompt, model_parameters
 
 
 def get_agent_by_id_service(session: Session, agent_id: UUID, graph_runner_id: UUID) -> AgentInfoSchema:
-    project = get_project(session, project_id=agent_id)
-    if not project:
+    agent_project = get_project(session, project_id=agent_id)
+    if not agent_project:
         return ProjectNotFound(agent_id)
-    graph_response = get_graph_service(session, project_id=agent_id, graph_runner_id=graph_runner_id)
+
+    graph_data = get_graph_service(session, project_id=agent_id, graph_runner_id=graph_runner_id)
+
+    system_prompt = ""
     model_parameters: list[PipelineParameterSchema] = []
-    tools: list[ComponentInstanceSchema] = []
-    for component_instance in graph_response.component_instances:
-        if component_instance.is_start_node and component_instance.component_id == COMPONENT_UUIDS["base_ai_agent"]:
-            for param in component_instance.parameters:
-                if param.id == SYSTEM_PROMPT_PARAMETER_DEF_ID:
-                    system_prompt = param.value if param.value else param.default
-                elif param.id in AI_MODEL_PARAMETER_IDS.values():  # model parameters
-                    model_parameters.append(param)
-        else:  # consider all other components as tools
-            tools.append(component_instance)
+    agent_tools: list[ComponentInstanceSchema] = []
+
+    for component_instance in graph_data.component_instances:
+        is_ai_agent_component = (
+            component_instance.is_start_node and component_instance.component_id == COMPONENT_UUIDS["base_ai_agent"]
+        )
+
+        if is_ai_agent_component:
+            system_prompt, model_parameters = _extract_system_prompt_and_model_params(component_instance)
+        else:
+            agent_tools.append(component_instance)
 
     return AgentInfoSchema(
-        name=project.name,
-        description=project.description,
-        organization_id=project.organization_id,
+        name=agent_project.name,
+        description=agent_project.description,
+        organization_id=agent_project.organization_id,
         system_prompt=system_prompt,
         model_parameters=model_parameters,
-        tools=tools,
+        tools=agent_tools,
     )
 
 
@@ -127,7 +154,7 @@ def create_new_agent_service(
     )
     graph_runner = insert_graph_runner(
         session=session,
-        graph_id=uuid.uuid4(),
+        graph_id=agent_data.id,
         add_input=False,
     )
     graph_runner_id = graph_runner.id
@@ -174,35 +201,52 @@ def build_ai_agent_component(
     )
 
 
+def _build_tool_relationships(
+    graph_runner_id: UUID, tools: list[ComponentInstanceSchema]
+) -> list[ComponentRelationshipSchema]:
+    """
+    Build relationships linking tools to the AI agent.
+
+    Args:
+        graph_runner_id: ID of the graph runner (AI agent instance)
+        tools: List of tool component instances
+
+    Returns:
+        List of component relationships
+    """
+    return [
+        ComponentRelationshipSchema(
+            parent_component_instance_id=graph_runner_id,
+            child_component_instance_id=tool.id,
+            parameter_name=AGENT_TOOLS_PARAMETER_NAME,
+            order=index,
+        )
+        for index, tool in enumerate(tools)
+    ]
+
+
 async def update_agent_service(
     session: Session, user_id: UUID, agent_id: UUID, graph_runner_id: UUID, agent_data: AgentUpdateSchema
 ) -> GraphUpdateResponse:
-    component_instances = agent_data.tools.copy()
-    component_instances.append(
-        build_ai_agent_component(
-            ai_agent_instance_id=graph_runner_id,
-            model_parameters=agent_data.model_parameters,
-            system_prompt=agent_data.system_prompt,
-        )
+    ai_agent_component = build_ai_agent_component(
+        ai_agent_instance_id=graph_runner_id,
+        model_parameters=agent_data.model_parameters,
+        system_prompt=agent_data.system_prompt,
     )
 
-    relationships: list[ComponentRelationshipSchema] = []
-    for index, tool in enumerate(agent_data.tools):
-        relationships.append(
-            ComponentRelationshipSchema(
-                parent_component_instance_id=graph_runner_id,
-                child_component_instance_id=tool.id,
-                parameter_name=AGENT_TOOLS_PARAMETER_NAME,
-                order=index,
-            )
-        )
-    graph_update_schema = GraphUpdateSchema(
-        relationships=relationships, component_instances=component_instances, edges=[]
+    all_component_instances = agent_data.tools.copy()
+    all_component_instances.append(ai_agent_component)
+
+    tool_relationships = _build_tool_relationships(graph_runner_id, agent_data.tools)
+
+    graph_update_request = GraphUpdateSchema(
+        relationships=tool_relationships, component_instances=all_component_instances, edges=[]
     )
+
     return await update_graph_service(
         session=session,
         graph_runner_id=graph_runner_id,
         project_id=agent_id,
-        graph_project=graph_update_schema,
+        graph_project=graph_update_request,
         user_id=user_id,
     )
