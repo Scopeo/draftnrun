@@ -57,8 +57,5 @@ def update_graph_runner_tag_fields(
     if change_log is not None:
         graph_runner.change_log = change_log
 
-    # Keep tag_name in sync with current values
-    graph_runner.tag_name = compose_tag_name(graph_runner.tag_version, graph_runner.version_name)
-
     session.add(graph_runner)
     session.commit()

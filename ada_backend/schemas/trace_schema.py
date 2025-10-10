@@ -22,11 +22,8 @@ class TraceSpan(BaseModel):
     children: list["TraceSpan"]
     environment: EnvType | None
     call_type: CallType | None
-    tag_version: str | None
     graph_runner_id: str | None
-    version_name: str | None = None
     tag_name: str | None = None
-    change_log: str | None = None
 
     @classmethod
     def from_dict(cls, data: dict) -> "TraceSpan":
@@ -48,11 +45,8 @@ class TraceSpan(BaseModel):
             children=[cls.from_dict(child) for child in data.get("children", [])],
             environment=data.get("environment"),
             call_type=data.get("call_type"),
-            tag_version=data.get("tag_version"),
             graph_runner_id=data.get("graph_runner_id"),
-            version_name=data.get("version_name"),
             tag_name=data.get("tag_name"),
-            change_log=data.get("change_log"),
         )
 
 
@@ -72,10 +66,7 @@ class RootTraceSpan(BaseModel):
     llm_token_count_completion: int | None
     environment: EnvType | None
     call_type: CallType | None
-    tag_version: str | None
     graph_runner_id: str | None
-    version_name: str | None = None
-    change_log: str | None = None
     tag_name: str | None = None
 
 
