@@ -84,6 +84,7 @@ async def get_user_from_supabase_token(
     except HTTPException:
         raise
     except Exception as e:
+        LOGGER.error("Failed to validate Supabase token", exc_info=True)
         raise HTTPException(status_code=401, detail="Failed to validate Supabase token") from e
 
 
@@ -114,10 +115,11 @@ def user_has_access_to_project_dependency(allowed_roles: set[str]):
                     detail="You don't have access to this project",
                 )
         except ValueError as e:
-            raise HTTPException(
-                status_code=403,
-                detail=str(e),
-            ) from e
+            LOGGER.error(
+                f"Access check failed for user {user.id} on project {project_id}: {e}",
+                exc_info=True,
+            )
+            raise HTTPException(status_code=403, detail="You don't have access to this project") from e
         return user
 
     return wrapper
@@ -145,6 +147,10 @@ def user_has_access_to_organization_dependency(allowed_roles: set[str]):
                     detail="You don't have access to this organization",
                 )
         except ValueError as e:
+            LOGGER.error(
+                f"Access check failed for user {user.id} on organization {organization_id}: {e}",
+                exc_info=True,
+            )
             raise HTTPException(
                 status_code=403,
                 detail="You don't have access to this organization",
@@ -331,7 +337,8 @@ async def verify_api_key_dependency(
     try:
         return verify_api_key(session, private_key=cleaned_x_api_key)
     except ValueError as e:
-        raise HTTPException(status_code=401, detail=str(e)) from e
+        LOGGER.error("API key verification failed", exc_info=True)
+        raise HTTPException(status_code=401, detail="Invalid API key") from e
 
 
 async def verify_ingestion_api_key_dependency(

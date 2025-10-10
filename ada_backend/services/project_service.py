@@ -29,6 +29,7 @@ from ada_backend.schemas.project_schema import (
     ProjectCreateSchema,
 )
 from ada_backend.services.graph.delete_graph_service import delete_graph_runner_service
+from ada_backend.services.errors import ProjectNotFound
 from ada_backend.segment_analytics import track_project_created, track_project_saved, track_user_get_project_list
 
 LOGGER = getLogger(__name__)
@@ -36,6 +37,8 @@ LOGGER = getLogger(__name__)
 
 def get_project_service(session: Session, project_id: UUID) -> ProjectWithGraphRunnersSchema:
     project_with_detail = get_project_with_details(session, project_id=project_id)
+    if not project_with_detail:
+        raise ProjectNotFound(project_id)
     return project_with_detail
 
 
@@ -48,6 +51,7 @@ def get_workflows_by_organization_service(
     if user_id:
         track_user_get_project_list(user_id, organization_id)
     projects = get_workflows_by_organization(session, organization_id)
+
     return [
         ProjectResponse(
             project_id=project.id,

@@ -169,7 +169,7 @@ def test_input_groundtruth_basic_operations():
     dataset_id = dataset_data["datasets"][0]["id"]
 
     # Test input-groundtruth creation
-    input_endpoint = f"/projects/{project_uuid}/qa/{dataset_id}/entries"
+    input_endpoint = f"/projects/{project_uuid}/qa/datasets/{dataset_id}/entries"
     create_payload = {
         "inputs_groundtruths": [
             {"input": "What is 2 + 2?", "groundtruth": "4"},
@@ -331,7 +331,7 @@ def _create_dummy_agent_workflow_config():
 
 
 def test_run_qa_endpoint():
-    """Test the run_qa endpoint with a configured workflow."""
+    """Test the run_qa endpoint with graph_runner_id (migrated from version field)."""
 
     # Create a project for testing
     project_uuid = str(uuid4())
@@ -374,6 +374,17 @@ def test_run_qa_endpoint():
     deploy_response = client.post(f"/projects/{project_uuid}/graph/{graph_runner_id}/deploy", headers=HEADERS_JWT)
     assert deploy_response.status_code == 200
 
+    # Get production graph runner ID after deployment
+    project_details_response = client.get(f"/projects/{project_uuid}", headers=HEADERS_JWT)
+    project_details = project_details_response.json()
+    production_graph_runner = None
+    for gr in project_details["graph_runners"]:
+        if gr["env"] == "production":
+            production_graph_runner = gr
+            break
+    assert production_graph_runner is not None, "Production graph runner not found"
+    production_graph_runner_id = production_graph_runner["graph_runner_id"]
+
     # Create a dataset
     dataset_uuid = str(uuid4())
     dataset_payload = {"datasets_name": [f"qa_run_dataset_{dataset_uuid}"]}
@@ -393,20 +404,20 @@ def test_run_qa_endpoint():
     }
 
     input_response = client.post(
-        f"/projects/{project_uuid}/qa/{dataset_id}/entries", headers=HEADERS_JWT, json=input_payload
+        f"/projects/{project_uuid}/qa/datasets/{dataset_id}/entries", headers=HEADERS_JWT, json=input_payload
     )
     assert input_response.status_code == 200
     input_data = input_response.json()
     assert len(input_data["inputs_groundtruths"]) == 3
 
-    # Test the run_qa endpoint with draft version on selected inputs
+    # Test the run_qa endpoint with draft graph_runner_id on selected inputs
     run_qa_payload_selection = {
-        "version": "draft",
+        "graph_runner_id": graph_runner_id,
         "input_ids": [input_data["inputs_groundtruths"][0]["id"], input_data["inputs_groundtruths"][1]["id"]],
     }
 
     run_qa_response_selection = client.post(
-        f"/projects/{project_uuid}/qa/{dataset_id}/run", headers=HEADERS_JWT, json=run_qa_payload_selection
+        f"/projects/{project_uuid}/qa/datasets/{dataset_id}/run", headers=HEADERS_JWT, json=run_qa_payload_selection
     )
 
     assert (
@@ -425,7 +436,7 @@ def test_run_qa_endpoint():
             result["input"] == output_content
         ), f"Input and output should be the same for dummy agent. Input: {result['input']}, Output: {result['output']}"
         assert result["success"] is True, f"All results should be successful. Result: {result}"
-        assert result["version"] == "draft", f"Version should be draft. Result: {result}"
+        assert result["graph_runner_id"] == graph_runner_id, f"graph_runner_id should match. Result: {result}"
 
     # Verify summary statistics for selection
     summary_selection = qa_results_selection["summary"]
@@ -434,14 +445,14 @@ def test_run_qa_endpoint():
     assert summary_selection["failed"] == 0
     assert summary_selection["success_rate"] == 100.0
 
-    # Test the run_qa endpoint with run_all=True on production version
+    # Test the run_qa endpoint with run_all=True on production graph_runner
     run_qa_payload_all = {
-        "version": "production",
+        "graph_runner_id": production_graph_runner_id,
         "run_all": True,
     }
 
     run_qa_response_all = client.post(
-        f"/projects/{project_uuid}/qa/{dataset_id}/run", headers=HEADERS_JWT, json=run_qa_payload_all
+        f"/projects/{project_uuid}/qa/datasets/{dataset_id}/run", headers=HEADERS_JWT, json=run_qa_payload_all
     )
 
     assert run_qa_response_all.status_code == 200, f"Expected status code 200, got {run_qa_response_all.status_code}"
@@ -461,7 +472,9 @@ def test_run_qa_endpoint():
             result["input"] == output_content
         ), f"Input and output should be the same for dummy agent. Input: {result['input']}, Output: {result['output']}"
         assert result["success"] is True, f"All results should be successful. Result: {result}"
-        assert result["version"] == "production", f"Version should be production. Result: {result}"
+        assert (
+            result["graph_runner_id"] == production_graph_runner_id
+        ), f"graph_runner_id should match production. Result: {result}"
 
     # Verify summary statistics for run_all
     summary_all = qa_results_all["summary"]
@@ -475,7 +488,7 @@ def test_run_qa_endpoint():
 
 
 def test_quality_assurance_complete_workflow():
-    """Test a complete quality assurance workflow."""
+    """Test a complete quality assurance workflow with graph_runner_id."""
 
     # Create a project
     project_uuid = str(uuid4())
@@ -487,6 +500,19 @@ def test_quality_assurance_complete_workflow():
 
     project_response = client.post(f"/projects/{ORGANIZATION_ID}", headers=HEADERS_JWT, json=project_payload)
     assert project_response.status_code == 200
+
+    # Get graph runner IDs
+    project_details_response = client.get(f"/projects/{project_uuid}", headers=HEADERS_JWT)
+    assert project_details_response.status_code == 200
+    project_details = project_details_response.json()
+
+    draft_graph_runner = None
+    for gr in project_details["graph_runners"]:
+        if gr["env"] == "draft":
+            draft_graph_runner = gr
+            break
+    assert draft_graph_runner is not None, "Draft graph runner not found"
+    draft_graph_runner_id = draft_graph_runner["graph_runner_id"]
 
     # Create a dataset
     dataset_payload = {"datasets_name": ["complete_workflow_dataset"]}
@@ -502,82 +528,58 @@ def test_quality_assurance_complete_workflow():
         ]
     }
     input_response = client.post(
-        f"/projects/{project_uuid}/qa/{dataset_id}/entries", headers=HEADERS_JWT, json=input_payload
+        f"/projects/{project_uuid}/qa/datasets/{dataset_id}/entries", headers=HEADERS_JWT, json=input_payload
     )
     assert input_response.status_code == 200
     input_data = input_response.json()
 
-    # Test querying without version filter - should return all entries with null versions initially
-    get_response_initial = client.get(f"/projects/{project_uuid}/qa/{dataset_id}/entries", headers=HEADERS_JWT)
+    # Test querying entries (migrated API - no longer supports version filter)
+    get_response_initial = client.get(
+        f"/projects/{project_uuid}/qa/datasets/{dataset_id}/entries", headers=HEADERS_JWT
+    )
     assert get_response_initial.status_code == 200
     initial_results = get_response_initial.json()["inputs_groundtruths"]
     assert len(initial_results) == 2  # All 2 inputs should be returned
-    # All should have no outputs initially (LEFT JOIN behavior)
-    for result in initial_results:
-        assert result["output"] is None
-        assert result["version"] is None
-        assert result["input_id"] is not None
-        assert result["input"] is not None
-        assert result["groundtruth"] is not None
 
-    # Test filtering by version (draft) - should return 0 results initially
-    get_response_draft = client.get(
-        f"/projects/{project_uuid}/qa/{dataset_id}/entries?version=draft", headers=HEADERS_JWT
+    # Test new outputs endpoint - should return empty initially
+    get_outputs_response = client.get(
+        f"/projects/{project_uuid}/qa/datasets/{dataset_id}/outputs?graph_runner_id={draft_graph_runner_id}",
+        headers=HEADERS_JWT,
     )
-    assert get_response_draft.status_code == 200
-    draft_results = get_response_draft.json()["inputs_groundtruths"]
-    assert len(draft_results) == 0  # No draft outputs exist yet
+    assert get_outputs_response.status_code == 200
+    draft_outputs = get_outputs_response.json()
+    assert len(draft_outputs) == 0  # No outputs exist yet
 
-    # Run QA on draft version
+    # Run QA on draft graph runner
     run_qa_payload = {
-        "version": "draft",
+        "graph_runner_id": draft_graph_runner_id,
         "input_ids": [input_data["inputs_groundtruths"][0]["id"]],
     }
     run_qa_response = client.post(
-        f"/projects/{project_uuid}/qa/{dataset_id}/run", headers=HEADERS_JWT, json=run_qa_payload
+        f"/projects/{project_uuid}/qa/datasets/{dataset_id}/run", headers=HEADERS_JWT, json=run_qa_payload
     )
     assert run_qa_response.status_code == 200
+    qa_results = run_qa_response.json()
+    assert "results" in qa_results
+    assert "summary" in qa_results
+    assert len(qa_results["results"]) == 1, "Should have 1 result for 1 input"
+    assert qa_results["results"][0]["success"] is True, "QA run should be successful"
+    assert qa_results["results"][0]["graph_runner_id"] == str(draft_graph_runner_id), "graph_runner_id should match"
+    assert qa_results["results"][0]["input"] is not None, "Input should be present in results"
+    assert qa_results["results"][0]["output"] is not None, "Output should be present in results"
 
-    # Check that draft version outputs now exist
-    get_response_draft_after = client.get(
-        f"/projects/{project_uuid}/qa/{dataset_id}/entries?version=draft", headers=HEADERS_JWT
+    # Verify outputs were created using the outputs endpoint (now returns Dict[UUID, str])
+    get_outputs_after_run = client.get(
+        f"/projects/{project_uuid}/qa/datasets/{dataset_id}/outputs?graph_runner_id={draft_graph_runner_id}",
+        headers=HEADERS_JWT,
     )
-    assert get_response_draft_after.status_code == 200
-    draft_results_after = get_response_draft_after.json()["inputs_groundtruths"]
-    # Should return exactly 1 result with draft version output
-    assert len(draft_results_after) == 1
-    assert draft_results_after[0]["version"] == "draft"
-    assert draft_results_after[0]["output"] is not None
-
-    # Run QA on production version
-    run_qa_payload_production = {
-        "version": "production",
-        "input_ids": [input_data["inputs_groundtruths"][1]["id"]],
-    }
-    run_qa_response_production = client.post(
-        f"/projects/{project_uuid}/qa/{dataset_id}/run", headers=HEADERS_JWT, json=run_qa_payload_production
-    )
-    assert run_qa_response_production.status_code == 200
-
-    # Check that production version outputs now exist
-    get_response_production = client.get(
-        f"/projects/{project_uuid}/qa/{dataset_id}/entries?version=production", headers=HEADERS_JWT
-    )
-    assert get_response_production.status_code == 200
-    production_results = get_response_production.json()["inputs_groundtruths"]
-    # Should return exactly 1 result with production version output
-    assert len(production_results) == 1
-    assert production_results[0]["version"] == "production"
-    assert production_results[0]["output"] is not None
-
-    # Check that getting all versions shows both draft and production outputs
-    get_response_all = client.get(f"/projects/{project_uuid}/qa/{dataset_id}/entries", headers=HEADERS_JWT)
-    assert get_response_all.status_code == 200
-    all_results = get_response_all.json()["inputs_groundtruths"]
-    assert len(all_results) == 2
-    versions_found = [r["version"] for r in all_results if r["version"] is not None]
-    assert "draft" in versions_found
-    assert "production" in versions_found
+    assert get_outputs_after_run.status_code == 200
+    draft_outputs_after_run = get_outputs_after_run.json()
+    assert len(draft_outputs_after_run) == 1, "Should have 1 output after running 1 input"
+    # The endpoint now returns Dict[UUID, str] so keys are UUIDs (serialized as strings in JSON)
+    first_input_id = str(input_data["inputs_groundtruths"][0]["id"])
+    assert first_input_id in draft_outputs_after_run, "Output should exist for the input that was run"
+    assert draft_outputs_after_run[first_input_id] is not None, "Output should not be None"
 
     # Cleanup
     client.delete(f"/projects/{project_uuid}", headers=HEADERS_JWT)

@@ -200,13 +200,16 @@ def deploy_graph_service(
         graph_runner_id_to_copy=graph_runner_id,
         project_id=project_id,
     )
+    new_tag = compute_next_tag_version(session, project_id)
+    update_graph_runner_tag_version(session, graph_runner_id, new_tag)
+    bind_graph_runner_to_project(
+        session, graph_runner_id=graph_runner_id, project_id=project_id, env=EnvType.PRODUCTION
+    )
+    LOGGER.info(f"Updated graph runner {graph_runner_id} to production")
+
     bind_graph_runner_to_project(
         session, graph_runner_id=new_graph_runner_id, project_id=project_id, env=EnvType.DRAFT
     )
-    new_tag = compute_next_tag_version(session, project_id)
-    update_graph_runner_tag_version(session, graph_runner_id, new_tag)
-    update_graph_runner_env(session, graph_runner_id, env=EnvType.PRODUCTION)
-    LOGGER.info(f"Updated graph runner {graph_runner_id} to production")
 
     return GraphDeployResponse(
         project_id=project_id,

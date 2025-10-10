@@ -28,7 +28,7 @@ from ada_backend.routers.auth_router import (
     UserRights,
 )
 from ada_backend.services.charts_service import get_charts_by_project
-from ada_backend.services.errors import ProjectNotFound
+from ada_backend.services.errors import ProjectNotFound, EnvironmentNotFound
 from ada_backend.services.metrics.monitor_kpis_service import get_monitoring_kpis_by_project
 from ada_backend.services.project_service import (
     create_workflow,
@@ -64,15 +64,15 @@ def get_workflows_by_organization_endpoint(
     try:
         return get_workflows_by_organization_service(session, organization_id, user.id)
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
-    except Exception as e:
-        LOGGER.exception(
-            "Failed to list projects for organization %s and user %s : %s",
-            organization_id,
-            user.id,
-            str(e),
+        LOGGER.error(
+            f"Failed to list workflows for organization {organization_id} and user {user.id}: {str(e)}", exc_info=True
         )
-        raise HTTPException(status_code=500, detail="Internal Server Error") from e
+        raise HTTPException(status_code=400, detail="Bad request") from e
+    except Exception as e:
+        LOGGER.error(
+            f"Failed to list workflows for organization {organization_id} and user {user.id}: {str(e)}", exc_info=True
+        )
+        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 # TODO: move to workflow_router
@@ -92,13 +92,11 @@ def get_workflow_endpoint(
     except ProjectNotFound as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
+        LOGGER.error(f"Failed to get workflow {project_id}: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=400, detail="Bad request") from e
     except Exception as e:
-        LOGGER.exception(
-            "Failed to get project %s",
-            project_id,
-        )
-        raise HTTPException(status_code=500, detail="Internal Server Error") from e
+        LOGGER.error(f"Failed to get workflow {project_id}: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @router.delete("/{project_id}", response_model=ProjectDeleteResponse, tags=["Projects"])
@@ -115,13 +113,11 @@ def delete_project_endpoint(
     try:
         return delete_project_service(session, project_id)
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
+        LOGGER.error(f"Failed to delete project {project_id}: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=400, detail="Bad request") from e
     except Exception as e:
-        LOGGER.exception(
-            "Failed to delete project %s",
-            project_id,
-        )
-        raise HTTPException(status_code=500, detail="Internal Server Error") from e
+        LOGGER.error(f"Failed to delete project {project_id}: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @router.patch("/{project_id}", response_model=ProjectSchema, tags=["Projects"])
@@ -139,13 +135,11 @@ def update_project_endpoint(
     try:
         return update_project_service(session, user.id, project_id, project)
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
+        LOGGER.error(f"Failed to update project {project_id}: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=400, detail="Bad request") from e
     except Exception as e:
-        LOGGER.exception(
-            "Failed to update project %s",
-            project_id,
-        )
-        raise HTTPException(status_code=500, detail="Internal Server Error") from e
+        LOGGER.error(f"Failed to update project {project_id}: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 # TODO: move to workflow_router
@@ -164,14 +158,11 @@ def create_workflow_endpoint(
     try:
         return create_workflow(session, user.id, organization_id, project)
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
+        LOGGER.error(f"Failed to create workflow in organization {organization_id}: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=400, detail="Bad request") from e
     except Exception as e:
-        LOGGER.exception(
-            "Failed to create project in organization %s by user %s",
-            organization_id,
-            user.id,
-        )
-        raise HTTPException(status_code=500, detail=f"Internal Server Error: {e}") from e
+        LOGGER.error(f"Failed to create workflow in organization {organization_id}: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @router.post("/{project_id}/{env}/run", response_model=ChatResponse)
@@ -199,11 +190,15 @@ async def run_env_agent_endpoint(
             env=env,
             call_type=CallType.API,
         )
+    except EnvironmentNotFound as e:
+        LOGGER.error(f"Environment not found for project {project_id} in environment {env}: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=404, detail=str(e)) from e
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
+        LOGGER.error(f"Failed to run agent for project {project_id} in environment {env}: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=400, detail="Bad request") from e
     except Exception as e:
-        LOGGER.exception("Error running agent for project %s (env=%s)", project_id, env)
-        raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}") from e
+        LOGGER.error(f"Failed to run agent for project {project_id} in environment {env}: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @router.get("/{project_id}/charts", response_model=ChartsResponse, tags=["Metrics"])
@@ -219,14 +214,15 @@ async def get_project_charts(
         response = await get_charts_by_project(project_id, duration, call_type)
         return response
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
-    except Exception as e:
-        LOGGER.exception(
-            "Failed to get charts for project %s (duration=%s)",
-            project_id,
-            duration,
+        LOGGER.error(
+            f"Failed to get charts for project {project_id} with duration {duration}: {str(e)}", exc_info=True
         )
-        raise HTTPException(status_code=500, detail="Internal Server Error") from e
+        raise HTTPException(status_code=400, detail="Bad request") from e
+    except Exception as e:
+        LOGGER.error(
+            f"Failed to get charts for project {project_id} with duration {duration}: {str(e)}", exc_info=True
+        )
+        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @router.get("/{project_id}/kpis", response_model=KPISResponse, tags=["Metrics"])
@@ -242,14 +238,11 @@ async def get_project_monitoring_kpi(
         response = get_monitoring_kpis_by_project(user.id, project_id, duration, call_type)
         return response
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
+        LOGGER.error(f"Failed to get KPIs for project {project_id} with duration {duration}: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=400, detail="Bad request") from e
     except Exception as e:
-        LOGGER.exception(
-            "Failed to get KPIs for project %s (duration=%s)",
-            project_id,
-            duration,
-        )
-        raise HTTPException(status_code=500, detail="Internal Server Error") from e
+        LOGGER.error(f"Failed to get KPIs for project {project_id} with duration {duration}: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @router.post("/{project_id}/graphs/{graph_runner_id}/chat", response_model=ChatResponse, tags=["Projects"])
@@ -291,14 +284,17 @@ async def chat(
             tag_version=project_env_binding.graph_runner.tag_version,
         )
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
-    except Exception as e:
-        LOGGER.exception(
-            "Error running agent for project %s, graph_runner %s",
-            project_id,
-            graph_runner_id,
+        LOGGER.error(
+            f"Failed to run agent chat for project {project_id}, graph_runner {graph_runner_id}: {str(e)}",
+            exc_info=True,
         )
-        raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}") from e
+        raise HTTPException(status_code=400, detail="Bad request") from e
+    except Exception as e:
+        LOGGER.error(
+            f"Failed to run agent chat for project {project_id}, graph_runner {graph_runner_id}: {str(e)}",
+            exc_info=True,
+        )
+        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @router.post("/{project_id}/{env}/chat", response_model=ChatResponse, tags=["Projects"])
@@ -333,8 +329,16 @@ async def chat_env(
             env=env,
             call_type=CallType.SANDBOX,
         )
+    except EnvironmentNotFound as e:
+        LOGGER.error(f"Environment not found for project {project_id} in environment {env}: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=404, detail=str(e)) from e
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
+        LOGGER.error(
+            f"Failed to run agent chat for project {project_id} in environment {env}: {str(e)}", exc_info=True
+        )
+        raise HTTPException(status_code=400, detail="Bad request") from e
     except Exception as e:
-        LOGGER.exception("Error running agent chat_env for project %s (env=%s)", project_id, env)
-        raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}") from e
+        LOGGER.error(
+            f"Failed to run agent chat for project {project_id} in environment {env}: {str(e)}", exc_info=True
+        )
+        raise HTTPException(status_code=500, detail="Internal server error") from e

@@ -37,14 +37,17 @@ class PaginatedInputGroundtruthResponse(BaseModel):
     """Schema for paginated input-groundtruth responses."""
 
     pagination: Pagination
-    inputs_groundtruths: List[InputGroundtruthWithVersionResponse]
+    inputs_groundtruths: List["InputGroundtruthResponse"]
 
 
 # Run endpoint schemas
 class QARunRequest(BaseModel):
-    """Schema for QA run request."""
+    """Schema for QA run request.
 
-    version: EnvType
+    Uses graph_runner_id to run a specific version of the workflow.
+    """
+
+    graph_runner_id: UUID
     input_ids: Optional[List[UUID]] = None
     run_all: bool = False
 
@@ -70,7 +73,7 @@ class QARunResult(BaseModel):
     input: str
     groundtruth: Optional[str] = None
     output: str
-    version: EnvType
+    graph_runner_id: UUID
     success: bool
     error: Optional[str] = None
 
