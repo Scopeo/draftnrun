@@ -19,12 +19,12 @@ from ada_backend.schemas.components_schema import (
 )
 from ada_backend.schemas.integration_schema import IntegrationSchema
 from ada_backend.schemas.parameter_schema import ComponentParamDefDTO
-from engine.agent.types import ToolDescription
 from ada_backend.database.models import ComponentGlobalParameter
 from ada_backend.database.component_definition_seeding import (
     upsert_components,
     upsert_components_parameter_definitions,
 )
+from ada_backend.schemas.pipeline.base import ToolDescriptionSchema
 
 LOGGER = logging.getLogger(__name__)
 
@@ -450,7 +450,8 @@ def get_all_components_with_parameters(
 
             default_tool_description_db = get_tool_description_component(session=session, component_id=component.id)
             tool_description = (
-                ToolDescription(
+                ToolDescriptionSchema(
+                    id=default_tool_description_db.id,
                     name=default_tool_description_db.name,
                     description=default_tool_description_db.description,
                     tool_properties=default_tool_description_db.tool_properties,
@@ -689,35 +690,37 @@ def upsert_sub_component_input(
     return sub_input
 
 
-def upsert_tool_description(
+def get_or_create_tool_description(
     session: Session,
     name: str,
     description: str,
     tool_properties: dict,
     required_tool_properties: list[str],
+    id: Optional[UUID] = None,
 ) -> db.ToolDescription:
-    """
-    Inserts or updates a tool description in the database.
-    Uses name as unique identifier for upsert operation.
-    Follows PUT semantics - completely replaces existing tool description.
-
-    Returns:
-        db.ToolDescription: The created or updated tool description object.
-    """
+    # TODO: use id
+    # First try to find by name and description only
     tool_description = (
         session.query(db.ToolDescription)
         .filter(
             db.ToolDescription.name == name,
+            db.ToolDescription.description == description,
         )
         .first()
     )
-
+    # If found, check if the JSON fields match
     if tool_description:
-        # Update existing tool description (PUT behavior)
-        tool_description.description = description
-        tool_description.tool_properties = tool_properties
-        tool_description.required_tool_properties = required_tool_properties
-    else:
+        # Compare the actual JSON values
+        if (
+            tool_description.tool_properties == tool_properties
+            and tool_description.required_tool_properties == required_tool_properties
+        ):
+            return tool_description
+        else:
+            # JSON fields don't match, create a new one
+            tool_description = None
+
+    if not tool_description:
         # Create new tool description
         tool_description = db.ToolDescription(
             name=name,
