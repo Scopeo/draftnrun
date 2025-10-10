@@ -190,6 +190,10 @@ class CoercionMatrix:
         target_type = self._resolve_type(target_type)
         source_type = self._resolve_type(source_type)
 
+        # Normalize parameterized dict types (e.g., dict[str, Any] -> dict)
+        target_type = self._normalize_dict_type(target_type)
+        source_type = self._normalize_dict_type(source_type)
+
         # Handle typing.Any - always pass through (delete after migration)
         if target_type == type(Any) or str(target_type) == "typing.Any":
             return value
@@ -231,6 +235,10 @@ class CoercionMatrix:
         # Convert string type representations to actual types
         target_type = self._resolve_type(target_type)
         source_type = self._resolve_type(source_type)
+
+        # Normalize parameterized dict types
+        target_type = self._normalize_dict_type(target_type)
+        source_type = self._normalize_dict_type(source_type)
 
         # Handle typing.Any - always can coerce (delete after migration)
         if target_type == type(Any) or str(target_type) == "typing.Any":
@@ -298,6 +306,14 @@ class CoercionMatrix:
             return dict
         else:
             return type(value)
+
+    def _normalize_dict_type(self, type_hint: Type) -> Type:
+        """Normalize parameterized dict types (e.g., dict[str, Any]) to plain dict."""
+        origin = get_origin(type_hint)
+        if origin is dict:
+            # Parameterized dict (e.g., dict[str, Any]) -> plain dict
+            return dict
+        return type_hint
 
     def _resolve_type(self, type_hint: Type | str) -> Type:
         """Convert string type representations to actual types."""

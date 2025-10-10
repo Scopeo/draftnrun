@@ -105,35 +105,6 @@ def seed_filter_components(session: Session):
             ),
         ],
     )
-    # LEGACY: Manual port seeding for unmigrated Filter component
-    existing = session.query(db.Component).filter(db.Component.id == filter.id).first()
-    if existing:
-        # Ensure INPUT and OUTPUT canonical 'messages' ports exist
-        port_defs = session.query(db.PortDefinition).filter(db.PortDefinition.component_id == filter.id).all()
-        have_messages_input = any(pd.port_type == db.PortType.INPUT and pd.name == "messages" for pd in port_defs)
-        have_messages_output = any(pd.port_type == db.PortType.OUTPUT and pd.name == "messages" for pd in port_defs)
-
-        if not have_messages_input:
-            session.add(
-                db.PortDefinition(
-                    component_id=filter.id,
-                    name="messages",
-                    port_type=db.PortType.INPUT,
-                    is_canonical=True,
-                    description="Canonical input carrying chat messages",
-                )
-            )
-        if not have_messages_output:
-            session.add(
-                db.PortDefinition(
-                    component_id=filter.id,
-                    name="messages",
-                    port_type=db.PortType.OUTPUT,
-                    is_canonical=True,
-                    description="Canonical output carrying chat messages",
-                )
-            )
-        session.commit()
 
     upsert_component_categories(
         session=session,
