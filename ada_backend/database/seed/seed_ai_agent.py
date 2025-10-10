@@ -219,7 +219,7 @@ def seed_ai_agent_components(session: Session):
             ),
             db.ComponentParameterDefinition(
                 id=UUID("e5282ccb-dcaa-4970-93c1-f6ef5018492d"),
-                component_id=base_ai_agent_version.id,
+                component_version_id=base_ai_agent_version.id,
                 name="output_format",
                 type=ParameterType.STRING,
                 nullable=True,
