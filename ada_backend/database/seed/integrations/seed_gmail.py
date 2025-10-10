@@ -12,6 +12,7 @@ from ada_backend.database.component_definition_seeding import (
     upsert_component_versions,
     upsert_components,
     upsert_components_parameter_definitions,
+    upsert_release_stage_to_current_version_mapping,
 )
 from ada_backend.database.seed.integrations.seed_integration import INTEGRATION_UUIDS
 from ada_backend.database.seed.utils import COMPONENT_UUIDS
@@ -59,3 +60,11 @@ def seed_gmail_components(session: Session):
     ]
 
     upsert_components_parameter_definitions(session, gmail_sender_parameter_definitions)
+
+    # Create release stage mapping
+    upsert_release_stage_to_current_version_mapping(
+        session=session,
+        component_id=gmail_sender_version.component_id,
+        release_stage=gmail_sender_version.release_stage,
+        component_version_id=gmail_sender_version.id,
+    )

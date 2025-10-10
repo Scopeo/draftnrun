@@ -13,6 +13,7 @@ from ada_backend.database.component_definition_seeding import (
     upsert_component_versions,
     upsert_components,
     upsert_components_parameter_definitions,
+    upsert_release_stage_to_current_version_mapping,
     upsert_component_categories,
 )
 from ada_backend.database.seed.seed_categories import CATEGORY_UUIDS
@@ -176,6 +177,14 @@ def seed_llm_call_components(session: Session):
                 ],
             ),
         ],
+    )
+
+    # Create release stage mapping
+    upsert_release_stage_to_current_version_mapping(
+        session=session,
+        component_id=llm_call_version.component_id,
+        release_stage=llm_call_version.release_stage,
+        component_version_id=llm_call_version.id,
     )
     upsert_component_categories(
         session=session,

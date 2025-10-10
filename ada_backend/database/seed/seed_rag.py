@@ -16,6 +16,7 @@ from ada_backend.database.component_definition_seeding import (
     upsert_components,
     upsert_components_parameter_child_relationships,
     upsert_components_parameter_definitions,
+    upsert_release_stage_to_current_version_mapping,
 )
 from ada_backend.database.seed.seed_categories import CATEGORY_UUIDS
 from ada_backend.database.seed.seed_tool_description import TOOL_DESCRIPTION_UUIDS
@@ -759,4 +760,79 @@ def seed_rag_components(session: Session):
                 ],
             ),
         ],
+    )
+
+    # Create release stage mappings for all RAG components
+    # This demonstrates how to manually specify which version is current for each release stage
+
+    # Synthesizer: PUBLIC version
+    upsert_release_stage_to_current_version_mapping(
+        session=session,
+        component_id=synthesizer_version.component_id,
+        release_stage=synthesizer_version.release_stage,
+        component_version_id=synthesizer_version.id,
+    )
+
+    # Hybrid Synthesizer: BETA version
+    upsert_release_stage_to_current_version_mapping(
+        session=session,
+        component_id=hybrid_synthesizer_version.component_id,
+        release_stage=hybrid_synthesizer_version.release_stage,
+        component_version_id=hybrid_synthesizer_version.id,
+    )
+
+    # Chunk Selector: BETA version
+    upsert_release_stage_to_current_version_mapping(
+        session=session,
+        component_id=chunk_selector_version.component_id,
+        release_stage=chunk_selector_version.release_stage,
+        component_version_id=chunk_selector_version.id,
+    )
+
+    # Retriever: PUBLIC version
+    upsert_release_stage_to_current_version_mapping(
+        session=session,
+        component_id=retriever_version.component_id,
+        release_stage=retriever_version.release_stage,
+        component_version_id=retriever_version.id,
+    )
+
+    # Cohere Reranker: PUBLIC version
+    upsert_release_stage_to_current_version_mapping(
+        session=session,
+        component_id=cohere_reranker_version.component_id,
+        release_stage=cohere_reranker_version.release_stage,
+        component_version_id=cohere_reranker_version.id,
+    )
+
+    # RAG Formatter: PUBLIC version
+    upsert_release_stage_to_current_version_mapping(
+        session=session,
+        component_id=rag_formatter_version.component_id,
+        release_stage=rag_formatter_version.release_stage,
+        component_version_id=rag_formatter_version.id,
+    )
+
+    # Vocabulary Search: PUBLIC version
+    upsert_release_stage_to_current_version_mapping(
+        session=session,
+        component_id=vocabulary_search_version.component_id,
+        release_stage=vocabulary_search_version.release_stage,
+        component_version_id=vocabulary_search_version.id,
+    )
+
+    # RAG Agent: PUBLIC version
+    upsert_release_stage_to_current_version_mapping(
+        session=session,
+        component_id=rag_agent_version.component_id,
+        release_stage=rag_agent_version.release_stage,
+        component_version_id=rag_agent_version.id,
+    )
+
+    # Hybrid RAG Agent: BETA version
+    upsert_release_stage_to_current_version_mapping(
+        session=session,
+        component_id=hybrid_rag_agent_version.component_id,
+        release_stage=hybrid_rag_agent_version.release_stage,
+        component_version_id=hybrid_rag_agent_version.id,
     )

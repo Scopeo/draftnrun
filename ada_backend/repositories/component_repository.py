@@ -23,6 +23,7 @@ from ada_backend.database.models import ComponentGlobalParameter
 from ada_backend.database.component_definition_seeding import (
     upsert_components,
     upsert_components_parameter_definitions,
+    upsert_release_stage_to_current_version_mapping,
 )
 from ada_backend.schemas.pipeline.base import ToolDescriptionSchema
 
@@ -1071,6 +1072,9 @@ def upsert_specific_api_component_with_defaults(
     ]
 
     upsert_components_parameter_definitions(session, param_defs)
+    upsert_release_stage_to_current_version_mapping(
+        session, component.id, component_version.release_stage, component_version.id
+    )
     return component_version
 
 

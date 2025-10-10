@@ -14,6 +14,7 @@ from ada_backend.database.component_definition_seeding import (
     upsert_component_versions,
     upsert_components,
     upsert_components_parameter_definitions,
+    upsert_release_stage_to_current_version_mapping,
 )
 from ada_backend.repositories.component_repository import get_component_version_by_id
 from ada_backend.database.seed.seed_categories import CATEGORY_UUIDS
@@ -94,4 +95,12 @@ def seed_input_components(session: Session):
         session=session,
         component_id=input.id,
         category_ids=[CATEGORY_UUIDS["trigger"]],
+    )
+
+    # Create release stage mapping
+    upsert_release_stage_to_current_version_mapping(
+        session=session,
+        component_id=input_version.component_id,
+        release_stage=input_version.release_stage,
+        component_version_id=input_version.id,
     )

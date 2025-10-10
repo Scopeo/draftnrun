@@ -13,6 +13,7 @@ from ada_backend.database.component_definition_seeding import (
     upsert_component_versions,
     upsert_components,
     upsert_components_parameter_definitions,
+    upsert_release_stage_to_current_version_mapping,
 )
 from ada_backend.database.seed.seed_categories import CATEGORY_UUIDS
 from ada_backend.database.seed.utils import COMPONENT_UUIDS
@@ -120,4 +121,12 @@ def seed_api_call_components(session: Session):
         session=session,
         component_id=api_call_component.id,
         category_ids=[CATEGORY_UUIDS["action"], CATEGORY_UUIDS["query"]],
+    )
+
+    # Create release stage mapping
+    upsert_release_stage_to_current_version_mapping(
+        session=session,
+        component_id=api_call_component_version.component_id,
+        release_stage=api_call_component_version.release_stage,
+        component_version_id=api_call_component_version.id,
     )

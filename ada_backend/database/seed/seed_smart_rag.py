@@ -13,6 +13,7 @@ from ada_backend.database.component_definition_seeding import (
     upsert_components,
     upsert_components_parameter_child_relationships,
     upsert_components_parameter_definitions,
+    upsert_release_stage_to_current_version_mapping,
 )
 from ada_backend.database.seed.seed_tool_description import TOOL_DESCRIPTION_UUIDS
 from ada_backend.database.seed.utils import (
@@ -256,4 +257,24 @@ def seed_smart_rag_components(session: Session):
                 is_advanced=True,
             ),
         ],
+    )
+
+    # Create release stage mappings for all Smart RAG components
+    upsert_release_stage_to_current_version_mapping(
+        session=session,
+        component_id=document_search_version.component_id,
+        release_stage=document_search_version.release_stage,
+        component_version_id=document_search_version.id,
+    )
+    upsert_release_stage_to_current_version_mapping(
+        session=session,
+        component_id=document_enhanced_llm_call_agent_version.component_id,
+        release_stage=document_enhanced_llm_call_agent_version.release_stage,
+        component_version_id=document_enhanced_llm_call_agent_version.id,
+    )
+    upsert_release_stage_to_current_version_mapping(
+        session=session,
+        component_id=document_react_loader_agent_version.component_id,
+        release_stage=document_react_loader_agent_version.release_stage,
+        component_version_id=document_react_loader_agent_version.id,
     )

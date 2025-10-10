@@ -6,6 +6,7 @@ from ada_backend.database.component_definition_seeding import (
     upsert_components,
     upsert_component_categories,
     upsert_component_versions,
+    upsert_release_stage_to_current_version_mapping,
 )
 from ada_backend.database.seed.utils import COMPONENT_UUIDS
 from ada_backend.database.seed.seed_tool_description import TOOL_DESCRIPTION_UUIDS
@@ -36,4 +37,12 @@ def seed_docx_generation_components(session: Session):
         session=session,
         component_id=docx_generation_component.id,
         category_ids=[CATEGORY_UUIDS["action"]],
+    )
+
+    # Create release stage mapping
+    upsert_release_stage_to_current_version_mapping(
+        session=session,
+        component_id=docx_generation_component_version.component_id,
+        release_stage=docx_generation_component_version.release_stage,
+        component_version_id=docx_generation_component_version.id,
     )

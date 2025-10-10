@@ -4,6 +4,7 @@ from ada_backend.database import models as db
 from ada_backend.database.component_definition_seeding import (
     upsert_components,
     upsert_component_versions,
+    upsert_release_stage_to_current_version_mapping,
     upsert_component_categories,
 )
 from ada_backend.database.seed.seed_categories import CATEGORY_UUIDS
@@ -35,6 +36,14 @@ def seed_linkup_tool_components(session: Session):
         default_tool_description_id=TOOL_DESCRIPTION_UUIDS["linkup_search_tool_description"],
     )
     upsert_component_versions(session, [linkup_tool_version])
+
+    # Create release stage mapping
+    upsert_release_stage_to_current_version_mapping(
+        session=session,
+        component_id=linkup_tool_version.component_id,
+        release_stage=linkup_tool_version.release_stage,
+        component_version_id=linkup_tool_version.id,
+    )
     upsert_component_categories(
         session=session,
         component_id=linkup_tool.id,
