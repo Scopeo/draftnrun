@@ -9,13 +9,13 @@ from engine.llm_services.constrained_output_models import (
 )
 
 
-class TestModel(BaseModel):
+class SampleModel(BaseModel):
     name: str
     age: int
     is_active: bool = True
 
 
-class TestModelOptional(BaseModel):
+class SampleModelOptional(BaseModel):
     name: str
     age: Optional[int] = None
 
@@ -57,9 +57,9 @@ class TestConvertJsonStrToPydantic:
     def test_valid_json_conversion(self):
         """Test conversion of valid JSON string to Pydantic model."""
         json_str = 'Here is some text {"name": "John", "age": 30, "is_active": true} and more text'
-        result = convert_json_str_to_pydantic(json_str, TestModel)
+        result = convert_json_str_to_pydantic(json_str, SampleModel)
 
-        assert isinstance(result, TestModel)
+        assert isinstance(result, SampleModel)
         assert result.name == "John"
         assert result.age == 30
         assert result.is_active is True
@@ -69,21 +69,21 @@ class TestConvertJsonStrToPydantic:
         json_str = "Text {invalid json} more text"
 
         with pytest.raises(ValueError, match="Issue with loading json format from LLM output"):
-            convert_json_str_to_pydantic(json_str, TestModel)
+            convert_json_str_to_pydantic(json_str, SampleModel)
 
     def test_no_json_object_raises_error(self):
         """Test that text without JSON object raises ValueError."""
         json_str = "Just plain text with no JSON"
 
         with pytest.raises(ValueError, match="Issue with loading json format from LLM output"):
-            convert_json_str_to_pydantic(json_str, TestModel)
+            convert_json_str_to_pydantic(json_str, SampleModel)
 
     def test_malformed_json_raises_error(self):
         """Test that malformed JSON raises ValueError."""
         json_str = 'Text {"name": "John", "age":} more text'  # missing value
 
         with pytest.raises(ValueError, match="Issue with loading json format from LLM output"):
-            convert_json_str_to_pydantic(json_str, TestModel)
+            convert_json_str_to_pydantic(json_str, SampleModel)
 
 
 class TestIntegration:
@@ -93,7 +93,7 @@ class TestIntegration:
         """Test the complete workflow from prompt formatting to JSON extraction."""
         # Step 1: Format prompt with Pydantic model
         prompt = "Please provide user information:"
-        formatted_prompt = format_prompt_with_pydantic_output(prompt, TestModel)
+        formatted_prompt = format_prompt_with_pydantic_output(prompt, SampleModel)
         assert (
             formatted_prompt == "Please provide user information:\nOutput in the following "
             'JSON format:\n{\n  "name": "string",\n '
@@ -110,9 +110,9 @@ class TestIntegration:
         assert extracted_json is not None
 
         # Step 4: Convert to Pydantic model
-        result = convert_json_str_to_pydantic(mock_response, TestModel)
+        result = convert_json_str_to_pydantic(mock_response, SampleModel)
 
-        assert isinstance(result, TestModel)
+        assert isinstance(result, SampleModel)
         assert result.name == "Alice"
         assert result.age == 28
         assert result.is_active is False

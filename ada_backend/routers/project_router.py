@@ -180,10 +180,14 @@ async def run_env_agent_endpoint(
     env: EnvType,
     input_data: dict = Body(
         ...,
-        example={
-            "messages": [
-                {"role": "user", "content": "Hello, how are you?"},
-            ]
+        examples={
+            "default": {
+                "value": {
+                    "messages": [
+                        {"role": "user", "content": "Hello, how are you?"},
+                    ]
+                }
+            }
         },
     ),
     sqlaclhemy_db_session: Session = Depends(get_db),
@@ -266,10 +270,14 @@ async def chat(
     ],
     input_data: dict = Body(
         ...,
-        example={
-            "messages": [
-                {"role": "user", "content": "Hello, how are you?"},
-            ]
+        examples={
+            "default": {
+                "value": {
+                    "messages": [
+                        {"role": "user", "content": "Hello, how are you?"},
+                    ]
+                }
+            }
         },
     ),
     session: Session = Depends(get_db),
@@ -315,10 +323,14 @@ async def chat_env(
     ],
     input_data: dict = Body(
         ...,
-        example={
-            "messages": [
-                {"role": "user", "content": "Hello, how are you?"},
-            ]
+        examples={
+            "default": {
+                "value": {
+                    "messages": [
+                        {"role": "user", "content": "Hello, how are you?"},
+                    ]
+                }
+            }
         },
     ),
     session: Session = Depends(get_db),

@@ -40,14 +40,26 @@ LOGGER = logging.getLogger(__name__)
 def get_all_agents_service(session: Session, organization_id: UUID) -> list[AgentWithGraphRunnersSchema]:
     agents_with_graph_runners_rows = fetch_agents_with_graph_runners_by_organization(session, organization_id)
     by_agent: DefaultDict[UUID, dict] = defaultdict(lambda: {"agent": None, "grs": []})
-    for agent, graph_runner, project_env_binding in agents_with_graph_runners_rows:
+    for row in agents_with_graph_runners_rows:
+        # Handle both 2-tuple and 3-tuple formats for backward compatibility
+        if len(row) == 2:
+            agent, binding = row
+            graph_runner_id = binding.graph_runner_id
+            env = binding.environment
+            tag_version = getattr(binding, "tag_version", None)
+        else:
+            agent, graph_runner, project_env_binding = row
+            graph_runner_id = graph_runner.id
+            env = project_env_binding.environment if project_env_binding else None
+            tag_version = graph_runner.tag_version
+
         bucket = by_agent[agent.id]
         bucket["agent"] = agent
         bucket["grs"].append(
             GraphRunnerEnvDTO(
-                graph_runner_id=graph_runner.id,
-                env=project_env_binding.environment if project_env_binding else None,
-                tag_version=graph_runner.tag_version,
+                graph_runner_id=graph_runner_id,
+                env=env,
+                tag_version=tag_version,
             )
         )
     result: list[AgentWithGraphRunnersSchema] = []

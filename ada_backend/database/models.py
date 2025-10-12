@@ -153,6 +153,21 @@ class PortType(StrEnum):
     OUTPUT = "OUTPUT"
 
 
+class ParameterResolutionPhase(StrEnum):
+    """
+    Defines when a parameter should be resolved and applied.
+
+    CONSTRUCTOR: Parameter is resolved at component instantiation time and passed to __init__().
+                 Example: api_key, model_name, temperature
+
+    RUNTIME: Parameter is resolved during graph execution and passed to .run().
+             Example: system_prompt, user_message, input_data
+             Can contain template references like {{@node.port}}
+    """
+    CONSTRUCTOR = "constructor"
+    RUNTIME = "runtime"
+
+
 class SelectOption(BaseModel):
     """Option for Select and similar UI components"""
 
@@ -564,6 +579,12 @@ class BasicParameter(Base):
         UUID(as_uuid=True), ForeignKey("organization_secrets.id", ondelete="CASCADE"), nullable=True
     )
     order = mapped_column(Integer, nullable=True)
+    resolution_phase = mapped_column(
+        make_pg_enum(ParameterResolutionPhase),
+        nullable=False,
+        default=ParameterResolutionPhase.CONSTRUCTOR,
+        server_default=ParameterResolutionPhase.CONSTRUCTOR.value,
+    )
 
     component_instance = relationship("ComponentInstance", back_populates="basic_parameters")
     parameter_definition = relationship("ComponentParameterDefinition")

@@ -1406,6 +1406,195 @@ class TestGraphRunnerComprehensiveScenarios:
         assert gr is not None
 
 
+class TestGraphRunnerCanonicalTransformation:
+    """Test canonical transformation for start nodes without port mappings."""
+
+    @pytest.mark.asyncio
+    async def test_message_to_messages_transformation(self):
+        """Test transformation of 'message' to 'messages' for ReActAgent-like components."""
+        tm = TraceManager(project_name="test")
+        g = nx.DiGraph()
+        g.add_node("agent")
+
+        # Mock a ReActAgent-like component with canonical input port "messages"
+        class MockReActAgent:
+            migrated = True
+
+            def get_canonical_ports(self):
+                return {"input": "messages", "output": "output"}
+
+            def get_inputs_schema(self) -> Type[BaseModel]:
+                class Inputs(BaseModel):
+                    messages: List[ChatMessage]
+
+                return Inputs
+
+            def get_outputs_schema(self) -> Type[BaseModel]:
+                class Outputs(BaseModel):
+                    output: str
+
+                return Outputs
+
+            async def run(self, node_data):
+                # Verify that messages was transformed correctly
+                assert "messages" in node_data.data
+                assert isinstance(node_data.data["messages"], list)
+                assert len(node_data.data["messages"]) == 1
+                assert isinstance(node_data.data["messages"][0], ChatMessage)
+                assert node_data.data["messages"][0].content == "Hello world"
+
+                from engine.agent.types import NodeData
+
+                return NodeData(data={"output": "Response"}, ctx=node_data.ctx)
+
+        runnables = {
+            "agent": MockReActAgent(),
+        }
+
+        # No port mappings - should trigger canonical transformation
+        gr = GraphRunner(
+            graph=g,
+            runnables=runnables,
+            start_nodes=["agent"],
+            trace_manager=tm,
+        )
+
+        # Test with global input containing "message" (singular)
+        input_data = {"message": "Hello world"}
+        result = await gr.run(input_data, is_root_execution=True)
+
+        # Should complete successfully without validation errors
+        assert result is not None
+
+    @pytest.mark.asyncio
+    async def test_message_to_messages_with_unified_params(self):
+        """Test transformation works even when component has unified parameters."""
+        tm = TraceManager(project_name="test")
+        g = nx.DiGraph()
+        g.add_node("agent")
+
+        # Mock a ReActAgent with parameters
+        class MockReActAgent:
+            migrated = True
+
+            def get_canonical_ports(self):
+                return {"input": "messages", "output": "output"}
+
+            def get_inputs_schema(self) -> Type[BaseModel]:
+                class Inputs(BaseModel):
+                    messages: List[ChatMessage]
+                    allow_tool_shortcuts: bool = False
+                    max_iterations: int = 3
+
+                return Inputs
+
+            def get_outputs_schema(self) -> Type[BaseModel]:
+                class Outputs(BaseModel):
+                    output: str
+
+                return Outputs
+
+            async def run(self, node_data):
+                # Verify that messages was transformed AND params were included
+                assert "messages" in node_data.data
+                assert isinstance(node_data.data["messages"], list)
+                assert len(node_data.data["messages"]) == 1
+                assert node_data.data["messages"][0].content == "Hello world"
+                assert "allow_tool_shortcuts" in node_data.data
+                assert node_data.data["allow_tool_shortcuts"] is True
+                assert "max_iterations" in node_data.data
+                assert node_data.data["max_iterations"] == 5
+
+                from engine.agent.types import NodeData
+
+                return NodeData(data={"output": "Response"}, ctx=node_data.ctx)
+
+        runnables = {
+            "agent": MockReActAgent(),
+        }
+
+        # Add unified parameters (component configuration)
+        node_parameters = {
+            "agent": {
+                "allow_tool_shortcuts": True,
+                "max_iterations": 5,
+            }
+        }
+
+        gr = GraphRunner(
+            graph=g,
+            runnables=runnables,
+            start_nodes=["agent"],
+            trace_manager=tm,
+            node_parameters=node_parameters,
+        )
+
+        # Test with global input containing "message" (singular)
+        input_data = {"message": "Hello world"}
+        result = await gr.run(input_data, is_root_execution=True)
+
+        # Should complete successfully
+        assert result is not None
+
+    @pytest.mark.asyncio
+    async def test_no_transformation_when_messages_present(self):
+        """Test that no transformation occurs when 'messages' is already present."""
+        tm = TraceManager(project_name="test")
+        g = nx.DiGraph()
+        g.add_node("agent")
+
+        class MockReActAgent:
+            migrated = True
+
+            def get_canonical_ports(self):
+                return {"input": "messages", "output": "output"}
+
+            def get_inputs_schema(self) -> Type[BaseModel]:
+                class Inputs(BaseModel):
+                    messages: List[ChatMessage]
+
+                return Inputs
+
+            def get_outputs_schema(self) -> Type[BaseModel]:
+                class Outputs(BaseModel):
+                    output: str
+
+                return Outputs
+
+            async def run(self, node_data):
+                # Verify that messages was passed through unchanged
+                assert "messages" in node_data.data
+                assert isinstance(node_data.data["messages"], list)
+                assert len(node_data.data["messages"]) == 2
+
+                from engine.agent.types import NodeData
+
+                return NodeData(data={"output": "Response"}, ctx=node_data.ctx)
+
+        runnables = {
+            "agent": MockReActAgent(),
+        }
+
+        gr = GraphRunner(
+            graph=g,
+            runnables=runnables,
+            start_nodes=["agent"],
+            trace_manager=tm,
+        )
+
+        # Test with global input already containing "messages" (plural)
+        input_data = {
+            "messages": [
+                ChatMessage(role="user", content="Message 1"),
+                ChatMessage(role="user", content="Message 2"),
+            ]
+        }
+        result = await gr.run(input_data, is_root_execution=True)
+
+        # Should complete successfully
+        assert result is not None
+
+
 if __name__ == "__main__":
     # Run a quick test to verify the test file works
     import sys

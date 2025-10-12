@@ -10,7 +10,7 @@ from ada_backend.repositories.integration_repository import (
 )
 from ada_backend.repositories.organization_repository import get_organization_secrets_from_project_id
 from engine.agent.types import ToolDescription, ComponentAttributes
-from ada_backend.database.models import ComponentInstance
+from ada_backend.database.models import ComponentInstance, ParameterResolutionPhase
 from ada_backend.repositories.component_repository import (
     get_component_instance_by_id,
     get_component_basic_parameters,
@@ -43,12 +43,27 @@ def get_component_params(
         dict[str, Any]: Parameters where:
             - Parameters with order=None are returned as single values
             - Parameters with order!=None are grouped in lists, ordered by the order field
+            - Parameters with resolution_phase=RUNTIME are excluded (they're for runtime, not constructor)
     """
+
+    # Get component instance to access component_id
+    component_instance = get_component_instance_by_id(session, component_instance_id)
+    if not component_instance:
+        raise ValueError(f"Component instance {component_instance_id} not found.")
+
     params = {}
     ordered_params: dict[str, list[tuple[int, Any]]] = {}  # name -> [(order, value), ...]
 
     for param in get_component_basic_parameters(session, component_instance_id):
         param_name = param.parameter_definition.name
+
+        # Skip runtime parameters - these are resolved during graph execution
+        if param.resolution_phase == ParameterResolutionPhase.RUNTIME:
+            LOGGER.debug(
+                f"Skipping parameter '{param_name}' (resolution_phase=RUNTIME) "
+                f"- will be resolved during graph execution"
+            )
+            continue
 
         if param.organization_secret_id:
             if not project_id:

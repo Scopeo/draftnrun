@@ -95,7 +95,9 @@ class LLMCallAgent(Agent):
         if kwargs:
             input_payloads = [kwargs]
 
-        input_replacements["input"] = ""
+        # Only add 'input' to replacements if there's actual content
+        # This preserves {input} placeholder if it's not being replaced
+        input_text = ""
         for payload in input_payloads:
             payload_json = (
                 payload.model_dump(exclude_unset=True, exclude_none=True)
@@ -111,9 +113,13 @@ class LLMCallAgent(Agent):
                 text_content, payload_files_content, payload_images_content = parse_openai_message_format(
                     payload_json["messages"][-1]["content"], self._completion_service._provider
                 )
-                input_replacements["input"] += text_content
+                input_text += text_content
                 files_content.extend(payload_files_content)
                 images_content.extend(payload_images_content)
+
+        # Only add to replacements if we have content (preserves {input} placeholder otherwise)
+        if input_text:
+            input_replacements["input"] = input_text
 
         for prompt_var in prompt_vars:
             for payload in input_payloads:

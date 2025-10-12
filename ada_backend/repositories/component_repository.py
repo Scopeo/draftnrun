@@ -508,6 +508,7 @@ def insert_component_parameter_definition(
     subinput_component_id: Optional[UUID] = None,
     ui_component: Optional[UIComponent] = None,
     ui_component_properties: Optional[dict] = None,
+    is_advanced: bool = False,
 ) -> db.ComponentParameterDefinition:
     """
     Inserts a new component parameter definition into the database.
@@ -521,6 +522,7 @@ def insert_component_parameter_definition(
         subinput_component_id=subinput_component_id,
         ui_component=ui_component,
         ui_component_properties=ui_component_properties,
+        is_advanced=is_advanced,
     )
     session.add(component_parameter_definition)
     session.commit()
@@ -571,6 +573,7 @@ def upsert_basic_parameter(
     value: Optional[str] = None,
     order: Optional[int] = None,
     org_secret_id: Optional[UUID] = None,
+    resolution_phase: Optional[db.ParameterResolutionPhase] = None,
 ) -> db.BasicParameter:
     """
     Inserts or updates a basic parameter. If a parameter with the same
@@ -612,24 +615,30 @@ def upsert_basic_parameter(
     if org_secret_id:
         if parameter:
             parameter.organization_secret_id = org_secret_id
+            if resolution_phase is not None:
+                parameter.resolution_phase = resolution_phase
         else:
             parameter = db.BasicParameter(
                 component_instance_id=component_instance_id,
                 parameter_definition_id=parameter_definition_id,
                 organization_secret_id=org_secret_id,
                 order=order,
+                resolution_phase=resolution_phase or db.ParameterResolutionPhase.CONSTRUCTOR,
             )
             session.add(parameter)
 
     else:
         if parameter:
             parameter.value = value
+            if resolution_phase is not None:
+                parameter.resolution_phase = resolution_phase
         else:
             parameter = db.BasicParameter(
                 component_instance_id=component_instance_id,
                 parameter_definition_id=parameter_definition_id,
                 value=value,
                 order=order,
+                resolution_phase=resolution_phase or db.ParameterResolutionPhase.CONSTRUCTOR,
             )
             session.add(parameter)
     session.commit()
@@ -905,3 +914,29 @@ def insert_component_global_parameter(
     session.commit()
     session.refresh(global_param)
     return global_param
+
+
+def update_component_release_stage(
+    session: Session,
+    component_id: UUID,
+    release_stage: db.ReleaseStage,
+) -> db.Component:
+    """
+    Updates the release stage of a component.
+
+    Args:
+        session: SQLAlchemy session
+        component_id: UUID of the component to update
+        release_stage: New release stage value
+
+    Returns:
+        Updated Component object
+    """
+    component = get_component_by_id(session, component_id)
+    if not component:
+        raise ValueError(f"Component {component_id} not found")
+    component.release_stage = release_stage
+    session.add(component)
+    session.commit()
+    session.refresh(component)
+    return component

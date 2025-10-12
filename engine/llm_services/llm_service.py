@@ -393,7 +393,9 @@ class CompletionService(LLMService):
         # validate with the basemodel OutputFormatModel
         response_format["strict"] = True
         response_format["type"] = "json_schema"
-        response_format = OutputFormatModel(**response_format).model_dump(exclude_none=True, exclude_unset=True)
+        response_format = OutputFormatModel(**response_format).model_dump(
+            exclude_none=True, exclude_unset=True, by_alias=True
+        )
         span = get_current_span()
         span.set_attributes({SpanAttributes.LLM_INVOCATION_PARAMETERS: json.dumps(self._invocation_parameters)})
         match self._provider:
