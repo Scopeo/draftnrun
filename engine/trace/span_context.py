@@ -1,6 +1,7 @@
 from contextvars import ContextVar
 from dataclasses import dataclass
 from typing import Optional
+from uuid import UUID
 
 from ada_backend.database.models import EnvType, CallType
 
@@ -15,7 +16,7 @@ class TracingSpanParams:
     environment: Optional[EnvType] = None
     call_type: Optional[CallType] = None
     trace_id: Optional[str] = None
-    graph_runner_id: Optional[str] = None
+    graph_runner_id: Optional[UUID] = None
     tag_name: Optional[str] = None
 
 
@@ -30,7 +31,7 @@ def set_tracing_span(
     uuid_for_temp_folder: Optional[str] = None,
     environment: Optional[EnvType] = None,
     call_type: Optional[CallType] = None,
-    graph_runner_id: Optional[str] = None,
+    graph_runner_id: Optional[UUID] = None,
     tag_name: Optional[str] = None,
 ) -> None:
     """Set current tracing context with project/org/llm info."""

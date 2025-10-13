@@ -168,7 +168,7 @@ async def run_agent(
         uuid_for_temp_folder=uuid_for_temp_folder,
         environment=environment,
         call_type=call_type,
-        graph_runner_id=str(graph_runner_id),
+        graph_runner_id=graph_runner_id,
         tag_name=tag_name,
     )
     try:
