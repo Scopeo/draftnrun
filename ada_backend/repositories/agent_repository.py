@@ -7,11 +7,6 @@ import ada_backend.database.models as db
 def fetch_agents_with_graph_runners_by_organization(
     session: Session, organization_id: UUID
 ) -> list[tuple[db.AgentProject, db.GraphRunner, db.ProjectEnvironmentBinding]]:
-    """
-    Fetch all agents with ALL their graph runners (versions) for an organization.
-    Uses LEFT OUTER JOIN to include graph runners even without environment bindings.
-    Returns agents ordered by creation date, with graph runners ordered by their creation date.
-    """
     rows = (
         session.query(db.AgentProject, db.GraphRunner, db.ProjectEnvironmentBinding)
         .join(db.ProjectEnvironmentBinding, db.ProjectEnvironmentBinding.project_id == db.AgentProject.id)

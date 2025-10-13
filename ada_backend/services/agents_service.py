@@ -125,11 +125,9 @@ def create_new_agent_service(
         organization_id=organization_id,
         project_type=db.ProjectType.AGENT,
     )
-    # For agents, use the agent ID (project ID) as the graph_runner_id
-    # This maintains the convention: agent_id == graph_runner_id == ai_agent_component_id
     graph_runner = insert_graph_runner(
         session=session,
-        graph_id=agent_data.id,  # Use agent_data.id instead of uuid.uuid4()
+        graph_id=agent_data.id,
         add_input=False,
     )
     graph_runner_id = graph_runner.id

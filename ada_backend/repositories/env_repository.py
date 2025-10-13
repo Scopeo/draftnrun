@@ -9,9 +9,6 @@ from ada_backend.database import models as db
 def get_project_env_binding(
     session: Session, project_id: UUID, graph_runner_id: UUID
 ) -> db.ProjectEnvironmentBinding | None:
-    """
-    Return the environment binding for a given project and graph runner, or None if missing.
-    """
     return (
         session.query(db.ProjectEnvironmentBinding)
         .filter(
@@ -52,9 +49,6 @@ def bind_graph_runner_to_project(
     project_id: UUID,
     env: EnvType,
 ) -> None:
-    """
-    Binds a graph runner to a project and environment.
-    """
     relationship = db.ProjectEnvironmentBinding(
         graph_runner_id=graph_runner_id, project_id=project_id, environment=env
     )

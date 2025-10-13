@@ -5,7 +5,7 @@ import uuid
 from sqlalchemy.orm import Session
 
 from ada_backend.database.models import EnvType
-from ada_backend.repositories.env_repository import bind_graph_runner_to_project, get_project_env_binding
+from ada_backend.repositories.env_repository import bind_graph_runner_to_project
 from ada_backend.repositories.graph_runner_repository import (
     get_graph_runners_by_project,
     graph_runner_exists,
@@ -48,7 +48,6 @@ def get_workflows_by_organization_service(
         track_user_get_project_list(user_id, organization_id)
     projects = get_workflows_by_organization(session, organization_id)
 
-    # Return lightweight project list without graph runners
     result = []
     for project in projects:
         result.append(
@@ -60,29 +59,6 @@ def get_workflows_by_organization_service(
         )
 
     return result
-
-
-def get_graph_runners_by_project_service(
-    session: Session,
-    project_id: UUID,
-) -> list[GraphRunnerEnvDTO]:
-    """Get all graph runners for a specific project with their environment bindings."""
-    # Get all graph_runners for this project
-    graph_runners_db = get_graph_runners_by_project(session, project_id)
-
-    # Get environment bindings for each graph_runner
-    graph_runners = []
-    for gr in graph_runners_db:
-        env_binding = get_project_env_binding(session, project_id, gr.id)
-        graph_runners.append(
-            GraphRunnerEnvDTO(
-                graph_runner_id=gr.id,
-                env=env_binding.environment if env_binding else None,
-                tag_version=gr.tag_version,
-            )
-        )
-
-    return graph_runners
 
 
 def delete_project_service(session: Session, project_id: UUID) -> ProjectDeleteResponse:

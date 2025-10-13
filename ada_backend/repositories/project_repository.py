@@ -38,14 +38,11 @@ def get_project_with_details(
     session: Session,
     project_id: UUID,
 ) -> ProjectWithGraphRunnersSchema:
-    # Get the project
     project = session.query(db.Project).filter(db.Project.id == project_id).first()
 
     if not project:
         raise ValueError(f"Project {project_id} not found")
 
-    # Get ALL graph_runners associated with this project
-    # Use a left outer join to get all graph_runners, even those without environment bindings
     results = (
         session.query(db.GraphRunner, db.ProjectEnvironmentBinding)
         .outerjoin(
@@ -60,7 +57,7 @@ def get_project_with_details(
                 )
             )
         )
-        .order_by(db.GraphRunner.created_at)  # Order by creation date
+        .order_by(db.GraphRunner.created_at)
     ).all()
 
     graph_runners = [

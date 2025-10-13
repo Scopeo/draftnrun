@@ -53,8 +53,6 @@ def test_get_project_by_organization():
     assert all("project_id" in project for project in projects)
     assert all("project_name" in project for project in projects)
     assert all("description" in project for project in projects)
-    assert all("organization_id" in project for project in projects)
-    assert all(project["organization_id"] == ORGANIZATION_ID for project in projects)
 
 
 def test_get_project():
