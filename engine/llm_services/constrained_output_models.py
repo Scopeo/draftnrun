@@ -1,5 +1,5 @@
 from typing import Dict, List, Optional, Union, Literal
-from pydantic import BaseModel, RootModel
+from pydantic import BaseModel, RootModel, Field
 import dirtyjson
 
 from engine.llm_services.utils_pydantic_generator import build_generic_pydantic_instance_from_pydantic_model
@@ -55,10 +55,12 @@ class JsonSchemaModel(BaseModel):
 
 
 class OutputFormatModel(BaseModel):
+    model_config = {"populate_by_name": True}
+
     name: str
     type: Literal["json_schema"]
     strict: bool = True
-    schema: JsonSchemaModel
+    schema_: JsonSchemaModel = Field(..., alias="schema")
 
 
 # Rebuild models to resolve forward references

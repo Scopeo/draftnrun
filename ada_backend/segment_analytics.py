@@ -1,17 +1,30 @@
-from uuid import UUID
 import logging
+from uuid import UUID
 
-import segment.analytics as analytics
+try:
+    import segment.analytics as segment_analytics
+except ModuleNotFoundError:
+    segment_analytics = None
 
 from settings import settings
 
 
 LOGGER = logging.getLogger(__name__)
-if hasattr(settings, "SEGMENT_API_KEY") and hasattr(settings, "ENV"):
+
+
+class _SegmentAnalyticsStub:
+    def __getattr__(self, name):
+        def _noop(*args, **kwargs):
+            LOGGER.debug("Segment analytics stub invoked for %s; skipping call", name)
+
+        return _noop
+
+
+analytics = segment_analytics or _SegmentAnalyticsStub()
+analytics_enabled = False
+if segment_analytics and hasattr(settings, "SEGMENT_API_KEY") and hasattr(settings, "ENV"):
     analytics.write_key = settings.SEGMENT_API_KEY
     analytics_enabled = True
-else:
-    analytics_enabled = False
 
 
 def non_breaking_track(func):

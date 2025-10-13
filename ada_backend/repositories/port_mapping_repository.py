@@ -89,3 +89,19 @@ def insert_port_mapping(
     session.add(mapping)
     session.commit()
     return mapping
+
+
+def bulk_insert_port_mappings(
+    session: Session,
+    mappings: list[db.PortMapping],
+) -> None:
+    """
+    Bulk inserts port mappings into the database.
+
+    Args:
+        session: SQLAlchemy session
+        mappings: List of PortMapping objects to insert
+    """
+    if mappings:
+        session.bulk_save_objects(mappings)
+        session.commit()

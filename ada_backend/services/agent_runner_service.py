@@ -1,6 +1,6 @@
 from uuid import UUID
 import uuid
-from typing import Optional
+from typing import Optional, Any
 import traceback
 
 from sqlalchemy.orm import Session
@@ -22,6 +22,7 @@ from ada_backend.repositories.graph_runner_repository import (
 from ada_backend.repositories.port_mapping_repository import list_port_mappings_for_graph
 from ada_backend.repositories.project_repository import get_project, get_project_with_details
 from ada_backend.repositories.organization_repository import get_organization_secrets
+from ada_backend.repositories.component_repository import get_component_instance_by_id
 from engine.graph_runner.runnable import Runnable
 from engine.trace.trace_context import get_trace_manager
 from engine.trace.span_context import set_tracing_span
@@ -73,6 +74,8 @@ async def build_graph_runner(
 
     runnables: dict[str, Runnable] = {}
     graph = nx.DiGraph()
+    node_parameters: dict[str, dict[str, Any]] = {}
+    node_id_to_name: dict[str, str] = {}
 
     for component_node in component_nodes:
         agent = instantiate_component(
@@ -82,6 +85,19 @@ async def build_graph_runner(
         )
         runnables[str(component_node.id)] = agent
         graph.add_node(str(component_node.id))
+
+        if component_node.name:
+            node_id_to_name[str(component_node.id)] = component_node.name
+
+        unified_params: dict[str, Any] = {}
+        component_instance = get_component_instance_by_id(session, component_node.id)
+        if component_instance and component_instance.basic_parameters:
+            for param in component_instance.basic_parameters:
+                if param.value is not None and param.value != "":
+                    unified_params[param.parameter_definition.name] = param.value
+
+        if unified_params:
+            node_parameters[str(component_node.id)] = unified_params
 
     for edge in edges:
         if edge.source_node_id:
@@ -93,6 +109,8 @@ async def build_graph_runner(
         start_nodes,
         trace_manager=trace_manager,
         port_mappings=port_mappings,
+        node_parameters=node_parameters,
+        node_id_to_name=node_id_to_name,
     )
 
 

@@ -25,6 +25,7 @@ from ada_backend.repositories.port_mapping_repository import (
     get_output_port_definition_id,
     get_input_port_definition_id,
     get_port_definition_by_id,
+    bulk_insert_port_mappings,
 )
 from ada_backend.database import models as db
 from ada_backend.schemas.pipeline.graph_schema import GraphUpdateResponse, GraphUpdateSchema
@@ -211,9 +212,7 @@ def _ensure_port_mappings_for_edges(
             )
             explicitly_mapped_pairs.add((pm_schema.source_instance_id, pm_schema.target_instance_id))
 
-        if new_mappings:
-            session.bulk_save_objects(new_mappings)
-            session.commit()
+        bulk_insert_port_mappings(session, new_mappings)
 
     # Auto-generate defaults for unmapped edges using canonical ports
     actual_edges: set[tuple[UUID, UUID]] = {(edge.origin, edge.destination) for edge in graph_project.edges}
@@ -277,6 +276,4 @@ def _ensure_port_mappings_for_edges(
             )
         )
 
-    if auto_generated_mappings:
-        session.bulk_save_objects(auto_generated_mappings)
-        session.commit()
+    bulk_insert_port_mappings(session, auto_generated_mappings)

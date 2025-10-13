@@ -13,10 +13,12 @@ from ada_backend.schemas.pipeline.base import ComponentInstanceSchema
 from ada_backend.database import models as db
 from ada_backend.repositories.component_repository import (
     get_component_parameter_definition_by_component_id,
+    get_port_definitions_for_component_ids,
     upsert_component_instance,
     upsert_basic_parameter,
     upsert_tool_description,
     delete_component_instance_parameters,
+    insert_component_parameter_definition,
 )
 from ada_backend.services.entity_factory import get_llm_provider_and_model
 from ada_backend.database.seed.constants import COMPLETION_MODEL_IN_DB
@@ -75,6 +77,9 @@ def create_or_update_component_instance(
         )
     }
 
+    port_definitions = get_port_definitions_for_component_ids(session, [instance_data.component_id])
+    input_port_names = {p.name for p in port_definitions if p.port_type == db.PortType.INPUT}
+
     for param_name, param_def in param_definitions.items():
         if param_def.type == db.ParameterType.LLM_API_KEY:
             organization_secrets = get_organization_secrets_from_project_id(session, project_id)
@@ -108,12 +113,49 @@ def create_or_update_component_instance(
             )
             LOGGER.info(f"LLM API key parameter '{param_name}' upsert for component '{component_name}' ")
 
-    # Create/update parameters
+    provided_param_names = {p.name for p in instance_data.parameters}
+
+    for param_name, param_def in param_definitions.items():
+        if param_name not in provided_param_names:
+            if param_def.type == db.ParameterType.LLM_API_KEY:
+                continue
+
+            if not param_def.nullable and param_def.default is not None:
+                LOGGER.info(
+                    f"Parameter '{param_name}' not provided for component '{component_name}', " f"using default value"
+                )
+                upsert_basic_parameter(
+                    session=session,
+                    component_instance_id=instance_id,
+                    parameter_definition_id=param_def.id,
+                    value=param_def.default,
+                    order=None,
+                )
+
     for param in instance_data.parameters:
         if param.name not in param_definitions:
-            raise ValueError(
-                f"Parameter '{param.name=}' not found in component definitions for component '{component_name}'"
-            )
+            if param.name in input_port_names:
+                existing_defs = get_component_parameter_definition_by_component_id(session, instance_data.component_id)
+                synthetic_def = next((d for d in existing_defs if d.name == param.name), None)
+
+                if not synthetic_def:
+                    synthetic_def = insert_component_parameter_definition(
+                        session=session,
+                        component_id=instance_data.component_id,
+                        name=param.name,
+                        param_type=db.ParameterType.STRING,
+                        nullable=True,
+                        default=None,
+                        ui_component=None,
+                        ui_component_properties=None,
+                        is_advanced=False,
+                    )
+
+                param_definitions[param.name] = synthetic_def
+            else:
+                raise ValueError(
+                    f"Parameter '{param.name=}' not found in component definitions for component '{component_name}'"
+                )
 
         param_def = param_definitions[param.name]
 
@@ -146,13 +188,12 @@ def create_or_update_component_instance(
                     f"because it is not nullable."
                 )
             elif param.value is not None:
+                stored_value = json.dumps(param.value) if isinstance(param.value, dict) else str(param.value)
                 upsert_basic_parameter(
                     session=session,
                     component_instance_id=instance_id,
                     parameter_definition_id=param_def.id,
-                    value=(
-                        json.dumps(param.value) if isinstance(param.value, dict) else str(param.value)
-                    ),  # Convert to string for storage
+                    value=stored_value,  # Convert to string for storage
                     order=param.order,
                 )
 

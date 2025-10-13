@@ -17,6 +17,7 @@ from engine.graph_runner.port_management import (
     validate_port_mappings,
     synthesize_default_mappings,
 )
+from engine.graph_runner.parameter_interpolation import ParameterInterpolator
 from engine import legacy_compatibility
 from engine.trace.trace_manager import TraceManager
 from engine.trace.serializer import serialize_to_json
@@ -37,6 +38,8 @@ class GraphRunner:
         trace_manager: TraceManager,
         *,
         port_mappings: list[dict[str, Any]] | None = None,
+        node_parameters: dict[str, dict[str, Any]] | None = None,
+        node_id_to_name: dict[str, str] | None = None,
         coercion_matrix: CoercionMatrix | None = None,
     ):
         self.trace_manager = trace_manager
@@ -64,10 +67,12 @@ class GraphRunner:
         for pm in self.port_mappings:
             self._mappings_by_target.setdefault(pm.target_instance_id, []).append(pm)
 
+        self.node_parameters: dict[str, dict[str, Any]] = node_parameters or {}
+        self.node_id_to_name: dict[str, str] = node_id_to_name or {}
+
         self.tasks: dict[str, Task] = {}
         self._input_node_id = "__input__"
         self._add_virtual_input_node()
-        # Synthesize explicit default mappings for single-predecessor nodes without mappings
         self._synthesize_default_mappings()
         self._validate_graph()
         validate_port_mappings(self.port_mappings, self.runnables)
@@ -171,29 +176,86 @@ class GraphRunner:
                 start_node,
             )
 
+    def _get_resolved_outputs(self) -> dict[str, dict[str, Any]]:
+        """Get all outputs from completed tasks for template resolution."""
+        resolved_outputs: dict[str, dict[str, Any]] = {}
+        for node_id, task in self.tasks.items():
+            if task.state == TaskState.COMPLETED and task.result and task.result.data:
+                resolved_outputs[node_id] = task.result.data
+                if node_id in self.node_id_to_name:
+                    resolved_outputs[self.node_id_to_name[node_id]] = task.result.data
+        return resolved_outputs
+
+    def _process_unified_parameters(self, node_id: str, input_data: dict[str, Any]) -> None:
+        """Process unified parameters and add to input_data."""
+        unified_params = self.node_parameters.get(node_id, {})
+        if not unified_params:
+            return
+
+        resolved_outputs = self._get_resolved_outputs()
+
+        for param_name, param_value in unified_params.items():
+            if isinstance(param_value, str) and ParameterInterpolator.is_template(param_value):
+                try:
+                    resolved_value = ParameterInterpolator.resolve_template(param_value, resolved_outputs)
+                    input_data[param_name] = resolved_value
+                except ValueError as e:
+                    raise ValueError(
+                        f"Failed to resolve parameter '{param_name}' for component '{node_id}': {e}"
+                    ) from e
+            else:
+                input_data[param_name] = param_value
+
     def _gather_inputs(self, node_id: str) -> dict[str, Any]:
-        """Assembles the input data for a node based on explicit mappings,
-        keeping start-node passthrough. Default mapping synthesis happens during
-        initialization so mappings should be explicit here.
-        """
+        """Assembles the input data for a node using the unified parameter system."""
         input_data: dict[str, Any] = {}
+        self._process_unified_parameters(node_id, input_data)
+
         port_mappings_for_target = self._mappings_by_target.get(node_id, [])
         predecessors = list(self.graph.predecessors(node_id))
         is_start_node = self._input_node_id in predecessors
+        unified_params = self.node_parameters.get(node_id, {})
 
         if not port_mappings_for_target:
-            # If node is start and has no other deps, pass through initial input
             real_predecessors = [p for p in predecessors if p != self._input_node_id]
             if is_start_node and not real_predecessors:
                 input_task_result = self.tasks[self._input_node_id].result
-                return input_task_result.data if input_task_result else {}
-            # Otherwise, no explicit mappings -> no inputs
-            return {}
+                passthrough_data = input_task_result.data if input_task_result else {}
+
+                runnable = self.runnables.get(node_id)
+                if runnable and hasattr(runnable, "get_canonical_ports"):
+                    canonical_ports = runnable.get_canonical_ports()
+                    canonical_input = canonical_ports.get("input")
+
+                    if canonical_input and canonical_input not in input_data:
+                        if canonical_input == "messages":
+                            from engine.agent.types import ChatMessage
+
+                            if "message" in passthrough_data:
+                                message_content = passthrough_data["message"]
+                                if isinstance(message_content, str):
+                                    input_data["messages"] = [ChatMessage(role="user", content=message_content)]
+                            elif "messages" in passthrough_data:
+                                messages_content = passthrough_data["messages"]
+                                if isinstance(messages_content, list):
+                                    input_data["messages"] = messages_content
+
+                has_template_unified_params = any(
+                    isinstance(v, str) and ParameterInterpolator.is_template(v) for v in unified_params.values()
+                )
+
+                if not has_template_unified_params:
+                    for key, value in passthrough_data.items():
+                        if key not in input_data:
+                            input_data[key] = value
 
         direct_port_mappings = [
             port_mapping for port_mapping in port_mappings_for_target if port_mapping.dispatch_strategy == "direct"
         ]
         for port_mapping in direct_port_mappings:
+            if port_mapping.target_port_name in input_data:
+                continue
+
             if (
                 port_mapping.source_instance_id in self.tasks
                 and self.tasks[port_mapping.source_instance_id].state == TaskState.COMPLETED
@@ -202,36 +264,24 @@ class GraphRunner:
                 if task_result and port_mapping.source_port_name in task_result.data:
                     source_value = task_result.data[port_mapping.source_port_name]
 
-                    # Check if target component is unmigrated (doesn't have migrated attribute)
                     target_component = self.runnables.get(node_id)
                     is_unmigrated = target_component and not hasattr(target_component, "migrated")
 
                     if is_unmigrated:
-                        # For unmigrated components, pass the entire output structure
-                        # instead of trying to extract individual fields
                         input_data = task_result.data
                     else:
-                        # For migrated components, use coercion system
                         target_type = (
                             get_target_field_type(target_component, port_mapping.target_port_name)
                             if target_component
                             else str
                         )
-
-                        # Get source type for accurate coercion
                         source_type = get_source_type_for_mapping(port_mapping, source_value, self.runnables)
-                        LOGGER.debug(
-                            f"Coercing {port_mapping.source_instance_id}.{port_mapping.source_port_name} "
-                            f"({source_type}) → {port_mapping.target_instance_id}.{port_mapping.target_port_name} "
-                            f"({target_type})"
-                        )
                         coerced_value = self.coercion_matrix.coerce(source_value, target_type, source_type)
                         input_data[port_mapping.target_port_name] = coerced_value
                 else:
                     LOGGER.warning(
                         f"Source port '{port_mapping.source_port_name}' not found in output of "
-                        f"node '{port_mapping.source_instance_id}' for mapping to "
-                        f"'{node_id}.{port_mapping.target_port_name}'."
+                        f"node '{port_mapping.source_instance_id}'"
                     )
 
         function_call_port_mappings = [
@@ -241,7 +291,9 @@ class GraphRunner:
         ]
         if function_call_port_mappings:
             structured_values = apply_function_call_strategy(node_id, function_call_port_mappings)
-            input_data.update(structured_values)
+            for key, value in structured_values.items():
+                if key not in input_data:
+                    input_data[key] = value
 
         return input_data
 
@@ -262,18 +314,14 @@ class GraphRunner:
             raise ValueError("All runnables must be in the graph")
 
     def _synthesize_default_mappings(self) -> None:
-        """Create explicit direct port mappings for nodes with exactly one real predecessor
-        when no mappings are provided. Uses canonical ports from runnables.
-
-        - Skips start nodes that only depend on the virtual input node (passthrough).
-        - Raises an error if a node has multiple real predecessors and no mappings.
-        """
-        new_mappings = synthesize_default_mappings(self.graph, self.runnables, self._input_node_id, self.port_mappings)
+        """Create explicit port mappings for nodes with one predecessor when no mappings provided."""
+        new_mappings = synthesize_default_mappings(
+            self.graph, self.runnables, self._input_node_id, self.port_mappings
+        )
 
         if not new_mappings:
             return
 
-        # Extend mappings and rebuild the index for consistency
         self.port_mappings.extend(new_mappings)
         self._mappings_by_target = {}
         for pm in self.port_mappings:
