@@ -161,7 +161,7 @@ def get_root_traces_by_project(
     call_type: Optional[CallType] = None,
     tag_version: Optional[str] = None,
     page: int = 1,
-    page_size: int = 100,
+    page_size: int = 20,
 ) -> PaginatedRootTracesResponse:
     df_span = query_root_trace_duration(project_id, duration)
     track_project_observability_loaded(user_id, project_id)
@@ -187,7 +187,7 @@ def get_root_traces_by_project(
 
     total_items = len(df_span)
     if page_size <= 0:
-        page_size = 100
+        page_size = 20
     if page <= 0:
         page = 1
     start = (page - 1) * page_size

@@ -26,7 +26,7 @@ async def get_root_traces(
     call_type: Optional[CallType] = None,
     tag_version: Optional[str] = None,
     page: int = Query(1, ge=1, description="Page number (1-based)"),
-    page_size: int = Query(100, ge=1, le=1000, description="Number of items per page"),
+    page_size: int = Query(20, ge=1, le=1000, description="Number of items per page"),
 ) -> PaginatedRootTracesResponse:
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
