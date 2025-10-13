@@ -82,19 +82,23 @@ def upsert_organization_secret(
         organization_id (UUID): ID of the organization.
         key (str): Key for the secret.
         secret (str): Secret value to be encrypted and stored.
+        secret_type (Optional[db.OrgSecretType]): Type of secret. If None, uses database default.
 
     Returns:
         db.OrganizationSecret: The newly created OrganizationSecret object.
     """
-    organization_secret = (
-        session.query(db.OrganizationSecret)
-        .filter(
-            db.OrganizationSecret.organization_id == organization_id,
-            db.OrganizationSecret.key == key,
-            db.OrganizationSecret.secret_type == secret_type,
-        )
-        .first()
+    # Build query - only filter by secret_type if explicitly provided
+    query = session.query(db.OrganizationSecret).filter(
+        db.OrganizationSecret.organization_id == organization_id,
+        db.OrganizationSecret.key == key,
     )
+
+    # Only filter by secret_type if it's explicitly provided to avoid mismatch with DB defaults
+    if secret_type is not None:
+        query = query.filter(db.OrganizationSecret.secret_type == secret_type)
+
+    organization_secret = query.first()
+
     if not organization_secret:
         LOGGER.info(f"Creating new secret with key {key} for organization {organization_id}")
         organization_secret = db.OrganizationSecret(organization_id=organization_id, key=key, secret_type=secret_type)
