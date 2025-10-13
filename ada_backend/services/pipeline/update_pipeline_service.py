@@ -77,7 +77,6 @@ def create_or_update_component_instance(
         )
     }
 
-    # Get port definitions to allow input ports as parameters (for hardcoded values/templates)
     port_definitions = get_port_definitions_for_component_ids(session, [instance_data.component_id])
     input_port_names = {p.name for p in port_definitions if p.port_type == db.PortType.INPUT}
 
@@ -114,17 +113,13 @@ def create_or_update_component_instance(
             )
             LOGGER.info(f"LLM API key parameter '{param_name}' upsert for component '{component_name}' ")
 
-    # Track which parameters were provided by the client
     provided_param_names = {p.name for p in instance_data.parameters}
 
-    # Create parameters with default values for non-nullable params not provided by client
     for param_name, param_def in param_definitions.items():
         if param_name not in provided_param_names:
-            # Skip LLM_API_KEY params as they're handled separately above
             if param_def.type == db.ParameterType.LLM_API_KEY:
                 continue
 
-            # If parameter is not nullable and not provided, use default value
             if not param_def.nullable and param_def.default is not None:
                 LOGGER.info(
                     f"Parameter '{param_name}' not provided for component '{component_name}', " f"using default value"
@@ -137,44 +132,26 @@ def create_or_update_component_instance(
                     order=None,
                 )
 
-    # Create/update parameters
     for param in instance_data.parameters:
-        # Allow parameters that match input port names (for hardcoded values/templates)
         if param.name not in param_definitions:
             if param.name in input_port_names:
-                # This is an input port parameter - we need to create a synthetic parameter definition
-                # for it so it can be stored in basic_parameters and picked up by the template system
-                LOGGER.debug(
-                    f"Parameter '{param.name}' matches input port name for component '{component_name}'. "
-                    "Creating synthetic parameter definition for template storage."
-                )
-
-                # Check if a synthetic parameter definition already exists
-                # Refresh param_definitions to check if it exists
                 existing_defs = get_component_parameter_definition_by_component_id(session, instance_data.component_id)
                 synthetic_def = next((d for d in existing_defs if d.name == param.name), None)
 
                 if not synthetic_def:
-                    # Create a synthetic parameter definition for this input port
                     synthetic_def = insert_component_parameter_definition(
                         session=session,
                         component_id=instance_data.component_id,
                         name=param.name,
                         param_type=db.ParameterType.STRING,
-                        nullable=True,  # Input ports are optional when hardcoded
+                        nullable=True,
                         default=None,
                         ui_component=None,
                         ui_component_properties=None,
                         is_advanced=False,
                     )
-                    LOGGER.info(
-                        f"Created synthetic parameter definition for input port '{param.name}' "
-                        f"on component '{component_name}'"
-                    )
 
-                # Add to param_definitions so it's processed below
                 param_definitions[param.name] = synthetic_def
-
             else:
                 raise ValueError(
                     f"Parameter '{param.name=}' not found in component definitions for component '{component_name}'"

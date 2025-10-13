@@ -45,12 +45,6 @@ def get_component_params(
             - Parameters with order!=None are grouped in lists, ordered by the order field
             - Parameters with resolution_phase=RUNTIME are excluded (they're for runtime, not constructor)
     """
-
-    # Get component instance to access component_id
-    component_instance = get_component_instance_by_id(session, component_instance_id)
-    if not component_instance:
-        raise ValueError(f"Component instance {component_instance_id} not found.")
-
     params = {}
     ordered_params: dict[str, list[tuple[int, Any]]] = {}  # name -> [(order, value), ...]
 
@@ -59,10 +53,6 @@ def get_component_params(
 
         # Skip runtime parameters - these are resolved during graph execution
         if param.resolution_phase == ParameterResolutionPhase.RUNTIME:
-            LOGGER.debug(
-                f"Skipping parameter '{param_name}' (resolution_phase=RUNTIME) "
-                f"- will be resolved during graph execution"
-            )
             continue
 
         if param.organization_secret_id:

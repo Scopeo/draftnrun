@@ -41,7 +41,6 @@ def get_all_agents_service(session: Session, organization_id: UUID) -> list[Agen
     agents_with_graph_runners_rows = fetch_agents_with_graph_runners_by_organization(session, organization_id)
     by_agent: DefaultDict[UUID, dict] = defaultdict(lambda: {"agent": None, "grs": []})
     for row in agents_with_graph_runners_rows:
-        # Handle both 2-tuple and 3-tuple formats for backward compatibility
         if len(row) == 2:
             agent, binding = row
             graph_runner_id = binding.graph_runner_id

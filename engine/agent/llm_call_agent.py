@@ -95,8 +95,6 @@ class LLMCallAgent(Agent):
         if kwargs:
             input_payloads = [kwargs]
 
-        # Only add 'input' to replacements if there's actual content
-        # This preserves {input} placeholder if it's not being replaced
         input_text = ""
         for payload in input_payloads:
             payload_json = (
@@ -117,7 +115,6 @@ class LLMCallAgent(Agent):
                 files_content.extend(payload_files_content)
                 images_content.extend(payload_images_content)
 
-        # Only add to replacements if we have content (preserves {input} placeholder otherwise)
         if input_text:
             input_replacements["input"] = input_text
 

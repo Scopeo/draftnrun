@@ -245,7 +245,7 @@ class ParameterInterpolator:
 
         Handles special cases:
         - None -> empty string
-        - Lists/dicts -> JSON representation
+        - Lists/dicts -> JSON representation (with fallback for non-serializable objects)
         - Other types -> str()
         """
         if value is None:
@@ -253,6 +253,10 @@ class ParameterInterpolator:
         elif isinstance(value, (list, dict)):
             import json
 
-            return json.dumps(value, ensure_ascii=False)
+            try:
+                return json.dumps(value, ensure_ascii=False)
+            except (TypeError, ValueError):
+                # Fallback for non-JSON-serializable objects (e.g., Pydantic models)
+                return str(value)
         else:
             return str(value)

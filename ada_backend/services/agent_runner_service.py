@@ -12,7 +12,6 @@ from ada_backend.schemas.project_schema import ChatResponse
 from ada_backend.services.agent_builder_service import instantiate_component
 from ada_backend.services.errors import ProjectNotFound
 from engine.graph_runner.graph_runner import GraphRunner
-from engine.graph_runner.parameter_interpolation import ParameterInterpolator
 from ada_backend.repositories.graph_runner_repository import (
     get_component_nodes,
     get_graph_runner_for_env,
@@ -75,8 +74,8 @@ async def build_graph_runner(
 
     runnables: dict[str, Runnable] = {}
     graph = nx.DiGraph()
-    node_parameters: dict[str, dict[str, Any]] = {}  # Unified parameter system
-    node_id_to_name: dict[str, str] = {}  # Map node IDs to component names for {{@name.field}} syntax
+    node_parameters: dict[str, dict[str, Any]] = {}
+    node_id_to_name: dict[str, str] = {}
 
     for component_node in component_nodes:
         agent = instantiate_component(
@@ -87,27 +86,16 @@ async def build_graph_runner(
         runnables[str(component_node.id)] = agent
         graph.add_node(str(component_node.id))
 
-        # Store component name mapping for {{@name.field}} syntax resolution
         if component_node.name:
             node_id_to_name[str(component_node.id)] = component_node.name
 
-        # Extract ALL parameters (unified parameter system)
-        # This supports static values, references, and hybrid values
         unified_params: dict[str, Any] = {}
-
-        # Access basic_parameters through the component_instance relationship
-        # component_node is a ComponentInstance with basic_parameters relationship
         component_instance = get_component_instance_by_id(session, component_node.id)
         if component_instance and component_instance.basic_parameters:
             for param in component_instance.basic_parameters:
                 if param.value is not None and param.value != "":
-                    # Use parameter definition name as the key
-                    param_name = param.parameter_definition.name
+                    unified_params[param.parameter_definition.name] = param.value
 
-                    # Add to unified parameters
-                    unified_params[param_name] = param.value
-
-        # Store unified parameters if any exist
         if unified_params:
             node_parameters[str(component_node.id)] = unified_params
 
@@ -121,8 +109,8 @@ async def build_graph_runner(
         start_nodes,
         trace_manager=trace_manager,
         port_mappings=port_mappings,
-        node_parameters=node_parameters,  # Pass unified parameters to GraphRunner
-        node_id_to_name=node_id_to_name,  # Pass component name mapping for {{@name.field}} syntax
+        node_parameters=node_parameters,
+        node_id_to_name=node_id_to_name,
     )
 
 
