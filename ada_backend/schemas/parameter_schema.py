@@ -32,7 +32,16 @@ class PipelineParameterSchema(ParameterBase, WithValue):
     """Represents a parameter value in the pipeline input"""
 
 
+class ParameterGroupSchema(BaseModel):
+    id: UUID
+    name: str
+    order_index: int
+
+
 class ComponentParamDefDTO(ParameterDefinition):
     """Represents a parameter definition for a component"""
 
     component_id: UUID
+    parameter_group_id: Optional[UUID] = None
+    group_order: Optional[int] = None
+    parameter_group_name: Optional[str] = None

@@ -4,7 +4,7 @@ from uuid import UUID
 from pydantic import BaseModel, field_validator
 
 from ada_backend.schemas.integration_schema import IntegrationSchema
-from ada_backend.schemas.parameter_schema import ComponentParamDefDTO
+from ada_backend.schemas.parameter_schema import ComponentParamDefDTO, ParameterGroupSchema
 from ada_backend.database import models as db
 
 
@@ -45,6 +45,7 @@ class ComponentWithParametersDTO(ComponentUseInfoSchema, ComponentDTO):
     integration: Optional[IntegrationSchema] = None
     parameters: List[ComponentParamDefDTO]
     port_definitions: List[PortDefinitionSchema] = []
+    parameter_groups: List[ParameterGroupSchema] = []
 
 
 class ComponentsResponse(BaseModel):
