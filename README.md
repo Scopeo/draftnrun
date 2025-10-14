@@ -676,3 +676,7 @@ Tools are available for the AI Agent. Note that the AI Agent can also have other
 - **Internet Search with OpenAI**: Answer a question using web search.
 - **SQL tool**: Builds SQL queries from natural language
 - **RunSQLquery tool**: Builds and executes SQL queries
+
+
+
+This project uses the 'python-docx-template' library, licensed under the GNU Lesser General Public License v2.1. See https://github.com/elapouya/python-docx-template for details.

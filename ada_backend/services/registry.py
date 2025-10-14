@@ -24,6 +24,7 @@ from engine.agent.tools.python_code_runner import PythonCodeRunner
 from engine.agent.tools.terminal_command_runner import TerminalCommandRunner
 from engine.agent.pdf_generation_tool import PDFGenerationTool
 from engine.agent.docx_generation_tool import DOCXGenerationTool
+from engine.agent.tools.docx_template import DocxTemplateAgent
 from engine.agent.document_enhanced_llm_call import DocumentEnhancedLLMCallAgent
 from engine.agent.document_react_loader import DocumentReactLoaderAgent
 from engine.agent.ocr_call import OCRCall
@@ -460,6 +461,16 @@ def create_factory_registry() -> FactoryRegistry:
         component_version_id=COMPONENT_VERSION_UUIDS["gmail_sender"],
         factory=AgentFactory(
             entity_class=GmailSender,
+        ),
+    )
+
+    registry.register(
+        name=COMPONENT_VERSION_UUIDS["docx_template_agent"],
+        factory=AgentFactory(
+            entity_class=DocxTemplateAgent,
+            parameter_processors=[
+                completion_service_processor,
+            ],
         ),
     )
 
