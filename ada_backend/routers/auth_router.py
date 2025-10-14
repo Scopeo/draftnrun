@@ -362,7 +362,7 @@ def user_has_access_to_organization_or_verify_api_key(allowed_roles: set[str]):
     async def wrapper(
         organization_id: UUID,
         authorization: HTTPAuthorizationCredentials | None = Depends(HTTPBearer(auto_error=False)),
-        x_api_key: str = Header(..., alias="X-API-Key"),
+        x_api_key: str | None = Header(None, alias="X-API-Key"),
         session: Session = Depends(get_db),
     ) -> tuple[UUID | None, UUID | None]:
         """Flexible authentication: tries user auth first, falls back to API key auth."""
