@@ -97,11 +97,14 @@ def create_ingestion_task_with_api_key(
 
 
 # New unified endpoint that supports both authentication methods
-@router.post("/ingestion_task/{organization_id}/unified", status_code=status.HTTP_201_CREATED)
-def create_ingestion_task_unified(
+@router.post("/ingestion_task/{organization_id}/choice_auth", status_code=status.HTTP_201_CREATED)
+def create_ingestion_task_choice_auth(
     organization_id: UUID,
     ingestion_task_data: IngestionTaskQueue,
-    auth_ids: Annotated[tuple[UUID | None, UUID | None], Depends(user_has_access_to_organization_or_verify_api_key)],
+    auth_ids: Annotated[
+        tuple[UUID | None, UUID | None],
+        Depends(user_has_access_to_organization_or_verify_api_key(allowed_roles=UserRights.WRITER.value)),
+    ],
     session: Session = Depends(get_db),
 ) -> UUID:
     user_id, api_key_id = auth_ids

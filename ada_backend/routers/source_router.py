@@ -13,6 +13,7 @@ from ada_backend.routers.auth_router import (
     UserRights,
     verify_api_key_dependency,
     verify_ingestion_api_key_dependency,
+    user_has_access_to_organization_or_verify_api_key,
 )
 from ada_backend.services.source_service import (
     get_sources_by_organization,
@@ -101,6 +102,33 @@ def update_organization_source_api_key(
     except Exception as e:
         LOGGER.exception(
             "Failed to update source API key %s for organization %s",
+            source_id,
+            organization_id,
+        )
+        raise HTTPException(status_code=500, detail="Internal Server Error") from e
+
+
+# New unified endpoint that supports both authentication methods
+@router.post("/{organization_id}/{source_id}/choice_auth", status_code=status.HTTP_200_OK)
+def update_organization_source_choice_auth(
+    organization_id: UUID,
+    source_id: UUID,
+    auth_ids: Annotated[
+        tuple[UUID | None, UUID | None],
+        Depends(user_has_access_to_organization_or_verify_api_key(allowed_roles=UserRights.ADMIN.value)),
+    ],
+    session: Session = Depends(get_db),
+):
+    """
+    Update organization source with flexible authentication.
+
+    """
+    user_id, api_key_id = auth_ids
+    try:
+        return update_source_by_source_id(session, organization_id, source_id, user_id=user_id, api_key_id=api_key_id)
+    except Exception as e:
+        LOGGER.exception(
+            "Failed to update source %s for organization %s",
             source_id,
             organization_id,
         )

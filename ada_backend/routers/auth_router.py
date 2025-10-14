@@ -354,35 +354,41 @@ async def verify_ingestion_api_key_dependency(
         raise HTTPException(status_code=401, detail="Invalid ingestion API key")
 
 
-async def user_has_access_to_organization_or_verify_api_key(
-    organization_id: UUID,
-    authorization: HTTPAuthorizationCredentials | None = Depends(HTTPBearer(auto_error=False)),
-    x_api_key: str = Header(None, alias="X-API-Key"),
-    session: Session = Depends(get_db),
-) -> tuple[UUID | None, UUID | None]:
+def user_has_access_to_organization_or_verify_api_key(allowed_roles: set[str]):
     """
-    Flexible authentication dependency that can handle both user and API key authentication.
-
+    Factory function that returns a flexible authentication dependency.
     """
-    if authorization and authorization.credentials:
-        try:
-            user = await get_user_from_supabase_token(authorization)
-            user = await user_has_access_to_organization_dependency(allowed_roles=UserRights.WRITER.value)(
-                organization_id=organization_id, user=user
-            )
-            return (user.id, None)
-        except HTTPException:
-            pass
 
-    if x_api_key:
-        try:
-            verified_api_key = await verify_api_key_dependency(x_api_key=x_api_key, session=session)
-            if verified_api_key.organization_id != organization_id:
-                raise HTTPException(status_code=403, detail="You don't have access to this organization")
-            return (None, verified_api_key.api_key_id)
-        except HTTPException:
-            pass
+    async def wrapper(
+        organization_id: UUID,
+        authorization: HTTPAuthorizationCredentials | None = Depends(HTTPBearer(auto_error=False)),
+        x_api_key: str = Header(..., alias="X-API-Key"),
+        session: Session = Depends(get_db),
+    ) -> tuple[UUID | None, UUID | None]:
+        """Flexible authentication: tries user auth first, falls back to API key auth."""
 
-    raise HTTPException(
-        status_code=401, detail="Authentication required: provide either Authorization header or X-API-Key header"
-    )
+        # Try user authentication first
+        if authorization and authorization.credentials:
+            try:
+                user = await get_user_from_supabase_token(authorization)
+                user = await user_has_access_to_organization_dependency(allowed_roles=allowed_roles)(
+                    organization_id=organization_id, user=user
+                )
+                return (user.id, None)
+            except HTTPException:
+                pass
+
+        if x_api_key:
+            try:
+                verified_api_key = await verify_api_key_dependency(x_api_key=x_api_key, session=session)
+                if verified_api_key.organization_id != organization_id:
+                    raise HTTPException(status_code=403, detail="You don't have access to this organization")
+                return (None, verified_api_key.api_key_id)
+            except HTTPException:
+                pass
+
+        raise HTTPException(
+            status_code=401, detail="Authentication required: provide either Authorization header or X-API-Key header"
+        )
+
+    return wrapper
