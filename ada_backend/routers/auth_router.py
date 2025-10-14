@@ -354,7 +354,7 @@ async def verify_ingestion_api_key_dependency(
         raise HTTPException(status_code=401, detail="Invalid ingestion API key")
 
 
-async def user_has_access_to_organization_dependency_or_verify_api_key(
+async def user_has_access_to_organization_or_verify_api_key(
     organization_id: UUID,
     authorization: HTTPAuthorizationCredentials | None = Depends(HTTPBearer(auto_error=False)),
     x_api_key: str = Header(None, alias="X-API-Key"),
