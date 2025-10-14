@@ -30,6 +30,7 @@ from engine.trace.trace_manager import TraceManager
 from settings import settings
 from logger import setup_logging
 from ada_backend.scheduler_boot import scheduler_lifespan
+from ada_backend.routers.ingestion_database_management_router import router as ingestion_database_management_router
 
 setup_logging()
 
@@ -109,6 +110,10 @@ app = FastAPI(
             "name": "Quality Assurance",
             "description": "Endpoints for managing quality assurance datasets, versions and inputs per project",
         },
+        {
+            "name": "Ingestion Database Management",
+            "description": "Endpoints for managing ingestion database for organization sources",
+        },
     ],
 )
 
@@ -138,6 +143,7 @@ app.include_router(trace_router)
 app.include_router(admin_tools_router)
 app.include_router(cron_router)
 app.include_router(global_secret_router)
+app.include_router(ingestion_database_management_router)
 
 app.add_middleware(RequestContextMiddleware)
 app.add_middleware(
