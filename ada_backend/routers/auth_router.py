@@ -1,9 +1,10 @@
 import logging
-from typing import Annotated
+from typing import Annotated, Callable
+
 from uuid import UUID
 from enum import Enum
 
-from fastapi import APIRouter, Depends, HTTPException, Header, Body, Query
+from fastapi import APIRouter, Depends, HTTPException, Header, Body, Query, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from supabase import Client, create_client
 from sqlalchemy.orm import Session
@@ -31,6 +32,7 @@ from ada_backend.schemas.auth_schema import (
     ApiKeyDeleteResponse,
     VerifiedApiKey,
 )
+from typing import Union
 
 LOGGER = logging.getLogger(__name__)
 
@@ -350,3 +352,37 @@ async def verify_ingestion_api_key_dependency(
     hashed_key = verify_ingestion_api_key(private_key=ingestion_api_key)
     if hashed_key != settings.INGESTION_API_KEY_HASHED:
         raise HTTPException(status_code=401, detail="Invalid ingestion API key")
+
+
+async def user_has_access_to_organization_dependency_or_verify_api_key(
+    organization_id: UUID,
+    authorization: HTTPAuthorizationCredentials | None = Depends(HTTPBearer(auto_error=False)),
+    x_api_key: str = Header(None, alias="X-API-Key"),
+    session: Session = Depends(get_db),
+) -> tuple[UUID | None, UUID | None]:
+    """
+    Flexible authentication dependency that can handle both user and API key authentication.
+
+    """
+    if authorization and authorization.credentials:
+        try:
+            user = await get_user_from_supabase_token(authorization)
+            user = await user_has_access_to_organization_dependency(allowed_roles=UserRights.WRITER.value)(
+                organization_id=organization_id, user=user
+            )
+            return (user.id, None)
+        except HTTPException:
+            pass
+
+    if x_api_key:
+        try:
+            verified_api_key = await verify_api_key_dependency(x_api_key=x_api_key, session=session)
+            if verified_api_key.organization_id != organization_id:
+                raise HTTPException(status_code=403, detail="You don't have access to this organization")
+            return (None, verified_api_key.api_key_id)
+        except HTTPException:
+            pass
+
+    raise HTTPException(
+        status_code=401, detail="Authentication required: provide either Authorization header or X-API-Key header"
+    )

@@ -13,6 +13,7 @@ from ada_backend.routers.auth_router import (
     UserRights,
     verify_api_key_dependency,
     verify_ingestion_api_key_dependency,
+    user_has_access_to_organization_or_verify_api_key,
 )
 from ada_backend.services.ingestion_task_service import (
     get_ingestion_task_by_organization_id,
@@ -93,6 +94,28 @@ def create_ingestion_task_with_api_key(
             f"Failed to create ingestion task for organization {organization_id} via API key: {str(e)}", exc_info=True
         )
         raise HTTPException(status_code=500, detail="Internal server error") from e
+
+
+# New unified endpoint that supports both authentication methods
+@router.post("/ingestion_task/{organization_id}/unified", status_code=status.HTTP_201_CREATED)
+def create_ingestion_task_unified(
+    organization_id: UUID,
+    ingestion_task_data: IngestionTaskQueue,
+    auth_ids: Annotated[tuple[UUID | None, UUID | None], Depends(user_has_access_to_organization_or_verify_api_key)],
+    session: Session = Depends(get_db),
+) -> UUID:
+    user_id, api_key_id = auth_ids
+    try:
+        task_id = create_ingestion_task_by_organization(
+            session,
+            organization_id=organization_id,
+            ingestion_task_data=ingestion_task_data,
+            user_id=user_id,
+            api_key_id=api_key_id,
+        )
+        return task_id
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Internal Server Error") from e
 
 
 @router.patch("/ingestion_task/{organization_id}", status_code=status.HTTP_200_OK)
