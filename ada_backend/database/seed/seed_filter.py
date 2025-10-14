@@ -78,6 +78,7 @@ def seed_filter_components(session: Session):
         is_protected=True,
         release_stage=db.ReleaseStage.PUBLIC,
         default_tool_description_id=TOOL_DESCRIPTION_UUIDS["default_filter_tool_description"],
+        icon="tabler-json",
     )
     upsert_components(
         session=session,

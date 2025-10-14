@@ -17,6 +17,7 @@ def seed_linkup_tool_components(session: Session):
         function_callable=True,
         release_stage=db.ReleaseStage.PUBLIC,
         default_tool_description_id=TOOL_DESCRIPTION_UUIDS["linkup_search_tool_description"],
+        icon="tabler-world-search",
     )
 
     upsert_components(

@@ -68,6 +68,7 @@ def get_component_instance(
         is_protected=component.is_protected,
         function_callable=component.function_callable,
         can_use_function_calling=component.can_use_function_calling,
+        icon=component.icon,
         subcomponents_info=[
             SubComponentParamSchema(
                 id=param_child_def.child_component_id,

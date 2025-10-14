@@ -29,6 +29,7 @@ def seed_web_search_components(session: Session):
         function_callable=True,
         release_stage=db.ReleaseStage.PUBLIC,
         default_tool_description_id=TOOL_DESCRIPTION_UUIDS["default_web_search_openai_tool_description"],
+        icon="tabler-brand-openai",
     )
     upsert_components(
         session=session,

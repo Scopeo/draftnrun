@@ -54,6 +54,7 @@ def seed_ai_agent_components(session: Session):
         can_use_function_calling=True,
         release_stage=db.ReleaseStage.PUBLIC,
         default_tool_description_id=TOOL_DESCRIPTION_UUIDS["default_ai_agent_description"],
+        icon="tabler-robot",
     )
     upsert_components(
         session=session,

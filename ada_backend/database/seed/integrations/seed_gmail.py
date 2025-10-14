@@ -29,6 +29,7 @@ def seed_gmail_components(session: Session):
         can_use_function_calling=False,
         release_stage=db.ReleaseStage.INTERNAL,
         default_tool_description_id=TOOL_DESCRIPTION_UUIDS["gmail_sender_tool_description"],
+        icon="tabler-brand-gmail",
     )
     upsert_components(session, [gmail_sender_component])
 

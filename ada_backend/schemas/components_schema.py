@@ -32,6 +32,7 @@ class ComponentUseInfoSchema(BaseModel):
     tool_parameter_name: Optional[str] = None
     subcomponents_info: list[SubComponentParamSchema]
     categories: List[str] = []
+    icon: Optional[str] = None
 
 
 class PortDefinitionSchema(BaseModel):

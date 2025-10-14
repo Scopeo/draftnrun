@@ -237,6 +237,7 @@ class Component(Base):
         ForeignKey("tool_descriptions.id"),
         nullable=True,
     )
+    icon = mapped_column(String, nullable=True)
     default_tool_description = relationship("ToolDescription", foreign_keys=[default_tool_description_id])
     definitions = relationship(
         "ComponentParameterDefinition",

@@ -27,6 +27,7 @@ def seed_terminal_command_runner_components(session: Session):
         can_use_function_calling=False,
         release_stage=db.ReleaseStage.PUBLIC,
         default_tool_description_id=TOOL_DESCRIPTION_UUIDS["terminal_command_runner_tool_description"],
+        icon="tabler-terminal-2",
     )
     upsert_components(session, [terminal_command_runner_component])
 

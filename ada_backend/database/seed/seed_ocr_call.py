@@ -26,6 +26,7 @@ def seed_ocr_call_components(session: Session):
         function_callable=True,
         release_stage=db.ReleaseStage.PUBLIC,
         default_tool_description_id=TOOL_DESCRIPTION_UUIDS["default_tool_description"],
+        icon="tabler-text-scan-2",
     )
     upsert_components(
         session=session,
