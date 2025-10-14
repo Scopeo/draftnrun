@@ -2,6 +2,7 @@ import logging
 import uuid
 from typing import Optional, Any
 from uuid import UUID
+from datetime import datetime, timedelta
 
 from sqlalchemy.orm import Session
 from croniter import croniter
@@ -40,6 +41,7 @@ from ada_backend.services.cron.errors import (
     CronJobAccessDenied,
     CronSchedulerError,
 )
+from ada_backend.services.cron.constants import CRON_MIN_INTERVAL_MINUTES
 
 LOGGER = logging.getLogger(__name__)
 
@@ -58,6 +60,27 @@ def _validate_timezone(tz: str):
         pytz.timezone(tz)
     except pytz.exceptions.UnknownTimeZoneError:
         raise CronValidationError(f"Invalid timezone '{tz}'. Must be a valid IANA timezone.") from None
+
+
+def _validate_maximum_frequency(cron_expr: str, min_interval_minutes: int = CRON_MIN_INTERVAL_MINUTES):
+    """Validate that the cron expression doesn't exceed the maximum frequency limit."""
+    try:
+        base_time = datetime.now()
+        cron = croniter(cron_expr, base_time)
+        occurrences = [cron.get_next(datetime) for _ in range(10)]
+
+        for i in range(len(occurrences) - 1):
+            interval = occurrences[i + 1] - occurrences[i]
+            if interval < timedelta(minutes=min_interval_minutes):
+                raise CronValidationError(
+                    f"Cron expression '{cron_expr}' runs too frequently. "
+                    f"Minimum allowed interval is {min_interval_minutes} minutes, "
+                    f"but found interval of {interval.total_seconds() / 60:.1f} minutes."
+                )
+    except CronValidationError:
+        raise
+    except Exception as e:
+        raise CronValidationError(f"Error validating cron frequency: {e}") from e
 
 
 def _assert_cron_in_org(session: Session, cron_id: UUID, organization_id: UUID) -> CronJob:
@@ -149,6 +172,7 @@ def create_cron_job(
     """Create a cron job and schedule it."""
     _validate_cron_expression(cron_data.cron_expr)
     _validate_timezone(cron_data.tz)
+    _validate_maximum_frequency(cron_data.cron_expr)
 
     execution_payload = _validate_and_enrich_payload_for_entrypoint(
         entrypoint=cron_data.entrypoint,
@@ -201,6 +225,7 @@ def update_cron_job_service(
 
     if cron_data.cron_expr is not None:
         _validate_cron_expression(cron_data.cron_expr)
+        _validate_maximum_frequency(cron_data.cron_expr)
     if cron_data.tz is not None:
         _validate_timezone(cron_data.tz)
 
