@@ -20,6 +20,7 @@ monitoring
 *.db
 pipeline.json
 *.csv
+*.png
 config/seaweedfs/master_data
 config/seaweedfs/volume_data
 config/seaweedfs/filer_data
