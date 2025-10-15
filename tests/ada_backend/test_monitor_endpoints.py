@@ -27,7 +27,7 @@ def test_monitor_endpoint():
     response = client.post(endpoint, json=data, headers=headers)
     output = ChatResponse.model_validate(response.json())
     assert isinstance(output.message, str)
-    assert output.error is None or isinstance(output.error, str)
+    assert output.error is None, f"Graph execution failed with error: {output.error}"
     assert isinstance(output.artifacts, dict)
 
     # Force flush the trace manager to ensure spans are exported

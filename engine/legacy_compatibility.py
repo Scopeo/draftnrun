@@ -81,36 +81,6 @@ def create_legacy_input_output_schema() -> Type[BaseModel]:
     return OutputSchema
 
 
-def create_legacy_filter_input_schema() -> Type[BaseModel]:
-    """Create legacy input schema for unmigrated Filter component.
-
-    LEGACY FUNCTION: DELETE after Filter component is migrated to Agent base class.
-    """
-
-    class InputSchema(BaseModel):
-        messages: list[ChatMessage]
-        artifacts: Optional[dict] = None
-        error: Optional[str] = None
-        is_final: Optional[bool] = None
-
-    return InputSchema
-
-
-def create_legacy_filter_output_schema() -> Type[BaseModel]:
-    """Create legacy output schema for unmigrated Filter component.
-
-    LEGACY FUNCTION: DELETE after Filter component is migrated to Agent base class.
-    """
-
-    class OutputSchema(BaseModel):
-        messages: list[ChatMessage]
-        artifacts: dict
-        error: Optional[str]
-        is_final: Optional[bool]
-
-    return OutputSchema
-
-
 # ============================================================================
 # LEGACY DATA CONVERSION FUNCTIONS
 # ============================================================================

@@ -8,8 +8,14 @@ from uuid import UUID
 class NodeData(BaseModel):
     """The universal data packet flowing between nodes."""
 
-    data: Dict[str, Any] = Field(default_factory=dict)
-    ctx: Dict[str, Any] = Field(default_factory=dict)
+    data: Dict[str, Any] = Field(
+        default_factory=dict,
+        description="The data payload being passed between nodes",
+    )
+    ctx: Dict[str, Any] = Field(
+        default_factory=dict,
+        description="Execution context and variables for the current node execution",
+    )
 
 
 class ChatMessage(BaseModel):

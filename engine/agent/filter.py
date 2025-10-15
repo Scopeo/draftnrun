@@ -1,21 +1,18 @@
 import logging
-from typing import Type
+from typing import Type, Any, Optional
 
-from opentelemetry import trace as trace_api
-from openinference.semconv.trace import SpanAttributes, OpenInferenceSpanKindValues
+from openinference.semconv.trace import OpenInferenceSpanKindValues
 from jsonschema_pydantic import jsonschema_to_pydantic
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
+from engine.agent.agent import Agent
 from engine.agent.types import (
     ToolDescription,
-    AgentPayload,
     ChatMessage,
     ComponentAttributes,
-    NodeData,
 )
 from engine.trace.trace_manager import TraceManager
 from engine.agent.utils import load_str_to_json
-from engine.trace.serializer import serialize_to_json
 
 LOGGER = logging.getLogger(__name__)
 
@@ -32,10 +29,36 @@ DEFAULT_FILTER_TOOL_DESCRIPTION = ToolDescription(
 )
 
 
-class Filter:
-    # LEGACY: Mark as unmigrated for retro-compatibility
-    # TODO: Remove after migration to Agent base class
-    migrated: bool = False
+class FilterInputs(BaseModel):
+    messages: Optional[list[ChatMessage]] = Field(default=None, description="The messages to filter.")
+    error: Optional[str] = Field(default=None, description="Error message if any.")
+    artifacts: dict[str, Any] = Field(default_factory=dict, description="Artifacts to filter.")
+    is_final: bool = Field(default=False, description="Whether this is a final output.")
+    # Allow any other fields to be passed through
+    model_config = {"extra": "allow"}
+
+
+class FilterOutputs(BaseModel):
+    output: str = Field(description="The string content of the final message from the agent.")
+    is_final: bool = Field(default=False, description="Indicates if this is the final output of the agent.")
+    artifacts: dict[str, Any] = Field(default_factory=dict, description="Artifacts produced by the agent.")
+
+
+class Filter(Agent):
+    TRACE_SPAN_KIND = OpenInferenceSpanKindValues.UNKNOWN.value
+    migrated = True
+
+    @classmethod
+    def get_inputs_schema(cls) -> Type[BaseModel]:
+        return FilterInputs
+
+    @classmethod
+    def get_outputs_schema(cls) -> Type[BaseModel]:
+        return FilterOutputs
+
+    @classmethod
+    def get_canonical_ports(cls) -> dict[str, str | None]:
+        return {"input": "messages", "output": "output"}
 
     def __init__(
         self,
@@ -44,58 +67,35 @@ class Filter:
         component_attributes: ComponentAttributes,
         filtering_json_schema: str,
     ):
-        self.trace_manager = trace_manager
-        self.tool_description = tool_description
-        self.component_attributes = component_attributes
+        super().__init__(
+            trace_manager=trace_manager,
+            tool_description=tool_description,
+            component_attributes=component_attributes,
+        )
         self.filtering_json_schema = load_str_to_json(filtering_json_schema)
         self.output_model = jsonschema_to_pydantic(self.filtering_json_schema)
 
-    def get_canonical_ports(self) -> dict[str, str | None]:
-        # The filter expects and produces an AgentPayload shape; the most
-        # semantically useful passthrough is the messages list.
-        return {"input": "messages", "output": "messages"}
+    async def _run_without_io_trace(self, inputs: FilterInputs, ctx: dict) -> FilterOutputs:
+        # Convert inputs to dict for filtering
+        input_data = inputs.model_dump(exclude_none=True)
 
-    # LEGACY: Schema methods for retro-compatibility with type discovery
-    # TODO: Remove after migration to Agent base class
-    @classmethod
-    def get_inputs_schema(cls) -> Type[BaseModel]:
-        """Filter component accepts AgentPayload structure."""
-        from engine.legacy_compatibility import create_legacy_filter_input_schema
-
-        return create_legacy_filter_input_schema()
-
-    @classmethod
-    def get_outputs_schema(cls) -> Type[BaseModel]:
-        """Filter component outputs AgentPayload structure."""
-        from engine.legacy_compatibility import create_legacy_filter_output_schema
-
-        return create_legacy_filter_output_schema()
-
-    async def run(self, output_data: AgentPayload | dict | NodeData):
-        if isinstance(output_data, NodeData):
-            output_data = output_data.data or {}
-        if isinstance(output_data, AgentPayload):
-            output_data = output_data.model_dump()
-        filtered_output = self.output_model(**output_data)
+        # Apply the JSON schema filter
+        filtered_output = self.output_model(**input_data)
         filtered_dict = filtered_output.model_dump(exclude_unset=True, exclude_none=True)
 
+        # Extract filtered fields
         messages = filtered_dict.get("messages", [])
-        error = filtered_dict.get("error")
         artifacts = filtered_dict.get("artifacts", {})
         is_final = filtered_dict.get("is_final", False)
 
+        # Convert message dicts to ChatMessage objects if needed
         if messages and isinstance(messages[0], dict):
             messages = [ChatMessage(**msg) for msg in messages]
 
-        result = AgentPayload(messages=messages, error=error, artifacts=artifacts, is_final=is_final)
+        output = messages[-1].to_string() if messages else ""
 
-        with self.trace_manager.start_span(self.component_attributes.component_instance_name) as span:
-            span.set_attributes(
-                {
-                    SpanAttributes.OPENINFERENCE_SPAN_KIND: OpenInferenceSpanKindValues.UNKNOWN.value,
-                    SpanAttributes.INPUT_VALUE: serialize_to_json(output_data, shorten_string=True),
-                    SpanAttributes.OUTPUT_VALUE: serialize_to_json(filtered_dict, shorten_string=True),
-                }
-            )
-            span.set_status(trace_api.StatusCode.OK)
-        return result
+        return FilterOutputs(
+            output=output,
+            is_final=is_final,
+            artifacts=artifacts,
+        )

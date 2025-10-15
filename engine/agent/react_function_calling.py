@@ -115,6 +115,7 @@ def get_default_output_tool_description() -> ToolDescription:
 
 
 class ReActAgent(Agent):
+    # TODO: It works as a migrated component, but it still uses legacy AgentPayload
     migrated = True
 
     @classmethod
@@ -170,6 +171,7 @@ class ReActAgent(Agent):
         self._date_in_system_prompt = date_in_system_prompt
         self._shared_sandbox: Optional[AsyncSandbox] = None
         self._e2b_api_key = getattr(settings, "E2B_API_KEY", None)
+        self._current_context: Optional[dict] = None
 
         self._output_format = output_format
         self._output_tool_agent_description = self._get_output_tool_description()
@@ -276,7 +278,9 @@ class ReActAgent(Agent):
                 tool_outputs[tool_call_id] = tool_output
         return tool_outputs, tools_to_process
 
-    async def _run_core(self, *inputs: AgentPayload | dict, **kwargs) -> AgentPayload:
+    async def _run_core(
+        self, *inputs: AgentPayload | dict, template_vars: Optional[dict] = None, **kwargs
+    ) -> AgentPayload:
         # Exact previous logic
         original_agent_input = inputs[0]
         if not isinstance(original_agent_input, AgentPayload):
@@ -301,7 +305,7 @@ class ReActAgent(Agent):
                 ChatMessage(
                     role="system",
                     content=fill_prompt_template_with_dictionary(
-                        original_agent_input.model_dump(),
+                        template_vars or {},
                         system_prompt_content,
                         self.component_attributes.component_instance_name,
                     ),
@@ -312,7 +316,11 @@ class ReActAgent(Agent):
             # to replace the system message by the initial prompt
             original_agent_input.messages[0] = ChatMessage(
                 role="system",
-                content=system_prompt_content,
+                content=fill_prompt_template_with_dictionary(
+                    template_vars or {},
+                    system_prompt_content,
+                    self.component_attributes.component_instance_name,
+                ),
             )
         agent_input = original_agent_input.model_copy(deep=True)
         history_messages_handled = self._memory_handling.get_truncated_messages_history(agent_input.messages)
@@ -398,7 +406,8 @@ class ReActAgent(Agent):
                 message=(f"Number of successful tool outputs: {successful_output_count}. " f"Running the agent again.")
             )
             self._current_iteration += 1
-            return await self._run_core(agent_input)
+            template_vars = self._current_context.get("template_vars", {}) if self._current_context else {}
+            return await self._run_core(agent_input, template_vars=template_vars)
         else:
             LOGGER.error(
                 f"Reached the maximum number of iterations ({self._max_iterations}) and still asks for tools."
@@ -416,7 +425,13 @@ class ReActAgent(Agent):
         # Map typed inputs to the original call style
         payload_dict = inputs.model_dump(exclude_none=True)
         agent_payload = AgentPayload(**payload_dict) if "messages" in payload_dict else payload_dict
-        core_result = await self._run_core(agent_payload)
+
+        # Pass template vars from context to _run_core
+        template_vars = ctx.get("template_vars", {})
+        self._current_context = ctx  # Store entire context for recursive calls
+
+        core_result = await self._run_core(agent_payload, template_vars=template_vars)
+
         # Map original output back to typed outputs
         final_message = (
             core_result.messages[-1] if core_result.messages else ChatMessage(role="assistant", content=None)

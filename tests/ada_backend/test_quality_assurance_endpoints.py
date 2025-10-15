@@ -1,4 +1,3 @@
-import json
 from uuid import uuid4
 from fastapi.testclient import TestClient
 
@@ -420,7 +419,8 @@ def test_run_qa_endpoint():
 
     # Check that all results have input == output (dummy agent behavior)
     for result in qa_results_selection["results"]:
-        output_content = json.loads(result["output"])[0]["content"]
+        # Filter now outputs clean string content directly (not JSON)
+        output_content = result["output"]
         assert (
             result["input"] == output_content
         ), f"Input and output should be the same for dummy agent. Input: {result['input']}, Output: {result['output']}"
@@ -455,7 +455,8 @@ def test_run_qa_endpoint():
 
     # Check that all results have input == output (dummy agent behavior)
     for result in qa_results_all["results"]:
-        output_content = json.loads(result["output"])[0]["content"]
+        # Filter now outputs clean string content directly (not JSON)
+        output_content = result["output"]
         assert (
             result["input"] == output_content
         ), f"Input and output should be the same for dummy agent. Input: {result['input']}, Output: {result['output']}"

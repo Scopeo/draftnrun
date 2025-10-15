@@ -11,7 +11,7 @@ from settings import settings
 
 # Test constants
 SOURCE_PORT_NAME = "output"
-TARGET_PORT_NAME = "input"
+TARGET_PORT_NAME = "messages"
 
 client = TestClient(app)
 ORGANIZATION_ID = "37b7d67f-8f29-4fce-8085-19dea582f605"  # umbrella organization
@@ -186,7 +186,7 @@ def test_get_put_roundtrip_port_mappings_migration():
     assert pm["source_instance_id"] == src_instance_id
     assert pm["target_instance_id"] == dst_instance_id
     assert pm["source_port_name"] == "output"
-    assert pm["target_port_name"] == "input"
+    assert pm["target_port_name"] == "messages"
     assert pm["dispatch_strategy"] == "direct"
 
     # Roundtrip: PUT the GET response back (dropping non-updatable fields)

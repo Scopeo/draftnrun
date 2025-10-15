@@ -67,10 +67,14 @@ class Agent(ABC):
 
     @abstractmethod
     async def _run_without_io_trace(self, inputs: BaseModel, ctx: Dict[str, Any]) -> BaseModel:
-        """
-        The clean, abstract method that developers implement.
-        They receive a validated Pydantic object for inputs and the runtime context.
-        They must return an instance of their declared output Pydantic model.
+        """Core execution method for agent logic.
+
+        Args:
+            inputs: Validated input data as a Pydantic model
+            ctx: Runtime context such as template variables, file data, and execution state
+
+        Returns:
+            Pydantic model instance matching the declared output type
         """
         pass
 
@@ -168,7 +172,7 @@ class Agent(ABC):
                                 legacy_arg = AgentPayload(messages=[ChatMessage(role="user", content=content)])
                             else:
                                 legacy_arg = AgentPayload(messages=[])
-                        legacy_output = await self._run_without_io_trace(legacy_arg)
+                        legacy_output = await self._run_without_io_trace(legacy_arg, ctx=input_node_data.ctx)
                         output_node_data = legacy_compatibility.convert_legacy_to_node_data(
                             legacy_output, input_node_data.ctx
                         )
