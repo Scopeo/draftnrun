@@ -10,11 +10,45 @@ from ada_backend.database import models as db
 from ada_backend.services.api_key_service import generate_scoped_api_key
 from settings import settings
 
+
+"""
+Test flexible authentication (JWT and/or API key) for database ingestion endpoints.
+
+Test structure:
+1. test_create_ingestion_task_auth: Tests ingestion task creation
+   - Sends POST /ingestion_task/{org_id} with different auth combinations
+   - Verifies task is created if at least one auth method is valid
+   - Verifies task data in database (name, type, status)
+   - Cleans up created task
+
+2. test_update_source_auth: Tests source update (re-trigger ingestion)
+   - First creates a source via POST /sources/{org_id}
+   - Sends POST /sources/{org_id}/{source_id} with different auth combinations
+   - Verifies update succeeds if at least one auth method is valid
+   - Cleans up created source
+
+Test cases for each endpoint:
+- Valid JWT only ✅
+- Valid API key only ✅
+- Invalid JWT + valid API key ✅ (fallback)
+- Valid JWT + invalid API key ✅ (fallback)
+- Both invalid ❌
+- No authentication ❌
+
+Note: Uses mocked Snowflake database (fake credentials) to be safe for GitHub.
+Since the database is mocked, the actual ingestion process is not executed - only API endpoints and authentication are tested.
+"""
+
 BASE_URL = "http://localhost:8000"
 ORGANIZATION_ID = "37b7d67f-8f29-4fce-8085-19dea582f605"
 MOCK_DB_URL = (
     "snowflake://MOCK_USER:MOCK_PASSWORD@mock.region.aws/mock_db/mock_schema?warehouse=MOCK_WH&role=mock_role"
 )
+
+
+# ============================================================================
+# Fixtures: Setup expensive resources (JWT token, API key) and test data
+# ============================================================================
 
 
 @pytest.fixture(scope="module")
@@ -43,35 +77,56 @@ def api_key(jwt_token):
 
 
 @pytest.fixture
-def headers_jwt(jwt_token):
-    return {"accept": "application/json", "Authorization": f"Bearer {jwt_token}"}
-
-
-@pytest.fixture
-def headers_api_key(api_key):
-    return {"accept": "application/json", "X-API-Key": api_key, "Content-Type": "application/json"}
-
-
-@pytest.fixture
-def headers_invalid_jwt():
-    return {"accept": "application/json", "Authorization": "Bearer invalid.jwt.token"}
-
-
-@pytest.fixture
-def headers_invalid_api_key():
-    return {"accept": "application/json", "X-API-Key": "invalid_key_123", "Content-Type": "application/json"}
-
-
-@pytest.fixture
-def source_attributes():
+def headers_map(jwt_token, api_key):
     return {
-        "source_db_url": MOCK_DB_URL,
-        "source_schema_name": "mock_schema",
-        "source_table_name": "mock_table",
-        "id_column_name": "id",
-        "text_column_names": ["content_column"],
-        "timestamp_column_name": "updated_at",
+        "jwt_valid": {"accept": "application/json", "Authorization": f"Bearer {jwt_token}"},
+        "api_key_valid": {"accept": "application/json", "X-API-Key": api_key, "Content-Type": "application/json"},
+        "jwt_invalid_api_valid": {
+            "accept": "application/json",
+            "Authorization": "Bearer invalid.jwt.token",
+            "X-API-Key": api_key,
+            "Content-Type": "application/json",
+        },
+        "jwt_valid_api_invalid": {
+            "accept": "application/json",
+            "Authorization": f"Bearer {jwt_token}",
+            "X-API-Key": "invalid_key_123",
+        },
+        "both_invalid": {
+            "accept": "application/json",
+            "Authorization": "Bearer invalid.jwt.token",
+            "X-API-Key": "invalid_key_123",
+        },
+        "no_auth": {"accept": "application/json", "Content-Type": "application/json"},
     }
+
+
+# ============================================================================
+# Global test data: Parametrize cases and mock database attributes
+# ============================================================================
+
+AUTH_TEST_CASES = [
+    ("jwt_valid", True),
+    ("api_key_valid", True),
+    ("jwt_invalid_api_valid", True),
+    ("jwt_valid_api_invalid", True),
+    ("both_invalid", False),
+    ("no_auth", False),
+]
+
+SOURCE_ATTRIBUTES = {
+    "source_db_url": MOCK_DB_URL,
+    "source_schema_name": "mock_schema",
+    "source_table_name": "mock_table",
+    "id_column_name": "id",
+    "text_column_names": ["content_column"],
+    "timestamp_column_name": "updated_at",
+}
+
+
+# ============================================================================
+# Helper functions: API calls, data retrieval, and cleanup
+# ============================================================================
 
 
 def create_ingestion_task(source_name, source_attributes, headers):
@@ -103,94 +158,52 @@ def verify_ingestion_task_data(task, expected_name, expected_type, expected_stat
     assert task["status"] == expected_status
 
 
-def cleanup_ingestion_task(task_id, headers_jwt):
+def cleanup_ingestion_task(task_id, headers_map):
     if task_id:
-        requests.delete(f"{BASE_URL}/ingestion_task/{ORGANIZATION_ID}/{task_id}", headers=headers_jwt)
+        requests.delete(f"{BASE_URL}/ingestion_task/{ORGANIZATION_ID}/{task_id}", headers=headers_map["jwt_valid"])
 
 
-@pytest.mark.parametrize(
-    "auth_type,should_succeed",
-    [
-        ("jwt_valid", True),
-        ("api_key_valid", True),
-        ("jwt_invalid_api_valid", True),
-        ("jwt_valid_api_invalid", True),
-        ("both_invalid", False),
-        ("no_auth", False),
-    ],
-)
+# ============================================================================
+# Tests: Verify flexible authentication for ingestion endpoints
+# ============================================================================
+
+
+@pytest.mark.parametrize("auth_type,should_succeed", AUTH_TEST_CASES)
 def test_create_ingestion_task_auth(
     auth_type,
     should_succeed,
-    source_attributes,
-    headers_jwt,
-    headers_api_key,
-    headers_invalid_jwt,
-    headers_invalid_api_key,
-    api_key,
+    headers_map,
 ):
-    headers_map = {
-        "jwt_valid": headers_jwt,
-        "api_key_valid": headers_api_key,
-        "jwt_invalid_api_valid": {**headers_invalid_jwt, "X-API-Key": api_key, "Content-Type": "application/json"},
-        "jwt_valid_api_invalid": {**headers_jwt, "X-API-Key": "invalid_key"},
-        "both_invalid": {**headers_invalid_jwt, "X-API-Key": "invalid_key"},
-        "no_auth": {"accept": "application/json", "Content-Type": "application/json"},
-    }
-
     source_name = f"Test_Create_{auth_type}"
-    response = create_ingestion_task(source_name, source_attributes, headers_map[auth_type])
+    response = create_ingestion_task(source_name, SOURCE_ATTRIBUTES, headers_map[auth_type])
 
     if should_succeed:
         assert response.status_code == 201
         task_id = response.json()
         assert isinstance(task_id, str)
 
-        task = get_ingestion_task_by_id(task_id, headers_jwt)
+        task = get_ingestion_task_by_id(task_id, headers_map["jwt_valid"])
         assert task is not None
         verify_ingestion_task_data(task, source_name, "database", "pending")
 
-        cleanup_ingestion_task(task_id, headers_jwt)
+        cleanup_ingestion_task(task_id, headers_map)
     else:
         assert response.status_code in [401, 403]
 
 
-@pytest.mark.parametrize(
-    "auth_type,should_succeed",
-    [
-        ("jwt_valid", True),
-        ("api_key_valid", True),
-        ("jwt_invalid_api_valid", True),
-        ("jwt_valid_api_invalid", True),
-        ("both_invalid", False),
-        ("no_auth", False),
-    ],
-)
+@pytest.mark.parametrize("auth_type,should_succeed", AUTH_TEST_CASES)
 def test_update_source_auth(
     auth_type,
     should_succeed,
-    source_attributes,
-    headers_jwt,
-    headers_api_key,
-    headers_invalid_jwt,
-    api_key,
+    headers_map,
 ):
-    headers_map = {
-        "jwt_valid": headers_jwt,
-        "api_key_valid": headers_api_key,
-        "jwt_invalid_api_valid": {**headers_invalid_jwt, "X-API-Key": api_key, "Content-Type": "application/json"},
-        "jwt_valid_api_invalid": {**headers_jwt, "X-API-Key": "invalid_key"},
-        "both_invalid": {**headers_invalid_jwt, "X-API-Key": "invalid_key"},
-        "no_auth": {"accept": "application/json", "Content-Type": "application/json"},
-    }
-
     source_name = f"Test_Update_{auth_type}"
 
     source_payload = {
         "name": source_name,
         "type": "database",
         "database_table_name": f"test_table_{auth_type}",
-        "attributes": source_attributes,
+        "attributes": SOURCE_ATTRIBUTES,
     }
     create_source_response = requests.post(
         f"{BASE_URL}/sources/{ORGANIZATION_ID}",
@@ -209,4 +222,4 @@ def test_update_source_auth(
     else:
         assert update_response.status_code in [401, 403]
 
-    requests.delete(f"{BASE_URL}/sources/{ORGANIZATION_ID}/{source_id}", headers=headers_jwt)
+    requests.delete(f"{BASE_URL}/sources/{ORGANIZATION_ID}/{source_id}", headers=headers_map["jwt_valid"])
