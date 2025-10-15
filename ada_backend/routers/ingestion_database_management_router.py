@@ -1,7 +1,7 @@
 import logging
 from fastapi import APIRouter
 from typing import Annotated
-from fastapi import Depends, HTTPException
+from fastapi import Depends, HTTPException, Query
 from uuid import UUID
 
 from engine.storage_service.db_utils import DBDefinition
@@ -12,7 +12,11 @@ from ada_backend.routers.auth_router import (
     UserRights,
     SupabaseUser,
 )
-from ada_backend.schemas.ingestion_database_management_schema import RowData, UpdateRowRequest
+from ada_backend.schemas.ingestion_database_management_schema import (
+    RowData,
+    PaginatedRowDataResponse,
+    UpdateRowRequest,
+)
 from ada_backend.services.ingestion_database_management_service import get_sql_local_service_for_ingestion
 
 
@@ -54,7 +58,9 @@ def get_rows_in_database(
     user: Annotated[
         SupabaseUser, Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.READER.value))
     ],
-) -> list[RowData]:
+    page: int = Query(1, ge=1, description="Page number (1-based)"),
+    page_size: int = Query(10, ge=1, le=1000, description="Number of items per page"),
+) -> PaginatedRowDataResponse:
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
     try:
@@ -63,13 +69,19 @@ def get_rows_in_database(
             source_name=source_name,
             organization_id=str(organization_id),
         )
-        rows = sql_local_service.get_all_rows(table_name, schema_name)
+        rows, total_count = sql_local_service.get_rows_paginated(
+            table_name=table_name, schema_name=schema_name, page=page, page_size=page_size
+        )
 
-        result = []
+        items = []
         for row_dict in rows:
-            result.append(RowData(data=row_dict, exists=True))
+            items.append(RowData(data=row_dict, exists=True))
 
-        return result
+        total_pages = (total_count + page_size - 1) // page_size
+
+        return PaginatedRowDataResponse(
+            items=items, total=total_count, page=page, page_size=page_size, total_pages=total_pages
+        )
     except Exception as e:
         LOGGER.exception(
             "Failed to get rows in database for organization %s, source %s",

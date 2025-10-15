@@ -1,10 +1,18 @@
 from pydantic import BaseModel
-from typing import Dict, Any
+from typing import Dict, Any, List
 
 
 class RowData(BaseModel):
     data: dict
     exists: bool
+
+
+class PaginatedRowDataResponse(BaseModel):
+    total: int
+    page: int
+    page_size: int
+    total_pages: int
+    items: List[RowData]
 
 
 class UpdateRowRequest(BaseModel):
