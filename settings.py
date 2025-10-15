@@ -127,8 +127,12 @@ class BaseConfig(BaseSettings):
     INGESTION_VIA_CUSTOM_MODEL: Optional[bool] = False
 
     # Google OAuth configuration
-    GOOGLE_CLIENT_ID: Optional[str] = None
-    GOOGLE_CLIENT_SECRET: Optional[str] = None
+    GOOGLE_CLIENT_ID: Optional[str] = None  # Legacy - backward compatibility
+    GOOGLE_CLIENT_SECRET: Optional[str] = None  # Legacy - backward compatibility
+
+    # Google OAuth for Gmail integration only
+    GOOGLE_GMAIL_CLIENT_ID: Optional[str] = None
+    GOOGLE_GMAIL_CLIENT_SECRET: Optional[str] = None
 
     # Observability stack endpoints
     TEMPO_ENDPOINT: str = "http://localhost:4318/v1/traces"
