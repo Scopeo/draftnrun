@@ -410,3 +410,25 @@ class SQLLocalService(DBService):
                 return pd.DataFrame([{"number_of_rows_inserted": result.rowcount}])
         LOGGER.info(f"Running query: {query}")
         return pd.read_sql(query, self.engine)
+
+    def get_row_by_chunk_id(
+        self,
+        table_name: str,
+        chunk_id: str,
+        schema_name: Optional[str] = None,
+        id_column_name: str = "chunk_id",
+    ) -> dict:
+        table = self.get_table(table_name, schema_name)
+        with self.Session() as session:
+            stmt = sqlalchemy.select(table).where(table.c[id_column_name] == chunk_id)
+            result = session.execute(stmt).fetchone()
+
+            if result is None:
+                raise ValueError(f"Row with {id_column_name}='{chunk_id}' not found in table {table_name}")
+
+            # Convert the SQLAlchemy Row to a dictionary
+            row_dict = {}
+            for column in table.columns:
+                row_dict[column.name] = getattr(result, column.name)
+
+            return row_dict
