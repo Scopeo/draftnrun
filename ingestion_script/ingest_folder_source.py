@@ -163,13 +163,7 @@ async def ingest_local_folder_source(
 ) -> None:
     LOGGER.info(f"[INGESTION_SOURCE] Starting LOCAL ingestion - Source: '{source_name}', Organization: '{organization_id}', Task: '{task_id}'")
     LOGGER.info(f"[INGESTION_CONFIG] Files count: {len(list_of_files_to_ingest)}, Supabase save: {save_supabase}, Add descriptions: {add_doc_description_to_chunks}, Chunk size: {chunk_size}")
-    
-    # Log file details for debugging
-    for i, file_info in enumerate(list_of_files_to_ingest[:5]):  # Log first 5 files
-        LOGGER.info(f"[LOCAL_FILES] File {i+1}: Name='{file_info.get('name', 'N/A')}', Path='{file_info.get('path', 'N/A')}', S3_Path='{file_info.get('s3_path', 'N/A')}'")
-    if len(list_of_files_to_ingest) > 5:
-        LOGGER.info(f"[LOCAL_FILES] ... and {len(list_of_files_to_ingest) - 5} more files")
-    
+
     folder_manager = S3FolderManager(folder_payload=list_of_files_to_ingest)
     source_type = db.SourceType.LOCAL
     await _ingest_folder_source(
