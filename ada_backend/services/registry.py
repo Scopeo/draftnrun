@@ -24,6 +24,7 @@ from engine.agent.tools.python_code_runner import PythonCodeRunner
 from engine.agent.tools.terminal_command_runner import TerminalCommandRunner
 from engine.agent.pdf_generation_tool import PDFGenerationTool
 from engine.agent.docx_generation_tool import DOCXGenerationTool
+from engine.agent.tools.docx_template import DocxTemplateAgent
 from engine.agent.document_enhanced_llm_call import DocumentEnhancedLLMCallAgent
 from engine.agent.document_react_loader import DocumentReactLoaderAgent
 from engine.agent.ocr_call import OCRCall
@@ -87,6 +88,7 @@ class SupportedEntityType(StrEnum):
     TERMINAL_COMMAND_RUNNER_TOOL = "Terminal Command Runner"
     PDF_GENERATION_TOOL = "PDF Generation Tool"
     DOCX_GENERATION_TOOL = "DOCX Generation Tool"
+    DOCX_TEMPLATE_AGENT = "DOCX Template Tool"
     SQL_TOOL = "SQLTool"
     LINKUP_SEARCH_TOOL = "Linkup Search Tool"
     LLM_CALL_AGENT = "LLM Call"
@@ -494,6 +496,16 @@ def create_factory_registry() -> FactoryRegistry:
         name=SupportedEntityType.GMAIL_SENDER,
         factory=AgentFactory(
             entity_class=GmailSender,
+        ),
+    )
+
+    registry.register(
+        name=SupportedEntityType.DOCX_TEMPLATE_AGENT,
+        factory=AgentFactory(
+            entity_class=DocxTemplateAgent,
+            parameter_processors=[
+                completion_service_processor,
+            ],
         ),
     )
 
