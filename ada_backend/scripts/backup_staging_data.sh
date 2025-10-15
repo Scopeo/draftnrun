@@ -54,6 +54,8 @@ pg_dump "$DB_URL" \
 echo "📦 Backing up project data..."
 pg_dump "$DB_URL" \
   --table=projects \
+  --table=workflow_projects \
+  --table=agent_projects \
   --table=project_env_binding \
   --table=graph_runners \
   --table=component_instances \
