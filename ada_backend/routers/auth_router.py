@@ -388,7 +388,8 @@ def user_has_access_to_organization_or_verify_api_key(allowed_roles: set[str]):
                 pass
 
         raise HTTPException(
-            status_code=401, detail="Authentication required: provide either Authorization header or X-API-Key header"
+            status_code=401,
+            detail="Authentication required: provide either Authorization token or X-API-Key header or verify they are valid.",
         )
 
     return wrapper
