@@ -62,24 +62,33 @@ def clone_organization_projects(organization_id: UUID, staging_db_url: str, prep
             print(f"  📝 Cloning project: {project.name} ({project.id})")
 
             try:
-                # Create the project in preprod
-                new_project = db.Project(
-                    id=project.id,  # Keep the same ID for consistency
-                    name=project.name,
-                    type=project.type,
-                    description=project.description,
-                    organization_id=project.organization_id,
-                )
-                preprod_session.add(new_project)
-
-                # Create the specific project type
+                # Create the project in preprod using the correct polymorphic approach
                 if project.type.value == "workflow":
-                    workflow_project = db.WorkflowProject(id=project.id)
-                    preprod_session.add(workflow_project)
+                    new_project = db.WorkflowProject(
+                        id=project.id,  # Keep the same ID for consistency
+                        name=project.name,
+                        type=project.type,
+                        description=project.description,
+                        organization_id=project.organization_id,
+                    )
                 elif project.type.value == "agent":
-                    agent_project = db.AgentProject(id=project.id)
-                    preprod_session.add(agent_project)
+                    new_project = db.AgentProject(
+                        id=project.id,  # Keep the same ID for consistency
+                        name=project.name,
+                        type=project.type,
+                        description=project.description,
+                        organization_id=project.organization_id,
+                    )
+                else:
+                    new_project = db.Project(
+                        id=project.id,  # Keep the same ID for consistency
+                        name=project.name,
+                        type=project.type,
+                        description=project.description,
+                        organization_id=project.organization_id,
+                    )
 
+                preprod_session.add(new_project)
                 preprod_session.commit()
 
                 # Clone each environment's graph runner
