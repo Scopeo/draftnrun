@@ -36,7 +36,8 @@ Test cases for each endpoint:
 - No authentication ❌
 
 Note: Uses mocked Snowflake database (fake credentials) to be safe for GitHub.
-Since the database is mocked, the actual ingestion process is not executed - only API endpoints and authentication are tested.
+Since the database is mocked, the actual ingestion process is not executed.
+Only API endpoints and authentication are tested.
 """
 
 BASE_URL = "http://localhost:8000"
