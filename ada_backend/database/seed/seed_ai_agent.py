@@ -24,7 +24,6 @@ from ada_backend.database.seed.constants import (
     TEMPERATURE_IN_DB,
 )
 
-
 SYSTEM_PROMPT_PARAMETER_DEF_ID = UUID("1cd1cd58-f066-4cf5-a0f5-9b2018fc4c6a")
 SYSTEM_PROMPT_PARAMETER_NAME = "initial_prompt"
 AGENT_TOOLS_PARAMETER_NAME = "agent_tools"
@@ -229,6 +228,35 @@ def seed_ai_agent_components(session: Session):
                         "JSON schema defining the properties/parameters of the output tool. "
                         'Example: {"answer": {"type": "string", "description": "The answer content"}, '
                         '"is_ending_conversation": {"type": "boolean", "description": "End conversation?"}}'
+                    ),
+                ).model_dump(exclude_unset=True, exclude_none=True),
+                is_advanced=True,
+            ),
+            db.ComponentParameterDefinition(
+                id=UUID("940b790a-cf38-49fb-babe-e4089cccea28"),
+                component_id=base_ai_agent.id,
+                name="rag_filter",
+                type=ParameterType.STRING,
+                nullable=True,
+                default=None,
+                ui_component=UIComponent.TEXTAREA,
+                ui_component_properties=UIComponentProperties(
+                    label="RAG Filter",
+                    placeholder=json.dumps(
+                        {"must": [{"key": "key_1", "match": {"any": ["value_1"]}},
+                                  {"key": "key_2", "match": {"any": ["value_2"]}}
+                                  ]},
+                        indent=4,
+                    ),
+                    description=(
+                        "JSON schema defining the filtering of documents to retrieve in your RAG setup."
+                        "This is a highly advanced parameter that follows the Qdrant filtering syntax."
+                        "Please refer to the "
+                        "[Qdrant documentation](https://qdrant.tech/documentation/concepts/filtering/) "
+                        "for more details: "
+                        'Example: {"must": [{"key": "field_1", "match": {"any": ["value_1"]},'
+                        '                   {"key": "field_2", "match": {"any": ["value_2"]}}]}'
+                        'will filter chunks with both field_1 and field_2 containing respectively value_1 and value_2.'
                     ),
                 ).model_dump(exclude_unset=True, exclude_none=True),
                 is_advanced=True,
