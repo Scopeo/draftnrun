@@ -29,7 +29,7 @@ from ada_backend.database import models as db
 def seed_docx_template_components(session: Session):
     docx_template_component = Component(
         id=COMPONENT_UUIDS["docx_template"],
-        name="DOCX Template Agent",
+        name="DOCX Template Tool",
         description="Analyze DOCX templates, generate content using AI based on business briefs, and fill templates with structured data.",
         is_agent=False,
         function_callable=True,
