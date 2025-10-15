@@ -45,6 +45,7 @@ OUTPUT_TOOL_DESCRIPTION = (
 
 class ReActAgentInputs(BaseModel):
     messages: list[ChatMessage] = Field(description="The history of messages in the conversation.")
+    rag_filter: Optional[dict] = Field(default=None, description="Optional RAG filter to apply to RAG tools.")
     # Allow any other fields to be passed through
     model_config = {"extra": "allow"}
 
@@ -121,7 +122,7 @@ class ReActAgent(Agent):
 
     @classmethod
     def get_canonical_ports(cls) -> dict[str, Optional[str]]:
-        return {"input": "messages", "output": "output"}
+        return {"input": "messages", "output": "output", "rag_filter": "rag_filter"}
 
     @classmethod
     def get_inputs_schema(cls) -> Type[BaseModel]:
@@ -148,7 +149,6 @@ class ReActAgent(Agent):
         allow_tool_shortcuts: bool = False,
         date_in_system_prompt: bool = False,
         output_format: Optional[str | dict] = None,
-        rag_filter: Optional[str | dict] = None,
     ) -> None:
         super().__init__(
             trace_manager=trace_manager,
@@ -176,10 +176,9 @@ class ReActAgent(Agent):
 
         self._output_format = output_format
         self._output_tool_agent_description = self._get_output_tool_description()
-
-        self._rag_filter = rag_filter
-        if isinstance(self._rag_filter, str):
-            self._rag_filter = load_str_to_json(self._rag_filter)
+        
+        # Initialize current rag_filter for runtime use
+        self._current_rag_filter: Optional[dict] = None
 
     def _get_output_tool_description(self) -> Optional[ToolDescription]:
         """
@@ -241,10 +240,10 @@ class ReActAgent(Agent):
         tool_to_use: Runnable = next(
             tool for tool in self.agent_tools if tool.tool_description.name == tool_function_name
         )
-        if isinstance(tool_to_use, RAG) and self._rag_filter:
-            tool_to_use.filter = self._rag_filter
-            tool_arguments["filters"] = self._rag_filter
-            LOGGER.info(f"Applied determinist RAG filter to tool call {self._rag_filter}")
+        if isinstance(tool_to_use, RAG) and self._current_rag_filter:
+            tool_to_use.filter = self._current_rag_filter
+            tool_arguments["filters"] = self._current_rag_filter
+            LOGGER.info(f"Applied determinist RAG filter to tool call {self._current_rag_filter}")
         if tool_function_name in CODE_RUNNER_TOOLS:
             tool_arguments["shared_sandbox"] = await self._ensure_shared_sandbox()
         try:
@@ -435,6 +434,8 @@ class ReActAgent(Agent):
 
     # --- Thin adapter to typed I/O ---
     async def _run_without_io_trace(self, inputs: ReActAgentInputs, ctx: dict) -> ReActAgentOutputs:
+        self._current_rag_filter = inputs.rag_filter
+        
         # Map typed inputs to the original call style
         payload_dict = inputs.model_dump(exclude_none=True)
         agent_payload = AgentPayload(**payload_dict) if "messages" in payload_dict else payload_dict

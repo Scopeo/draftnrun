@@ -42,8 +42,10 @@ def seed_input_components(session: Session):
     # LEGACY: Manual port seeding for unmigrated Input component
     existing = get_component_by_id(session, input.id)
     if existing:
-        # Ensure an OUTPUT canonical 'messages' port exists
+        # Ensure canonical output ports exist
         port_defs = session.query(db.PortDefinition).filter(db.PortDefinition.component_id == input.id).all()
+        
+        # Check for messages output port
         have_messages_output = any(pd.port_type == db.PortType.OUTPUT and pd.name == "messages" for pd in port_defs)
         if not have_messages_output:
             session.add(
@@ -55,7 +57,21 @@ def seed_input_components(session: Session):
                     description="Canonical output carrying chat messages",
                 )
             )
-            session.commit()
+        
+        # Check for rag_filter output port
+        have_rag_filter_output = any(pd.port_type == db.PortType.OUTPUT and pd.name == "rag_filter" for pd in port_defs)
+        if not have_rag_filter_output:
+            session.add(
+                db.PortDefinition(
+                    component_id=input.id,
+                    name="rag_filter",
+                    port_type=db.PortType.OUTPUT,
+                    is_canonical=True,
+                    description="Canonical output carrying RAG filter object",
+                )
+            )
+        
+        session.commit()
     upsert_components_parameter_definitions(
         session=session,
         component_parameter_definitions=[

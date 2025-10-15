@@ -45,7 +45,7 @@ class Input:
     def get_canonical_ports(self) -> dict[str, str | None]:
         # Expose the canonical output as the messages list so default mappings
         # can auto-wire to downstream components expecting chat messages.
-        return {"output": "messages"}
+        return {"output": "messages", "rag_filter": "rag_filter"}
 
     # LEGACY: Schema methods for retro-compatibility with type discovery
     # TODO: Remove after migration to Agent base class
