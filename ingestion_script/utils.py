@@ -54,18 +54,34 @@ def update_ingestion_task(
     ingestion_task: IngestionTaskUpdate,
 ) -> None:
     """Update the status of an ingestion task in the database."""
+    api_url = f"{str(settings.ADA_URL)}/ingestion_task/{organization_id}"
+    LOGGER.info(f"[API_CALL] Starting update_ingestion_task - URL: {api_url}, Task ID: {ingestion_task.id}, Status: {ingestion_task.status}")
+    
     try:
         response = requests.patch(
-            f"{str(settings.ADA_URL)}/ingestion_task/{organization_id}",
+            api_url,
             json=ingestion_task.model_dump(mode="json"),
             headers={
                 "x-ingestion-api-key": settings.INGESTION_API_KEY,
                 "Content-Type": "application/json",
             },
+            timeout=30,  # Add timeout to prevent hanging
         )
+        LOGGER.info(f"[API_CALL] update_ingestion_task response - Status: {response.status_code}, Task ID: {ingestion_task.id}")
         response.raise_for_status()
+        LOGGER.info(f"[API_CALL] Successfully updated ingestion task - Task ID: {ingestion_task.id}")
+    except requests.exceptions.Timeout as e:
+        LOGGER.error(f"[API_CALL] TIMEOUT updating ingestion task - Task ID: {ingestion_task.id}, URL: {api_url}, Error: {str(e)}")
+        raise requests.exceptions.RequestException(
+            f"Timeout updating ingestion task for organization {organization_id}: {str(e)}"
+        ) from e
+    except requests.exceptions.ConnectionError as e:
+        LOGGER.error(f"[API_CALL] CONNECTION ERROR updating ingestion task - Task ID: {ingestion_task.id}, URL: {api_url}, Error: {str(e)}")
+        raise requests.exceptions.RequestException(
+            f"Connection error updating ingestion task for organization {organization_id}: {str(e)}"
+        ) from e
     except Exception as e:
-        LOGGER.error(f"Failed to update ingestion task: {str(e)}")
+        LOGGER.error(f"[API_CALL] FAILED updating ingestion task - Task ID: {ingestion_task.id}, URL: {api_url}, Error: {str(e)}")
         raise requests.exceptions.RequestException(
             f"Failed to update ingestion task for organization {organization_id}: {str(e)}"
         ) from e
@@ -76,22 +92,35 @@ def create_source(
     source_data: DataSourceSchema,
 ) -> UUID:
     """Create a source in the database."""
+    api_url = f"{str(settings.ADA_URL)}/sources/{organization_id}"
+    LOGGER.info(f"[API_CALL] Starting create_source - URL: {api_url}, Source: {source_data.name}, Organization: {organization_id}")
 
     try:
         response = requests.post(
-            f"{str(settings.ADA_URL)}/sources/{organization_id}",
+            api_url,
             json=source_data.model_dump(mode="json"),
             headers={
                 "x-ingestion-api-key": settings.INGESTION_API_KEY,
                 "Content-Type": "application/json",
             },
+            timeout=30,  # Add timeout to prevent hanging
         )
+        LOGGER.info(f"[API_CALL] create_source response - Status: {response.status_code}, Source: {source_data.name}")
         response.raise_for_status()
-        source_id = response.json()
-        LOGGER.info(f"Successfully created source {source_id} for organization {organization_id}")
-        return source_id
+        LOGGER.info(f"[API_CALL] Successfully created source - Name: {source_data.name}, Organization: {organization_id}")
+        return response.json()
+    except requests.exceptions.Timeout as e:
+        LOGGER.error(f"[API_CALL] TIMEOUT creating source - Source: {source_data.name}, URL: {api_url}, Error: {str(e)}")
+        raise requests.exceptions.RequestException(
+            f"Timeout creating source for organization {organization_id}: {str(e)}"
+        ) from e
+    except requests.exceptions.ConnectionError as e:
+        LOGGER.error(f"[API_CALL] CONNECTION ERROR creating source - Source: {source_data.name}, URL: {api_url}, Error: {str(e)}")
+        raise requests.exceptions.RequestException(
+            f"Connection error creating source for organization {organization_id}: {str(e)}"
+        ) from e
     except Exception as e:
-        LOGGER.error(f"Failed to create source: {str(e)}")
+        LOGGER.error(f"[API_CALL] FAILED creating source - Source: {source_data.name}, URL: {api_url}, Error: {str(e)}")
         raise requests.exceptions.RequestException(
             f"Failed to create source for organization {organization_id}: "
             f"{str(e)} with the data {source_data.model_dump(mode='json')}"
@@ -150,14 +179,14 @@ async def upload_source(
                 organization_id=organization_id,
                 ingestion_task=ingestion_task,
             )
-            return
+            raise ValueError(f"Source '{source_name}' already exists in database schema '{schema_name}'")
     elif not update_existing and await qdrant_service.collection_exists_async(qdrant_collection_name):
         LOGGER.error(f"Source {source_name} already exists in Qdrant")
         update_ingestion_task(
             organization_id=organization_id,
             ingestion_task=ingestion_task,
         )
-        return
+        raise ValueError(f"Source '{source_name}' already exists in Qdrant collection '{qdrant_collection_name}'")
 
     try:
         await ingestion_function(

@@ -1,9 +1,12 @@
 from pathlib import Path
 from typing import List
+import logging
 
 from data_ingestion.document.folder_management.folder_management import FileDocument, FileDocumentType, FolderManager
 from data_ingestion.boto3_client import get_s3_boto3_client, get_content_from_file, delete_file_from_bucket
 from settings import settings
+
+LOGGER = logging.getLogger(__name__)
 
 
 class S3FolderManager(FolderManager):
@@ -40,11 +43,23 @@ class S3FolderManager(FolderManager):
 
     def _get_file_info(self, file_path: str) -> FileDocument:
         file_data = self._files[file_path]
+        file_name = file_data["name"]
+        file_extension = Path(file_path).suffix.lower()
+        
+        LOGGER.info(f"[LOCAL_S3] Processing file: '{file_name}', Path: '{file_path}', Extension: '{file_extension}'")
+        
+        try:
+            file_type = FileDocumentType(file_extension)
+            LOGGER.info(f"[FILE_TYPE_DETECTION] Successfully determined file type '{file_type.value}' from extension '{file_extension}' for '{file_name}'")
+        except ValueError:
+            LOGGER.error(f"[FILE_TYPE_DETECTION] FAILED - Unsupported file extension '{file_extension}' for file '{file_name}' at path '{file_path}'")
+            raise ValueError(f"Unsupported file extension '{file_extension}' for file '{file_name}'")
+        
         return FileDocument(
             id=file_path,
             last_edited_ts=file_data["last_edited_ts"],
-            type=FileDocumentType(Path(file_path).suffix.lower()),
-            file_name=file_data["name"],
+            type=file_type,
+            file_name=file_name,
             folder_name=str(Path(file_path).parent),
             metadata=file_data["metadata"],
         )

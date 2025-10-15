@@ -61,6 +61,13 @@ def read_chunk_table(table_name: str, db_service: DBService) -> dict:
 
 
 def sanitize_filename(filename, remove_extension_dot=True):
+    # Handle None input
+    if filename is None:
+        return ""
+    
+    # Convert to string if not already
+    filename = str(filename)
+    
     # Convert accented characters to non-accented equivalents
     filename = unicodedata.normalize("NFKD", filename).encode("ASCII", "ignore").decode("ASCII")
     # Replace '&' with 'and'
@@ -106,14 +113,15 @@ def split_df_by_token_limit(
 
     for _, row in df.iterrows():
         current_chunk.append(row)
-        temp_df = pd.DataFrame(current_chunk, columns=df.columns)
+        temp_df = pd.DataFrame(current_chunk, columns=df.columns).reset_index(drop=True)
         if get_chunk_token_count(chunk_df=temp_df) > max_tokens:
             current_chunk.pop()
-            chunk_df = pd.DataFrame(current_chunk, columns=df.columns)
+            chunk_df = pd.DataFrame(current_chunk, columns=df.columns).reset_index(drop=True)
             chunks.append(chunk_df)
             current_chunk = [row]
 
     if current_chunk:
-        chunks.append(pd.DataFrame(current_chunk, columns=df.columns))
+        chunk_df = pd.DataFrame(current_chunk, columns=df.columns).reset_index(drop=True)
+        chunks.append(chunk_df)
 
     return chunks
