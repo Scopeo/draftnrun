@@ -6,7 +6,6 @@ from uuid import UUID
 
 from engine.storage_service.db_utils import DBDefinition
 from ingestion_script.utils import get_sanitize_names
-from engine.storage_service.local_service import SQLLocalService
 from ada_backend.routers.auth_router import (
     verify_ingestion_api_key_dependency,
     user_has_access_to_organization_dependency,
@@ -14,7 +13,7 @@ from ada_backend.routers.auth_router import (
     SupabaseUser,
 )
 from ada_backend.schemas.ingestion_database_management_schema import RowInfo, UpdateRowRequest
-from settings import settings
+from ada_backend.services.ingestion_database_management_service import get_sql_local_service_for_ingestion
 
 
 router = APIRouter(tags=["Ingestion Database Management"], prefix="/ingestion_database_management")
@@ -29,7 +28,7 @@ def create_table_in_database(
     table_definition: DBDefinition,
 ) -> None:
     try:
-        sql_local_service = SQLLocalService(engine_url=settings.INGESTION_DB_URL)
+        sql_local_service = get_sql_local_service_for_ingestion()
         schema_name, table_name, qdrant_collection_name = get_sanitize_names(
             source_name=source_name,
             organization_id=str(organization_id),
@@ -59,7 +58,7 @@ def get_rows_in_database(
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
     try:
-        sql_local_service = SQLLocalService(engine_url=settings.INGESTION_DB_URL)
+        sql_local_service = get_sql_local_service_for_ingestion()
         schema_name, table_name, qdrant_collection_name = get_sanitize_names(
             source_name=source_name,
             organization_id=str(organization_id),
@@ -91,13 +90,13 @@ def update_row_in_database(
     chunk_id: str,
     update_request: UpdateRowRequest,
     user: Annotated[
-        SupabaseUser, Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.READER.value))
+        SupabaseUser, Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.WRITER.value))
     ],
-) -> None:
+) -> dict:
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
     try:
-        sql_local_service = SQLLocalService(engine_url=settings.INGESTION_DB_URL)
+        sql_local_service = get_sql_local_service_for_ingestion()
         schema_name, table_name, qdrant_collection_name = get_sanitize_names(
             source_name=source_name,
             organization_id=str(organization_id),
@@ -110,7 +109,13 @@ def update_row_in_database(
             update_data=update_request.update_data,
             id_column_name=update_request.id_column_name,
         )
-        return None
+        updated_row = sql_local_service.get_row_by_chunk_id(
+            table_name=table_name,
+            schema_name=schema_name,
+            chunk_id=chunk_id,
+            id_column_name=update_request.id_column_name,
+        )
+        return updated_row
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
     except Exception as e:
@@ -130,13 +135,13 @@ def delete_row_in_database(
     chunk_ids: list[str],
     id_column_name: str,
     user: Annotated[
-        SupabaseUser, Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.READER.value))
+        SupabaseUser, Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.WRITER.value))
     ],
 ) -> None:
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
     try:
-        sql_local_service = SQLLocalService(engine_url=settings.INGESTION_DB_URL)
+        sql_local_service = get_sql_local_service_for_ingestion()
         schema_name, table_name, qdrant_collection_name = get_sanitize_names(
             source_name=source_name,
             organization_id=str(organization_id),
