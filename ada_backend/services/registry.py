@@ -88,7 +88,7 @@ class SupportedEntityType(StrEnum):
     TERMINAL_COMMAND_RUNNER_TOOL = "Terminal Command Runner"
     PDF_GENERATION_TOOL = "PDF Generation Tool"
     DOCX_GENERATION_TOOL = "DOCX Generation Tool"
-    DOCX_TEMPLATE_AGENT = "DOCX Template Agent"
+    DOCX_TEMPLATE_AGENT = "DOCX Template Tool"
     SQL_TOOL = "SQLTool"
     LINKUP_SEARCH_TOOL = "Linkup Search Tool"
     LLM_CALL_AGENT = "LLM Call"
