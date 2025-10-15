@@ -5,13 +5,12 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from ada_backend.database.setup_db import get_db
-from ada_backend.schemas.auth_schema import SupabaseUser, VerifiedApiKey
+from ada_backend.schemas.auth_schema import SupabaseUser
 from ada_backend.schemas.source_schema import DataSourceSchema, DataSourceSchemaResponse
 
 from ada_backend.routers.auth_router import (
     user_has_access_to_organization_dependency,
     UserRights,
-    verify_api_key_dependency,
     verify_ingestion_api_key_dependency,
     user_has_access_to_organization_or_verify_api_key,
 )

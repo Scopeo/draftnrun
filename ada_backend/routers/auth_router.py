@@ -1,10 +1,10 @@
 import logging
-from typing import Annotated, Callable
+from typing import Annotated
 
 from uuid import UUID
 from enum import Enum
 
-from fastapi import APIRouter, Depends, HTTPException, Header, Body, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Header, Body, Query
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from supabase import Client, create_client
 from sqlalchemy.orm import Session
@@ -32,7 +32,6 @@ from ada_backend.schemas.auth_schema import (
     ApiKeyDeleteResponse,
     VerifiedApiKey,
 )
-from typing import Union
 
 LOGGER = logging.getLogger(__name__)
 
