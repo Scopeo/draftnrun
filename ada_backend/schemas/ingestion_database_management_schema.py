@@ -2,8 +2,7 @@ from pydantic import BaseModel
 from typing import Dict, Any
 
 
-class RowInfo(BaseModel):
-    row_id: int
+class RowData(BaseModel):
     data: dict
     exists: bool
 
