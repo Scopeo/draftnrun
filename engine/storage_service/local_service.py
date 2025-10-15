@@ -411,6 +411,27 @@ class SQLLocalService(DBService):
         LOGGER.info(f"Running query: {query}")
         return pd.read_sql(query, self.engine)
 
+    def get_all_rows(self, table_name: str, schema_name: Optional[str] = None) -> list[dict]:
+        """
+        Get all rows from a table as a list of dictionaries.
+        Returns raw data without using DataFrames.
+        """
+        table = self.get_table(table_name, schema_name)
+        result = []
+
+        with self.Session() as session:
+            stmt = sqlalchemy.select(table)
+            rows = session.execute(stmt).fetchall()
+
+            for row in rows:
+                # Convert SQLAlchemy Row to dictionary
+                row_dict = {}
+                for column in table.columns:
+                    row_dict[column.name] = getattr(row, column.name)
+                result.append(row_dict)
+
+        return result
+
     def get_row_by_chunk_id(
         self,
         table_name: str,

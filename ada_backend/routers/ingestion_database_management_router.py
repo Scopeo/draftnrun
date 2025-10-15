@@ -12,7 +12,7 @@ from ada_backend.routers.auth_router import (
     UserRights,
     SupabaseUser,
 )
-from ada_backend.schemas.ingestion_database_management_schema import RowInfo, UpdateRowRequest
+from ada_backend.schemas.ingestion_database_management_schema import RowData, UpdateRowRequest
 from ada_backend.services.ingestion_database_management_service import get_sql_local_service_for_ingestion
 
 
@@ -54,7 +54,7 @@ def get_rows_in_database(
     user: Annotated[
         SupabaseUser, Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.READER.value))
     ],
-) -> list[RowInfo]:
+) -> list[RowData]:
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
     try:
@@ -63,16 +63,12 @@ def get_rows_in_database(
             source_name=source_name,
             organization_id=str(organization_id),
         )
-        df = sql_local_service.get_table_df(
-            table_name=table_name,
-            schema_name=schema_name,
-        )
-        # Convert DataFrame rows to RowInfo objects
-        # Use DataFrame index as row_id and convert the entire row to a dict for data
+        rows = sql_local_service.get_all_rows(table_name, schema_name)
+
         result = []
-        for index, row in df.iterrows():
-            row_dict = row.to_dict()
-            result.append(RowInfo(row_id=index, data=row_dict, exists=True))
+        for row_dict in rows:
+            result.append(RowData(data=row_dict, exists=True))
+
         return result
     except Exception as e:
         LOGGER.exception(
@@ -92,7 +88,7 @@ def update_row_in_database(
     user: Annotated[
         SupabaseUser, Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.WRITER.value))
     ],
-) -> dict:
+) -> RowData:
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
     try:
@@ -115,7 +111,7 @@ def update_row_in_database(
             chunk_id=chunk_id,
             id_column_name=update_request.id_column_name,
         )
-        return updated_row
+        return RowData(data=updated_row, exists=True)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
     except Exception as e:
