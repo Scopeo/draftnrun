@@ -788,27 +788,19 @@ def delete_component_instances(
     tool_descriptions_to_delete = []
 
     for instance in instances:
-        # Check if this instance has a tool description that should be deleted
         if instance.tool_description_id:
             tool_description_id = instance.tool_description_id
-
-            # Only delete the tool description if:
-            # 1. It's not used by multiple instances (instance-specific)
-            # 2. It's not a default tool description for any component
             if not is_tool_description_used_by_multiple_instances(
                 session, tool_description_id
             ) and not is_tool_description_default_for_component(session, tool_description_id):
                 tool_descriptions_to_delete.append(tool_description_id)
                 LOGGER.info(f"Marking tool description {tool_description_id} for deletion (instance-specific)")
 
-        # Handle integration relationships
         if get_component_instance_integration_relationship(session, instance.id):
             delete_linked_integration(session, instance.id)
 
-        # Delete the instance (triggers ORM cascade)
         session.delete(instance)
 
-    # Delete the instance-specific tool descriptions
     for tool_description_id in tool_descriptions_to_delete:
         tool_description = (
             session.query(db.ToolDescription).filter(db.ToolDescription.id == tool_description_id).first()
