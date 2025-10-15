@@ -411,18 +411,26 @@ class SQLLocalService(DBService):
         LOGGER.info(f"Running query: {query}")
         return pd.read_sql(query, self.engine)
 
-    def get_all_rows(self, table_name: str, schema_name: Optional[str] = None) -> list[dict]:
+    def get_rows_paginated(
+        self, table_name: str, schema_name: Optional[str] = None, page: int = 1, page_size: int = 10
+    ) -> tuple[list[dict], int]:
         """
-        Get all rows from a table as a list of dictionaries.
-        Returns raw data without using DataFrames.
+        Get paginated rows from a table as a list of dictionaries.
+        Returns (rows, total_count) without using DataFrames.
         """
         table = self.get_table(table_name, schema_name)
-        result = []
 
         with self.Session() as session:
-            stmt = sqlalchemy.select(table)
+            # Get total count
+            count_stmt = sqlalchemy.select(sqlalchemy.func.count()).select_from(table)
+            total_count = session.execute(count_stmt).scalar()
+
+            # Get paginated rows
+            offset = (page - 1) * page_size
+            stmt = sqlalchemy.select(table).offset(offset).limit(page_size)
             rows = session.execute(stmt).fetchall()
 
+            result = []
             for row in rows:
                 # Convert SQLAlchemy Row to dictionary
                 row_dict = {}
@@ -430,7 +438,7 @@ class SQLLocalService(DBService):
                     row_dict[column.name] = getattr(row, column.name)
                 result.append(row_dict)
 
-        return result
+        return result, total_count
 
     def get_row_by_chunk_id(
         self,
