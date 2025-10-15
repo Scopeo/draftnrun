@@ -137,6 +137,9 @@ def get_token_usage(organization_id: UUID) -> TokenUsage:
         if not token_usage:
             return TokenUsage(organization_id=str(organization_id), total_tokens=0)
         return TokenUsage(organization_id=token_usage.organization_id, total_tokens=token_usage.total_tokens)
+    except Exception as e:
+        LOGGER.error(f"Error fetching token usage for organization_id={organization_id}: {e}")
+        return TokenUsage(organization_id=str(organization_id), total_tokens=0)
     finally:
         session.close()
 
