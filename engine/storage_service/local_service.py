@@ -365,6 +365,41 @@ class SQLLocalService(DBService):
             df = pd.DataFrame(result.fetchall(), columns=result.keys())
             return df.to_markdown(index=False)
 
+    def update_row(
+        self,
+        table_name: str,
+        chunk_id: str,
+        update_data: dict,
+        schema_name: Optional[str] = None,
+        id_column_name: str = "chunk_id",
+    ) -> None:
+        """
+        Update a specific row in the table by its chunk_id.
+        """
+        table = self.get_table(table_name, schema_name)
+
+        with self.Session() as session:
+            # Check if the row exists
+            existing_record = session.execute(
+                sqlalchemy.select(table).where(table.c[id_column_name] == chunk_id)
+            ).scalar_one_or_none()
+
+            if not existing_record:
+                raise ValueError(f"Row with chunk_id='{chunk_id}' not found in table {table_name}")
+
+            # Update the row
+            update_values = update_data.copy()
+            update_values = self.add_processed_datetime_if_exists(table, update_values)
+
+            stmt = sqlalchemy.update(table).where(table.c.chunk_id == chunk_id).values(**update_values)
+            result = session.execute(stmt)
+
+            if result.rowcount == 0:
+                raise ValueError(f"Failed to update row with chunk_id='{chunk_id}'")
+
+            session.commit()
+            LOGGER.info(f"Successfully updated row chunk_id='{chunk_id}' in table {table_name}")
+
     def run_query(self, query: str) -> pd.DataFrame:
 
         query = query.strip()

@@ -211,3 +211,14 @@ class DBService(ABC):
         schema_name: Optional[str] = None,
     ) -> None:
         pass
+
+    @abstractmethod
+    def update_row(
+        self,
+        table_name: str,
+        chunk_id: str,
+        update_data: dict,
+        id_column_name: str,
+        schema_name: Optional[str] = None,
+    ) -> None:
+        pass
