@@ -87,31 +87,25 @@ def create_ingestion_task(source_name, source_attributes, headers):
     return response
 
 
-def get_source_by_name(source_name, headers_jwt):
-    response = requests.get(f"{BASE_URL}/sources/{ORGANIZATION_ID}", headers=headers_jwt)
+def get_ingestion_task_by_id(task_id, headers_jwt):
+    response = requests.get(f"{BASE_URL}/ingestion_task/{ORGANIZATION_ID}", headers=headers_jwt)
     if response.status_code != 200:
         return None
-    for source in response.json():
-        if source["name"] == source_name:
-            return source
+    for task in response.json():
+        if task["id"] == task_id:
+            return task
     return None
 
 
-def verify_source_data(source, expected_name, expected_attributes):
-    assert source["name"] == expected_name
-    assert source["type"] == "database"
-    assert source["attributes"]["source_db_url"] == expected_attributes["source_db_url"]
-    assert source["attributes"]["source_schema_name"] == expected_attributes["source_schema_name"]
-    assert source["attributes"]["source_table_name"] == expected_attributes["source_table_name"]
-    assert source["attributes"]["id_column_name"] == expected_attributes["id_column_name"]
-    assert source["attributes"]["text_column_names"] == expected_attributes["text_column_names"]
+def verify_ingestion_task_data(task, expected_name, expected_type, expected_status):
+    assert task["source_name"] == expected_name
+    assert task["source_type"] == expected_type
+    assert task["status"] == expected_status
 
 
-def cleanup_source(task_id, source_id, headers_jwt):
+def cleanup_ingestion_task(task_id, headers_jwt):
     if task_id:
         requests.delete(f"{BASE_URL}/ingestion_task/{ORGANIZATION_ID}/{task_id}", headers=headers_jwt)
-    if source_id:
-        requests.delete(f"{BASE_URL}/sources/{ORGANIZATION_ID}/{source_id}", headers=headers_jwt)
 
 
 @pytest.mark.parametrize(
@@ -152,11 +146,11 @@ def test_create_ingestion_task_auth(
         task_id = response.json()
         assert isinstance(task_id, str)
 
-        source = get_source_by_name(source_name, headers_jwt)
-        assert source is not None
-        verify_source_data(source, source_name, source_attributes)
+        task = get_ingestion_task_by_id(task_id, headers_jwt)
+        assert task is not None
+        verify_ingestion_task_data(task, source_name, "database", "pending")
 
-        cleanup_source(task_id, source["id"], headers_jwt)
+        cleanup_ingestion_task(task_id, headers_jwt)
     else:
         assert response.status_code in [401, 403]
 
@@ -191,16 +185,23 @@ def test_update_source_auth(
     }
 
     source_name = f"Test_Update_{auth_type}"
-    create_response = create_ingestion_task(source_name, source_attributes, headers_jwt)
-    assert create_response.status_code == 201
-    task_id = create_response.json()
 
-    source = get_source_by_name(source_name, headers_jwt)
-    assert source is not None
-    verify_source_data(source, source_name, source_attributes)
+    source_payload = {
+        "name": source_name,
+        "type": "database",
+        "database_table_name": f"test_table_{auth_type}",
+        "attributes": source_attributes,
+    }
+    create_source_response = requests.post(
+        f"{BASE_URL}/sources/{ORGANIZATION_ID}",
+        headers={"X-Ingestion-API-Key": settings.INGESTION_API_KEY, "Content-Type": "application/json"},
+        json=source_payload,
+    )
+    assert create_source_response.status_code == 201
+    source_id = create_source_response.json()
 
     update_response = requests.post(
-        f"{BASE_URL}/sources/{ORGANIZATION_ID}/{source['id']}", headers=headers_map[auth_type]
+        f"{BASE_URL}/sources/{ORGANIZATION_ID}/{source_id}", headers=headers_map[auth_type]
     )
 
     if should_succeed:
@@ -208,4 +209,4 @@ def test_update_source_auth(
     else:
         assert update_response.status_code in [401, 403]
 
-    cleanup_source(task_id, source["id"], headers_jwt)
+    requests.delete(f"{BASE_URL}/sources/{ORGANIZATION_ID}/{source_id}", headers=headers_jwt)
