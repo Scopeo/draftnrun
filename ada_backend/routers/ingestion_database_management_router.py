@@ -5,7 +5,6 @@ from fastapi import Depends, HTTPException, Query
 from uuid import UUID
 
 from engine.storage_service.db_utils import DBDefinition
-from ingestion_script.utils import get_sanitize_names
 from ada_backend.routers.auth_router import (
     verify_ingestion_api_key_dependency,
     user_has_access_to_organization_dependency,
@@ -17,7 +16,12 @@ from ada_backend.schemas.ingestion_database_management_schema import (
     PaginatedRowDataResponse,
     UpdateRowRequest,
 )
-from ada_backend.services.ingestion_database_management_service import get_sql_local_service_for_ingestion
+from ada_backend.services.ingestion_database_management_service import (
+    create_table_in_ingestion_db,
+    get_paginated_rows_from_ingestion_db,
+    update_row_in_ingestion_db,
+    delete_rows_from_ingestion_db,
+)
 
 
 router = APIRouter(tags=["Ingestion Database Management"], prefix="/ingestion_database_management")
@@ -32,17 +36,7 @@ def create_table_in_database(
     table_definition: DBDefinition,
 ) -> None:
     try:
-        sql_local_service = get_sql_local_service_for_ingestion()
-        schema_name, table_name, qdrant_collection_name = get_sanitize_names(
-            source_name=source_name,
-            organization_id=str(organization_id),
-        )
-        sql_local_service.create_table(
-            table_name=table_name,
-            table_definition=table_definition,
-            schema_name=schema_name,
-        )
-        return None
+        return create_table_in_ingestion_db(organization_id, source_name, table_definition)
     except Exception as e:
         LOGGER.exception(
             "Failed to create table in database for organization %s",
@@ -64,24 +58,7 @@ def get_rows_in_database(
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
     try:
-        sql_local_service = get_sql_local_service_for_ingestion()
-        schema_name, table_name, qdrant_collection_name = get_sanitize_names(
-            source_name=source_name,
-            organization_id=str(organization_id),
-        )
-        rows, total_count = sql_local_service.get_rows_paginated(
-            table_name=table_name, schema_name=schema_name, page=page, page_size=page_size
-        )
-
-        items = []
-        for row_dict in rows:
-            items.append(RowData(data=row_dict, exists=True))
-
-        total_pages = (total_count + page_size - 1) // page_size
-
-        return PaginatedRowDataResponse(
-            items=items, total=total_count, page=page, page_size=page_size, total_pages=total_pages
-        )
+        return get_paginated_rows_from_ingestion_db(organization_id, source_name, page, page_size)
     except Exception as e:
         LOGGER.exception(
             "Failed to get rows in database for organization %s, source %s",
@@ -104,26 +81,7 @@ def update_row_in_database(
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
     try:
-        sql_local_service = get_sql_local_service_for_ingestion()
-        schema_name, table_name, qdrant_collection_name = get_sanitize_names(
-            source_name=source_name,
-            organization_id=str(organization_id),
-        )
-
-        sql_local_service.update_row(
-            table_name=table_name,
-            schema_name=schema_name,
-            chunk_id=chunk_id,
-            update_data=update_request.update_data,
-            id_column_name=update_request.id_column_name,
-        )
-        updated_row = sql_local_service.get_row_by_chunk_id(
-            table_name=table_name,
-            schema_name=schema_name,
-            chunk_id=chunk_id,
-            id_column_name=update_request.id_column_name,
-        )
-        return RowData(data=updated_row, exists=True)
+        return update_row_in_ingestion_db(organization_id, source_name, chunk_id, update_request)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
     except Exception as e:
@@ -149,18 +107,7 @@ def delete_row_in_database(
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
     try:
-        sql_local_service = get_sql_local_service_for_ingestion()
-        schema_name, table_name, qdrant_collection_name = get_sanitize_names(
-            source_name=source_name,
-            organization_id=str(organization_id),
-        )
-        sql_local_service.delete_rows_from_table(
-            table_name=table_name,
-            ids=chunk_ids,
-            id_column_name=id_column_name,
-            schema_name=schema_name,
-        )
-        return None
+        return delete_rows_from_ingestion_db(organization_id, source_name, chunk_ids, id_column_name)
     except Exception as e:
         LOGGER.exception(
             "Failed to delete rows in database for organization %s, source %s, chunk %s",
