@@ -1,5 +1,6 @@
 import pytest
 import requests
+import jwt
 from uuid import UUID
 
 from ada_backend.database.setup_db import SessionLocal
@@ -23,11 +24,11 @@ def jwt_token():
 
 @pytest.fixture(scope="module")
 def api_key(jwt_token):
+    decoded_token = jwt.decode(jwt_token, options={"verify_signature": False})
+    user_id = UUID(decoded_token["sub"])
+
     session = SessionLocal()
     try:
-        user_response = requests.get(f"{BASE_URL}/auth/me", headers={"Authorization": f"Bearer {jwt_token}"})
-        user_id = UUID(user_response.json()["id"])
-
         api_key_response = generate_scoped_api_key(
             session=session,
             scope_type=db.ApiKeyType.ORGANIZATION,
