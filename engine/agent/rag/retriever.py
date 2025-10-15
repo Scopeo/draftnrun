@@ -72,11 +72,15 @@ class Retriever:
                 query_text,
                 filters,
             )
+            input_data = f"Query: {query_text} \n"
+            if filters:
+                input_data += f"Filters: {json.dumps(filters, separators=(',', ':'))}"
+            
             span.set_attributes(
                 {
                     SpanAttributes.OPENINFERENCE_SPAN_KIND: OpenInferenceSpanKindValues.RETRIEVER.value,
                     SpanAttributes.EMBEDDING_MODEL_NAME: self._vectorestore_service._embedding_service._model_name,
-                    SpanAttributes.INPUT_VALUE: query_text,
+                    SpanAttributes.INPUT_VALUE: input_data,
                     "component_instance_id": str(self.component_attributes.component_instance_id),
                 }
             )
