@@ -64,52 +64,11 @@ def create_organization_source(
         raise HTTPException(status_code=500, detail="Internal Server Error") from e
 
 
-@router.post("/{organization_id}/{source_id}", status_code=status.HTTP_200_OK)
-def update_organization_source(
-    user: Annotated[
-        SupabaseUser, Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.ADMIN.value))
-    ],
-    organization_id: UUID,
-    source_id: UUID,
-    session: Session = Depends(get_db),
-):
-    if not user.id:
-        raise HTTPException(status_code=400, detail="User ID not found")
-    try:
-        return update_source_by_source_id(session, organization_id, source_id, user_id=user.id)
-    except Exception as e:
-        LOGGER.exception(
-            "Failed to update source %s for organization %s by user %s",
-            source_id,
-            organization_id,
-            user.id,
-        )
-        raise HTTPException(status_code=500, detail="Internal Server Error") from e
-
-
-@router.post("/{organization_id}/{source_id}/api-key", status_code=status.HTTP_200_OK)
-def update_organization_source_api_key(
-    organization_id: UUID,
-    source_id: UUID,
-    session: Session = Depends(get_db),
-    verified_api_key: VerifiedApiKey = Depends(verify_api_key_dependency),
-):
-    if verified_api_key.organization_id != organization_id:
-        raise HTTPException(status_code=403, detail="You don't have access to this organization")
-    try:
-        return update_source_by_source_id(session, organization_id, source_id, api_key_id=verified_api_key.api_key_id)
-
-    except Exception as e:
-        LOGGER.exception(
-            "Failed to update source API key %s for organization %s",
-            source_id,
-            organization_id,
-        )
-        raise HTTPException(status_code=500, detail="Internal Server Error") from e
-
-
-# New unified endpoint that supports both authentication methods
-@router.post("/{organization_id}/{source_id}/choice_auth", status_code=status.HTTP_200_OK)
+@router.post(
+    "/{organization_id}/{source_id}",
+    status_code=status.HTTP_200_OK,
+    summary="Update source in organization, authentication via user token or API key",
+)
 def update_organization_source_choice_auth(
     organization_id: UUID,
     source_id: UUID,

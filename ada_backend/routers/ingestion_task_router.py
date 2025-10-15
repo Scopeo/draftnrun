@@ -51,53 +51,11 @@ def get_organization_sources(
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
-@router.post("/ingestion_task/{organization_id}", status_code=status.HTTP_201_CREATED)
-def create_organization_task(
-    organization_id: UUID,
-    ingestion_task_data: IngestionTaskQueue,
-    user: Annotated[
-        SupabaseUser, Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.WRITER.value))
-    ],
-    session: Session = Depends(get_db),
-) -> UUID:
-    if not user.id:
-        raise HTTPException(status_code=400, detail="User ID not found")
-    try:
-        task_id = create_ingestion_task_by_organization(
-            session, organization_id=organization_id, ingestion_task_data=ingestion_task_data, user_id=user.id
-        )
-        return task_id
-    except Exception as e:
-        LOGGER.error(f"Failed to create ingestion task for organization {organization_id}: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Internal server error") from e
-
-
-@router.post("/organizations/{organization_id}/ingestion_tasks/api-key-auths", status_code=status.HTTP_201_CREATED)
-def create_ingestion_task_with_api_key(
-    organization_id: UUID,
-    ingestion_task_data: IngestionTaskQueue,
-    verified_api_key: VerifiedApiKey = Depends(verify_api_key_dependency),
-    session: Session = Depends(get_db),
-):
-    if verified_api_key.organization_id != organization_id:
-        raise HTTPException(status_code=403, detail="You don't have access to this organization")
-    try:
-        task_id = create_ingestion_task_by_organization(
-            session,
-            organization_id=organization_id,
-            ingestion_task_data=ingestion_task_data,
-            api_key_id=verified_api_key.api_key_id,
-        )
-        return task_id
-    except Exception as e:
-        LOGGER.error(
-            f"Failed to create ingestion task for organization {organization_id} via API key: {str(e)}", exc_info=True
-        )
-        raise HTTPException(status_code=500, detail="Internal server error") from e
-
-
-# New unified endpoint that supports both authentication methods
-@router.post("/ingestion_task/{organization_id}/choice_auth", status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/ingestion_task/{organization_id}",
+    status_code=status.HTTP_201_CREATED,
+    summary="Create ingestion task in organization, authentication via user token or API key",
+)
 def create_ingestion_task_choice_auth(
     organization_id: UUID,
     ingestion_task_data: IngestionTaskQueue,

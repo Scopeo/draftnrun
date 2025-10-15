@@ -23,34 +23,7 @@ LOGGER = logging.getLogger(__name__)
 
 @router.post(
     "/organizations/{organization_id}/files/upload-urls",
-    summary="Get S3 Upload Presigned URLs",
-    response_model=list[S3UploadURL],
-)
-async def generate_s3_upload_presigned_urls(
-    organization_id: UUID,
-    user: Annotated[
-        SupabaseUser, Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.READER.value))
-    ],
-    upload_file_requests: list[UploadFileRequest],
-) -> list[S3UploadURL]:
-    if not user.id:
-        raise HTTPException(status_code=400, detail="User ID not found")
-
-    try:
-        return generate_s3_upload_presigned_urls_service(organization_id, upload_file_requests)
-    except Exception as e:
-        LOGGER.exception(
-            "Failed to generate S3 presigned URLs for organization %s (count=%s)",
-            organization_id,
-            len(upload_file_requests),
-        )
-        raise HTTPException(status_code=500, detail="Internal Server Error") from e
-
-
-# New unified endpoint that supports both authentication methods
-@router.post(
-    "/organizations/{organization_id}/files/upload-urls/choice_auth",
-    summary="Get S3 Upload Presigned URLs (Flexible Auth)",
+    summary="Get S3 Upload Presigned URLs, authentication via user or API key",
     response_model=list[S3UploadURL],
 )
 async def generate_s3_upload_presigned_urls_choice_auth(
