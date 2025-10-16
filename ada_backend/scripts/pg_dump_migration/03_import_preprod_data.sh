@@ -149,8 +149,60 @@ echo -e "${GREEN}Step 12: Import basic_parameters${NC}"
 import_table "basic_parameters" "id, component_instance_id, parameter_definition_id, value, organization_secret_id, \"order\""
 
 echo ""
-echo -e "${GREEN}Step 13: Import port_mappings${NC}"
-import_table "port_mappings" "id, graph_runner_id, source_instance_id, source_port_definition_id, target_instance_id, target_port_definition_id, dispatch_strategy"
+echo -e "${GREEN}Step 13: Import port_mappings (with port_definition ID mapping)${NC}"
+echo -e "${YELLOW}Mapping staging port_definition IDs to preprod IDs...${NC}"
+psql "$PREPROD_URL" << 'EOF'
+    -- Load staging port_definitions into temp table for mapping
+    CREATE TEMP TABLE temp_staging_port_defs (
+        id UUID,
+        component_id UUID,
+        name TEXT,
+        port_type TEXT,
+        is_canonical BOOLEAN,
+        description TEXT
+    );
+    \COPY temp_staging_port_defs FROM './staging_export/port_definitions.tsv' WITH (FORMAT text, DELIMITER E'\t')
+    
+    -- Create ID mapping table
+    CREATE TEMP TABLE port_def_id_mapping AS
+    SELECT 
+        spd.id as staging_id,
+        pd.id as preprod_id
+    FROM temp_staging_port_defs spd
+    JOIN port_definitions pd ON 
+        pd.component_id = spd.component_id 
+        AND pd.name = spd.name 
+        AND pd.port_type::text = spd.port_type;
+    
+    -- Load port_mappings
+    CREATE TEMP TABLE temp_port_mappings (
+        id UUID,
+        graph_runner_id UUID,
+        source_instance_id UUID,
+        source_port_definition_id_staging UUID,
+        target_instance_id UUID,
+        target_port_definition_id_staging UUID,
+        dispatch_strategy TEXT
+    );
+    \COPY temp_port_mappings FROM './staging_export/port_mappings.tsv' WITH (FORMAT text, DELIMITER E'\t')
+    
+    -- Insert with ID mapping
+    INSERT INTO port_mappings (id, graph_runner_id, source_instance_id, source_port_definition_id, target_instance_id, target_port_definition_id, dispatch_strategy)
+    SELECT 
+        tmp.id,
+        tmp.graph_runner_id,
+        tmp.source_instance_id,
+        COALESCE(src_map.preprod_id, tmp.source_port_definition_id_staging) as source_port_definition_id,
+        tmp.target_instance_id,
+        COALESCE(tgt_map.preprod_id, tmp.target_port_definition_id_staging) as target_port_definition_id,
+        tmp.dispatch_strategy
+    FROM temp_port_mappings tmp
+    LEFT JOIN port_def_id_mapping src_map ON src_map.staging_id = tmp.source_port_definition_id_staging
+    LEFT JOIN port_def_id_mapping tgt_map ON tgt_map.staging_id = tmp.target_port_definition_id_staging;
+    
+    DROP TABLE temp_staging_port_defs, port_def_id_mapping, temp_port_mappings;
+EOF
+echo -e "${GREEN}✓ Imported $(wc -l < ./staging_export/port_mappings.tsv) rows into port_mappings${NC}"
 
 echo ""
 echo -e "${GREEN}Step 14: Import component_sub_inputs${NC}"
