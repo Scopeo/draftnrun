@@ -629,3 +629,48 @@ def test_structured_output_in_function_call_async(
             # and the second call had tool_choice="none" (for max iterations)
             assert mock_client.chat.completions.create.call_count == 1  # Only one chat.completions.create call
             # The second call goes through responses.parse (constrained_complete)
+
+
+def test_react_agent_with_null_output_format(mock_trace_manager, mock_tool_description, mock_llm_service):
+    """Test that ReActAgent handles output_format='null' without crashing.
+
+    This test reproduces the bug where agent workflows fail with:
+    'NoneType' object has no attribute 'keys'
+
+    The bug occurs when output_format is passed as the string 'null' instead of None.
+    """
+    # This should not raise an exception with the fix
+    react_agent = ReActAgent(
+        completion_service=mock_llm_service,
+        component_attributes=ComponentAttributes(component_instance_name="Test React Agent With Null Output"),
+        trace_manager=mock_trace_manager,
+        tool_description=mock_tool_description,
+        output_format="null",  # This was causing the bug
+    )
+
+    # Verify the agent was created successfully
+    assert react_agent.component_attributes.component_instance_name == "Test React Agent With Null Output"
+    assert react_agent._output_format == "null"
+
+    # Verify that _get_output_tool_description returns None (handles the null case gracefully)
+    output_tool = react_agent._get_output_tool_description()
+    assert output_tool is None  # Should return None instead of crashing
+
+
+def test_react_agent_with_none_output_format(mock_trace_manager, mock_tool_description, mock_llm_service):
+    """Test that ReActAgent handles output_format=None correctly."""
+    react_agent = ReActAgent(
+        completion_service=mock_llm_service,
+        component_attributes=ComponentAttributes(component_instance_name="Test React Agent With None Output"),
+        trace_manager=mock_trace_manager,
+        tool_description=mock_tool_description,
+        output_format=None,  # This should work fine
+    )
+
+    # Verify the agent was created successfully
+    assert react_agent.component_attributes.component_instance_name == "Test React Agent With None Output"
+    assert react_agent._output_format is None
+
+    # Verify that _get_output_tool_description returns None
+    output_tool = react_agent._get_output_tool_description()
+    assert output_tool is None

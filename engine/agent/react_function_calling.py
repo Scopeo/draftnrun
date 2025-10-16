@@ -192,6 +192,8 @@ class ReActAgent(Agent):
             parsed_output_tool_properies = load_str_to_json(self._output_format)
         else:
             parsed_output_tool_properies = self._output_format
+        if parsed_output_tool_properies is None:
+            return None
 
         required_properties = list(parsed_output_tool_properies.keys())
         return ToolDescription(
