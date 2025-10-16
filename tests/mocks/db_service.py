@@ -54,7 +54,7 @@ def sample_table_definition():
     return DBDefinition(
         columns=[
             DBColumn(name=PROCESSED_DATETIME_FIELD, type="STRING", default="CURRENT_TIMESTAMP", is_nullable=False),
-            DBColumn(name="id", type="INTEGER", is_primary=True),
+            DBColumn(name="chunk_id", type="INTEGER", is_primary=True),
             DBColumn(name="name", type="STRING"),
             DBColumn(name="created_at", type="STRING"),
         ]

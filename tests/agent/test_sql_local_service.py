@@ -23,7 +23,7 @@ def test_insert_data(postgres_service, sample_table_definition):
         "test_table",
         schema_name=TEST_SCHEMA_NAME,
         data={
-            "id": 1,
+            "chunk_id": 1,
             "name": "Alice",
             "created_at": "2021-01-01 11:10:00",
         },
@@ -42,12 +42,12 @@ def test_insert_df_to_table(postgres_service, sample_table_definition):
     df = pd.DataFrame(
         [
             {
-                "id": 1,
+                "chunk_id": 1,
                 "name": "Alice",
                 "created_at": "2021-01-01 11:10:00",
             },
             {
-                "id": 2,
+                "chunk_id": 2,
                 "name": "Bob",
                 "created_at": "2021-01-01 11:10:00",
             },
@@ -81,7 +81,9 @@ def test_delete_rows_from_table(postgres_service, sample_table_definition):
     )
     postgres_service.insert_df_to_table(df, "test_table", schema_name=TEST_SCHEMA_NAME)
     postgres_service.delete_rows_from_table(
-        table_name="test_table", schema_name=TEST_SCHEMA_NAME, ids=[1],
+        table_name="test_table",
+        schema_name=TEST_SCHEMA_NAME,
+        ids=[1],
     )
     result_df = postgres_service.get_table_df("test_table", schema_name=TEST_SCHEMA_NAME)
     assert len(result_df) == 1
@@ -97,12 +99,12 @@ def test_refresh_table(postgres_service, sample_table_definition):
     df = pd.DataFrame(
         [
             {
-                "id": 1,
+                "chunk_id": 1,
                 "name": "Alice",
                 "created_at": "2021-01-01 11:10:00",
             },
             {
-                "id": 2,
+                "chunk_id": 2,
                 "name": "Bob",
                 "created_at": "2021-01-01 11:10:00",
             },
@@ -113,7 +115,7 @@ def test_refresh_table(postgres_service, sample_table_definition):
     updated_df = pd.DataFrame(
         [
             {
-                "id": 1,
+                "chunk_id": 1,
                 "name": "Alice Updated",
                 "created_at": "2021-02-01 11:15:00",
             }
@@ -122,14 +124,14 @@ def test_refresh_table(postgres_service, sample_table_definition):
     postgres_service._refresh_table_from_df(
         df=updated_df,
         table_name="test_table",
-        id_column="id",
+        id_column="chunk_id",
         table_definition=sample_table_definition,
         schema_name=TEST_SCHEMA_NAME,
     )
 
     result_df = postgres_service.get_table_df(table_name="test_table", schema_name=TEST_SCHEMA_NAME)
     assert len(result_df) == 2
-    assert result_df[result_df["id"] == 1].iloc[0]["name"] == "Alice Updated"
+    assert result_df[result_df["chunk_id"] == 1].iloc[0]["name"] == "Alice Updated"
 
 
 def test_drop_table(postgres_service, sample_table_definition):
@@ -165,13 +167,13 @@ def test_error_when_inserting_new_column(postgres_service, sample_table_definiti
         schema_name=TEST_SCHEMA_NAME,
     )
     df_to_insert = pd.DataFrame(
-        [[2, "value4", "2024-12-12 11:45:45", "tag"]], columns=["id", "name", "created_at", "metadata"]
+        [[2, "value4", "2024-12-12 11:45:45", "tag"]], columns=["chunk_id", "name", "created_at", "metadata"]
     )
     with pytest.raises(ValueError):
         postgres_service.insert_df_to_table(df_to_insert, table_name="test_table", schema_name=TEST_SCHEMA_NAME)
     with pytest.raises(ValueError):
         postgres_service.insert_data(
             "test_table",
-            data={"id": 1, "name": "value2", "created_at": "2024-12-10 11:45:45", "metadata": "tag"},
+            data={"chunk_id": 1, "name": "value2", "created_at": "2024-12-10 11:45:45", "metadata": "tag"},
             schema_name=TEST_SCHEMA_NAME,
         )
