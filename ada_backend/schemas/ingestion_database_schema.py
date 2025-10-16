@@ -2,19 +2,18 @@ from pydantic import BaseModel
 from typing import Dict, Any, List
 
 
-class RowData(BaseModel):
+class ChunkData(BaseModel):
     data: dict
-    exists: bool
 
 
-class PaginatedRowDataResponse(BaseModel):
+class PaginatedChunkDataResponse(BaseModel):
     total: int
     page: int
     page_size: int
     total_pages: int
-    items: List[RowData]
+    items: List[ChunkData]
 
 
-class UpdateRowRequest(BaseModel):
+class UpdateChunk(BaseModel):
     update_data: Dict[str, Any]
     id_column_name: str

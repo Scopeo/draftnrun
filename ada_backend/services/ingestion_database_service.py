@@ -2,9 +2,9 @@ from uuid import UUID
 
 from engine.storage_service.local_service import SQLLocalService
 from ada_backend.schemas.ingestion_database_schema import (
-    PaginatedRowDataResponse,
-    RowData,
-    UpdateRowRequest,
+    PaginatedChunkDataResponse,
+    ChunkData,
+    UpdateChunk,
 )
 from ingestion_script.utils import get_sanitize_names
 from engine.storage_service.db_utils import DBDefinition
@@ -38,7 +38,7 @@ def get_paginated_chunks_from_ingestion_db(
     source_name: str,
     page: int,
     page_size: int,
-) -> PaginatedRowDataResponse:
+) -> PaginatedChunkDataResponse:
     sql_local_service = get_sql_local_service_for_ingestion()
     schema_name, table_name, qdrant_collection_name = get_sanitize_names(
         source_name=source_name,
@@ -47,9 +47,9 @@ def get_paginated_chunks_from_ingestion_db(
     rows, total_count = sql_local_service.get_rows_paginated(table_name, schema_name, page, page_size)
     items = []
     for row_dict in rows:
-        items.append(RowData(data=row_dict, exists=True))
+        items.append(ChunkData(data=row_dict, exists=True))
     total_pages = (total_count + page_size - 1) // page_size
-    return PaginatedRowDataResponse(
+    return PaginatedChunkDataResponse(
         items=items, total=total_count, page=page, page_size=page_size, total_pages=total_pages
     )
 
@@ -58,8 +58,8 @@ def update_chunk_info_in_ingestion_db(
     organization_id: UUID,
     source_name: str,
     chunk_id: str,
-    update_request: UpdateRowRequest,
-) -> RowData:
+    update_request: UpdateChunk,
+) -> ChunkData:
     sql_local_service = get_sql_local_service_for_ingestion()
     schema_name, table_name, qdrant_collection_name = get_sanitize_names(
         source_name=source_name,
@@ -77,7 +77,7 @@ def update_chunk_info_in_ingestion_db(
         chunk_id=chunk_id,
         id_column_name=update_request.id_column_name,
     )
-    return RowData(data=updated_row, exists=True)
+    return ChunkData(data=updated_row, exists=True)
 
 
 def delete_chunks_from_ingestion_db(
