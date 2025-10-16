@@ -376,8 +376,8 @@ def user_has_access_to_organization_or_verify_api_key(allowed_roles: set[str]):
                 )
                 return (user.id, None)
             except HTTPException as e:
-                LOGGER.exception("User token (JWT) is not valid")
-                jwt_exception = f"{e.detail}"
+                LOGGER.exception(f"User token (JWT) is not valid {e.detail}")
+                jwt_exception = "Provided but not valid"
 
         if x_api_key:
             try:
@@ -391,13 +391,13 @@ def user_has_access_to_organization_or_verify_api_key(allowed_roles: set[str]):
                     raise HTTPException(status_code=403, detail="You don't have access to this organization")
                 return (None, verified_api_key.api_key_id)
             except HTTPException as e:
-                LOGGER.exception("API Key is not valid")
-                api_key_exception = f"{e.detail}"
+                LOGGER.exception(f"API Key is not valid : {e.detail}")
+                api_key_exception = "Provided but not valid"
 
         raise HTTPException(
             status_code=401,
             detail=(
-                f"Authentication failed, one of the two must be valid:\n"
+                f"Authentication failed, one of the authentication methods must be valid:\n"
                 f"  - User token (JWT) : {jwt_exception}\n"
                 f"  - API Key : {api_key_exception}"
             ),
