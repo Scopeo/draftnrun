@@ -129,6 +129,7 @@ async def ingest_google_drive_source(
     access_token: str = None,
     add_doc_description_to_chunks: bool = False,
     chunk_size: Optional[int] = 1024,
+    chunk_overlap: Optional[int] = 0,
 ) -> None:
     # TODO: see how we can change whole code to use id instead of path
     path = "https://drive.google.com/drive/folders/" + folder_id
@@ -143,6 +144,7 @@ async def ingest_google_drive_source(
         save_supabase=save_supabase,
         add_doc_description_to_chunks=add_doc_description_to_chunks,
         chunk_size=chunk_size,
+        chunk_overlap=chunk_overlap,
     )
 
 
@@ -154,6 +156,7 @@ async def ingest_local_folder_source(
     save_supabase: bool = True,
     add_doc_description_to_chunks: bool = False,
     chunk_size: Optional[int] = 1024,
+    chunk_overlap: Optional[int] = 0,
 ) -> None:
     folder_manager = S3FolderManager(folder_payload=list_of_files_to_ingest)
     source_type = db.SourceType.LOCAL
@@ -166,6 +169,7 @@ async def ingest_local_folder_source(
         save_supabase=save_supabase,
         add_doc_description_to_chunks=add_doc_description_to_chunks,
         chunk_size=chunk_size,
+        chunk_overlap=chunk_overlap,
     )
     folder_manager.clean_bucket()
 
@@ -179,6 +183,7 @@ async def _ingest_folder_source(
     save_supabase: bool = True,
     add_doc_description_to_chunks: bool = False,
     chunk_size: Optional[int] = 1024,
+    chunk_overlap: Optional[int] = 0,
 ) -> None:
     ingestion_task = IngestionTaskUpdate(
         id=task_id,
@@ -262,6 +267,7 @@ async def _ingest_folder_source(
             get_file_content_func=folder_manager.get_file_content,
             chunk_size=chunk_size,
             use_llm_for_pdf=settings.USE_LLM_FOR_PDF_PARSING,
+            overlapping_size=chunk_overlap,
         )
     except Exception as e:
         LOGGER.error(f"Failed to chunk documents: {str(e)}")
