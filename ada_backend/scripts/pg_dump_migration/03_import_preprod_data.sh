@@ -62,10 +62,15 @@ import_table() {
         return
     fi
     
-    # Import using COPY FROM
-    psql "$PREPROD_URL" -c "\COPY $table ($columns) FROM '$tsv_file' WITH (FORMAT text, DELIMITER E'\t')" > /dev/null
+    # Import using temp table to handle conflicts gracefully
+    psql "$PREPROD_URL" > /dev/null <<EOF
+CREATE TEMP TABLE temp_${table} (LIKE ${table} INCLUDING ALL);
+\COPY temp_${table} ($columns) FROM '$tsv_file' WITH (FORMAT text, DELIMITER E'\t')
+INSERT INTO ${table} SELECT * FROM temp_${table} ON CONFLICT DO NOTHING;
+DROP TABLE temp_${table};
+EOF
     
-    echo -e "${GREEN}✓ Imported $row_count rows into $table${NC}"
+    echo -e "${GREEN}✓ Imported $row_count rows into $table (skipped duplicates)${NC}"
 }
 
 # Function to import with conflict handling (using temp table)
@@ -129,8 +134,60 @@ echo -e "${GREEN}Step 7: Import graph_runners${NC}"
 import_table "graph_runners" "id, created_at, updated_at, tag_version"
 
 echo ""
-echo -e "${GREEN}Step 8: Import component_instances${NC}"
-import_table "component_instances" "id, component_id, name, ref, tool_description_id, created_at"
+echo -e "${GREEN}Step 8: Import component_instances (with tool_description ID mapping)${NC}"
+echo -e "${YELLOW}Mapping staging tool_description IDs to preprod IDs...${NC}"
+psql "$PREPROD_URL" << 'EOF'
+    -- Load staging tool_descriptions into temp table for mapping
+    CREATE TEMP TABLE temp_staging_tool_descs (
+        id UUID,
+        name TEXT,
+        description TEXT,
+        tool_properties JSONB,
+        required_tool_properties JSONB,
+        created_at TIMESTAMP,
+        updated_at TIMESTAMP
+    );
+    \COPY temp_staging_tool_descs FROM './staging_export/tool_descriptions.tsv' WITH (FORMAT text, DELIMITER E'\t')
+    
+    -- Create ID mapping table based on component name
+    CREATE TEMP TABLE tool_desc_id_mapping AS
+    SELECT 
+        tstd.id as staging_id,
+        td.id as preprod_id
+    FROM temp_staging_tool_descs tstd
+    JOIN tool_descriptions td ON td.name = tstd.name;
+    
+    -- Load staging component_instances
+    CREATE TEMP TABLE temp_component_instances (
+        id UUID,
+        component_id UUID,
+        name TEXT,
+        ref TEXT,
+        tool_description_id UUID,
+        created_at TIMESTAMP
+    );
+    \COPY temp_component_instances FROM './staging_export/component_instances.tsv' WITH (FORMAT text, DELIMITER E'\t')
+    
+    -- Insert component_instances with mapped tool_description IDs
+    INSERT INTO component_instances (id, component_id, name, ref, tool_description_id, created_at)
+    SELECT 
+        tci.id,
+        tci.component_id,
+        tci.name,
+        tci.ref,
+        COALESCE(tdm.preprod_id, tci.tool_description_id) as tool_description_id,
+        tci.created_at
+    FROM temp_component_instances tci
+    LEFT JOIN tool_desc_id_mapping tdm ON tdm.staging_id = tci.tool_description_id
+    ON CONFLICT DO NOTHING;
+    
+    DROP TABLE temp_staging_tool_descs;
+    DROP TABLE tool_desc_id_mapping;
+    DROP TABLE temp_component_instances;
+EOF
+
+ROWS=$(wc -l < "./staging_export/component_instances.tsv")
+echo -e "${GREEN}✓ Imported $ROWS rows into component_instances (with ID mapping)${NC}"
 
 echo ""
 echo -e "${GREEN}Step 9: Import project_env_binding${NC}"
@@ -145,8 +202,65 @@ echo -e "${GREEN}Step 11: Import graph_runner_edges${NC}"
 import_table "graph_runner_edges" "id, source_node_id, target_node_id, graph_runner_id, \"order\", created_at, updated_at"
 
 echo ""
-echo -e "${GREEN}Step 12: Import basic_parameters${NC}"
-import_table "basic_parameters" "id, component_instance_id, parameter_definition_id, value, organization_secret_id, \"order\""
+echo -e "${GREEN}Step 12: Import basic_parameters (with parameter_definition ID mapping)${NC}"
+echo -e "${YELLOW}Mapping staging parameter_definition IDs to preprod IDs...${NC}"
+psql "$PREPROD_URL" << 'EOF'
+    -- Load staging component_parameter_definitions into temp table for mapping
+    CREATE TEMP TABLE temp_staging_param_defs (
+        id UUID,
+        component_id UUID,
+        name TEXT,
+        type TEXT,
+        nullable BOOLEAN,
+        "order" INTEGER,
+        "default" TEXT,
+        ui_component TEXT,
+        ui_component_properties JSONB,
+        is_advanced BOOLEAN
+    );
+    \COPY temp_staging_param_defs FROM './staging_export/component_parameter_definitions.tsv' WITH (FORMAT text, DELIMITER E'\t')
+    
+    -- Create ID mapping table based on (component_id, name)
+    CREATE TEMP TABLE param_def_id_mapping AS
+    SELECT 
+        tspd.id as staging_id,
+        cpd.id as preprod_id
+    FROM temp_staging_param_defs tspd
+    JOIN component_parameter_definitions cpd ON 
+        cpd.component_id = tspd.component_id 
+        AND cpd.name = tspd.name;
+    
+    -- Load staging basic_parameters
+    CREATE TEMP TABLE temp_basic_parameters (
+        id UUID,
+        component_instance_id UUID,
+        parameter_definition_id UUID,
+        value TEXT,
+        organization_secret_id UUID,
+        "order" INTEGER
+    );
+    \COPY temp_basic_parameters FROM './staging_export/basic_parameters.tsv' WITH (FORMAT text, DELIMITER E'\t')
+    
+    -- Insert basic_parameters with mapped parameter_definition IDs
+    INSERT INTO basic_parameters (id, component_instance_id, parameter_definition_id, value, organization_secret_id, "order")
+    SELECT 
+        tbp.id,
+        tbp.component_instance_id,
+        COALESCE(pdm.preprod_id, tbp.parameter_definition_id) as parameter_definition_id,
+        tbp.value,
+        tbp.organization_secret_id,
+        tbp."order"
+    FROM temp_basic_parameters tbp
+    LEFT JOIN param_def_id_mapping pdm ON pdm.staging_id = tbp.parameter_definition_id
+    ON CONFLICT DO NOTHING;
+    
+    DROP TABLE temp_staging_param_defs;
+    DROP TABLE param_def_id_mapping;
+    DROP TABLE temp_basic_parameters;
+EOF
+
+ROWS=$(wc -l < "./staging_export/basic_parameters.tsv")
+echo -e "${GREEN}✓ Imported $ROWS rows into basic_parameters (with ID mapping)${NC}"
 
 echo ""
 echo -e "${GREEN}Step 13: Import port_mappings (with port_definition ID mapping)${NC}"
@@ -198,7 +312,8 @@ psql "$PREPROD_URL" << 'EOF'
         tmp.dispatch_strategy
     FROM temp_port_mappings tmp
     LEFT JOIN port_def_id_mapping src_map ON src_map.staging_id = tmp.source_port_definition_id_staging
-    LEFT JOIN port_def_id_mapping tgt_map ON tgt_map.staging_id = tmp.target_port_definition_id_staging;
+    LEFT JOIN port_def_id_mapping tgt_map ON tgt_map.staging_id = tmp.target_port_definition_id_staging
+    ON CONFLICT DO NOTHING;
     
     DROP TABLE temp_staging_port_defs, port_def_id_mapping, temp_port_mappings;
 EOF
