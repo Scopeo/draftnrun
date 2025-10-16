@@ -56,6 +56,7 @@ from ada_backend.database.seed.constants import (
     REASONING_IN_DB,
 )
 from engine.agent.static_responder import StaticResponder
+from engine.agent.pdf_parsing import PDFParsingTool
 
 
 class SupportedEntityType(StrEnum):
@@ -100,6 +101,7 @@ class SupportedEntityType(StrEnum):
     FILTER = "Filter"
     PROJECT_REFERENCE = "ProjectReference"
     CHUNK_PROCESSOR = "ChunkProcessor"
+    PDF_PARSING_TOOL = "PDF Parsing Tool"
 
     # Integrations
     GMAIL_SENDER = "Gmail Sender"
@@ -487,6 +489,13 @@ def create_factory_registry() -> FactoryRegistry:
         name=SupportedEntityType.FILTER,
         factory=AgentFactory(
             entity_class=Filter,
+        ),
+    )
+
+    registry.register(
+        name=SupportedEntityType.PDF_PARSING_TOOL,
+        factory=AgentFactory(
+            entity_class=PDFParsingTool,
         ),
     )
 

@@ -41,6 +41,7 @@ dependencies = [
     { name = "prometheus-fastapi-instrumentator" },
     { name = "pydantic-settings" },
     { name = "pymupdf" },
+    { name = "pymupdf4llm" },
     { name = "pytest-asyncio" },
     { name = "python-dotenv" },
     { name = "python-levenshtein" },
@@ -148,6 +149,7 @@ requires-dist = [
     { name = "prometheus-fastapi-instrumentator", specifier = ">=7.1.0" },
     { name = "pydantic-settings", specifier = "==2.1.0" },
     { name = "pymupdf", specifier = ">=1.24.5,<2" },
+    { name = "pymupdf4llm", specifier = ">=0.0.25" },
     { name = "pytest-asyncio", specifier = ">=0.23.8" },
     { name = "python-dotenv", specifier = "==1.0.0" },
     { name = "python-levenshtein", specifier = ">=0.27.1" },
@@ -3144,6 +3146,18 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/99/39/23ac15cf0edc2877ef366dc7ae041ac199d212433c2c3113661d1a1d5ad0/pymupdf-1.26.1-cp39-abi3-musllinux_1_2_x86_64.whl", hash = "sha256:26cebdcc1b2b7a7445423599ce2e0000f2be0333cce0fa0e6846e5a7da46f965", size = 24258802, upload-time = "2025-06-11T22:15:20.499Z" },
     { url = "https://files.pythonhosted.org/packages/e1/8c/56bd5951128d5c5c0b64d2942090c2cd7bc44302bac991b941ac736e3d63/pymupdf-1.26.1-cp39-abi3-win32.whl", hash = "sha256:82ed9e106cf564fc959c0691c374ba68443086ba1a1c9f26128eebbc3e6df9e5", size = 16927933, upload-time = "2025-06-11T22:15:59.72Z" },
     { url = "https://files.pythonhosted.org/packages/a7/1b/0613759a059c8c952c18811c7c7dd0ba5d7945ed13a535719489f533d700/pymupdf-1.26.1-cp39-abi3-win_amd64.whl", hash = "sha256:8deae5168fce37d707f68d1981da6c0bb71f1f176d9835d5914ad46f779a036f", size = 18519587, upload-time = "2025-06-11T22:16:38.155Z" },
+]
+
+[[package]]
+name = "pymupdf4llm"
+version = "0.0.25"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "pymupdf" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/e0/64/b0d235a8fedb5e04c4a668321365cc8b8a767c1bc502a3985fed2162917a/pymupdf4llm-0.0.25.tar.gz", hash = "sha256:deebe0f54c2d654ab175432cf015a17b33a02463f46a5ea1aeed741f6fa502de", size = 28684, upload-time = "2025-06-13T17:27:30.816Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/43/a0/cb7c3ec3eb762b6849745132465d25c11cd6c74a8cf18ae9dbbee8159cda/pymupdf4llm-0.0.25-py3-none-any.whl", hash = "sha256:a4b4ce8680c008a27b33a14d9fbaeeeb7475e726a010e08bdf171d53eb777a6d", size = 29352, upload-time = "2025-06-13T17:27:32.867Z" },
 ]
 
 [[package]]

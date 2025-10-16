@@ -86,6 +86,7 @@ COMPONENT_UUIDS: dict[str, UUID] = {
     "chunk_processor": UUID("5d9f0f3e-2b4c-5678-9012-345678901bcd"),
     "docx_generation": UUID("b5195a0f-94f5-4f5c-8804-32dd19b16833"),
     "static_responder": UUID("1F7334BE-7164-4440-BBF3-E986EED0388F"),
+    "pdf_parsing_tool": UUID("6e8f1f4f-3c5d-6789-0123-456789012cde"),
 }
 
 DEFAULT_MODEL = "openai:gpt-5-mini"
