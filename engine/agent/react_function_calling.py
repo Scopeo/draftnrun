@@ -109,7 +109,7 @@ def get_default_output_tool_description() -> ToolDescription:
             "is_ending_conversation": {
                 "type": "boolean",
                 "description": "Whether this response should end the conversation (true) or "
-                               "allow for follow-up questions (false).",
+                "allow for follow-up questions (false).",
             },
         },
         required_properties=["answer", "is_ending_conversation"],
@@ -176,7 +176,7 @@ class ReActAgent(Agent):
 
         self._output_format = output_format
         self._output_tool_agent_description = self._get_output_tool_description()
-        
+
         # Initialize current rag_filter for runtime use
         self._current_rag_filter: Optional[dict] = None
 
@@ -241,7 +241,6 @@ class ReActAgent(Agent):
             tool for tool in self.agent_tools if tool.tool_description.name == tool_function_name
         )
         if isinstance(tool_to_use, RAG) and self._current_rag_filter:
-            tool_to_use.filter = self._current_rag_filter
             tool_arguments["filters"] = self._current_rag_filter
             LOGGER.info(f"Applied determinist RAG filter to tool call {self._current_rag_filter}")
         if tool_function_name in CODE_RUNNER_TOOLS:
@@ -435,7 +434,7 @@ class ReActAgent(Agent):
     # --- Thin adapter to typed I/O ---
     async def _run_without_io_trace(self, inputs: ReActAgentInputs, ctx: dict) -> ReActAgentOutputs:
         self._current_rag_filter = inputs.rag_filter
-        
+
         # Map typed inputs to the original call style
         payload_dict = inputs.model_dump(exclude_none=True)
         agent_payload = AgentPayload(**payload_dict) if "messages" in payload_dict else payload_dict
