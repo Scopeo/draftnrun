@@ -22,10 +22,21 @@ if [ "$confirmation" != "YES" ]; then
 fi
 
 psql "$PREPROD_URL" << 'EOF'
-TRUNCATE TABLE component_sub_inputs, port_mappings, basic_parameters, 
-                graph_runner_edges, graph_runner_nodes, project_env_binding,
-                component_instances, graph_runners, workflow_projects, 
-                agent_projects, projects CASCADE;
+-- Drop all schemas and recreate
+DROP SCHEMA IF EXISTS public CASCADE;
+DROP SCHEMA IF EXISTS scheduler CASCADE;
+DROP SCHEMA IF EXISTS quality_assurance CASCADE;
+
+-- Recreate schemas
+CREATE SCHEMA public;
+CREATE SCHEMA scheduler;
+CREATE SCHEMA quality_assurance;
+
+-- Grant permissions
+GRANT ALL ON SCHEMA public TO ada_preprod_user;
+GRANT ALL ON SCHEMA public TO public;
+GRANT ALL ON SCHEMA scheduler TO ada_preprod_user;
+GRANT ALL ON SCHEMA quality_assurance TO ada_preprod_user;
 EOF
 
 echo "✓ All tables truncated"
