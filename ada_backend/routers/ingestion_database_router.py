@@ -24,11 +24,11 @@ from ada_backend.services.ingestion_database_service import (
 )
 
 
-router = APIRouter(tags=["Ingestion Database"], prefix="/ingestion_database")
+router = APIRouter(tags=["Ingestion Database"])
 LOGGER = logging.getLogger(__name__)
 
 
-@router.post("/organizations/{organization_id}")
+@router.post("/organizations/{organization_id}/ingestion_database")
 def create_table_in_database(
     verified_ingestion_api_key: Annotated[None, Depends(verify_ingestion_api_key_dependency)],
     organization_id: UUID,
@@ -45,7 +45,7 @@ def create_table_in_database(
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
-@router.get("/organizations/{organization_id}/sources/{source_name}/chunks")
+@router.get("/organizations/{organization_id}/ingestion_database/sources/{source_name}/chunks")
 def get_rows_in_database(
     organization_id: UUID,
     source_name: str,
@@ -68,7 +68,7 @@ def get_rows_in_database(
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
-@router.put("/organizations/{organization_id}/sources/{source_name}/chunks/{chunk_id}")
+@router.put("/organizations/{organization_id}/ingestion_database/sources/{source_name}/chunks/{chunk_id}")
 def update_row_in_database(
     organization_id: UUID,
     source_name: str,
@@ -94,7 +94,7 @@ def update_row_in_database(
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
-@router.delete("/organizations/{organization_id}/sources/{source_name}/rows/{chunk_id}")
+@router.delete("/organizations/{organization_id}/ingestion_database/sources/{source_name}/chunks/{chunk_id}")
 def delete_row_in_database(
     organization_id: UUID,
     source_name: str,
