@@ -4,6 +4,9 @@ This script copies all projects from a specific organization from staging to pre
 using the get_graph_service and update_graph_service, which automatically handles
 ID generation and dependencies.
 
+FIXED: Now uses insert_project() to properly create polymorphic inheritance records
+(WorkflowProject/AgentProject) instead of just base Project records.
+
 Usage:
     uv run python -m ada_backend.scripts.copy_qa_projects_get_put --organization-id <UUID> --staging-db-url <URL> --preprod-db-url <URL>
 
@@ -27,6 +30,7 @@ from ada_backend.services.graph.get_graph_service import get_graph_service
 from ada_backend.services.graph.update_graph_service import update_graph_service
 from ada_backend.schemas.pipeline.graph_schema import GraphUpdateSchema
 from ada_backend.database.models import EnvType
+from ada_backend.repositories.project_repository import insert_project
 
 LOGGER = logging.getLogger(__name__)
 
@@ -81,16 +85,16 @@ def copy_qa_projects_get_put(organization_id: UUID, staging_db_url: str, preprod
             print(f"  📝 Copying project: {project.name} ({project.id})")
 
             try:
-                # Create the project in preprod
-                new_project = Project(
-                    id=uuid4(),  # Generate new UUID
-                    name=project.name,
-                    type=project.type,
-                    description=project.description,
+                # Create the project in preprod using proper polymorphic inheritance
+                # This ensures records are created in both projects table AND polymorphic tables
+                new_project = insert_project(
+                    session=preprod_session,
+                    project_id=uuid4(),  # Generate new UUID
+                    project_name=project.name,
                     organization_id=organization_id,
+                    description=project.description,
+                    project_type=project.type,  # This will create WorkflowProject or AgentProject
                 )
-                preprod_session.add(new_project)
-                preprod_session.flush()  # Get the new project ID
 
                 # Get environment bindings for this project
                 env_bindings = (
@@ -137,8 +141,7 @@ def copy_qa_projects_get_put(organization_id: UUID, staging_db_url: str, preprod
                         print(f"    ❌ Error copying graph runner {binding.graph_runner_id}: {e}")
                         continue
 
-                # Commit the project and its graphs
-                preprod_session.commit()
+                # Note: insert_project already commits, so we don't need to commit here
                 print(f"  ✅ Successfully copied project: {project.name}")
                 copied_count += 1
 
