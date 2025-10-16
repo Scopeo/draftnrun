@@ -164,6 +164,29 @@ delete_from_table "projects" \
     "organization_id = '$ORG_ID'"
 
 echo ""
+echo -e "${GREEN}Step 8: Cleanup any orphaned records (safety net)${NC}"
+
+# Clean up any orphaned graph_runners that weren't caught by the above queries
+echo -e "${YELLOW}Cleaning orphaned graph_runners (if any)...${NC}"
+ORPHANED_GR=$(psql "$PREPROD_URL" -t -c "SELECT COUNT(*) FROM graph_runners WHERE id NOT IN (SELECT DISTINCT graph_runner_id FROM project_env_binding)" | tr -d ' ')
+if [ "$ORPHANED_GR" -gt 0 ]; then
+    psql "$PREPROD_URL" -c "DELETE FROM graph_runners WHERE id NOT IN (SELECT DISTINCT graph_runner_id FROM project_env_binding)" > /dev/null
+    echo -e "${GREEN}✓ Deleted $ORPHANED_GR orphaned graph_runners${NC}"
+else
+    echo -e "${YELLOW}⚠ No orphaned graph_runners found${NC}"
+fi
+
+# Clean up any orphaned component_instances that weren't caught by the above queries
+echo -e "${YELLOW}Cleaning orphaned component_instances (if any)...${NC}"
+ORPHANED_CI=$(psql "$PREPROD_URL" -t -c "SELECT COUNT(*) FROM component_instances WHERE id NOT IN (SELECT DISTINCT node_id FROM graph_runner_nodes)" | tr -d ' ')
+if [ "$ORPHANED_CI" -gt 0 ]; then
+    psql "$PREPROD_URL" -c "DELETE FROM component_instances WHERE id NOT IN (SELECT DISTINCT node_id FROM graph_runner_nodes)" > /dev/null
+    echo -e "${GREEN}✓ Deleted $ORPHANED_CI orphaned component_instances${NC}"
+else
+    echo -e "${YELLOW}⚠ No orphaned component_instances found${NC}"
+fi
+
+echo ""
 echo -e "${GREEN}=====================================${NC}"
 echo -e "${GREEN}Cleanup Complete!${NC}"
 echo -e "${GREEN}=====================================${NC}"
