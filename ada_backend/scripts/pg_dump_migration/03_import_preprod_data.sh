@@ -82,35 +82,39 @@ echo -e "${GREEN}Step 3: Import agent_projects${NC}"
 import_table "agent_projects" "id"
 
 echo ""
-echo -e "${GREEN}Step 4: Import graph_runners${NC}"
+echo -e "${GREEN}Step 4: Import tool_descriptions (referenced by component_instances)${NC}"
+import_table "tool_descriptions" "id, name, description, tool_properties, required_tool_properties, created_at, updated_at"
+
+echo ""
+echo -e "${GREEN}Step 5: Import graph_runners${NC}"
 import_table "graph_runners" "id, created_at, updated_at, tag_version"
 
 echo ""
-echo -e "${GREEN}Step 5: Import component_instances${NC}"
+echo -e "${GREEN}Step 6: Import component_instances${NC}"
 import_table "component_instances" "id, component_id, name, ref, tool_description_id, created_at"
 
 echo ""
-echo -e "${GREEN}Step 6: Import project_env_binding${NC}"
+echo -e "${GREEN}Step 7: Import project_env_binding${NC}"
 import_table "project_env_binding" "id, project_id, environment, graph_runner_id, created_at, updated_at"
 
 echo ""
-echo -e "${GREEN}Step 7: Import graph_runner_nodes${NC}"
+echo -e "${GREEN}Step 8: Import graph_runner_nodes${NC}"
 import_table "graph_runner_nodes" "id, node_id, graph_runner_id, node_type, is_start_node, created_at, updated_at"
 
 echo ""
-echo -e "${GREEN}Step 8: Import graph_runner_edges${NC}"
+echo -e "${GREEN}Step 9: Import graph_runner_edges${NC}"
 import_table "graph_runner_edges" "id, source_node_id, target_node_id, graph_runner_id, \"order\", created_at, updated_at"
 
 echo ""
-echo -e "${GREEN}Step 9: Import basic_parameters${NC}"
+echo -e "${GREEN}Step 10: Import basic_parameters${NC}"
 import_table "basic_parameters" "id, component_instance_id, parameter_definition_id, value, organization_secret_id, \"order\""
 
 echo ""
-echo -e "${GREEN}Step 10: Import port_mappings${NC}"
+echo -e "${GREEN}Step 11: Import port_mappings${NC}"
 import_table "port_mappings" "id, graph_runner_id, source_instance_id, source_port_definition_id, target_instance_id, target_port_definition_id, dispatch_strategy"
 
 echo ""
-echo -e "${GREEN}Step 11: Import component_sub_inputs${NC}"
+echo -e "${GREEN}Step 12: Import component_sub_inputs${NC}"
 import_table "component_sub_inputs" "id, parent_component_instance_id, child_component_instance_id, parameter_definition_id, \"order\""
 
 echo ""

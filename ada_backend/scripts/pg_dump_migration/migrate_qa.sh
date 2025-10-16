@@ -1,6 +1,6 @@
 #!/bin/bash
 # QA Migration: Add QA projects from staging to preprod
-# Assumes preprod already has prod data + proper schema
+# Assumes: schema is up-to-date and components are seeded
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
