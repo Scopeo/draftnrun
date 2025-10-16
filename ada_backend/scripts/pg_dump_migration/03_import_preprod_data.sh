@@ -122,7 +122,7 @@ import_table_with_conflict_handling "component_parameter_definitions" "id, compo
 
 echo ""
 echo -e "${GREEN}Step 6: Import port_definitions (referenced by port_mappings)${NC}"
-import_table_with_conflict_handling "port_definitions" "id, component_id, name, type"
+import_table_with_conflict_handling "port_definitions" "id, component_id, name, port_type"
 
 echo ""
 echo -e "${GREEN}Step 7: Import graph_runners${NC}"
