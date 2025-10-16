@@ -7,7 +7,7 @@ from pydantic import BaseModel
 
 from engine.agent.types import ToolDescription, ComponentAttributes, AgentPayload, NodeData
 from engine.trace.trace_manager import TraceManager
-from engine.agent.utils import load_str_to_json
+from engine.agent.json_schema_utils import parse_json_schema_string, validate_and_apply_defaults
 from engine.trace.serializer import serialize_to_json
 
 LOGGER = logging.getLogger(__name__)
@@ -44,7 +44,8 @@ class Start:
         self.trace_manager = trace_manager
         self.tool_description = tool_description
         self.component_attributes = component_attributes
-        self.payload_schema = load_str_to_json(payload_schema)
+        # Parse the JSON Schema string
+        self.payload_schema = parse_json_schema_string(payload_schema)
         self.api_enabled = api_enabled
         self.api_input_format = api_input_format
         self.cron_enabled = cron_enabled
@@ -78,10 +79,12 @@ class Start:
             base = dict(input_data)
             incoming_ctx = {}
 
-        filtered_input = base.copy()
-        for k, v in self.payload_schema.items():
-            if k not in filtered_input:
-                filtered_input[k] = v
+        # Validate input against schema and apply defaults
+        try:
+            filtered_input = validate_and_apply_defaults(base, self.payload_schema)
+        except Exception as e:
+            LOGGER.warning(f"Schema validation failed, using input as-is: {e}")
+            filtered_input = base.copy()
 
         with self.trace_manager.start_span(self.component_attributes.component_instance_name) as span:
             span.set_attributes(

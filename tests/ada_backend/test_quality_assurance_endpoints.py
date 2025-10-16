@@ -14,7 +14,22 @@ HEADERS_JWT = {
 }
 
 # JSON constants for test workflow configuration
-DEFAULT_PAYLOAD_SCHEMA = {"messages": [{"role": "user", "content": "Hello"}], "additional_info": "info"}
+import json
+
+DEFAULT_PAYLOAD_SCHEMA = json.dumps(
+    {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "properties": {
+            "messages": {
+                "type": "array",
+                "items": {"type": "object", "properties": {"role": {"type": "string"}, "content": {"type": "string"}}},
+                "default": [{"role": "user", "content": "Hello"}],
+            },
+            "additional_info": {"type": "string", "default": "info"},
+        },
+    }
+)
 
 DEFAULT_FILTER_SCHEMA = {
     "type": "object",
@@ -251,7 +266,9 @@ def _create_dummy_agent_workflow_config():
                         "id": "48332255-4a0e-4432-8fb4-46267e8ffd4d",
                         "type": "string",
                         "nullable": False,
-                        "default": DEFAULT_PAYLOAD_SCHEMA,
+                        "default": json.dumps(
+                            {"messages": [{"role": "user", "content": "Hello"}], "additional_info": "info"}
+                        ),
                         "ui_component": "Textarea",
                         "ui_component_properties": {
                             "label": "An exemple of your payload schema",
