@@ -137,6 +137,10 @@ class QAMigrationOrchestrator:
                 # For projects table, use two-step approach
                 if table == "projects":
                     self._migrate_projects_two_step()
+                elif table == "workflow_projects":
+                    self._migrate_workflow_projects_two_step()
+                elif table == "agent_projects":
+                    self._migrate_agent_projects_two_step()
                 else:
                     # Execute the query normally
                     self.db_manager.execute_preprod_query(query, (self.org_id,), fetch=False)
@@ -163,24 +167,76 @@ class QAMigrationOrchestrator:
     def _migrate_projects_two_step(self):
         """Migrate projects using two-step approach: fetch from staging, insert into preprod."""
         logger.info("  Fetching projects from staging...")
-        
+
         # Fetch projects from staging
         staging_projects = self.db_manager.execute_staging_query(
             "SELECT id, name, type, description, created_at, updated_at FROM projects WHERE organization_id = %s",
-            (self.org_id,)
+            (self.org_id,),
         )
-        
+
         logger.info(f"  Found {len(staging_projects)} projects in staging")
-        
+
         # Insert each project into preprod
         for project in staging_projects:
             self.db_manager.execute_preprod_query(
                 "INSERT INTO projects (id, name, type, description, organization_id, created_at, updated_at) VALUES (%s, %s, %s, %s, %s, %s, %s)",
-                (project['id'], project['name'], project['type'], project['description'], self.org_id, project['created_at'], project['updated_at']),
+                (
+                    project["id"],
+                    project["name"],
+                    project["type"],
+                    project["description"],
+                    self.org_id,
+                    project["created_at"],
+                    project["updated_at"],
+                ),
+                fetch=False,
+            )
+
+        logger.info(f"  Inserted {len(staging_projects)} projects into preprod")
+
+    def _migrate_workflow_projects_two_step(self):
+        """Migrate workflow projects using two-step approach."""
+        logger.info("  Fetching workflow projects from staging...")
+        
+        # Fetch workflow projects from staging
+        staging_workflow_projects = self.db_manager.execute_staging_query(
+            "SELECT wp.id FROM workflow_projects wp JOIN projects p ON wp.id = p.id WHERE p.organization_id = %s",
+            (self.org_id,)
+        )
+        
+        logger.info(f"  Found {len(staging_workflow_projects)} workflow projects in staging")
+        
+        # Insert each workflow project into preprod
+        for wp in staging_workflow_projects:
+            self.db_manager.execute_preprod_query(
+                "INSERT INTO workflow_projects (id) VALUES (%s)",
+                (wp['id'],),
                 fetch=False
             )
         
-        logger.info(f"  Inserted {len(staging_projects)} projects into preprod")
+        logger.info(f"  Inserted {len(staging_workflow_projects)} workflow projects into preprod")
+
+    def _migrate_agent_projects_two_step(self):
+        """Migrate agent projects using two-step approach."""
+        logger.info("  Fetching agent projects from staging...")
+        
+        # Fetch agent projects from staging
+        staging_agent_projects = self.db_manager.execute_staging_query(
+            "SELECT ap.id FROM agent_projects ap JOIN projects p ON ap.id = p.id WHERE p.organization_id = %s",
+            (self.org_id,)
+        )
+        
+        logger.info(f"  Found {len(staging_agent_projects)} agent projects in staging")
+        
+        # Insert each agent project into preprod
+        for ap in staging_agent_projects:
+            self.db_manager.execute_preprod_query(
+                "INSERT INTO agent_projects (id) VALUES (%s)",
+                (ap['id'],),
+                fetch=False
+            )
+        
+        logger.info(f"  Inserted {len(staging_agent_projects)} agent projects into preprod")
 
     def execute_core_data_migration(self) -> bool:
         """Execute core data migration (projects and polymorphic tables)."""
