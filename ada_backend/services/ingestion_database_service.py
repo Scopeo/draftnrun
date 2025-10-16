@@ -47,7 +47,7 @@ def get_paginated_chunks_from_ingestion_db(
     rows, total_count = sql_local_service.get_rows_paginated(table_name, schema_name, page, page_size)
     items = []
     for row_dict in rows:
-        items.append(ChunkData(data=row_dict, exists=True))
+        items.append(ChunkData(data=row_dict))
     total_pages = (total_count + page_size - 1) // page_size
     return PaginatedChunkDataResponse(
         items=items, total=total_count, page=page, page_size=page_size, total_pages=total_pages
