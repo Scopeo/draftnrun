@@ -1,6 +1,6 @@
 from collections import defaultdict
 from typing import DefaultDict
-from uuid import UUID
+from uuid import UUID, uuid4
 import logging
 
 from sqlalchemy.orm import Session
@@ -32,6 +32,7 @@ from ada_backend.services.errors import ProjectNotFound
 from ada_backend.database import models as db
 from ada_backend.services.graph.get_graph_service import get_graph_service
 from ada_backend.services.graph.update_graph_service import update_graph_service
+from ada_backend.services.pipeline.update_pipeline_service import create_or_update_component_instance
 
 
 LOGGER = logging.getLogger(__name__)
@@ -234,10 +235,21 @@ async def update_agent_service(
         system_prompt=agent_data.system_prompt,
     )
 
-    all_component_instances = agent_data.tools.copy()
+    tools_with_ids = []
+    for tool in agent_data.tools:
+        if tool.id is None:
+            tool.id = uuid4()
+            LOGGER.info(f"Generated new instance ID {tool.id} for tool {tool.component_id}")
+        else:
+            LOGGER.info(f"Reusing existing instance ID {tool.id} for tool {tool.component_id}")
+
+        create_or_update_component_instance(session, tool, agent_id)
+        tools_with_ids.append(tool)
+
+    all_component_instances = tools_with_ids.copy()
     all_component_instances.append(ai_agent_component)
 
-    tool_relationships = _build_tool_relationships(graph_runner_id, agent_data.tools)
+    tool_relationships = _build_tool_relationships(graph_runner_id, tools_with_ids)
 
     graph_update_request = GraphUpdateSchema(
         relationships=tool_relationships, component_instances=all_component_instances, edges=[]
