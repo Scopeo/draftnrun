@@ -111,34 +111,46 @@ export_table_custom "agent_projects" \
 echo ""
 echo -e "${GREEN}Step 4: Export tool_descriptions (referenced by component_instances)${NC}"
 export_table_custom "tool_descriptions" \
-    "SELECT DISTINCT td.id, td.name, td.description, td.tool_properties, td.required_tool_properties, td.created_at, td.updated_at 
+    "SELECT td.id, td.name, td.description, td.tool_properties, td.required_tool_properties, td.created_at, td.updated_at 
      FROM tool_descriptions td 
-     JOIN component_instances ci ON td.id = ci.tool_description_id 
-     JOIN graph_runner_nodes grn ON ci.id = grn.node_id 
-     JOIN graph_runners gr ON grn.graph_runner_id = gr.id 
-     JOIN project_env_binding peb ON gr.id = peb.graph_runner_id 
-     JOIN projects p ON peb.project_id = p.id 
-     WHERE p.organization_id = '$ORG_ID'"
+     WHERE td.id IN (
+         SELECT DISTINCT ci.tool_description_id 
+         FROM component_instances ci 
+         JOIN graph_runner_nodes grn ON ci.id = grn.node_id 
+         JOIN graph_runners gr ON grn.graph_runner_id = gr.id 
+         JOIN project_env_binding peb ON gr.id = peb.graph_runner_id 
+         JOIN projects p ON peb.project_id = p.id 
+         WHERE p.organization_id = '$ORG_ID' 
+         AND ci.tool_description_id IS NOT NULL
+     )"
 
 echo ""
 echo -e "${GREEN}Step 5: Export graph_runners${NC}"
 export_table_custom "graph_runners" \
-    "SELECT DISTINCT gr.id, gr.created_at, gr.updated_at, gr.tag_version 
+    "SELECT gr.id, gr.created_at, gr.updated_at, gr.tag_version 
      FROM graph_runners gr 
-     JOIN project_env_binding peb ON gr.id = peb.graph_runner_id 
-     JOIN projects p ON peb.project_id = p.id 
-     WHERE p.organization_id = '$ORG_ID'"
+     WHERE gr.id IN (
+         SELECT DISTINCT peb.graph_runner_id 
+         FROM project_env_binding peb 
+         JOIN projects p ON peb.project_id = p.id 
+         WHERE p.organization_id = '$ORG_ID' 
+         AND peb.graph_runner_id IS NOT NULL
+     )"
 
 echo ""
 echo -e "${GREEN}Step 6: Export component_instances${NC}"
 export_table_custom "component_instances" \
-    "SELECT DISTINCT ci.id, ci.component_id, ci.name, ci.ref, ci.tool_description_id, ci.created_at 
+    "SELECT ci.id, ci.component_id, ci.name, ci.ref, ci.tool_description_id, ci.created_at 
      FROM component_instances ci 
-     JOIN graph_runner_nodes grn ON ci.id = grn.node_id 
-     JOIN graph_runners gr ON grn.graph_runner_id = gr.id 
-     JOIN project_env_binding peb ON gr.id = peb.graph_runner_id 
-     JOIN projects p ON peb.project_id = p.id 
-     WHERE p.organization_id = '$ORG_ID'"
+     WHERE ci.id IN (
+         SELECT DISTINCT grn.node_id 
+         FROM graph_runner_nodes grn 
+         JOIN graph_runners gr ON grn.graph_runner_id = gr.id 
+         JOIN project_env_binding peb ON gr.id = peb.graph_runner_id 
+         JOIN projects p ON peb.project_id = p.id 
+         WHERE p.organization_id = '$ORG_ID' 
+         AND grn.node_type = 'component_instance'
+     )"
 
 echo ""
 echo -e "${GREEN}Step 7: Export project_env_binding${NC}"
