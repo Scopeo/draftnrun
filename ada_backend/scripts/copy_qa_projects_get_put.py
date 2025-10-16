@@ -21,6 +21,7 @@ import argparse
 from uuid import UUID, uuid4
 from typing import List
 import logging
+import asyncio
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -60,7 +61,7 @@ def clear_ids_for_new_creation(graph_data):
     return graph_data
 
 
-def copy_qa_projects_get_put(organization_id: UUID, staging_db_url: str, preprod_db_url: str) -> None:
+async def copy_qa_projects_get_put(organization_id: UUID, staging_db_url: str, preprod_db_url: str) -> None:
     """Copy QA projects from staging to preprod using GET → PUT approach"""
 
     # Create database connections
@@ -119,7 +120,7 @@ def copy_qa_projects_get_put(organization_id: UUID, staging_db_url: str, preprod
                         new_graph_runner_id = uuid4()
 
                         # Use update_graph_service to create the complete graph
-                        update_graph_service(
+                        await update_graph_service(
                             session=preprod_session,
                             graph_runner_id=new_graph_runner_id,
                             project_id=new_project.id,
@@ -176,9 +177,9 @@ def main():
         print("❌ Invalid organization ID format. Must be a valid UUID.")
         return
 
-    copy_qa_projects_get_put(
+    asyncio.run(copy_qa_projects_get_put(
         organization_id=organization_id, staging_db_url=args.staging_db_url, preprod_db_url=args.preprod_db_url
-    )
+    ))
 
 
 if __name__ == "__main__":
