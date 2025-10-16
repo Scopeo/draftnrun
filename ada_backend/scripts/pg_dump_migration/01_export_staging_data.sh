@@ -125,7 +125,23 @@ export_table_custom "tool_descriptions" \
      )"
 
 echo ""
-echo -e "${GREEN}Step 5: Export graph_runners${NC}"
+echo -e "${GREEN}Step 5: Export component_parameter_definitions (referenced by basic_parameters)${NC}"
+export_table_custom "component_parameter_definitions" \
+    "SELECT cpd.id, cpd.component_id, cpd.name, cpd.type, cpd.nullable, cpd.\"order\", cpd.default, cpd.ui_component, cpd.ui_component_properties, cpd.is_advanced 
+     FROM component_parameter_definitions cpd 
+     WHERE cpd.id IN (
+         SELECT DISTINCT bp.parameter_definition_id 
+         FROM basic_parameters bp 
+         JOIN component_instances ci ON bp.component_instance_id = ci.id 
+         JOIN graph_runner_nodes grn ON ci.id = grn.node_id 
+         JOIN graph_runners gr ON grn.graph_runner_id = gr.id 
+         JOIN project_env_binding peb ON gr.id = peb.graph_runner_id 
+         JOIN projects p ON peb.project_id = p.id 
+         WHERE p.organization_id = '$ORG_ID'
+     )"
+
+echo ""
+echo -e "${GREEN}Step 7: Export graph_runners${NC}"
 export_table_custom "graph_runners" \
     "SELECT gr.id, gr.created_at, gr.updated_at, gr.tag_version 
      FROM graph_runners gr 
@@ -138,7 +154,7 @@ export_table_custom "graph_runners" \
      )"
 
 echo ""
-echo -e "${GREEN}Step 6: Export component_instances${NC}"
+echo -e "${GREEN}Step 8: Export component_instances${NC}"
 export_table_custom "component_instances" \
     "SELECT ci.id, ci.component_id, ci.name, ci.ref, ci.tool_description_id, ci.created_at 
      FROM component_instances ci 
@@ -153,7 +169,7 @@ export_table_custom "component_instances" \
      )"
 
 echo ""
-echo -e "${GREEN}Step 7: Export project_env_binding${NC}"
+echo -e "${GREEN}Step 9: Export project_env_binding${NC}"
 export_table_custom "project_env_binding" \
     "SELECT peb.id, peb.project_id, peb.environment, peb.graph_runner_id, peb.created_at, peb.updated_at 
      FROM project_env_binding peb 
@@ -161,7 +177,7 @@ export_table_custom "project_env_binding" \
      WHERE p.organization_id = '$ORG_ID'"
 
 echo ""
-echo -e "${GREEN}Step 8: Export graph_runner_nodes${NC}"
+echo -e "${GREEN}Step 10: Export graph_runner_nodes${NC}"
 export_table_custom "graph_runner_nodes" \
     "SELECT grn.id, grn.node_id, grn.graph_runner_id, grn.node_type, grn.is_start_node, grn.created_at, grn.updated_at 
      FROM graph_runner_nodes grn 
@@ -171,7 +187,7 @@ export_table_custom "graph_runner_nodes" \
      WHERE p.organization_id = '$ORG_ID'"
 
 echo ""
-echo -e "${GREEN}Step 9: Export graph_runner_edges${NC}"
+echo -e "${GREEN}Step 11: Export graph_runner_edges${NC}"
 export_table_custom "graph_runner_edges" \
     "SELECT gre.id, gre.source_node_id, gre.target_node_id, gre.graph_runner_id, gre.\"order\", gre.created_at, gre.updated_at 
      FROM graph_runner_edges gre 
@@ -181,7 +197,7 @@ export_table_custom "graph_runner_edges" \
      WHERE p.organization_id = '$ORG_ID'"
 
 echo ""
-echo -e "${GREEN}Step 10: Export basic_parameters${NC}"
+echo -e "${GREEN}Step 12: Export basic_parameters${NC}"
 export_table_custom "basic_parameters" \
     "SELECT bp.id, bp.component_instance_id, bp.parameter_definition_id, bp.value, bp.organization_secret_id, bp.\"order\" 
      FROM basic_parameters bp 
@@ -193,7 +209,7 @@ export_table_custom "basic_parameters" \
      WHERE p.organization_id = '$ORG_ID'"
 
 echo ""
-echo -e "${GREEN}Step 11: Export port_mappings${NC}"
+echo -e "${GREEN}Step 13: Export port_mappings${NC}"
 export_table_custom "port_mappings" \
     "SELECT pm.id, pm.graph_runner_id, pm.source_instance_id, pm.source_port_definition_id, pm.target_instance_id, pm.target_port_definition_id, pm.dispatch_strategy 
      FROM port_mappings pm 
@@ -203,7 +219,7 @@ export_table_custom "port_mappings" \
      WHERE p.organization_id = '$ORG_ID'"
 
 echo ""
-echo -e "${GREEN}Step 12: Export component_sub_inputs${NC}"
+echo -e "${GREEN}Step 14: Export component_sub_inputs${NC}"
 export_table_custom "component_sub_inputs" \
     "SELECT csi.id, csi.parent_component_instance_id, csi.child_component_instance_id, csi.parameter_definition_id, csi.\"order\" 
      FROM component_sub_inputs csi 
