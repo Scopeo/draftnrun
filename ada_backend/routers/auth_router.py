@@ -384,7 +384,7 @@ def user_has_access_to_organization_or_verify_api_key(allowed_roles: set[str]):
                 verified_api_key = await verify_api_key_dependency(x_api_key=x_api_key, session=session)
                 if verified_api_key.organization_id != organization_id:
                     LOGGER.exception(
-                        "API Key is for organization %s, access to arganization %s denied",
+                        "API Key is for organization %s => access to organization %s denied",
                         verified_api_key.organization_id,
                         organization_id,
                     )
