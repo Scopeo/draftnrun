@@ -30,6 +30,8 @@ EOF
 
 echo "✓ All tables truncated"
 echo ""
-echo "Now run Alembic migrations:"
+echo "Now run Alembic migrations and seed database:"
+echo "  cd /home/ec2-user/draftnrun"
 echo "  make db-upgrade"
+echo "  make db-seed"
 
