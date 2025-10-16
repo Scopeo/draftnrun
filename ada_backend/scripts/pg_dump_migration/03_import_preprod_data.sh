@@ -118,7 +118,7 @@ import_table_with_conflict_handling "tool_descriptions" "id, name, description, 
 
 echo ""
 echo -e "${GREEN}Step 5: Import component_parameter_definitions (referenced by basic_parameters)${NC}"
-import_table_with_conflict_handling "component_parameter_definitions" "id, component_id, name, type, nullable, \"order\", default, ui_component, ui_component_properties, is_advanced"
+import_table_with_conflict_handling "component_parameter_definitions" "id, component_id, name, type, nullable, \"order\", \"default\", ui_component, ui_component_properties, is_advanced"
 
 echo ""
 echo -e "${GREEN}Step 6: Import graph_runners${NC}"
