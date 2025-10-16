@@ -141,6 +141,12 @@ class QAMigrationOrchestrator:
                     self._migrate_workflow_projects_two_step()
                 elif table == "agent_projects":
                     self._migrate_agent_projects_two_step()
+                elif table == "graph_runners":
+                    self._migrate_graph_runners_two_step()
+                elif table == "component_instances":
+                    self._migrate_component_instances_two_step()
+                elif table == "project_env_binding":
+                    self._migrate_project_env_binding_two_step()
                 else:
                     # Execute the query normally
                     self.db_manager.execute_preprod_query(query, (self.org_id,), fetch=False)
@@ -197,46 +203,121 @@ class QAMigrationOrchestrator:
     def _migrate_workflow_projects_two_step(self):
         """Migrate workflow projects using two-step approach."""
         logger.info("  Fetching workflow projects from staging...")
-        
+
         # Fetch workflow projects from staging
         staging_workflow_projects = self.db_manager.execute_staging_query(
             "SELECT wp.id FROM workflow_projects wp JOIN projects p ON wp.id = p.id WHERE p.organization_id = %s",
-            (self.org_id,)
+            (self.org_id,),
         )
-        
+
         logger.info(f"  Found {len(staging_workflow_projects)} workflow projects in staging")
-        
+
         # Insert each workflow project into preprod
         for wp in staging_workflow_projects:
             self.db_manager.execute_preprod_query(
-                "INSERT INTO workflow_projects (id) VALUES (%s)",
-                (wp['id'],),
-                fetch=False
+                "INSERT INTO workflow_projects (id) VALUES (%s)", (wp["id"],), fetch=False
             )
-        
+
         logger.info(f"  Inserted {len(staging_workflow_projects)} workflow projects into preprod")
 
     def _migrate_agent_projects_two_step(self):
         """Migrate agent projects using two-step approach."""
         logger.info("  Fetching agent projects from staging...")
-        
+
         # Fetch agent projects from staging
         staging_agent_projects = self.db_manager.execute_staging_query(
             "SELECT ap.id FROM agent_projects ap JOIN projects p ON ap.id = p.id WHERE p.organization_id = %s",
-            (self.org_id,)
+            (self.org_id,),
         )
-        
+
         logger.info(f"  Found {len(staging_agent_projects)} agent projects in staging")
-        
+
         # Insert each agent project into preprod
         for ap in staging_agent_projects:
             self.db_manager.execute_preprod_query(
-                "INSERT INTO agent_projects (id) VALUES (%s)",
-                (ap['id'],),
+                "INSERT INTO agent_projects (id) VALUES (%s)", (ap["id"],), fetch=False
+            )
+
+        logger.info(f"  Inserted {len(staging_agent_projects)} agent projects into preprod")
+
+    def _migrate_graph_runners_two_step(self):
+        """Migrate graph runners using two-step approach."""
+        logger.info("  Fetching graph runners from staging...")
+        
+        # Fetch graph runners from staging
+        staging_graph_runners = self.db_manager.execute_staging_query(
+            """SELECT gr.id, gr.created_at, gr.updated_at, gr.tag_version 
+               FROM graph_runners gr 
+               JOIN project_env_binding peb ON gr.id = peb.graph_runner_id 
+               JOIN projects p ON peb.project_id = p.id 
+               WHERE p.organization_id = %s""",
+            (self.org_id,)
+        )
+        
+        logger.info(f"  Found {len(staging_graph_runners)} graph runners in staging")
+        
+        # Insert each graph runner into preprod
+        for gr in staging_graph_runners:
+            self.db_manager.execute_preprod_query(
+                "INSERT INTO graph_runners (id, created_at, updated_at, tag_version) VALUES (%s, %s, %s, %s)",
+                (gr['id'], gr['created_at'], gr['updated_at'], gr['tag_version']),
                 fetch=False
             )
         
-        logger.info(f"  Inserted {len(staging_agent_projects)} agent projects into preprod")
+        logger.info(f"  Inserted {len(staging_graph_runners)} graph runners into preprod")
+
+    def _migrate_component_instances_two_step(self):
+        """Migrate component instances using two-step approach."""
+        logger.info("  Fetching component instances from staging...")
+        
+        # Fetch component instances from staging
+        staging_component_instances = self.db_manager.execute_staging_query(
+            """SELECT ci.id, ci.component_id, ci.name, ci.ref, ci.tool_description_id, ci.created_at 
+               FROM component_instances ci 
+               JOIN graph_runner_nodes grn ON ci.id = grn.node_id 
+               JOIN graph_runners gr ON grn.graph_runner_id = gr.id 
+               JOIN project_env_binding peb ON gr.id = peb.graph_runner_id 
+               JOIN projects p ON peb.project_id = p.id 
+               WHERE p.organization_id = %s""",
+            (self.org_id,)
+        )
+        
+        logger.info(f"  Found {len(staging_component_instances)} component instances in staging")
+        
+        # Insert each component instance into preprod
+        for ci in staging_component_instances:
+            self.db_manager.execute_preprod_query(
+                "INSERT INTO component_instances (id, component_id, name, ref, tool_description_id, created_at) VALUES (%s, %s, %s, %s, %s, %s)",
+                (ci['id'], ci['component_id'], ci['name'], ci['ref'], ci['tool_description_id'], ci['created_at']),
+                fetch=False
+            )
+        
+        logger.info(f"  Inserted {len(staging_component_instances)} component instances into preprod")
+
+    def _migrate_project_env_binding_two_step(self):
+        """Migrate project environment bindings using two-step approach."""
+        logger.info("  Fetching project environment bindings from staging...")
+        
+        # Fetch project environment bindings from staging
+        staging_bindings = self.db_manager.execute_staging_query(
+            """SELECT peb.id, peb.project_id, peb.environment, peb.graph_runner_id, peb.created_at, peb.updated_at 
+               FROM project_env_binding peb 
+               JOIN projects p ON peb.project_id = p.id 
+               WHERE p.organization_id = %s""",
+            (self.org_id,)
+        )
+        
+        logger.info(f"  Found {len(staging_bindings)} project environment bindings in staging")
+        
+        # Insert each binding into preprod
+        for binding in staging_bindings:
+            self.db_manager.execute_preprod_query(
+                "INSERT INTO project_env_binding (id, project_id, environment, graph_runner_id, created_at, updated_at) VALUES (%s, %s, %s, %s, %s, %s)",
+                (binding['id'], binding['project_id'], binding['environment'], binding['graph_runner_id'], binding['created_at'], binding['updated_at']),
+                fetch=False
+            )
+        
+        logger.info(f"  Inserted {len(staging_bindings)} project environment bindings into preprod")
 
     def execute_core_data_migration(self) -> bool:
         """Execute core data migration (projects and polymorphic tables)."""
