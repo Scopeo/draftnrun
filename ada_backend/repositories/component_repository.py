@@ -267,7 +267,7 @@ def get_instance_parameters_with_definition(
         InstanceParameterWithDefinition(
             id=param_def.id,
             name=param_def.name,
-            value=param.get_value(),
+            value=param.value,
             type=param_def.type,
             nullable=param_def.nullable,
             default=param_def.default,
@@ -276,6 +276,7 @@ def get_instance_parameters_with_definition(
             is_advanced=param_def.is_advanced,
         )
         for param, param_def in results
+        if param_def.type not in [db.ParameterType.LLM_API_KEY]  # Hide sensitive parameter types
     ]
 
 
