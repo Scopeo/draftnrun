@@ -68,6 +68,37 @@ import_table() {
     echo -e "${GREEN}✓ Imported $row_count rows into $table${NC}"
 }
 
+# Function to import with conflict handling (using temp table)
+import_table_with_conflict_handling() {
+    local table=$1
+    local columns=$2
+    local tsv_file="$EXPORT_DIR/${table}.tsv"
+    
+    echo -e "${YELLOW}Importing $table (skipping duplicates)...${NC}"
+    
+    if [ ! -f "$tsv_file" ]; then
+        echo -e "${YELLOW}⚠ File not found: $tsv_file (skipping)${NC}"
+        return
+    fi
+    
+    local row_count=$(wc -l < "$tsv_file")
+    
+    if [ "$row_count" -eq 0 ]; then
+        echo -e "${YELLOW}⚠ No data to import for $table${NC}"
+        return
+    fi
+    
+    # Create temp table, import, then insert with ON CONFLICT
+    psql "$PREPROD_URL" > /dev/null <<EOF
+CREATE TEMP TABLE temp_${table} (LIKE ${table} INCLUDING ALL);
+\COPY temp_${table} ($columns) FROM '$tsv_file' WITH (FORMAT text, DELIMITER E'\t')
+INSERT INTO ${table} SELECT * FROM temp_${table} ON CONFLICT DO NOTHING;
+DROP TABLE temp_${table};
+EOF
+    
+    echo -e "${GREEN}✓ Imported $row_count rows into $table (skipped duplicates)${NC}"
+}
+
 # Import tables in correct order for referential integrity
 echo ""
 echo -e "${GREEN}Step 1: Import projects (base table)${NC}"
@@ -83,7 +114,7 @@ import_table "agent_projects" "id"
 
 echo ""
 echo -e "${GREEN}Step 4: Import tool_descriptions (referenced by component_instances)${NC}"
-import_table "tool_descriptions" "id, name, description, tool_properties, required_tool_properties, created_at, updated_at"
+import_table_with_conflict_handling "tool_descriptions" "id, name, description, tool_properties, required_tool_properties, created_at, updated_at"
 
 echo ""
 echo -e "${GREEN}Step 5: Import graph_runners${NC}"
