@@ -1,16 +1,20 @@
-import pymupdf4llm
+import logging
 import tempfile
 import urllib.request
 import urllib.parse
 import os
-from pathlib import Path
 from typing import Any
+
+from pathlib import Path
+import pymupdf4llm
 
 from engine.agent.agent import Agent
 from engine.agent.types import AgentPayload, ChatMessage, ToolDescription, ComponentAttributes
 from engine.trace.trace_manager import TraceManager
 from engine.temps_folder_utils import get_output_dir
 
+
+LOGGER = logging.getLogger(__name__)
 
 DEFAULT_PDF_PARSING_TOOL_DESCRIPTION = ToolDescription(
     name="PDF Parsing Tool",
@@ -36,10 +40,15 @@ class PDFParsingTool(Agent):
         )
 
     async def _run_without_io_trace(self, *inputs: AgentPayload, **kwargs: Any) -> AgentPayload:
+        file_bytes = kwargs.get("file_bytes")
+        if file_bytes:
+            LOGGER.info("Parsing PDF from bytes")
+            md_text = pymupdf4llm.to_markdown(file_bytes)
+            return AgentPayload(messages=[ChatMessage(role="assistant", content=md_text)])
+
         file_input = kwargs.get("file_input")
         if not file_input:
             return AgentPayload(messages=[ChatMessage(role="assistant", content="No file input provided")])
-
         temp_file_path = None
         try:
             if self.is_url(file_input):
@@ -60,6 +69,7 @@ class PDFParsingTool(Agent):
             return AgentPayload(messages=[ChatMessage(role="assistant", content=md_text)])
 
         except Exception as e:
+            LOGGER.error(f"Error parsing PDF: {e}")
             return AgentPayload(messages=[ChatMessage(role="assistant", content=f"Error parsing PDF: {e}")])
         finally:
             if temp_file_path and temp_file_path.exists():

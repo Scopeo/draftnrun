@@ -82,22 +82,18 @@ def load_llms_services():
             trace_manager=TraceManager(project_name="ingestion"),
         )
 
-    # TODO: add the selection at the user level via Front
+    return vision_completion_service, fallback_vision_llm_service
+
+
+def load_embedding_service():
     if settings.INGESTION_VIA_CUSTOM_MODEL:
-        embedding_service = get_first_available_embeddings_custom_llm()
-        if embedding_service is None:
-            raise ValueError(
-                "No custom embedding model found. Please set up a custom model for ingestion"
-                "or check that your providers for custom llm are unique."
-            )
+        return get_first_available_embeddings_custom_llm()
     else:
-        embedding_service = EmbeddingService(
+        return EmbeddingService(
             provider="openai",
             model_name="text-embedding-3-large",
             trace_manager=TraceManager(project_name="ingestion"),
         )
-
-    return vision_completion_service, fallback_vision_llm_service, embedding_service
 
 
 async def sync_chunks_to_qdrant(
@@ -190,10 +186,24 @@ async def _ingest_folder_source(
         source_type=source_type,
         status=db.TaskStatus.FAILED,
     )
+    if settings.USE_LLM_FOR_PDF_PARSING:
+        try:
+            vision_completion_service, fallback_vision_llm_service = load_llms_services()
+        except ValueError as e:
+            LOGGER.error(f"Failed to load LLM services: {str(e)}")
+            update_ingestion_task(
+                organization_id=organization_id,
+                ingestion_task=ingestion_task,
+            )
+            return
+    else:
+        vision_completion_service = None
+        fallback_vision_llm_service = None
+
     try:
-        vision_completion_service, fallback_vision_llm_service, embedding_service = load_llms_services()
+        embedding_service = load_embedding_service()
     except ValueError as e:
-        LOGGER.error(f"Failed to load LLM services: {str(e)}")
+        LOGGER.error(f"Failed to load embedding service: {str(e)}")
         update_ingestion_task(
             organization_id=organization_id,
             ingestion_task=ingestion_task,
@@ -251,6 +261,7 @@ async def _ingest_folder_source(
             llm_service=fallback_vision_llm_service,
             get_file_content_func=folder_manager.get_file_content,
             chunk_size=chunk_size,
+            use_llm_for_pdf=settings.USE_LLM_FOR_PDF_PARSING,
         )
     except Exception as e:
         LOGGER.error(f"Failed to chunk documents: {str(e)}")
