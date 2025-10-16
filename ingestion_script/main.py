@@ -46,12 +46,16 @@ async def ingestion_main_async(
 ):
 
     set_trace_manager(TraceManager(project_name="Ingestion"))
+    session = SessionLocal()
+    try:
+        organization_llm_providers = get_organization_llm_providers(session=session, organization_id=organization_id)
+    finally:
+        session.close()
+
     set_tracing_span(
         project_id="None",
         organization_id=organization_id,
-        organization_llm_providers=get_organization_llm_providers(
-            session=SessionLocal(), organization_id=organization_id
-        ),
+        organization_llm_providers=organization_llm_providers,
     )
     chunk_size = source_attributes.get("chunk_size")
     if chunk_size is None:

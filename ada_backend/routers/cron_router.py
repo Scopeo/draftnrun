@@ -62,8 +62,8 @@ def get_organization_cron_jobs(
     try:
         return get_cron_jobs_for_organization(session, organization_id, enabled_only)
     except Exception as e:
-        LOGGER.error(f"Error fetching cron jobs for organization {organization_id}: {e}")
-        raise HTTPException(status_code=500, detail="Internal Server Error") from e
+        LOGGER.error(f"Failed to fetch cron jobs for organization {organization_id}: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @router.get("/{organization_id}/{cron_id}", response_model=CronJobWithRuns)
@@ -91,8 +91,8 @@ def get_cron_job_details(
     except CronJobAccessDenied as e:
         raise HTTPException(status_code=403, detail=str(e)) from e
     except Exception as e:
-        LOGGER.error(f"Error fetching cron job {cron_id}: {e}")
-        raise HTTPException(status_code=500, detail="Internal Server Error") from e
+        LOGGER.error(f"Failed to fetch cron job {cron_id} for organization {organization_id}: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @router.post("/{organization_id}", response_model=CronJobResponse, status_code=201)
@@ -118,8 +118,8 @@ def create_organization_cron_job(
     except CronSchedulerError as e:
         raise HTTPException(status_code=502, detail=str(e)) from e
     except Exception as e:
-        LOGGER.error(f"Error creating cron job for organization {organization_id}: {e}")
-        raise HTTPException(status_code=500, detail="Internal Server Error") from e
+        LOGGER.error(f"Failed to create cron job for organization {organization_id}: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @router.patch("/{organization_id}/{cron_id}", response_model=CronJobResponse)
@@ -149,8 +149,10 @@ def update_organization_cron_job(
     except CronValidationError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
-        LOGGER.error(f"Error updating cron job {cron_id}: {e}")
-        raise HTTPException(status_code=500, detail="Internal Server Error") from e
+        LOGGER.error(
+            f"Failed to update cron job {cron_id} for organization {organization_id}: {str(e)}", exc_info=True
+        )
+        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @router.delete("/{organization_id}/{cron_id}", response_model=CronJobDeleteResponse)
@@ -179,8 +181,10 @@ def delete_organization_cron_job(
     except CronJobAccessDenied as e:
         raise HTTPException(status_code=403, detail=str(e)) from e
     except Exception as e:
-        LOGGER.error(f"Error deleting cron job {cron_id}: {e}")
-        raise HTTPException(status_code=500, detail="Internal Server Error") from e
+        LOGGER.error(
+            f"Failed to delete cron job {cron_id} for organization {organization_id}: {str(e)}", exc_info=True
+        )
+        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @router.post("/{organization_id}/{cron_id}/pause", response_model=CronJobPauseResponse)
@@ -209,8 +213,8 @@ def pause_organization_cron_job(
     except CronJobAccessDenied as e:
         raise HTTPException(status_code=403, detail=str(e)) from e
     except Exception as e:
-        LOGGER.error(f"Error pausing cron job {cron_id}: {e}")
-        raise HTTPException(status_code=500, detail="Internal Server Error") from e
+        LOGGER.error(f"Failed to pause cron job {cron_id} for organization {organization_id}: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @router.post("/{organization_id}/{cron_id}/resume", response_model=CronJobPauseResponse)
@@ -239,8 +243,10 @@ def resume_organization_cron_job(
     except CronJobAccessDenied as e:
         raise HTTPException(status_code=403, detail=str(e)) from e
     except Exception as e:
-        LOGGER.error(f"Error resuming cron job {cron_id}: {e}")
-        raise HTTPException(status_code=500, detail="Internal Server Error") from e
+        LOGGER.error(
+            f"Failed to resume cron job {cron_id} for organization {organization_id}: {str(e)}", exc_info=True
+        )
+        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @router.get("/{organization_id}/{cron_id}/runs", response_model=CronRunListResponse)
@@ -269,5 +275,7 @@ def get_cron_job_runs(
     except CronJobAccessDenied as e:
         raise HTTPException(status_code=403, detail=str(e)) from e
     except Exception as e:
-        LOGGER.error(f"Error fetching runs for cron job {cron_id}: {e}")
-        raise HTTPException(status_code=500, detail="Internal Server Error") from e
+        LOGGER.error(
+            f"Failed to fetch runs for cron job {cron_id} for organization {organization_id}: {str(e)}", exc_info=True
+        )
+        raise HTTPException(status_code=500, detail="Internal server error") from e

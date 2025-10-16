@@ -191,7 +191,7 @@ def cast_value(
     parameter_type: ParameterType,
     unresolved_value: str,
 ) -> str | int | float | bool | dict:
-    if parameter_type != ParameterType.STRING and (unresolved_value == "None" or unresolved_value is None):
+    if unresolved_value is None or unresolved_value == "None" or unresolved_value == "null":
         return None
     if parameter_type == ParameterType.STRING:
         return unresolved_value
@@ -889,6 +889,14 @@ class ProjectEnvironmentBinding(Base):
     project = relationship("Project", back_populates="envs")
     graph_runner = relationship("GraphRunner")
 
+    __table_args__ = (
+        sa.UniqueConstraint(
+            "project_id",
+            "environment",
+            name="uq_project_environment",
+        ),
+    )
+
 
 class OrganizationSecret(Base):
     """
@@ -1196,7 +1204,10 @@ class DatasetProject(Base):
 
 class VersionOutput(Base):
     __tablename__ = "version_output"
-    __table_args__ = {"schema": "quality_assurance"}
+    __table_args__ = (
+        sa.UniqueConstraint("input_id", "graph_runner_id", name="uq_version_output_input_graph_runner"),
+        {"schema": "quality_assurance"},
+    )
 
     id = mapped_column(UUID(as_uuid=True), primary_key=True, index=True, server_default=func.gen_random_uuid())
     input_id = mapped_column(
@@ -1206,12 +1217,18 @@ class VersionOutput(Base):
         index=True,
     )
     output = mapped_column(String, nullable=False)
-    version = mapped_column(make_pg_enum(EnvType), nullable=False)  # Changed from version_id to version using EnvType
+    graph_runner_id = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("graph_runners.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
     created_at = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     # Relationships
     input_groundtruth = relationship("InputGroundtruth", back_populates="version_outputs")
+    graph_runner = relationship("GraphRunner")
 
     def __str__(self):
-        return f"VersionOutput(id={self.id}, input_id={self.input_id}, version={self.version})"
+        return f"VersionOutput(id={self.id}, input_id={self.input_id}, graph_runner_id={self.graph_runner_id})"

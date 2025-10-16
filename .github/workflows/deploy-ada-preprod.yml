@@ -26,10 +26,29 @@ jobs:
                   key: ${{ secrets.SSH_PRIVATE_KEY }}
                   port: 22
                   script: |
+                      set -e
                       cd /home/ec2-user/draftnrun
                       git remote set-url origin git@github.com:scopeo/draftnrun.git
-                      git reset --hard HEAD
-                      git pull origin ${{ inputs.git_ref }}
+
+                      # Fetch all branches and tags from origin
+                      git fetch --all --tags --prune
+
+                      # Resolve the provided ref to a concrete target (branch, tag, or commit)
+                      REF="${{ inputs.git_ref }}"
+                      if git rev-parse --verify --quiet "origin/${REF}" >/dev/null; then
+                          TARGET="origin/${REF}"
+                      elif git rev-parse --verify --quiet "refs/tags/${REF}" >/dev/null; then
+                          TARGET="refs/tags/${REF}"
+                      elif git rev-parse --verify --quiet "${REF}" >/dev/null; then
+                          TARGET="${REF}"
+                      else
+                          echo "Ref '${REF}' not found on remote or locally" >&2
+                          exit 1
+                      fi
+
+                      # Force checkout into a throwaway local branch to avoid merges/conflicts
+                      git checkout --force -B preprod-deploy "${TARGET}"
+                      git clean -fd
 
             - name: SSH Remote Commands
               uses: appleboy/ssh-action@master

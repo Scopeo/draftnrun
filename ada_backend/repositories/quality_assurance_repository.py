@@ -3,9 +3,9 @@ from typing import List, Optional, Tuple
 from uuid import UUID
 
 from sqlalchemy.orm import Session
-from sqlalchemy import func, and_
+from sqlalchemy import func
 
-from ada_backend.database.models import InputGroundtruth, DatasetProject, VersionOutput, EnvType
+from ada_backend.database.models import InputGroundtruth, DatasetProject, VersionOutput
 from ada_backend.schemas.input_groundtruth_schema import InputGroundtruthCreate
 
 LOGGER = logging.getLogger(__name__)
@@ -37,81 +37,12 @@ def get_inputs_groundtruths_by_ids(
     return session.query(InputGroundtruth).filter(InputGroundtruth.id.in_(input_ids)).all()
 
 
-def get_inputs_groundtruths_with_version_outputs(
-    session: Session,
-    dataset_id: UUID,
-    version: Optional[EnvType] = None,
-    skip: int = 0,
-    limit: int = 100,
-) -> List[Tuple[InputGroundtruth, Optional[VersionOutput]]]:
-    """
-    Get input-groundtruth entries for a dataset with their version outputs.
-
-    - If version is specified: Uses INNER JOIN to only return inputs that have outputs for that version
-    - If version is None: Uses LEFT JOIN to return all inputs with their outputs (if any)
-
-    Args:
-        session: SQLAlchemy session
-        dataset_id: ID of the dataset
-        version: Optional version filter (draft or production)
-        skip: Number of records to skip
-        limit: Maximum number of records to return
-
-    Returns:
-        List of tuples containing (InputGroundtruth, VersionOutput or None)
-    """
-    if version is not None:
-        # Use INNER JOIN when filtering by version - only return inputs that have outputs for that version
-        query = (
-            session.query(InputGroundtruth, VersionOutput)
-            .join(
-                VersionOutput,
-                and_(
-                    InputGroundtruth.id == VersionOutput.input_id,
-                    VersionOutput.version == version,
-                ),
-            )
-            .filter(InputGroundtruth.dataset_id == dataset_id)
-            .order_by(InputGroundtruth.created_at.desc())
-            .offset(skip)
-            .limit(limit)
-        )
-    else:
-        # Use LEFT JOIN when no version filter - return all inputs with their outputs (if any)
-        query = (
-            session.query(InputGroundtruth, VersionOutput)
-            .outerjoin(
-                VersionOutput,
-                InputGroundtruth.id == VersionOutput.input_id,
-            )
-            .filter(InputGroundtruth.dataset_id == dataset_id)
-            .order_by(InputGroundtruth.created_at.desc())
-            .offset(skip)
-            .limit(limit)
-        )
-
-    return query.all()
-
-
 def get_inputs_groundtruths_count_by_dataset(
     session: Session,
     dataset_id: UUID,
 ) -> int:
     """Get total count of input-groundtruth entries for a dataset."""
     return session.query(func.count(InputGroundtruth.id)).filter(InputGroundtruth.dataset_id == dataset_id).scalar()
-
-
-def get_inputs_groundtruths_with_pagination(
-    session: Session,
-    dataset_id: UUID,
-    page: int = 1,
-    size: int = 100,
-) -> tuple[List[InputGroundtruth], int]:
-    """Get input-groundtruth entries with pagination and total count."""
-    skip = (page - 1) * size
-    inputs_groundtruths = get_inputs_groundtruths_by_dataset(session, dataset_id, skip, size)
-    total_count = get_inputs_groundtruths_count_by_dataset(session, dataset_id)
-    return inputs_groundtruths, total_count
 
 
 def create_inputs_groundtruths(
@@ -192,17 +123,16 @@ def upsert_version_output(
     session: Session,
     input_id: UUID,
     output: str,
-    version: EnvType,
+    graph_runner_id: UUID,
 ) -> VersionOutput:
-    """Create or update a version output entry for the given input and version.
+    """Create or update a version output entry for the given input and graph_runner_id.
 
-    If a `VersionOutput` for the `(input_id, version)` pair exists, update its `output`.
+    If a `VersionOutput` for the `(input_id, graph_runner_id)` pair exists, update its `output`.
     Otherwise, create a new one.
     """
-    # Find existing version output for this input and version
     existing: Optional[VersionOutput] = (
         session.query(VersionOutput)
-        .filter(VersionOutput.input_id == input_id, VersionOutput.version == version)
+        .filter(VersionOutput.input_id == input_id, VersionOutput.graph_runner_id == graph_runner_id)
         .first()
     )
 
@@ -210,66 +140,45 @@ def upsert_version_output(
         existing.output = output
         session.commit()
         session.refresh(existing)
-        LOGGER.info(f"Updated version output for input {input_id} and version {version}")
+        LOGGER.info(f"Updated version output for input {input_id} and graph_runner_id {graph_runner_id}")
         return existing
 
     version_output = VersionOutput(
         input_id=input_id,
         output=output,
-        version=version,
+        graph_runner_id=graph_runner_id,
     )
 
     session.add(version_output)
     session.commit()
     session.refresh(version_output)
 
-    LOGGER.info(f"Created version output for input {input_id} and version {version}")
+    LOGGER.info(f"Created version output for input {input_id} and graph_runner_id {graph_runner_id}")
     return version_output
 
 
-def upsert_version_outputs(
+def get_outputs_by_graph_runner(
     session: Session,
-    version_outputs_data: List[Tuple[UUID, str, EnvType]],
-) -> List[VersionOutput]:
-    """Create or update multiple version output entries.
+    dataset_id: UUID,
+    graph_runner_id: UUID,
+) -> List[Tuple[UUID, str]]:
+    """Get outputs for a specific graph_runner.
 
-    For each tuple `(input_id, output, version)`, update the existing row matching
-    `(input_id, version)`, or create it if missing.
+    Args:
+        session: SQLAlchemy session
+        dataset_id: ID of the dataset
+        graph_runner_id: ID of the graph runner
+
+    Returns:
+        List of tuples (input_id, output)
     """
-    results: List[VersionOutput] = []
+    results = (
+        session.query(VersionOutput.input_id, VersionOutput.output)
+        .join(InputGroundtruth, InputGroundtruth.id == VersionOutput.input_id)
+        .filter(InputGroundtruth.dataset_id == dataset_id, VersionOutput.graph_runner_id == graph_runner_id)
+        .all()
+    )
 
-    # Perform upserts one by one to respect existing code style and simplicity
-    for input_id, output, version in version_outputs_data:
-        existing: Optional[VersionOutput] = (
-            session.query(VersionOutput)
-            .filter(VersionOutput.input_id == input_id, VersionOutput.version == version)
-            .first()
-        )
-
-        if existing:
-            existing.output = output
-            results.append(existing)
-        else:
-            results.append(
-                VersionOutput(
-                    input_id=input_id,
-                    output=output,
-                    version=version,
-                )
-            )
-
-    # Separate creations from updates for a single commit
-    to_create = [vo for vo in results if vo.id is None]
-    if to_create:
-        session.add_all(to_create)
-
-    session.commit()
-
-    # Refresh all objects to ensure we return persisted instances with IDs
-    for vo in results:
-        session.refresh(vo)
-
-    LOGGER.info(f"Upserted {len(results)} version output entries")
     return results
 
 
@@ -289,7 +198,6 @@ def clear_version_outputs_for_input_ids(
     if not input_ids:
         return 0
 
-    # Set output to empty string for all versions (draft/production) for those inputs
     updated_count = (
         session.query(VersionOutput)
         .filter(VersionOutput.input_id.in_(input_ids))

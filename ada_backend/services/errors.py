@@ -47,3 +47,10 @@ class GraphNotFound(Exception):
     def __init__(self, graph_id: UUID):
         self.graph_id = graph_id
         super().__init__(f"Graph not found: {graph_id}")
+
+
+class EnvironmentNotFound(Exception):
+    def __init__(self, project_id: UUID, environment: str):
+        self.project_id = project_id
+        self.environment = environment
+        super().__init__(f"Environment '{environment}' not found for project: {project_id}")

@@ -10,7 +10,7 @@ from ada_backend.database.models import EnvType, OrgSecretType, CallType
 from ada_backend.repositories.edge_repository import get_edges
 from ada_backend.schemas.project_schema import ChatResponse
 from ada_backend.services.agent_builder_service import instantiate_component
-from ada_backend.services.errors import ProjectNotFound
+from ada_backend.services.errors import ProjectNotFound, EnvironmentNotFound
 from engine.graph_runner.graph_runner import GraphRunner
 from ada_backend.repositories.graph_runner_repository import (
     get_component_nodes,
@@ -124,7 +124,7 @@ async def run_env_agent(
 ) -> ChatResponse:
     graph_runner = get_graph_runner_for_env(session=session, project_id=project_id, env=env)
     if not graph_runner:
-        raise ValueError(f"{env} graph runner not found for project {project_id}.")
+        raise EnvironmentNotFound(project_id, env.value)
     return await run_agent(
         session=session,
         project_id=project_id,
@@ -146,6 +146,8 @@ async def run_agent(
     tag_version: Optional[str] = None,
 ) -> ChatResponse:
     project_details = get_project_with_details(session, project_id=project_id)
+    if not project_details:
+        raise ProjectNotFound(project_id)
     agent = await get_agent_for_project(
         session,
         project_id=project_id,

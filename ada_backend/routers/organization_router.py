@@ -40,13 +40,11 @@ def get_secret_keys(
     try:
         return get_secret_keys_service(sqlaclhemy_db_session, organization_id)
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
+        LOGGER.error(f"Failed to get organization secrets for organization {organization_id}: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=400, detail="Bad request") from e
     except Exception as e:
-        LOGGER.exception(
-            "Failed to get organization secrets for org %s",
-            organization_id,
-        )
-        raise HTTPException(status_code=500, detail="Internal Server Error") from e
+        LOGGER.error(f"Failed to get organization secrets for organization {organization_id}: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @router.put(
@@ -69,14 +67,15 @@ async def add_or_update_secret_to_organization(
     try:
         return await upsert_secret_to_org_service(sqlaclhemy_db_session, organization_id, secret_key, secret)
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
-    except Exception as e:
-        LOGGER.exception(
-            "Failed to upsert organization secret %s for org %s",
-            secret_key,
-            organization_id,
+        LOGGER.error(
+            f"Failed to upsert secret {secret_key} for organization {organization_id}: {str(e)}", exc_info=True
         )
-        raise HTTPException(status_code=500, detail="Internal Server Error") from e
+        raise HTTPException(status_code=400, detail="Bad request") from e
+    except Exception as e:
+        LOGGER.error(
+            f"Failed to upsert secret {secret_key} for organization {organization_id}: {str(e)}", exc_info=True
+        )
+        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @router.delete(
@@ -98,11 +97,12 @@ def delete_secret_from_organization(
     try:
         return delete_secret_to_org_service(sqlaclhemy_db_session, organization_id, secret_key)
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
-    except Exception as e:
-        LOGGER.exception(
-            "Failed to delete organization secret %s for org %s",
-            secret_key,
-            organization_id,
+        LOGGER.error(
+            f"Failed to delete secret {secret_key} for organization {organization_id}: {str(e)}", exc_info=True
         )
-        raise HTTPException(status_code=500, detail="Internal Server Error") from e
+        raise HTTPException(status_code=400, detail="Bad request") from e
+    except Exception as e:
+        LOGGER.error(
+            f"Failed to delete secret {secret_key} for organization {organization_id}: {str(e)}", exc_info=True
+        )
+        raise HTTPException(status_code=500, detail="Internal server error") from e
