@@ -36,56 +36,50 @@ def clear_ids_for_new_creation(graph_data):
     # Clear component instance IDs
     for instance in graph_data.component_instances:
         instance.id = None
-    
+
     # Clear relationship IDs and instance references
     for relationship in graph_data.relationships:
         relationship.parent_component_instance_id = None
         relationship.child_component_instance_id = None
-    
+
     # Clear edge IDs and node references
     for edge in graph_data.edges:
         edge.id = None
         edge.origin = None  # Will be set by the service
         edge.destination = None
-    
+
     # Clear port mapping instance references
     for port_mapping in graph_data.port_mappings:
         port_mapping.source_instance_id = None
         port_mapping.target_instance_id = None
-    
+
     return graph_data
 
 
-def copy_qa_projects_get_put(
-    organization_id: UUID,
-    staging_db_url: str,
-    preprod_db_url: str
-) -> None:
+def copy_qa_projects_get_put(organization_id: UUID, staging_db_url: str, preprod_db_url: str) -> None:
     """Copy QA projects from staging to preprod using GET → PUT approach"""
-    
+
     # Create database connections
     staging_engine = create_engine(staging_db_url)
     preprod_engine = create_engine(preprod_db_url)
-    
+
     StagingSession = sessionmaker(bind=staging_engine)
     PreprodSession = sessionmaker(bind=preprod_engine)
-    
+
     staging_session = StagingSession()
     preprod_session = PreprodSession()
-    
+
     try:
         # Get all projects for the organization from staging
-        staging_projects = staging_session.query(Project).filter(
-            Project.organization_id == organization_id
-        ).all()
-        
+        staging_projects = staging_session.query(Project).filter(Project.organization_id == organization_id).all()
+
         print(f"📦 Found {len(staging_projects)} projects to copy from staging")
-        
+
         copied_count = 0
-        
+
         for project in staging_projects:
             print(f"  📝 Copying project: {project.name} ({project.id})")
-            
+
             try:
                 # Create the project in preprod
                 new_project = Project(
@@ -93,33 +87,33 @@ def copy_qa_projects_get_put(
                     name=project.name,
                     type=project.type,
                     description=project.description,
-                    organization_id=organization_id
+                    organization_id=organization_id,
                 )
                 preprod_session.add(new_project)
                 preprod_session.flush()  # Get the new project ID
-                
+
                 # Get environment bindings for this project
-                env_bindings = staging_session.query(ProjectEnvironmentBinding).filter(
-                    ProjectEnvironmentBinding.project_id == project.id
-                ).all()
-                
+                env_bindings = (
+                    staging_session.query(ProjectEnvironmentBinding)
+                    .filter(ProjectEnvironmentBinding.project_id == project.id)
+                    .all()
+                )
+
                 for binding in env_bindings:
                     try:
                         print(f"    🔄 Copying graph runner {binding.graph_runner_id} for env {binding.environment}")
-                        
+
                         # Get the complete graph data from staging
                         graph_data = get_graph_service(
-                            session=staging_session,
-                            project_id=project.id,
-                            graph_runner_id=binding.graph_runner_id
+                            session=staging_session, project_id=project.id, graph_runner_id=binding.graph_runner_id
                         )
-                        
+
                         # Clear IDs so new ones can be generated
                         graph_data = clear_ids_for_new_creation(graph_data)
-                        
+
                         # Create new graph runner in preprod
                         new_graph_runner_id = uuid4()
-                        
+
                         # Use update_graph_service to create the complete graph
                         update_graph_service(
                             session=preprod_session,
@@ -129,31 +123,33 @@ def copy_qa_projects_get_put(
                                 component_instances=graph_data.component_instances,
                                 relationships=graph_data.relationships,
                                 edges=graph_data.edges,
-                                port_mappings=graph_data.port_mappings
+                                port_mappings=graph_data.port_mappings,
                             ),
                             env=binding.environment,
-                            bypass_validation=True  # Skip draft validation for migration
+                            bypass_validation=True,  # Skip draft validation for migration
                         )
-                        
-                        print(f"    ✅ Successfully copied graph runner {new_graph_runner_id} for env {binding.environment}")
-                        
+
+                        print(
+                            f"    ✅ Successfully copied graph runner {new_graph_runner_id} for env {binding.environment}"
+                        )
+
                     except Exception as e:
                         print(f"    ❌ Error copying graph runner {binding.graph_runner_id}: {e}")
                         continue
-                
+
                 # Commit the project and its graphs
                 preprod_session.commit()
                 print(f"  ✅ Successfully copied project: {project.name}")
                 copied_count += 1
-                
+
             except Exception as e:
                 print(f"  ❌ Error copying project {project.name}: {e}")
                 preprod_session.rollback()
                 continue
-        
+
         print(f"\n✅ Copy completed successfully!")
         print(f"📊 Copied {copied_count} out of {len(staging_projects)} projects")
-        
+
     except Exception as e:
         print(f"❌ Error during copy process: {e}")
         preprod_session.rollback()
@@ -168,19 +164,17 @@ def main():
     parser.add_argument("--organization-id", type=str, required=True, help="Organization UUID")
     parser.add_argument("--staging-db-url", type=str, required=True, help="Staging database URL")
     parser.add_argument("--preprod-db-url", type=str, required=True, help="Preprod database URL")
-    
+
     args = parser.parse_args()
-    
+
     try:
         organization_id = UUID(args.organization_id)
     except ValueError:
         print("❌ Invalid organization ID format. Must be a valid UUID.")
         return
-    
+
     copy_qa_projects_get_put(
-        organization_id=organization_id,
-        staging_db_url=args.staging_db_url,
-        preprod_db_url=args.preprod_db_url
+        organization_id=organization_id, staging_db_url=args.staging_db_url, preprod_db_url=args.preprod_db_url
     )
 
 
