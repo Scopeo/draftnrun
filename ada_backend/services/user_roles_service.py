@@ -54,6 +54,10 @@ async def get_user_access_to_organization(
     """
     Check if a user has access to an organization.
     """
+    # Offline mode bypass - always grant access with fixed role
+    if settings.OFFLINE_MODE:
+        return OrganizationAccess(org_id=organization_id, role=settings.OFFLINE_DEFAULT_ROLE)
+
     endpoint = f"{settings.SUPABASE_PROJECT_URL}/functions/v1/check-org-access"
     result = await _get_user_access(endpoint, user.token, "org_id", str(organization_id))
     identify_user_access_org(user.id, user.email, organization_id)
@@ -71,6 +75,10 @@ async def is_user_super_admin(user: SupabaseUser) -> bool:
     """
     Check global super admin status using the same Edge Function as the frontend.
     """
+    # Offline mode bypass - always return True
+    if settings.OFFLINE_MODE:
+        return True
+
     endpoint = f"{settings.SUPABASE_PROJECT_URL}/functions/v1/check-super-admin"
     headers = {
         "Authorization": f"Bearer {user.token}",
