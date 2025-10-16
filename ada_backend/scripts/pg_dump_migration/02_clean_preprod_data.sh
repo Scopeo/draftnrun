@@ -113,15 +113,7 @@ delete_from_table "graph_runner_nodes" \
     )"
 
 echo ""
-echo -e "${GREEN}Step 3: Delete project bindings${NC}"
-
-delete_from_table "project_env_binding" \
-    "project_id IN (
-        SELECT id FROM projects WHERE organization_id = '$ORG_ID'
-    )"
-
-echo ""
-echo -e "${GREEN}Step 4: Delete component instances${NC}"
+echo -e "${GREEN}Step 3: Delete component instances (before deleting bindings)${NC}"
 
 delete_from_table "component_instances" \
     "id IN (
@@ -134,7 +126,7 @@ delete_from_table "component_instances" \
     )"
 
 echo ""
-echo -e "${GREEN}Step 5: Delete graph runners${NC}"
+echo -e "${GREEN}Step 4: Delete graph runners (before deleting bindings)${NC}"
 
 delete_from_table "graph_runners" \
     "id IN (
@@ -142,6 +134,14 @@ delete_from_table "graph_runners" \
         JOIN project_env_binding peb ON gr.id = peb.graph_runner_id
         JOIN projects p ON peb.project_id = p.id
         WHERE p.organization_id = '$ORG_ID'
+    )"
+
+echo ""
+echo -e "${GREEN}Step 5: Delete project bindings${NC}"
+
+delete_from_table "project_env_binding" \
+    "project_id IN (
+        SELECT id FROM projects WHERE organization_id = '$ORG_ID'
     )"
 
 echo ""
