@@ -23,7 +23,7 @@ LOGGER = logging.getLogger(__name__)
 
 @router.post(
     "/organizations/{organization_id}/files/upload-urls",
-    summary="Get S3 Upload Presigned URLs, authentication via user or API key",
+    summary="Get S3 Upload Presigned URLs, authentication via user token or API key",
     response_model=list[S3UploadURL],
 )
 async def generate_s3_upload_presigned_urls_choice_auth(

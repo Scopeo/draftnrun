@@ -1,6 +1,5 @@
 import logging
 from typing import Annotated
-
 from uuid import UUID
 from enum import Enum
 
@@ -366,7 +365,9 @@ def user_has_access_to_organization_or_verify_api_key(allowed_roles: set[str]):
     ) -> tuple[UUID | None, UUID | None]:
         """Flexible authentication: tries user auth first, falls back to API key auth."""
 
-        # Try user authentication first
+        jwt_exception = "Nothing entered"
+        api_key_exception = "Nothing entered"
+
         if authorization and authorization.credentials:
             try:
                 user = await get_user_from_supabase_token(authorization)
@@ -374,23 +375,31 @@ def user_has_access_to_organization_or_verify_api_key(allowed_roles: set[str]):
                     organization_id=organization_id, user=user
                 )
                 return (user.id, None)
-            except HTTPException:
-                pass
+            except HTTPException as e:
+                LOGGER.exception("User token (JWT) is not valid")
+                jwt_exception = f"{e.detail}"
 
         if x_api_key:
             try:
                 verified_api_key = await verify_api_key_dependency(x_api_key=x_api_key, session=session)
                 if verified_api_key.organization_id != organization_id:
+                    LOGGER.exception(
+                        "API Key is for organization %s, access to arganization %s denied",
+                        verified_api_key.organization_id,
+                        organization_id,
+                    )
                     raise HTTPException(status_code=403, detail="You don't have access to this organization")
                 return (None, verified_api_key.api_key_id)
-            except HTTPException:
-                pass
+            except HTTPException as e:
+                LOGGER.exception("API Key is not valid")
+                api_key_exception = f"{e.detail}"
 
         raise HTTPException(
             status_code=401,
             detail=(
-                "Authentication required: provide either Authorization token or X-API-Key header, "
-                "or verify they are valid."
+                f"Authentication failed, one of the two must be valid:\n"
+                f"  - User token (JWT) : {jwt_exception}\n"
+                f"  - API Key : {api_key_exception}"
             ),
         )
 
