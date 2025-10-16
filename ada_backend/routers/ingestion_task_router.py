@@ -31,6 +31,7 @@ LOGGER = logging.getLogger(__name__)
 
 
 router = APIRouter(tags=["Ingestion Task"])
+LOGGER = logging.getLogger(__name__)
 
 
 @router.get("/ingestion_task/{organization_id}", response_model=List[IngestionTaskResponse])
@@ -75,6 +76,10 @@ def create_ingestion_task_choice_auth(
         )
         return task_id
     except Exception as e:
+        LOGGER.exception(
+            "Failed to create ingestion task for organization %s",
+            organization_id,
+        )
         raise HTTPException(status_code=500, detail="Internal Server Error") from e
 
 
