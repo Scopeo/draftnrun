@@ -37,26 +37,15 @@ LOGGER = logging.getLogger(__name__)
 
 
 def clear_ids_for_new_creation(graph_data):
-    """Clear IDs from graph data so new ones can be generated"""
-    # Clear component instance IDs
-    for instance in graph_data.component_instances:
-        instance.id = None
+    """Keep original IDs - no need to clear anything for direct copy"""
+    # Keep all the original IDs - we're doing a direct copy from staging to preprod
+    # The service will handle creating the records with the same IDs
 
-    # Clear relationship IDs and instance references
-    for relationship in graph_data.relationships:
-        relationship.parent_component_instance_id = None
-        relationship.child_component_instance_id = None
-
-    # Clear edge IDs and node references
+    # Only clear edge IDs since they reference nodes that will be recreated
     for edge in graph_data.edges:
         edge.id = None
         edge.origin = None  # Will be set by the service
         edge.destination = None
-
-    # Clear port mapping instance references
-    for port_mapping in graph_data.port_mappings:
-        port_mapping.source_instance_id = None
-        port_mapping.target_instance_id = None
 
     return graph_data
 
@@ -177,9 +166,11 @@ def main():
         print("❌ Invalid organization ID format. Must be a valid UUID.")
         return
 
-    asyncio.run(copy_qa_projects_get_put(
-        organization_id=organization_id, staging_db_url=args.staging_db_url, preprod_db_url=args.preprod_db_url
-    ))
+    asyncio.run(
+        copy_qa_projects_get_put(
+            organization_id=organization_id, staging_db_url=args.staging_db_url, preprod_db_url=args.preprod_db_url
+        )
+    )
 
 
 if __name__ == "__main__":
