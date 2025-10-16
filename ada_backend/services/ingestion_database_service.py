@@ -1,7 +1,7 @@
 from uuid import UUID
 
 from engine.storage_service.local_service import SQLLocalService
-from ada_backend.schemas.ingestion_database_management_schema import (
+from ada_backend.schemas.ingestion_database_schema import (
     PaginatedRowDataResponse,
     RowData,
     UpdateRowRequest,
@@ -33,7 +33,7 @@ def create_table_in_ingestion_db(
     return None
 
 
-def get_paginated_rows_from_ingestion_db(
+def get_paginated_chunks_from_ingestion_db(
     organization_id: UUID,
     source_name: str,
     page: int,
@@ -54,7 +54,7 @@ def get_paginated_rows_from_ingestion_db(
     )
 
 
-def update_row_in_ingestion_db(
+def update_chunk_info_in_ingestion_db(
     organization_id: UUID,
     source_name: str,
     chunk_id: str,
@@ -80,7 +80,7 @@ def update_row_in_ingestion_db(
     return RowData(data=updated_row, exists=True)
 
 
-def delete_rows_from_ingestion_db(
+def delete_chunks_from_ingestion_db(
     organization_id: UUID,
     source_name: str,
     chunk_ids: list[str],

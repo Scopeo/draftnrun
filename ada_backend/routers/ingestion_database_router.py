@@ -11,20 +11,20 @@ from ada_backend.routers.auth_router import (
     UserRights,
     SupabaseUser,
 )
-from ada_backend.schemas.ingestion_database_management_schema import (
+from ada_backend.schemas.ingestion_database_schema import (
     RowData,
     PaginatedRowDataResponse,
     UpdateRowRequest,
 )
-from ada_backend.services.ingestion_database_management_service import (
+from ada_backend.services.ingestion_database_service import (
     create_table_in_ingestion_db,
-    get_paginated_rows_from_ingestion_db,
-    update_row_in_ingestion_db,
-    delete_rows_from_ingestion_db,
+    get_paginated_chunks_from_ingestion_db,
+    update_chunk_info_in_ingestion_db,
+    delete_chunks_from_ingestion_db,
 )
 
 
-router = APIRouter(tags=["Ingestion Database Management"], prefix="/ingestion_database_management")
+router = APIRouter(tags=["Ingestion Database"], prefix="/ingestion_database")
 LOGGER = logging.getLogger(__name__)
 
 
@@ -45,7 +45,7 @@ def create_table_in_database(
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
-@router.get("/organizations/{organization_id}/sources/{source_name}/rows")
+@router.get("/organizations/{organization_id}/sources/{source_name}/chunks")
 def get_rows_in_database(
     organization_id: UUID,
     source_name: str,
@@ -58,7 +58,7 @@ def get_rows_in_database(
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
     try:
-        return get_paginated_rows_from_ingestion_db(organization_id, source_name, page, page_size)
+        return get_paginated_chunks_from_ingestion_db(organization_id, source_name, page, page_size)
     except Exception as e:
         LOGGER.exception(
             "Failed to get rows in database for organization %s, source %s",
@@ -68,7 +68,7 @@ def get_rows_in_database(
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
-@router.put("/organizations/{organization_id}/sources/{source_name}/rows/{chunk_id}")
+@router.put("/organizations/{organization_id}/sources/{source_name}/chunks/{chunk_id}")
 def update_row_in_database(
     organization_id: UUID,
     source_name: str,
@@ -81,7 +81,7 @@ def update_row_in_database(
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
     try:
-        return update_row_in_ingestion_db(organization_id, source_name, chunk_id, update_request)
+        return update_chunk_info_in_ingestion_db(organization_id, source_name, chunk_id, update_request)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
     except Exception as e:
@@ -107,7 +107,7 @@ def delete_row_in_database(
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
     try:
-        return delete_rows_from_ingestion_db(organization_id, source_name, chunk_ids, id_column_name)
+        return delete_chunks_from_ingestion_db(organization_id, source_name, chunk_ids, id_column_name)
     except Exception as e:
         LOGGER.exception(
             "Failed to delete rows in database for organization %s, source %s, chunk %s",
