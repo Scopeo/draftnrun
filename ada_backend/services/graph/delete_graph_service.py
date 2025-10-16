@@ -4,7 +4,11 @@ import logging
 from sqlalchemy.orm import Session
 
 from ada_backend.repositories.component_repository import delete_component_instances
-from ada_backend.repositories.graph_runner_repository import delete_graph_runner, get_component_nodes
+from ada_backend.repositories.graph_runner_repository import (
+    delete_graph_runner,
+    get_component_nodes,
+    graph_runner_exists,
+)
 
 LOGGER = logging.getLogger(__name__)
 
@@ -29,6 +33,11 @@ def delete_graph_runner_service(session: Session, graph_runner_id: UUID):
         session (Session): SQLAlchemy session.
         graph_runner_id (UUID): ID of the graph runner to delete.
     """
+    # Check if the graph runner exists
+    if not graph_runner_exists(session, graph_runner_id):
+        LOGGER.info(f"Graph runner {graph_runner_id} does not exist, already deleted")
+        return
+
     graph_nodes = get_component_nodes(session, graph_runner_id)
     delete_graph_runner(session, graph_runner_id)
 

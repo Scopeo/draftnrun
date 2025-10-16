@@ -2,7 +2,7 @@ from typing import Annotated
 import logging
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.orm import Session
 
 from ada_backend.repositories.project_repository import get_project
@@ -183,10 +183,8 @@ def delete_graph_runner_endpoint(
         raise HTTPException(status_code=400, detail="User ID not found")
     try:
         delete_graph_runner_service(session, graph_runner_id)
-        return {"message": f"Graph runner {graph_runner_id} deleted successfully"}
-    except ValueError as e:
-        LOGGER.error(f"Failed to delete graph runner {graph_runner_id}: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=400, detail="Bad request") from e
     except Exception as e:
         LOGGER.error(f"Failed to delete graph runner {graph_runner_id}: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Internal server error") from e
+        raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}") from e
+
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
