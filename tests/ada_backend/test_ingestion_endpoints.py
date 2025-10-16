@@ -86,12 +86,16 @@ def test_ingest_local_folder_source():
     assert isinstance(task_id, str)
     assert len(task_id) > 0
     set_trace_manager(TraceManager(project_name="Test Ingestion"))
+    session = SessionLocal()
+    try:
+        organization_llm_providers = get_organization_llm_providers(session=session, organization_id=ORGANIZATION_ID)
+    finally:
+        session.close()
+
     set_tracing_span(
         project_id="None",
         organization_id=ORGANIZATION_ID,
-        organization_llm_providers=get_organization_llm_providers(
-            session=SessionLocal(), organization_id=ORGANIZATION_ID
-        ),
+        organization_llm_providers=organization_llm_providers,
     )
 
     asyncio.run(

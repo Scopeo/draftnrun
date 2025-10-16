@@ -220,7 +220,10 @@ def test_get_put_roundtrip_port_mappings_migration():
 
     # Cleanup this graph runner and project
     session = SessionLocal()
-    delete_graph_runner(session, UUID(graph_runner_id))
+    try:
+        delete_graph_runner(session, UUID(graph_runner_id))
+    finally:
+        session.close()
     client.delete(f"/projects/{project_id}", headers=HEADERS_JWT)
 
 
@@ -450,6 +453,9 @@ def test_deploy_graph_copies_port_mappings():
 
     # Cleanup both graph runners and project
     session = SessionLocal()
-    delete_graph_runner(session, UUID(graph_runner_id))
-    delete_graph_runner(session, UUID(new_draft_graph_id))
+    try:
+        delete_graph_runner(session, UUID(graph_runner_id))
+        delete_graph_runner(session, UUID(new_draft_graph_id))
+    finally:
+        session.close()
     client.delete(f"/projects/{project_id}", headers=HEADERS_JWT)

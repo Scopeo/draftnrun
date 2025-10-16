@@ -283,8 +283,11 @@ def test_delete_graph_runner():
 
     # Now delete it
     session = SessionLocal()
-    graph_id = UUID(graph_runner_id)
-    delete_graph_runner(session, graph_id)
+    try:
+        graph_id = UUID(graph_runner_id)
+        delete_graph_runner(session, graph_id)
+    finally:
+        session.close()
 
     # Verify it's gone
     response = client.get(endpoint, headers=HEADERS_JWT)
