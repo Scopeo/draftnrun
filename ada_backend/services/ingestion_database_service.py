@@ -75,7 +75,6 @@ def update_chunk_info_in_ingestion_db(
         table_name=table_name,
         schema_name=schema_name,
         chunk_id=chunk_id,
-        id_column_name=update_request.id_column_name,
     )
     return ChunkData(data=updated_row)
 
@@ -84,7 +83,6 @@ def delete_chunks_from_ingestion_db(
     organization_id: UUID,
     source_name: str,
     chunk_ids: list[str],
-    id_column_name: str,
 ) -> None:
     sql_local_service = get_sql_local_service_for_ingestion()
     schema_name, table_name, qdrant_collection_name = get_sanitize_names(
@@ -95,6 +93,5 @@ def delete_chunks_from_ingestion_db(
         table_name=table_name,
         schema_name=schema_name,
         ids=chunk_ids,
-        id_column_name=id_column_name,
     )
     return None

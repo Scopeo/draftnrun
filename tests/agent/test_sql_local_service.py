@@ -68,12 +68,12 @@ def test_delete_rows_from_table(postgres_service, sample_table_definition):
     df = pd.DataFrame(
         [
             {
-                "id": 1,
+                "chunk_id": 1,
                 "name": "Alice",
                 "created_at": "2021-01-01 11:10:00",
             },
             {
-                "id": 2,
+                "chunk_id": 2,
                 "name": "Bob",
                 "created_at": "2021-01-01 11:10:00",
             },
@@ -81,7 +81,7 @@ def test_delete_rows_from_table(postgres_service, sample_table_definition):
     )
     postgres_service.insert_df_to_table(df, "test_table", schema_name=TEST_SCHEMA_NAME)
     postgres_service.delete_rows_from_table(
-        table_name="test_table", schema_name=TEST_SCHEMA_NAME, ids=[1], id_column_name="id"
+        table_name="test_table", schema_name=TEST_SCHEMA_NAME, ids=[1],
     )
     result_df = postgres_service.get_table_df("test_table", schema_name=TEST_SCHEMA_NAME)
     assert len(result_df) == 1

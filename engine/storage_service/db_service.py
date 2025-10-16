@@ -188,7 +188,6 @@ class DBService(ABC):
         self,
         table_name: str,
         ids: list[str | int],
-        id_column_name: str = "FILE_ID",
         schema_name: Optional[str] = None,
     ):
         pass
@@ -205,7 +204,6 @@ class DBService(ABC):
     def upsert_value(
         self,
         table_name: str,
-        id_column_name: str,
         id: str,
         values: dict,
         schema_name: Optional[str] = None,
@@ -218,7 +216,6 @@ class DBService(ABC):
         table_name: str,
         chunk_id: str,
         update_data: dict,
-        id_column_name: str,
         schema_name: Optional[str] = None,
     ) -> None:
         pass

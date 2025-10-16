@@ -31,6 +31,8 @@ TYPE_MAPPING: dict[str, Type[TypeEngine]] = {
 }
 DEFAULT_MAPPING = {"CURRENT_TIMESTAMP": sqlalchemy.func.current_timestamp()}
 
+CHUNK_ID_COLUMN_NAME = "chunk_id"
+
 
 class SQLLocalService(DBService):
     def __init__(self, engine_url: str, component_attributes: Optional[ComponentAttributes] = None):
@@ -307,12 +309,11 @@ class SQLLocalService(DBService):
         self,
         table_name: str,
         ids: list[str | int],
-        id_column_name: str = "FILE_ID",
         schema_name: Optional[str] = None,
     ):
         table = self.get_table(table_name, schema_name)
         with self.Session() as session:
-            delete_stmt = sqlalchemy.delete(table).where(table.c[id_column_name].in_(ids))
+            delete_stmt = sqlalchemy.delete(table).where(table.c[CHUNK_ID_COLUMN_NAME].in_(ids))
             session.execute(delete_stmt)
             session.commit()
 
@@ -371,7 +372,6 @@ class SQLLocalService(DBService):
         chunk_id: str,
         update_data: dict,
         schema_name: Optional[str] = None,
-        id_column_name: str = "chunk_id",
     ) -> None:
         """
         Update a specific row in the table by its chunk_id.
@@ -381,7 +381,7 @@ class SQLLocalService(DBService):
         with self.Session() as session:
             # Check if the row exists
             existing_record = session.execute(
-                sqlalchemy.select(table).where(table.c[id_column_name] == chunk_id)
+                sqlalchemy.select(table).where(table.c[CHUNK_ID_COLUMN_NAME] == chunk_id)
             ).scalar_one_or_none()
 
             if not existing_record:
@@ -445,15 +445,14 @@ class SQLLocalService(DBService):
         table_name: str,
         chunk_id: str,
         schema_name: Optional[str] = None,
-        id_column_name: str = "chunk_id",
     ) -> dict:
         table = self.get_table(table_name, schema_name)
         with self.Session() as session:
-            stmt = sqlalchemy.select(table).where(table.c[id_column_name] == chunk_id)
+            stmt = sqlalchemy.select(table).where(table.c[CHUNK_ID_COLUMN_NAME] == chunk_id)
             result = session.execute(stmt).fetchone()
 
             if result is None:
-                raise ValueError(f"Row with {id_column_name}='{chunk_id}' not found in table {table_name}")
+                raise ValueError(f"Row with {CHUNK_ID_COLUMN_NAME}='{chunk_id}' not found in table {table_name}")
 
             # Convert the SQLAlchemy Row to a dictionary
             row_dict = {}

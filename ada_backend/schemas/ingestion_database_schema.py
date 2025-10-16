@@ -16,4 +16,3 @@ class PaginatedChunkDataResponse(BaseModel):
 
 class UpdateChunk(BaseModel):
     update_data: Dict[str, Any]
-    id_column_name: str
