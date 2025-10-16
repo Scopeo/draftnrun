@@ -77,7 +77,7 @@ def update_chunk_info_in_ingestion_db(
         chunk_id=chunk_id,
         id_column_name=update_request.id_column_name,
     )
-    return ChunkData(data=updated_row, exists=True)
+    return ChunkData(data=updated_row)
 
 
 def delete_chunks_from_ingestion_db(
