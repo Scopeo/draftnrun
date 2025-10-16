@@ -75,7 +75,7 @@ class Retriever:
             input_data = f"Query: {query_text} \n"
             if filters:
                 input_data += f"Filters: {json.dumps(filters, separators=(',', ':'))}"
-            
+
             span.set_attributes(
                 {
                     SpanAttributes.OPENINFERENCE_SPAN_KIND: OpenInferenceSpanKindValues.RETRIEVER.value,
