@@ -34,16 +34,17 @@ def create_table_in_database(
     organization_id: UUID,
     source_name: str,
     table_definition: DBDefinition,
-) -> None:
+) -> tuple[str, DBDefinition]:
     try:
-        return create_table_in_ingestion_db(organization_id, source_name, table_definition)
+        table_name, table_definition = create_table_in_ingestion_db(organization_id, source_name, table_definition)
+        return table_name, table_definition
     except Exception as e:
         LOGGER.exception(
-            "Failed to create table in database for organization %s",
+            "Failed to create table in database for organization %s, source %s",
             organization_id,
+            source_name,
         )
         raise HTTPException(status_code=500, detail=str(e)) from e
-
 
 @router.get("/organizations/{organization_id}/ingestion_database/sources/{source_name}/chunks")
 def get_rows_in_database(

@@ -19,7 +19,7 @@ def create_table_in_ingestion_db(
     organization_id: UUID,
     source_name: str,
     table_definition: DBDefinition,
-) -> None:
+) -> tuple[str, DBDefinition]:
     sql_local_service = get_sql_local_service_for_ingestion()
     schema_name, table_name, qdrant_collection_name = get_sanitize_names(
         source_name=source_name,
@@ -30,7 +30,7 @@ def create_table_in_ingestion_db(
         table_definition=table_definition,
         schema_name=schema_name,
     )
-    return None
+    return table_name, table_definition
 
 
 def get_paginated_chunks_from_ingestion_db(
