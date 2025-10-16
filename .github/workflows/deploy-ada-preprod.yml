@@ -1,0 +1,76 @@
+name: Deploy Ada preprod and restart
+
+on:
+    workflow_dispatch:
+        inputs:
+            confirm:
+                description: "Are you sure you want to deploy to preprod?"
+                required: true
+                default: false
+                type: boolean
+            git_ref:
+                description: "Git reference to deploy (commit, branch, or tag)"
+                required: false
+                default: "main"
+                type: string
+
+jobs:
+    deploy:
+        runs-on: ubuntu-latest
+        steps:
+            - name: Connexion à EC2 et git pull
+              uses: appleboy/ssh-action@master
+              with:
+                  host: ${{ secrets.EC2_HOST_SCOPEO_PREPROD }}
+                  username: ec2-user
+                  key: ${{ secrets.SSH_PRIVATE_KEY }}
+                  port: 22
+                  script: |
+                      set -e
+                      cd /home/ec2-user/draftnrun
+                      git remote set-url origin git@github.com:scopeo/draftnrun.git
+
+                      # Fetch all branches and tags from origin
+                      git fetch --all --tags --prune
+
+                      # Resolve the provided ref to a concrete target (branch, tag, or commit)
+                      REF="${{ inputs.git_ref }}"
+                      if git rev-parse --verify --quiet "origin/${REF}" >/dev/null; then
+                          TARGET="origin/${REF}"
+                      elif git rev-parse --verify --quiet "refs/tags/${REF}" >/dev/null; then
+                          TARGET="refs/tags/${REF}"
+                      elif git rev-parse --verify --quiet "${REF}" >/dev/null; then
+                          TARGET="${REF}"
+                      else
+                          echo "Ref '${REF}' not found on remote or locally" >&2
+                          exit 1
+                      fi
+
+                      # Force checkout into a throwaway local branch to avoid merges/conflicts
+                      git checkout --force -B preprod-deploy "${TARGET}"
+                      git clean -fd
+
+            - name: SSH Remote Commands
+              uses: appleboy/ssh-action@master
+              with:
+                  host: ${{ secrets.EC2_HOST_SCOPEO_PREPROD }}
+                  username: ec2-user
+                  key: ${{ secrets.SSH_PRIVATE_KEY }}
+                  port: 22
+                  script: |
+                      set -e
+                      cd /home/ec2-user/draftnrun
+
+                      echo "📦 Install dependencies"
+                      pip install --upgrade uv
+                      uv sync
+
+                      echo "👁️ Re-setup the traces database"
+                      make trace-db-upgrade
+
+                      echo "🔄 Re-setup the database"
+                      make db-upgrade
+                      make db-seed
+
+                      echo "Reload Gunicorn with zero downtime"
+                      sudo systemctl restart gunicorn

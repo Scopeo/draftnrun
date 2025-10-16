@@ -182,7 +182,14 @@ def test_update_agent_service_builds_graph_and_calls_update(monkeypatch):
             called["user_id"] = args[4] if len(args) > 4 else None
         return GraphUpdateResponse(graph_id=called["graph_runner_id"])
 
+    def fake_create_or_update_component_instance(session_arg, tool, project_id):
+        # no-op, just validates arguments are passed
+        pass
+
     monkeypatch.setattr(agents_service, "update_graph_service", fake_update_graph_service)
+    monkeypatch.setattr(
+        agents_service, "create_or_update_component_instance", fake_create_or_update_component_instance
+    )
 
     res = asyncio.run(agents_service.update_agent_service(session, user_id, agent_id, graph_runner_id, agent_data))
 
