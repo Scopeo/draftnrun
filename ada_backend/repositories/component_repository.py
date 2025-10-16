@@ -267,7 +267,7 @@ def get_instance_parameters_with_definition(
         InstanceParameterWithDefinition(
             id=param_def.id,
             name=param_def.name,
-            value=param.value.get_value(),
+            value=param.get_value(),
             type=param_def.type,
             nullable=param_def.nullable,
             default=param_def.default,
