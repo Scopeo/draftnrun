@@ -6,7 +6,6 @@ from ada_backend.database import models as db
 from ada_backend.database.component_definition_seeding import upsert_tool_descriptions
 from ada_backend.database.utils import DEFAULT_TOOL_DESCRIPTION
 from engine.agent.llm_call_agent import DEFAULT_LLM_CALL_TOOL_DESCRIPTION
-from engine.agent.pdf_parsing import DEFAULT_PDF_PARSING_TOOL_DESCRIPTION
 from engine.agent.tools.tavily_search_tool import TAVILY_TOOL_DESCRIPTION
 from engine.agent.tools.api_call_tool import API_CALL_TOOL_DESCRIPTION
 from engine.agent.document_enhanced_llm_call import DEFAULT_DOCUMENT_ENHANCED_LLM_CALL_TOOL_DESCRIPTION
@@ -44,7 +43,6 @@ TOOL_DESCRIPTION_UUIDS = {
     "default_pdf_generation_tool_description": UUID("e2b11113-2222-3333-4444-555555555555"),
     "linkup_search_tool_description": UUID("d2e3f456-789a-bcde-f012-3456789abcde"),
     "default_docx_generation_tool_description": UUID("d57c546b-9f9d-4207-bb6e-0e38b2a3bce5"),
-    "pdf_parsing_tool_description": UUID("7f9f2f5f-4d6e-7890-1234-567890123def"),
 }
 
 
@@ -115,10 +113,6 @@ def seed_tool_description(session: Session):
         id=TOOL_DESCRIPTION_UUIDS["default_docx_generation_tool_description"],
         **DEFAULT_DOCX_GENERATION_TOOL_DESCRIPTION.model_dump(),
     )
-    pdf_parsing_tool_description = db.ToolDescription(
-        id=TOOL_DESCRIPTION_UUIDS["pdf_parsing_tool_description"],
-        **DEFAULT_PDF_PARSING_TOOL_DESCRIPTION.model_dump(),
-    )
     upsert_tool_descriptions(
         session=session,
         tool_descriptions=[
@@ -140,6 +134,5 @@ def seed_tool_description(session: Session):
             pdf_generation_tool_description,
             linkup_search_tool_description,
             docx_generation_tool_description,
-            pdf_parsing_tool_description,
         ],
     )
