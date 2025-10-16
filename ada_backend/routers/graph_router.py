@@ -25,6 +25,7 @@ from ada_backend.services.graph.deploy_graph_service import deploy_graph_service
 from ada_backend.services.graph.load_copy_graph_service import load_copy_graph_service
 from ada_backend.services.graph.update_graph_service import update_graph_service
 from ada_backend.services.graph.get_graph_service import get_graph_service
+from ada_backend.services.graph.delete_graph_service import delete_graph_runner_service
 
 router = APIRouter(
     prefix="/projects/{project_id}/graph",
@@ -164,3 +165,28 @@ def load_copy_graph_runner(
             f"Failed to load copy of graph for project {project_id} runner {graph_runner_id}: {str(e)}", exc_info=True
         )
         raise HTTPException(status_code=400, detail="Bad request") from e
+
+
+@router.delete("/{graph_runner_id}", summary="Delete Graph Runner", tags=["Graph"])
+def delete_graph_runner_endpoint(
+    graph_runner_id: UUID,
+    user: Annotated[
+        SupabaseUser, Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.ADMIN.value))
+    ],
+    session: Session = Depends(get_db),
+):
+    """
+    Delete a graph runner and everything related to it.
+    This includes all components, edges, and the graph runner itself.
+    """
+    if not user.id:
+        raise HTTPException(status_code=400, detail="User ID not found")
+    try:
+        delete_graph_runner_service(session, graph_runner_id)
+        return {"message": f"Graph runner {graph_runner_id} deleted successfully"}
+    except ValueError as e:
+        LOGGER.error(f"Failed to delete graph runner {graph_runner_id}: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=400, detail="Bad request") from e
+    except Exception as e:
+        LOGGER.error(f"Failed to delete graph runner {graph_runner_id}: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error") from e
