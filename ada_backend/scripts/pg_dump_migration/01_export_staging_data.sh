@@ -143,7 +143,7 @@ export_table_custom "component_parameter_definitions" \
 echo ""
 echo -e "${GREEN}Step 6: Export port_definitions (referenced by port_mappings)${NC}"
 export_table_custom "port_definitions" \
-    "SELECT pd.id, pd.component_id, pd.name, pd.port_type 
+    "SELECT pd.id, pd.component_id, pd.name, pd.port_type, pd.is_canonical, pd.description 
      FROM port_definitions pd 
      WHERE pd.id IN (
          SELECT DISTINCT pm.source_port_definition_id 
