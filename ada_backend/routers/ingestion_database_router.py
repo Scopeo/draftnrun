@@ -101,15 +101,15 @@ def delete_chunks_in_database(
     organization_id: UUID,
     source_name: str,
     chunk_ids: list[str],
-    id_column_name: str,
     user: Annotated[
         SupabaseUser, Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.WRITER.value))
     ],
-) -> None:
+) -> dict:
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
     try:
-        return delete_chunks_from_ingestion_db(organization_id, source_name, chunk_ids, id_column_name)
+        delete_chunks_from_ingestion_db(organization_id, source_name, chunk_ids)
+        return {"message": "Chunks deleted successfully"}
     except Exception as e:
         LOGGER.exception(
             "Failed to delete chunks in database for organization %s, source %s, chunk %s",
