@@ -66,6 +66,37 @@ async def get_user_from_supabase_token(
     """
     supabase_token = authorization.credentials
 
+    # Offline mode bypass - create a mock user for development
+    if settings.OFFLINE_MODE:
+        LOGGER.info("OFFLINE_MODE enabled, bypassing Supabase token validation")
+        # Try to extract user ID from token if it's a valid UUID format
+        # Otherwise use a default user ID
+        import re
+        uuid_pattern = r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'
+        user_id_match = re.search(uuid_pattern, supabase_token, re.IGNORECASE)
+        
+        if user_id_match:
+            extracted_user_id = user_id_match.group(0)
+            LOGGER.info(f"Extracted user ID from token: {extracted_user_id}")
+            user_id = extracted_user_id
+        else:
+            # Use the user ID from the error log you provided
+            user_id = "96106451-e84a-4c31-ae65-4d259d1d8d50"
+            LOGGER.info(f"Using default user ID for offline mode: {user_id}")
+        
+        default_email = "offline@example.com"
+        
+        user = SupabaseUser(
+            id=user_id,
+            email=default_email,
+            token=supabase_token,
+        )
+
+        context = get_request_context()
+        context.set_user(user)
+
+        return user
+
     try:
         user_response = supabase.auth.get_user(supabase_token)
         if not user_response or not user_response.user:
