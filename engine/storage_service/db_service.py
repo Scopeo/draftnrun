@@ -5,7 +5,7 @@ from typing import Optional
 import pandas as pd
 
 from engine.agent.agent import ComponentAttributes
-from engine.storage_service.db_utils import DBDefinition, convert_to_correct_pandas_type
+from engine.storage_service.db_utils import DBDefinition, convert_to_correct_pandas_type, ID_COLUMN_NAME
 
 
 LOGGER = logging.getLogger(__name__)
@@ -189,6 +189,7 @@ class DBService(ABC):
         table_name: str,
         ids: list[str | int],
         schema_name: Optional[str] = None,
+        id_column_name: str = ID_COLUMN_NAME,
     ):
         pass
 
@@ -207,6 +208,7 @@ class DBService(ABC):
         id: str,
         values: dict,
         schema_name: Optional[str] = None,
+        id_column_name: str = ID_COLUMN_NAME,
     ) -> None:
         pass
 
