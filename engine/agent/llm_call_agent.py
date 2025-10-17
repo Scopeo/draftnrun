@@ -1,3 +1,5 @@
+from typing import Optional
+
 from openinference.semconv.trace import SpanAttributes
 from opentelemetry.trace import get_current_span
 
