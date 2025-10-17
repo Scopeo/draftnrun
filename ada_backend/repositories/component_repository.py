@@ -19,12 +19,12 @@ from ada_backend.schemas.components_schema import (
 )
 from ada_backend.schemas.integration_schema import IntegrationSchema
 from ada_backend.schemas.parameter_schema import ComponentParamDefDTO
-from engine.agent.types import ToolDescription
 from ada_backend.database.models import ComponentGlobalParameter
 from ada_backend.database.component_definition_seeding import (
     upsert_components,
     upsert_components_parameter_definitions,
 )
+from ada_backend.schemas.pipeline.base import ToolDescriptionSchema
 
 LOGGER = logging.getLogger(__name__)
 
@@ -333,6 +333,34 @@ def get_tool_description_component(
     )
 
 
+def is_tool_description_used_by_multiple_instances(
+    session: Session,
+    tool_description_id: UUID,
+) -> bool:
+    """
+    Checks if a tool description is used by multiple component instances.
+    Returns True if used by more than one instance, False otherwise.
+    """
+    count = (
+        session.query(db.ComponentInstance)
+        .filter(db.ComponentInstance.tool_description_id == tool_description_id)
+        .count()
+    )
+    return count > 1
+
+
+def is_tool_description_default_for_component(
+    session: Session,
+    tool_description_id: UUID,
+) -> bool:
+    """
+    Checks if a tool description is used as a default tool description for any component.
+    Returns True if it's a default tool description, False otherwise.
+    """
+    count = session.query(db.Component).filter(db.Component.default_tool_description_id == tool_description_id).count()
+    return count > 0
+
+
 def get_tool_parameter_by_component_id(
     session: Session,
     component_id: UUID,
@@ -450,7 +478,8 @@ def get_all_components_with_parameters(
 
             default_tool_description_db = get_tool_description_component(session=session, component_id=component.id)
             tool_description = (
-                ToolDescription(
+                ToolDescriptionSchema(
+                    id=default_tool_description_db.id,
                     name=default_tool_description_db.name,
                     description=default_tool_description_db.description,
                     tool_properties=default_tool_description_db.tool_properties,
@@ -689,35 +718,39 @@ def upsert_sub_component_input(
     return sub_input
 
 
-def upsert_tool_description(
+def get_or_create_tool_description(
     session: Session,
     name: str,
     description: str,
     tool_properties: dict,
     required_tool_properties: list[str],
+    id: Optional[UUID] = None,
 ) -> db.ToolDescription:
-    """
-    Inserts or updates a tool description in the database.
-    Uses name as unique identifier for upsert operation.
-    Follows PUT semantics - completely replaces existing tool description.
-
-    Returns:
-        db.ToolDescription: The created or updated tool description object.
-    """
+    # TODO: use id
+    # First try to find by name and description only
     tool_description = (
         session.query(db.ToolDescription)
         .filter(
             db.ToolDescription.name == name,
+            db.ToolDescription.description == description,
         )
         .first()
     )
 
+    # TODO: remove when front sends id
+    # If found, check if the JSON fields match
     if tool_description:
-        # Update existing tool description (PUT behavior)
-        tool_description.description = description
-        tool_description.tool_properties = tool_properties
-        tool_description.required_tool_properties = required_tool_properties
-    else:
+        # Compare the actual JSON values
+        if (
+            tool_description.tool_properties == tool_properties
+            and tool_description.required_tool_properties == required_tool_properties
+        ):
+            return tool_description
+        else:
+            # JSON fields don't match, create a new one
+            tool_description = None
+
+    if not tool_description:
         # Create new tool description
         tool_description = db.ToolDescription(
             name=name,
@@ -740,6 +773,7 @@ def delete_component_instances(
     """
     Deletes all component instances for a given component.
     Ensures cascading deletes on related entities.
+    Also deletes tool descriptions that are specific to these instances (not shared or default).
     """
 
     query = session.query(db.ComponentInstance)
@@ -751,10 +785,29 @@ def delete_component_instances(
         query = query.filter(db.ComponentInstance.id.in_(component_instance_ids))
 
     instances = query.all()
+    tool_descriptions_to_delete = []
+
     for instance in instances:
+        if instance.tool_description_id:
+            tool_description_id = instance.tool_description_id
+            if not is_tool_description_used_by_multiple_instances(
+                session, tool_description_id
+            ) and not is_tool_description_default_for_component(session, tool_description_id):
+                tool_descriptions_to_delete.append(tool_description_id)
+                LOGGER.info(f"Marking tool description {tool_description_id} for deletion (instance-specific)")
+
         if get_component_instance_integration_relationship(session, instance.id):
             delete_linked_integration(session, instance.id)
-        session.delete(instance)  # Triggers ORM cascade
+
+        session.delete(instance)
+
+    for tool_description_id in tool_descriptions_to_delete:
+        tool_description = (
+            session.query(db.ToolDescription).filter(db.ToolDescription.id == tool_description_id).first()
+        )
+        if tool_description:
+            session.delete(tool_description)
+            LOGGER.info(f"Deleted instance-specific tool description {tool_description_id}")
 
     session.commit()
 

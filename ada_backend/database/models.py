@@ -810,7 +810,7 @@ class ToolDescription(Base):
     __tablename__ = "tool_descriptions"
 
     id = mapped_column(UUID(as_uuid=True), primary_key=True, index=True, default=uuid.uuid4)
-    name = mapped_column(String, unique=True, nullable=False)
+    name = mapped_column(String, nullable=False)
     description = mapped_column(Text, nullable=False)
     tool_properties = mapped_column(JSON, nullable=True, default=dict)
     required_tool_properties = mapped_column(JSON, nullable=True, default=list)

@@ -5,7 +5,14 @@ from pydantic import BaseModel, ConfigDict
 
 from ada_backend.schemas.integration_schema import GraphIntegrationSchema
 from ada_backend.schemas.parameter_schema import PipelineParameterSchema
-from engine.agent.types import ToolDescription
+
+
+class ToolDescriptionSchema(BaseModel):
+    id: Optional[UUID] = None
+    name: str
+    description: str
+    tool_properties: dict
+    required_tool_properties: list[str]
 
 
 class ComponentInstanceSchema(BaseModel):
@@ -19,7 +26,7 @@ class ComponentInstanceSchema(BaseModel):
     is_start_node: bool = False
     component_id: UUID
     parameters: list[PipelineParameterSchema]
-    tool_description: Optional[ToolDescription] = None
+    tool_description: Optional[ToolDescriptionSchema] = None
     integration: Optional[GraphIntegrationSchema] = None
 
 

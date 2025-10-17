@@ -4,7 +4,7 @@ from typing import Optional
 from sqlalchemy.orm import Session
 
 from ada_backend.repositories.component_repository import (
-    upsert_tool_description,
+    get_or_create_tool_description,
     upsert_component_instance,
     get_component_parameter_definition_by_component_id,
     delete_component_global_parameters,
@@ -45,7 +45,7 @@ def create_specific_api_tool_service(
     )
 
     # Upsert tool description
-    tool_desc = upsert_tool_description(
+    tool_desc = get_or_create_tool_description(
         session=session,
         name=payload.tool_description_name,
         description=(payload.tool_description or payload.tool_display_name),

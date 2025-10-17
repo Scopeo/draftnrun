@@ -9,7 +9,8 @@ from ada_backend.repositories.integration_repository import (
     get_component_instance_integration_relationship,
 )
 from ada_backend.repositories.organization_repository import get_organization_secrets_from_project_id
-from engine.agent.types import ToolDescription, ComponentAttributes
+from ada_backend.schemas.pipeline.base import ToolDescriptionSchema
+from engine.agent.types import ComponentAttributes, ToolDescription
 from ada_backend.database.models import ComponentInstance
 from ada_backend.repositories.component_repository import (
     get_component_instance_by_id,
@@ -212,10 +213,15 @@ def instantiate_component(
     input_params = replace_secret_placeholders(input_params, key_to_secret)
 
     # Resolve tool description if required
-    tool_description = _get_tool_description(session, component_instance)
-    if tool_description:
-        input_params["tool_description"] = tool_description
-    LOGGER.debug(f"Tool description: {tool_description}\n")
+    tool_description_schema = _get_tool_description(session, component_instance)
+    if tool_description_schema:
+        input_params["tool_description"] = ToolDescription(
+            name=tool_description_schema.name,
+            description=tool_description_schema.description,
+            tool_properties=tool_description_schema.tool_properties,
+            required_tool_properties=tool_description_schema.required_tool_properties,
+        )
+    LOGGER.debug(f"Tool description: {tool_description_schema}\n")
     input_params["component_attributes"] = ComponentAttributes(
         component_instance_name=component_instance.name,
         component_instance_id=component_instance.id,
@@ -245,7 +251,7 @@ def instantiate_component(
 def _get_tool_description(
     session: Session,
     component_instance: ComponentInstance,
-) -> Optional[ToolDescription]:
+) -> Optional[ToolDescriptionSchema]:
     """
     Get the tool description for a component instance.
 
@@ -265,7 +271,8 @@ def _get_tool_description(
         LOGGER.warning(f"Tool description not found for agent component instance {component_instance.id}.")
         return None
 
-    return ToolDescription(
+    return ToolDescriptionSchema(
+        id=db_tool_description.id,
         name=db_tool_description.name.replace(" ", "_"),
         description=db_tool_description.description,
         tool_properties=db_tool_description.tool_properties,
