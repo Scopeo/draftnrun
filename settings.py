@@ -124,6 +124,7 @@ class BaseConfig(BaseSettings):
     # Ingestion parameters
     NUMBER_OF_PAGES_TO_DETECT_DOCUMENT_TYPE: Optional[int] = 5
     PAGE_RESOLUTION_ZOOM: Optional[float] = 3.0
+    USE_LLM_FOR_PDF_PARSING: bool = True
     INGESTION_VIA_CUSTOM_MODEL: Optional[bool] = False
 
     # Google OAuth configuration
