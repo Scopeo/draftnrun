@@ -45,7 +45,7 @@ class Input:
     def get_canonical_ports(self) -> dict[str, str | None]:
         # Expose the canonical output as the messages list so default mappings
         # can auto-wire to downstream components expecting chat messages.
-        return {"output": "messages"}
+        return {"output": "messages", "rag_filter": "rag_filter"}
 
     # LEGACY: Schema methods for retro-compatibility with type discovery
     # TODO: Remove after migration to Agent base class
@@ -97,6 +97,7 @@ class Input:
         template_vars = {}
         file_content = {}
         file_urls = {}
+        rag_filter = {}
 
         for k, v in filtered_input.items():
             if k == "messages":
@@ -113,6 +114,8 @@ class Input:
             elif k.endswith("_file_url") or k.endswith("_url"):
                 # LEGACY: Individual file URL fields (deprecated)
                 file_urls[k] = v
+            elif k == "rag_filter":
+                rag_filter = v
             else:
                 # LEGACY: Flat template variables (deprecated)
                 # {"username": "John", "company": "Acme"}
@@ -129,4 +132,4 @@ class Input:
 
         # Return NodeData with messages in data and template_vars in ctx
         messages = filtered_input.get("messages", [])
-        return NodeData(data={"messages": messages}, ctx=ctx)
+        return NodeData(data={"messages": messages, "rag_filter": rag_filter}, ctx=ctx)
