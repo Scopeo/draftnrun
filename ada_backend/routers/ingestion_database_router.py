@@ -1,7 +1,7 @@
 import logging
 from fastapi import APIRouter
 from typing import Annotated
-from fastapi import Depends, HTTPException, Query
+from fastapi import Depends, HTTPException, Query, Response, status
 from uuid import UUID
 
 from engine.storage_service.db_utils import DBDefinition
@@ -104,17 +104,19 @@ def delete_chunks_in_database(
     user: Annotated[
         SupabaseUser, Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.WRITER.value))
     ],
-) -> dict:
+):
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
     try:
         delete_chunks_from_ingestion_db(organization_id, source_name, chunk_ids)
-        return {"message": "Chunks deleted successfully"}
     except Exception as e:
-        LOGGER.exception(
-            "Failed to delete chunks in database for organization %s, source %s, chunk %s",
+        LOGGER.error(
+            "Failed to delete chunks in database for organization %s, source %s, chunk %s: %s",
             organization_id,
             source_name,
             chunk_ids,
+            str(e),
         )
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        raise HTTPException(status_code=500, detail="Internal Server Error") from e
+
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
