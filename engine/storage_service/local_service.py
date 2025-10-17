@@ -10,8 +10,12 @@ import pandas as pd
 
 from engine.agent.agent import ComponentAttributes
 from engine.storage_service.db_service import DBService
-from engine.storage_service.db_utils import DBDefinition, check_columns_matching_between_data_and_database_table
-from engine.storage_service.db_utils import PROCESSED_DATETIME_FIELD
+from engine.storage_service.db_utils import (
+    DBDefinition,
+    check_columns_matching_between_data_and_database_table,
+    PROCESSED_DATETIME_FIELD,
+    ID_COLUMN_NAME,
+)
 
 LOGGER = logging.getLogger(__name__)
 
@@ -30,8 +34,6 @@ TYPE_MAPPING: dict[str, Type[TypeEngine]] = {
     "VARIANT": sqlalchemy.JSON,
 }
 DEFAULT_MAPPING = {"CURRENT_TIMESTAMP": sqlalchemy.func.current_timestamp()}
-
-CHUNK_ID_COLUMN_NAME = "chunk_id"
 
 
 class SQLLocalService(DBService):
@@ -310,7 +312,7 @@ class SQLLocalService(DBService):
         table_name: str,
         ids: list[str | int],
         schema_name: Optional[str] = None,
-        id_column_name: str = CHUNK_ID_COLUMN_NAME,
+        id_column_name: str = ID_COLUMN_NAME,
     ):
         table = self.get_table(table_name, schema_name)
         with self.Session() as session:
@@ -382,7 +384,7 @@ class SQLLocalService(DBService):
         with self.Session() as session:
             # Check if the row exists
             existing_record = session.execute(
-                sqlalchemy.select(table).where(table.c[CHUNK_ID_COLUMN_NAME] == chunk_id)
+                sqlalchemy.select(table).where(table.c[ID_COLUMN_NAME] == chunk_id)
             ).scalar_one_or_none()
 
             if not existing_record:
@@ -449,11 +451,11 @@ class SQLLocalService(DBService):
     ) -> dict:
         table = self.get_table(table_name, schema_name)
         with self.Session() as session:
-            stmt = sqlalchemy.select(table).where(table.c[CHUNK_ID_COLUMN_NAME] == chunk_id)
+            stmt = sqlalchemy.select(table).where(table.c[ID_COLUMN_NAME] == chunk_id)
             result = session.execute(stmt).fetchone()
 
             if result is None:
-                raise ValueError(f"Row with {CHUNK_ID_COLUMN_NAME}='{chunk_id}' not found in table {table_name}")
+                raise ValueError(f"Row with {ID_COLUMN_NAME}='{chunk_id}' not found in table {table_name}")
 
             # Convert the SQLAlchemy Row to a dictionary
             row_dict = {}
