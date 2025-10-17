@@ -141,6 +141,10 @@ class BaseConfig(BaseSettings):
     # Observability stack feature flag
     ENABLE_OBSERVABILITY_STACK: bool = False
 
+    # Offline mode bypass
+    OFFLINE_MODE: bool = False
+    OFFLINE_DEFAULT_ROLE: str = "admin"
+
     @model_validator(mode="after")
     @classmethod
     def sync_db_settings(cls, values):
