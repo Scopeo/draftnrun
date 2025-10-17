@@ -1,11 +1,11 @@
 """
 Tests for project repository functions.
 Testing the versioning features and graph runner management.
-TODO: Enable these tests when migrating test suite to PostgreSQL
-(currently skipped due to SQLite incompatibility with PostgreSQL regex constraints)
 """
 
+from datetime import datetime, timedelta, timezone
 import uuid
+
 import pytest
 from sqlalchemy.orm import Session
 
@@ -15,10 +15,6 @@ from ada_backend.repositories.project_repository import (
     get_workflows_by_organization,
 )
 from ada_backend.schemas.project_schema import ProjectWithGraphRunnersSchema
-
-pytestmark = pytest.mark.skip(
-    reason="Tests require PostgreSQL - SQLite doesn't support regex operators (~) used in GraphRunner constraints"
-)
 
 
 @pytest.fixture
@@ -160,35 +156,44 @@ class TestGetProjectWithDetails:
         ada_backend_mock_session.add(project)
         ada_backend_mock_session.flush()
 
-        # Create graph runners with deliberate ordering
-        gr1 = db.GraphRunner(id=uuid.uuid4(), tag_version="v1.0.0")
+        # Create graph runners with deliberate ordering (only 2 since we have 2 env types)
+        # Set explicit timestamps to ensure deterministic ordering
+        base_time = datetime.now(timezone.utc)
+        gr1 = db.GraphRunner(
+            id=uuid.uuid4(),
+            tag_version="v1.0.0",
+            created_at=base_time,
+        )
         ada_backend_mock_session.add(gr1)
         ada_backend_mock_session.flush()
 
-        gr2 = db.GraphRunner(id=uuid.uuid4(), tag_version="v2.0.0")
+        gr2 = db.GraphRunner(
+            id=uuid.uuid4(),
+            tag_version="v2.0.0",
+            created_at=base_time + timedelta(seconds=1),
+        )
         ada_backend_mock_session.add(gr2)
         ada_backend_mock_session.flush()
 
-        gr3 = db.GraphRunner(id=uuid.uuid4(), tag_version="v3.0.0")
-        ada_backend_mock_session.add(gr3)
-        ada_backend_mock_session.flush()
-
-        # Create bindings
-        for gr in [gr1, gr2, gr3]:
-            binding = db.ProjectEnvironmentBinding(
-                project_id=project_id,
-                graph_runner_id=gr.id,
-                environment=db.EnvType.DRAFT,
-            )
-            ada_backend_mock_session.add(binding)
-
+        # Create bindings with different environments
+        binding1 = db.ProjectEnvironmentBinding(
+            project_id=project_id,
+            graph_runner_id=gr1.id,
+            environment=db.EnvType.DRAFT,
+        )
+        binding2 = db.ProjectEnvironmentBinding(
+            project_id=project_id,
+            graph_runner_id=gr2.id,
+            environment=db.EnvType.PRODUCTION,
+        )
+        ada_backend_mock_session.add_all([binding1, binding2])
         ada_backend_mock_session.commit()
 
         result = get_project_with_details(ada_backend_mock_session, project_id)
 
         # Graph runners should be in order of creation
         gr_ids = [gr.graph_runner_id for gr in result.graph_runners]
-        assert gr_ids == [gr1.id, gr2.id, gr3.id]
+        assert gr_ids == [gr1.id, gr2.id]
 
     def test_handles_project_not_found(self, ada_backend_mock_session: Session):
         """

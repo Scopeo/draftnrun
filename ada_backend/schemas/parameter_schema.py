@@ -10,6 +10,15 @@ class ParameterBase(BaseModel):
     order: Optional[int] = None
 
 
+class ComponentParameterDefinitionCreate(ParameterBase):
+    type: ParameterType
+    nullable: bool = False
+    default: Optional[str | int | float | bool | dict] = None
+    ui_component: Optional[UIComponent] = None
+    ui_component_properties: Optional[dict] = None
+    is_advanced: bool = False
+
+
 class ParameterDefinition(ParameterBase):
     id: UUID
     type: ParameterType

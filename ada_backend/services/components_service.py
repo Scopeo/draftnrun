@@ -1,8 +1,10 @@
 import logging
 from typing import Optional
+from uuid import UUID
 
 from sqlalchemy.orm import Session
 
+from ada_backend.database import models as db
 from ada_backend.database.models import ReleaseStage
 from ada_backend.repositories.component_repository import (
     get_all_components_with_parameters,
@@ -92,3 +94,35 @@ def update_component_release_stage_service(
     component.release_stage = release_stage
     session.add(component)
     session.commit()
+
+
+def update_component_service(session: Session, component_id: UUID, **kwargs) -> db.Component:
+    """
+    Update an existing component with the given attributes.
+    Service layer function that handles business logic and validation.
+
+    Args:
+        session: Database session
+        component_id: ID of the component to update
+        **kwargs: Component attributes to update
+
+    Returns:
+        Updated component
+
+    Raises:
+        ComponentNotFound: If component not found
+    """
+    # Check if component exists
+    component = get_component_by_id(session, component_id)
+    if component is None:
+        raise ComponentNotFound(component_id)
+
+    # Update component attributes
+    for key, value in kwargs.items():
+        if hasattr(component, key):
+            setattr(component, key, value)
+
+    # Commit changes
+    session.commit()
+    session.refresh(component)
+    return component

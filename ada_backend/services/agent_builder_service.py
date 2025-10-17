@@ -31,6 +31,9 @@ def get_component_params(
     session: Session,
     component_instance_id: UUID,
     project_id: Optional[UUID] = None,
+    *,
+    include_global_parameters: bool = False,
+    component_instance: ComponentInstance | None = None,
 ) -> dict[str, Any]:
     """
     Fetches and resolves all parameters for a given component instance.
@@ -45,8 +48,13 @@ def get_component_params(
             - Parameters with order=None are returned as single values
             - Parameters with order!=None are grouped in lists, ordered by the order field
     """
-    params = {}
+    params: dict[str, Any] = {}
     ordered_params: dict[str, list[tuple[int, Any]]] = {}  # name -> [(order, value), ...]
+
+    if component_instance is None:
+        component_instance = get_component_instance_by_id(session, component_instance_id)
+        if not component_instance:
+            raise ValueError(f"Component instance {component_instance_id} not found.")
 
     for param in get_component_basic_parameters(session, component_instance_id):
         param_name = param.parameter_definition.name
@@ -86,6 +94,20 @@ def get_component_params(
         # Sort by order and extract just the values
         params[name] = [v for _, v in sorted(values, key=lambda x: x[0])]
 
+    if include_global_parameters:
+        grouped_globals: dict[str, list[tuple[int, Any]]] = {}
+        for gparam in get_global_parameters_by_component_id(session, component_instance.component_id):
+            pname = gparam.parameter_definition.name
+            gvalue = gparam.get_value()
+            if gparam.order is not None:
+                if pname not in grouped_globals:
+                    grouped_globals[pname] = []
+                grouped_globals[pname].append((gparam.order, gvalue))
+            else:
+                params[pname] = gvalue
+        for pname, values in grouped_globals.items():
+            params[pname] = [v for _, v in sorted(values, key=lambda x: x[0])]
+
     return params
 
 
@@ -112,11 +134,13 @@ def instantiate_component(
     component_name = component_instance.component.name
     LOGGER.debug(f"Init instantiation for component: {component_name}\n")
 
-    # Fetch basic parameters
+    # Fetch basic and global parameters
     input_params: dict[str, Any] = get_component_params(
         session,
         component_instance_id,
         project_id=project_id,
+        include_global_parameters=True,
+        component_instance=component_instance,
     )
     LOGGER.debug(f"{input_params=}\n")
 
@@ -179,30 +203,6 @@ def instantiate_component(
                 instance for _, instance in sorted(sub_component_list, key=lambda x: x[0] or 0)
             ]
     LOGGER.debug(f"Merged input parameters: {input_params}\n")
-
-    # Apply global component parameters (non-overridable, invisible to UI)
-    try:
-        globals_ = get_global_parameters_by_component_id(
-            session,
-            component_instance.component_id,
-        )
-        grouped_globals: dict[str, list[tuple[int, Any]]] = {}
-        for gparam in globals_:
-            pname = gparam.parameter_definition.name
-            if gparam.order is not None:
-                if pname not in grouped_globals:
-                    grouped_globals[pname] = []
-                grouped_globals[pname].append((gparam.order, gparam.get_value()))
-            else:
-                # Scalar: enforce globally
-                input_params[pname] = gparam.get_value()
-        for pname, values in grouped_globals.items():
-            input_params[pname] = [v for _, v in sorted(values, key=lambda x: x[0])]
-        LOGGER.debug(f"Input parameters after applying global component parameters: {input_params}\n")
-    except Exception as e:
-        raise ValueError(
-            f"Failed to apply global component parameters for instance {component_instance.ref}: {e}"
-        ) from e
 
     # Resolve secret placeholders for any parameter in input_params.
     key_to_secret: dict[str, str] | None = None

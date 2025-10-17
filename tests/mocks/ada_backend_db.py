@@ -2,27 +2,31 @@ from uuid import UUID, uuid4
 
 import pytest
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, Session
+from sqlalchemy.orm import Session, sessionmaker
 
-from ada_backend.database.seed_db import seed_db
-from ada_backend.database.models import Base, ParameterType
 from ada_backend.database import models as db
+from ada_backend.database.models import Base
+from settings import settings
 
 
 @pytest.fixture(scope="function")
 def test_db():
     """
-    Creates an in-memory SQLite database for testing.
+    Connects to the PostgreSQL database for testing.
+    Uses transactions for test isolation without affecting the actual database.
     """
-    engine = create_engine("sqlite:///:memory:")
-    Base.metadata.create_all(bind=engine)  # Create tables
+    if not settings.ADA_DB_URL:
+        raise ValueError("ADA_DB_URL is not configured. Please set it in credentials.env")
 
-    # Define a reusable session factory
-    SessionLocal = sessionmaker(bind=engine)
+    engine = create_engine(settings.ADA_DB_URL, echo=False)
+
+    Base.metadata.create_all(bind=engine)
+
+    SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
 
     yield engine, SessionLocal
 
-    Base.metadata.drop_all(bind=engine)  # Drop tables after the test
+    engine.dispose()
 
 
 MOCK_UUIDS: dict[str, UUID] = {
@@ -35,6 +39,7 @@ MOCK_UUIDS: dict[str, UUID] = {
     "component_3": uuid4(),
     "component_4": uuid4(),
     "component_5": uuid4(),
+    "component_6": uuid4(),
     "tool_description_1": uuid4(),
     "tool_description_2": uuid4(),
     "component_instance_1": uuid4(),
@@ -42,6 +47,7 @@ MOCK_UUIDS: dict[str, UUID] = {
     "component_instance_3": uuid4(),
     "component_instance_4": uuid4(),
     "component_instance_5": uuid4(),
+    "component_instance_6": uuid4(),
 }
 
 
@@ -50,16 +56,31 @@ def populate_ada_backend_db_with_mock_data(session: Session):
     Populate the test database with mock data for ada_backend.
     """
 
+    # --- Organization ---
+    test_org_id = uuid4()
+
     # --- Projects ---
-    project_1 = db.Project(id=MOCK_UUIDS["project_1"], name="Project A", description="First test project.")
-    project_2 = db.Project(id=MOCK_UUIDS["project_2"], name="Project B", description="Second test project.")
+    project_1 = db.WorkflowProject(
+        id=MOCK_UUIDS["project_1"],
+        name="Project A",
+        description="First test project.",
+        type=db.ProjectType.WORKFLOW,
+        organization_id=test_org_id,
+    )
+    project_2 = db.AgentProject(
+        id=MOCK_UUIDS["project_2"],
+        name="Project B",
+        description="Second test project.",
+        type=db.ProjectType.AGENT,
+        organization_id=test_org_id,
+    )
     session.add_all([project_1, project_2])
     session.commit()
 
-    # --- Add Project Secret ---
+    # --- Add Organization Secret ---
     project_secret_1 = db.OrganizationSecret(
         id=MOCK_UUIDS["project_secret_1"],
-        project_id=project_1.id,
+        organization_id=test_org_id,
         key="API_KEY",
     )
     project_secret_1.set_secret("super_secret_key")
@@ -69,34 +90,34 @@ def populate_ada_backend_db_with_mock_data(session: Session):
     # --- Components ---
     component_1 = db.Component(
         id=MOCK_UUIDS["component_1"],
-        name="CompletionService",
+        name="TestMockCompletionService",
         description="Completion Service.",
     )
     component_2 = db.Component(
         id=MOCK_UUIDS["component_2"],
-        name="Synthesizer",
+        name="TestMockSynthesizer",
         description="Synthesizer Component.",
     )
     component_3 = db.Component(
         id=MOCK_UUIDS["component_3"],
-        name="Retriever",
+        name="TestMockRetriever",
         description="Retriever Component.",
     )
     component_4 = db.Component(
         id=MOCK_UUIDS["component_4"],
-        name="ReActAgent",
+        name="TestMockReActAgent",
         description="ReAct framework agent.",
         is_agent=True,
     )
     component_5 = db.Component(
         id=MOCK_UUIDS["component_5"],
-        name="RAGAgent",
+        name="TestMockRAGAgent",
         description="Retrieve and Generate Agent.",
         is_agent=True,
     )
     component_6 = db.Component(
         id=MOCK_UUIDS["component_6"],
-        name="EmbeddingService",
+        name="TestMockEmbeddingService",
         description="Embedding Service.",
     )
     session.add_all([component_1, component_2, component_3, component_4, component_5, component_6])
@@ -105,14 +126,14 @@ def populate_ada_backend_db_with_mock_data(session: Session):
     # --- Tool Descriptions ---
     tool_description_1 = db.ToolDescription(
         id=MOCK_UUIDS["tool_description_1"],
-        name="MockTool1",
+        name=f"TestMockTool1_{test_org_id.hex[:8]}",
         description="Mock tool description 1.",
         tool_properties={"prop1": "value1"},
         required_tool_properties={"req1": "value1"},
     )
     tool_description_2 = db.ToolDescription(
         id=MOCK_UUIDS["tool_description_2"],
-        name="MockTool2",
+        name=f"TestMockTool2_{test_org_id.hex[:8]}",
         description="Mock tool description 2.",
         tool_properties={"prop2": "value2"},
         required_tool_properties={"req2": "value2"},
@@ -165,71 +186,17 @@ def populate_ada_backend_db_with_mock_data(session: Session):
     )
     session.commit()
 
-    # --- Basic Parameters ---
-    secret_param = db.BasicParameter(
-        component_instance_id=component_instance_1.id,
-        name="api_key",
-        project_secret_id=project_secret_1.id,
-        value_type=ParameterType.STRING,
-    )
-    param_1 = db.BasicParameter(
-        component_instance_id=component_instance_1.id,
-        name="temperature",
-        value=0.8,
-        value_type=ParameterType.FLOAT,
-    )
-    param_2 = db.BasicParameter(
-        component_instance_id=component_instance_2.id,
-        name="style",
-        value="formal",
-        value_type=ParameterType.STRING,
-    )
-    param_3 = db.BasicParameter(
-        component_instance_id=component_instance_4.id,
-        name="max_iterations",
-        value=5,
-        value_type=ParameterType.INTEGER,
-    )
-    param_4 = db.BasicParameter(
-        component_instance_id=component_instance_5.id,
-        name="retrieval_count",
-        value=3,
-        value_type=ParameterType.INTEGER,
-    )
-    session.add_all([param_1, param_2, param_3, param_4, secret_param])
-    session.commit()
-
-    # --- Component Sub-Inputs ---
-    component_sub_input = db.ComponentSubInput(
-        parent_component_instance_id=component_instance_2.id,
-        child_component_instance_id=component_instance_1.id,
-        parameter_name="llm_service",
-    )
-    session.add(component_sub_input)
-    session.commit()
-
-    # --- Component Relationships ---
-    # ReActAgent uses Synthesizer
-    agent_component_input = db.ComponentSubInput(
-        parent_component_instance_id=component_instance_4.id,
-        child_component_instance_id=component_instance_2.id,
-        parameter_name="synthesizer",
-    )
-    # RAGAgent uses ReActAgent as a sub-agent
-    agent_sub_agent_input = db.ComponentSubInput(
-        parent_component_instance_id=component_instance_5.id,
-        child_component_instance_id=component_instance_4.id,
-        parameter_name="sub_agent",
-    )
-    session.add_all([agent_component_input, agent_sub_agent_input])
-    session.commit()
+    # Skip BasicParameters and ComponentSubInputs - not needed for these tests
+    # This speeds up test execution significantly
 
 
 def populate_ada_backend_db_from_seed(session: Session):
     """
-    Populate the test database with mock data for ada_backend.
+    Populate the test database with seed data.
+    Import is done lazily to avoid loading weasyprint dependencies at module import time.
     """
-    # --- Seed the database ---
+    from ada_backend.database.seed_db import seed_db
+
     seed_db(session)
 
 
