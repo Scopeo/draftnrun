@@ -342,3 +342,123 @@ async def chat_env(
             f"Failed to run agent chat for project {project_id} in environment {env}: {str(e)}", exc_info=True
         )
         raise HTTPException(status_code=500, detail="Internal server error") from e
+
+
+@router.post("/{project_id}/sync-cron-payload", tags=["Projects"])
+def sync_cron_payload(
+    project_id: UUID,
+    user: Annotated[
+        SupabaseUser,
+        Depends(
+            user_has_access_to_project_dependency(
+                allowed_roles=UserRights.WRITER.value,
+            )
+        ),
+    ],
+    session: Session = Depends(get_db),
+):
+    """
+    Update cron job's input_data payload from the Start node's payload schema defaults.
+
+    Extracts default values from the draft version's Start node payload schema
+    and updates the cron job accordingly.
+    """
+    from ada_backend.repositories.project_repository import get_project_with_details
+    from ada_backend.repositories.graph_runner_repository import get_component_nodes
+    from ada_backend.repositories.component_repository import get_component_instance_by_id
+    from ada_backend.repositories.cron_repository import get_cron_jobs_by_organization
+    from ada_backend.services.cron.service import update_cron_job_service
+    from ada_backend.schemas.cron_schema import CronJobUpdate
+    import json
+
+    if not user.id:
+        raise HTTPException(status_code=400, detail="User ID not found")
+
+    try:
+        # Get project
+        project = get_project_with_details(session, project_id)
+        if not project:
+            raise HTTPException(status_code=404, detail="Project not found")
+
+        # Find draft graph runner (always use draft for schema extraction, same as before)
+        draft_graph_runner = None
+        for gr in project.graph_runners:
+            if gr.env == "draft" and gr.tag_version is None:
+                draft_graph_runner = gr
+                break
+
+        if not draft_graph_runner:
+            return {"status": "no_draft", "message": "No draft version found"}
+
+        # Get Start nodes from draft
+        component_nodes = get_component_nodes(session, draft_graph_runner.graph_runner_id)
+        start_nodes = [cn for cn in component_nodes if cn.is_start_node]
+
+        if not start_nodes:
+            return {"status": "no_start_node", "message": "No Start node found"}
+
+        # Get payload schema from first Start node
+        start_node = start_nodes[0]
+        component_instance = get_component_instance_by_id(session, start_node.component_instance_id)
+
+        if not component_instance:
+            raise HTTPException(status_code=404, detail="Start node component instance not found")
+
+        # Extract payload schema
+        payload_schema_value = None
+        for param in component_instance.basic_parameters:
+            if param.parameter_definition.name == "payload_schema":
+                payload_schema_value = param.value
+                break
+
+        if not payload_schema_value:
+            return {"status": "no_schema", "message": "No payload schema found in Start node"}
+
+        # Extract default values from schema (same logic that worked before)
+        cron_payload = {}
+        if payload_schema_value:
+            try:
+                schema = json.loads(payload_schema_value)
+                if isinstance(schema, dict) and "default" in schema:
+                    cron_payload = schema["default"]
+                elif isinstance(schema, dict) and "properties" in schema:
+                    cron_payload = {}
+                    for prop_name, prop_schema in schema["properties"].items():
+                        if isinstance(prop_schema, dict) and "default" in prop_schema:
+                            cron_payload[prop_name] = prop_schema["default"]
+            except (json.JSONDecodeError, ValueError, KeyError):
+                pass
+
+        # Find cron job for this project
+        cron_jobs = get_cron_jobs_by_organization(session, project.organization_id, enabled_only=False)
+        project_cron = None
+        for job in cron_jobs:
+            if job.payload and job.payload.get("project_id") == str(project_id):
+                project_cron = job
+                break
+
+        if not project_cron:
+            return {"status": "no_cron", "message": "No cron job found for this project"}
+
+        # Update cron job's input_data
+        updated_payload = project_cron.payload.copy()
+        updated_payload["input_data"] = cron_payload
+
+        update_data = CronJobUpdate(payload=updated_payload)
+        update_cron_job_service(
+            session,
+            project_cron.id,
+            update_data,
+            project.organization_id,
+            user_id=user.id,
+        )
+
+        return {
+            "status": "success",
+            "message": "Cron payload synced from Start node schema",
+            "cron_id": str(project_cron.id),
+            "input_data": cron_payload,
+        }
+    except Exception as e:
+        LOGGER.error(f"Failed to sync cron payload for project {project_id}: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error") from e

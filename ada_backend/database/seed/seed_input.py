@@ -83,3 +83,107 @@ def seed_input_components(session: Session):
         component_id=input.id,
         category_ids=[CATEGORY_UUIDS["trigger"]],
     )
+
+
+def seed_start_components(session: Session):
+    start_component = db.Component(
+        id=COMPONENT_UUIDS["start"],
+        name="Start",
+        description="Start node that receives initial workflow input and configures triggers",
+        is_agent=True,
+        is_protected=True,
+        release_stage=db.ReleaseStage.PUBLIC,
+        default_tool_description_id=TOOL_DESCRIPTION_UUIDS["default_tool_description"],
+        icon="tabler-play",
+    )
+
+    upsert_components(session=session, components=[start_component])
+
+    # LEGACY: Manual port seeding for unmigrated Start component
+    existing = get_component_by_id(session, start_component.id)
+    if existing:
+        # Ensure an OUTPUT canonical 'messages' port exists
+        port_defs = session.query(db.PortDefinition).filter(db.PortDefinition.component_id == start_component.id).all()
+        have_messages_output = any(pd.port_type == db.PortType.OUTPUT and pd.name == "messages" for pd in port_defs)
+        if not have_messages_output:
+            session.add(
+                db.PortDefinition(
+                    component_id=start_component.id,
+                    name="messages",
+                    port_type=db.PortType.OUTPUT,
+                    is_canonical=True,
+                    description="Canonical output carrying chat messages",
+                )
+            )
+            session.commit()
+
+    upsert_components_parameter_definitions(
+        session=session,
+        component_parameter_definitions=[
+            # Payload schema (JSON structure for workflow input)
+            db.ComponentParameterDefinition(
+                id=UUID("48332255-4a0e-4432-8fb4-46267e8ffd4c"),
+                component_id=start_component.id,
+                name=INPUT_PAYLOAD_PARAMETER_NAME,
+                type=ParameterType.JSON_SCHEMA,
+                nullable=False,
+                order=1,
+                default=json.dumps(
+                    {
+                        "$schema": "http://json-schema.org/draft-07/schema#",
+                        "title": "Start payload schema",
+                        "type": "object",
+                        "properties": {
+                            "messages": {
+                                "type": "array",
+                                "description": "Chat messages for the workflow input",
+                                "items": {
+                                    "type": "object",
+                                    "properties": {
+                                        "role": {
+                                            "type": "string",
+                                            "enum": ["user", "assistant", "system"],
+                                            "default": "user",
+                                        },
+                                        "content": {
+                                            "type": "string",
+                                            "default": "Hello",
+                                        },
+                                    },
+                                    "required": ["role", "content"],
+                                    "additionalProperties": False,
+                                },
+                                "minItems": 1,
+                                "default": [{"role": "user", "content": "Hello"}],
+                            },
+                            "additional_info": {
+                                "type": "string",
+                                "description": "Optional free-form context provided to the workflow",
+                                "default": "info",
+                            },
+                        },
+                        "required": ["messages"],
+                        "additionalProperties": True,
+                        "default": {
+                            "messages": [{"role": "user", "content": "Hello"}],
+                            "additional_info": "info",
+                        },
+                    },
+                    indent=4,
+                ),
+                ui_component=UIComponent.SCHEMA_BUILDER,
+                ui_component_properties=UIComponentProperties(
+                    label="Payload",
+                    description="Defines the structure of input data for this workflow. "
+                    "Keys can be referenced as template variables (e.g., {{additional_info}}). "
+                    "Values serve as defaults when not provided in requests.",
+                ).model_dump(exclude_unset=True, exclude_none=True),
+            ),
+        ],
+    )
+
+    upsert_component_categories(
+        session=session,
+        component_id=start_component.id,
+        category_ids=[CATEGORY_UUIDS["trigger"]],
+    )

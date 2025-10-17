@@ -354,3 +354,184 @@ def get_cron_runs(
         runs=runs,
         total=len(runs),
     )
+
+
+def sync_project_cron_jobs(
+    session: Session,
+    project_id: UUID,
+    user_id: str,
+) -> dict[str, Any]:
+    """
+    Sync cron jobs from project's Start node configuration.
+
+    This function:
+    1. Finds all Start nodes in the project's draft graph
+    2. Extracts cron configuration from Start node parameters
+    3. Creates/updates/deletes cron jobs in the scheduler accordingly
+
+    Returns a dict with sync status and created/updated/deleted job IDs.
+    """
+    from ada_backend.repositories.project_repository import get_project_with_details
+    from ada_backend.repositories.graph_runner_repository import get_component_nodes
+    from ada_backend.repositories.component_repository import get_component_instance_by_id
+    from ada_backend.database.models import EnvType
+
+    project = get_project_with_details(session, project_id)
+    if not project:
+        raise CronValidationError(f"Project {project_id} not found")
+
+    organization_id = project.organization_id
+
+    # Get draft graph runner
+    draft_graph_runner = next((gr for gr in project.graph_runners if gr.env == EnvType.DRAFT), None)
+    if not draft_graph_runner:
+        return {
+            "status": "no_draft_graph",
+            "message": "No draft graph found for project",
+            "created": [],
+            "updated": [],
+            "deleted": [],
+        }
+
+    # Get all component nodes in the graph
+    component_nodes = get_component_nodes(session, draft_graph_runner.graph_runner_id)
+
+    # Find Start nodes (nodes with is_start_node=True)
+    start_nodes = [node for node in component_nodes if node.is_start_node]
+
+    if not start_nodes:
+        return {
+            "status": "no_start_nodes",
+            "message": "No start nodes found in draft graph",
+            "created": [],
+            "updated": [],
+            "deleted": [],
+        }
+
+    created_jobs = []
+    updated_jobs = []
+    errors = []
+
+    for start_node in start_nodes:
+        component_instance = get_component_instance_by_id(session, start_node.component_instance_id)
+        if not component_instance:
+            continue
+
+        # Extract cron parameters from basic_parameters (list of BasicParameter objects)
+        cron_enabled = False
+        cron_expression = None
+        cron_timezone = "UTC"
+        payload_schema_value = None
+
+        # Iterate through the list of basic parameters
+        for param in component_instance.basic_parameters:
+            param_name = param.parameter_definition.name
+            param_value = param.value
+
+            if param_name == "cron_enabled":
+                # Convert string to boolean
+                cron_enabled = param_value.lower() == "true" if param_value else False
+            elif param_name == "cron_expression":
+                cron_expression = param_value
+            elif param_name == "cron_timezone":
+                cron_timezone = param_value if param_value else "UTC"
+            elif param_name == "payload_schema":
+                payload_schema_value = param_value
+
+        # Extract default payload from the payload_schema
+        import json
+
+        cron_payload = {}
+        if payload_schema_value:
+            try:
+                schema = json.loads(payload_schema_value)
+                if isinstance(schema, dict) and "default" in schema:
+                    cron_payload = schema["default"]
+                elif isinstance(schema, dict) and "properties" in schema:
+                    cron_payload = {}
+                    for prop_name, prop_schema in schema["properties"].items():
+                        if isinstance(prop_schema, dict) and "default" in prop_schema:
+                            cron_payload[prop_name] = prop_schema["default"]
+            except (json.JSONDecodeError, ValueError, KeyError) as e:
+                LOGGER.warning(
+                    f"Failed to extract default from payload_schema for component {component_instance.id}: {e}"
+                )
+                cron_payload = {}
+
+        # Check if a cron job already exists for this project+env
+        existing_jobs = get_cron_jobs_by_organization(session, organization_id, enabled_only=False)
+        existing_job = None
+        for job in existing_jobs:
+            job_payload = job.payload or {}
+            if job_payload.get("project_id") == str(project_id) and job_payload.get("env") == "draft":
+                existing_job = job
+                break
+
+        if cron_enabled and cron_expression:
+            # Create or update cron job
+            job_name = f"{project.project_name} - Draft (Auto-scheduled)"
+            payload_data = {
+                "project_id": str(project_id),
+                "env": "draft",
+                "input_data": cron_payload,
+            }
+
+            try:
+                if existing_job:
+                    # Update existing job
+                    cron_data = CronJobUpdate(
+                        name=job_name,
+                        cron_expr=cron_expression,
+                        tz=cron_timezone,
+                        payload=payload_data,
+                        is_enabled=True,
+                    )
+                    updated_job = update_cron_job_service(
+                        session,
+                        existing_job.id,
+                        cron_data,
+                        organization_id,
+                        user_id=user_id,
+                    )
+                    updated_jobs.append(str(updated_job.id))
+                    LOGGER.info(f"Updated cron job {updated_job.id} for project {project_id}")
+                else:
+                    # Create new job
+                    cron_data = CronJobCreate(
+                        name=job_name,
+                        cron_expr=cron_expression,
+                        tz=cron_timezone,
+                        entrypoint=CronEntrypoint.AGENT_INFERENCE,
+                        payload=payload_data,
+                    )
+                    created_job = create_cron_job(
+                        session,
+                        organization_id,
+                        cron_data,
+                        user_id=user_id,
+                    )
+                    created_jobs.append(str(created_job.id))
+                    LOGGER.info(f"Created cron job {created_job.id} for project {project_id}")
+            except Exception as e:
+                error_msg = f"Failed to sync cron job for project {project_id}: {str(e)}"
+                LOGGER.error(error_msg)
+                errors.append(error_msg)
+        elif existing_job:
+            # Cron disabled but job exists - pause it
+            try:
+                pause_cron_job(session, existing_job.id, organization_id)
+                updated_jobs.append(str(existing_job.id))
+                LOGGER.info(f"Paused cron job {existing_job.id} for project {project_id}")
+            except Exception as e:
+                error_msg = f"Failed to pause cron job {existing_job.id}: {str(e)}"
+                LOGGER.error(error_msg)
+                errors.append(error_msg)
+
+    return {
+        "status": "success" if not errors else "partial_success",
+        "message": f"Synced cron jobs for project {project_id}",
+        "created": created_jobs,
+        "updated": updated_jobs,
+        "deleted": [],
+        "errors": errors if errors else None,
+    }

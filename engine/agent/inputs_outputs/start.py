@@ -7,27 +7,25 @@ from pydantic import BaseModel
 
 from engine.agent.types import ToolDescription, ComponentAttributes, AgentPayload, NodeData
 from engine.trace.trace_manager import TraceManager
-from engine.agent.json_schema_utils import parse_json_schema_string, extract_defaults_from_schema
+from engine.agent.json_schema_utils import parse_json_schema_string
 from engine.trace.serializer import serialize_to_json
 
 LOGGER = logging.getLogger(__name__)
 
-DEFAULT_INPUT_TOOL_DESCRIPTION = ToolDescription(
-    name="Input_Tool",
-    description=("An input tool that filters the input data to return an AgentPayload."),
+DEFAULT_START_TOOL_DESCRIPTION = ToolDescription(
+    name="Start_Tool",
+    description=("A start node that initializes the workflow with input data."),
     tool_properties={
         "input_data": {
             "type": "json",
-            "description": "An input tool",
+            "description": "The starting input data for the workflow",
         },
     },
     required_tool_properties=[],
 )
 
 
-class Input:
-    # LEGACY: Mark as unmigrated for retro-compatibility
-    # TODO: Remove after migration to Agent base class
+class Start:
     migrated: bool = False
 
     def __init__(
@@ -46,35 +44,23 @@ class Input:
         else:
             # If it's already a dict, use it directly
             self.payload_schema = payload_schema
-        # Extract default values from schema for backwards compatibility
-        self.payload_defaults = extract_defaults_from_schema(self.payload_schema)
 
-    @classmethod
-    def get_canonical_ports(cls) -> dict[str, str | None]:
-        # Expose the canonical output as the messages list so default mappings
-        # can auto-wire to downstream components expecting chat messages.
+    def get_canonical_ports(self) -> dict[str, str | None]:
         return {"output": "messages"}
 
-    # LEGACY: Schema methods for retro-compatibility with type discovery
-    # TODO: Remove after migration to Agent base class
     @classmethod
     def get_inputs_schema(cls) -> Type[BaseModel]:
-        """Input component accepts any input data."""
         from engine.legacy_compatibility import create_legacy_input_schema
 
         return create_legacy_input_schema()
 
     @classmethod
     def get_outputs_schema(cls) -> Type[BaseModel]:
-        """Input component outputs messages list (canonical port)."""
         from engine.legacy_compatibility import create_legacy_input_output_schema
 
         return create_legacy_input_output_schema()
 
-    # TODO: Refactor Agent I/O to use an unified input/output object:
     async def run(self, input_data: AgentPayload | dict | NodeData) -> NodeData:
-        # Normalize input to a plain dict
-        # TODO: Remove after I/O refactor migration
         if isinstance(input_data, NodeData):
             base: dict = dict(input_data.data or {})
             incoming_ctx = input_data.ctx.copy()
@@ -86,9 +72,11 @@ class Input:
             incoming_ctx = {}
 
         filtered_input = base.copy()
-        for k, v in self.payload_defaults.items():
-            if k not in filtered_input:
-                filtered_input[k] = v
+
+        if isinstance(self.payload_schema, dict) and "properties" in self.payload_schema:
+            for key, prop_schema in self.payload_schema["properties"].items():
+                if key not in filtered_input and "default" in prop_schema:
+                    filtered_input[key] = prop_schema["default"]
 
         with self.trace_manager.start_span(self.component_attributes.component_instance_name) as span:
             span.set_attributes(
@@ -101,7 +89,6 @@ class Input:
             )
             span.set_status(trace_api.StatusCode.OK)
 
-        # Extract template vars (everything except messages and file-related fields)
         template_vars = {}
         file_content = {}
         file_urls = {}
@@ -110,24 +97,16 @@ class Input:
             if k == "messages":
                 continue
             elif k == "template_vars" and isinstance(v, dict):
-                # {"template_vars": {"username": "John"}}
                 template_vars.update({tk: str(tv) for tk, tv in v.items()})
             elif k == "file_urls" and isinstance(v, dict):
-                # {"file_urls": {"cs_book": "url"}}
                 file_urls.update(v)
             elif k.endswith("_file_content") or k.endswith("_file_data"):
-                # LEGACY: Individual file content fields (deprecated)
                 file_content[k] = v
             elif k.endswith("_file_url") or k.endswith("_url"):
-                # LEGACY: Individual file URL fields (deprecated)
                 file_urls[k] = v
             else:
-                # LEGACY: Flat template variables (deprecated)
-                # {"username": "John", "company": "Acme"}
-                # TODO: Remove this support once all frontends use nested structure
                 template_vars[k] = str(v)
 
-        # Build context
         ctx = incoming_ctx
         ctx["template_vars"] = template_vars
         if file_content:
@@ -135,6 +114,5 @@ class Input:
         if file_urls:
             ctx["file_urls"] = file_urls
 
-        # Return NodeData with messages in data and template_vars in ctx
         messages = filtered_input.get("messages", [])
         return NodeData(data={"messages": messages}, ctx=ctx)
