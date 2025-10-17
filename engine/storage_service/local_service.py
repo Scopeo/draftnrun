@@ -310,10 +310,11 @@ class SQLLocalService(DBService):
         table_name: str,
         ids: list[str | int],
         schema_name: Optional[str] = None,
+        id_column_name: str = CHUNK_ID_COLUMN_NAME,
     ):
         table = self.get_table(table_name, schema_name)
         with self.Session() as session:
-            delete_stmt = sqlalchemy.delete(table).where(table.c[CHUNK_ID_COLUMN_NAME].in_(ids))
+            delete_stmt = sqlalchemy.delete(table).where(table.c[id_column_name].in_(ids))
             session.execute(delete_stmt)
             session.commit()
 

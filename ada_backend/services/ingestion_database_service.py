@@ -83,7 +83,7 @@ def delete_chunks_from_ingestion_db(
     organization_id: UUID,
     source_name: str,
     chunk_ids: list[str],
-) -> None:
+):
     sql_local_service = get_sql_local_service_for_ingestion()
     schema_name, table_name, qdrant_collection_name = get_sanitize_names(
         source_name=source_name,
@@ -94,4 +94,3 @@ def delete_chunks_from_ingestion_db(
         schema_name=schema_name,
         ids=chunk_ids,
     )
-    return None
