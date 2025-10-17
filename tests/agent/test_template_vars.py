@@ -63,13 +63,14 @@ def react_agent(mock_trace_manager, mock_llm_service):
 
 
 def test_input_block_extracts_template_vars(input_block):
-    """Test Input block returns NodeData with template_vars in ctx."""
+    """Test Input block returns NodeData with template vars directly in ctx."""
     input_data = {"messages": [{"role": "user", "content": "hi"}]}
     result = asyncio.run(input_block.run(input_data))
 
     assert isinstance(result, NodeData)
     assert "messages" in result.data
-    assert result.ctx.get("template_vars") == {"yes": "LOL", "name": "John"}
+    assert result.ctx.get("yes") == "LOL"
+    assert result.ctx.get("name") == "John"
 
 
 def test_input_block_preserves_existing_ctx(input_block):
@@ -81,7 +82,8 @@ def test_input_block_preserves_existing_ctx(input_block):
 
     assert isinstance(result, NodeData)
     assert result.ctx["existing_key"] == "existing_value"
-    assert result.ctx["template_vars"] == {"yes": "LOL", "name": "John"}
+    assert result.ctx["yes"] == "LOL"
+    assert result.ctx["name"] == "John"
 
 
 @patch("engine.prometheus_metric.agent_calls")
@@ -94,7 +96,7 @@ def test_llm_call_with_template_vars(get_span_mock, agent_calls_mock, llm_agent)
 
     # Simulate Input -> LLMCallAgent flow with NodeData
     input_node_data = NodeData(
-        data={"messages": [{"role": "user", "content": "hi"}]}, ctx={"template_vars": {"yes": "LOL", "name": "John"}}
+        data={"messages": [{"role": "user", "content": "hi"}]}, ctx={"yes": "LOL", "name": "John"}
     )
 
     result = asyncio.run(llm_agent.run(input_node_data))
@@ -128,7 +130,7 @@ def test_llm_call_missing_template_var(get_span_mock, agent_calls_mock, mock_llm
 
     input_node_data = NodeData(
         data={"messages": [{"role": "user", "content": "hi"}]},
-        ctx={"template_vars": {"yes": "LOL"}},  # missing_var not provided
+        ctx={"yes": "LOL"},  # missing_var not provided
     )
 
     with pytest.raises(ValueError, match="Missing template variable 'missing_var'"):
@@ -157,9 +159,7 @@ def test_llm_call_with_input_var(get_span_mock, agent_calls_mock, llm_agent):
         prompt_template="User said: {input}",
     )
 
-    input_node_data = NodeData(
-        data={"messages": [{"role": "user", "content": "Hello world!"}]}, ctx={"template_vars": {}}
-    )
+    input_node_data = NodeData(data={"messages": [{"role": "user", "content": "Hello world!"}]}, ctx={})
 
     result = asyncio.run(agent.run(input_node_data))
 
@@ -177,7 +177,7 @@ def test_react_agent_with_template_vars(get_span_mock, agent_calls_mock, react_a
     agent_calls_mock.labels.return_value = counter_mock
 
     input_node_data = NodeData(
-        data={"messages": [{"role": "user", "content": "hi"}]}, ctx={"template_vars": {"yes": "LOL", "name": "Alice"}}
+        data={"messages": [{"role": "user", "content": "hi"}]}, ctx={"yes": "LOL", "name": "Alice"}
     )
 
     result = asyncio.run(react_agent.run(input_node_data))
@@ -209,7 +209,7 @@ def test_template_vars_priority(get_span_mock, agent_calls_mock, mock_llm_servic
 
     input_node_data = NodeData(
         data={"messages": [{"role": "user", "content": "Hello from message"}]},
-        ctx={"template_vars": {"yes": "Hello from template"}},
+        ctx={"yes": "Hello from template"},
     )
 
     # The {{input}} should come from message content, {{yes}} from template_vars
@@ -247,17 +247,14 @@ def test_llm_call_with_file_handling(get_span_mock, agent_calls_mock, get_models
     input_node_data = NodeData(
         data={"messages": [{"role": "user", "content": "Hello world!"}]},
         ctx={
-            "template_vars": {},
-            "file_content": {
-                "my_file_content": {
-                    "filename": "test.pdf",
-                    "file_data": (
-                        "data:application/pdf;base64,"
-                        "JVBERi0xLjQKJcOkw7zDtsO8CjIgMCBvYmoKPDwKL0xlbmd0aCAzIDAgUgo+PgpzdHJlYW0K"
-                    ),
-                }
+            "my_file_content": {
+                "filename": "test.pdf",
+                "file_data": (
+                    "data:application/pdf;base64,"
+                    "JVBERi0xLjQKJcOkw7zDtsO8CjIgMCBvYmoKPDwKL0xlbmd0aCAzIDAgUgo+PgpzdHJlYW0K"
+                ),
             },
-            "file_urls": {"my_file_url": "https://example.com/document.pdf"},
+            "my_file_url": "https://example.com/document.pdf",
         },
     )
 
@@ -268,8 +265,8 @@ def test_llm_call_with_file_handling(get_span_mock, agent_calls_mock, get_models
     agent._completion_service.complete_async.assert_called_once()
 
 
-def test_input_block_with_nested_template_vars(mock_trace_manager):
-    """Test Input block handles nested template_vars field correctly."""
+def test_input_block_with_flat_template_vars(mock_trace_manager):
+    """Test Input block handles flat template vars correctly."""
     # Create a fresh input block without schema defaults
     input_block = Input(
         trace_manager=mock_trace_manager,
@@ -282,25 +279,24 @@ def test_input_block_with_nested_template_vars(mock_trace_manager):
 
     input_data = {
         "messages": [{"role": "user", "content": "Hello"}],
-        "file_urls": {"cs_book": "https://example.com/book.pdf"},
-        "template_vars": {"username": "John"},
+        "cs_book_url": "https://example.com/book.pdf",
+        "username": "John",
     }
     result = asyncio.run(input_block.run(input_data))
 
     assert isinstance(result, NodeData)
     assert "messages" in result.data
-    # template_vars should contain the nested values, not the field itself
-    assert result.ctx.get("template_vars") == {"username": "John"}
-    assert result.ctx.get("file_urls") == {"cs_book": "https://example.com/book.pdf"}
+    assert result.ctx.get("username") == "John"
+    assert result.ctx.get("cs_book_url") == "https://example.com/book.pdf"
 
 
 @patch("engine.agent.llm_call_agent.get_models_by_capability")
 @patch("engine.prometheus_metric.agent_calls")
 @patch("engine.prometheus_metric.get_tracing_span")
-def test_llm_call_with_nested_template_vars(
+def test_llm_call_with_flat_template_vars(
     get_span_mock, agent_calls_mock, get_models_mock, mock_llm_service
 ):  # noqa: F811
-    """Test LLMCallAgent works with nested template_vars from frontend payload."""
+    """Test LLMCallAgent works with flat template vars from frontend payload."""
     get_span_mock.return_value = MagicMock(project_id="test_project")
     counter_mock = MagicMock()
     agent_calls_mock.labels.return_value = counter_mock
@@ -322,7 +318,7 @@ def test_llm_call_with_nested_template_vars(
 
     input_node_data = NodeData(
         data={"messages": [{"role": "user", "content": "Hello"}]},
-        ctx={"template_vars": {"username": "John"}, "file_urls": {"cs_book": "https://example.com/book.pdf"}},
+        ctx={"username": "John", "cs_book": "https://example.com/book.pdf"},
     )
 
     result = asyncio.run(agent.run(input_node_data))

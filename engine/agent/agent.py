@@ -229,7 +229,9 @@ class Agent(ABC):
                             data[input_port_name] = last_message.get("content", "")
 
                     validated_inputs = InputModel(**data)
-                    output_model_instance = await self._run_without_io_trace(inputs=validated_inputs, ctx={})
+                    # Pass ctx from kwargs if available (for tool calls from ReactAgent)
+                    ctx = kwargs.get("ctx", {})
+                    output_model_instance = await self._run_without_io_trace(inputs=validated_inputs, ctx=ctx)
                     OutputModel = self.get_outputs_schema()
                     if not isinstance(output_model_instance, OutputModel):
                         raise TypeError(
