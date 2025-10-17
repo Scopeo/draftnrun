@@ -6,14 +6,14 @@ from ada_backend.schemas.parameter_schema import PipelineParameterSchema
 from ada_backend.schemas.pipeline.base import (
     ComponentRelationshipSchema,
     ComponentInstanceSchema,
+    ToolDescriptionSchema,
 )
 from ada_backend.schemas.pipeline.graph_schema import EdgeSchema, GraphUpdateSchema, PortMappingSchema
-from engine.agent.types import ToolDescription
 from engine.agent.rag.rag import format_rag_tool_description
 from ada_backend.database.seed.constants import COMPLETION_MODEL_IN_DB
 
 
-GRAPH_TEST_TOOL_DESCRIPTION = ToolDescription(
+GRAPH_TEST_TOOL_DESCRIPTION = ToolDescriptionSchema(
     name="Graph Test Chatbot",
     description="Graph Test for Revaline",
     tool_properties={},
@@ -55,6 +55,8 @@ def build_graph_test_chatbot(
         "evaluation_instance": uuid4(),
     }
 
+    rag_tool_description = format_rag_tool_description(source="customer_service")
+
     instances = [
         ComponentInstanceSchema(
             id=COMPONENT_INSTANCES_IDS["llm_call_instance"],
@@ -77,7 +79,12 @@ def build_graph_test_chatbot(
             component_id=components["rag_agent"],
             ref=f"{agent_name}_rag_agent_instance",
             parameters=[],
-            tool_description=format_rag_tool_description(source="customer_service"),
+            tool_description=ToolDescriptionSchema(
+                name=rag_tool_description.name,
+                description=rag_tool_description.description,
+                tool_properties=rag_tool_description.tool_properties,
+                required_tool_properties=rag_tool_description.required_tool_properties,
+            ),
         ),
         ComponentInstanceSchema(
             id=COMPONENT_INSTANCES_IDS["synthesizer_instance"],
