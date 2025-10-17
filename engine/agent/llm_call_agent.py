@@ -1,11 +1,8 @@
-from typing import Optional, Any, Type
-from pydantic import BaseModel, Field
-
 from openinference.semconv.trace import SpanAttributes
 from opentelemetry.trace import get_current_span
 
 from engine.agent.agent import Agent
-from engine.agent.types import ChatMessage, ToolDescription, ComponentAttributes
+from engine.agent.types import AgentPayload, ChatMessage, ToolDescription, ComponentAttributes
 from engine.agent.utils import extract_vars_in_text_template, parse_openai_message_format
 from engine.llm_services.llm_service import CompletionService
 from engine.trace.trace_manager import TraceManager
@@ -64,32 +61,8 @@ DEFAULT_LLM_CALL_TOOL_DESCRIPTION = ToolDescription(
 )
 
 
-class LLMCallInputs(BaseModel):
-    messages: list[ChatMessage] = Field(description="The input messages")
-    # Allow extra fields for backward compatibility
-    model_config = {"extra": "allow"}
-
-
-class LLMCallOutputs(BaseModel):
-    output: str = Field(description="The LLM response")
-    artifacts: dict[str, Any] = Field(default_factory=dict)
-
-
 class LLMCallAgent(Agent):
-    migrated = True
-
-    # Add schema methods
-    @classmethod
-    def get_inputs_schema(cls) -> Type[BaseModel]:
-        return LLMCallInputs
-
-    @classmethod
-    def get_outputs_schema(cls) -> Type[BaseModel]:
-        return LLMCallOutputs
-
-    @classmethod
-    def get_canonical_ports(cls) -> dict[str, str | None]:
-        return {"input": "messages", "output": "output"}
+    migrated = False
 
     def __init__(
         self,
@@ -113,50 +86,61 @@ class LLMCallAgent(Agent):
         self._file_url_key = file_url_key
         self.output_format = output_format
 
-    async def _run_without_io_trace(self, inputs: LLMCallInputs, ctx: dict) -> LLMCallOutputs:
-        # Extract template vars from context
-        template_vars = ctx.get("template_vars", {})
+    async def _run_without_io_trace(self, *input_payloads: AgentPayload | dict, **kwargs) -> AgentPayload:
 
         prompt_vars = extract_vars_in_text_template(self._prompt_template)
         input_replacements = {}
         files_content = []
         images_content = []
 
-        # Extract input from messages
-        input_replacements["input"] = ""
-        if inputs.messages:
-            last_message = inputs.messages[-1]
-            if last_message.content:
+        if kwargs:
+            input_payloads = [kwargs]
+
+        for payload in input_payloads:
+            payload_json = (
+                payload.model_dump(exclude_unset=True, exclude_none=True)
+                if isinstance(payload, AgentPayload)
+                else payload
+            )
+            if (
+                "messages" in payload_json
+                and payload_json["messages"]
+                and "content" in payload_json["messages"][-1]
+                and payload_json["messages"][-1]["content"]
+            ):
                 text_content, payload_files_content, payload_images_content = parse_openai_message_format(
-                    last_message.content, self._completion_service._provider
+                    payload_json["messages"][-1]["content"], self._completion_service._provider
                 )
-                input_replacements["input"] = text_content
+                input_replacements["input"] += text_content
                 files_content.extend(payload_files_content)
                 images_content.extend(payload_images_content)
 
         # Fill template vars from context
         for prompt_var in prompt_vars:
-            if prompt_var in template_vars:
-                input_replacements[prompt_var] = template_vars[prompt_var]
-            elif prompt_var not in input_replacements:
-                raise ValueError(
-                    f"Missing template variable '{prompt_var}' needed in prompt template "
-                    f"of component '{self.component_attributes.component_instance_name}'. "
-                    f"Available template vars: {list(template_vars.keys())}"
-                )
+            for payload in input_payloads:
+                if prompt_var in payload_json:
+                    input_replacements[prompt_var] = payload_json[prompt_var]
+                    continue
+            if prompt_var not in input_replacements:
+                input_replacements[prompt_var] = ""
 
-        # Handle file content from context
-        file_content_ctx = ctx.get("file_content", {})
-        if self._file_content_key and self._file_content_key in file_content_ctx:
-            file_data = file_content_ctx[self._file_content_key]
-            if isinstance(file_data, dict) and "filename" in file_data and "file_data" in file_data:
-                files_content.append({"type": "file", "file": file_data})
+        if self._file_content_key:
+            for payload in input_payloads:
+                if (
+                    self._file_content_key in payload_json
+                    and isinstance(payload_json[self._file_content_key], dict)
+                    and "filename" in payload_json[self._file_content_key]
+                    and "file_data" in payload_json[self._file_content_key]
+                ):
+                    files_content.append({"type": "file", "file": payload_json[self._file_content_key]})
+                    continue
 
-        # Handle file URLs from context
-        file_urls_ctx = ctx.get("file_urls", {})
-        if self._file_url_key and self._file_url_key in file_urls_ctx:
-            file_url = file_urls_ctx[self._file_url_key]
-            files_content.append({"type": "file", "file_url": file_url})
+        if self._file_url_key:
+            for payload in input_payloads:
+                if self._file_url_key in payload_json:
+                    file_url = payload_json[self._file_url_key]
+                    files_content.append({"type": "file", "file_url": file_url})
+                    continue
 
         text_content = self._prompt_template.format(**input_replacements)
 
@@ -213,4 +197,6 @@ class LLMCallAgent(Agent):
             response = await self._completion_service.complete_async(
                 messages=[{"role": "user", "content": content}],
             )
-        return LLMCallOutputs(output=response, artifacts={})
+        return AgentPayload(
+            messages=[ChatMessage(role="assistant", content=response)],
+        )
