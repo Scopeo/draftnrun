@@ -25,6 +25,7 @@ def test_monitor_endpoint():
     }
     data = {"messages": [{"role": "user", "content": "Hello, how are you?"}]}
     response = client.post(endpoint, json=data, headers=headers)
+    assert response.status_code == 200
     output = ChatResponse.model_validate(response.json())
     assert isinstance(output.message, str)
     assert output.error is None, f"Graph execution failed with error: {output.error}"

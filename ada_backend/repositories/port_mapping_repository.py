@@ -44,21 +44,21 @@ def delete_port_mappings_for_target_except(
     return deleted
 
 
-def get_output_port_definition_id(session: Session, component_id: UUID, port_name: str) -> UUID | None:
+def get_output_port_definition_id(session: Session, component_version_id: UUID, port_name: str) -> UUID | None:
     """Get port definition ID for OUTPUT port, returns None if not found"""
     result = (
         session.query(db.PortDefinition.id)
-        .filter_by(component_id=component_id, name=port_name, port_type=db.PortType.OUTPUT)
+        .filter_by(component_version_id=component_version_id, name=port_name, port_type=db.PortType.OUTPUT)
         .first()
     )
     return result[0] if result else None
 
 
-def get_input_port_definition_id(session: Session, component_id: UUID, port_name: str) -> UUID | None:
+def get_input_port_definition_id(session: Session, component_version_id: UUID, port_name: str) -> UUID | None:
     """Get port definition ID for INPUT port, returns None if not found"""
     result = (
         session.query(db.PortDefinition.id)
-        .filter_by(component_id=component_id, name=port_name, port_type=db.PortType.INPUT)
+        .filter_by(component_version_id=component_version_id, name=port_name, port_type=db.PortType.INPUT)
         .first()
     )
     return result[0] if result else None

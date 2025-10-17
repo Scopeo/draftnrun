@@ -9,5 +9,6 @@ class ComponentInstanceReadSchema(ComponentInstanceSchema, ComponentUseInfoSchem
 
     component_name: str
     component_description: Optional[str]
+    version_tag: Optional[str] = None
 
     parameters: list[PipelineParameterReadSchema]

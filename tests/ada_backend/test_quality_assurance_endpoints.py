@@ -243,6 +243,7 @@ def _create_dummy_agent_workflow_config():
                 "ref": "API Input",
                 "is_start_node": True,
                 "component_id": "01357c0b-bc99-44ce-a435-995acc5e2544",  # input component UUID
+                "component_version_id": "01357c0b-bc99-44ce-a435-995acc5e2544",
                 "parameters": [
                     {
                         "value": DEFAULT_PAYLOAD_SCHEMA,
@@ -286,6 +287,7 @@ def _create_dummy_agent_workflow_config():
                 "ref": "Filter",
                 "is_start_node": False,
                 "component_id": "02468c0b-bc99-44ce-a435-995acc5e2545",  # filter component UUID
+                "component_version_id": "02468c0b-bc99-44ce-a435-995acc5e2545",
                 "parameters": [
                     {
                         "value": DEFAULT_FILTER_SCHEMA,

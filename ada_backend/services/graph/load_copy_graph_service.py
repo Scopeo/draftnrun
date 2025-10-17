@@ -50,6 +50,7 @@ def load_copy_graph_service(
             name=component_instance_to_copy.name,
             is_start_node=component_instance_to_copy.is_start_node,
             component_id=component_instance_to_copy.component_id,
+            component_version_id=component_instance_to_copy.component_version_id,
             tool_description=component_instance_to_copy.tool_description,
             parameters=[
                 PipelineParameterSchema(name=param.name, value=param.value, order=param.order)
