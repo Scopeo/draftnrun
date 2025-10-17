@@ -21,13 +21,24 @@ def mock_trace_manager():
 @pytest.fixture
 def input_block(mock_trace_manager):
     """Input block with template vars in payload_schema."""
+    schema = {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "properties": {
+            "messages": {"type": "array", "default": []},
+            "yes": {"type": "string", "default": "LOL"},
+            "name": {"type": "string", "default": "John"},
+        },
+    }
+    import json
+
     return Input(
         trace_manager=mock_trace_manager,
         tool_description=ToolDescription(
             name="input", description="input", tool_properties={}, required_tool_properties=[]
         ),
         component_attributes=ComponentAttributes(component_instance_name="Test Input"),
-        payload_schema='{"messages": [], "yes": "LOL", "name": "John"}',
+        payload_schema=json.dumps(schema),
     )
 
 
@@ -271,13 +282,20 @@ def test_llm_call_with_file_handling(get_span_mock, agent_calls_mock, get_models
 def test_input_block_with_nested_template_vars(mock_trace_manager):
     """Test Input block handles nested template_vars field correctly."""
     # Create a fresh input block without schema defaults
+    schema = {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "properties": {"messages": {"type": "array", "default": []}},
+    }
+    import json
+
     input_block = Input(
         trace_manager=mock_trace_manager,
         tool_description=ToolDescription(
             name="input", description="input", tool_properties={}, required_tool_properties=[]
         ),
         component_attributes=ComponentAttributes(component_instance_name="Test Input"),
-        payload_schema='{"messages": []}',  # No default template vars
+        payload_schema=json.dumps(schema),  # No default template vars
     )
 
     input_data = {
