@@ -93,40 +93,13 @@ class Input:
             )
             span.set_status(trace_api.StatusCode.OK)
 
-        # Extract template vars (everything except messages and file-related fields)
-        template_vars = {}
-        file_content = {}
-        file_urls = {}
-
+        # "messages" go in data, all other fields go in ctx
+        ctx = incoming_ctx
         for k, v in filtered_input.items():
             if k == "messages":
                 continue
-            elif k == "template_vars" and isinstance(v, dict):
-                # {"template_vars": {"username": "John"}}
-                template_vars.update({tk: str(tv) for tk, tv in v.items()})
-            elif k == "file_urls" and isinstance(v, dict):
-                # {"file_urls": {"cs_book": "url"}}
-                file_urls.update(v)
-            elif k.endswith("_file_content") or k.endswith("_file_data"):
-                # LEGACY: Individual file content fields (deprecated)
-                file_content[k] = v
-            elif k.endswith("_file_url") or k.endswith("_url"):
-                # LEGACY: Individual file URL fields (deprecated)
-                file_urls[k] = v
-            else:
-                # LEGACY: Flat template variables (deprecated)
-                # {"username": "John", "company": "Acme"}
-                # TODO: Remove this support once all frontends use nested structure
-                template_vars[k] = str(v)
+            ctx[k] = v
 
-        # Build context
-        ctx = incoming_ctx
-        ctx["template_vars"] = template_vars
-        if file_content:
-            ctx["file_content"] = file_content
-        if file_urls:
-            ctx["file_urls"] = file_urls
-
-        # Return NodeData with messages in data and template_vars in ctx
+        # Return NodeData with messages in data and all other fields in ctx
         messages = filtered_input.get("messages", [])
         return NodeData(data={"messages": messages}, ctx=ctx)
