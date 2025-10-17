@@ -36,8 +36,8 @@ async def create_chunks_from_document_without_llm(
             try:
                 markdown_text = _parse_pdf_without_llm(str(temp_path))
             except Exception as e:
-                LOGGER.error(f"Error parsing PDF {document.file_name} without LLM: {e}")
-                raise Exception(f"Error parsing PDF {document.file_name} without LLM: {e}")
+                LOGGER.error(f"Error parsing PDF {document.file_name} without LLM: {e}", exc_info=True)
+                raise Exception(f"Error parsing PDF {document.file_name} without LLM") from e
             finally:
                 if temp_path.exists():
                     os.unlink(temp_path)
@@ -51,5 +51,5 @@ async def create_chunks_from_document_without_llm(
         )
 
     except Exception as e:
-        LOGGER.error(f"Error processing PDF {document.file_name} without LLM: {e}")
-        raise Exception(f"Error processing PDF {document.file_name} without LLM: {e}")
+        LOGGER.error(f"Error processing PDF {document.file_name} without LLM: {e}", exc_info=True)
+        raise Exception(f"Error processing PDF {document.file_name} without LLM") from e
