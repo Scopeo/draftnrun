@@ -54,9 +54,10 @@ async def get_user_access_to_organization(
     """
     Check if a user has access to an organization.
     """
-    # Offline mode bypass - always grant access with fixed role
+    # Offline mode - use direct database access
     if settings.OFFLINE_MODE:
-        return OrganizationAccess(org_id=organization_id, role=settings.OFFLINE_DEFAULT_ROLE)
+        from ada_backend.services.offline_org_access import get_offline_org_access
+        return get_offline_org_access(user.id, organization_id)
 
     endpoint = f"{settings.SUPABASE_PROJECT_URL}/functions/v1/check-org-access"
     result = await _get_user_access(endpoint, user.token, "org_id", str(organization_id))
