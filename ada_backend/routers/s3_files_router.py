@@ -7,7 +7,7 @@ from ada_backend.schemas.auth_schema import SupabaseUser
 from ada_backend.routers.auth_router import (
     user_has_access_to_organization_dependency,
     UserRights,
-    user_has_access_to_organization_or_verify_api_key,
+    user_has_access_to_organization_xor_verify_api_key,
 )
 from ada_backend.schemas.s3_file_schema import UploadFileRequest, S3UploadURL
 from ada_backend.services.s3_files_service import (
@@ -31,7 +31,7 @@ async def generate_s3_upload_presigned_urls_choice_auth(
     upload_file_requests: list[UploadFileRequest],
     auth_ids: Annotated[
         tuple[UUID | None, UUID | None],
-        Depends(user_has_access_to_organization_or_verify_api_key(allowed_roles=UserRights.READER.value)),
+        Depends(user_has_access_to_organization_xor_verify_api_key(allowed_roles=UserRights.READER.value)),
     ],
 ) -> list[S3UploadURL]:
     """

@@ -12,7 +12,7 @@ from ada_backend.routers.auth_router import (
     user_has_access_to_organization_dependency,
     UserRights,
     verify_ingestion_api_key_dependency,
-    user_has_access_to_organization_or_verify_api_key,
+    user_has_access_to_organization_xor_verify_api_key,
 )
 from ada_backend.services.ingestion_task_service import (
     get_ingestion_task_by_organization_id,
@@ -61,7 +61,7 @@ def create_ingestion_task_choice_auth(
     ingestion_task_data: IngestionTaskQueue,
     auth_ids: Annotated[
         tuple[UUID | None, UUID | None],
-        Depends(user_has_access_to_organization_or_verify_api_key(allowed_roles=UserRights.WRITER.value)),
+        Depends(user_has_access_to_organization_xor_verify_api_key(allowed_roles=UserRights.WRITER.value)),
     ],
     session: Session = Depends(get_db),
 ) -> UUID:

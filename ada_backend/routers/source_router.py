@@ -12,7 +12,7 @@ from ada_backend.routers.auth_router import (
     user_has_access_to_organization_dependency,
     UserRights,
     verify_ingestion_api_key_dependency,
-    user_has_access_to_organization_or_verify_api_key,
+    user_has_access_to_organization_xor_verify_api_key,
 )
 from ada_backend.services.source_service import (
     get_sources_by_organization,
@@ -73,7 +73,7 @@ def update_organization_source_choice_auth(
     source_id: UUID,
     auth_ids: Annotated[
         tuple[UUID | None, UUID | None],
-        Depends(user_has_access_to_organization_or_verify_api_key(allowed_roles=UserRights.ADMIN.value)),
+        Depends(user_has_access_to_organization_xor_verify_api_key(allowed_roles=UserRights.ADMIN.value)),
     ],
     session: Session = Depends(get_db),
 ):
