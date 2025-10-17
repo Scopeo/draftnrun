@@ -13,16 +13,57 @@ from ada_backend.database import models as db
 def test_db():
     """
     Creates an in-memory SQLite database for testing.
+    Note: Some PostgreSQL-specific constraints and types are adapted for SQLite compatibility.
     """
+    from sqlalchemy import JSON
+    from sqlalchemy.dialects.postgresql import JSONB
+    from copy import copy
+
     engine = create_engine("sqlite:///:memory:")
+
+    # Make copies of table constraints and column types before modifying
+    # This prevents modifications from affecting other tests
+    original_table_schemas = {}
+    original_constraints = {}
+    original_column_types = {}
+
+    # Adapt PostgreSQL-specific types and constraints for SQLite before creating tables
+    for table_name, table in Base.metadata.tables.items():
+        # Save originals
+        original_table_schemas[table_name] = table.schema
+        original_constraints[table_name] = copy(table.constraints)
+        original_column_types[table_name] = {}
+
+        # SQLite doesn't support schemas - remove them
+        table.schema = None
+
+        # Remove regex constraints from GraphRunner table
+        if table.name == "graph_runners":
+            table.constraints = {c for c in table.constraints if not (hasattr(c, "sqltext") and "~" in str(c.sqltext))}
+
+        # Replace JSONB columns with JSON (SQLite compatible)
+        for column in table.columns:
+            if isinstance(column.type, JSONB):
+                original_column_types[table_name][column.name] = column.type
+                column.type = JSON()
+
     Base.metadata.create_all(bind=engine)  # Create tables
 
     # Define a reusable session factory
-    SessionLocal = sessionmaker(bind=engine)
+    SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)  # Prevent detached instance errors
 
     yield engine, SessionLocal
 
     Base.metadata.drop_all(bind=engine)  # Drop tables after the test
+
+    # Restore original values to avoid affecting other tests
+    for table_name, table in Base.metadata.tables.items():
+        table.schema = original_table_schemas.get(table_name)
+        if table_name in original_constraints:
+            table.constraints = original_constraints[table_name]
+        for column in table.columns:
+            if table_name in original_column_types and column.name in original_column_types[table_name]:
+                column.type = original_column_types[table_name][column.name]
 
 
 MOCK_UUIDS: dict[str, UUID] = {

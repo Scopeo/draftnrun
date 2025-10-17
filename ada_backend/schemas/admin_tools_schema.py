@@ -1,4 +1,5 @@
 from typing import Optional, Dict, Any, List, Literal
+from datetime import datetime
 from pydantic import BaseModel, Field
 from uuid import UUID
 
@@ -22,3 +23,22 @@ class CreatedSpecificApiToolResponse(BaseModel):
     component_instance_id: UUID
     name: Optional[str]
     tool_description_id: Optional[UUID]
+
+
+class ApiToolListItem(BaseModel):
+    component_instance_id: UUID
+    name: str  # tool_display_name (user-facing name from Component)
+    description: Optional[str]  # tool_description (agent-facing description from ToolDescription)
+    method: Optional[str]
+    created_at: datetime
+    updated_at: datetime
+
+
+class ApiToolListResponse(BaseModel):
+    tools: List[ApiToolListItem]
+
+
+class ApiToolDetailResponse(CreateSpecificApiToolRequest):
+    component_instance_id: UUID
+    component_id: UUID
+    tool_description_id: UUID

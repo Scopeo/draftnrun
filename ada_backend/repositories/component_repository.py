@@ -36,6 +36,53 @@ def get_global_parameters_by_component_id(
     return session.query(ComponentGlobalParameter).filter(ComponentGlobalParameter.component_id == component_id).all()
 
 
+def check_component_used_in_projects(session: Session, component_id: UUID) -> bool:
+    """
+    Check if a component has any instances that are used in graph runners (projects).
+    Returns True if the component is used in at least one project, False otherwise.
+    """
+    used_count = (
+        session.query(db.GraphRunnerNode)
+        .join(db.ComponentInstance, db.GraphRunnerNode.node_id == db.ComponentInstance.id)
+        .filter(db.ComponentInstance.component_id == component_id)
+        .count()
+    )
+    return used_count > 0
+
+
+def get_tool_description_by_id(
+    session: Session,
+    tool_description_id: UUID,
+) -> Optional[db.ToolDescription]:
+    """Get a ToolDescription by ID."""
+    return session.query(db.ToolDescription).filter(db.ToolDescription.id == tool_description_id).first()
+
+
+def get_api_tool_components(session: Session):
+    """
+    Get all API tool components (excluding the base API Call component).
+    Returns list of tuples with component details for API tools.
+    Note: Returns ComponentInstance.name (user-facing) not Component.name (internal with UUID suffix).
+    """
+    return (
+        session.query(
+            db.ComponentInstance.id.label("component_instance_id"),
+            db.ComponentInstance.name,  # User-facing name, not Component.name
+            db.ToolDescription.description,
+            db.Component.created_at,
+            db.Component.updated_at,
+            db.Component.id.label("component_id"),
+        )
+        .join(db.Component, db.ComponentInstance.component_id == db.Component.id)
+        .join(db.ToolDescription, db.ComponentInstance.tool_description_id == db.ToolDescription.id)
+        .filter(
+            db.Component.base_component == "API Call",
+            db.Component.name != "API Call",  # Exclude the original base component
+        )
+        .all()
+    )
+
+
 def has_global_parameter(
     session: Session,
     component_id: UUID,
@@ -718,39 +765,117 @@ def upsert_sub_component_input(
     return sub_input
 
 
-def get_or_create_tool_description(
+def _update_tool_description_fields(
+    tool_description: db.ToolDescription,
+    name: str,
+    description: str,
+    tool_properties: dict,
+    required_tool_properties: list[str],
+) -> None:
+    """
+    Helper function to update tool description fields.
+    Eliminates duplication between create and update operations.
+    """
+    tool_description.name = name
+    tool_description.description = description
+    tool_description.tool_properties = tool_properties
+    tool_description.required_tool_properties = required_tool_properties
+
+
+def upsert_tool_description(
     session: Session,
     name: str,
     description: str,
     tool_properties: dict,
     required_tool_properties: list[str],
     id: Optional[UUID] = None,
+    force_create: bool = False,
 ) -> db.ToolDescription:
-    # TODO: use id
-    # First try to find by name and description only
-    tool_description = (
-        session.query(db.ToolDescription)
-        .filter(
-            db.ToolDescription.name == name,
-            db.ToolDescription.description == description,
+    """
+    Creates or updates a tool description.
+
+    Args:
+        id: If provided, updates the existing tool description with this ID.
+        force_create: If True, always creates a new record (skips name-based lookup).
+                     Use this when you need a unique tool description per item.
+
+    Behavior:
+        - If id is provided: Updates existing or creates with that ID
+        - If force_create is True: Always creates new (no lookup)
+        - Otherwise: Tries to find by name/description (backward compatible)
+    """
+    tool_description = None
+
+    if id:
+        # Update existing by ID
+        tool_description = session.query(db.ToolDescription).filter(db.ToolDescription.id == id).first()
+        if not tool_description:
+            # ID provided but doesn't exist, try to find by name first to avoid unique constraint violation
+            existing_by_name = session.query(db.ToolDescription).filter(db.ToolDescription.name == name).first()
+            if existing_by_name:
+                # Name already exists, update and return it instead
+                _update_tool_description_fields(
+                    existing_by_name, name, description, tool_properties, required_tool_properties
+                )
+                session.commit()
+                session.refresh(existing_by_name)
+                return existing_by_name
+            else:
+                # Name doesn't exist, create new with provided ID
+                tool_description = db.ToolDescription(
+                    id=id,
+                    name=name,
+                    description=description,
+                    tool_properties=tool_properties,
+                    required_tool_properties=required_tool_properties,
+                )
+                session.add(tool_description)
+                session.commit()
+                session.refresh(tool_description)
+                return tool_description
+    elif force_create:
+        # Force create new - skip all lookups
+        tool_description = db.ToolDescription(
+            name=name,
+            description=description,
+            tool_properties=tool_properties,
+            required_tool_properties=required_tool_properties,
         )
-        .first()
-    )
+        session.add(tool_description)
+        session.commit()
+        session.refresh(tool_description)
+        return tool_description
+    else:
+        # Try to find by name and description
+        tool_description = (
+            session.query(db.ToolDescription)
+            .filter(
+                db.ToolDescription.name == name,
+                db.ToolDescription.description == description,
+            )
+            .first()
+        )
 
-    # TODO: remove when front sends id
-    # If found, check if the JSON fields match
+        # If found, check if the JSON fields match
+        if tool_description:
+            if (
+                tool_description.tool_properties == tool_properties
+                and tool_description.required_tool_properties == required_tool_properties
+            ):
+                return tool_description
+            else:
+                # JSON fields don't match, update the existing one instead of creating new
+                _update_tool_description_fields(
+                    tool_description, name, description, tool_properties, required_tool_properties
+                )
+                session.commit()
+                session.refresh(tool_description)
+                return tool_description
+
     if tool_description:
-        # Compare the actual JSON values
-        if (
-            tool_description.tool_properties == tool_properties
-            and tool_description.required_tool_properties == required_tool_properties
-        ):
-            return tool_description
-        else:
-            # JSON fields don't match, create a new one
-            tool_description = None
-
-    if not tool_description:
+        # Update existing
+        _update_tool_description_fields(tool_description, name, description, tool_properties, required_tool_properties)
+    else:
         # Create new tool description
         tool_description = db.ToolDescription(
             name=name,
@@ -834,16 +959,25 @@ def upsert_specific_api_component_with_defaults(
     headers_json: Optional[str],
     timeout_val: Optional[int],
     fixed_params_json: Optional[str],
+    component_id: Optional[UUID] = None,
 ) -> db.Component:
     """
     Ensure a specific API component exists with default parameter definitions.
 
+    Args:
+        component_id: If provided, updates the existing component with that ID. If None, creates new component.
+
     Returns the component.
     """
-    component = get_component_by_name(session, tool_display_name)
+    component = get_component_by_id(session, component_id) if component_id else None
     if not component:
+        # Create new component with unique internal name (to avoid UNIQUE constraint violations)
+        # The user-facing name is stored in ComponentInstance.name
+        from uuid import uuid4
+
+        internal_name = f"{tool_display_name} [{uuid4().hex[:8]}]"
         component = db.Component(
-            name=tool_display_name,
+            name=internal_name,
             base_component="API Call",
             description=f"Preconfigured API tool for {tool_display_name}.",
             is_agent=False,
@@ -852,6 +986,9 @@ def upsert_specific_api_component_with_defaults(
             release_stage=db.ReleaseStage.INTERNAL,
         )
         upsert_components(session, [component])
+    else:
+        # Update existing component - keep internal name stable, update description
+        component.description = f"Preconfigured API tool for {tool_display_name}."
 
     param_defs = [
         db.ComponentParameterDefinition(
