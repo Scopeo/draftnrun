@@ -15,7 +15,7 @@ from ada_backend.repositories.component_repository import (
     get_component_parameter_definition_by_component_id,
     upsert_component_instance,
     upsert_basic_parameter,
-    get_or_create_tool_description,
+    upsert_tool_description,
     delete_component_instance_parameters,
 )
 from ada_backend.services.entity_factory import get_llm_provider_and_model
@@ -33,7 +33,7 @@ def create_or_update_component_instance(
     # Create tool description if needed
     tool_description = None
     if instance_data.tool_description:
-        tool_description = get_or_create_tool_description(
+        tool_description = upsert_tool_description(
             session=session,
             name=instance_data.tool_description.name,
             description=instance_data.tool_description.description,
