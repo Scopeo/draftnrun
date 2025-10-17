@@ -365,14 +365,11 @@ def user_has_access_to_organization_xor_verify_api_key(allowed_roles: set[str]):
     ) -> tuple[UUID | None, UUID | None]:
         """Flexible authentication: tries user auth first, falls back to API key auth."""
 
-        jwt_exception = "Nothing entered"
-        api_key_exception = "Nothing entered"
-
         if authorization and authorization.credentials and x_api_key:
             LOGGER.exception(
-                f"User has entered two authenticators : "
-                f"User token (JWT) : {authorization.credentials}"
-                f"User token (JWT) is not valid {x_api_key}"
+                "User has entered two authenticators :\n"
+                f"  - User token (JWT) : {authorization.credentials}\n"
+                f"  - User token (JWT) is not valid {x_api_key}"
             )
             raise HTTPException(
                 status_code=400,
@@ -390,7 +387,7 @@ def user_has_access_to_organization_xor_verify_api_key(allowed_roles: set[str]):
                 LOGGER.exception(f"User token (JWT) is not valid {e.detail}")
                 raise HTTPException(
                     status_code=401,
-                    detail=(f"Authentication failed : User token (JWT) is not valid"),
+                    detail=("Authentication failed : User token (JWT) is not valid"),
                 ) from e
 
         if x_api_key:
@@ -408,7 +405,7 @@ def user_has_access_to_organization_xor_verify_api_key(allowed_roles: set[str]):
                 LOGGER.exception(f"API Key is not valid : {e.detail}")
                 raise HTTPException(
                     status_code=401,
-                    detail=(f"Authentication failed : API Key is not valid"),
+                    detail=("Authentication failed : API Key is not valid"),
                 ) from e
 
         LOGGER.exception("No authentication provided for organization access")
