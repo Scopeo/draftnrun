@@ -79,7 +79,8 @@ def build_span_trees(df: pd.DataFrame) -> List[TraceSpan]:
             children=[],
             environment=row.get("environment", None),
             call_type=row.get("call_type", None),
-            tag_version=row.get("tag_version", None),
+            graph_runner_id=row.get("graph_runner_id", None),
+            tag_name=row.get("tag_name", None)
         )
 
     trace_trees = []
@@ -122,7 +123,8 @@ def build_root_spans(df: pd.DataFrame) -> List[RootTraceSpan]:
                 llm_token_count_completion=row.get("llm_token_count_completion", None),
                 environment=row.get("environment", None),
                 call_type=row.get("call_type", None),
-                tag_version=row.get("tag_version", None),
+                graph_runner_id=row.get("graph_runner_id", None),
+                tag_name=row.get("tag_name", None),
             )
         )
 
@@ -153,7 +155,7 @@ def get_root_traces_by_project(
     duration: int,
     environment: Optional[EnvType] = None,
     call_type: Optional[CallType] = None,
-    tag_version: Optional[str] = None,
+    graph_runner_id: Optional[UUID] = None,
 ) -> List[RootTraceSpan]:
     df_span = query_root_trace_duration(project_id, duration)
     track_project_observability_loaded(user_id, project_id)
@@ -174,7 +176,7 @@ def get_root_traces_by_project(
         after_filter_count = len(df_span)
         LOGGER.info(f"Rows before filter: {before_filter_count}, after filter: {after_filter_count}")
 
-    if tag_version is not None:
-        df_span = df_span[df_span["tag_version"] == tag_version]
+    if graph_runner_id is not None:
+        df_span = df_span[df_span["graph_runner_id"] == str(graph_runner_id)]
 
     return build_root_spans(df_span)

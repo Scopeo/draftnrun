@@ -23,8 +23,9 @@ class GraphGetResponse(BaseModel):
     component_instances: list[ComponentInstanceReadSchema]
     relationships: list[ComponentRelationshipSchema]
     edges: list[EdgeSchema]
-    tag_version: Optional[str] = None
     port_mappings: list[PortMappingSchema] = Field(default_factory=list)
+    tag_name: Optional[str] = None
+    change_log: Optional[str] = None
 
 
 class GraphLoadResponse(BaseModel):
