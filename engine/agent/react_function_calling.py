@@ -171,7 +171,6 @@ class ReActAgent(Agent):
         self._date_in_system_prompt = date_in_system_prompt
         self._shared_sandbox: Optional[AsyncSandbox] = None
         self._e2b_api_key = getattr(settings, "E2B_API_KEY", None)
-        self._current_context: Optional[dict] = None
 
         self._output_format = output_format
         self._output_tool_agent_description = self._get_output_tool_description()
@@ -224,7 +223,10 @@ class ReActAgent(Agent):
 
     # --- ORIGINAL CORE LOGIC (unchanged) ---
     async def _run_tool_call(
-        self, *original_agent_inputs: AgentPayload, tool_call: ChatCompletionMessageToolCall
+        self,
+        *original_agent_inputs: AgentPayload,
+        tool_call: ChatCompletionMessageToolCall,
+        ctx: Optional[dict] = None,
     ) -> tuple[str, AgentPayload]:
         tool_call_id = tool_call.id
         tool_function_name = tool_call.function.name
@@ -237,14 +239,19 @@ class ReActAgent(Agent):
         if tool_function_name in CODE_RUNNER_TOOLS:
             tool_arguments["shared_sandbox"] = await self._ensure_shared_sandbox()
         try:
+            if ctx is not None and tool_to_use.migrated:
+                LOGGER.info(f"Passing ctx to tool {tool_function_name}: {ctx}")
+                tool_arguments["ctx"] = ctx
+            LOGGER.info(f"Calling tool {tool_function_name} with arguments: {tool_arguments}")
             tool_output = await tool_to_use.run(*original_agent_inputs, **tool_arguments)
+            LOGGER.info(f"Tool {tool_function_name} returned: {tool_output}")
         except Exception as e:
             LOGGER.error(f"Error running tool {tool_function_name}: {e}")
             tool_output = AgentPayload(messages=[ChatMessage(role="assistant", content=str(e))], error=str(e))
         return tool_call_id, tool_output
 
     async def _process_tool_calls(
-        self, *original_agent_inputs: AgentPayload, tool_calls: list[dict]
+        self, *original_agent_inputs: AgentPayload, tool_calls: list[dict], ctx: Optional[dict] = None
     ) -> tuple[dict[str, AgentPayload], list[dict]]:
         tool_outputs: dict[str, AgentPayload] = {}
 
@@ -264,6 +271,7 @@ class ReActAgent(Agent):
                 self._run_tool_call(
                     *original_agent_inputs,
                     tool_call=tool_call,
+                    ctx=ctx,
                 )
                 for tool_call in tools_to_process
             ]
@@ -276,13 +284,12 @@ class ReActAgent(Agent):
                 tool_call_id, tool_output = await self._run_tool_call(
                     *original_agent_inputs,
                     tool_call=tool_call,
+                    ctx=ctx,
                 )
                 tool_outputs[tool_call_id] = tool_output
         return tool_outputs, tools_to_process
 
-    async def _run_core(
-        self, *inputs: AgentPayload | dict, template_vars: Optional[dict] = None, **kwargs
-    ) -> AgentPayload:
+    async def _run_core(self, *inputs: AgentPayload | dict, ctx: Optional[dict] = None, **kwargs) -> AgentPayload:
         # Exact previous logic
         original_agent_input = inputs[0]
         if not isinstance(original_agent_input, AgentPayload):
@@ -307,7 +314,7 @@ class ReActAgent(Agent):
                 ChatMessage(
                     role="system",
                     content=fill_prompt_template_with_dictionary(
-                        template_vars or {},
+                        ctx or {},
                         system_prompt_content,
                         self.component_attributes.component_instance_name,
                     ),
@@ -319,7 +326,7 @@ class ReActAgent(Agent):
             original_agent_input.messages[0] = ChatMessage(
                 role="system",
                 content=fill_prompt_template_with_dictionary(
-                    template_vars or {},
+                    ctx or {},
                     system_prompt_content,
                     self.component_attributes.component_instance_name,
                 ),
@@ -370,6 +377,7 @@ class ReActAgent(Agent):
         agent_outputs, processed_tool_calls = await self._process_tool_calls(
             original_agent_input,
             tool_calls=all_tool_calls,
+            ctx=ctx,
         )
 
         agent_input.messages.append(
@@ -408,8 +416,7 @@ class ReActAgent(Agent):
                 message=(f"Number of successful tool outputs: {successful_output_count}. " f"Running the agent again.")
             )
             self._current_iteration += 1
-            template_vars = self._current_context.get("template_vars", {}) if self._current_context else {}
-            return await self._run_core(agent_input, template_vars=template_vars)
+            return await self._run_core(agent_input, ctx=ctx)
         else:
             LOGGER.error(
                 f"Reached the maximum number of iterations ({self._max_iterations}) and still asks for tools."
@@ -428,11 +435,7 @@ class ReActAgent(Agent):
         payload_dict = inputs.model_dump(exclude_none=True)
         agent_payload = AgentPayload(**payload_dict) if "messages" in payload_dict else payload_dict
 
-        # Pass template vars from context to _run_core
-        template_vars = ctx.get("template_vars", {})
-        self._current_context = ctx  # Store entire context for recursive calls
-
-        core_result = await self._run_core(agent_payload, template_vars=template_vars)
+        core_result = await self._run_core(agent_payload, ctx=ctx)
 
         # Map original output back to typed outputs
         final_message = (
