@@ -66,6 +66,15 @@ async def get_user_from_supabase_token(
     """
     supabase_token = authorization.credentials
 
+    # Bypass authentication in offline mode
+    if settings.OFFLINE_MODE:
+        user = SupabaseUser(
+            id=UUID("11111111-1111-1111-1111-111111111111"), email="dummy@email.com", token="offline-mode-token"
+        )
+        context = get_request_context()
+        context.set_user(user)
+        return user
+
     try:
         user_response = supabase.auth.get_user(supabase_token)
         if not user_response or not user_response.user:
