@@ -184,7 +184,7 @@ def delete_graph_runner_endpoint(
     try:
         delete_graph_runner_service(session, graph_runner_id)
     except Exception as e:
-        LOGGER.error(f"Failed to delete graph runner {graph_runner_id}: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}") from e
+        LOGGER.exception(f"Failed to delete graph runner {graph_runner_id}")
+        raise HTTPException(status_code=500, detail="Internal Server Error") from e
 
     return Response(status_code=status.HTTP_204_NO_CONTENT)
