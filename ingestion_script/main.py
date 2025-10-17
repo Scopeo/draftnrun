@@ -98,6 +98,7 @@ async def ingestion_main_async(
                 access_token=access_token,
                 add_doc_description_to_chunks=False,
                 chunk_size=chunk_size,
+                chunk_overlap=chunk_overlap,
             )
         except Exception as e:
             LOGGER.error(f"Error during google drive ingestion: {str(e)}")
@@ -125,6 +126,7 @@ async def ingestion_main_async(
                 save_supabase=True,
                 add_doc_description_to_chunks=False,
                 chunk_size=chunk_size,
+                chunk_overlap=chunk_overlap,
             )
         except Exception as e:
             LOGGER.error(f"Error during local ingestion: {str(e)}")

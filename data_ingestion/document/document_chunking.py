@@ -9,6 +9,7 @@ import pandas as pd
 from data_ingestion.document.docx_ingestion import get_chunks_from_docx
 from data_ingestion.document.markdown_ingestion import get_chunks_from_markdown
 from data_ingestion.document.pdf_vision_ingestion import create_chunks_from_document
+from data_ingestion.document.parsing_pdf_ingestion import create_chunks_from_document_without_llm
 from data_ingestion.document.excel_ingestion import ingest_excel_file
 from data_ingestion.document.csv_ingestion import ingest_csv_file
 from data_ingestion.document.folder_management.folder_management import (
@@ -26,26 +27,39 @@ def document_chunking_mapping(
     vision_ingestion_service: Optional[VisionService] = None,
     llm_service: Optional[CompletionService] = None,
     get_file_content_func: Optional[Callable[[FileDocument], str]] = None,
-    docx_overlapping_size: int = 50,
+    overlapping_size: int = 50,
     chunk_size: Optional[int] = 1024,
+    use_llm_for_pdf: bool = True,
 ) -> dict[FileDocumentType, FileProcessor]:
 
-    document_chunking_mapping = {
-        FileDocumentType.PDF.value: partial(
+    if use_llm_for_pdf:
+        pdf_processor = partial(
             create_chunks_from_document,
             google_llm_service=vision_ingestion_service,
             openai_llm_service=llm_service,
             get_file_content=get_file_content_func,
-        ),
+        )
+        LOGGER.info("Using LLM-based PDF processing")
+    else:
+        pdf_processor = partial(
+            create_chunks_from_document_without_llm,
+            get_file_content=get_file_content_func,
+            chunk_size=chunk_size,
+            chunk_overlap=overlapping_size,
+        )
+        LOGGER.info("Using non-LLM PDF processing with pymupdf4llm")
+
+    document_chunking_mapping = {
+        FileDocumentType.PDF.value: pdf_processor,
         FileDocumentType.DOCX.value: partial(
             get_chunks_from_docx,
             get_file_content_func=get_file_content_func,
-            chunk_overlap=docx_overlapping_size,
+            chunk_overlap=overlapping_size,
         ),
         FileDocumentType.MARKDOWN.value: partial(
             get_chunks_from_markdown,
             get_file_content_func=get_file_content_func,
-            chunk_overlap=docx_overlapping_size,
+            chunk_overlap=overlapping_size,
         ),
         FileDocumentType.EXCEL.value: partial(
             ingest_excel_file,
