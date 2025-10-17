@@ -3,7 +3,7 @@ from fastapi.testclient import TestClient
 from ada_backend.main import app
 
 from ada_backend.schemas.project_schema import ChatResponse
-from ada_backend.schemas.trace_schema import RootTraceSpan
+from ada_backend.schemas.trace_schema import RootTraceSpan, PaginatedRootTracesResponse
 from ada_backend.scripts.get_supabase_token import get_user_jwt
 from engine.trace.trace_context import set_trace_manager
 from engine.trace.trace_manager import TraceManager
@@ -36,11 +36,25 @@ def test_monitor_endpoint():
     duration = 7
     url = f"/projects/{project_id}/traces?duration={duration}"
     response = client.get(url, headers=headers)
-    results = response.json()
-    keys_trace_span = [field_name[0] for field_name in RootTraceSpan.model_fields.items()]
 
     assert response.status_code == 200
-    assert len(results) > 0
-    assert isinstance(results, list)
-    assert all(isinstance(result, dict) for result in results)
-    assert all(key in result for result in results for key in keys_trace_span)
+
+    # Validate the paginated response structure
+    paginated_response = PaginatedRootTracesResponse.model_validate(response.json())
+
+    # Check pagination metadata
+    assert paginated_response.pagination.page >= 1
+    assert paginated_response.pagination.size > 0
+    assert paginated_response.pagination.total_items >= 0
+    assert paginated_response.pagination.total_pages >= 0
+
+    # Check traces list
+    traces = paginated_response.traces
+    assert len(traces) > 0
+    assert isinstance(traces, list)
+
+    # Validate each trace has all required RootTraceSpan fields
+    keys_trace_span = list(RootTraceSpan.model_fields.keys())
+    for trace in traces:
+        trace_dict = trace.model_dump()
+        assert all(key in trace_dict for key in keys_trace_span)
