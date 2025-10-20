@@ -200,7 +200,7 @@ def deploy_graph_service(
         project_id=project_id,
     )
     new_tag = compute_next_tag_version(session, project_id)
-    update_graph_runner_tag_version(session, graph_runner_id, new_tag)
+    update_graph_runner_tag_fields(session, graph_runner_id, tag_version=new_tag)
     bind_graph_runner_to_project(
         session, graph_runner_id=graph_runner_id, project_id=project_id, env=EnvType.PRODUCTION
     )
@@ -209,12 +209,6 @@ def deploy_graph_service(
     bind_graph_runner_to_project(
         session, graph_runner_id=new_graph_runner_id, project_id=project_id, env=EnvType.DRAFT
     )
-
-    new_tag = compute_next_tag_version(session, project_id)
-    # Only update tag_version here; version_name/change_log may be set elsewhere
-    update_graph_runner_tag_fields(session, graph_runner_id, tag_version=new_tag)
-    update_graph_runner_env(session, graph_runner_id, env=EnvType.PRODUCTION)
-    LOGGER.info(f"Updated graph runner {graph_runner_id} to production")
 
     return GraphDeployResponse(
         project_id=project_id,
