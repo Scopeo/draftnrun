@@ -70,3 +70,15 @@ class RootTraceSpan(BaseModel):
 class TokenUsage(BaseModel):
     organization_id: str
     total_tokens: int
+
+
+class Pagination(BaseModel):
+    page: int
+    size: int
+    total_items: int
+    total_pages: int
+
+
+class PaginatedRootTracesResponse(BaseModel):
+    pagination: Pagination
+    traces: list[RootTraceSpan]
