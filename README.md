@@ -194,6 +194,10 @@ OFFLINE_MODE=True
 OFFLINE_DEFAULT_ROLE="admin"
 ```
 
+This will enable the offline mode in the backend, very useful if you have trouble with the
+supabase edge runtime functions (they are served with the command `supabase functions serve`) 
+Those edge runtime functions allow the front end to check the authentifications on your different organizations.
+
 
 Once Supabase-Cli is installed, go to the root of the repository and run:
 
