@@ -163,9 +163,6 @@ def get_root_traces_by_project(
     call_type: Optional[CallType] = None,
     page: int = 1,
     page_size: int = 20,
-    version_name: Optional[str] = None,
-    tag_name: Optional[str] = None,
-    change_log: Optional[str] = None,
     graph_runner_id: Optional[UUID] = None,
 ) -> PaginatedRootTracesResponse:
     df_span = query_root_trace_duration(project_id, duration)
@@ -186,15 +183,6 @@ def get_root_traces_by_project(
         df_span = df_span[df_span["call_type"] == call_type.value]
         after_filter_count = len(df_span)
         LOGGER.info(f"Rows before filter: {before_filter_count}, after filter: {after_filter_count}")
-
-    if version_name is not None:
-        df_span = df_span[df_span["version_name"] == version_name]
-
-    if tag_name is not None:
-        df_span = df_span[df_span["tag_name"] == tag_name]
-
-    if change_log is not None:
-        df_span = df_span[df_span["change_log"] == change_log]
 
     if graph_runner_id is not None:
         df_span = df_span[df_span["graph_runner_id"] == graph_runner_id]

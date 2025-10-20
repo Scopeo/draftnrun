@@ -25,9 +25,6 @@ async def get_root_traces(
     call_type: Optional[CallType] = None,
     page: int = Query(1, ge=1, description="Page number (1-based)"),
     page_size: int = Query(20, ge=1, le=1000, description="Number of items per page"),
-    version_name: Optional[str] = None,
-    tag_name: Optional[str] = None,
-    change_log: Optional[str] = None,
     graph_runner_id: Optional[UUID] = None,
 ) -> PaginatedRootTracesResponse:
     if not user.id:
@@ -41,9 +38,6 @@ async def get_root_traces(
             call_type,
             page,
             page_size,
-            version_name,
-            tag_name,
-            change_log,
             graph_runner_id,
         )
         return response
