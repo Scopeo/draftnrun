@@ -66,6 +66,7 @@ dependencies = [
     "docxtpl>=0.20.1",
     "pymupdf4llm>=0.0.25",
     "func-timeout>=4.3.5,<5",
+    "python-docx>=1.2.0",
 ]
 [dependency-groups]
 dev = [
