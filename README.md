@@ -187,6 +187,14 @@ Supabase is the service needed to link the FrontEnd and Backend.
 
 We provide a `supabase` folder with the configuration.
 
+Put in the `credentials.env` file the following variable:
+
+```bash
+OFFLINE_MODE=True
+OFFLINE_DEFAULT_ROLE="admin"
+```
+
+
 Once Supabase-Cli is installed, go to the root of the repository and run:
 
 ```bash
