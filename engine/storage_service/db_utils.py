@@ -8,6 +8,7 @@ from sqlalchemy.engine.url import make_url
 
 
 PROCESSED_DATETIME_FIELD = "_processed_datetime"
+CHUNK_ID_COLUMN = "chunk_id"
 
 LOGGER = logging.getLogger(__name__)
 PANDAS_DTYPE_MAPPING: dict[str, str] = {

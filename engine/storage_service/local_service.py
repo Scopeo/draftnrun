@@ -10,8 +10,12 @@ import pandas as pd
 
 from engine.agent.agent import ComponentAttributes
 from engine.storage_service.db_service import DBService
-from engine.storage_service.db_utils import DBDefinition, check_columns_matching_between_data_and_database_table
-from engine.storage_service.db_utils import PROCESSED_DATETIME_FIELD
+from engine.storage_service.db_utils import (
+    DBDefinition,
+    check_columns_matching_between_data_and_database_table,
+    PROCESSED_DATETIME_FIELD,
+    CHUNK_ID_COLUMN,
+)
 
 LOGGER = logging.getLogger(__name__)
 
@@ -307,8 +311,8 @@ class SQLLocalService(DBService):
         self,
         table_name: str,
         ids: list[str | int],
-        id_column_name: str = "FILE_ID",
         schema_name: Optional[str] = None,
+        id_column_name: str = CHUNK_ID_COLUMN,
     ):
         table = self.get_table(table_name, schema_name)
         with self.Session() as session:
@@ -365,6 +369,40 @@ class SQLLocalService(DBService):
             df = pd.DataFrame(result.fetchall(), columns=result.keys())
             return df.to_markdown(index=False)
 
+    def update_row(
+        self,
+        table_name: str,
+        chunk_id: str,
+        update_data: dict,
+        schema_name: Optional[str] = None,
+    ) -> None:
+        """
+        Update a specific row in the table by its chunk_id.
+        """
+        table = self.get_table(table_name, schema_name)
+
+        with self.Session() as session:
+            # Check if the row exists
+            existing_record = session.execute(
+                sqlalchemy.select(table).where(table.c[CHUNK_ID_COLUMN] == chunk_id)
+            ).scalar_one_or_none()
+
+            if not existing_record:
+                raise ValueError(f"Row with chunk_id='{chunk_id}' not found in table {table_name}")
+
+            # Update the row
+            update_values = update_data.copy()
+            update_values = self.add_processed_datetime_if_exists(table, update_values)
+
+            stmt = sqlalchemy.update(table).where(table.c.chunk_id == chunk_id).values(**update_values)
+            result = session.execute(stmt)
+
+            if result.rowcount == 0:
+                raise ValueError(f"Failed to update row with chunk_id='{chunk_id}'")
+
+            session.commit()
+            LOGGER.info(f"Successfully updated row chunk_id='{chunk_id}' in table {table_name}")
+
     def run_query(self, query: str) -> pd.DataFrame:
 
         query = query.strip()
@@ -375,3 +413,54 @@ class SQLLocalService(DBService):
                 return pd.DataFrame([{"number_of_rows_inserted": result.rowcount}])
         LOGGER.info(f"Running query: {query}")
         return pd.read_sql(query, self.engine)
+
+    def get_rows_paginated(
+        self, table_name: str, schema_name: Optional[str] = None, page: int = 1, page_size: int = 10
+    ) -> tuple[list[dict], int]:
+        """
+        Get paginated rows from a table as a list of dictionaries.
+        Returns (rows, total_count) without using DataFrames.
+        """
+        table = self.get_table(table_name, schema_name)
+
+        with self.Session() as session:
+            # Get total count
+            count_stmt = sqlalchemy.select(sqlalchemy.func.count()).select_from(table)
+            total_count = session.execute(count_stmt).scalar()
+
+            # Get paginated rows
+            offset = (page - 1) * page_size
+            stmt = sqlalchemy.select(table).offset(offset).limit(page_size)
+            rows = session.execute(stmt).fetchall()
+
+            result = []
+            for row in rows:
+                # Convert SQLAlchemy Row to dictionary
+                row_dict = {}
+                for column in table.columns:
+                    row_dict[column.name] = getattr(row, column.name)
+                result.append(row_dict)
+
+        return result, total_count
+
+    def get_row_by_id(
+        self,
+        table_name: str,
+        chunk_id: str,
+        schema_name: Optional[str] = None,
+        id_column_name: str = CHUNK_ID_COLUMN,
+    ) -> dict:
+        table = self.get_table(table_name, schema_name)
+        with self.Session() as session:
+            stmt = sqlalchemy.select(table).where(table.c[id_column_name] == chunk_id)
+            result = session.execute(stmt).fetchone()
+
+            if result is None:
+                raise ValueError(f"Row with {id_column_name}='{chunk_id}' not found in table {table_name}")
+
+            # Convert the SQLAlchemy Row to a dictionary
+            row_dict = {}
+            for column in table.columns:
+                row_dict[column.name] = getattr(result, column.name)
+
+            return row_dict

@@ -5,7 +5,7 @@ from typing import Optional
 import pandas as pd
 
 from engine.agent.agent import ComponentAttributes
-from engine.storage_service.db_utils import DBDefinition, convert_to_correct_pandas_type
+from engine.storage_service.db_utils import DBDefinition, convert_to_correct_pandas_type, CHUNK_ID_COLUMN
 
 
 LOGGER = logging.getLogger(__name__)
@@ -188,8 +188,8 @@ class DBService(ABC):
         self,
         table_name: str,
         ids: list[str | int],
-        id_column_name: str = "FILE_ID",
         schema_name: Optional[str] = None,
+        id_column_name: str = CHUNK_ID_COLUMN,
     ):
         pass
 
@@ -205,9 +205,19 @@ class DBService(ABC):
     def upsert_value(
         self,
         table_name: str,
-        id_column_name: str,
         id: str,
         values: dict,
+        schema_name: Optional[str] = None,
+        id_column_name: str = CHUNK_ID_COLUMN,
+    ) -> None:
+        pass
+
+    @abstractmethod
+    def update_row(
+        self,
+        table_name: str,
+        chunk_id: str,
+        update_data: dict,
         schema_name: Optional[str] = None,
     ) -> None:
         pass

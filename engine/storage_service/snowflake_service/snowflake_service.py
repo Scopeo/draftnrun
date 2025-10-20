@@ -290,3 +290,33 @@ class SnowflakeService(DBService):
         )
         with self._lock:
             self.connector.cursor().execute(query, (id,) + tuple(values.values()))
+
+    def update_row(
+        self,
+        table_name: str,
+        row_id: str,
+        update_data: dict,
+        id_column_name: str = "chunk_id",
+        schema_name: Optional[str] = None,
+    ) -> None:
+        """
+        Update a specific row in the table by its ID.
+        Raises ValueError if the row doesn't exist.
+        """
+        if not schema_name:
+            raise ValueError("Schema name is required for Snowflake")
+
+        # First check if the row exists
+        check_query = f"SELECT COUNT(*) FROM {schema_name}.{table_name} WHERE {id_column_name} = %s"
+        with self._lock:
+            result = self.connector.cursor().execute(check_query, (row_id,)).fetchone()
+            if result[0] == 0:
+                raise ValueError(f"Row with {id_column_name}='{row_id}' not found in table {table_name}")
+
+        # Construct the SET part of the SQL query
+        set_clause = ", ".join([f"{column} = %s" for column in update_data.keys()])
+        query = f"UPDATE {schema_name}.{table_name} SET {set_clause} WHERE {id_column_name} = %s"
+
+        with self._lock:
+            self.connector.cursor().execute(query, tuple(update_data.values()) + (row_id,))
+            LOGGER.info(f"Successfully updated row {id_column_name}='{row_id}' in table {table_name}")
