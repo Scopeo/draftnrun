@@ -31,6 +31,8 @@ def compose_tag_name(tag_version: Optional[str], version_name: Optional[str]) ->
     """Compose the tag name from tag_version and version_name, or return None if incomplete."""
     if tag_version and version_name:
         return f"{tag_version}-{version_name}"
+    if tag_version:
+        return tag_version
     return None
 
 

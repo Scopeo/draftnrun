@@ -24,13 +24,17 @@ def upgrade() -> None:
     op.add_column("spans", sa.Column("graph_runner_id", sa.UUID(), nullable=True))
     op.add_column("spans", sa.Column("tag_name", sa.String(), nullable=True))
 
-    # Data migration: copy tag_version to tag_name before dropping
+    # Data migration: copy tag_version to tag_name, removing 'v' prefix
     connection = op.get_bind()
     connection.execute(
         sa.text(
             """
             UPDATE spans
-            SET tag_name = 'v' || tag_version
+            SET tag_name = CASE
+                WHEN tag_version ~ '^[vV]'
+                THEN SUBSTRING(tag_version FROM 2)
+                ELSE tag_version
+            END
             WHERE tag_version IS NOT NULL
             """
         )
@@ -52,17 +56,13 @@ def downgrade() -> None:
     # Add tag_version column back
     op.add_column("spans", sa.Column("tag_version", sa.String(), nullable=True))
 
-    # Data migration: copy tag_name back to tag_version (strip 'v' prefix if present)
+    # Data migration: copy tag_name back to tag_version, adding 'v' prefix
     connection = op.get_bind()
     connection.execute(
         sa.text(
             """
             UPDATE spans
-            SET tag_version = CASE
-                WHEN tag_name ~ '^[vV]'
-                THEN SUBSTRING(tag_name FROM 2)
-                ELSE tag_name
-            END
+            SET tag_version = 'v' || tag_name
             WHERE tag_name IS NOT NULL
             """
         )
