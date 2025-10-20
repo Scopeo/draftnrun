@@ -75,7 +75,7 @@ class TraceManager:
             if params.project_id:
                 attributes["project_id"] = params.project_id
             if params.graph_runner_id:
-                attributes["graph_runner_id"] = params.graph_runner_id
+                attributes["graph_runner_id"] = str(params.graph_runner_id)
             if params.environment:
                 attributes["environment"] = params.environment.value
             if params.call_type:

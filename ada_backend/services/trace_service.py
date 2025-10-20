@@ -86,7 +86,7 @@ def build_span_trees(df: pd.DataFrame) -> List[TraceSpan]:
             environment=row.get("environment", None),
             call_type=row.get("call_type", None),
             graph_runner_id=row.get("graph_runner_id", None),
-            tag_name=row.get("tag_name", None)
+            tag_name=row.get("tag_name", None),
         )
 
     trace_trees = []
@@ -197,7 +197,7 @@ def get_root_traces_by_project(
         df_span = df_span[df_span["change_log"] == change_log]
 
     if graph_runner_id is not None:
-        df_span = df_span[df_span["graph_runner_id"] == str(graph_runner_id)]
+        df_span = df_span[df_span["graph_runner_id"] == graph_runner_id]
 
     total_items = len(df_span)
     if page_size <= 0:

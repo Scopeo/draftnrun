@@ -1,3 +1,4 @@
+from uuid import UUID
 from pydantic import BaseModel
 
 from ada_backend.database.models import EnvType, CallType
@@ -22,7 +23,7 @@ class TraceSpan(BaseModel):
     children: list["TraceSpan"]
     environment: EnvType | None
     call_type: CallType | None
-    graph_runner_id: str | None
+    graph_runner_id: UUID | None
     tag_name: str | None = None
 
     @classmethod
@@ -66,7 +67,7 @@ class RootTraceSpan(BaseModel):
     llm_token_count_completion: int | None
     environment: EnvType | None
     call_type: CallType | None
-    graph_runner_id: str | None
+    graph_runner_id: UUID | None
     tag_name: str | None = None
 
 
