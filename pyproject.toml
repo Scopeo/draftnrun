@@ -65,6 +65,7 @@ dependencies = [
     "md2docx-python>=1.0.0",
     "docxtpl>=0.20.1",
     "pymupdf4llm>=0.0.25",
+    "python-docx>=1.2.0",
 ]
 [dependency-groups]
 dev = [
