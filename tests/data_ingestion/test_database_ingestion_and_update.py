@@ -11,33 +11,6 @@ from ada_backend.services.api_key_service import generate_scoped_api_key
 from settings import settings
 
 
-"""
-Test flexible authentication (JWT and/or API key) for database ingestion endpoints.
-
-Test structure:
-1. test_create_ingestion_task_auth: Tests ingestion task creation
-   - Sends POST /ingestion_task/{org_id} with different auth combinations
-   - Verifies task is created if at least one auth method is valid
-   - Verifies task data in database (name, type, status)
-   - Cleans up created task
-
-2. test_update_source_auth: Tests source update (re-trigger ingestion)
-   - First creates a source via POST /sources/{org_id}
-   - Sends POST /sources/{org_id}/{source_id} with different auth combinations
-   - Verifies update succeeds if at least one auth method is valid
-   - Cleans up created source
-
-Test cases for each endpoint:
-- Valid JWT only ✅
-- Valid API key only ✅
-- Both authentication methods provided ❌ (XOR violation - 400)
-- No authentication ❌ (401)
-
-Note: Uses mocked Snowflake database (fake credentials) to be safe for GitHub.
-Since the database is mocked, the actual ingestion process is not executed.
-Only API endpoints and authentication are tested.
-"""
-
 BASE_URL = "http://localhost:8000"
 ORGANIZATION_ID = "37b7d67f-8f29-4fce-8085-19dea582f605"
 MOCK_DB_URL = (
@@ -45,11 +18,7 @@ MOCK_DB_URL = (
 )
 
 
-# ============================================================================
 # Fixtures: Setup expensive resources (JWT token, API key) and test data
-# ============================================================================
-
-
 @pytest.fixture(scope="module")
 def jwt_token():
     return get_user_jwt(settings.TEST_USER_EMAIL, settings.TEST_USER_PASSWORD)
@@ -90,10 +59,7 @@ def headers_map(jwt_token, api_key):
     }
 
 
-# ============================================================================
-# Global test data: Parametrize cases and mock database attributes
-# ============================================================================
-
+# Global test data: Parametrize authentication cases and mock database attributes
 AUTH_TEST_CASES = [
     ("jwt_valid", True),
     ("api_key_valid", True),
@@ -111,11 +77,7 @@ SOURCE_ATTRIBUTES = {
 }
 
 
-# ============================================================================
 # Helper functions: API calls, data retrieval, and cleanup
-# ============================================================================
-
-
 def create_ingestion_task(source_name, source_attributes, headers):
     payload = IngestionTaskQueue(
         source_name=source_name,
@@ -150,11 +112,7 @@ def cleanup_ingestion_task(task_id, headers_map):
         requests.delete(f"{BASE_URL}/ingestion_task/{ORGANIZATION_ID}/{task_id}", headers=headers_map["jwt_valid"])
 
 
-# ============================================================================
-# Tests: Verify flexible authentication for ingestion endpoints
-# ============================================================================
-
-
+# Test flexible authentication (JWT and/or API key) for database ingestion endpoints.
 @pytest.mark.parametrize("auth_type,should_succeed", AUTH_TEST_CASES)
 def test_create_ingestion_task_auth(
     auth_type,

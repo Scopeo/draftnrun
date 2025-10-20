@@ -68,7 +68,7 @@ def create_organization_source(
     status_code=status.HTTP_200_OK,
     summary="Update source in organization, authentication via user token or API key",
 )
-def update_organization_source_choice_auth(
+def update_organization_source(
     organization_id: UUID,
     source_id: UUID,
     auth_ids: Annotated[
@@ -79,11 +79,13 @@ def update_organization_source_choice_auth(
 ):
     """
     Update organization source with flexible authentication.
-
     """
     user_id, api_key_id = auth_ids
     try:
-        return update_source_by_source_id(session, organization_id, source_id, user_id=user_id, api_key_id=api_key_id)
+        if user_id:
+            return update_source_by_source_id(session, organization_id, source_id, user_id=user_id)
+        else:
+            return update_source_by_source_id(session, organization_id, source_id, api_key_id=api_key_id)
     except Exception as e:
         LOGGER.exception(
             "Failed to update source %s for organization %s",

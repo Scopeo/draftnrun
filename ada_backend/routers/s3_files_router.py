@@ -26,7 +26,7 @@ LOGGER = logging.getLogger(__name__)
     summary="Get S3 Upload Presigned URLs, authentication via user token or API key",
     response_model=list[S3UploadURL],
 )
-async def generate_s3_upload_presigned_urls_choice_auth(
+async def generate_s3_upload_presigned_urls(
     organization_id: UUID,
     upload_file_requests: list[UploadFileRequest],
     auth_ids: Annotated[
@@ -36,9 +36,8 @@ async def generate_s3_upload_presigned_urls_choice_auth(
 ) -> list[S3UploadURL]:
     """
     Generate S3 upload presigned URLs with flexible authentication.
-
     """
-    user_id, api_key_id = auth_ids
+    user_id, api_key_id = auth_ids  # One is always None
     try:
         return generate_s3_upload_presigned_urls_service(organization_id, upload_file_requests)
     except Exception as e:

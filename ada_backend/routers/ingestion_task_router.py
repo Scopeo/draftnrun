@@ -56,7 +56,7 @@ def get_organization_sources(
     status_code=status.HTTP_201_CREATED,
     summary="Create ingestion task in organization, authentication via user token or API key",
 )
-def create_ingestion_task_choice_auth(
+def create_ingestion_task(
     organization_id: UUID,
     ingestion_task_data: IngestionTaskQueue,
     auth_ids: Annotated[
@@ -65,15 +65,25 @@ def create_ingestion_task_choice_auth(
     ],
     session: Session = Depends(get_db),
 ) -> UUID:
+    """
+    Create ingestion task with flexible authentication.
+    """
     user_id, api_key_id = auth_ids
     try:
-        task_id = create_ingestion_task_by_organization(
-            session,
-            organization_id=organization_id,
-            ingestion_task_data=ingestion_task_data,
-            user_id=user_id,
-            api_key_id=api_key_id,
-        )
+        if user_id:
+            task_id = create_ingestion_task_by_organization(
+                session,
+                organization_id=organization_id,
+                ingestion_task_data=ingestion_task_data,
+                user_id=user_id,
+            )
+        else:
+            task_id = create_ingestion_task_by_organization(
+                session,
+                organization_id=organization_id,
+                ingestion_task_data=ingestion_task_data,
+                api_key_id=api_key_id,
+            )
         return task_id
     except Exception as e:
         LOGGER.exception(
