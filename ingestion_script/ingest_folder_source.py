@@ -1,6 +1,7 @@
 import logging
 from uuid import UUID
 from typing import Optional
+import uuid
 
 from ada_backend.database import models as db
 from ada_backend.schemas.ingestion_task_schema import IngestionTaskUpdate
@@ -130,6 +131,7 @@ async def ingest_google_drive_source(
     add_doc_description_to_chunks: bool = False,
     chunk_size: Optional[int] = 1024,
     chunk_overlap: Optional[int] = 0,
+    source_id: Optional[UUID] = None,
 ) -> None:
     LOGGER.info(
         f"[INGESTION_SOURCE] Starting GOOGLE DRIVE ingestion - Source: '{source_name}', "
@@ -154,6 +156,7 @@ async def ingest_google_drive_source(
         add_doc_description_to_chunks=add_doc_description_to_chunks,
         chunk_size=chunk_size,
         chunk_overlap=chunk_overlap,
+        source_id=source_id,
     )
 
 
@@ -166,6 +169,7 @@ async def ingest_local_folder_source(
     add_doc_description_to_chunks: bool = False,
     chunk_size: Optional[int] = 1024,
     chunk_overlap: Optional[int] = 0,
+    source_id: Optional[UUID] = None,
 ) -> None:
     LOGGER.info(
         f"[INGESTION_SOURCE] Starting LOCAL ingestion - Source: '{source_name}', "
@@ -188,6 +192,7 @@ async def ingest_local_folder_source(
         add_doc_description_to_chunks=add_doc_description_to_chunks,
         chunk_size=chunk_size,
         chunk_overlap=chunk_overlap,
+        source_id=source_id,
     )
     folder_manager.clean_bucket()
 
@@ -202,12 +207,16 @@ async def _ingest_folder_source(
     add_doc_description_to_chunks: bool = False,
     chunk_size: Optional[int] = 1024,
     chunk_overlap: Optional[int] = 0,
+    source_id: Optional[UUID] = None,
 ) -> None:
+    if source_id is None:
+        source_id = uuid.uuid4()
     ingestion_task = IngestionTaskUpdate(
         id=task_id,
         source_name=source_name,
         source_type=source_type,
         status=db.TaskStatus.FAILED,
+        source_id=source_id,
     )
     if settings.USE_LLM_FOR_PDF_PARSING:
         try:
@@ -232,12 +241,28 @@ async def _ingest_folder_source(
             ingestion_task=ingestion_task,
         )
         return
-
     db_table_schema, db_table_name, qdrant_collection_name = get_sanitize_names(
-        source_name=source_name,
+        source_id=str(source_id),
         organization_id=organization_id,
     )
 
+    LOGGER.info(f"Table schema in ingestion : {db_table_schema}")
+    LOGGER.info(f"Table name in ingestion : {db_table_name}")
+    source_data = DataSourceSchema(
+        id=source_id,
+        name=source_name,
+        type=source_type,
+        database_schema=db_table_schema,
+        database_table_name=db_table_name,
+        qdrant_collection_name=qdrant_collection_name,
+        qdrant_schema=QDRANT_SCHEMA.to_dict(),
+        embedding_model_reference=f"{embedding_service._provider}:{embedding_service._model_name}",
+    )
+    LOGGER.info(f"Creating source {str(source_id)} for organization {organization_id} in database")
+    create_source(
+        organization_id=organization_id,
+        source_data=source_data,
+    )
     if settings.INGESTION_DB_URL is None:
         raise ValueError("INGESTION_DB_URL is not set")
     create_db_if_not_exists(settings.INGESTION_DB_URL)
@@ -246,9 +271,6 @@ async def _ingest_folder_source(
         embedding_service=embedding_service,
         default_collection_schema=QDRANT_SCHEMA,
     )
-
-    LOGGER.info(f"Table schema in ingestion : {db_table_schema}")
-    LOGGER.info(f"Table name in ingestion : {db_table_name}")
 
     # Check if source already exists in either database or Qdrant
     if db_service.schema_exists(schema_name=db_table_schema) and db_service.table_exists(
@@ -399,9 +421,9 @@ async def _ingest_folder_source(
         status=db.TaskStatus.COMPLETED,
     )
 
-    LOGGER.info(f" Update status {source_name} source for organization {organization_id} in database")
+    LOGGER.info(f" Update status {str(source_id)} source for organization {organization_id} in database")
     update_ingestion_task(
         organization_id=organization_id,
         ingestion_task=ingestion_task,
     )
-    LOGGER.info(f"Successfully ingested {source_name} source for organization {organization_id}")
+    LOGGER.info(f"Successfully ingested {str(source_id)} source for organization {organization_id}")

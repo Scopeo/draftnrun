@@ -1,5 +1,6 @@
 import asyncio
 import requests
+import uuid
 
 from ada_backend.database.setup_db import SessionLocal
 from ada_backend.scripts.get_supabase_token import get_user_jwt
@@ -56,9 +57,10 @@ def test_ingest_local_folder_source():
         "timestamp_column_name": None,
         "is_sync_enabled": False,
     }
+    test_source_id = str(uuid.uuid4())
     database_schema, database_table_name, qdrant_collection_name = get_sanitize_names(
-        source_name=test_source_name,
         organization_id=ORGANIZATION_ID,
+        source_id=test_source_id,
     )
     endpoint_upload_file = f"{BASE_URL}/files/{ORGANIZATION_ID}/upload"
     with open("tests/resources/documents/sample.pdf", "rb") as f:
@@ -74,7 +76,7 @@ def test_ingest_local_folder_source():
 
     endpoint = f"{BASE_URL}/ingestion_task/{ORGANIZATION_ID}"
     payload = IngestionTaskQueue(
-        source_name=test_source_name,
+        source_id=test_source_id,
         source_type=db.SourceType.LOCAL,
         status=db.TaskStatus.PENDING,
         source_attributes=test_source_attributes,
@@ -102,7 +104,7 @@ def test_ingest_local_folder_source():
         ingest_local_folder_source(
             list_of_files_to_ingest=test_source_attributes["list_of_files_from_local_folder"],
             organization_id=ORGANIZATION_ID,
-            source_name=test_source_name,
+            source_id=test_source_id,
             task_id=task_id,
             save_supabase=False,
             add_doc_description_to_chunks=False,

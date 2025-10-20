@@ -273,7 +273,7 @@ async def ingestion_database(
     query_filter: Optional[str] = None,
     timestamp_filter: Optional[str] = None,
     source_attributes: Optional[SourceAttributes] = None,
-    source_id: Optional[str] = None,
+    source_id: Optional[UUID] = None,
 ) -> None:
 
     db_definition, source_type_map = get_db_source_definition(
