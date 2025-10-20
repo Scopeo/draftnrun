@@ -14,7 +14,7 @@ from engine.storage_service.db_utils import (
     DBDefinition,
     check_columns_matching_between_data_and_database_table,
     PROCESSED_DATETIME_FIELD,
-    ID_COLUMN_NAME,
+    CHUNK_ID_COLUMN,
 )
 
 LOGGER = logging.getLogger(__name__)
@@ -312,7 +312,7 @@ class SQLLocalService(DBService):
         table_name: str,
         ids: list[str | int],
         schema_name: Optional[str] = None,
-        id_column_name: str = ID_COLUMN_NAME,
+        id_column_name: str = CHUNK_ID_COLUMN,
     ):
         table = self.get_table(table_name, schema_name)
         with self.Session() as session:
@@ -384,7 +384,7 @@ class SQLLocalService(DBService):
         with self.Session() as session:
             # Check if the row exists
             existing_record = session.execute(
-                sqlalchemy.select(table).where(table.c[ID_COLUMN_NAME] == chunk_id)
+                sqlalchemy.select(table).where(table.c[CHUNK_ID_COLUMN] == chunk_id)
             ).scalar_one_or_none()
 
             if not existing_record:
@@ -443,19 +443,20 @@ class SQLLocalService(DBService):
 
         return result, total_count
 
-    def get_row_by_chunk_id(
+    def get_row_by_id(
         self,
         table_name: str,
         chunk_id: str,
         schema_name: Optional[str] = None,
+        id_column_name: str = CHUNK_ID_COLUMN,
     ) -> dict:
         table = self.get_table(table_name, schema_name)
         with self.Session() as session:
-            stmt = sqlalchemy.select(table).where(table.c[ID_COLUMN_NAME] == chunk_id)
+            stmt = sqlalchemy.select(table).where(table.c[id_column_name] == chunk_id)
             result = session.execute(stmt).fetchone()
 
             if result is None:
-                raise ValueError(f"Row with {ID_COLUMN_NAME}='{chunk_id}' not found in table {table_name}")
+                raise ValueError(f"Row with {id_column_name}='{chunk_id}' not found in table {table_name}")
 
             # Convert the SQLAlchemy Row to a dictionary
             row_dict = {}

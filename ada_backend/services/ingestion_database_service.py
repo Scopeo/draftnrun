@@ -71,7 +71,7 @@ def update_chunk_info_in_ingestion_db(
         chunk_id=chunk_id,
         update_data=update_request.update_data,
     )
-    updated_row = sql_local_service.get_row_by_chunk_id(
+    updated_row = sql_local_service.get_row_by_id(
         table_name=table_name,
         schema_name=schema_name,
         chunk_id=chunk_id,
