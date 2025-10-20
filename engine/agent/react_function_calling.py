@@ -45,7 +45,6 @@ OUTPUT_TOOL_DESCRIPTION = (
 
 class ReActAgentInputs(BaseModel):
     messages: list[ChatMessage] = Field(description="The history of messages in the conversation.")
-    rag_filter: Optional[dict] = Field(default=None, description="Optional RAG filter to apply to RAG tools.")
     # Allow any other fields to be passed through
     model_config = {"extra": "allow"}
 
@@ -122,7 +121,7 @@ class ReActAgent(Agent):
 
     @classmethod
     def get_canonical_ports(cls) -> dict[str, Optional[str]]:
-        return {"input": "messages", "output": "output", "rag_filter": "rag_filter"}
+        return {"input": "messages", "output": "output"}
 
     @classmethod
     def get_inputs_schema(cls) -> Type[BaseModel]:
@@ -177,7 +176,6 @@ class ReActAgent(Agent):
         self._output_format = output_format
         self._output_tool_agent_description = self._get_output_tool_description()
 
-        # Initialize current rag_filter for runtime use
         self._current_rag_filter: Optional[dict] = None
 
     def _get_output_tool_description(self) -> Optional[ToolDescription]:
@@ -433,13 +431,20 @@ class ReActAgent(Agent):
 
     # --- Thin adapter to typed I/O ---
     async def _run_without_io_trace(self, inputs: ReActAgentInputs, ctx: dict) -> ReActAgentOutputs:
-        self._current_rag_filter = inputs.rag_filter
-
         # Map typed inputs to the original call style
         payload_dict = inputs.model_dump(exclude_none=True)
         agent_payload = AgentPayload(**payload_dict) if "messages" in payload_dict else payload_dict
 
-        core_result = await self._run_core(agent_payload, ctx=ctx)
+        #core_result = await self._run_core(agent_payload, ctx=ctx)
+        # Pass template vars from context to _run_core
+        template_vars = ctx.get("template_vars", {})
+        self._current_context = ctx  # Store entire context for recursive calls
+
+        # Pass Rag filter vars from context to _run_core
+        rag_filter = ctx.get("rag_filter", {})
+        self._current_rag_filter = rag_filter
+
+        core_result = await self._run_core(agent_payload, template_vars=template_vars)
 
         # Map original output back to typed outputs
         final_message = (

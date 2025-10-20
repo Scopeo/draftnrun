@@ -139,20 +139,13 @@ def test_template_variable_injection(
 
     runnables = {"input": input_component, "react_agent": react_agent}
 
-    # Explicit port mappings: input.messages -> react_agent.messages, input.rag_filter -> react_agent.rag_filter
+    # Explicit port mappings: input.messages -> react_agent.messages
     port_mappings = [
         {
             "source_instance_id": "input",
             "source_port_name": "messages",
             "target_instance_id": "react_agent",
             "target_port_name": "messages",
-            "dispatch_strategy": "direct",
-        },
-        {
-            "source_instance_id": "input",
-            "source_port_name": "rag_filter",
-            "target_instance_id": "react_agent",
-            "target_port_name": "rag_filter",
             "dispatch_strategy": "direct",
         },
     ]
@@ -269,20 +262,13 @@ def test_rag_filter_superseding_react_function_calling_rag_filter(
 
     runnables = {"input": input_component, "react_agent": react_agent}
 
-    # Explicit port mappings: input.messages -> react_agent.messages, input.rag_filter -> react_agent.rag_filter
+    # Explicit port mappings: input.messages -> react_agent.messages
     port_mappings = [
         {
             "source_instance_id": "input",
             "source_port_name": "messages",
             "target_instance_id": "react_agent",
             "target_port_name": "messages",
-            "dispatch_strategy": "direct",
-        },
-        {
-            "source_instance_id": "input",
-            "source_port_name": "rag_filter",
-            "target_instance_id": "react_agent",
-            "target_port_name": "rag_filter",
             "dispatch_strategy": "direct",
         },
     ]
