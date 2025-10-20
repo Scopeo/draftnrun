@@ -96,7 +96,7 @@ def update_chunk_info_in_database(
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
-@router.delete("/organizations/{organization_id}/ingestion_database/sources/{source_name}/chunks/{chunk_id}")
+@router.delete("/organizations/{organization_id}/ingestion_database/sources/{source_name}/chunks")
 def delete_chunks_in_database(
     organization_id: UUID,
     source_name: str,
