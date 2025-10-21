@@ -1,8 +1,9 @@
 import pandas as pd
 import asyncio
 from uuid import uuid4
+from unittest.mock import AsyncMock, patch
 
-from engine.qdrant_service import QdrantCollectionSchema, QdrantService
+from engine.qdrant_service import QdrantCollectionSchema, QdrantService, FieldSchema
 from engine.llm_services.llm_service import EmbeddingService
 from engine.agent.types import SourceChunk
 from tests.mocks.trace_manager import MockTraceManager
@@ -137,3 +138,118 @@ def test_qdrant_service():
 
     assert asyncio.run(qdrant_agentic_service.delete_collection_async(TEST_COLLECTION_NAME))
     assert not asyncio.run(qdrant_agentic_service.collection_exists_async(TEST_COLLECTION_NAME))
+
+
+def test_multiple_metadata_fields_index_creation():
+    """
+    Test that verifies the bug fix for DRA-575.
+    Ensures that index creation is called for ALL metadata fields, not just the last one.
+    """
+    TEST_COLLECTION_NAME_MULTI = f"test_multi_metadata_{uuid4()}"
+
+    mock_trace_manager = MockTraceManager(project_name="test")
+    embedding_service = EmbeddingService(
+        trace_manager=mock_trace_manager,
+        provider="openai",
+        model_name="text-embedding-3-large",
+    )
+
+    # Create schema with multiple metadata fields and types
+    qdrant_schema = QdrantCollectionSchema(
+        chunk_id_field="chunk_id",
+        content_field="content",
+        file_id_field="file_id",
+        url_id_field="url",
+        last_edited_ts_field="last_edited_ts",
+        metadata_fields_to_keep={"author", "status", "priority", "version"},
+        metadata_field_types={
+            "author": "VARCHAR",
+            "status": "VARCHAR",
+            "priority": "INTEGER",
+            "version": "FLOAT",
+        },
+    )
+
+    qdrant_service = QdrantService.from_defaults(
+        embedding_service=embedding_service,
+        default_collection_schema=qdrant_schema,
+        timeout=60.0,
+    )
+
+    # Create collection
+    if asyncio.run(qdrant_service.collection_exists_async(TEST_COLLECTION_NAME_MULTI)):
+        asyncio.run(qdrant_service.delete_collection_async(TEST_COLLECTION_NAME_MULTI))
+
+    asyncio.run(qdrant_service.create_collection_async(collection_name=TEST_COLLECTION_NAME_MULTI))
+
+    # Add a chunk so collection has data
+    chunks = [
+        {
+            "chunk_id": "1",
+            "content": "test content",
+            "file_id": "file_1",
+            "url": "https://test.com",
+            "last_edited_ts": "2024-11-26 10:40:40",
+            "author": "John Doe",
+            "status": "draft",
+            "priority": 1,
+            "version": 1.0,
+        }
+    ]
+    asyncio.run(qdrant_service.add_chunks_async(list_chunks=chunks, collection_name=TEST_COLLECTION_NAME_MULTI))
+
+    # Mock create_index_if_needed_async to track calls
+    original_create_index = qdrant_service.create_index_if_needed_async
+    call_tracker = []
+
+    async def mock_create_index(collection_name: str, field_name: str, field_schema_type: FieldSchema):
+        call_tracker.append(
+            {
+                "collection_name": collection_name,
+                "field_name": field_name,
+                "field_schema_type": field_schema_type,
+            }
+        )
+        # Call the original method to maintain functionality
+        return await original_create_index(collection_name, field_name, field_schema_type)
+
+    # Patch the method
+    qdrant_service.create_index_if_needed_async = mock_create_index
+
+    # Call get_collection_data_async which triggers index creation
+    asyncio.run(qdrant_service.get_collection_data_async(TEST_COLLECTION_NAME_MULTI))
+
+    # Verify that create_index_if_needed_async was called for ALL metadata fields
+    metadata_field_calls = [
+        call for call in call_tracker if call["field_name"] in qdrant_schema.metadata_fields_to_keep
+    ]
+
+    # Should have 4 calls, one for each metadata field
+    assert (
+        len(metadata_field_calls) == 4
+    ), f"Expected 4 index creation calls for metadata fields, got {len(metadata_field_calls)}"
+
+    # Verify each field was called with the correct type
+    field_type_map = {
+        "author": FieldSchema.KEYWORD,
+        "status": FieldSchema.KEYWORD,
+        "priority": FieldSchema.INTEGER,
+        "version": FieldSchema.FLOAT,
+    }
+
+    for field_name, expected_type in field_type_map.items():
+        matching_calls = [call for call in metadata_field_calls if call["field_name"] == field_name]
+        assert len(matching_calls) == 1, f"Expected exactly 1 call for field '{field_name}', got {len(matching_calls)}"
+        assert (
+            matching_calls[0]["field_schema_type"] == expected_type
+        ), f"Field '{field_name}' should have type {expected_type}, got {matching_calls[0]['field_schema_type']}"
+
+    # Also verify chunk_id and last_edited_ts indexes were created
+    chunk_id_calls = [call for call in call_tracker if call["field_name"] == "chunk_id"]
+    assert len(chunk_id_calls) >= 1, "chunk_id index should be created"
+
+    last_edited_calls = [call for call in call_tracker if call["field_name"] == "last_edited_ts"]
+    assert len(last_edited_calls) >= 1, "last_edited_ts index should be created"
+
+    # Cleanup
+    asyncio.run(qdrant_service.delete_collection_async(TEST_COLLECTION_NAME_MULTI))

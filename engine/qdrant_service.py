@@ -1170,7 +1170,6 @@ class QdrantService:
         if old_df.empty:
             await self.add_chunks_async(json.loads(df.to_json(orient="records", date_format="iso")), collection_name)
             LOGGER.info(f"Qdrant collection is empty. Added {len(df)} chunks to Qdrant")
-            print(f"Qdrant collection is empty. Added {len(df)} chunks to Qdrant")
             return True
 
         incoming_ids = set(df[self.default_schema.chunk_id_field])
