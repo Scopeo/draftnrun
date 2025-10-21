@@ -295,6 +295,7 @@ class ComponentVersion(Base):
     __table_args__ = (
         CheckConstraint("version_tag ~ '^[0-9]+\\.[0-9]+\\.[0-9]+$'", name="check_version_semver"),
         UniqueConstraint("component_id", "version_tag", name="uq_component_version"),
+        UniqueConstraint("component_id", "id", name="uq_component_versions_component_id_id"),
     )
 
     def __str__(self):
@@ -850,7 +851,9 @@ class PortDefinition(Base):
     description = mapped_column(Text, nullable=True)
     component_version = relationship("ComponentVersion", back_populates="port_definitions")
 
-    __table_args__ = (sa.UniqueConstraint("component_id", "name", "port_type", name="unique_component_port"),)
+    __table_args__ = (
+        sa.UniqueConstraint("component_version_id", "name", "port_type", name="unique_component_version_port"),
+    )
 
 
 class PortMapping(Base):

@@ -14,7 +14,7 @@ from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
 revision: str = "db6ec45f87f4"
-down_revision: Union[str, None] = "8cc2f22a492e"
+down_revision: Union[str, None] = "c4aa0d13832e"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
@@ -208,11 +208,13 @@ def upgrade() -> None:
     # -------------------------------------------------------------------------
     # Add ReleaseStageToCurrentVersionMapping table
     # -------------------------------------------------------------------------
+    # First, create a composite unique constraint to support the composite FK
     op.create_unique_constraint(
         "uq_component_versions_component_id_id",
         "component_versions",
         ["component_id", "id"],
     )
+
     op.create_table(
         "release_stage_to_current_version_mappings",
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
@@ -226,10 +228,11 @@ def upgrade() -> None:
         sa.Column("component_version_id", postgresql.UUID(as_uuid=True), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=True),
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=True),
+        # Composite FK to ensure component_version belongs to the same component
         sa.ForeignKeyConstraint(
             ["component_id", "component_version_id"],
             ["component_versions.component_id", "component_versions.id"],
-            name="fk_rs_current_version",
+            name="fk_mapping_same_component",
             ondelete="CASCADE",
         ),
         sa.UniqueConstraint("component_id", "release_stage", name="uq_component_release_stage"),
@@ -318,21 +321,53 @@ def upgrade() -> None:
     # Cleaning : remove from components the columns that are now versioned
     # -------------------------------------------------------------------------
     with op.batch_alter_table("components") as batch:
-        batch.drop_column("description")
         batch.drop_column("integration_id")
         batch.drop_column("default_tool_description_id")
         batch.drop_column("release_stage")
+
+    # Create indexes
+    op.create_index(op.f("ix_component_versions_id"), "component_versions", ["id"], unique=False)
+    op.create_unique_constraint(
+        "unique_component_version_port", "port_definitions", ["component_version_id", "name", "port_type"]
+    )
+    op.create_index(
+        "idx_current_by_component_stage",
+        "release_stage_to_current_version_mappings",
+        ["component_id", "release_stage"],
+        unique=True,
+    )
+    op.create_index(
+        op.f("ix_release_stage_to_current_version_mappings_component_version_id"),
+        "release_stage_to_current_version_mappings",
+        ["component_version_id"],
+        unique=False,
+    )
+    op.create_index(
+        op.f("ix_release_stage_to_current_version_mappings_component_id"),
+        "release_stage_to_current_version_mappings",
+        ["component_id"],
+        unique=False,
+    )
+    op.create_index(
+        op.f("ix_release_stage_to_current_version_mappings_id"),
+        "release_stage_to_current_version_mappings",
+        ["id"],
+        unique=False,
+    )
+
+    # Note: We keep the composite unique constraint uq_component_versions_component_id_id
+    # because the FK fk_mapping_same_component depends on it
 
 
 def downgrade() -> None:
     # -------------------------------------------------------------------------
     # Add back the columns to components that were removed in upgrade()
+    # Note: description is kept in components, so we don't add it back
     # -------------------------------------------------------------------------
     release_stage_enum = sa.Enum(
         "beta", "early_access", "public", "internal", name="release_stage", native_enum=True, create_type=False
     )
     with op.batch_alter_table("components") as batch:
-        batch.add_column(sa.Column("description", sa.Text(), nullable=True))
         batch.add_column(
             sa.Column(
                 "integration_id",
@@ -389,6 +424,9 @@ def downgrade() -> None:
         fk_name_new="component_global_parameters_component_id_fkey",
     )
 
+    # Drop the unique constraint on port_definitions before modifying the table
+    op.drop_constraint("unique_component_version_port", "port_definitions", type_="unique")
+
     downgrade_fk_from_version_to_component(
         table_name="port_definitions",
         old_col="component_version_id",
@@ -432,6 +470,22 @@ def downgrade() -> None:
         """
     )
     # -------------------------------------------------------------------------
+    # Drop indexes from release_stage_to_current_version_mappings before dropping the table
+    # -------------------------------------------------------------------------
+    op.drop_index(
+        op.f("ix_release_stage_to_current_version_mappings_id"), table_name="release_stage_to_current_version_mappings"
+    )
+    op.drop_index(
+        op.f("ix_release_stage_to_current_version_mappings_component_id"),
+        table_name="release_stage_to_current_version_mappings",
+    )
+    op.drop_index(
+        op.f("ix_release_stage_to_current_version_mappings_component_version_id"),
+        table_name="release_stage_to_current_version_mappings",
+    )
+    op.drop_index("idx_current_by_component_stage", table_name="release_stage_to_current_version_mappings")
+
+    # -------------------------------------------------------------------------
     # Drop ReleaseStageToCurrentVersionMapping table
     # -------------------------------------------------------------------------
     op.drop_table("release_stage_to_current_version_mappings")
@@ -440,11 +494,9 @@ def downgrade() -> None:
     # Drop index/constraints/table component_versions
     # -------------------------------------------------------------------------
     op.execute("DROP INDEX IF EXISTS uq_component_current_version;")
+    op.drop_index(op.f("ix_component_versions_id"), table_name="component_versions")
     op.drop_constraint("check_version_not_empty", "component_versions", type_="check")
     op.drop_constraint("check_version_format", "component_versions", type_="check")
-    op.drop_constraint(
-        "uq_component_versions_component_id_id",
-        "component_versions",
-        type_="unique",
-    )
+    # Drop the composite unique constraint (it still exists because we didn't drop it in upgrade)
+    op.drop_constraint(op.f("uq_component_versions_component_id_id"), "component_versions", type_="unique")
     op.drop_table("component_versions")
