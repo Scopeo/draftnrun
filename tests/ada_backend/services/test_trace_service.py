@@ -7,6 +7,7 @@ import pytest
 from ada_backend.services import trace_service
 from ada_backend.schemas.trace_schema import TraceSpan
 from ada_backend.database.models import EnvType, CallType
+from engine.trace import sql_exporter
 
 
 def test_get_token_usage(monkeypatch):
@@ -27,7 +28,10 @@ def test_get_token_usage(monkeypatch):
 
             return Q()
 
-    monkeypatch.setattr(trace_service, "get_session_trace", lambda: EmptySession())
+        def close(self):
+            pass
+
+    monkeypatch.setattr(sql_exporter, "get_session_trace", lambda: EmptySession())
 
     res = trace_service.get_token_usage(org_id)
     assert res.organization_id == str(org_id)
@@ -60,8 +64,11 @@ def test_get_token_usage(monkeypatch):
 
             return Q(self._usage)
 
+        def close(self):
+            pass
+
     usage = Usage(str(org_id), 12345)
-    monkeypatch.setattr(trace_service, "get_session_trace", lambda: SessionWithUsage(usage))
+    monkeypatch.setattr(sql_exporter, "get_session_trace", lambda: SessionWithUsage(usage))
 
     res2 = trace_service.get_token_usage(org_id)
     assert res2.organization_id == usage.organization_id
