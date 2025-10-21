@@ -3,10 +3,11 @@
 import pytest
 import asyncio
 from unittest.mock import MagicMock, patch
+from types import SimpleNamespace
 from engine.agent.inputs_outputs.input import Input
 from engine.agent.llm_call_agent import LLMCallAgent
 from engine.agent.react_function_calling import ReActAgent
-from engine.agent.types import NodeData, ComponentAttributes, ToolDescription
+from engine.agent.types import NodeData, ComponentAttributes, ToolDescription, AgentPayload, ChatMessage
 from engine.trace.trace_manager import TraceManager
 
 # Mock services are available as fixtures from conftest.py
@@ -63,13 +64,14 @@ def react_agent(mock_trace_manager, mock_llm_service):
 
 
 def test_input_block_extracts_template_vars(input_block):
-    """Test Input block returns NodeData with template_vars in ctx."""
+    """Test Input block returns NodeData with template vars directly in ctx."""
     input_data = {"messages": [{"role": "user", "content": "hi"}]}
     result = asyncio.run(input_block.run(input_data))
 
     assert isinstance(result, NodeData)
     assert "messages" in result.data
-    assert result.ctx.get("template_vars") == {"yes": "LOL", "name": "John"}
+    assert result.ctx.get("yes") == "LOL"
+    assert result.ctx.get("name") == "John"
 
 
 def test_input_block_preserves_existing_ctx(input_block):
@@ -81,7 +83,8 @@ def test_input_block_preserves_existing_ctx(input_block):
 
     assert isinstance(result, NodeData)
     assert result.ctx["existing_key"] == "existing_value"
-    assert result.ctx["template_vars"] == {"yes": "LOL", "name": "John"}
+    assert result.ctx["yes"] == "LOL"
+    assert result.ctx["name"] == "John"
 
 
 @patch("engine.prometheus_metric.agent_calls")
@@ -94,7 +97,7 @@ def test_llm_call_with_template_vars(get_span_mock, agent_calls_mock, llm_agent)
 
     # Simulate Input -> LLMCallAgent flow with NodeData
     input_node_data = NodeData(
-        data={"messages": [{"role": "user", "content": "hi"}]}, ctx={"template_vars": {"yes": "LOL", "name": "John"}}
+        data={"messages": [{"role": "user", "content": "hi"}]}, ctx={"yes": "LOL", "name": "John"}
     )
 
     result = asyncio.run(llm_agent.run(input_node_data))
@@ -128,7 +131,7 @@ def test_llm_call_missing_template_var(get_span_mock, agent_calls_mock, mock_llm
 
     input_node_data = NodeData(
         data={"messages": [{"role": "user", "content": "hi"}]},
-        ctx={"template_vars": {"yes": "LOL"}},  # missing_var not provided
+        ctx={"yes": "LOL"},  # missing_var not provided
     )
 
     with pytest.raises(ValueError, match="Missing template variable 'missing_var'"):
@@ -157,9 +160,7 @@ def test_llm_call_with_input_var(get_span_mock, agent_calls_mock, llm_agent):
         prompt_template="User said: {input}",
     )
 
-    input_node_data = NodeData(
-        data={"messages": [{"role": "user", "content": "Hello world!"}]}, ctx={"template_vars": {}}
-    )
+    input_node_data = NodeData(data={"messages": [{"role": "user", "content": "Hello world!"}]}, ctx={})
 
     result = asyncio.run(agent.run(input_node_data))
 
@@ -177,7 +178,7 @@ def test_react_agent_with_template_vars(get_span_mock, agent_calls_mock, react_a
     agent_calls_mock.labels.return_value = counter_mock
 
     input_node_data = NodeData(
-        data={"messages": [{"role": "user", "content": "hi"}]}, ctx={"template_vars": {"yes": "LOL", "name": "Alice"}}
+        data={"messages": [{"role": "user", "content": "hi"}]}, ctx={"yes": "LOL", "name": "Alice"}
     )
 
     result = asyncio.run(react_agent.run(input_node_data))
@@ -209,7 +210,7 @@ def test_template_vars_priority(get_span_mock, agent_calls_mock, mock_llm_servic
 
     input_node_data = NodeData(
         data={"messages": [{"role": "user", "content": "Hello from message"}]},
-        ctx={"template_vars": {"yes": "Hello from template"}},
+        ctx={"yes": "Hello from template"},
     )
 
     # The {{input}} should come from message content, {{yes}} from template_vars
@@ -247,17 +248,14 @@ def test_llm_call_with_file_handling(get_span_mock, agent_calls_mock, get_models
     input_node_data = NodeData(
         data={"messages": [{"role": "user", "content": "Hello world!"}]},
         ctx={
-            "template_vars": {},
-            "file_content": {
-                "my_file_content": {
-                    "filename": "test.pdf",
-                    "file_data": (
-                        "data:application/pdf;base64,"
-                        "JVBERi0xLjQKJcOkw7zDtsO8CjIgMCBvYmoKPDwKL0xlbmd0aCAzIDAgUgo+PgpzdHJlYW0K"
-                    ),
-                }
+            "my_file_content": {
+                "filename": "test.pdf",
+                "file_data": (
+                    "data:application/pdf;base64,"
+                    "JVBERi0xLjQKJcOkw7zDtsO8CjIgMCBvYmoKPDwKL0xlbmd0aCAzIDAgUgo+PgpzdHJlYW0K"
+                ),
             },
-            "file_urls": {"my_file_url": "https://example.com/document.pdf"},
+            "my_file_url": "https://example.com/document.pdf",
         },
     )
 
@@ -268,8 +266,8 @@ def test_llm_call_with_file_handling(get_span_mock, agent_calls_mock, get_models
     agent._completion_service.complete_async.assert_called_once()
 
 
-def test_input_block_with_nested_template_vars(mock_trace_manager):
-    """Test Input block handles nested template_vars field correctly."""
+def test_input_block_with_flat_template_vars(mock_trace_manager):
+    """Test Input block handles flat template vars correctly."""
     # Create a fresh input block without schema defaults
     input_block = Input(
         trace_manager=mock_trace_manager,
@@ -282,25 +280,24 @@ def test_input_block_with_nested_template_vars(mock_trace_manager):
 
     input_data = {
         "messages": [{"role": "user", "content": "Hello"}],
-        "file_urls": {"cs_book": "https://example.com/book.pdf"},
-        "template_vars": {"username": "John"},
+        "cs_book_url": "https://example.com/book.pdf",
+        "username": "John",
     }
     result = asyncio.run(input_block.run(input_data))
 
     assert isinstance(result, NodeData)
     assert "messages" in result.data
-    # template_vars should contain the nested values, not the field itself
-    assert result.ctx.get("template_vars") == {"username": "John"}
-    assert result.ctx.get("file_urls") == {"cs_book": "https://example.com/book.pdf"}
+    assert result.ctx.get("username") == "John"
+    assert result.ctx.get("cs_book_url") == "https://example.com/book.pdf"
 
 
 @patch("engine.agent.llm_call_agent.get_models_by_capability")
 @patch("engine.prometheus_metric.agent_calls")
 @patch("engine.prometheus_metric.get_tracing_span")
-def test_llm_call_with_nested_template_vars(
+def test_llm_call_with_flat_template_vars(
     get_span_mock, agent_calls_mock, get_models_mock, mock_llm_service
 ):  # noqa: F811
-    """Test LLMCallAgent works with nested template_vars from frontend payload."""
+    """Test LLMCallAgent works with flat template vars from frontend payload."""
     get_span_mock.return_value = MagicMock(project_id="test_project")
     counter_mock = MagicMock()
     agent_calls_mock.labels.return_value = counter_mock
@@ -322,7 +319,7 @@ def test_llm_call_with_nested_template_vars(
 
     input_node_data = NodeData(
         data={"messages": [{"role": "user", "content": "Hello"}]},
-        ctx={"template_vars": {"username": "John"}, "file_urls": {"cs_book": "https://example.com/book.pdf"}},
+        ctx={"username": "John", "cs_book": "https://example.com/book.pdf"},
     )
 
     result = asyncio.run(agent.run(input_node_data))
@@ -330,3 +327,140 @@ def test_llm_call_with_nested_template_vars(
     # Verify template vars and file URLs were used
     assert result.data["output"] == "Test response"
     agent._completion_service.complete_async.assert_called_once()
+
+
+@patch("engine.agent.llm_call_agent.get_models_by_capability")
+@patch("engine.prometheus_metric.agent_calls")
+@patch("engine.prometheus_metric.get_tracing_span")
+def test_llm_call_template_vars_from_tool_args(
+    get_span_mock, agent_calls_mock, get_models_mock, mock_llm_service
+):  # noqa: F811
+    """Ensure template vars provided via function-calling tool args are honored (inputs-first path)."""
+    get_span_mock.return_value = MagicMock(project_id="test_project")
+    counter_mock = MagicMock()
+    agent_calls_mock.labels.return_value = counter_mock
+
+    # Allow files and configure provider/model
+    get_models_mock.return_value = [{"reference": "openai:gpt-4o"}]
+    mock_llm_service._provider = "openai"
+    mock_llm_service._model_name = "gpt-4o"
+
+    tm = MagicMock(spec=TraceManager)
+    llm_tool = LLMCallAgent(
+        trace_manager=tm,
+        completion_service=mock_llm_service,
+        tool_description=ToolDescription(
+            name="Get_content", description="", tool_properties={}, required_tool_properties=[]
+        ),
+        component_attributes=ComponentAttributes(component_instance_name="LLM Call"),
+        prompt_template="Respond to {query}. Speak like a {speak}",
+        file_url_key="doc_url",
+    )
+
+    react = ReActAgent(
+        completion_service=mock_llm_service,
+        component_attributes=ComponentAttributes(component_instance_name="ReAct"),
+        trace_manager=tm,
+        tool_description=ToolDescription(
+            name="react", description="", tool_properties={}, required_tool_properties=[]
+        ),
+        agent_tools=[llm_tool],
+        run_tools_in_parallel=False,
+    )
+
+    doc_url = "https://example.com/a.pdf"
+    query = "What is the weather?"
+    speak = "pirate"
+    fn = SimpleNamespace(
+        name="Get_content", arguments=f'{{"doc_url": "{doc_url}", "query": "{query}", "speak": "{speak}"}}'
+    )
+    tool_call = SimpleNamespace(id="call_1", function=fn)
+
+    # Tools in this path receive legacy AgentPayload; no ctx propagation
+    agent_payload = AgentPayload(messages=[ChatMessage(role="user", content="Hi")])
+    _id, _ = asyncio.run(react._run_tool_call(agent_payload, tool_call=tool_call))
+
+    # Verify completion was called with template variables and file URL from function calling
+    mock_llm_service.complete_async.assert_called_once()
+    content = mock_llm_service.complete_async.call_args.kwargs["messages"][0]["content"]
+    assert isinstance(content, list)
+
+    # Check that file URL was included
+    file_parts = [p for p in content if isinstance(p, dict) and p.get("type") == "file" and "file_url" in p]
+    assert len(file_parts) == 1 and file_parts[0]["file_url"] == doc_url
+
+    # Check that template variables were used in the text content
+    text_parts = [p for p in content if isinstance(p, dict) and p.get("type") == "text"]
+    assert len(text_parts) == 1
+    text_content = text_parts[0]["text"]
+    assert query in text_content  # Template variable should be filled
+    assert speak in text_content  # Template variable should be filled
+
+
+@patch("engine.agent.llm_call_agent.get_models_by_capability")
+@patch("engine.prometheus_metric.agent_calls")
+@patch("engine.prometheus_metric.get_tracing_span")
+def test_react_agent_two_tool_calls_different_urls(
+    get_span_mock, agent_calls_mock, get_models_mock, mock_llm_service, mock_trace_manager
+):
+    """Two tool calls with different file_url should not affect each other."""
+    get_span_mock.return_value = MagicMock(project_id="test_project")
+    counter_mock = MagicMock()
+    agent_calls_mock.labels.return_value = counter_mock
+    # Allow files
+    get_models_mock.return_value = [{"reference": "openai:gpt-4o"}]
+    mock_llm_service._provider = "openai"
+    mock_llm_service._model_name = "gpt-4o"
+
+    # Tool under test
+    llm_tool = LLMCallAgent(
+        trace_manager=mock_trace_manager,
+        completion_service=mock_llm_service,
+        tool_description=ToolDescription(
+            name="Get_content", description="", tool_properties={}, required_tool_properties=[]
+        ),
+        component_attributes=ComponentAttributes(component_instance_name="Get content"),
+        prompt_template="Describe: {input}",
+        file_url_key="file_url",
+    )
+
+    # React agent with this single tool
+    react = ReActAgent(
+        completion_service=mock_llm_service,
+        component_attributes=ComponentAttributes(component_instance_name="ReAct"),
+        trace_manager=mock_trace_manager,
+        tool_description=ToolDescription(
+            name="react", description="", tool_properties={}, required_tool_properties=[]
+        ),
+        agent_tools=[llm_tool],
+        run_tools_in_parallel=False,
+    )
+
+    # Build two fake tool calls
+    def make_tool_call(call_id: str, url: str):
+        fn = SimpleNamespace(name="Get_content", arguments=f'{"{"}"file_url": "{url}"{"}"}')
+        return SimpleNamespace(id=call_id, function=fn)
+
+    tc1 = make_tool_call("call_1", "https://a.example/a.pdf")
+    tc2 = make_tool_call("call_2", "https://b.example/b.pdf")
+
+    # Original input payload: tools receive legacy AgentPayload in this path
+    agent_payload = AgentPayload(messages=[ChatMessage(role="user", content="Hi")])
+
+    # Run both tool calls sequentially via the helper
+    id1, _ = asyncio.run(react._run_tool_call(agent_payload, tool_call=tc1))
+    id2, _ = asyncio.run(react._run_tool_call(agent_payload, tool_call=tc2))
+    assert id1 == "call_1" and id2 == "call_2"
+
+    # Validate two separate calls with distinct file_url were made
+    calls = mock_llm_service.complete_async.call_args_list
+    assert len(calls) == 2
+    contents = [calls[0].kwargs["messages"][0]["content"], calls[1].kwargs["messages"][0]["content"]]
+    # Each content should be a list including a file dict with the given URL
+    urls = []
+    for content in contents:
+        assert isinstance(content, list)
+        file_parts = [p for p in content if isinstance(p, dict) and p.get("type") == "file" and "file_url" in p]
+        assert len(file_parts) == 1
+        urls.append(file_parts[0]["file_url"])
+    assert urls == ["https://a.example/a.pdf", "https://b.example/b.pdf"]
