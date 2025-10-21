@@ -17,7 +17,8 @@ from ada_backend.repositories.env_repository import (
     update_graph_runner_env,
 )
 from ada_backend.repositories.port_mapping_repository import list_port_mappings_for_graph, insert_port_mapping
-from ada_backend.services.tag_service import compute_next_tag_version, update_graph_runner_tag_fields
+from ada_backend.services.tag_service import compute_next_tag_version
+from ada_backend.repositories.tag_repository import update_graph_runner_tag_fields
 from ada_backend.repositories.graph_runner_repository import (
     get_component_nodes,
     get_graph_runner_for_env,

@@ -1,7 +1,7 @@
 """add version_name, tag_name, change_log to graph runner
 
 Revision ID: 558db5695d27
-Revises: 79e3872b3b03
+Revises: c4aa0d13832e
 Create Date: 2025-10-09 11:28:02.101277
 
 """

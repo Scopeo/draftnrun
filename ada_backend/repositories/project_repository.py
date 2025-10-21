@@ -6,7 +6,6 @@ from sqlalchemy.orm import Session
 
 from ada_backend.database import models as db
 from ada_backend.schemas.project_schema import GraphRunnerEnvDTO, ProjectWithGraphRunnersSchema
-from ada_backend.services.tag_service import compose_tag_name
 
 LOGGER = logging.getLogger(__name__)
 
@@ -65,7 +64,8 @@ def get_project_with_details(
         GraphRunnerEnvDTO(
             graph_runner_id=graph_runner.id,
             env=env_binding.environment if env_binding else None,
-            tag_name=compose_tag_name(graph_runner.tag_version, graph_runner.version_name),
+            tag_version=graph_runner.tag_version,
+            version_name=graph_runner.version_name,
             change_log=graph_runner.change_log,
         )
         for graph_runner, env_binding in graph_runner_rows
