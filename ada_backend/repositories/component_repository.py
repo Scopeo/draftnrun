@@ -47,6 +47,7 @@ class InstanceParameterWithDefinition:
 class ComponentWithVersionDTO:
     component_id: UUID
     name: str
+    icon: Optional[str] = None
     description: Optional[str]
     component_version_id: UUID
     version_tag: str
@@ -493,6 +494,7 @@ def get_current_component_versions(
         ComponentWithVersionDTO(
             component_id=comp.id,
             name=comp.name,
+            icon=comp.icon,
             description=ver.description,
             component_version_id=ver.id,
             version_tag=ver.version_tag,
@@ -650,7 +652,7 @@ def get_all_components_with_parameters(
                     can_use_function_calling=component_with_version.can_use_function_calling,
                     tool_description=tool_description,
                     parameters=parameters_to_fill,
-                    icon=component.icon,
+                    icon=component_with_version.icon,
                     subcomponents_info=[
                         SubComponentParamSchema(
                             component_version_id=param_child_def.child_component_version_id,
