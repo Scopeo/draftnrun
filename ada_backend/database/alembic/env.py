@@ -3,8 +3,6 @@ from logging.config import fileConfig
 from sqlalchemy import engine_from_config
 from sqlalchemy import pool
 from alembic import context
-import sqlalchemy as sa
-from sqlalchemy.dialects import postgresql
 
 from settings import settings
 from ada_backend.database.models import Base
@@ -14,7 +12,6 @@ from ada_backend.database.setup_db import get_db_url
 # access to the values within the .ini file in use.
 config = context.config
 config.set_main_option("sqlalchemy.url", get_db_url())
-is_sqlite = settings.ADA_DB_DRIVER == "sqlite"
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.
@@ -41,16 +38,6 @@ def include_object(object, name, type_, reflected, compare_to):
     This function specifically excludes UUID to NUMERIC type changes in SQLite databases,
     which are false positives due to SQLite's limited type system.
     """
-    if type_ == "column" and is_sqlite:
-        # Check if this is a UUID to NUMERIC change (or vice versa)
-        if (
-            isinstance(object.type, postgresql.UUID)
-            and hasattr(compare_to, "type")
-            and isinstance(compare_to.type, sa.NUMERIC)
-        ):
-            # Exclude UUID to NUMERIC type changes in SQLite
-            return False
-
     # Ignore APScheduler tables - they are managed by APScheduler itself
     if type_ == "table" and name == "apscheduler_jobs":
         return False
