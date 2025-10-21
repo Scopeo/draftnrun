@@ -14,6 +14,15 @@ from ingestion_script.ingest_folder_source import ingest_google_drive_source, in
 from ingestion_script.utils import update_ingestion_task
 from ada_backend.database import models as db
 
+# Configure logging to ensure all logs are captured by worker subprocess
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler()  # Output to stdout for worker to capture
+    ]
+)
+
 LOGGER = logging.getLogger(__name__)
 DEFAULT_CHUNK_SIZE = 1024
 DEFAULT_CHUNK_OVERLAP = 0
