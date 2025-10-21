@@ -11,6 +11,8 @@ from settings import settings
 
 client = TestClient(app)
 ORGANIZATION_ID = "37b7d67f-8f29-4fce-8085-19dea582f605"  # umbrella organization
+PROJECT_ID = "9ae2def9-a04b-40a8-abe8-89264a418bfd"  # test project ID for mocked tests
+GRAPH_RUNNER_ID = "a1b2c3d4-e5f6-4a5b-8c9d-0e1f2a3b4c5d"  # test graph runner ID for mocked tests
 JWT_TOKEN = get_user_jwt(settings.TEST_USER_EMAIL, settings.TEST_USER_PASSWORD)
 HEADERS_JWT = {
     "accept": "application/json",
@@ -351,6 +353,3 @@ def test_load_copy_graph_endpoint_unexpected_error(monkeypatch):
 
     response = client.get(endpoint, headers=HEADERS_JWT)
     assert response.status_code == 500
-
-    # Cleanup project
-    client.delete(f"/projects/{project_id}", headers=HEADERS_JWT)
