@@ -4,7 +4,6 @@ from sqlalchemy import engine_from_config
 from sqlalchemy import pool
 from alembic import context
 
-from settings import settings
 from ada_backend.database.models import Base
 from ada_backend.database.setup_db import get_db_url
 
