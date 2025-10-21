@@ -1,5 +1,5 @@
 import logging
-from typing import Optional, Any
+from typing import Optional, Any, TypedDict, Iterator
 import json
 
 import networkx as nx
@@ -17,6 +17,9 @@ from engine.graph_runner.port_management import (
     validate_port_mappings,
     synthesize_default_mappings,
 )
+from engine.graph_runner.field_expression_management import evaluate_expression
+from engine.field_expressions.ast import ExpressionNode, RefNode
+from engine.field_expressions.traversal import select_nodes
 from engine import legacy_compatibility
 from engine.trace.trace_manager import TraceManager
 from engine.trace.serializer import serialize_to_json
@@ -29,6 +32,11 @@ LOGGER = logging.getLogger(__name__)
 class GraphRunner:
     TRACE_SPAN_KIND: str = OpenInferenceSpanKindValues.CHAIN.value
 
+    class ExpressionSpec(TypedDict):
+        target_instance_id: str
+        field_name: str
+        expression_ast: ExpressionNode
+
     def __init__(
         self,
         graph: nx.DiGraph,
@@ -37,6 +45,7 @@ class GraphRunner:
         trace_manager: TraceManager,
         *,
         port_mappings: list[dict[str, Any]] | None = None,
+        expressions: list[ExpressionSpec] | None = None,
         coercion_matrix: CoercionMatrix | None = None,
     ):
         self.trace_manager = trace_manager
@@ -64,13 +73,22 @@ class GraphRunner:
         for pm in self.port_mappings:
             self._mappings_by_target.setdefault(pm.target_instance_id, []).append(pm)
 
+        # Build lookup index for expressions by (target, field)
+        self.expressions: list[GraphRunner.ExpressionSpec] = expressions or []
+        self._expressions_by_target_ast: dict[tuple[str, str], ExpressionNode] = {
+            (expr["target_instance_id"], expr["field_name"]): expr["expression_ast"] for expr in self.expressions
+        }
+
         self.tasks: dict[str, Task] = {}
         self._input_node_id = "__input__"
         self._add_virtual_input_node()
         # Synthesize explicit default mappings for single-predecessor nodes without mappings
         self._synthesize_default_mappings()
+        # Augment graph topology with dependencies from port mappings (including synthesized) and expressions
+        self._augment_graph_with_dependencies()
         self._validate_graph()
         validate_port_mappings(self.port_mappings, self.runnables)
+        self._validate_expressions()
 
     def _initialize_execution(self, input_data: dict[str, Any]) -> None:
         """Initialize the execution state including dependencies and input data."""
@@ -171,6 +189,31 @@ class GraphRunner:
                 start_node,
             )
 
+    def _augment_graph_with_dependencies(self) -> None:
+        """Augment the graph with edges derived from port mappings and expressions, then validate DAG.
+
+        - For each port mapping, ensure an edge source -> target exists.
+        - For each expression with ref nodes, add edges ref.instance -> target.
+        - Forbid self-loops; raise on cycles.
+        """
+        for pm in self.port_mappings:
+            src = pm.source_instance_id
+            dst = pm.target_instance_id
+            if not self.graph.has_edge(src, dst):
+                self.graph.add_edge(src, dst)
+
+        for (target, _field), expr_ast in self._expressions_by_target_ast.items():
+            ref_nodes: Iterator[RefNode] = select_nodes(expr_ast, lambda n: isinstance(n, RefNode))
+            src_instances = {ref_node.instance for ref_node in ref_nodes}
+            for src in src_instances:
+                if not self.graph.has_edge(src, target):
+                    self.graph.add_edge(src, target)
+
+        if not nx.is_directed_acyclic_graph(self.graph):
+            raise ValueError(
+                f"Graph contains cycles after dependency augmentation. Edges: {dict(self.graph.edges())}",
+            )
+
     def _gather_inputs(self, node_id: str) -> dict[str, Any]:
         """Assembles the input data for a node based on explicit mappings,
         keeping start-node passthrough. Default mapping synthesis happens during
@@ -186,9 +229,9 @@ class GraphRunner:
             real_predecessors = [p for p in predecessors if p != self._input_node_id]
             if is_start_node and not real_predecessors:
                 input_task_result = self.tasks[self._input_node_id].result
-                return input_task_result.data if input_task_result else {}
-            # Otherwise, no explicit mappings -> no inputs
-            return {}
+                input_data = input_task_result.data if input_task_result else {}
+            else:
+                input_data = {}
 
         direct_port_mappings = [
             port_mapping for port_mapping in port_mappings_for_target if port_mapping.dispatch_strategy == "direct"
@@ -204,7 +247,7 @@ class GraphRunner:
 
                     # Check if target component is unmigrated (doesn't have migrated attribute)
                     target_component = self.runnables.get(node_id)
-                    is_unmigrated = target_component and not hasattr(target_component, "migrated")
+                    is_unmigrated = bool(target_component) and not hasattr(target_component, "migrated")
 
                     if is_unmigrated:
                         # For unmigrated components, pass the entire output structure
@@ -243,6 +286,36 @@ class GraphRunner:
             structured_values = apply_function_call_strategy(node_id, function_call_port_mappings)
             input_data.update(structured_values)
 
+        # Handle field expressions for inputs (non-ref expressions like concat/literal)
+        # Apply regardless of whether explicit port mappings exist; non-ref expressions override mapped values.
+        # Pure-ref expressions are ignored at runtime (port mappings authoritative).
+        if self._expressions_by_target_ast:
+            non_ref_expressions: list[tuple[str, ExpressionNode]] = [
+                (field_name, expr_ast)
+                for (target_id, field_name), expr_ast in self._expressions_by_target_ast.items()
+                if target_id == node_id and not isinstance(expr_ast, RefNode)
+            ]
+
+            target_component = self.runnables[node_id]
+            for field_name, expression_ast in non_ref_expressions:
+
+                def _to_string(value: Any) -> str:
+                    return self.coercion_matrix.coerce(value, str, type(value))
+
+                evaluated_value = evaluate_expression(
+                    expression_ast,
+                    field_name,
+                    self.tasks,
+                    to_string=_to_string,
+                )
+                LOGGER.debug(f"Evaluating non-ref expression for {node_id}.{field_name}")
+                target_type = get_target_field_type(target_component, field_name)
+                if target_type is not str:
+                    LOGGER.warning(f"Coercing expression result to {target_type} for field {field_name}")
+                    evaluated_value = self.coercion_matrix.coerce(evaluated_value, target_type, str)
+                input_data[field_name] = evaluated_value
+                LOGGER.debug(f"Set {node_id}.{field_name} from expression: {evaluated_value}")
+
         return input_data
 
     def reset(self):
@@ -260,6 +333,37 @@ class GraphRunner:
 
         if set(self.runnables.keys()) != set(self.graph.nodes()) - {self._input_node_id}:
             raise ValueError("All runnables must be in the graph")
+
+    def _validate_expressions(self):
+        """
+        Ensures all expressions target valid components and fields.
+        - Expressions must target valid components
+        - Expressions must target fields that are in the component's input schema
+        """
+        for expression in self.expressions:
+            target_instance_id = expression["target_instance_id"]
+            field_name = expression["field_name"]
+
+            if target_instance_id not in self.runnables:
+                raise ValueError(
+                    f"Expression targets non-existent component '{target_instance_id}' "
+                    f"for field '{field_name}'. Component must exist in the graph."
+                )
+
+            target_component = self.runnables[target_instance_id]
+            if not bool(getattr(target_component, "migrated", False)):
+                raise ValueError(
+                    f"Expressions are not supported for unmigrated component '{target_instance_id}'. "
+                    f"Please migrate the component or remove the expression for field '{field_name}'."
+                )
+
+            inputs_schema = target_component.get_inputs_schema()
+            input_fields = list(inputs_schema.model_fields.keys())
+            if field_name not in input_fields:
+                raise ValueError(
+                    f"Formula targets non-existent field '{field_name}' on component '{target_instance_id}'. "
+                    f"Available input fields: {input_fields}"
+                )
 
     def _synthesize_default_mappings(self) -> None:
         """Create explicit direct port mappings for nodes with exactly one real predecessor

@@ -344,10 +344,11 @@ def test_structured_output_in_function_call_async(
         max_iterations=2,  # Allow for 2 iterations: tool call + structured output
     )
 
-    # Test 1: Verify structured output tool is loaded correctly
-    assert react_agent._output_tool_agent_description is not None
-    assert react_agent._output_tool_agent_description.name == "chat_formatting_output_tool"
-    assert react_agent._output_tool_agent_description.tool_properties == output_tool_properties
+    # Test 1: Verify structured output tool is constructed correctly
+    output_tool = react_agent._get_output_tool_description(react_agent._output_format)
+    assert output_tool is not None
+    assert output_tool.name == "chat_formatting_output_tool"
+    assert output_tool.tool_properties == output_tool_properties
 
     # Test 2: Structured output tool called directly
     with patch("openai.AsyncOpenAI") as mock_openai_client:
@@ -653,7 +654,7 @@ def test_react_agent_with_null_output_format(mock_trace_manager, mock_tool_descr
     assert react_agent._output_format == "null"
 
     # Verify that _get_output_tool_description returns None (handles the null case gracefully)
-    output_tool = react_agent._get_output_tool_description()
+    output_tool = react_agent._get_output_tool_description(react_agent._output_format)
     assert output_tool is None  # Should return None instead of crashing
 
 
@@ -672,7 +673,7 @@ def test_react_agent_with_none_output_format(mock_trace_manager, mock_tool_descr
     assert react_agent._output_format is None
 
     # Verify that _get_output_tool_description returns None
-    output_tool = react_agent._get_output_tool_description()
+    output_tool = react_agent._get_output_tool_description(react_agent._output_format)
     assert output_tool is None
 
 

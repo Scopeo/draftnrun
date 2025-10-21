@@ -34,6 +34,7 @@ class FilterInputs(BaseModel):
     error: Optional[str] = Field(default=None, description="Error message if any.")
     artifacts: dict[str, Any] = Field(default_factory=dict, description="Artifacts to filter.")
     is_final: bool = Field(default=False, description="Whether this is a final output.")
+    filtering_json_schema: Optional[str] = Field(default=None, description="JSON schema for filtering data.")
     # Allow any other fields to be passed through
     model_config = {"extra": "allow"}
 
@@ -72,15 +73,18 @@ class Filter(Agent):
             tool_description=tool_description,
             component_attributes=component_attributes,
         )
-        self.filtering_json_schema = load_str_to_json(filtering_json_schema)
-        self.output_model = jsonschema_to_pydantic(self.filtering_json_schema)
+        self.filtering_json_schema = filtering_json_schema
 
     async def _run_without_io_trace(self, inputs: FilterInputs, ctx: dict) -> FilterOutputs:
+        filtering_json_schema = inputs.filtering_json_schema or self.filtering_json_schema
+        filtering_json_schema_dict = load_str_to_json(filtering_json_schema)
+        output_model = jsonschema_to_pydantic(filtering_json_schema_dict)
+
         # Convert inputs to dict for filtering
         input_data = inputs.model_dump(exclude_none=True)
 
         # Apply the JSON schema filter
-        filtered_output = self.output_model(**input_data)
+        filtered_output = output_model(**input_data)
         filtered_dict = filtered_output.model_dump(exclude_unset=True, exclude_none=True)
 
         # Extract filtered fields

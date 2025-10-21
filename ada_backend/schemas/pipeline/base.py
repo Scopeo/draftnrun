@@ -1,9 +1,10 @@
 from typing import Optional
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from ada_backend.schemas.integration_schema import GraphIntegrationSchema
+from ada_backend.schemas.pipeline.field_expression_schema import FieldExpressionUpdateSchema
 from ada_backend.schemas.parameter_schema import PipelineParameterSchema
 
 
@@ -29,6 +30,7 @@ class ComponentInstanceSchema(BaseModel):
     parameters: list[PipelineParameterSchema]
     tool_description: Optional[ToolDescriptionSchema] = None
     integration: Optional[GraphIntegrationSchema] = None
+    field_expressions: list[FieldExpressionUpdateSchema] = Field(default_factory=list)
 
 
 class ComponentRelationshipSchema(BaseModel):
