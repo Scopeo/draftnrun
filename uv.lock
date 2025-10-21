@@ -11,7 +11,6 @@ name = "ada-ai-backend"
 version = "0.0.1"
 source = { editable = "." }
 dependencies = [
-    { name = "aiosqlite" },
     { name = "alembic" },
     { name = "anytree" },
     { name = "apscheduler" },
@@ -120,7 +119,6 @@ tracing = [
 
 [package.metadata]
 requires-dist = [
-    { name = "aiosqlite", specifier = ">=0.20.0,<0.21" },
     { name = "alembic", specifier = ">=1.14.1,<2" },
     { name = "anytree", specifier = "==2.12.1" },
     { name = "apscheduler", specifier = ">=3.10.0,<4.0.0" },

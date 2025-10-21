@@ -197,15 +197,6 @@ poetry run python -m ada_backend.scripts.test_db_connection
 For SQLite, you need to set the `ADA_DB_URL` value in your `credentials.env`:
 
 ```
-ADA_DB_DRIVER=sqlite  # Default is sqlite if not specified
-ADA_DB_URL=sqlite:///<path_to_sqlite_db_file>  # Required for SQLite
-```
-
-#### PostgreSQL Configuration
-
-For PostgreSQL, set the following values in your `credentials.env`:
-
-```
 ADA_DB_DRIVER=postgresql
 ADA_DB_HOST=localhost
 ADA_DB_PORT=5432

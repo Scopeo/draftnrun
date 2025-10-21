@@ -41,14 +41,6 @@ def postgres_service() -> Generator[SQLLocalService, None, None]:
 
 
 @pytest.fixture(scope="function")
-def sqlite_service():
-    """Fixture to provide an SQLLocalService instance with SQLite in-memory."""
-    engine_url = "sqlite:///:memory:"
-    service = SQLLocalService(engine_url=engine_url)
-    yield service
-
-
-@pytest.fixture(scope="function")
 def sample_table_definition():
     """Fixture to provide a sample table definition."""
     return DBDefinition(

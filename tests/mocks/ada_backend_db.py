@@ -7,22 +7,67 @@ from sqlalchemy.orm import sessionmaker, Session
 from ada_backend.database.seed_db import seed_db
 from ada_backend.database.models import Base, ParameterType
 from ada_backend.database import models as db
+from settings import settings
+from sqlalchemy.engine import make_url
+from sqlalchemy.exc import OperationalError
+from sqlalchemy import text
 
 
 @pytest.fixture(scope="function")
 def test_db():
     """
-    Creates an in-memory SQLite database for testing.
+    Provides a PostgreSQL database connection for testing.
+    Requires ADA_TEST_DB_URL or ADA_DB_URL to be configured.
     """
-    engine = create_engine("sqlite:///:memory:")
-    Base.metadata.create_all(bind=engine)  # Create tables
+    db_url = settings.ADA_TEST_DB_URL
+    if not db_url:
+        pytest.skip("ADA_TEST_DB_URL must be set to run PostgreSQL-backed database tests.")
+
+    url = make_url(db_url)
+    if not url.drivername.startswith("postgresql"):
+        pytest.skip("Database tests require a PostgreSQL URL (ADA_TEST_DB_URL / ADA_DB_URL).")
+
+    engine = create_engine(db_url)
+    created_additional_schemas: set[str] = set()
+    required_schemas = {"scheduler", "quality_assurance"}
+    try:
+        schema_name = f"test_schema_{uuid4().hex}"
+        with engine.connect() as connection:
+            connection = connection.execution_options(isolation_level="AUTOCOMMIT")
+            connection.execute(text(f"CREATE SCHEMA {schema_name}"))
+            for schema in required_schemas:
+                exists = connection.execute(
+                    text(
+                        "SELECT schema_name FROM information_schema.schemata WHERE schema_name = :name"
+                    ),
+                    {"name": schema},
+                ).fetchone()
+                if not exists:
+                    connection.execute(text(f"CREATE SCHEMA {schema}"))
+                    created_additional_schemas.add(schema)
+        engine.test_schema = schema_name
+        with engine.connect() as connection:
+            connection.execute(text(f"SET search_path TO {schema_name}"))
+            Base.metadata.create_all(bind=connection)
+    except OperationalError as exc:
+        pytest.skip(f"Unable to connect to PostgreSQL database: {exc}")
 
     # Define a reusable session factory
     SessionLocal = sessionmaker(bind=engine)
+    SessionLocal.test_schema = schema_name
+    engine.created_test_schemas = created_additional_schemas
 
     yield engine, SessionLocal
 
-    Base.metadata.drop_all(bind=engine)  # Drop tables after the test
+    with engine.connect() as connection:
+        connection.execute(text(f"SET search_path TO {schema_name}"))
+        Base.metadata.drop_all(bind=connection)
+    with engine.connect() as connection:
+        connection = connection.execution_options(isolation_level="AUTOCOMMIT")
+        connection.execute(text(f"DROP SCHEMA IF EXISTS {schema_name} CASCADE"))
+        for schema in getattr(engine, "created_test_schemas", set()):
+            connection.execute(text(f"DROP SCHEMA IF EXISTS {schema} CASCADE"))
+    engine.dispose()
 
 
 MOCK_UUIDS: dict[str, UUID] = {
@@ -240,8 +285,10 @@ def ada_backend_mock_session(test_db):
     Automatically rolls back changes after the test.
     """
     engine, SessionLocal = test_db  # Unpack the engine and session factory
+    schema_name = getattr(engine, "test_schema", "public")
     connection = engine.connect()
     transaction = connection.begin()
+    connection.execute(text(f"SET search_path TO {schema_name}"))
     _session = SessionLocal(bind=connection)
 
     populate_ada_backend_db_with_mock_data(_session)
@@ -260,8 +307,10 @@ def ada_backend_seed_session(test_db):
     Automatically rolls back changes after the test.
     """
     engine, SessionLocal = test_db
+    schema_name = getattr(engine, "test_schema", "public")
     connection = engine.connect()
     transaction = connection.begin()
+    connection.execute(text(f"SET search_path TO {schema_name}"))
     _session = SessionLocal(bind=connection)
 
     populate_ada_backend_db_from_seed(_session)
