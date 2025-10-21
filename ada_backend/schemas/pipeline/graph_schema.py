@@ -6,6 +6,10 @@ from pydantic import BaseModel, Field
 from ada_backend.schemas.pipeline.base import ComponentRelationshipSchema, ComponentInstanceSchema
 from ada_backend.schemas.pipeline.get_pipeline_schema import ComponentInstanceReadSchema
 from ada_backend.schemas.pipeline.port_mapping_schema import PortMappingSchema
+from ada_backend.schemas.pipeline.field_formula_schema import (
+    FieldFormulaUpdateSchema,
+    FieldFormulaReadSchema,
+)
 
 
 class EdgeSchema(BaseModel):
@@ -24,6 +28,7 @@ class GraphGetResponse(BaseModel):
     relationships: list[ComponentRelationshipSchema]
     edges: list[EdgeSchema]
     port_mappings: list[PortMappingSchema] = Field(default_factory=list)
+    field_formulas: list[FieldFormulaReadSchema] = Field(default_factory=list)
     tag_name: Optional[str] = None
     change_log: Optional[str] = None
 
@@ -43,8 +48,10 @@ class GraphUpdateSchema(BaseModel):
     relationships: list[ComponentRelationshipSchema]
     edges: list[EdgeSchema]
 
-    # New multi-port data flow wiring. When omitted, canonical mappings will be auto-created for edges
+    # Multi-port data flow wiring. When omitted, canonical mappings will be auto-created for edges
     port_mappings: list[PortMappingSchema] = Field(default_factory=list)
+    # Field formulas for computing input field from literals and references
+    field_formulas: list[FieldFormulaUpdateSchema] = Field(default_factory=list)
 
 
 class GraphUpdateResponse(BaseModel):

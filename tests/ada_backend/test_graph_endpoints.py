@@ -62,8 +62,8 @@ def test_create_empty_graph_runner():
     results = response.json()
     assert response.status_code == 200
     assert isinstance(results, dict)
-    # GET should include port_mappings even if none were provided
-    assert results == {**payload, "port_mappings": []}
+    # GET should include port_mappings and field_formulas even if none were provided
+    assert results == {**payload, "port_mappings": [], "field_formulas": []}
 
     # Cleanup
     client.delete(f"/projects/{project_id}", headers=HEADERS_JWT)

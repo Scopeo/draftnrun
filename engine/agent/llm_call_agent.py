@@ -68,7 +68,25 @@ DEFAULT_LLM_CALL_TOOL_DESCRIPTION = ToolDescription(
 
 
 class LLMCallInputs(BaseModel):
-    messages: list[ChatMessage] = Field(description="The input messages")
+    messages: list[ChatMessage] = Field(
+        description="The input messages",
+    )
+    prompt_template: Optional[str] = Field(
+        default=None,
+        description="Prompt template to use",
+    )
+    file_content_key: Optional[str] = Field(
+        default=None,
+        description="Key for file content in inputs",
+    )
+    file_url_key: Optional[str] = Field(
+        default=None,
+        description="Key for file URL in inputs",
+    )
+    output_format: Optional[dict[str, Any]] = Field(
+        default=None,
+        description="Output format for structured responses",
+    )
     # Allow extra fields for backward compatibility
     model_config = {"extra": "allow"}
 
@@ -103,7 +121,7 @@ class LLMCallAgent(Agent):
         prompt_template: str,
         file_content_key: Optional[str] = None,
         file_url_key: Optional[str] = None,
-        output_format: Optional[dict[str] | None] = None,
+        output_format: Optional[dict[str, Any]] = None,
     ):
         super().__init__(
             trace_manager=trace_manager,
@@ -118,7 +136,13 @@ class LLMCallAgent(Agent):
 
     async def _run_without_io_trace(self, inputs: LLMCallInputs, ctx: dict) -> LLMCallOutputs:
         LOGGER.info(f"Running LLM call agent with inputs: {inputs} and ctx: {ctx}")
-        prompt_vars = extract_vars_in_text_template(self._prompt_template)
+
+        prompt_template = inputs.prompt_template or self._prompt_template
+        file_content_key = inputs.file_content_key or self._file_content_key
+        file_url_key = inputs.file_url_key or self._file_url_key
+        output_format = inputs.output_format or self.output_format
+
+        prompt_vars = extract_vars_in_text_template(prompt_template)
         input_replacements = {}
         files_content = []
         images_content = []
@@ -152,28 +176,28 @@ class LLMCallAgent(Agent):
                 )
 
         # Handle file content from inputs first, then context
-        if self._file_content_key:
+        if file_content_key:
             input_dict = inputs.model_dump(exclude_none=True)
             file_data = None
-            if self._file_content_key in input_dict:
-                file_data = input_dict[self._file_content_key]
-            elif self._file_content_key in ctx:
-                file_data = ctx[self._file_content_key]
+            if file_content_key in input_dict:
+                file_data = input_dict[file_content_key]
+            elif file_content_key in ctx:
+                file_data = ctx[file_content_key]
             if isinstance(file_data, dict) and "filename" in file_data and "file_data" in file_data:
                 files_content.append({"type": "file", "file": file_data})
 
         # Handle file URLs from inputs first, then context
-        if self._file_url_key:
+        if file_url_key:
             input_dict = inputs.model_dump(exclude_none=True)
             file_url = None
-            if self._file_url_key in input_dict:
-                file_url = input_dict[self._file_url_key]
-            elif self._file_url_key in ctx:
-                file_url = ctx[self._file_url_key]
+            if file_url_key in input_dict:
+                file_url = input_dict[file_url_key]
+            elif file_url_key in ctx:
+                file_url = ctx[file_url_key]
             if isinstance(file_url, str) and file_url:
                 files_content.append({"type": "file", "file_url": file_url})
 
-        text_content = self._prompt_template.format(**input_replacements)
+        text_content = prompt_template.format(**input_replacements)
 
         # Check for file support
         file_supported_references = [
@@ -219,10 +243,10 @@ class LLMCallAgent(Agent):
                 SpanAttributes.LLM_MODEL_NAME: self._completion_service._model_name,
             }
         )
-        if self.output_format:
+        if output_format:
             response = await self._completion_service.constrained_complete_with_json_schema_async(
                 messages=[{"role": "user", "content": content}],
-                response_format=self.output_format,
+                response_format=output_format,
             )
         else:
             response = await self._completion_service.complete_async(
