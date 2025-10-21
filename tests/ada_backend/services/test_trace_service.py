@@ -163,7 +163,10 @@ def test_get_root_traces_by_project_no_filter(monkeypatch):
         lambda proj_id, duration: df,
     )
 
-    roots = trace_service.get_root_traces_by_project(user_id=user_id, project_id=project_id, duration=7)
+    paginated_roots_response = trace_service.get_root_traces_by_project(
+        user_id=user_id, project_id=project_id, duration=7
+    )
+    roots = paginated_roots_response.traces
 
     assert len(roots) == 2
     names = {r.name for r in roots}
@@ -187,14 +190,16 @@ def test_get_root_traces_by_project_with_filters(monkeypatch):
         lambda proj_id, duration: df,
     )
 
-    roots_env = trace_service.get_root_traces_by_project(
+    paginated_roots_env_response = trace_service.get_root_traces_by_project(
         user_id=user_id, project_id=project_id, duration=7, environment=EnvType.PRODUCTION
     )
+    roots_env = paginated_roots_env_response.traces
     assert len(roots_env) == 2
     assert {r.name for r in roots_env} == {"a", "c"}
 
-    roots_call = trace_service.get_root_traces_by_project(
+    paginated_roots_call_response = trace_service.get_root_traces_by_project(
         user_id=user_id, project_id=project_id, duration=7, call_type=CallType.SANDBOX
     )
+    roots_call = paginated_roots_call_response.traces
     assert len(roots_call) == 2
     assert {r.name for r in roots_call} == {"b", "c"}
