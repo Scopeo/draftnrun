@@ -176,7 +176,6 @@ async def run_agent(
         )
         params = get_tracing_span()
     except LLMKeyLimitExceededError:
-        # Re-raise LLM key limit errors without modification so they can be handled by the router
         raise
     except Exception as e:
         tb = traceback.format_exc()
