@@ -59,9 +59,10 @@ def test_get_all_agents_service(monkeypatch):
     dummy_agents = [DummyAgent(uuid.uuid4(), "A1", "desc1"), DummyAgent(uuid.uuid4(), "A2", None)]
 
     class DummyGraphRunner:
-        def __init__(self, id, tag_version=None):
+        def __init__(self, id, tag_version=None, version_name=None):
             self.id = id
             self.tag_version = tag_version
+            self.version_name = version_name
             self.created_at = "2025-01-01T00:00:00"
 
     class DummyBinding:
@@ -73,8 +74,9 @@ def test_get_all_agents_service(monkeypatch):
         assert session_arg is session
         assert organization_id_arg == org_id
         # return triples (agent, graph_runner, binding) as the real repository does
-        gr1 = DummyGraphRunner(uuid.uuid4(), "v1")
-        gr2 = DummyGraphRunner(uuid.uuid4(), "v2")
+tests/ada_backend/test_agents_service.py
+        gr1 = DummyGraphRunner(uuid.uuid4(), "v1", "version1")
+        gr2 = DummyGraphRunner(uuid.uuid4(), "v2", "version2")
         return [
             (dummy_agents[0], gr1, DummyBinding(gr1.id, "draft")),
             (dummy_agents[1], gr2, DummyBinding(gr2.id, "draft")),
