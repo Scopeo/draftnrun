@@ -12,10 +12,13 @@ from ada_backend.schemas.trace_schema import (
     TokenUsage,
     PaginatedRootTracesResponse,
     Pagination,
+    ConversationHistory,
+    ChatMessage,
 )
 from ada_backend.services.metrics.utils import (
     query_root_trace_duration,
     query_trace_by_trace_id,
+    query_conversation_messages,
 )
 from ada_backend.repositories.trace_repository import get_organization_token_usage
 from ada_backend.segment_analytics import track_project_observability_loaded, track_span_observability_loaded
@@ -202,3 +205,23 @@ def get_root_traces_by_project(
         pagination=Pagination(page=page, size=page_size, total_items=total_items, total_pages=total_pages),
         traces=traces,
     )
+
+
+def get_conversation_history_service(user_id: UUID, conversation_id: str) -> ConversationHistory:
+
+    LOGGER.info(f"Retrieving conversation history for conversation_id: {conversation_id}")
+
+    input_messages, output_messages = query_conversation_messages(conversation_id)
+
+    if not input_messages and not output_messages:
+        raise ValueError(f"No spans found for conversation_id {conversation_id}")
+
+    all_messages = input_messages + output_messages
+
+    chat_messages = [
+        ChatMessage(role=msg["role"], content=msg["content"])
+        for msg in all_messages
+        if isinstance(msg, dict) and "role" in msg and "content" in msg
+    ]
+
+    return ConversationHistory(messages=chat_messages)
