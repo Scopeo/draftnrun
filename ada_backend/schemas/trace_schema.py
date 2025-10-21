@@ -86,3 +86,12 @@ class Pagination(BaseModel):
 class PaginatedRootTracesResponse(BaseModel):
     pagination: Pagination
     traces: list[RootTraceSpan]
+
+
+class ChatMessage(BaseModel):
+    role: str
+    content: str
+
+
+class ConversationHistory(BaseModel):
+    messages: list[ChatMessage]
