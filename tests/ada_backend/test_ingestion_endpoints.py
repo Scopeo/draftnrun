@@ -62,6 +62,9 @@ def test_ingest_local_folder_source():
         organization_id=ORGANIZATION_ID,
         source_id=test_source_id,
     )
+    print("database_table_name", database_table_name)
+    print("test_source_id", test_source_id)
+    print("qdrant_collection_name", qdrant_collection_name)
     endpoint_upload_file = f"{BASE_URL}/files/{ORGANIZATION_ID}/upload"
     with open("tests/resources/documents/sample.pdf", "rb") as f:
         files_payload = [("files", ("doc1.pdf", f, "application/pdf"))]
@@ -76,13 +79,12 @@ def test_ingest_local_folder_source():
 
     endpoint = f"{BASE_URL}/ingestion_task/{ORGANIZATION_ID}"
     payload = IngestionTaskQueue(
-        source_id=test_source_id,
         source_name=test_source_name,
         source_type=db.SourceType.LOCAL,
         status=db.TaskStatus.PENDING,
         source_attributes=test_source_attributes,
     )
-    response = requests.post(endpoint, headers=HEADERS_JWT, json=payload.model_dump_json())
+    response = requests.post(endpoint, headers=HEADERS_JWT, json=payload.model_dump())
     task_id = response.json()
 
     assert response.status_code == 201
@@ -106,6 +108,7 @@ def test_ingest_local_folder_source():
             list_of_files_to_ingest=test_source_attributes["list_of_files_from_local_folder"],
             organization_id=ORGANIZATION_ID,
             source_id=test_source_id,
+            source_name=test_source_name,
             task_id=task_id,
             save_supabase=False,
             add_doc_description_to_chunks=False,
@@ -119,17 +122,17 @@ def test_ingest_local_folder_source():
     assert get_source_response.status_code == 200
     assert isinstance(get_source_response.json(), list)
     sources = get_source_response.json()
-    source_id = None
+    found_source = False
     for source in sources:
-        if source["database_table_name"] == database_table_name:
-            source_id = source["id"]
+        if source["id"] == test_source_id:
             assert source["name"] == test_source_name
             assert source["type"] == test_source_type
             assert source["database_schema"] == database_schema
             assert source["database_table_name"] == database_table_name
-        else:
-            assert source["name"] != test_source_name
-
+            assert source["qdrant_collection_name"] == qdrant_collection_name
+            found_source = True
+            break
+    assert found_source
     qdrant_service = QdrantService.from_defaults()
     assert qdrant_service.collection_exists(qdrant_collection_name)
 
@@ -146,7 +149,7 @@ def test_ingest_local_folder_source():
     delete_response = requests.delete(delete_endpoint, headers=HEADERS_JWT)
     assert delete_response.status_code == 204
 
-    delete_source_endpoint = f"{BASE_URL}/sources/{ORGANIZATION_ID}/{source_id}"
+    delete_source_endpoint = f"{BASE_URL}/sources/{ORGANIZATION_ID}/{test_source_id}"
     delete_source_response = requests.delete(delete_source_endpoint, headers=HEADERS_JWT)
     assert delete_source_response.status_code == 204
 
