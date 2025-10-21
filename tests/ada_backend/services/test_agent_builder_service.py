@@ -77,6 +77,7 @@ def test__get_tool_description_not_found(monkeypatch):
 
 class DummyDBTool:
     def __init__(self):
+        self.id = uuid.uuid4()
         self.name = "My Tool"
         self.description = "desc"
         self.tool_properties = {"p": {"type": "string"}}
