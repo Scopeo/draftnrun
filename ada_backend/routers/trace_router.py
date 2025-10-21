@@ -7,8 +7,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from ada_backend.database.models import CallType, EnvType
 from ada_backend.routers.auth_router import get_user_from_supabase_token
 from ada_backend.schemas.auth_schema import SupabaseUser
-from ada_backend.schemas.trace_schema import TraceSpan, PaginatedRootTracesResponse
-from ada_backend.services.trace_service import get_root_traces_by_project, get_span_trace_service
+from ada_backend.schemas.trace_schema import TraceSpan, PaginatedRootTracesResponse, ChatMessage
+from ada_backend.services.trace_service import (
+    get_root_traces_by_project,
+    get_span_trace_service,
+    get_conversation_history_service,
+)
 
 LOGGER = logging.getLogger(__name__)
 
@@ -70,5 +74,35 @@ async def get_span_trace(
         LOGGER.exception(
             "Failed to get span trace for trace_id=%s",
             trace_id,
+        )
+        raise HTTPException(status_code=500, detail="Internal Server Error") from e
+
+
+@router.get("/conversations/{conversation_id}/messages", response_model=list[ChatMessage], tags=["Metrics"])
+async def get_conversation_messages(
+    conversation_id: str,
+    user: Annotated[SupabaseUser, Depends(get_user_from_supabase_token)],
+) -> list[ChatMessage]:
+    """
+    Get message history for a specific conversation.
+
+    Args:
+        conversation_id: The ID of the conversation to retrieve messages for
+        user: Authenticated user from Supabase token
+
+    Returns:
+        List of chat messages with role and content
+    """
+    if not user.id:
+        raise HTTPException(status_code=400, detail="User ID not found")
+    try:
+        response = get_conversation_history_service(user.id, conversation_id)
+        return response.messages
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    except Exception as e:
+        LOGGER.exception(
+            "Failed to get conversation history for conversation_id=%s",
+            conversation_id,
         )
         raise HTTPException(status_code=500, detail="Internal Server Error") from e

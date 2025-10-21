@@ -5,6 +5,7 @@ import json
 
 import numpy as np
 import pandas as pd
+from sqlalchemy import text
 
 from ada_backend.database.models import CallType
 from engine.trace.sql_exporter import get_session_trace
@@ -159,3 +160,39 @@ def count_conversations_per_day(df: pd.DataFrame, all_dates_df: pd.DataFrame) ->
     conversation_id_usage = conversation_id_usage.sort_values(by="date", ascending=True)
 
     return conversation_id_usage
+
+
+def query_conversation_messages(conversation_id: str) -> tuple[list, list]:
+    """
+    Query the most recent span with a specific conversation_id and return messages.
+
+    Args:
+        conversation_id: The conversation ID to filter spans by
+
+    Returns:
+        Tuple of (input_messages, output_messages)
+    """
+    query = text(
+        f"""
+    SELECT
+        (m.input_content::jsonb->0->'messages') as input_messages,
+        (m.output_content::jsonb->0->'messages') as output_messages
+    FROM spans s
+    LEFT JOIN span_messages m ON m.span_id = s.span_id
+    WHERE s.attributes->>'conversation_id' = '{conversation_id}'
+    AND s.name = 'Workflow'
+    ORDER BY s.start_time DESC
+    """
+    )
+
+    session = get_session_trace()
+    result = session.execute(query).fetchone()
+    session.close()
+
+    if not result:
+        return [], []
+
+    input_messages = result[0] if result[0] else []
+    output_messages = result[1] if result[1] else []
+
+    return input_messages, output_messages
