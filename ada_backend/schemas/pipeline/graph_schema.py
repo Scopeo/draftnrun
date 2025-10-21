@@ -43,7 +43,7 @@ class GraphUpdateSchema(BaseModel):
     relationships: list[ComponentRelationshipSchema]
     edges: list[EdgeSchema]
 
-    # New multi-port data flow wiring. When omitted, canonical mappings will be auto-created for edges
+    # Multi-port data flow wiring. When omitted, canonical mappings will be auto-created for edges
     port_mappings: list[PortMappingSchema] = Field(default_factory=list)
 
 

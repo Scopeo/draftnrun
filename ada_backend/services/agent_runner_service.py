@@ -22,12 +22,14 @@ from ada_backend.repositories.graph_runner_repository import (
     delete_temp_folder,
 )
 from ada_backend.repositories.port_mapping_repository import list_port_mappings_for_graph
+from ada_backend.repositories.field_expression_repository import get_field_expressions_for_instances
 from ada_backend.repositories.project_repository import get_project, get_project_with_details
 from ada_backend.repositories.organization_repository import get_organization_secrets
 from engine.graph_runner.runnable import Runnable
 from engine.trace.trace_context import get_trace_manager
 from engine.trace.span_context import set_tracing_span
 from engine.trace.span_context import get_tracing_span
+from engine.field_expressions.serde import from_json as expression_from_json
 
 
 def get_organization_llm_providers(session: Session, organization_id: UUID) -> list[str]:
@@ -73,6 +75,21 @@ async def build_graph_runner(
         for pm in pms
     ]
 
+    component_instance_ids = [node.id for node in component_nodes]
+    field_expressions = get_field_expressions_for_instances(session, component_instance_ids)
+    expressions = []
+    for expression in field_expressions:
+        expression_ast = None
+        if expression.expression_json:
+            expression_ast = expression_from_json(expression.expression_json)
+        expressions.append(
+            {
+                "target_instance_id": str(expression.component_instance_id),
+                "field_name": expression.field_name,
+                "expression_ast": expression_ast,
+            }
+        )
+
     runnables: dict[str, Runnable] = {}
     graph = nx.DiGraph()
 
@@ -95,6 +112,7 @@ async def build_graph_runner(
         start_nodes,
         trace_manager=trace_manager,
         port_mappings=port_mappings,
+        expressions=expressions,
     )
 
 

@@ -230,7 +230,7 @@ class TestGraphRunnerBuildTimeValidation:
         assert gr is not None
 
     def test_single_node_with_self_loop(self):
-        """Test single node with self loop."""
+        """Test single node with self loop - should fail due to DAG enforcement."""
         tm = TraceManager(project_name="test")
         g = nx.DiGraph()
         g.add_node("A")
@@ -250,15 +250,15 @@ class TestGraphRunnerBuildTimeValidation:
             }
         ]
 
-        # Should build successfully
-        gr = GraphRunner(
-            graph=g,
-            runnables=runnables,
-            start_nodes=["A"],
-            trace_manager=tm,
-            port_mappings=valid_mappings,
-        )
-        assert gr is not None
+        # Should fail due to DAG enforcement (self-loops forbidden)
+        with pytest.raises(ValueError, match="Graph contains cycles"):
+            GraphRunner(
+                graph=g,
+                runnables=runnables,
+                start_nodes=["A"],
+                trace_manager=tm,
+                port_mappings=valid_mappings,
+            )
 
 
 class TestGraphRunnerErrorCases:
@@ -343,7 +343,7 @@ class TestGraphRunnerErrorCases:
             )
 
     def test_invalid_port_mapping_source_not_found(self):
-        """Test that non-existent sources fall back to str and can coerce to compatible types."""
+        """Test that non-existent sources are now forbidden in strict validation."""
         tm = TraceManager(project_name="test")
         g = nx.DiGraph()
         g.add_nodes_from(["A", "B"])
@@ -371,16 +371,15 @@ class TestGraphRunnerErrorCases:
             }
         ]
 
-        # Should succeed because str can now coerce to list[ChatMessage] (Input component functionality)
-        # This is the expected behavior for the Input component refactor
-        gr = GraphRunner(
-            graph=g,
-            runnables=runnables,
-            start_nodes=["A"],
-            trace_manager=tm,
-            port_mappings=invalid_mappings,
-        )
-        assert gr is not None  # Should create successfully
+        # Should fail due to strict validation - all mapped nodes must exist
+        with pytest.raises(ValueError, match="All runnables must be in the graph"):
+            GraphRunner(
+                graph=g,
+                runnables=runnables,
+                start_nodes=["A"],
+                trace_manager=tm,
+                port_mappings=invalid_mappings,
+            )
 
     def test_invalid_port_mapping_target_not_found(self):
         """Test error when port mapping references non-existent target."""
@@ -403,16 +402,15 @@ class TestGraphRunnerErrorCases:
             }
         ]
 
-        # Should build successfully (validation only checks coercion, not existence)
-        # The error will occur at runtime when the target is not found
-        gr = GraphRunner(
-            graph=g,
-            runnables=runnables,
-            start_nodes=["A"],
-            trace_manager=tm,
-            port_mappings=invalid_mappings,
-        )
-        assert gr is not None
+        # Should fail due to strict validation - all mapped nodes must exist
+        with pytest.raises(ValueError, match="All runnables must be in the graph"):
+            GraphRunner(
+                graph=g,
+                runnables=runnables,
+                start_nodes=["A"],
+                trace_manager=tm,
+                port_mappings=invalid_mappings,
+            )
 
 
 class TestGraphRunnerPortMappingValidation:
@@ -738,7 +736,7 @@ class TestGraphRunnerEdgeCases:
         assert gr is not None
 
     def test_graph_with_cycles(self):
-        """Test graph with cycles."""
+        """Test graph with cycles - should fail due to DAG enforcement."""
         tm = TraceManager(project_name="test")
         g = nx.DiGraph()
         g.add_nodes_from(["A", "B", "C"])
@@ -776,15 +774,15 @@ class TestGraphRunnerEdgeCases:
             },
         ]
 
-        # Should build successfully (cycles are allowed in the graph structure)
-        gr = GraphRunner(
-            graph=g,
-            runnables=runnables,
-            start_nodes=["A"],
-            trace_manager=tm,
-            port_mappings=mappings,
-        )
-        assert gr is not None
+        # Should fail due to DAG enforcement (cycles forbidden)
+        with pytest.raises(ValueError, match="Graph contains cycles"):
+            GraphRunner(
+                graph=g,
+                runnables=runnables,
+                start_nodes=["A"],
+                trace_manager=tm,
+                port_mappings=mappings,
+            )
 
     def test_graph_with_parallel_paths(self):
         """Test graph with parallel paths from same source."""
@@ -878,7 +876,7 @@ class TestGraphRunnerEdgeCases:
         assert gr is not None
 
     def test_graph_with_self_loops(self):
-        """Test graph with self loops."""
+        """Test graph with self loops - should fail due to DAG enforcement."""
         tm = TraceManager(project_name="test")
         g = nx.DiGraph()
         g.add_nodes_from(["A", "B"])
@@ -907,15 +905,15 @@ class TestGraphRunnerEdgeCases:
             },
         ]
 
-        # Should build successfully
-        gr = GraphRunner(
-            graph=g,
-            runnables=runnables,
-            start_nodes=["A"],
-            trace_manager=tm,
-            port_mappings=mappings,
-        )
-        assert gr is not None
+        # Should fail due to DAG enforcement (self-loops forbidden)
+        with pytest.raises(ValueError, match="Graph contains cycles"):
+            GraphRunner(
+                graph=g,
+                runnables=runnables,
+                start_nodes=["A"],
+                trace_manager=tm,
+                port_mappings=mappings,
+            )
 
 
 class TestGraphRunnerPortMappingStrategies:

@@ -44,6 +44,8 @@ OUTPUT_TOOL_DESCRIPTION = (
 
 class ReActAgentInputs(BaseModel):
     messages: list[ChatMessage] = Field(description="The history of messages in the conversation.")
+    initial_prompt: Optional[str] = Field(default=None, description="Initial prompt to use for the agent.")
+    output_format: Optional[str | dict] = Field(default=None, description="Structured output format.")
     # Allow any other fields to be passed through
     model_config = {"extra": "allow"}
 
@@ -173,9 +175,10 @@ class ReActAgent(Agent):
         self._e2b_api_key = getattr(settings, "E2B_API_KEY", None)
 
         self._output_format = output_format
-        self._output_tool_agent_description = self._get_output_tool_description()
+        self._output_tool_agent_description = self._get_output_tool_description(output_format)
 
-    def _get_output_tool_description(self) -> Optional[ToolDescription]:
+    @staticmethod
+    def _get_output_tool_description(output_format: str | dict | None) -> Optional[ToolDescription]:
         """
         Get the output tool description using the same pattern as RAG.
 
@@ -183,18 +186,18 @@ class ReActAgent(Agent):
             ToolDescription if all required output tool parameters are set, None otherwise.
         """
         # If no output tool is configured, return None
-        if not any([self._output_format]):
+        if not any([output_format]):
             return None
 
         # Parse JSON strings to appropriate data types
-        if isinstance(self._output_format, str):
-            parsed_output_tool_properies = load_str_to_json(self._output_format)
+        if isinstance(output_format, str):
+            parsed_output_tool_properies = load_str_to_json(output_format)
         else:
-            parsed_output_tool_properies = self._output_format
+            parsed_output_tool_properies = output_format
         if parsed_output_tool_properies is None:
             return None
 
-        required_properties = list(parsed_output_tool_properies.keys())
+        required_properties = list[Any](parsed_output_tool_properies.keys())
         return ToolDescription(
             name=OUTPUT_TOOL_NAME,
             description=OUTPUT_TOOL_DESCRIPTION,
@@ -286,7 +289,14 @@ class ReActAgent(Agent):
                 tool_outputs[tool_call_id] = tool_output
         return tool_outputs, tools_to_process
 
-    async def _run_core(self, *inputs: AgentPayload | dict, ctx: Optional[dict] = None, **kwargs) -> AgentPayload:
+    async def _run_core(
+        self,
+        *inputs: AgentPayload | dict,
+        ctx: Optional[dict] = None,
+        initial_prompt: str,
+        output_tool_description: ToolDescription | None,
+        **kwargs,
+    ) -> AgentPayload:
         # Exact previous logic
         original_agent_input = inputs[0]
         if not isinstance(original_agent_input, AgentPayload):
@@ -299,11 +309,11 @@ class ReActAgent(Agent):
         system_message = next((msg for msg in original_agent_input.messages if msg.role == "system"), None)
 
         # Prepare system prompt content
-        system_prompt_content = self.initial_prompt
+        system_prompt_content = initial_prompt
         if self._date_in_system_prompt:
             # TODO: add the timezone of the user
             current_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            system_prompt_content = f"Current date and time: {current_date}\n\n{self.initial_prompt}"
+            system_prompt_content = f"Current date and time: {current_date}\n\n{initial_prompt}"
 
         if system_message is None:
             original_agent_input.messages.insert(
@@ -344,7 +354,7 @@ class ReActAgent(Agent):
                 messages=llm_input_messages,
                 tools=[agent.tool_description for agent in self.agent_tools],
                 tool_choice=tool_choice,
-                structured_output_tool=self._output_tool_agent_description,
+                structured_output_tool=output_tool_description,
             )
 
             span.set_attributes(
@@ -413,7 +423,13 @@ class ReActAgent(Agent):
                 message=(f"Number of successful tool outputs: {successful_output_count}. " f"Running the agent again.")
             )
             self._current_iteration += 1
-            return await self._run_core(agent_input, ctx=ctx, **kwargs)
+            return await self._run_core(
+                agent_input,
+                ctx=ctx,
+                initial_prompt=initial_prompt,
+                output_tool_description=output_tool_description,
+                **kwargs,
+            )
         else:
             LOGGER.error(
                 f"Reached the maximum number of iterations ({self._max_iterations}) and still asks for tools."
@@ -429,10 +445,19 @@ class ReActAgent(Agent):
     # --- Thin adapter to typed I/O ---
     async def _run_without_io_trace(self, inputs: ReActAgentInputs, ctx: dict) -> ReActAgentOutputs:
         # Map typed inputs to the original call style
+        initial_prompt = inputs.initial_prompt or self.initial_prompt
+        output_format = inputs.output_format or self._output_format
+        output_tool_description = self._get_output_tool_description(output_format)
+
         payload_dict = inputs.model_dump(exclude_none=True)
         agent_payload = AgentPayload(**payload_dict) if "messages" in payload_dict else payload_dict
 
-        core_result = await self._run_core(agent_payload, ctx=ctx)
+        core_result = await self._run_core(
+            agent_payload,
+            ctx=ctx,
+            initial_prompt=initial_prompt,
+            output_tool_description=output_tool_description,
+        )
 
         # Map original output back to typed outputs
         final_message = (

@@ -69,6 +69,14 @@ DEFAULT_LLM_CALL_TOOL_DESCRIPTION = ToolDescription(
 
 class LLMCallInputs(BaseModel):
     messages: list[ChatMessage] = Field(description="The input messages")
+    prompt_template: Optional[str] = Field(
+        default=None,
+        description="Prompt template to use for the LLM call.",
+    )
+    output_format: Optional[dict[str, Any]] = Field(
+        default=None,
+        description="Structured output format.",
+    )
     # Allow extra fields for backward compatibility
     model_config = {"extra": "allow"}
 
@@ -118,7 +126,10 @@ class LLMCallAgent(Agent):
 
     async def _run_without_io_trace(self, inputs: LLMCallInputs, ctx: Optional[dict] = None) -> LLMCallOutputs:
         LOGGER.info(f"Running LLM call agent with inputs: {inputs} and ctx: {ctx}")
-        prompt_vars = extract_vars_in_text_template(self._prompt_template)
+        prompt_template = inputs.prompt_template or self._prompt_template
+        output_format = inputs.output_format or self.output_format
+
+        prompt_vars = extract_vars_in_text_template(prompt_template)
         input_replacements = {}
         files_content = []
         images_content = []
@@ -173,7 +184,7 @@ class LLMCallAgent(Agent):
             if isinstance(file_url, str) and file_url:
                 files_content.append({"type": "file", "file_url": file_url})
 
-        text_content = self._prompt_template.format(**input_replacements)
+        text_content = prompt_template.format(**input_replacements)
 
         # Check for file support
         file_supported_references = [
@@ -219,10 +230,10 @@ class LLMCallAgent(Agent):
                 SpanAttributes.LLM_MODEL_NAME: self._completion_service._model_name,
             }
         )
-        if self.output_format:
+        if output_format:
             response = await self._completion_service.constrained_complete_with_json_schema_async(
                 messages=[{"role": "user", "content": content}],
-                response_format=self.output_format,
+                response_format=output_format,
             )
         else:
             response = await self._completion_service.complete_async(
