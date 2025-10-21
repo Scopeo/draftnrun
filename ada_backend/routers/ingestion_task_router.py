@@ -7,12 +7,12 @@ from fastapi import APIRouter, Depends, HTTPException, status
 
 
 from ada_backend.database.setup_db import get_db
-from ada_backend.schemas.auth_schema import SupabaseUser, VerifiedApiKey
+from ada_backend.schemas.auth_schema import SupabaseUser
 from ada_backend.routers.auth_router import (
     user_has_access_to_organization_dependency,
     UserRights,
-    verify_api_key_dependency,
     verify_ingestion_api_key_dependency,
+    user_has_access_to_organization_xor_verify_api_key,
 )
 from ada_backend.services.ingestion_task_service import (
     get_ingestion_task_by_organization_id,
@@ -31,6 +31,7 @@ LOGGER = logging.getLogger(__name__)
 
 
 router = APIRouter(tags=["Ingestion Task"])
+LOGGER = logging.getLogger(__name__)
 
 
 @router.get("/ingestion_task/{organization_id}", response_model=List[IngestionTaskResponse])
@@ -50,49 +51,46 @@ def get_organization_sources(
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
-@router.post("/ingestion_task/{organization_id}", status_code=status.HTTP_201_CREATED)
-def create_organization_task(
+@router.post(
+    "/ingestion_task/{organization_id}",
+    status_code=status.HTTP_201_CREATED,
+    summary="Create ingestion task in organization, authentication via user token or API key",
+)
+def create_ingestion_task(
     organization_id: UUID,
     ingestion_task_data: IngestionTaskQueue,
-    user: Annotated[
-        SupabaseUser, Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.WRITER.value))
+    auth_ids: Annotated[
+        tuple[UUID | None, UUID | None],
+        Depends(user_has_access_to_organization_xor_verify_api_key(allowed_roles=UserRights.WRITER.value)),
     ],
     session: Session = Depends(get_db),
 ) -> UUID:
-    if not user.id:
-        raise HTTPException(status_code=400, detail="User ID not found")
+    """
+    Create ingestion task with flexible authentication.
+    """
+    user_id, api_key_id = auth_ids
     try:
-        task_id = create_ingestion_task_by_organization(
-            session, organization_id=organization_id, ingestion_task_data=ingestion_task_data, user_id=user.id
-        )
+        if user_id:
+            task_id = create_ingestion_task_by_organization(
+                session,
+                organization_id=organization_id,
+                ingestion_task_data=ingestion_task_data,
+                user_id=user_id,
+            )
+        else:
+            task_id = create_ingestion_task_by_organization(
+                session,
+                organization_id=organization_id,
+                ingestion_task_data=ingestion_task_data,
+                api_key_id=api_key_id,
+            )
         return task_id
     except Exception as e:
-        LOGGER.error(f"Failed to create ingestion task for organization {organization_id}: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Internal server error") from e
-
-
-@router.post("/organizations/{organization_id}/ingestion_tasks/api-key-auths", status_code=status.HTTP_201_CREATED)
-def create_ingestion_task_with_api_key(
-    organization_id: UUID,
-    ingestion_task_data: IngestionTaskQueue,
-    verified_api_key: VerifiedApiKey = Depends(verify_api_key_dependency),
-    session: Session = Depends(get_db),
-):
-    if verified_api_key.organization_id != organization_id:
-        raise HTTPException(status_code=403, detail="You don't have access to this organization")
-    try:
-        task_id = create_ingestion_task_by_organization(
-            session,
-            organization_id=organization_id,
-            ingestion_task_data=ingestion_task_data,
-            api_key_id=verified_api_key.api_key_id,
+        LOGGER.exception(
+            "Failed to create ingestion task for organization %s",
+            organization_id,
         )
-        return task_id
-    except Exception as e:
-        LOGGER.error(
-            f"Failed to create ingestion task for organization {organization_id} via API key: {str(e)}", exc_info=True
-        )
-        raise HTTPException(status_code=500, detail="Internal server error") from e
+        raise HTTPException(status_code=500, detail="Internal Server Error") from e
 
 
 @router.patch("/ingestion_task/{organization_id}", status_code=status.HTTP_200_OK)

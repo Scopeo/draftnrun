@@ -4,7 +4,11 @@ from typing import Annotated, Optional
 from uuid import UUID, uuid4
 
 from ada_backend.schemas.auth_schema import SupabaseUser
-from ada_backend.routers.auth_router import user_has_access_to_organization_dependency, UserRights
+from ada_backend.routers.auth_router import (
+    user_has_access_to_organization_dependency,
+    UserRights,
+    user_has_access_to_organization_xor_verify_api_key,
+)
 from ada_backend.schemas.s3_file_schema import UploadFileRequest, S3UploadURL
 from ada_backend.services.s3_files_service import (
     generate_s3_upload_presigned_urls_service,
@@ -19,19 +23,21 @@ LOGGER = logging.getLogger(__name__)
 
 @router.post(
     "/organizations/{organization_id}/files/upload-urls",
-    summary="Get S3 Upload Presigned URLs",
+    summary="Get S3 Upload Presigned URLs, authentication via user token or API key",
     response_model=list[S3UploadURL],
 )
 async def generate_s3_upload_presigned_urls(
     organization_id: UUID,
-    user: Annotated[
-        SupabaseUser, Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.READER.value))
-    ],
     upload_file_requests: list[UploadFileRequest],
+    auth_ids: Annotated[
+        tuple[UUID | None, UUID | None],
+        Depends(user_has_access_to_organization_xor_verify_api_key(allowed_roles=UserRights.READER.value)),
+    ],
 ) -> list[S3UploadURL]:
-    if not user.id:
-        raise HTTPException(status_code=400, detail="User ID not found")
-
+    """
+    Generate S3 upload presigned URLs with flexible authentication.
+    """
+    user_id, api_key_id = auth_ids  # One is always None
     try:
         return generate_s3_upload_presigned_urls_service(organization_id, upload_file_requests)
     except Exception as e:
