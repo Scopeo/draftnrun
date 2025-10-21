@@ -166,7 +166,7 @@ async def _process_collection(
 
 async def upgrade_collections(connection, qdrant_service, data_sources):
     """
-    Rename Qdrant collections from org_id_source_name format to org_id_source_id format.
+    Rename Qdrant collections from org_id_source_name format to source_id format.
     """
     renamed_count = 0
     skipped_count = 0
@@ -188,7 +188,7 @@ async def upgrade_collections(connection, qdrant_service, data_sources):
         sanitized_source_id = sanitize_filename(str(source_id))
 
         old_collection_name = f"{sanitized_organization_id}_{sanitized_source_name}_collection"
-        new_collection_name = f"{sanitized_organization_id}_{sanitized_source_id}_collection"
+        new_collection_name = f"{sanitized_source_id}_collection"
 
         success = await _process_collection(
             connection=connection,
@@ -210,7 +210,7 @@ async def upgrade_collections(connection, qdrant_service, data_sources):
 
 async def downgrade_collections(connection, qdrant_service, data_sources):
     """
-    Downgrade Qdrant collections from org_id_source_id format back to org_id_source_name format.
+    Downgrade Qdrant collections from source_id format back to org_id_source_name format.
     """
     renamed_count = 0
     skipped_count = 0
@@ -231,7 +231,7 @@ async def downgrade_collections(connection, qdrant_service, data_sources):
         sanitized_source_name = sanitize_filename(str(source_name))
         sanitized_source_id = sanitize_filename(str(source_id))
 
-        old_collection_name = f"{sanitized_organization_id}_{sanitized_source_id}_collection"
+        old_collection_name = f"{sanitized_source_id}_collection"
         new_collection_name = f"{sanitized_organization_id}_{sanitized_source_name}_collection"
 
         success = await _process_collection(
@@ -356,7 +356,8 @@ def upgrade_ingestion_db_tables(connection, data_sources):
     ) in data_sources:
         schema_name = database_schema
         old_table_name = database_table_name
-        new_table_name = f"{source_id}_table"
+        sanitized_source_id = sanitize_filename(str(source_id))
+        new_table_name = f"{sanitized_source_id}_table"
 
         success = _process_table(
             connection=connection,
@@ -410,7 +411,7 @@ def downgrade_ingestion_db_tables(connection, data_sources):
 
 def upgrade() -> None:
     """
-    Rename Qdrant collections from org_id_source_name format to org_id_source_id format,
+    Rename Qdrant collections from org_id_source_name format to source_id format,
     rename ingestion database tables from source_name_table to source_id_table,
     and update database_table_name and database_schema in data_sources using source_attributes information.
     This migration updates the qdrant_collection_name field in data_sources table,
@@ -439,7 +440,7 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     """
-    Downgrade migration: rename Qdrant collections from org_id_source_id format back to org_id_source_name format,
+    Downgrade migration: rename Qdrant collections from source_id format back to org_id_source_name format,
     rename ingestion database tables from source_id_table back to source_name_table,
     and revert database_table_name and database_schema in data_sources.
     """

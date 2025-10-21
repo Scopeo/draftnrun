@@ -28,9 +28,10 @@ URL_COLUMN_NAME = "url"
 
 def get_sanitize_names(organization_id: str, source_id: str) -> tuple[str, str, str]:
     sanitize_organization_id = sanitize_filename(organization_id)
+    sanitize_source_id = sanitize_filename(source_id)
     schema_name = f"org_{sanitize_organization_id}"
-    table_name = f"{source_id}_table"
-    qdrant_collection_name = f"{sanitize_organization_id}_{source_id}_collection"
+    table_name = f"{sanitize_source_id}_table"
+    qdrant_collection_name = f"{sanitize_source_id}_collection"
     return (
         schema_name,
         table_name,

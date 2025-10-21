@@ -62,9 +62,7 @@ def test_ingest_local_folder_source():
         organization_id=ORGANIZATION_ID,
         source_id=test_source_id,
     )
-    print("database_table_name", database_table_name)
-    print("test_source_id", test_source_id)
-    print("qdrant_collection_name", qdrant_collection_name)
+
     endpoint_upload_file = f"{BASE_URL}/files/{ORGANIZATION_ID}/upload"
     with open("tests/resources/documents/sample.pdf", "rb") as f:
         files_payload = [("files", ("doc1.pdf", f, "application/pdf"))]
