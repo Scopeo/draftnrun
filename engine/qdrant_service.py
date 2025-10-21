@@ -1097,6 +1097,7 @@ class QdrantService:
             raise ValueError(f"Collection {collection_name} does not exist.")
 
         schema = self._get_schema(collection_name)
+
         await self.create_index_if_needed_async(
             collection_name=collection_name,
             field_name=schema.chunk_id_field,
@@ -1108,13 +1109,14 @@ class QdrantService:
                 if schema.metadata_field_types and metadata_field in schema.metadata_field_types:
                     internal_type = schema.metadata_field_types[metadata_field]
                     field_type = map_internal_type_to_qdrant_field_schema(internal_type)
-
-            await self.create_index_if_needed_async(
-                collection_name=collection_name,
-                field_name=metadata_field,
-                field_schema_type=field_type,
-            )
+                LOGGER.debug(f"Creating index for {metadata_field} with type {field_type}")
+                await self.create_index_if_needed_async(
+                    collection_name=collection_name,
+                    field_name=metadata_field,
+                    field_schema_type=field_type,
+                )
         if schema.last_edited_ts_field:
+            LOGGER.debug(f"Creating index datetime for {schema.last_edited_ts_field} with type DATETIME")
             await self.create_index_if_needed_async(
                 collection_name=collection_name,
                 field_name=schema.last_edited_ts_field,
@@ -1168,6 +1170,7 @@ class QdrantService:
         if old_df.empty:
             await self.add_chunks_async(json.loads(df.to_json(orient="records", date_format="iso")), collection_name)
             LOGGER.info(f"Qdrant collection is empty. Added {len(df)} chunks to Qdrant")
+            print(f"Qdrant collection is empty. Added {len(df)} chunks to Qdrant")
             return True
 
         incoming_ids = set(df[self.default_schema.chunk_id_field])
