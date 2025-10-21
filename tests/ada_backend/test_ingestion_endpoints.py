@@ -82,7 +82,7 @@ def test_ingest_local_folder_source():
         status=db.TaskStatus.PENDING,
         source_attributes=test_source_attributes,
     )
-    response = requests.post(endpoint, headers=HEADERS_JWT, json=payload.model_dump())
+    response = requests.post(endpoint, headers=HEADERS_JWT, json=payload.model_dump_json())
     task_id = response.json()
 
     assert response.status_code == 201
