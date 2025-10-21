@@ -47,7 +47,6 @@ class InstanceParameterWithDefinition:
 class ComponentWithVersionDTO:
     component_id: UUID
     name: str
-    icon: Optional[str] = None
     description: Optional[str]
     component_version_id: UUID
     version_tag: str
@@ -57,6 +56,7 @@ class ComponentWithVersionDTO:
     can_use_function_calling: bool
     is_protected: bool
     integration_id: Optional[UUID]
+    icon: Optional[str] = None
     default_tool_description_id: Optional[UUID] = None
 
 
