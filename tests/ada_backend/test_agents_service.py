@@ -74,7 +74,6 @@ def test_get_all_agents_service(monkeypatch):
         assert session_arg is session
         assert organization_id_arg == org_id
         # return triples (agent, graph_runner, binding) as the real repository does
-tests/ada_backend/test_agents_service.py
         gr1 = DummyGraphRunner(uuid.uuid4(), "v1", "version1")
         gr2 = DummyGraphRunner(uuid.uuid4(), "v2", "version2")
         return [
