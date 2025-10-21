@@ -425,6 +425,18 @@ How to get them:
 
 Make sure the redirect URI matches what you configure in Google and your app. Do not commit these secrets to version control.
 
+### Opting out of RGPD compliance (trace data retention)
+
+By default, the system automatically deletes trace data older than 90 days to comply with RGPD requirements. To opt out of this automatic cleanup:
+
+Connect to your PostgreSQL database and run:
+
+```sql
+\c postgres
+SELECT cron.unschedule(jobid) FROM cron.job WHERE jobname = 'cleanup-old-spans';
+```
+
+This removes the scheduled cleanup job. Trace data will no longer be automatically deleted after 90 days.
 
 ## Set up the database for backend and ingestion
 
