@@ -135,7 +135,8 @@ async def _process_collection(
                     payload={"points": batch},
                 )
                 LOGGER.info(
-                    f"Inserted batch {i//insert_batch_size + 1}/{(len(all_points) + insert_batch_size - 1)//insert_batch_size}"
+                    f"Inserted batch {i//insert_batch_size + 1}/"
+                    "{(len(all_points) + insert_batch_size - 1)//insert_batch_size}"
                 )
         else:
             LOGGER.warning(f"No points found in collection {current_collection_name}")
@@ -145,8 +146,8 @@ async def _process_collection(
         connection.execute(
             text(
                 """
-            UPDATE data_sources 
-            SET qdrant_collection_name = :new_name 
+            UPDATE data_sources
+            SET qdrant_collection_name = :new_name
             WHERE id = :source_id
         """
             ),
@@ -287,7 +288,7 @@ def _process_table(connection, schema_name, old_table_name, new_table_name, sour
         # Check if old table exists
         ingestion_cursor.execute(
             """
-            SELECT table_name FROM information_schema.tables 
+            SELECT table_name FROM information_schema.tables
             WHERE table_schema = %s AND table_name = %s
             """,
             (schema_name, old_table_name),
@@ -299,7 +300,7 @@ def _process_table(connection, schema_name, old_table_name, new_table_name, sour
         # Check if new table already exists
         ingestion_cursor.execute(
             """
-            SELECT table_name FROM information_schema.tables 
+            SELECT table_name FROM information_schema.tables
             WHERE table_schema = %s AND table_name = %s
             """,
             (schema_name, new_table_name),
@@ -318,8 +319,8 @@ def _process_table(connection, schema_name, old_table_name, new_table_name, sour
         connection.execute(
             text(
                 """
-            UPDATE data_sources 
-            SET database_table_name = :new_table_name 
+            UPDATE data_sources
+            SET database_table_name = :new_table_name
             WHERE id = :source_id
             """
             ),
@@ -421,8 +422,8 @@ def upgrade() -> None:
     result = connection.execute(
         text(
             """
-        SELECT id, organization_id, database_schema, database_table_name, name, qdrant_collection_name 
-        FROM data_sources 
+        SELECT id, organization_id, database_schema, database_table_name, name, qdrant_collection_name
+        FROM data_sources
     """
         )
     )
@@ -447,8 +448,8 @@ def downgrade() -> None:
     result = connection.execute(
         text(
             """
-        SELECT id, organization_id, database_schema, database_table_name, name, qdrant_collection_name 
-        FROM data_sources 
+        SELECT id, organization_id, database_schema, database_table_name, name, qdrant_collection_name
+        FROM data_sources
     """
         )
     )
