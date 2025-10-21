@@ -77,6 +77,7 @@ def test_ingest_local_folder_source():
     endpoint = f"{BASE_URL}/ingestion_task/{ORGANIZATION_ID}"
     payload = IngestionTaskQueue(
         source_id=test_source_id,
+        source_name=test_source_name,
         source_type=db.SourceType.LOCAL,
         status=db.TaskStatus.PENDING,
         source_attributes=test_source_attributes,
