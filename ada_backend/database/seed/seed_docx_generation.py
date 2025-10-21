@@ -21,6 +21,7 @@ def seed_docx_generation_components(session: Session):
         is_agent=False,
         function_callable=True,
         can_use_function_calling=False,
+        icon="tabler-file-type-docx",
     )
     upsert_components(session, [docx_generation_component])
     docx_generation_component_version = db.ComponentVersion(
@@ -30,7 +31,6 @@ def seed_docx_generation_components(session: Session):
         release_stage=db.ReleaseStage.INTERNAL,
         description="Convert markdown text to DOCX files.",
         default_tool_description_id=TOOL_DESCRIPTION_UUIDS["default_docx_generation_tool_description"],
-        icon="tabler-file-type-docx",
     )
     upsert_component_versions(session, [docx_generation_component_version])
     upsert_component_categories(

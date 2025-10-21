@@ -118,7 +118,7 @@ def seed_filter_components(session: Session):
         ],
     )
     # LEGACY: Manual port seeding for unmigrated Filter component
-    existing = session.query(db.Component).filter(db.ComponentVersion.id == filter_version.id).first()
+    existing = session.query(db.ComponentVersion).filter(db.ComponentVersion.id == filter_version.id).first()
     if existing:
         # Ensure INPUT and OUTPUT canonical 'messages' ports exist
         port_defs = (

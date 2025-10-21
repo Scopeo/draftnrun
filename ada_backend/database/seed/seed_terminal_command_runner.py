@@ -28,6 +28,7 @@ def seed_terminal_command_runner_components(session: Session):
         is_agent=False,
         function_callable=True,
         can_use_function_calling=False,
+        icon="tabler-terminal-2",
     )
     upsert_components(session, [terminal_command_runner_component])
     terminal_command_runner_version = db.ComponentVersion(
@@ -41,7 +42,6 @@ def seed_terminal_command_runner_components(session: Session):
     upsert_component_versions(
         session=session,
         component_versions=[terminal_command_runner_version],
-        icon="tabler-terminal-2",
     )
 
     terminal_command_runner_parameter_definitions = [
