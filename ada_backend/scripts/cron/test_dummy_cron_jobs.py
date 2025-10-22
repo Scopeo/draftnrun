@@ -35,7 +35,7 @@ async def create_dummy_job(
         "entrypoint": "dummy_print",
         "payload": payload,
     }
-    response = await client.post(f"{API_BASE_URL}/crons/{org_id}", json=request_payload)
+    response = await client.post(f"{API_BASE_URL}/organizations/{org_id}/crons", json=request_payload)
     response.raise_for_status()
     job_id = response.json()["id"]
     print(f"✅ Cron job '{name}' created with ID: {job_id}")
@@ -45,7 +45,7 @@ async def create_dummy_job(
 async def delete_job(client: httpx.AsyncClient, org_id: str, job_id: str, name: str):
     """Deletes a cron job."""
     print(f"--- Deleting cron job: {name} ({job_id}) ---")
-    response = await client.delete(f"{API_BASE_URL}/crons/{org_id}/{job_id}")
+    response = await client.delete(f"{API_BASE_URL}/organizations/{org_id}/crons/{job_id}")
     response.raise_for_status()
     print(f"✅ Cron job '{name}' deleted successfully.")
 
