@@ -321,16 +321,19 @@ def seed_ai_agent_parameter_groups(session: Session):
     ]
 
     # Upsert component parameter groups
-    for cpg in component_parameter_groups:
+    for component_parameter_group in component_parameter_groups:
         existing_cpg = (
             session.query(db.ComponentParameterGroup)
-            .filter_by(component_id=cpg.component_id, parameter_group_id=cpg.parameter_group_id)
+            .filter_by(
+                component_id=component_parameter_group.component_id,
+                parameter_group_id=component_parameter_group.parameter_group_id,
+            )
             .first()
         )
         if existing_cpg:
-            existing_cpg.order_index = cpg.order_index
+            existing_cpg.order_index = component_parameter_group.order_index
         else:
-            session.add(cpg)
+            session.add(component_parameter_group)
 
     session.flush()  # Ensure relationships are saved before updating parameters
 
