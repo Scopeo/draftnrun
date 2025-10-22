@@ -150,7 +150,7 @@ class Worker:
                 f"task_id='{task_id}', "
                 f"source_type='{source_type}', "
                 f"source_attributes={repr(source_attributes)}, "
-                f"source_id={source_id}"
+                f"source_id='{source_id}'"
                 f")",
             ]
 
