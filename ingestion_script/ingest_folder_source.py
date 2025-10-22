@@ -131,6 +131,9 @@ async def ingest_google_drive_source(
     chunk_size: Optional[int] = 1024,
     chunk_overlap: Optional[int] = 0,
 ) -> None:
+    LOGGER.info(f"[INGESTION_SOURCE] Starting GOOGLE DRIVE ingestion - Source: '{source_name}', Folder ID: '{folder_id}', Organization: '{organization_id}', Task: '{task_id}'")
+    LOGGER.info(f"[INGESTION_CONFIG] Supabase save: {save_supabase}, Add descriptions: {add_doc_description_to_chunks}, Chunk size: {chunk_size}")
+    
     # TODO: see how we can change whole code to use id instead of path
     path = "https://drive.google.com/drive/folders/" + folder_id
     folder_manager = GoogleDriveFolderManager(path=path, access_token=access_token)
@@ -158,6 +161,9 @@ async def ingest_local_folder_source(
     chunk_size: Optional[int] = 1024,
     chunk_overlap: Optional[int] = 0,
 ) -> None:
+    LOGGER.info(f"[INGESTION_SOURCE] Starting LOCAL ingestion - Source: '{source_name}', Organization: '{organization_id}', Task: '{task_id}'")
+    LOGGER.info(f"[INGESTION_CONFIG] Files count: {len(list_of_files_to_ingest)}, Supabase save: {save_supabase}, Add descriptions: {add_doc_description_to_chunks}, Chunk size: {chunk_size}")
+
     folder_manager = S3FolderManager(folder_payload=list_of_files_to_ingest)
     source_type = db.SourceType.LOCAL
     await _ingest_folder_source(
@@ -241,7 +247,7 @@ async def _ingest_folder_source(
             organization_id=organization_id,
             ingestion_task=ingestion_task,
         )
-        return
+        raise ValueError(f"Source '{source_name}' already exists in database table '{db_table_schema}.{db_table_name}'")
 
     if await qdrant_service.collection_exists_async(qdrant_collection_name):
         LOGGER.error(f"Source {source_name} already exists in Qdrant")
@@ -249,7 +255,7 @@ async def _ingest_folder_source(
             organization_id=organization_id,
             ingestion_task=ingestion_task,
         )
-        return
+        raise ValueError(f"Source '{source_name}' already exists in Qdrant collection '{qdrant_collection_name}'")
 
     LOGGER.info("Starting ingestion process")
     files_info = folder_manager.list_all_files_info()
@@ -291,7 +297,40 @@ async def _ingest_folder_source(
     LOGGER.info(f"Found {len(files_info)} files to ingest")
     try:
         if len(files_info) == 0:
-            raise ValueError("No files found to ingest")
+            LOGGER.warning(f"No files found to ingest in source '{source_name}' - marking as completed")
+            LOGGER.info(f"[EMPTY_FOLDER] About to update task status to COMPLETED for task {task_id}")
+            # Update task status to COMPLETED for empty folders
+            ingestion_task_completed = IngestionTaskUpdate(
+                id=task_id,
+                source_name=source_name,
+                source_type=source_type,
+                status=db.TaskStatus.COMPLETED,
+            )
+            LOGGER.info(f"[EMPTY_FOLDER] Calling update_ingestion_task with status: {ingestion_task_completed.status}")
+            update_ingestion_task(
+                organization_id=organization_id,
+                ingestion_task=ingestion_task_completed,
+            )
+            LOGGER.info(f"[EMPTY_FOLDER] Task status update completed")
+            # Still create the empty source in the database for consistency
+            LOGGER.info(f"[EMPTY_FOLDER] About to create empty source in database")
+            source_data = DataSourceSchema(
+                name=source_name,
+                type=source_type,
+                database_schema=db_table_schema,
+                database_table_name=db_table_name,
+                qdrant_collection_name=qdrant_collection_name,
+                qdrant_schema=QDRANT_SCHEMA.to_dict(),
+                embedding_model_reference=f"{EMBEDDING_SERVICE._provider}:{EMBEDDING_SERVICE._model_name}",
+                attributes=None,
+            )
+            LOGGER.info(f"[EMPTY_FOLDER] Calling create_source for empty folder")
+            create_source(
+                organization_id=organization_id,
+                source_data=source_data,
+            )
+            LOGGER.info(f"[EMPTY_FOLDER] Empty source created successfully - returning")
+            return
         for document in files_info:
             chunks_df = await get_chunks_dataframe_from_doc(
                 document,
@@ -322,7 +361,7 @@ async def _ingest_folder_source(
             organization_id=organization_id,
             ingestion_task=ingestion_task,
         )
-        return
+        raise  # Re-raise the exception to ensure subprocess exits with non-zero code
     source_data = DataSourceSchema(
         name=source_name,
         type=source_type,

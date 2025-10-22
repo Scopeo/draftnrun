@@ -95,10 +95,33 @@ class GoogleDriveFolderManager(FolderManager):
         file = self._fetch_file_details(file_path)
 
         folder_names = self.get_folder_names(file["id"])
+        
+        # Get file type from MIME type with comprehensive logging
+        mime_type = file["mimeType"]
+        file_name = file["name"]
+        from pathlib import Path
+        file_extension = Path(file_name).suffix.lower()
+        
+        LOGGER.info(f"[GOOGLE_DRIVE] Processing file: '{file_name}', MIME type: '{mime_type}', Extension: '{file_extension}'")
+        
+        file_type = FileDocumentType.from_mime_type(mime_type)
+        
+        if file_type is not None:
+            LOGGER.info(f"[FILE_TYPE_DETECTION] Successfully mapped MIME type '{mime_type}' to file type '{file_type.value}' for '{file_name}'")
+        else:
+            LOGGER.warning(f"[FILE_TYPE_DETECTION] Unknown MIME type '{mime_type}' for file '{file_name}'. Attempting fallback detection from extension '{file_extension}'")
+            # Try to determine type from file extension as fallback
+            try:
+                file_type = FileDocumentType(file_extension)
+                LOGGER.info(f"[FILE_TYPE_DETECTION] Successfully determined file type '{file_type.value}' from extension '{file_extension}' for '{file_name}'")
+            except ValueError:
+                LOGGER.error(f"[FILE_TYPE_DETECTION] FAILED - Could not determine file type for '{file_name}' with MIME type '{mime_type}' and extension '{file_extension}'")
+                raise ValueError(f"Unsupported file type: MIME type '{mime_type}', extension '{file_extension}' for file '{file_name}'")
+        
         return FileDocument(
             id=file["id"],
             last_edited_ts=file.get("modifiedTime", None),
-            type=FileDocumentType.from_mime_type(file["mimeType"]),
+            type=file_type,
             file_name=file["name"],
             folder_name="/".join(reversed(folder_names)),
             metadata={

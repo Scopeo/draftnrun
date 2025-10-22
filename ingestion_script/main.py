@@ -14,6 +14,15 @@ from ingestion_script.ingest_folder_source import ingest_google_drive_source, in
 from ingestion_script.utils import update_ingestion_task
 from ada_backend.database import models as db
 
+# Configure logging to ensure all logs are captured by worker subprocess
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler()  # Output to stdout for worker to capture
+    ]
+)
+
 LOGGER = logging.getLogger(__name__)
 DEFAULT_CHUNK_SIZE = 1024
 DEFAULT_CHUNK_OVERLAP = 0
@@ -44,6 +53,7 @@ async def ingestion_main_async(
     source_attributes: dict,
     source_id: Optional[str] = None,
 ):
+    LOGGER.info(f"[INGESTION_MAIN] Starting ingestion - Source: '{source_name}', Type: {source_type}, Organization: {organization_id}, Task: {task_id}")
 
     set_trace_manager(TraceManager(project_name="Ingestion"))
     session = SessionLocal()
@@ -57,6 +67,7 @@ async def ingestion_main_async(
         organization_id=organization_id,
         organization_llm_providers=organization_llm_providers,
     )
+    LOGGER.info(f"[INGESTION_MAIN] Trace manager and span initialized for task {task_id}")
     chunk_size = source_attributes.get("chunk_size")
     if chunk_size is None:
         chunk_size = DEFAULT_CHUNK_SIZE
@@ -106,7 +117,7 @@ async def ingestion_main_async(
                 organization_id=organization_id,
                 ingestion_task=failed_ingestion_task,
             )
-            return
+            raise  # Re-raise the exception to ensure subprocess exits with non-zero code
 
     elif source_type == SourceType.LOCAL:
         if check_missing_params(
@@ -134,7 +145,7 @@ async def ingestion_main_async(
                 organization_id=organization_id,
                 ingestion_task=failed_ingestion_task,
             )
-            return
+            raise  # Re-raise the exception to ensure subprocess exits with non-zero code
 
     elif source_type == SourceType.DATABASE:
         if check_missing_params(
@@ -179,8 +190,14 @@ async def ingestion_main_async(
                 organization_id=organization_id,
                 ingestion_task=failed_ingestion_task,
             )
-            return
+            raise  # Re-raise the exception to ensure subprocess exits with non-zero code
 
 
 def ingestion_main(**kwargs):
-    asyncio.run(ingestion_main_async(**kwargs))
+    LOGGER.info(f"[INGESTION_MAIN] Entry point called with kwargs: {list(kwargs.keys())}")
+    try:
+        asyncio.run(ingestion_main_async(**kwargs))
+        LOGGER.info(f"[INGESTION_MAIN] Completed successfully")
+    except Exception as e:
+        LOGGER.error(f"[INGESTION_MAIN] FAILED with error: {str(e)}")
+        raise
