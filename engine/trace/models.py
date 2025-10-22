@@ -5,7 +5,7 @@ from sqlalchemy import Text, Column, Integer, String, TIMESTAMP, Enum as SQLAlch
 from sqlalchemy.orm import declarative_base, mapped_column
 from opentelemetry.trace.status import StatusCode
 from openinference.semconv.trace import OpenInferenceSpanKindValues
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 
 from ada_backend.database.models import EnvType, CallType
 
@@ -48,6 +48,7 @@ class Span(Base):
 
     span_id = Column(String, nullable=False, unique=True)
     parent_id = Column(String, nullable=True, index=True)
+    graph_runner_id = Column(UUID, nullable=True, index=True)
     name = Column(String, nullable=False)
     span_kind = mapped_column(make_pg_string_enum(OpenInferenceSpanKindValues), nullable=False)
     start_time = Column(TIMESTAMP(timezone=True), nullable=False, index=True)
@@ -72,7 +73,7 @@ class Span(Base):
     environment = mapped_column(make_pg_string_enum(EnvType), nullable=True)
     call_type = mapped_column(make_pg_string_enum(CallType), nullable=True)
     project_id = Column(String, nullable=True, index=True)
-    tag_version = Column(String, nullable=True)
+    tag_name = Column(String, nullable=True)
 
 
 class OrganizationUsage(Base):

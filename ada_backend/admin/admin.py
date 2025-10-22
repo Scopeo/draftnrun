@@ -229,7 +229,7 @@ class CategoryAdmin(EnhancedModelView, model=db.Category):
 class GraphRunnerAdmin(EnhancedModelView, model=db.GraphRunner):
     category = AdminCategory.COMPONENTS
     icon = "fas fa-cubes"
-    column_list = ["id", "created_at", "updated_at", "tag_version"]
+    column_list = ["id", "created_at", "updated_at", "tag_version", "version_name", "change_log"]
 
 
 class ComponentInstanceAdmin(EnhancedModelView, model=db.ComponentInstance):

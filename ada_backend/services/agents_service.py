@@ -49,6 +49,7 @@ def get_all_agents_service(session: Session, organization_id: UUID) -> list[Agen
                 graph_runner_id=graph_runner.id,
                 env=project_env_binding.environment if project_env_binding else None,
                 tag_version=graph_runner.tag_version,
+                version_name=graph_runner.version_name,
             )
         )
 

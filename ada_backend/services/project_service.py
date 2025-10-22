@@ -30,6 +30,7 @@ from ada_backend.schemas.project_schema import (
 )
 from ada_backend.services.graph.delete_graph_service import delete_graph_runner_service
 from ada_backend.services.errors import ProjectNotFound
+from ada_backend.services.tag_service import compose_tag_name
 from ada_backend.segment_analytics import track_project_created, track_project_saved, track_user_get_project_list
 
 LOGGER = getLogger(__name__)
@@ -39,6 +40,11 @@ def get_project_service(session: Session, project_id: UUID) -> ProjectWithGraphR
     project_with_detail = get_project_with_details(session, project_id=project_id)
     if not project_with_detail:
         raise ProjectNotFound(project_id)
+
+    # Compose tag_name for each graph runner using the service layer
+    for graph_runner in project_with_detail.graph_runners:
+        graph_runner.tag_name = compose_tag_name(graph_runner.tag_version, graph_runner.version_name)
+
     return project_with_detail
 
 

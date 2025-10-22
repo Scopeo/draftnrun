@@ -39,6 +39,8 @@ from ada_backend.services.project_service import (
 )
 from ada_backend.repositories.env_repository import get_env_relationship_by_graph_runner_id
 from engine.llm_services.utils import LLMKeyLimitExceededError
+from ada_backend.services.tag_service import compose_tag_name
+
 
 LOGGER = logging.getLogger(__name__)
 
@@ -285,7 +287,10 @@ async def chat(
             input_data=input_data,
             environment=environment,
             call_type=CallType.SANDBOX,
-            tag_version=project_env_binding.graph_runner.tag_version,
+            tag_name=compose_tag_name(
+                project_env_binding.graph_runner.tag_version,
+                project_env_binding.graph_runner.version_name,
+            ),
         )
     except LLMKeyLimitExceededError as e:
         LOGGER.error(

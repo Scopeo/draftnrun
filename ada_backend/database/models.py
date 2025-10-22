@@ -376,12 +376,19 @@ class GraphRunner(Base):
     created_at = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     tag_version = mapped_column(String, nullable=True)
+    version_name = mapped_column(String, nullable=True)
+    change_log = mapped_column(Text, nullable=True)
 
     graph_edges = relationship("GraphRunnerEdge", back_populates="graph_runner")
     nodes = relationship("GraphRunnerNode", back_populates="graph_runner")
     port_mappings = relationship("PortMapping", back_populates="graph_runner")
 
-    __table_args__ = (CheckConstraint("tag_version ~ '^v[0-9]+\\.[0-9]+\\.[0-9]+$'", name="check_tag_version_semver"),)
+    __table_args__ = (
+        CheckConstraint(
+            "tag_version ~ '^[0-9]+\\.[0-9]+\\.[0-9]+$'",
+            name="check_tag_version_semver",
+        ),
+    )
 
     def __str__(self):
         return f"Graph Runner({self.id})"
