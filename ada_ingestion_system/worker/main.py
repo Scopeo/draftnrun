@@ -152,7 +152,7 @@ class Worker:
                     f"source_type='{source_type}', "
                     f"source_attributes={repr(source_attributes)}, "
                     + (f"source_id='{source_id}', " if source_id else "")
-                    + f")"
+                    + ")"
                 ),
             ]
 
