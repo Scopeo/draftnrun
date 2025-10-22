@@ -35,7 +35,7 @@ class PipelineParameterSchema(ParameterBase, WithValue):
 class ParameterGroupSchema(BaseModel):
     id: UUID
     name: str
-    order_index: int
+    group_order_within_component: int
 
 
 class ComponentParamDefDTO(ParameterDefinition):
@@ -44,5 +44,5 @@ class ComponentParamDefDTO(ParameterDefinition):
     component_version_id: UUID
     component_id: UUID
     parameter_group_id: Optional[UUID] = None
-    group_order: Optional[int] = None
+    parameter_order_within_group: Optional[int] = None
     parameter_group_name: Optional[str] = None

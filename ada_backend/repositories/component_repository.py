@@ -259,7 +259,7 @@ def get_component_parameter_groups(
     return (
         session.query(db.ComponentParameterGroup)
         .filter(db.ComponentParameterGroup.component_id == component_id)
-        .order_by(db.ComponentParameterGroup.order_index)
+        .order_by(db.ComponentParameterGroup.group_order_within_component)
         .all()
     )
 
@@ -621,7 +621,7 @@ def get_all_components_with_parameters(
                 ParameterGroupSchema(
                     id=pg.parameter_group.id,
                     name=pg.parameter_group.name,
-                    order_index=pg.order_index,
+                    group_order_within_component=pg.group_order_within_component,
                 )
                 for pg in parameter_groups
             ]
@@ -660,7 +660,7 @@ def get_all_components_with_parameters(
                             is_advanced=param.is_advanced,
                             order=param.order,
                             parameter_group_id=param.parameter_group_id,
-                            group_order=param.group_order,
+                            parameter_order_within_group=param.parameter_order_within_group,
                             parameter_group_name=parameter_group_name,
                         )
                     )

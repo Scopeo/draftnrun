@@ -1,8 +1,8 @@
 """add group parameters table
 
-Revision ID: 56cab9f802e7
+Revision ID: 691619b1b1cd
 Revises: c4aa0d13832e
-Create Date: 2025-10-22 12:38:12.107758
+Create Date: 2025-10-22 15:58:05.869251
 
 """
 
@@ -13,7 +13,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = "56cab9f802e7"
+revision: str = "691619b1b1cd"
 down_revision: Union[str, None] = "c4aa0d13832e"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -32,7 +32,7 @@ def upgrade() -> None:
         sa.Column("id", sa.UUID(), nullable=False),
         sa.Column("component_id", sa.UUID(), nullable=False),
         sa.Column("parameter_group_id", sa.UUID(), nullable=False),
-        sa.Column("order_index", sa.Integer(), nullable=False),
+        sa.Column("group_order_within_component", sa.Integer(), nullable=False),
         sa.ForeignKeyConstraint(["component_id"], ["components.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(
             ["parameter_group_id"],
@@ -44,7 +44,9 @@ def upgrade() -> None:
         sa.UniqueConstraint("component_id", "parameter_group_id", name="uq_component_parameter_group"),
     )
     op.add_column("component_parameter_definitions", sa.Column("parameter_group_id", sa.UUID(), nullable=True))
-    op.add_column("component_parameter_definitions", sa.Column("group_order", sa.Integer(), nullable=True))
+    op.add_column(
+        "component_parameter_definitions", sa.Column("parameter_order_within_group", sa.Integer(), nullable=True)
+    )
     op.create_foreign_key(
         "fk_component_parameter_definitions_parameter_group_id",
         "component_parameter_definitions",
@@ -60,7 +62,7 @@ def downgrade() -> None:
     op.drop_constraint(
         "fk_component_parameter_definitions_parameter_group_id", "component_parameter_definitions", type_="foreignkey"
     )
-    op.drop_column("component_parameter_definitions", "group_order")
+    op.drop_column("component_parameter_definitions", "parameter_order_within_group")
     op.drop_column("component_parameter_definitions", "parameter_group_id")
     op.drop_table("component_parameter_groups")
     op.drop_table("parameter_groups")

@@ -524,7 +524,7 @@ class ComponentParameterDefinition(Base):
         ForeignKey("parameter_groups.id", name="fk_component_parameter_definitions_parameter_group_id"),
         nullable=True,
     )
-    group_order = mapped_column(Integer, nullable=True)
+    parameter_order_within_group = mapped_column(Integer, nullable=True)
 
     component = relationship("Component", back_populates="definitions")
     parameter_group = relationship("ParameterGroup")
@@ -650,7 +650,7 @@ class ComponentParameterGroup(Base):
         ForeignKey("parameter_groups.id", ondelete="CASCADE", name="fk_component_parameter_groups_parameter_group_id"),
         nullable=False,
     )
-    order_index = mapped_column(Integer, nullable=False, default=0)
+    group_order_within_component = mapped_column(Integer, nullable=False, default=0)
 
     component = relationship("Component", back_populates="parameter_groups")
     parameter_group = relationship("ParameterGroup")

@@ -178,7 +178,7 @@ class ComponentParameterDefinitionAdmin(EnhancedModelView, model=db.ComponentPar
         "ui_component",
         "is_advanced",
         "parameter_group",
-        "group_order",
+        "parameter_order_within_group",
     ]
     form_columns = [
         "component",
@@ -190,7 +190,7 @@ class ComponentParameterDefinitionAdmin(EnhancedModelView, model=db.ComponentPar
         "ui_component_properties",
         "is_advanced",
         "parameter_group",
-        "group_order",
+        "parameter_order_within_group",
     ]
     column_filters = ["type", "is_advanced", "nullable", "ui_component", "parameter_group"]
     column_searchable_list = ["name", "component.name", "parameter_group.name"]
@@ -318,12 +318,12 @@ class ComponentParameterGroupAdmin(EnhancedModelView, model=db.ComponentParamete
         "id",
         "component",
         "parameter_group",
-        "order_index",
+        "group_order_within_component",
     ]
     form_columns = [
         "component",
         "parameter_group",
-        "order_index",
+        "group_order_within_component",
     ]
     column_searchable_list = ["component.name", "parameter_group.name"]
 

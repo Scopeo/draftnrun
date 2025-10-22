@@ -34,6 +34,7 @@ SYSTEM_PROMPT_PARAMETER_DEF_ID = UUID("1cd1cd58-f066-4cf5-a0f5-9b2018fc4c6a")
 SYSTEM_PROMPT_PARAMETER_NAME = "initial_prompt"
 AGENT_TOOLS_PARAMETER_NAME = "agent_tools"
 AI_MODEL_PARAMETER_IDS = {
+    "output_format": UUID("e5282ccb-dcaa-4970-93c1-f6ef5018492d"),
     "max_iterations": UUID("89efb2e1-9228-44db-91d6-871a41042067"),
     TEMPERATURE_IN_DB: UUID("5bdece0d-bbc1-4cc7-a192-c4b7298dc163"),
     "date_in_system_prompt": UUID("f7dbbe12-e6ff-5bfe-b006-f6bf0e9cbf4d"),
@@ -311,12 +312,12 @@ def seed_ai_agent_parameter_groups(session: Session):
         db.ComponentParameterGroup(
             component_id=COMPONENT_UUIDS["base_ai_agent"],
             parameter_group_id=PARAMETER_GROUP_UUIDS["agent_behavior_settings"],
-            order_index=1,
+            group_order_within_component=1,
         ),
         db.ComponentParameterGroup(
             component_id=COMPONENT_UUIDS["base_ai_agent"],
             parameter_group_id=PARAMETER_GROUP_UUIDS["history_management"],
-            order_index=2,
+            group_order_within_component=2,
         ),
     ]
 
@@ -331,7 +332,7 @@ def seed_ai_agent_parameter_groups(session: Session):
             .first()
         )
         if existing_cpg:
-            existing_cpg.order_index = component_parameter_group.order_index
+            existing_cpg.group_order_within_component = component_parameter_group.group_order_within_component
         else:
             session.add(component_parameter_group)
 
@@ -339,35 +340,39 @@ def seed_ai_agent_parameter_groups(session: Session):
 
     # Update existing parameter definitions to link them to groups
     parameter_group_assignments = {
-        # Advanced Settings Group
+        # Agent behavior settings Group
+        AI_MODEL_PARAMETER_IDS["output_format"]: {
+            "parameter_group_id": PARAMETER_GROUP_UUIDS["agent_behavior_settings"],
+            "parameter_order_within_group": 1,
+        },
         AI_MODEL_PARAMETER_IDS["allow_tool_shortcuts"]: {
             "parameter_group_id": PARAMETER_GROUP_UUIDS["agent_behavior_settings"],
-            "group_order": 1,
+            "parameter_order_within_group": 2,
         },
         AI_MODEL_PARAMETER_IDS["max_iterations"]: {
             "parameter_group_id": PARAMETER_GROUP_UUIDS["agent_behavior_settings"],
-            "group_order": 2,
+            "parameter_order_within_group": 3,
         },
         AI_MODEL_PARAMETER_IDS[TEMPERATURE_IN_DB]: {
             "parameter_group_id": PARAMETER_GROUP_UUIDS["agent_behavior_settings"],
-            "group_order": 3,
+            "parameter_order_within_group": 4,
         },
         # History Management Group
         AI_MODEL_PARAMETER_IDS["input_data_field_for_messages_history"]: {
             "parameter_group_id": PARAMETER_GROUP_UUIDS["history_management"],
-            "group_order": 1,
+            "parameter_order_within_group": 1,
         },
         AI_MODEL_PARAMETER_IDS["first_history_messages"]: {
             "parameter_group_id": PARAMETER_GROUP_UUIDS["history_management"],
-            "group_order": 2,
+            "parameter_order_within_group": 2,
         },
         AI_MODEL_PARAMETER_IDS["last_history_messages"]: {
             "parameter_group_id": PARAMETER_GROUP_UUIDS["history_management"],
-            "group_order": 3,
+            "parameter_order_within_group": 3,
         },
         AI_MODEL_PARAMETER_IDS["date_in_system_prompt"]: {
             "parameter_group_id": PARAMETER_GROUP_UUIDS["history_management"],
-            "group_order": 4,
+            "parameter_order_within_group": 4,
         },
     }
 
@@ -376,6 +381,6 @@ def seed_ai_agent_parameter_groups(session: Session):
         param_def = session.query(db.ComponentParameterDefinition).filter_by(id=param_id).first()
         if param_def:
             param_def.parameter_group_id = group_info["parameter_group_id"]
-            param_def.group_order = group_info["group_order"]
+            param_def.parameter_order_within_group = group_info["parameter_order_within_group"]
 
     session.commit()
