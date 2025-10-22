@@ -22,7 +22,7 @@ def upgrade() -> None:
     # Clean up orphaned span_messages records
     op.execute(
         """
-        DELETE FROM span_messages 
+        DELETE FROM span_messages
         WHERE span_id NOT IN (SELECT span_id FROM spans)
     """
     )
