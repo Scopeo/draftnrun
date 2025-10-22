@@ -142,16 +142,18 @@ class Worker:
             cmd = [
                 python_cmd,
                 "-c",
-                f"import sys; sys.path.append('{os.path.dirname(ada_backend_path)}'); "
-                f"from {module_path} import ingestion_main; "
-                f"ingestion_main("
-                f"source_name={repr(source_name)}, "
-                f"organization_id='{organization_id}', "
-                f"task_id='{task_id}', "
-                f"source_type='{source_type}', "
-                f"source_attributes={repr(source_attributes)}, "
-                f"source_id='{source_id}'"
-                f")",
+                (
+                    f"import sys; sys.path.append('{os.path.dirname(ada_backend_path)}'); "
+                    f"from {module_path} import ingestion_main; "
+                    f"ingestion_main("
+                    f"source_name={repr(source_name)}, "
+                    f"organization_id='{organization_id}', "
+                    f"task_id='{task_id}', "
+                    f"source_type='{source_type}', "
+                    f"source_attributes={repr(source_attributes)}, "
+                    + (f"source_id='{source_id}', " if source_id else "")
+                    + f")"
+                ),
             ]
 
             # Execute the command (log without sensitive data)
