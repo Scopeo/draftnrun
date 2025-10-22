@@ -774,9 +774,6 @@ def delete_component_instances(
     Deletes all component instances for a given component.
     Ensures cascading deletes on related entities.
     Also deletes tool descriptions that are specific to these instances (not shared or default).
-
-    NOTE: Component instances are NOT deleted if they are still being used by other graph runners.
-    This prevents accidental deletion of components that are shared across multiple versions.
     """
 
     query = session.query(db.ComponentInstance)
@@ -791,17 +788,6 @@ def delete_component_instances(
     tool_descriptions_to_delete = []
 
     for instance in instances:
-        # Check if this component instance is still being used by other graph runners
-        # A component instance should only be deleted if it's not referenced by any graph runner nodes
-        other_graph_usage = session.query(db.GraphRunnerNode).filter(db.GraphRunnerNode.node_id == instance.id).count()
-
-        if other_graph_usage > 0:
-            LOGGER.warning(
-                f"Skipping deletion of component instance {instance.id} - "
-                f"still referenced by {other_graph_usage} graph runner node(s)"
-            )
-            continue
-
         if instance.tool_description_id:
             tool_description_id = instance.tool_description_id
             if not is_tool_description_used_by_multiple_instances(
