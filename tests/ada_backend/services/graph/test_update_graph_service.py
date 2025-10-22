@@ -1,28 +1,22 @@
 """
 Tests for graph update service - specifically testing draft mode validation.
 Tests ensure that only draft versions (env='draft' AND tag_version=null) can be modified.
-
-NOTE: These tests require PostgreSQL due to regex constraints in the GraphRunner model.
-When the test suite is migrated to PostgreSQL, these tests will work automatically.
-For now, they are marked as integration tests.
 """
 
 import uuid
 import pytest
+from unittest.mock import MagicMock
+import sys
 from sqlalchemy.orm import Session
 
-from ada_backend.database import models as db
-from ada_backend.services.graph.update_graph_service import (
+sys.modules["weasyprint"] = MagicMock()
+
+from ada_backend.database import models as db  # noqa: E402
+from ada_backend.services.graph.update_graph_service import (  # noqa: E402
     update_graph_service,
     validate_graph_is_draft,
 )
-from ada_backend.schemas.pipeline.graph_schema import GraphUpdateSchema
-
-# Mark all tests in this module as integration tests requiring PostgreSQL
-pytestmark = pytest.mark.skip(
-    reason="Tests require PostgreSQL (SQLite doesn't support regex constraints). "
-    "Run with PostgreSQL test database or enable when test suite is migrated to PostgreSQL."
-)
+from ada_backend.schemas.pipeline.graph_schema import GraphUpdateSchema  # noqa: E402
 
 
 @pytest.fixture
@@ -156,7 +150,18 @@ def simple_graph_payload():
                         "ui_component": "Textarea",
                         "ui_component_properties": {},
                         "is_advanced": False,
-                    }
+                    },
+                    {
+                        "value": "openai:gpt-4",
+                        "name": "completion_model",
+                        "order": None,
+                        "type": "string",
+                        "nullable": False,
+                        "default": "openai:gpt-4",
+                        "ui_component": "Select",
+                        "ui_component_properties": {},
+                        "is_advanced": False,
+                    },
                 ],
                 "tool_description": {
                     "name": "Test Tool",
@@ -223,19 +228,15 @@ class TestValidateGraphIsDraft:
         # Should not raise an exception for new graphs
         validate_graph_is_draft(ada_backend_mock_session, new_graph_id)
 
-    def test_raises_error_for_nonexistent_graph(self, ada_backend_mock_session: Session):
+    def test_allows_nonexistent_graph(self, ada_backend_mock_session: Session):
         """
-        Test that appropriate error is raised for non-existent graph.
+        Test that non-existent graphs are allowed (for creation).
+        This is similar to graphs without bindings - they're treated as new/draft.
         """
         non_existent_id = uuid.uuid4()
 
-        with pytest.raises(ValueError) as exc_info:
-            validate_graph_is_draft(ada_backend_mock_session, non_existent_id)
-
-        # Should raise error about graph not being found (from get_env_relationship)
-        # or about graph not existing
-        error_message = str(exc_info.value)
-        assert "not found" in error_message.lower()
+        # Should not raise an exception - non-existent graphs are allowed for creation
+        validate_graph_is_draft(ada_backend_mock_session, non_existent_id)
 
 
 class TestUpdateGraphServiceDraftValidation:

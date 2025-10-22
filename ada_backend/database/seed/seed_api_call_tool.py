@@ -69,7 +69,7 @@ def seed_api_call_components(session: Session):
             id=UUID("d4e5f6a7-b8c9-0123-def1-234567890123"),
             component_id=api_call_component.id,
             name="headers",
-            type=ParameterType.STRING,
+            type=ParameterType.JSON,
             nullable=True,
             ui_component=UIComponent.TEXTAREA,
             ui_component_properties=UIComponentProperties(
@@ -82,7 +82,8 @@ def seed_api_call_components(session: Session):
             component_id=api_call_component.id,
             name="timeout",
             type=ParameterType.INTEGER,
-            default=30,
+            nullable=True,
+            default="30",
             ui_component=UIComponent.SLIDER,
             ui_component_properties=UIComponentProperties(
                 label="Timeout (seconds)",
@@ -97,12 +98,13 @@ def seed_api_call_components(session: Session):
             id=UUID("a7b8c9d0-e1f2-3456-1234-567890123456"),
             component_id=api_call_component.id,
             name="fixed_parameters",
-            type=ParameterType.STRING,
+            type=ParameterType.JSON,
             nullable=True,
             ui_component=UIComponent.TEXTAREA,
             ui_component_properties=UIComponentProperties(
                 label="Fixed Parameters",
                 placeholder='{"api_version": "v2", "format": "json"}',
+                description="Key/value pairs that will always be included in the API request.",
             ).model_dump(exclude_unset=True, exclude_none=True),
         ),
     ]

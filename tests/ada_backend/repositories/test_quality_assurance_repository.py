@@ -1,7 +1,5 @@
 """
 Pytest tests for Quality Assurance Repository functions.
-TODO: Enable these tests when migrating test suite to PostgreSQL
-(currently skipped due to SQLite incompatibility with PostgreSQL regex constraints)
 
 Tests cover the migration from EnvType-based version system to graph_runner_id-based system.
 Specifically tests:
@@ -19,18 +17,15 @@ from ada_backend.database.models import (
     VersionOutput,
     InputGroundtruth,
     DatasetProject,
-    Project,
+    WorkflowProject,
     GraphRunner,
+    ProjectType,
 )
 from ada_backend.repositories.quality_assurance_repository import (
     upsert_version_output,
     get_outputs_by_graph_runner,
     get_inputs_groundtruths_by_dataset,
     clear_version_outputs_for_input_ids,
-)
-
-pytestmark = pytest.mark.skip(
-    reason="Tests require PostgreSQL - SQLite doesn't support regex operators (~) used in GraphRunner constraints"
 )
 
 
@@ -41,7 +36,13 @@ class TestUpsertVersionOutput:
         """Test creating a new version output."""
         session = ada_backend_mock_session
 
-        project = Project(id=uuid4(), name="Test Project", description="Test")
+        project = WorkflowProject(
+            id=uuid4(),
+            name="Test Project",
+            description="Test",
+            type=ProjectType.WORKFLOW,
+            organization_id=uuid4(),
+        )
         session.add(project)
 
         graph_runner = GraphRunner(id=uuid4())
@@ -75,7 +76,13 @@ class TestUpsertVersionOutput:
         """Test updating an existing version output maintains same ID."""
         session = ada_backend_mock_session
 
-        project = Project(id=uuid4(), name="Test Project", description="Test")
+        project = WorkflowProject(
+            id=uuid4(),
+            name="Test Project",
+            description="Test",
+            type=ProjectType.WORKFLOW,
+            organization_id=uuid4(),
+        )
         session.add(project)
 
         graph_runner = GraphRunner(id=uuid4())
@@ -125,7 +132,13 @@ class TestUpsertVersionOutput:
         """Test that unique constraint prevents duplicate (input_id, graph_runner_id)."""
         session = ada_backend_mock_session
 
-        project = Project(id=uuid4(), name="Test Project", description="Test")
+        project = WorkflowProject(
+            id=uuid4(),
+            name="Test Project",
+            description="Test",
+            type=ProjectType.WORKFLOW,
+            organization_id=uuid4(),
+        )
         session.add(project)
 
         graph_runner = GraphRunner(id=uuid4())
@@ -171,7 +184,13 @@ class TestGetOutputsByGraphRunner:
         """Test retrieving outputs only for specified graph_runner."""
         session = ada_backend_mock_session
 
-        project = Project(id=uuid4(), name="Test Project", description="Test")
+        project = WorkflowProject(
+            id=uuid4(),
+            name="Test Project",
+            description="Test",
+            type=ProjectType.WORKFLOW,
+            organization_id=uuid4(),
+        )
         session.add(project)
 
         graph_runner_1 = GraphRunner(id=uuid4())
@@ -221,7 +240,13 @@ class TestGetOutputsByGraphRunner:
         """Test returns empty list when no outputs exist."""
         session = ada_backend_mock_session
 
-        project = Project(id=uuid4(), name="Test Project", description="Test")
+        project = WorkflowProject(
+            id=uuid4(),
+            name="Test Project",
+            description="Test",
+            type=ProjectType.WORKFLOW,
+            organization_id=uuid4(),
+        )
         session.add(project)
 
         graph_runner = GraphRunner(id=uuid4())
@@ -259,7 +284,13 @@ class TestGetInputsGroundtruthsByDataset:
         """Test function returns all inputs (outputs retrieved separately now)."""
         session = ada_backend_mock_session
 
-        project = Project(id=uuid4(), name="Test Project", description="Test")
+        project = WorkflowProject(
+            id=uuid4(),
+            name="Test Project",
+            description="Test",
+            type=ProjectType.WORKFLOW,
+            organization_id=uuid4(),
+        )
         session.add(project)
 
         dataset = DatasetProject(id=uuid4(), project_id=project.id, dataset_name="Test Dataset")
@@ -298,10 +329,16 @@ class TestClearVersionOutputs:
     """Test clear_version_outputs_for_input_ids function."""
 
     def test_clears_specified_inputs(self, ada_backend_mock_session: Session):
-        """Test clearing version outputs for specific input IDs."""
+        """Test clearing version outputs for specific input IDs (sets output to empty string)."""
         session = ada_backend_mock_session
 
-        project = Project(id=uuid4(), name="Test Project", description="Test")
+        project = WorkflowProject(
+            id=uuid4(),
+            name="Test Project",
+            description="Test",
+            type=ProjectType.WORKFLOW,
+            organization_id=uuid4(),
+        )
         session.add(project)
 
         graph_runner = GraphRunner(id=uuid4())
@@ -332,15 +369,27 @@ class TestClearVersionOutputs:
             input_ids=[inputs[0].id, inputs[1].id],
         )
 
-        remaining = session.query(VersionOutput).all()
-        assert len(remaining) == 1
-        assert remaining[0].input_id == inputs[2].id
+        all_outputs = session.query(VersionOutput).filter(VersionOutput.graph_runner_id == graph_runner.id).all()
+        assert len(all_outputs) == 3
+
+        cleared_outputs = [vo for vo in all_outputs if vo.input_id in [inputs[0].id, inputs[1].id]]
+        assert len(cleared_outputs) == 2
+        assert all(vo.output == "" for vo in cleared_outputs)
+
+        uncleared_output = [vo for vo in all_outputs if vo.input_id == inputs[2].id][0]
+        assert uncleared_output.output == "Output for Input 2"
 
     def test_empty_list_does_nothing(self, ada_backend_mock_session: Session):
         """Test clearing with empty list doesn't affect data."""
         session = ada_backend_mock_session
 
-        project = Project(id=uuid4(), name="Test Project", description="Test")
+        project = WorkflowProject(
+            id=uuid4(),
+            name="Test Project",
+            description="Test",
+            type=ProjectType.WORKFLOW,
+            organization_id=uuid4(),
+        )
         session.add(project)
 
         graph_runner = GraphRunner(id=uuid4())
@@ -369,7 +418,7 @@ class TestClearVersionOutputs:
 
         clear_version_outputs_for_input_ids(session=session, input_ids=[])
 
-        remaining = session.query(VersionOutput).all()
+        remaining = session.query(VersionOutput).filter(VersionOutput.graph_runner_id == graph_runner.id).all()
         assert len(remaining) == 1
 
 
