@@ -1,8 +1,8 @@
-"""add group parameters tables
+"""add group parameters table
 
-Revision ID: 12506b31123b
-Revises: 79e3872b3b03
-Create Date: 2025-10-08 15:31:13.186820
+Revision ID: 56cab9f802e7
+Revises: c4aa0d13832e
+Create Date: 2025-10-22 12:38:12.107758
 
 """
 
@@ -13,8 +13,8 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = "12506b31123b"
-down_revision: Union[str, None] = "79e3872b3b03"
+revision: str = "56cab9f802e7"
+down_revision: Union[str, None] = "c4aa0d13832e"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
