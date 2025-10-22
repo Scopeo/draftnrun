@@ -20,6 +20,7 @@ from ada_backend.database.seed.utils import (
 from ada_backend.database.seed.constants import (
     COMPLETION_MODEL_IN_DB,
 )
+from ada_backend.database.models import ParameterType, UIComponent, UIComponentProperties
 
 
 def seed_web_search_components(session: Session):
@@ -64,6 +65,20 @@ def seed_web_search_components(session: Session):
                         param_id=UUID("f1e57044-3762-4791-bc4d-32fcfb9d87cf"),
                     ),
                 ],
+            ),
+            db.ComponentParameterDefinition(
+                id=UUID("b2c3d4e5-f6a7-8901-bcde-f12345678901"),
+                component_id=web_search_openai_agent.id,
+                name="allowed_domains",
+                type=ParameterType.JSON,
+                nullable=True,
+                default=None,
+                ui_component=UIComponent.TEXTAREA,
+                ui_component_properties=UIComponentProperties(
+                    label="Allowed Domains",
+                    description="Restrict web search results to specific domains.",
+                    placeholder='["wikipedia.org", "example.com"]',
+                ).model_dump(exclude_unset=True, exclude_none=True),
             ),
         ],
     )
