@@ -24,6 +24,7 @@ from ada_backend.database.seed.constants import (
     TEMPERATURE_IN_DB,
 )
 
+
 SYSTEM_PROMPT_PARAMETER_DEF_ID = UUID("1cd1cd58-f066-4cf5-a0f5-9b2018fc4c6a")
 SYSTEM_PROMPT_PARAMETER_NAME = "initial_prompt"
 AGENT_TOOLS_PARAMETER_NAME = "agent_tools"

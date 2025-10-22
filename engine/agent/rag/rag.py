@@ -99,6 +99,7 @@ class RAG(Agent):
         )
 
         sourced_response = self._formatter.format(sourced_response)
+
         for i, source in enumerate(chunks):
             self.log_trace(
                 {
