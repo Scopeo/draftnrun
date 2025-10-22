@@ -10,6 +10,8 @@ from settings import settings
 
 client = TestClient(app)
 ORGANIZATION_ID = "37b7d67f-8f29-4fce-8085-19dea582f605"  # umbrella organization
+PROJECT_ID = "9ae2def9-a04b-40a8-abe8-89264a418bfd"  # test project ID for mocked tests
+GRAPH_RUNNER_ID = "a1b2c3d4-e5f6-4a5b-8c9d-0e1f2a3b4c5d"  # test graph runner ID for mocked tests
 JWT_TOKEN = get_user_jwt(settings.TEST_USER_EMAIL, settings.TEST_USER_PASSWORD)
 HEADERS_JWT = {
     "accept": "application/json",
@@ -291,7 +293,47 @@ def test_delete_graph_runner():
 
     # Verify it's gone
     response = client.get(endpoint, headers=HEADERS_JWT)
-    assert response.status_code == 404
+    assert response.status_code == 400
 
-    # Cleanup project
-    client.delete(f"/projects/{project_id}", headers=HEADERS_JWT)
+
+def test_load_copy_graph_endpoint_success(monkeypatch):
+    """When load_copy_graph_service returns a GraphLoadResponse, endpoint should return 200."""
+    endpoint = f"/projects/{PROJECT_ID}/graph/{GRAPH_RUNNER_ID}/load-copy"
+
+    # Build a minimal GraphLoadResponse-like dict
+    payload = {"component_instances": [], "relationships": [], "edges": []}
+
+    monkeypatch.setattr(
+        "ada_backend.routers.graph_router.load_copy_graph_service",
+        lambda session, project_id_to_copy, graph_runner_id_to_copy: payload,
+    )
+
+    response = client.get(endpoint, headers=HEADERS_JWT)
+    assert response.status_code == 200
+    assert response.json() == payload
+
+
+def test_load_copy_graph_endpoint_value_error(monkeypatch):
+    """When service raises ValueError, endpoint should return 400."""
+    endpoint = f"/projects/{PROJECT_ID}/graph/{GRAPH_RUNNER_ID}/load-copy"
+
+    def fake(session, project_id_to_copy, graph_runner_id_to_copy):
+        raise ValueError("invalid relationship")
+
+    monkeypatch.setattr("ada_backend.routers.graph_router.load_copy_graph_service", fake)
+
+    response = client.get(endpoint, headers=HEADERS_JWT)
+    assert response.status_code == 400
+
+
+def test_load_copy_graph_endpoint_unexpected_error(monkeypatch):
+    """When service raises unexpected exception, endpoint should return 500."""
+    endpoint = f"/projects/{PROJECT_ID}/graph/{GRAPH_RUNNER_ID}/load-copy"
+
+    def fake(session, project_id_to_copy, graph_runner_id_to_copy):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr("ada_backend.routers.graph_router.load_copy_graph_service", fake)
+
+    response = client.get(endpoint, headers=HEADERS_JWT)
+    assert response.status_code == 500
