@@ -210,6 +210,8 @@ class Agent(ABC):
 
                 if self.migrated:
                     InputModel = self.get_inputs_schema()
+                    # Extract ctx from kwargs so it is not treated as an input field
+                    ctx = kwargs.pop("ctx", {})
                     data = legacy_compatibility.collect_inputs_from_legacy(args, kwargs)
 
                     ports = self.get_canonical_ports()
@@ -229,7 +231,8 @@ class Agent(ABC):
                             data[input_port_name] = last_message.get("content", "")
 
                     validated_inputs = InputModel(**data)
-                    output_model_instance = await self._run_without_io_trace(inputs=validated_inputs, ctx={})
+                    # Pass ctx that was explicitly provided by caller (e.g., ReActAgent)
+                    output_model_instance = await self._run_without_io_trace(inputs=validated_inputs, ctx=ctx)
                     OutputModel = self.get_outputs_schema()
                     if not isinstance(output_model_instance, OutputModel):
                         raise TypeError(

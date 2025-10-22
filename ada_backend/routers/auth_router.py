@@ -359,3 +359,68 @@ async def verify_ingestion_api_key_dependency(
     hashed_key = verify_ingestion_api_key(private_key=ingestion_api_key)
     if hashed_key != settings.INGESTION_API_KEY_HASHED:
         raise HTTPException(status_code=401, detail="Invalid ingestion API key")
+
+
+def user_has_access_to_organization_xor_verify_api_key(allowed_roles: set[str]):
+    """
+    Factory function that returns a flexible authentication dependency.
+    """
+
+    async def wrapper(
+        organization_id: UUID,
+        authorization: HTTPAuthorizationCredentials | None = Depends(HTTPBearer(auto_error=False)),
+        x_api_key: str | None = Header(None, alias="X-API-Key"),
+        session: Session = Depends(get_db),
+    ) -> tuple[UUID | None, UUID | None]:
+        """Flexible authentication: tries user auth first, falls back to API key auth."""
+
+        if authorization and authorization.credentials and x_api_key:
+            LOGGER.exception(
+                "User has entered two authenticators :\n"
+                f"  - User token (JWT) : {authorization.credentials}\n"
+                f"  - User token (JWT) is not valid {x_api_key}"
+            )
+            raise HTTPException(
+                status_code=400,
+                detail=("Provide either Authorization token OR X-API-Key, not both"),
+            )
+
+        if authorization and authorization.credentials:
+            try:
+                user = await get_user_from_supabase_token(authorization)
+                user = await user_has_access_to_organization_dependency(allowed_roles=allowed_roles)(
+                    organization_id=organization_id, user=user
+                )
+                return (user.id, None)
+            except HTTPException as e:
+                LOGGER.exception(f"User token (JWT) is not valid {e.detail}")
+                raise HTTPException(
+                    status_code=401,
+                    detail=("Authentication failed : User token (JWT) is not valid"),
+                ) from e
+
+        if x_api_key:
+            try:
+                verified_api_key = await verify_api_key_dependency(x_api_key=x_api_key, session=session)
+                if verified_api_key.organization_id != organization_id:
+                    LOGGER.exception(
+                        "API Key is for organization %s => access to organization %s denied",
+                        verified_api_key.organization_id,
+                        organization_id,
+                    )
+                    raise HTTPException(status_code=403, detail="You don't have access to this organization")
+                return (None, verified_api_key.api_key_id)
+            except HTTPException as e:
+                LOGGER.exception(f"API Key is not valid : {e.detail}")
+                raise HTTPException(
+                    status_code=401,
+                    detail=("Authentication failed : API Key is not valid"),
+                ) from e
+
+        LOGGER.exception("No authentication provided for organization access")
+        raise HTTPException(
+            status_code=401,
+            detail="Authentication required: provide either Authorization token or X-API-Key header",
+        )
+
+    return wrapper

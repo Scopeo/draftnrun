@@ -38,6 +38,7 @@ from ada_backend.services.project_service import (
     update_project_service,
 )
 from ada_backend.repositories.env_repository import get_env_relationship_by_graph_runner_id
+from engine.llm_services.utils import LLMKeyLimitExceededError
 
 LOGGER = logging.getLogger(__name__)
 
@@ -190,6 +191,9 @@ async def run_env_agent_endpoint(
             env=env,
             call_type=CallType.API,
         )
+    except LLMKeyLimitExceededError as e:
+        LOGGER.error(f"LLM key limit exceeded for project {project_id} in environment {env}: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except EnvironmentNotFound as e:
         LOGGER.error(f"Environment not found for project {project_id} in environment {env}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=404, detail=str(e)) from e
@@ -283,6 +287,12 @@ async def chat(
             call_type=CallType.SANDBOX,
             tag_version=project_env_binding.graph_runner.tag_version,
         )
+    except LLMKeyLimitExceededError as e:
+        LOGGER.error(
+            f"LLM key limit exceeded for project {project_id} for graph runner {graph_runner_id}: {str(e)}",
+            exc_info=True,
+        )
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except ValueError as e:
         LOGGER.error(
             f"Failed to run agent chat for project {project_id}, graph_runner {graph_runner_id}: {str(e)}",
@@ -329,6 +339,9 @@ async def chat_env(
             env=env,
             call_type=CallType.SANDBOX,
         )
+    except LLMKeyLimitExceededError as e:
+        LOGGER.error(f"LLM key limit exceeded for project {project_id} in environment {env}: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except EnvironmentNotFound as e:
         LOGGER.error(f"Environment not found for project {project_id} in environment {env}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=404, detail=str(e)) from e

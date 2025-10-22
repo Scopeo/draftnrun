@@ -1,5 +1,6 @@
 from typing import Optional, Any, Type
 from pydantic import BaseModel, Field
+import logging
 
 from openinference.semconv.trace import SpanAttributes
 from opentelemetry.trace import get_current_span
@@ -14,6 +15,8 @@ from ada_backend.database.seed.supported_models import (
     get_models_by_capability,
     ModelCapability,
 )
+
+LOGGER = logging.getLogger(__name__)
 
 DEFAULT_LLM_CALL_TOOL_DESCRIPTION = ToolDescription(
     name="LLM Call",
@@ -114,9 +117,7 @@ class LLMCallAgent(Agent):
         self.output_format = output_format
 
     async def _run_without_io_trace(self, inputs: LLMCallInputs, ctx: dict) -> LLMCallOutputs:
-        # Extract template vars from context
-        template_vars = ctx.get("template_vars", {})
-
+        LOGGER.info(f"Running LLM call agent with inputs: {inputs} and ctx: {ctx}")
         prompt_vars = extract_vars_in_text_template(self._prompt_template)
         input_replacements = {}
         files_content = []
@@ -134,29 +135,43 @@ class LLMCallAgent(Agent):
                 files_content.extend(payload_files_content)
                 images_content.extend(payload_images_content)
 
-        # Fill template vars from context
+        # Fill template vars from inputs first (function calling), then context (direct calls)
+        input_dict = inputs.model_dump(exclude_none=True)
         for prompt_var in prompt_vars:
-            if prompt_var in template_vars:
-                input_replacements[prompt_var] = template_vars[prompt_var]
+            if prompt_var in input_dict:
+                # Template var provided via function calling (tool mode)
+                input_replacements[prompt_var] = input_dict[prompt_var]
+            elif prompt_var in ctx:
+                # Template var provided via context (direct mode)
+                input_replacements[prompt_var] = ctx[prompt_var]
             elif prompt_var not in input_replacements:
                 raise ValueError(
                     f"Missing template variable '{prompt_var}' needed in prompt template "
                     f"of component '{self.component_attributes.component_instance_name}'. "
-                    f"Available template vars: {list(template_vars.keys())}"
+                    f"Available template vars: {list(set(input_dict.keys()) | set(ctx.keys()))}"
                 )
 
-        # Handle file content from context
-        file_content_ctx = ctx.get("file_content", {})
-        if self._file_content_key and self._file_content_key in file_content_ctx:
-            file_data = file_content_ctx[self._file_content_key]
+        # Handle file content from inputs first, then context
+        if self._file_content_key:
+            input_dict = inputs.model_dump(exclude_none=True)
+            file_data = None
+            if self._file_content_key in input_dict:
+                file_data = input_dict[self._file_content_key]
+            elif self._file_content_key in ctx:
+                file_data = ctx[self._file_content_key]
             if isinstance(file_data, dict) and "filename" in file_data and "file_data" in file_data:
                 files_content.append({"type": "file", "file": file_data})
 
-        # Handle file URLs from context
-        file_urls_ctx = ctx.get("file_urls", {})
-        if self._file_url_key and self._file_url_key in file_urls_ctx:
-            file_url = file_urls_ctx[self._file_url_key]
-            files_content.append({"type": "file", "file_url": file_url})
+        # Handle file URLs from inputs first, then context
+        if self._file_url_key:
+            input_dict = inputs.model_dump(exclude_none=True)
+            file_url = None
+            if self._file_url_key in input_dict:
+                file_url = input_dict[self._file_url_key]
+            elif self._file_url_key in ctx:
+                file_url = ctx[self._file_url_key]
+            if isinstance(file_url, str) and file_url:
+                files_content.append({"type": "file", "file_url": file_url})
 
         text_content = self._prompt_template.format(**input_replacements)
 

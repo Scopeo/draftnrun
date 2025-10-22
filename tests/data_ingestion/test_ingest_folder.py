@@ -47,8 +47,11 @@ def test_get_chunks_dataframe_from_docs(mock_file_document, mock_file_chunk):
         )
 
     mock_processor.assert_called_once_with(mock_file_document, chunk_size=1024)
-    mock_logger.info.assert_called_once_with(
-        f"Processing document {docs_to_process.file_name} of type {docs_to_process.type}"
+    # Verify that logging occurred with the document processing start message
+    assert mock_logger.info.called
+    assert any(
+        "[DOCUMENT_PROCESSING] Starting processing for document 'dummy_file'" in str(call)
+        for call in mock_logger.info.call_args_list
     )
 
     expected_data = {
