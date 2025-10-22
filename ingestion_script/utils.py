@@ -180,8 +180,10 @@ async def upload_source(
     db_service = SQLLocalService(engine_url=settings.INGESTION_DB_URL)
     if source_id:
         result_source_id = source_id
+        update_task = True
     else:
         result_source_id = uuid.uuid4()
+        update_task = False
     schema_name, table_name, qdrant_collection_name = get_sanitize_names(
         organization_id=organization_id,
         source_id=str(result_source_id),
@@ -254,10 +256,11 @@ async def upload_source(
         embedding_model_reference=f"{embedding_service._provider}:{embedding_service._model_name}",
         attributes=attributes,
     )
-    create_source(
-        organization_id=organization_id,
-        source_data=source_data,
-    )
+    if not update_task:
+        create_source(
+            organization_id=organization_id,
+            source_data=source_data,
+        )
     LOGGER.info(f"Upserting source {source_name} for organization {organization_id} in database")
 
     ingestion_task = IngestionTaskUpdate(
