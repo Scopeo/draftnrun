@@ -80,10 +80,16 @@ class Worker:
                 organization_id=organization_id,
                 parameters=safe_payload,
             )
-            
+
             # Enhanced logging for debugging
-            logger.info(f"[WORKER] Starting ingestion task processing - ID: {ingestion_id}, Source: {source_name}, Type: {source_type}, Org: {organization_id}")
-            logger.info(f"[WORKER] Task details - Task ID: {task_id}, Source attributes keys: {list(source_attributes.keys()) if source_attributes else 'None'}")
+            logger.info(
+                f"[WORKER] Starting ingestion task processing - ID: {ingestion_id}, "
+                f"Source: {source_name}, Type: {source_type}, Org: {organization_id}"
+            )
+            logger.info(
+                f"[WORKER] Task details - Task ID: {task_id}, "
+                f"Source attributes keys: {list(source_attributes.keys()) if source_attributes else 'None'}"
+            )
 
             # Get the ada_backend path - assumes a standard structure
             ada_backend_path = Path(__file__).parents[2] / "ada_backend"
@@ -155,8 +161,9 @@ class Worker:
                 # Sanitize access tokens and other sensitive data in the command
                 safe_cmd[2] = safe_cmd[2].replace(repr(source_attributes), "***SANITIZED_SOURCE_ATTRIBUTES***")
                 # Also sanitize any access tokens that might appear directly
-                if 'access_token' in safe_cmd[2]:
+                if "access_token" in safe_cmd[2]:
                     import re
+
                     safe_cmd[2] = re.sub(r"'access_token': '[^']*'", "'access_token': '***REDACTED***'", safe_cmd[2])
                     safe_cmd[2] = re.sub(r'"access_token": "[^"]*"', '"access_token": "***REDACTED***"', safe_cmd[2])
             logger.info("executing_command", cmd=" ".join(safe_cmd))
@@ -171,80 +178,80 @@ class Worker:
             # Real-time logging - stream output as it happens
             import select
             import fcntl
-            
+
             # Make stdout and stderr non-blocking for real-time reading
             if process.stdout:
                 fd = process.stdout.fileno()
                 fl = fcntl.fcntl(fd, fcntl.F_GETFL)
                 fcntl.fcntl(fd, fcntl.F_SETFL, fl | os.O_NONBLOCK)
-            
+
             if process.stderr:
                 fd = process.stderr.fileno()
                 fl = fcntl.fcntl(fd, fcntl.F_GETFL)
                 fcntl.fcntl(fd, fcntl.F_SETFL, fl | os.O_NONBLOCK)
-            
+
             stdout_buffer = ""
             stderr_buffer = ""
             stderr_lines = []
-            
+
             # Stream output in real-time until process completes
             while process.poll() is None:
                 ready, _, _ = select.select([process.stdout, process.stderr], [], [], 0.1)
-                
+
                 for stream in ready:
                     if stream == process.stdout:
                         try:
-                            chunk = stream.read(1024).decode('utf-8', errors='replace')
+                            chunk = stream.read(1024).decode("utf-8", errors="replace")
                             if chunk:
                                 stdout_buffer += chunk
                                 # Log complete lines immediately
-                                while '\n' in stdout_buffer:
-                                    line, stdout_buffer = stdout_buffer.split('\n', 1)
+                                while "\n" in stdout_buffer:
+                                    line, stdout_buffer = stdout_buffer.split("\n", 1)
                                     if line.strip():
                                         logger.info("script_live", output=line.strip())
-                        except:
+                        except Exception:
                             pass
-                    
+
                     elif stream == process.stderr:
                         try:
-                            chunk = stream.read(1024).decode('utf-8', errors='replace')
+                            chunk = stream.read(1024).decode("utf-8", errors="replace")
                             if chunk:
                                 stderr_buffer += chunk
                                 # Log complete lines immediately
-                                while '\n' in stderr_buffer:
-                                    line, stderr_buffer = stderr_buffer.split('\n', 1)
+                                while "\n" in stderr_buffer:
+                                    line, stderr_buffer = stderr_buffer.split("\n", 1)
                                     if line.strip():
                                         stderr_lines.append(line.strip())
                                         logger.error("script_live_error", output=line.strip())
-                        except:
+                        except Exception:
                             pass
-            
+
             # Read any remaining output after process completes
             try:
                 if process.stdout:
-                    remaining = process.stdout.read().decode('utf-8', errors='replace')
+                    remaining = process.stdout.read().decode("utf-8", errors="replace")
                     stdout_buffer += remaining
                 if process.stderr:
-                    remaining = process.stderr.read().decode('utf-8', errors='replace')
+                    remaining = process.stderr.read().decode("utf-8", errors="replace")
                     stderr_buffer += remaining
-            except:
+            except Exception:
                 pass
-            
+
             # Log any remaining buffer content
             if stdout_buffer.strip():
-                for line in stdout_buffer.strip().split('\n'):
+                for line in stdout_buffer.strip().split("\n"):
                     if line.strip():
                         logger.info("script_final", output=line.strip())
-            
+
             if stderr_buffer.strip():
-                for line in stderr_buffer.strip().split('\n'):
+                for line in stderr_buffer.strip().split("\n"):
                     if line.strip():
                         stderr_lines.append(line.strip())
                         logger.error("script_final_error", output=line.strip())
-            
+
             # Generate error summary if we have stderr content
             if stderr_lines:
-                stderr_text = '\n'.join(stderr_lines)
+                stderr_text = "\n".join(stderr_lines)
                 error_summary = self._parse_error_message(stderr_text)
                 logger.error("script_error_summary", **error_summary)
 
@@ -256,7 +263,7 @@ class Worker:
                     task_id=task_id,
                     source_name=source_name,
                     source_type=source_type,
-                    ingestion_id=ingestion_id
+                    ingestion_id=ingestion_id,
                 )
             else:
                 logger.info("task_completed", ingestion_id=ingestion_id)
@@ -270,7 +277,7 @@ class Worker:
                     task_id=task_id,
                     source_name=source_name,
                     source_type=source_type,
-                    ingestion_id=ingestion_id
+                    ingestion_id=ingestion_id,
                 )
             except Exception as update_error:
                 logger.error("failed_to_update_task_status", error=str(update_error))
@@ -339,7 +346,7 @@ class Worker:
         try:
             from ada_backend.schemas.ingestion_task_schema import IngestionTaskUpdate
             from ada_backend.database import models as db
-            
+
             # Create the failed task update
             failed_task = IngestionTaskUpdate(
                 id=task_id,
@@ -347,11 +354,11 @@ class Worker:
                 source_type=source_type,
                 status=db.TaskStatus.FAILED,
             )
-            
+
             # Get API base URL from environment or use default
             api_base_url = os.getenv("API_BASE_URL", DEFAULT_API_BASE_URL)
             ingestion_api_key = os.getenv("INGESTION_API_KEY", "default-key")
-            
+
             # Make the API call to update task status
             response = requests.patch(
                 f"{api_base_url}/ingestion_task/{organization_id}",
@@ -363,21 +370,21 @@ class Worker:
                 timeout=10,  # Add timeout to prevent hanging
             )
             response.raise_for_status()
-            
+
             logger.info(
                 "task_status_updated_to_failed",
                 ingestion_id=ingestion_id,
                 task_id=task_id,
-                organization_id=organization_id
+                organization_id=organization_id,
             )
-            
+
         except Exception as e:
             logger.error(
                 "failed_to_update_task_status_to_failed",
                 ingestion_id=ingestion_id,
                 task_id=task_id,
                 organization_id=organization_id,
-                error=str(e)
+                error=str(e),
             )
 
     def log_redis_state(self):

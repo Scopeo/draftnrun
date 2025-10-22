@@ -17,10 +17,8 @@ from ada_backend.database import models as db
 # Configure logging to ensure all logs are captured by worker subprocess
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.StreamHandler()  # Output to stdout for worker to capture
-    ]
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    handlers=[logging.StreamHandler()],  # Output to stdout for worker to capture
 )
 
 LOGGER = logging.getLogger(__name__)
@@ -53,7 +51,10 @@ async def ingestion_main_async(
     source_attributes: dict,
     source_id: Optional[str] = None,
 ):
-    LOGGER.info(f"[INGESTION_MAIN] Starting ingestion - Source: '{source_name}', Type: {source_type}, Organization: {organization_id}, Task: {task_id}")
+    LOGGER.info(
+        f"[INGESTION_MAIN] Starting ingestion - Source: '{source_name}', Type: {source_type}, "
+        f"Organization: {organization_id}, Task: {task_id}"
+    )
 
     set_trace_manager(TraceManager(project_name="Ingestion"))
     session = SessionLocal()
@@ -197,7 +198,7 @@ def ingestion_main(**kwargs):
     LOGGER.info(f"[INGESTION_MAIN] Entry point called with kwargs: {list(kwargs.keys())}")
     try:
         asyncio.run(ingestion_main_async(**kwargs))
-        LOGGER.info(f"[INGESTION_MAIN] Completed successfully")
+        LOGGER.info("[INGESTION_MAIN] Completed successfully")
     except Exception as e:
         LOGGER.error(f"[INGESTION_MAIN] FAILED with error: {str(e)}")
         raise
