@@ -19,6 +19,14 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
+    # Clean up orphaned span_messages records
+    op.execute(
+        """
+        DELETE FROM span_messages 
+        WHERE span_id NOT IN (SELECT span_id FROM spans)
+    """
+    )
+
     op.create_foreign_key(None, "span_messages", "spans", ["span_id"], ["span_id"], ondelete="CASCADE")
     op.drop_index(op.f("ix_spans_call_type"), table_name="spans")
     op.drop_index(op.f("ix_spans_environment"), table_name="spans")
