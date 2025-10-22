@@ -14,6 +14,7 @@ from ada_backend.schemas.pipeline.graph_schema import GraphGetResponse, EdgeSche
 from ada_backend.services.errors import GraphNotFound
 from ada_backend.schemas.pipeline.port_mapping_schema import PortMappingSchema
 from ada_backend.services.pipeline.get_pipeline_service import get_component_instance, get_relationships
+from ada_backend.services.tag_service import compose_tag_name
 
 LOGGER = logging.getLogger(__name__)
 
@@ -83,10 +84,16 @@ def get_graph_service(
             )
         )
 
-    return GraphGetResponse(
+    # Build response, omitting change_log if unset (None)
+    response = GraphGetResponse(
         component_instances=component_instances_with_definitions,
         relationships=relationships,
         edges=edges,
-        tag_version=project_env_binding.graph_runner.tag_version,
         port_mappings=port_mappings,
+        tag_name=compose_tag_name(
+            project_env_binding.graph_runner.tag_version,
+            project_env_binding.graph_runner.version_name,
+        ),
+        change_log=project_env_binding.graph_runner.change_log,
     )
+    return response

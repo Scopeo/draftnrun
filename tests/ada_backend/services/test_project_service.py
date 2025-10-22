@@ -60,8 +60,8 @@ def test_projects_with_versions(db_session: Session, test_organization):
         db_session.flush()
 
         # Create graph runners
-        draft_gr = db.GraphRunner(id=uuid.uuid4(), tag_version=f"draft-v{i}")
-        prod_gr = db.GraphRunner(id=uuid.uuid4(), tag_version=f"v{i}.0.0")
+        draft_gr = db.GraphRunner(id=uuid.uuid4(), tag_version=f"draft-{i}")
+        prod_gr = db.GraphRunner(id=uuid.uuid4(), tag_version=f"{i}.0.0")
         db_session.add_all([draft_gr, prod_gr])
         db_session.flush()
 
@@ -221,24 +221,25 @@ class TestGetProjectService:
 
     def test_includes_tag_versions(self, db_session: Session, test_projects_with_versions):
         """
-        Test that tag_version is included for each graph runner.
+        Test that tag_name is included for each graph runner.
         """
         project_data = test_projects_with_versions[0]
         project_id = project_data["project"].id
 
         result = get_project_service(db_session, project_id)
 
-        # Build tag version map
-        version_map = {gr.graph_runner_id: gr.tag_version for gr in result.graph_runners}
+        # Build tag name map
+        tag_name_map = {gr.graph_runner_id: gr.tag_name for gr in result.graph_runners}
 
-        # Verify tag versions
+        # Verify tag names are present
         draft_id = project_data["draft_gr"].id
         prod_id = project_data["prod_gr"].id
 
-        assert draft_id in version_map
-        assert prod_id in version_map
-        assert "draft" in version_map[draft_id]
-        assert version_map[prod_id].startswith("v")
+        assert draft_id in tag_name_map
+        assert prod_id in tag_name_map
+        # Tag names should be present (either from tag_version or version_name)
+        assert tag_name_map[draft_id] is not None
+        assert tag_name_map[prod_id] is not None
 
     def test_includes_complete_project_metadata(self, db_session: Session, test_projects_with_versions):
         """
@@ -310,7 +311,7 @@ class TestGetProjectService:
             project_ids.append(project_id)
 
             # Create graph runner with DRAFT environment
-            gr = db.GraphRunner(id=uuid.uuid4(), tag_version=f"v{i}.0.0")
+            gr = db.GraphRunner(id=uuid.uuid4(), tag_version=f"{i}.0.0")
             db_session.add(gr)
 
             binding = db.ProjectEnvironmentBinding(

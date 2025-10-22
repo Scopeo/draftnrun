@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 import networkx as nx
 
 from ada_backend.database.models import EnvType, OrgSecretType, CallType
+from ada_backend.services.tag_service import compose_tag_name
 from ada_backend.repositories.edge_repository import get_edges
 from ada_backend.schemas.project_schema import ChatResponse
 from ada_backend.services.agent_builder_service import instantiate_component
@@ -133,7 +134,7 @@ async def run_env_agent(
         input_data=input_data,
         environment=env,
         call_type=call_type,
-        tag_version=graph_runner.tag_version,
+        tag_name=compose_tag_name(graph_runner.tag_version, graph_runner.version_name),
     )
 
 
@@ -144,7 +145,7 @@ async def run_agent(
     input_data: dict,
     environment: EnvType,
     call_type: CallType,
-    tag_version: Optional[str] = None,
+    tag_name: Optional[str] = None,
 ) -> ChatResponse:
     project_details = get_project_with_details(session, project_id=project_id)
     if not project_details:
@@ -167,7 +168,8 @@ async def run_agent(
         uuid_for_temp_folder=uuid_for_temp_folder,
         environment=environment,
         call_type=call_type,
-        tag_version=tag_version,
+        graph_runner_id=graph_runner_id,
+        tag_name=tag_name,
     )
     try:
         agent_output = await agent.run(
