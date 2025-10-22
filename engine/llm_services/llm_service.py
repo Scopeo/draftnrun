@@ -805,8 +805,8 @@ class WebSearchService(LLMService):
         super().__init__(trace_manager, provider, model_name, api_key, base_url)
 
     @with_usage_check
-    def web_search(self, query: str, filters: Optional[dict] = None) -> str:
-        return asyncio.run(self.web_search_async(query, filters))
+    def web_search(self, query: str, allowed_domains: Optional[list[str]] = None) -> str:
+        return asyncio.run(self.web_search_async(query, allowed_domains))
 
     @with_async_usage_check
     async def web_search_async(self, query: str, allowed_domains: Optional[list[str]] = None) -> str:
