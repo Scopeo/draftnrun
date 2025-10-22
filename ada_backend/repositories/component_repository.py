@@ -800,7 +800,6 @@ def delete_component_instances(
             delete_linked_integration(session, instance.id)
 
         session.delete(instance)
-        LOGGER.info(f"Deleted component instance {instance.id}")
 
     for tool_description_id in tool_descriptions_to_delete:
         tool_description = (
