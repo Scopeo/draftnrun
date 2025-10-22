@@ -72,20 +72,20 @@ async def run_cron_tests(org_id: str, project_id: str, client: httpx.AsyncClient
                 "input_data": {"messages": [{"role": "user", "content": "Test payload"}]},
             },
         }
-        create_response = await client.post(f"{API_BASE_URL}/crons/{org_id}", json=cron_payload)
+        create_response = await client.post(f"{API_BASE_URL}/organizations/{org_id}/crons", json=cron_payload)
         print_response("1. Create Cron Job", create_response)
         created_cron_id = create_response.json()["id"]
 
         # 2. Get all Cron Jobs for the organization
         print("\nRunning: 2. List Cron Jobs")
-        list_response = await client.get(f"{API_BASE_URL}/crons/{org_id}")
+        list_response = await client.get(f"{API_BASE_URL}/organizations/{org_id}/crons")
         print_response("2. List Cron Jobs", list_response)
         assert any(job["id"] == created_cron_id for job in list_response.json()["cron_jobs"])
         print("✅ Cron job found in the list.")
 
         # 3. Get details for the created Cron Job
         print("\nRunning: 3. Get Cron Job Details")
-        detail_response = await client.get(f"{API_BASE_URL}/crons/{org_id}/{created_cron_id}")
+        detail_response = await client.get(f"{API_BASE_URL}/organizations/{org_id}/crons/{created_cron_id}")
         print_response("3. Get Cron Job Details", detail_response)
         assert detail_response.json()["name"] == cron_payload["name"]
 
@@ -96,7 +96,7 @@ async def run_cron_tests(org_id: str, project_id: str, client: httpx.AsyncClient
             "cron_expr": "0 13 * * *",  # Daily at 13:00
         }
         update_response = await client.patch(
-            f"{API_BASE_URL}/crons/{org_id}/{created_cron_id}",
+            f"{API_BASE_URL}/organizations/{org_id}/crons/{created_cron_id}",
             json=update_payload,
         )
         print_response("4. Update Cron Job", update_response)
@@ -105,23 +105,27 @@ async def run_cron_tests(org_id: str, project_id: str, client: httpx.AsyncClient
 
         # 5. Pause the Cron Job
         print("\nRunning: 5. Pause Cron Job")
-        pause_response = await client.post(f"{API_BASE_URL}/crons/{org_id}/{created_cron_id}/pause")
+        pause_response = await client.post(f"{API_BASE_URL}/organizations/{org_id}/crons/{created_cron_id}/pause")
         print_response("5. Pause Cron Job", pause_response)
         assert not pause_response.json()["is_enabled"]
 
         # Verify it's inactive
-        detail_after_pause = (await client.get(f"{API_BASE_URL}/crons/{org_id}/{created_cron_id}")).json()
+        detail_after_pause = (
+            await client.get(f"{API_BASE_URL}/organizations/{org_id}/crons/{created_cron_id}")
+        ).json()
         assert not detail_after_pause["is_enabled"]
         print("✅ Cron job is inactive.")
 
         # 6. Resume the Cron Job
         print("\nRunning: 6. Resume Cron Job")
-        resume_response = await client.post(f"{API_BASE_URL}/crons/{org_id}/{created_cron_id}/resume")
+        resume_response = await client.post(f"{API_BASE_URL}/organizations/{org_id}/crons/{created_cron_id}/resume")
         print_response("6. Resume Cron Job", resume_response)
         assert resume_response.json()["is_enabled"]
 
         # Verify it's active again
-        detail_after_resume = (await client.get(f"{API_BASE_URL}/crons/{org_id}/{created_cron_id}")).json()
+        detail_after_resume = (
+            await client.get(f"{API_BASE_URL}/organizations/{org_id}/crons/{created_cron_id}")
+        ).json()
         assert detail_after_resume["is_enabled"]
         print("✅ Cron job is active again.")
 
@@ -133,7 +137,7 @@ async def run_cron_tests(org_id: str, project_id: str, client: httpx.AsyncClient
         # 7. Clean up by deleting the created Cron Job
         if created_cron_id:
             print("\nRunning: 7. Delete Cron Job (Cleanup)")
-            delete_response = await client.delete(f"{API_BASE_URL}/crons/{org_id}/{created_cron_id}")
+            delete_response = await client.delete(f"{API_BASE_URL}/organizations/{org_id}/crons/{created_cron_id}")
             print_response("7. Delete Cron Job (Cleanup)", delete_response)
 
 
