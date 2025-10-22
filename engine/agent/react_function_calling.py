@@ -434,17 +434,9 @@ class ReActAgent(Agent):
         # Map typed inputs to the original call style
         payload_dict = inputs.model_dump(exclude_none=True)
         agent_payload = AgentPayload(**payload_dict) if "messages" in payload_dict else payload_dict
-
-        #core_result = await self._run_core(agent_payload, ctx=ctx)
-        # Pass template vars from context to _run_core
-        template_vars = ctx.get("template_vars", {})
-        self._current_context = ctx  # Store entire context for recursive calls
-
-        # Pass Rag filter vars from context to _run_core
         rag_filter = ctx.get("rag_filter", {})
         self._current_rag_filter = rag_filter
-
-        core_result = await self._run_core(agent_payload, template_vars=template_vars)
+        core_result = await self._run_core(agent_payload, ctx=ctx)
 
         # Map original output back to typed outputs
         final_message = (
