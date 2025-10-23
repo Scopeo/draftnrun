@@ -40,10 +40,10 @@ from ada_backend.services.cron.errors import (
 
 LOGGER = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/crons", tags=["Cron Jobs"])
+router = APIRouter(prefix="/organizations", tags=["Cron Jobs"])
 
 
-@router.get("/{organization_id}", response_model=CronJobListResponse)
+@router.get("/{organization_id}/crons", response_model=CronJobListResponse)
 def get_organization_cron_jobs(
     organization_id: UUID,
     user: Annotated[
@@ -66,7 +66,7 @@ def get_organization_cron_jobs(
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
-@router.get("/{organization_id}/{cron_id}", response_model=CronJobWithRuns)
+@router.get("/{organization_id}/crons/{cron_id}", response_model=CronJobWithRuns)
 def get_cron_job_details(
     organization_id: UUID,
     cron_id: UUID,
@@ -95,7 +95,7 @@ def get_cron_job_details(
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
-@router.post("/{organization_id}", response_model=CronJobResponse, status_code=201)
+@router.post("/{organization_id}/crons", response_model=CronJobResponse, status_code=201)
 def create_organization_cron_job(
     organization_id: UUID,
     cron_data: CronJobCreate,
@@ -122,7 +122,7 @@ def create_organization_cron_job(
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
-@router.patch("/{organization_id}/{cron_id}", response_model=CronJobResponse)
+@router.patch("/{organization_id}/crons/{cron_id}", response_model=CronJobResponse)
 def update_organization_cron_job(
     organization_id: UUID,
     cron_id: UUID,
@@ -155,7 +155,7 @@ def update_organization_cron_job(
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
-@router.delete("/{organization_id}/{cron_id}", response_model=CronJobDeleteResponse)
+@router.delete("/{organization_id}/crons/{cron_id}", response_model=CronJobDeleteResponse)
 def delete_organization_cron_job(
     organization_id: UUID,
     cron_id: UUID,
@@ -187,7 +187,7 @@ def delete_organization_cron_job(
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
-@router.post("/{organization_id}/{cron_id}/pause", response_model=CronJobPauseResponse)
+@router.post("/{organization_id}/crons/{cron_id}/pause", response_model=CronJobPauseResponse)
 def pause_organization_cron_job(
     organization_id: UUID,
     cron_id: UUID,
@@ -217,7 +217,7 @@ def pause_organization_cron_job(
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
-@router.post("/{organization_id}/{cron_id}/resume", response_model=CronJobPauseResponse)
+@router.post("/{organization_id}/crons/{cron_id}/resume", response_model=CronJobPauseResponse)
 def resume_organization_cron_job(
     organization_id: UUID,
     cron_id: UUID,
@@ -232,7 +232,6 @@ def resume_organization_cron_job(
     """
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
-
     try:
         result = resume_cron_job(session, cron_id, organization_id=organization_id)
         if not result:
@@ -249,7 +248,7 @@ def resume_organization_cron_job(
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
-@router.get("/{organization_id}/{cron_id}/runs", response_model=CronRunListResponse)
+@router.get("/{organization_id}/crons/{cron_id}/runs", response_model=CronRunListResponse)
 def get_cron_job_runs(
     organization_id: UUID,
     cron_id: UUID,
