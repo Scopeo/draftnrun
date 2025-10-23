@@ -32,6 +32,7 @@ from ada_backend.services.errors import ProjectNotFound
 from ada_backend.database import models as db
 from ada_backend.services.graph.get_graph_service import get_graph_service
 from ada_backend.services.graph.update_graph_service import update_graph_service
+from ada_backend.services.tag_service import compose_tag_name
 from ada_backend.services.pipeline.update_pipeline_service import create_or_update_component_instance
 
 
@@ -50,6 +51,8 @@ def get_all_agents_service(session: Session, organization_id: UUID) -> list[Agen
                 env=project_env_binding.environment if project_env_binding else None,
                 tag_version=graph_runner.tag_version,
                 version_name=graph_runner.version_name,
+                tag_name=compose_tag_name(graph_runner.tag_version, graph_runner.version_name),
+                change_log=graph_runner.change_log,
             )
         )
 
