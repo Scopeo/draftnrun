@@ -41,9 +41,9 @@ def get_unmigrated_output_type(component, port_name: str) -> Type | None:
 
     component_name = component.__class__.__name__
 
-    # Special case: Start component has different pattern
-    # Start component actually outputs list[dict], not list[ChatMessage]
-    if component_name == "Start":
+    # Special case: Start/Input component has different pattern
+    # Start/Input component actually outputs list[dict], not list[ChatMessage]
+    if component_name in ["Start", "Input"]:
         return {"messages": list[dict]}.get(port_name)
 
     # Default: All other unmigrated components use AgentPayload pattern
@@ -56,9 +56,9 @@ def get_unmigrated_output_type(component, port_name: str) -> Type | None:
 
 
 def create_legacy_input_schema() -> Type[BaseModel]:
-    """Create legacy input schema for unmigrated Start component.
+    """Create legacy input schema for unmigrated Start/Input component.
 
-    LEGACY FUNCTION: DELETE after Start component is migrated to Agent base class.
+    LEGACY FUNCTION: DELETE after Start/Input component is migrated to Agent base class.
     """
 
     class InputSchema(BaseModel):

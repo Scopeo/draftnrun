@@ -44,7 +44,7 @@ def seed_start_components(session: Session):
         component_id=COMPONENT_UUIDS["start"],
         version_tag="0.0.1",
         release_stage=db.ReleaseStage.PUBLIC,
-        description="Start node that receives initial workflow input and configures triggers",
+        description="Beginning of the workflow: setup the input format here.",
         default_tool_description_id=TOOL_DESCRIPTION_UUIDS["default_tool_description"],
     )
     upsert_component_versions(
