@@ -1,3 +1,4 @@
+import json
 from typing import Optional, Type
 from pydantic import BaseModel, Field
 
@@ -40,16 +41,16 @@ DEFAULT_WEB_SEARCH_OPENAI_TOOL_DESCRIPTION = ToolDescription(
 )
 
 
+class SearchFilters(BaseModel):
+    allowed_domains: Optional[list[str]] = Field(
+        default=None, description="List of domains to restrict search results to"
+    )
+
+
 class WebSearchOpenAIToolInputs(BaseModel):
     query: Optional[str] = Field(default=None, description="The standalone question to be answered using web search.")
     messages: Optional[list[ChatMessage]] = Field(default=None, description="Optional legacy message context.")
-    filters: Optional[dict] = Field(
-        default=None,
-        description=(
-            "Optional filters to restrict search results. "
-            "Can include 'allowed_domains' to limit search to specific domains."
-        ),
-    )
+    filters: Optional[SearchFilters] = Field(default=None, description="Optional filters to restrict search results")
     model_config = {"extra": "allow"}
 
 
@@ -99,9 +100,9 @@ class WebSearchOpenAITool(Agent):
 
         final_allowed_domains = None
         if self._allowed_domains is not None:
-            final_allowed_domains = self._allowed_domains
-        elif inputs.filters.get("allowed_domains"):
-            final_allowed_domains = inputs.filters.get("allowed_domains")
+            final_allowed_domains = json.loads(self._allowed_domains)
+        elif inputs.filters and inputs.filters.allowed_domains:
+            final_allowed_domains = inputs.filters.allowed_domains
 
         span = get_current_span()
         span.set_attributes(

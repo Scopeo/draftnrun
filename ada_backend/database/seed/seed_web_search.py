@@ -70,7 +70,7 @@ def seed_web_search_components(session: Session):
                 id=UUID("b2c3d4e5-f6a7-8901-bcde-f12345678901"),
                 component_id=web_search_openai_agent.id,
                 name="allowed_domains",
-                type=ParameterType.JSON,
+                type=ParameterType.STRING,
                 nullable=True,
                 default=None,
                 ui_component=UIComponent.TEXTAREA,
