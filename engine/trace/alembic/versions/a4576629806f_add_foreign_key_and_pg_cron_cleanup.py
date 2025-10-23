@@ -1,7 +1,7 @@
 """add_foreign_key_and_pg_cron_cleanup
 
 Revision ID: a4576629806f
-Revises: 7a9e2b3f4c5d
+Revises: 55bf7791d9dd
 Create Date: 2025-10-21 13:08:54.099132
 
 """
@@ -13,7 +13,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "a4576629806f"
-down_revision: Union[str, None] = "7a9e2b3f4c5d"
+down_revision: Union[str, None] = "55bf7791d9dd"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
@@ -28,9 +28,9 @@ def upgrade() -> None:
     )
 
     op.create_foreign_key(None, "span_messages", "spans", ["span_id"], ["span_id"], ondelete="CASCADE")
-    op.drop_index(op.f("ix_spans_call_type"), table_name="spans")
-    op.drop_index(op.f("ix_spans_environment"), table_name="spans")
-    # ### end Alembic commands ###
+
+    op.execute("DROP INDEX IF EXISTS ix_spans_call_type;")
+    op.execute("DROP INDEX IF EXISTS ix_spans_environment;")
 
     op.execute("CREATE EXTENSION IF NOT EXISTS pg_cron;")
 
@@ -70,6 +70,6 @@ def downgrade() -> None:
     """
     )
 
-    op.create_index(op.f("ix_spans_environment"), "spans", ["environment"], unique=False)
-    op.create_index(op.f("ix_spans_call_type"), "spans", ["call_type"], unique=False)
-    op.drop_constraint("span_messages_span_id_fkey", "span_messages", type_="foreignkey")
+    op.execute("CREATE INDEX IF NOT EXISTS ix_spans_environment ON spans (environment);")
+    op.execute("CREATE INDEX IF NOT EXISTS ix_spans_call_type ON spans (call_type);")
+    op.drop_constraint("span_messages_span_id_fkey", "span_messages", type_="foreignkey", if_exists=True)
