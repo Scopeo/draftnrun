@@ -985,23 +985,25 @@ def upsert_specific_api_component_with_defaults(
     Returns the component.
     """
     component = get_component_by_name(session, tool_display_name)
-    if not component:
-        component = db.Component(
-            name=tool_display_name,
-            base_component="API Call",
-            is_agent=False,
-            function_callable=True,
-            can_use_function_calling=False,
-        )
-        upsert_components(session, [component])
-        component_version = db.ComponentVersion(
-            component_id=component.id,
-            description=f"Preconfigured API tool for {tool_display_name}.",
-            release_stage=db.ReleaseStage.INTERNAL,
-        )
-        session.add(component_version)
-        session.commit()
-        session.refresh(component_version)
+    if component:
+        raise ValueError(f"Component {tool_display_name} already exists")
+    component = db.Component(
+        name=tool_display_name,
+        base_component="API Call",
+        is_agent=False,
+        function_callable=True,
+        can_use_function_calling=False,
+    )
+    upsert_components(session, [component])
+    component_version = db.ComponentVersion(
+        component_id=component.id,
+        description=f"Preconfigured API tool for {tool_display_name}.",
+        release_stage=db.ReleaseStage.INTERNAL,
+        version_tag="0.0.1",
+    )
+    session.add(component_version)
+    session.commit()
+    session.refresh(component_version)
 
     param_defs = [
         db.ComponentParameterDefinition(
