@@ -20,12 +20,18 @@ DEFAULT_WEB_SEARCH_OPENAI_TOOL_DESCRIPTION = ToolDescription(
         },
         "filters": {
             "type": "object",
-            "description": "Optional filters to restrict search results. Can include 'allowed_domains' to limit search to specific domains.",
+            "description": (
+                "Optional filters to restrict search results. "
+                "Can include 'allowed_domains' to limit search to specific domains."
+            ),
             "properties": {
                 "allowed_domains": {
                     "type": "array",
                     "items": {"type": "string"},
-                    "description": "List of domains to restrict search results to (e.g., ['mydomain.net', 'myotherdomain.com']).",
+                    "description": (
+                        "List of domains to restrict search results to "
+                        "(e.g., ['mydomain.net', 'myotherdomain.com'])."
+                    ),
                 }
             },
         },
@@ -39,7 +45,10 @@ class WebSearchOpenAIToolInputs(BaseModel):
     messages: Optional[list[ChatMessage]] = Field(default=None, description="Optional legacy message context.")
     filters: Optional[dict] = Field(
         default=None,
-        description="Optional filters to restrict search results. Can include 'allowed_domains' to limit search to specific domains.",
+        description=(
+            "Optional filters to restrict search results. "
+            "Can include 'allowed_domains' to limit search to specific domains."
+        ),
     )
     model_config = {"extra": "allow"}
 
