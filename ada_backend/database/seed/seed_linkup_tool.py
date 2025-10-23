@@ -3,7 +3,9 @@ from sqlalchemy.orm import Session
 from ada_backend.database import models as db
 from ada_backend.database.component_definition_seeding import (
     upsert_components,
+    upsert_component_categories,
 )
+from ada_backend.database.seed.seed_categories import CATEGORY_UUIDS
 from ada_backend.database.seed.seed_tool_description import TOOL_DESCRIPTION_UUIDS
 from ada_backend.database.seed.utils import COMPONENT_UUIDS
 
@@ -25,4 +27,9 @@ def seed_linkup_tool_components(session: Session):
         components=[
             linkup_tool,
         ],
+    )
+    upsert_component_categories(
+        session=session,
+        component_id=linkup_tool.id,
+        category_ids=[CATEGORY_UUIDS["query"]],
     )

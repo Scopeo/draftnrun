@@ -12,7 +12,9 @@ from ada_backend.database.models import (
 from ada_backend.database.component_definition_seeding import (
     upsert_components,
     upsert_components_parameter_definitions,
+    upsert_component_categories,
 )
+from ada_backend.database.seed.seed_categories import CATEGORY_UUIDS
 from ada_backend.database.seed.seed_tool_description import TOOL_DESCRIPTION_UUIDS
 from ada_backend.database.seed.utils import (
     COMPONENT_UUIDS,
@@ -164,4 +166,9 @@ def seed_llm_call_components(session: Session):
                 ],
             ),
         ],
+    )
+    upsert_component_categories(
+        session=session,
+        component_id=llm_call.id,
+        category_ids=[CATEGORY_UUIDS["most_used"]],
     )

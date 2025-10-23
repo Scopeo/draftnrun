@@ -9,6 +9,7 @@ CATEGORY_UUIDS = {
     "query": UUID("2cf1a375-4a05-4e36-adef-f0c72e897dbf"),
     "processing": UUID("802ccf36-cb93-4a91-a57a-24e65f2feee4"),
     "logical": UUID("a0d88f3f-12da-4b65-9879-ea89fc280395"),
+    "most_used": UUID("b1c2d3e4-f5a6-7b8c-9d0e-1f2a3b4c5d6e"),
 }
 
 
@@ -69,6 +70,17 @@ def seed_categories(session):
                 "- 'If-else' block.\n"
                 "- Checking if a payment was successful.\n"
                 "- Verifying user permissions."
+            ),
+        ),
+        db.Category(
+            id=CATEGORY_UUIDS["most_used"],
+            name="Most Used",
+            description=(
+                "Components that are most frequently used in workflows. "
+                "These are essential building blocks for many common use cases.\n"
+                "Examples:\n"
+                "- AI Agent for intelligent task automation.\n"
+                "- LLM Call for direct language model interactions."
             ),
         ),
     ]
