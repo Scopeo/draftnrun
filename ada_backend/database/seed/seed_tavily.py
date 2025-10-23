@@ -5,9 +5,11 @@ from sqlalchemy.orm import Session
 from ada_backend.database import models as db
 from ada_backend.database.models import ParameterType
 from ada_backend.database.component_definition_seeding import (
+    upsert_component_versions,
     upsert_components,
     upsert_components_parameter_child_relationships,
     upsert_components_parameter_definitions,
+    upsert_release_stage_to_current_version_mapping,
 )
 from ada_backend.database.seed.seed_tool_description import TOOL_DESCRIPTION_UUIDS
 from ada_backend.database.seed.utils import (
@@ -23,11 +25,8 @@ def seed_tavily_components(session: Session):
     tavily_agent = db.Component(
         id=COMPONENT_UUIDS["tavily_agent"],
         name="Internet Search with Tavily",
-        description="Performs internet search using Tavily",
         is_agent=False,
         function_callable=False,
-        release_stage=db.ReleaseStage.INTERNAL,
-        default_tool_description_id=TOOL_DESCRIPTION_UUIDS["tavily_tool_description"],
     )
     upsert_components(
         session=session,
@@ -35,10 +34,22 @@ def seed_tavily_components(session: Session):
             tavily_agent,
         ],
     )
+    tavily_agent_version = db.ComponentVersion(
+        id=COMPONENT_UUIDS["tavily_agent"],
+        component_id=COMPONENT_UUIDS["tavily_agent"],
+        version_tag="v0.1.0",
+        release_stage=db.ReleaseStage.INTERNAL,
+        description="Agent that uses Tavily to perform internet searches and answer questions based on the results.",
+        default_tool_description_id=TOOL_DESCRIPTION_UUIDS["tavily_tool_description"],
+    )
+    upsert_component_versions(
+        session=session,
+        component_versions=[tavily_agent_version],
+    )
     # Tavily
     tavily_synthesizer_param = db.ComponentParameterDefinition(
         id=UUID("24e16437-87d8-4b65-b2f8-63711ed97b8f"),
-        component_id=tavily_agent.id,
+        component_version_id=tavily_agent_version.id,
         name="synthesizer",
         type=ParameterType.COMPONENT,
         nullable=True,
@@ -53,7 +64,7 @@ def seed_tavily_components(session: Session):
             db.ComponentParameterChildRelationship(
                 id=UUID("5592a748-efc1-4dd0-9600-d4a41e9bba94"),
                 component_parameter_definition_id=tavily_synthesizer_param.id,
-                child_component_id=COMPONENT_UUIDS["synthesizer"],
+                child_component_version_id=COMPONENT_UUIDS["synthesizer"],
             ),
         ],
     )
@@ -62,7 +73,7 @@ def seed_tavily_components(session: Session):
         component_parameter_definitions=[
             # Tavily Agent
             *build_completion_service_config_definitions(
-                component_id=tavily_agent.id,
+                component_version_id=tavily_agent_version.id,
                 params_to_seed=[
                     ParameterLLMConfig(
                         param_name=COMPLETION_MODEL_IN_DB,
@@ -75,4 +86,11 @@ def seed_tavily_components(session: Session):
                 ],
             ),
         ],
+    )
+
+    upsert_release_stage_to_current_version_mapping(
+        session=session,
+        component_id=tavily_agent_version.component_id,
+        release_stage=tavily_agent_version.release_stage,
+        component_version_id=tavily_agent_version.id,
     )

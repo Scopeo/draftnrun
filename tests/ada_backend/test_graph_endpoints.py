@@ -2,6 +2,7 @@ from uuid import UUID, uuid4
 
 from fastapi.testclient import TestClient
 
+from ada_backend.database.seed.utils import COMPONENT_UUIDS
 from ada_backend.database.setup_db import SessionLocal
 from ada_backend.main import app
 from ada_backend.repositories.graph_runner_repository import delete_graph_runner
@@ -15,6 +16,8 @@ HEADERS_JWT = {
     "accept": "application/json",
     "Authorization": f"Bearer {JWT_TOKEN}",
 }
+COMPONENT_ID = str(COMPONENT_UUIDS["llm_call"])
+COMPONENT_VERSION_ID = str(COMPONENT_UUIDS["llm_call"])
 
 
 def test_create_empty_graph_runner():
@@ -106,7 +109,8 @@ def test_update_graph_runner():
                 "name": "LLM Call",
                 "ref": "",
                 "is_start_node": True,
-                "component_id": "7a039611-49b3-4bfd-b09b-c0f93edf3b79",
+                "component_id": COMPONENT_ID,
+                "component_version_id": COMPONENT_VERSION_ID,
                 "parameters": [
                     {
                         "value": "Reformulate the question as a customer service query :\n{question}",
@@ -170,7 +174,8 @@ def test_update_graph_runner():
                 "name": "Polite LLM",
                 "ref": "",
                 "is_start_node": False,
-                "component_id": "7a039611-49b3-4bfd-b09b-c0f93edf3b79",
+                "component_id": COMPONENT_ID,
+                "component_version_id": COMPONENT_VERSION_ID,
                 "parameters": [
                     {
                         "value": "Add polite expressions to the question: {question} \n",

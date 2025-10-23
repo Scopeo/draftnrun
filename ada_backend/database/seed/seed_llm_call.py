@@ -10,8 +10,10 @@ from ada_backend.database.models import (
     UIComponentProperties,
 )
 from ada_backend.database.component_definition_seeding import (
+    upsert_component_versions,
     upsert_components,
     upsert_components_parameter_definitions,
+    upsert_release_stage_to_current_version_mapping,
     upsert_component_categories,
 )
 from ada_backend.database.seed.seed_categories import CATEGORY_UUIDS
@@ -33,11 +35,8 @@ def seed_llm_call_components(session: Session):
     llm_call = db.Component(
         id=COMPONENT_UUIDS["llm_call"],
         name="LLM Call",
-        description="Templated LLM Call",
         is_agent=True,
         function_callable=True,
-        release_stage=db.ReleaseStage.PUBLIC,
-        default_tool_description_id=TOOL_DESCRIPTION_UUIDS["default_llm_call_tool_description"],
         icon="tabler-message-chatbot",
     )
     upsert_components(
@@ -46,12 +45,24 @@ def seed_llm_call_components(session: Session):
             llm_call,
         ],
     )
+    llm_call_version = db.ComponentVersion(
+        id=COMPONENT_UUIDS["llm_call"],
+        component_id=COMPONENT_UUIDS["llm_call"],
+        version_tag="0.0.1",
+        release_stage=db.ReleaseStage.PUBLIC,
+        description="A component that makes calls to a Large Language Model (LLM) with a custom prompt.",
+        default_tool_description_id=TOOL_DESCRIPTION_UUIDS["default_llm_call_tool_description"],
+    )
+    upsert_component_versions(
+        session=session,
+        component_versions=[llm_call_version],
+    )
     upsert_components_parameter_definitions(
         session=session,
         component_parameter_definitions=[
             db.ComponentParameterDefinition(
                 id=UUID("e79b8f5f-d9cc-4a1f-a98a-4992f42a0196"),
-                component_id=llm_call.id,
+                component_version_id=llm_call_version.id,
                 name="prompt_template",
                 type=ParameterType.STRING,
                 nullable=False,
@@ -67,7 +78,7 @@ def seed_llm_call_components(session: Session):
             ),
             db.ComponentParameterDefinition(
                 id=UUID("a12eb38c-a10e-46f8-bc31-01d3551d954c"),
-                component_id=llm_call.id,
+                component_version_id=llm_call_version.id,
                 name="file_content_key",
                 type=ParameterType.STRING,
                 nullable=True,
@@ -82,7 +93,7 @@ def seed_llm_call_components(session: Session):
             ),
             db.ComponentParameterDefinition(
                 id=UUID("0dcee65b-d3b7-43e6-8cb4-2ec531c1875c"),
-                component_id=llm_call.id,
+                component_version_id=llm_call_version.id,
                 name="file_url_key",
                 type=ParameterType.STRING,
                 nullable=True,
@@ -95,7 +106,7 @@ def seed_llm_call_components(session: Session):
             ),
             db.ComponentParameterDefinition(
                 id=UUID("d7ee43ab-80f8-4ee5-ac38-938163933610"),
-                component_id=llm_call.id,
+                component_version_id=llm_call_version.id,
                 name="output_format",
                 type=ParameterType.STRING,
                 nullable=True,
@@ -141,7 +152,7 @@ def seed_llm_call_components(session: Session):
                 is_advanced=True,
             ),
             *build_completion_service_config_definitions(
-                component_id=llm_call.id,
+                component_version_id=llm_call_version.id,
                 params_to_seed=[
                     ParameterLLMConfig(
                         param_name=COMPLETION_MODEL_IN_DB,
@@ -166,6 +177,14 @@ def seed_llm_call_components(session: Session):
                 ],
             ),
         ],
+    )
+
+    # Create release stage mapping
+    upsert_release_stage_to_current_version_mapping(
+        session=session,
+        component_id=llm_call_version.component_id,
+        release_stage=llm_call_version.release_stage,
+        component_version_id=llm_call_version.id,
     )
     upsert_component_categories(
         session=session,

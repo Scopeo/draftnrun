@@ -4,9 +4,11 @@ from sqlalchemy.orm import Session
 from ada_backend.database.models import Component, ParameterType, UIComponent, UIComponentProperties
 
 from ada_backend.database.component_definition_seeding import (
+    upsert_component_versions,
     upsert_components,
     upsert_component_categories,
     upsert_components_parameter_definitions,
+    upsert_release_stage_to_current_version_mapping,
 )
 from ada_backend.database.seed.utils import COMPONENT_UUIDS
 from ada_backend.database.seed.seed_tool_description import TOOL_DESCRIPTION_UUIDS
@@ -19,22 +21,32 @@ def seed_pdf_generation_components(session: Session):
     pdf_generation_component = Component(
         id=COMPONENT_UUIDS["pdf_generation"],
         name="PDF Generation Tool",
-        description="Convert markdown text to PDF files.",
         is_agent=False,
         function_callable=True,
         can_use_function_calling=False,
-        release_stage=db.ReleaseStage.INTERNAL,
-        default_tool_description_id=TOOL_DESCRIPTION_UUIDS["default_pdf_generation_tool_description"],
         icon="tabler-file-type-pdf",
     )
     upsert_components(session, [pdf_generation_component])
+
+    pdf_generation_component_version = db.ComponentVersion(
+        id=COMPONENT_UUIDS["pdf_generation"],
+        component_id=COMPONENT_UUIDS["pdf_generation"],
+        version_tag="0.0.1",
+        release_stage=db.ReleaseStage.INTERNAL,
+        description="Convert markdown text to PDF files.",
+        default_tool_description_id=TOOL_DESCRIPTION_UUIDS["default_pdf_generation_tool_description"],
+    )
+    upsert_component_versions(
+        session=session,
+        component_versions=[pdf_generation_component_version],
+    )
 
     upsert_components_parameter_definitions(
         session=session,
         component_parameter_definitions=[
             db.ComponentParameterDefinition(
                 id=UUID("ce261f44-fa83-4962-82c4-4deacad44d65"),
-                component_id=pdf_generation_component.id,
+                component_version_id=pdf_generation_component_version.id,
                 name="css_formatting",
                 type=ParameterType.STRING,
                 default=DEFAULT_CSS_FORMATTING,
@@ -53,4 +65,12 @@ def seed_pdf_generation_components(session: Session):
         session=session,
         component_id=pdf_generation_component.id,
         category_ids=[CATEGORY_UUIDS["action"]],
+    )
+
+    # Create release stage mapping
+    upsert_release_stage_to_current_version_mapping(
+        session=session,
+        component_id=pdf_generation_component_version.component_id,
+        release_stage=pdf_generation_component_version.release_stage,
+        component_version_id=pdf_generation_component_version.id,
     )

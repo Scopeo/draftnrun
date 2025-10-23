@@ -35,4 +35,4 @@ class PipelineParameterSchema(ParameterBase, WithValue):
 class ComponentParamDefDTO(ParameterDefinition):
     """Represents a parameter definition for a component"""
 
-    component_id: UUID
+    component_version_id: UUID

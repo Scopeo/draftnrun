@@ -5,6 +5,8 @@ from enum import StrEnum
 import logging
 
 from sqlalchemy import (
+    ForeignKeyConstraint,
+    Index,
     String,
     Text,
     JSON,
@@ -13,6 +15,7 @@ from sqlalchemy import (
     DateTime,
     Boolean,
     Enum as SQLAlchemyEnum,
+    UniqueConstraint,
     func,
     CheckConstraint,
     UUID,
@@ -223,40 +226,134 @@ class Component(Base):
     id = mapped_column(UUID(as_uuid=True), primary_key=True, index=True, default=uuid.uuid4)
     name = mapped_column(String, unique=True, nullable=False)
     base_component = mapped_column(String, nullable=True)
+    icon = mapped_column(String, nullable=True)
     description = mapped_column(Text, nullable=True)
     is_agent = mapped_column(Boolean, nullable=False, default=False)
-    integration_id = mapped_column(UUID(as_uuid=True), ForeignKey("integrations.id"), nullable=True)
     created_at = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     function_callable = mapped_column(Boolean, nullable=False, default=False)
     can_use_function_calling = mapped_column(Boolean, nullable=False, default=False)
     is_protected = mapped_column(Boolean, nullable=False, default=False)
-    release_stage = mapped_column(make_pg_enum(ReleaseStage), nullable=False, default=ReleaseStage.INTERNAL)
-    default_tool_description_id = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("tool_descriptions.id"),
-        nullable=True,
-    )
-    icon = mapped_column(String, nullable=True)
-    default_tool_description = relationship("ToolDescription", foreign_keys=[default_tool_description_id])
-    definitions = relationship(
-        "ComponentParameterDefinition",
-        back_populates="component",
-    )
-    port_definitions = relationship(
-        "PortDefinition",
-        back_populates="component",
-        cascade="all, delete-orphan",
-    )
-    child_definitions = relationship("ComponentParameterChildRelationship", back_populates="child_component")
+
     categories = relationship(
         "ComponentCategory",
         back_populates="component",
         cascade="all, delete-orphan",
     )
 
+    versions = relationship(
+        "ComponentVersion",
+        back_populates="component",
+        cascade="all, delete-orphan",
+        order_by="ComponentVersion.created_at.desc()",
+    )
+
     def __str__(self):
         return f"Component({self.name})"
+
+
+class ComponentVersion(Base):
+    """
+    Defines versions for components to track changes and updates over time.
+    """
+
+    __tablename__ = "component_versions"
+
+    id = mapped_column(UUID(as_uuid=True), primary_key=True, index=True, default=uuid.uuid4)
+    component_id = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("components.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    version_tag = mapped_column(String, nullable=False)
+    changelog = mapped_column(Text, nullable=True)
+
+    description = mapped_column(Text, nullable=True)
+    integration_id = mapped_column(UUID(as_uuid=True), ForeignKey("integrations.id"), nullable=True)
+    default_tool_description_id = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("tool_descriptions.id"),
+        nullable=True,
+    )
+    release_stage = mapped_column(make_pg_enum(ReleaseStage), nullable=False, default=ReleaseStage.BETA)
+
+    created_at = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    component = relationship("Component")
+    definitions = relationship(
+        "ComponentParameterDefinition",
+        back_populates="component_version",
+    )
+    port_definitions = relationship(
+        "PortDefinition",
+        back_populates="component_version",
+        cascade="all, delete-orphan",
+    )
+    child_definitions = relationship("ComponentParameterChildRelationship", back_populates="child_component")
+
+    __table_args__ = (
+        CheckConstraint("version_tag ~ '^[0-9]+\\.[0-9]+\\.[0-9]+$'", name="check_version_semver"),
+        UniqueConstraint("component_id", "version_tag", name="uq_component_version"),
+        UniqueConstraint("component_id", "id", name="uq_component_versions_component_id_id"),
+    )
+
+    def __str__(self):
+        return f"ComponentVersion(component_id={self.component_id}, version_tag={self.version_tag})"
+
+
+class ReleaseStageToCurrentVersionMapping(Base):
+    """
+    Maps release stages to the 'current' version of a component.
+
+    Invariant DB garanti:
+      - (component_id, release_stage) est unique.
+      - component_version_id pointe sur une version qui appartient au même component_id.
+    """
+
+    __tablename__ = "release_stage_to_current_version_mappings"
+
+    id = mapped_column(UUID(as_uuid=True), primary_key=True, index=True, default=uuid.uuid4)
+
+    component_id = mapped_column(
+        UUID(as_uuid=True), ForeignKey("components.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    release_stage = mapped_column(
+        make_pg_enum(ReleaseStage),
+        nullable=False,
+    )
+    component_version_id = mapped_column(
+        UUID(as_uuid=True),
+        nullable=False,
+        index=True,
+    )
+
+    created_at = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    component_version = relationship("ComponentVersion")
+
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["component_id", "component_version_id"],
+            ["component_versions.component_id", "component_versions.id"],
+            ondelete="CASCADE",
+            name="fk_mapping_same_component",
+        ),
+        UniqueConstraint("component_id", "release_stage", name="uq_component_release_stage"),
+        Index(
+            "idx_current_by_component_stage",
+            "component_id",
+            "release_stage",
+            unique=True,
+        ),
+    )
+
+    def __str__(self) -> str:
+        return (
+            f"ReleaseStageToCurrentVersionMapping(component_id={self.component_id}, "
+            f"release_stage={self.release_stage}, component_version_id={self.component_version_id})"
+        )
 
 
 class Integration(Base):
@@ -402,9 +499,9 @@ class ComponentParameterDefinition(Base):
     __tablename__ = "component_parameter_definitions"
 
     id = mapped_column(UUID(as_uuid=True), primary_key=True, index=True, default=uuid.uuid4)
-    component_id = mapped_column(
+    component_version_id = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("components.id", ondelete="CASCADE"),
+        ForeignKey("component_versions.id", ondelete="CASCADE"),
         nullable=False,
     )
     name = mapped_column(String, nullable=False)
@@ -416,7 +513,7 @@ class ComponentParameterDefinition(Base):
     ui_component_properties = mapped_column(JSON, nullable=True)
     is_advanced = mapped_column(Boolean, nullable=False, default=False)
 
-    component = relationship("Component", back_populates="definitions")
+    component_version = relationship("ComponentVersion", back_populates="definitions")
     child_components = relationship(
         "ComponentParameterChildRelationship", back_populates="component_parameter_definition"
     )
@@ -441,19 +538,19 @@ class ComponentParameterChildRelationship(Base):
         ForeignKey("component_parameter_definitions.id", ondelete="CASCADE"),
         nullable=False,
     )
-    child_component_id = mapped_column(
+    child_component_version_id = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("components.id", ondelete="CASCADE"),
+        ForeignKey("component_versions.id", ondelete="CASCADE"),
         nullable=False,
     )
 
     component_parameter_definition = relationship("ComponentParameterDefinition", back_populates="child_components")
-    child_component = relationship("Component", back_populates="child_definitions")
+    child_component = relationship("ComponentVersion", back_populates="child_definitions")
 
     def __str__(self):
         return (
             f"CompParamToChildCompRel(component_parameter_definition_id={self.component_parameter_definition_id}, "
-            f"child_component_id={self.child_component_id})"
+            f"child_component_version_id={self.child_component_version_id})"
         )
 
 
@@ -463,9 +560,9 @@ class ComponentInstance(Base):
     __tablename__ = "component_instances"
 
     id = mapped_column(UUID(as_uuid=True), primary_key=True, index=True, default=uuid.uuid4)
-    component_id = mapped_column(
+    component_version_id = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("components.id", ondelete="CASCADE"),
+        ForeignKey("component_versions.id", ondelete="CASCADE"),
         nullable=False,
     )
     name = mapped_column(String, nullable=True, index=True)
@@ -473,7 +570,7 @@ class ComponentInstance(Base):
     tool_description_id = mapped_column(UUID(as_uuid=True), ForeignKey("tool_descriptions.id"), nullable=True)
     created_at = mapped_column(DateTime(timezone=True), server_default=func.now())
 
-    component = relationship("Component")
+    component_version = relationship("ComponentVersion")
     tool_description = relationship("ToolDescription")
     basic_parameters = relationship(
         "BasicParameter",
@@ -616,9 +713,9 @@ class ComponentGlobalParameter(Base):
     __tablename__ = "component_global_parameters"
 
     id = mapped_column(UUID(as_uuid=True), primary_key=True, index=True, default=uuid.uuid4)
-    component_id = mapped_column(
+    component_version_id = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("components.id", ondelete="CASCADE"),
+        ForeignKey("component_versions.id", ondelete="CASCADE"),
         nullable=False,
     )
     parameter_definition_id = mapped_column(
@@ -630,13 +727,13 @@ class ComponentGlobalParameter(Base):
     value = mapped_column(String, nullable=True)
     order = mapped_column(Integer, nullable=True)
 
-    component = relationship("Component")
+    component_version = relationship("ComponentVersion")
     parameter_definition = relationship("ComponentParameterDefinition")
     __table_args__ = (
         # Enforce uniqueness for scalar values (order IS NULL)
         sa.Index(
             "uq_comp_global_param_scalar",
-            "component_id",
+            "component_version_id",
             "parameter_definition_id",
             unique=True,
             postgresql_where=sa.text('"order" IS NULL'),
@@ -644,7 +741,7 @@ class ComponentGlobalParameter(Base):
         # Enforce uniqueness for list values (order IS NOT NULL)
         sa.Index(
             "uq_comp_global_param_list",
-            "component_id",
+            "component_version_id",
             "parameter_definition_id",
             "order",
             unique=True,
@@ -743,18 +840,20 @@ class PortDefinition(Base):
     __tablename__ = "port_definitions"
 
     id = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    component_id = mapped_column(
+    component_version_id = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("components.id", ondelete="CASCADE"),
+        ForeignKey("component_versions.id", ondelete="CASCADE"),
         nullable=False,
     )
     name = mapped_column(String, nullable=False)
     port_type = mapped_column(make_pg_enum(PortType), nullable=False)
     is_canonical = mapped_column(Boolean, nullable=False, default=False)
     description = mapped_column(Text, nullable=True)
-    component = relationship("Component", back_populates="port_definitions")
+    component_version = relationship("ComponentVersion", back_populates="port_definitions")
 
-    __table_args__ = (sa.UniqueConstraint("component_id", "name", "port_type", name="unique_component_port"),)
+    __table_args__ = (
+        sa.UniqueConstraint("component_version_id", "name", "port_type", name="unique_component_version_port"),
+    )
 
 
 class PortMapping(Base):

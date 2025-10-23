@@ -10,8 +10,10 @@ from ada_backend.database.models import (
 )
 from ada_backend.database.component_definition_seeding import (
     upsert_component_categories,
+    upsert_component_versions,
     upsert_components,
     upsert_components_parameter_definitions,
+    upsert_release_stage_to_current_version_mapping,
 )
 from ada_backend.database.seed.seed_categories import CATEGORY_UUIDS
 from ada_backend.database.seed.utils import COMPONENT_UUIDS
@@ -23,20 +25,30 @@ def seed_python_code_runner_components(session: Session):
     python_code_runner_component = Component(
         id=COMPONENT_UUIDS["python_code_runner"],
         name="Python Code Runner",
-        description="Execute Python code in a secure sandbox environment.",
         is_agent=False,
         function_callable=True,
         can_use_function_calling=False,
-        release_stage=db.ReleaseStage.PUBLIC,
-        default_tool_description_id=TOOL_DESCRIPTION_UUIDS["python_code_runner_tool_description"],
         icon="logos-python",
     )
     upsert_components(session, [python_code_runner_component])
 
+    python_code_runner_component_version = db.ComponentVersion(
+        id=COMPONENT_UUIDS["python_code_runner"],
+        component_id=COMPONENT_UUIDS["python_code_runner"],
+        version_tag="0.0.1",
+        release_stage=db.ReleaseStage.PUBLIC,
+        description="Execute Python code in a secure sandbox environment.",
+        default_tool_description_id=TOOL_DESCRIPTION_UUIDS["python_code_runner_tool_description"],
+    )
+    upsert_component_versions(
+        session=session,
+        component_versions=[python_code_runner_component_version],
+    )
+
     python_code_runner_parameter_definitions = [
         ComponentParameterDefinition(
             id=UUID("e2b00002-2222-3333-4444-555555555555"),
-            component_id=python_code_runner_component.id,
+            component_version_id=python_code_runner_component_version.id,
             name="timeout",
             type=ParameterType.INTEGER,
             nullable=False,
@@ -59,4 +71,12 @@ def seed_python_code_runner_components(session: Session):
         session=session,
         component_id=python_code_runner_component.id,
         category_ids=[CATEGORY_UUIDS["action"], CATEGORY_UUIDS["processing"]],
+    )
+
+    # Create release stage mapping
+    upsert_release_stage_to_current_version_mapping(
+        session=session,
+        component_id=python_code_runner_component_version.component_id,
+        release_stage=python_code_runner_component_version.release_stage,
+        component_version_id=python_code_runner_component_version.id,
     )

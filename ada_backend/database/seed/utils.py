@@ -130,7 +130,7 @@ class ParameterLLMConfig(BaseModel):
 
 
 def build_completion_service_config_definitions(
-    component_id: UUID,
+    component_version_id: UUID,
     params_to_seed: list[ParameterLLMConfig],
     definitions: list[db.ComponentParameterDefinition] = [],
 ) -> list[db.ComponentParameterDefinition]:
@@ -148,7 +148,7 @@ def build_completion_service_config_definitions(
             definitions.append(
                 db.ComponentParameterDefinition(
                     id=param.param_id,
-                    component_id=component_id,
+                    component_version_id=component_version_id,
                     name=COMPLETION_MODEL_IN_DB,
                     type=ParameterType.STRING,
                     nullable=False,
@@ -164,7 +164,7 @@ def build_completion_service_config_definitions(
             definitions.append(
                 db.ComponentParameterDefinition(
                     id=param.param_id,
-                    component_id=component_id,
+                    component_version_id=component_version_id,
                     name=TEMPERATURE_IN_DB,
                     type=ParameterType.FLOAT,
                     nullable=False,
@@ -186,7 +186,7 @@ def build_completion_service_config_definitions(
             definitions.append(
                 db.ComponentParameterDefinition(
                     id=param.param_id,
-                    component_id=component_id,
+                    component_version_id=component_version_id,
                     name=VERBOSITY_IN_DB,
                     type=ParameterType.STRING,
                     nullable=True,
@@ -209,7 +209,7 @@ def build_completion_service_config_definitions(
             definitions.append(
                 db.ComponentParameterDefinition(
                     id=param.param_id,
-                    component_id=component_id,
+                    component_version_id=component_version_id,
                     name=REASONING_IN_DB,
                     type=ParameterType.STRING,
                     nullable=True,
@@ -232,7 +232,7 @@ def build_completion_service_config_definitions(
             definitions.append(
                 db.ComponentParameterDefinition(
                     id=param.param_id,
-                    component_id=component_id,
+                    component_version_id=component_version_id,
                     name="api_key",
                     type=ParameterType.LLM_API_KEY,
                     nullable=True,
@@ -242,7 +242,7 @@ def build_completion_service_config_definitions(
 
 
 def build_function_calling_service_config_definitions(
-    component_id: UUID,
+    component_version_id: UUID,
     params_to_seed: list[ParameterLLMConfig],
 ) -> list[db.ComponentParameterDefinition]:
     """
@@ -260,7 +260,7 @@ def build_function_calling_service_config_definitions(
             definitions.append(
                 db.ComponentParameterDefinition(
                     id=param.param_id,
-                    component_id=component_id,
+                    component_version_id=component_version_id,
                     name=COMPLETION_MODEL_IN_DB,
                     type=ParameterType.STRING,
                     nullable=False,
@@ -276,7 +276,7 @@ def build_function_calling_service_config_definitions(
             definitions.append(
                 db.ComponentParameterDefinition(
                     id=param.param_id,
-                    component_id=component_id,
+                    component_version_id=component_version_id,
                     name=TEMPERATURE_IN_DB,
                     type=ParameterType.FLOAT,
                     nullable=False,
@@ -297,7 +297,7 @@ def build_function_calling_service_config_definitions(
             definitions.append(
                 db.ComponentParameterDefinition(
                     id=param.param_id,
-                    component_id=component_id,
+                    component_version_id=component_version_id,
                     name="api_key",
                     type=ParameterType.LLM_API_KEY,
                     nullable=True,
@@ -307,7 +307,7 @@ def build_function_calling_service_config_definitions(
 
 
 def build_embedding_service_config_definitions(
-    component_id: UUID,
+    component_version_id: UUID,
     params_to_seed: list[ParameterLLMConfig],
 ) -> list[db.ComponentParameterDefinition]:
     """
@@ -324,7 +324,7 @@ def build_embedding_service_config_definitions(
             definitions.append(
                 db.ComponentParameterDefinition(
                     id=param.param_id,
-                    component_id=component_id,
+                    component_version_id=component_version_id,
                     name=EMBEDDING_MODEL_IN_DB,
                     type=ParameterType.STRING,
                     nullable=False,
@@ -340,7 +340,7 @@ def build_embedding_service_config_definitions(
             definitions.append(
                 db.ComponentParameterDefinition(
                     id=param.param_id,
-                    component_id=component_id,
+                    component_version_id=component_version_id,
                     name="api_key",
                     type=ParameterType.STRING,
                     nullable=False,
@@ -351,7 +351,7 @@ def build_embedding_service_config_definitions(
 
 
 def build_web_service_config_definitions(
-    component_id: UUID,
+    component_version_id: UUID,
     params_to_seed: list[ParameterLLMConfig],
 ) -> list[db.ComponentParameterDefinition]:
     """
@@ -368,7 +368,7 @@ def build_web_service_config_definitions(
             definitions.append(
                 db.ComponentParameterDefinition(
                     id=param.param_id,
-                    component_id=component_id,
+                    component_version_id=component_version_id,
                     name=COMPLETION_MODEL_IN_DB,
                     type=ParameterType.STRING,
                     nullable=False,
@@ -384,7 +384,7 @@ def build_web_service_config_definitions(
             definitions.append(
                 db.ComponentParameterDefinition(
                     id=param.param_id,
-                    component_id=component_id,
+                    component_version_id=component_version_id,
                     name="api_key",
                     type=ParameterType.LLM_API_KEY,
                     nullable=True,
@@ -394,7 +394,7 @@ def build_web_service_config_definitions(
 
 
 def build_ocr_service_config_definitions(
-    component_id: UUID,
+    component_version_id: UUID,
     params_to_seed: list[ParameterLLMConfig],
 ) -> list[db.ComponentParameterDefinition]:
     """
@@ -411,7 +411,7 @@ def build_ocr_service_config_definitions(
             definitions.append(
                 db.ComponentParameterDefinition(
                     id=param.param_id,
-                    component_id=component_id,
+                    component_version_id=component_version_id,
                     name=COMPLETION_MODEL_IN_DB,
                     type=ParameterType.STRING,
                     nullable=False,
@@ -427,7 +427,7 @@ def build_ocr_service_config_definitions(
             definitions.append(
                 db.ComponentParameterDefinition(
                     id=param.param_id,
-                    component_id=component_id,
+                    component_version_id=component_version_id,
                     name="api_key",
                     type=ParameterType.LLM_API_KEY,
                     nullable=True,

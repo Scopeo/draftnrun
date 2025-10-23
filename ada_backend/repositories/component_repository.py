@@ -23,33 +23,11 @@ from ada_backend.database.models import ComponentGlobalParameter
 from ada_backend.database.component_definition_seeding import (
     upsert_components,
     upsert_components_parameter_definitions,
+    upsert_release_stage_to_current_version_mapping,
 )
 from ada_backend.schemas.pipeline.base import ToolDescriptionSchema
 
 LOGGER = logging.getLogger(__name__)
-
-
-def get_global_parameters_by_component_id(
-    session: Session,
-    component_id: UUID,
-) -> list[ComponentGlobalParameter]:
-    return session.query(ComponentGlobalParameter).filter(ComponentGlobalParameter.component_id == component_id).all()
-
-
-def has_global_parameter(
-    session: Session,
-    component_id: UUID,
-    parameter_definition_id: UUID,
-) -> bool:
-    return (
-        session.query(ComponentGlobalParameter)
-        .filter(
-            ComponentGlobalParameter.component_id == component_id,
-            ComponentGlobalParameter.parameter_definition_id == parameter_definition_id,
-        )
-        .first()
-        is not None
-    )
 
 
 @dataclass
@@ -63,6 +41,58 @@ class InstanceParameterWithDefinition:
     ui_component: Optional[UIComponent] = None
     ui_component_properties: Optional[dict] = None
     is_advanced: bool = False
+
+
+@dataclass
+class ComponentWithVersionDTO:
+    component_id: UUID
+    name: str
+    description: Optional[str]
+    component_version_id: UUID
+    version_tag: str
+    release_stage: ReleaseStage
+    is_agent: bool
+    function_callable: Optional[str]
+    can_use_function_calling: bool
+    is_protected: bool
+    integration_id: Optional[UUID]
+    icon: Optional[str] = None
+    default_tool_description_id: Optional[UUID] = None
+
+
+STAGE_HIERARCHY = {
+    ReleaseStage.INTERNAL: [ReleaseStage.INTERNAL, ReleaseStage.EARLY_ACCESS, ReleaseStage.BETA, ReleaseStage.PUBLIC],
+    ReleaseStage.BETA: [ReleaseStage.BETA, ReleaseStage.EARLY_ACCESS, ReleaseStage.PUBLIC],
+    ReleaseStage.EARLY_ACCESS: [ReleaseStage.EARLY_ACCESS, ReleaseStage.PUBLIC],
+    ReleaseStage.PUBLIC: [ReleaseStage.PUBLIC],
+}
+
+
+def get_global_parameters_by_component_version_id(
+    session: Session,
+    component_version_id: UUID,
+) -> list[ComponentGlobalParameter]:
+    return (
+        session.query(ComponentGlobalParameter)
+        .filter(ComponentGlobalParameter.component_version_id == component_version_id)
+        .all()
+    )
+
+
+def has_global_parameter(
+    session: Session,
+    component_version_id: UUID,
+    parameter_definition_id: UUID,
+) -> bool:
+    return (
+        session.query(ComponentGlobalParameter)
+        .filter(
+            ComponentGlobalParameter.component_version_id == component_version_id,
+            ComponentGlobalParameter.parameter_definition_id == parameter_definition_id,
+        )
+        .first()
+        is not None
+    )
 
 
 # --- READ operations ---
@@ -84,7 +114,7 @@ def get_component_by_id(
 
 def get_component_by_name(
     session: Session,
-    name: str,
+    component_name: str,
 ) -> Optional[db.Component]:
     """
     Retrieves a specific component by its name.
@@ -92,17 +122,48 @@ def get_component_by_name(
     return (
         session.query(db.Component)
         .filter(
-            db.Component.name == name,
+            db.Component.name == component_name,
         )
         .first()
     )
 
 
+def get_component_version_by_id(
+    session: Session,
+    component_version_id: UUID,
+) -> Optional[db.ComponentVersion]:
+    """
+    Retrieves a specific component version by its ID.
+    """
+    return (
+        session.query(db.ComponentVersion)
+        .filter(
+            db.ComponentVersion.id == component_version_id,
+        )
+        .first()
+    )
+
+
+def get_component_parameter_definition_by_component_version(
+    session: Session,
+    component_version_id: UUID,
+) -> Optional[db.Component]:
+    return (
+        session.query(db.ComponentParameterDefinition)
+        .filter(
+            db.ComponentParameterDefinition.component_version_id == component_version_id,
+        )
+        .all()
+    )
+
+
 def delete_component_global_parameters(
     session: Session,
-    component_id: UUID,
+    component_version_id: UUID,
 ) -> None:
-    session.query(ComponentGlobalParameter).filter(ComponentGlobalParameter.component_id == component_id).delete()
+    session.query(ComponentGlobalParameter).filter(
+        ComponentGlobalParameter.component_version_id == component_version_id
+    ).delete()
     session.commit()
 
 
@@ -120,7 +181,10 @@ def delete_component_by_id(
 
     instance_ids: List[UUID] = [
         ci.id
-        for ci in session.query(db.ComponentInstance).filter(db.ComponentInstance.component_id == component_id).all()
+        for ci in session.query(db.ComponentInstance)
+        .join(db.ComponentVersion, db.ComponentInstance.component_version_id == db.ComponentVersion.id)
+        .filter(db.ComponentVersion.component_id == component_id)
+        .all()
     ]
     if instance_ids:
         delete_component_instances(session, component_instance_ids=instance_ids)
@@ -130,8 +194,9 @@ def delete_component_by_id(
         d.id
         for d in (
             session.query(db.ComponentParameterDefinition)
+            .join(db.ComponentVersion, db.ComponentParameterDefinition.component_version_id == db.ComponentVersion.id)
             .filter(
-                db.ComponentParameterDefinition.component_id == component_id,
+                db.ComponentVersion.component_id == component_id,
             )
             .all()
         )
@@ -147,8 +212,9 @@ def delete_component_by_id(
 
     (
         session.query(db.ComponentParameterDefinition)
+        .join(db.ComponentVersion, db.ComponentParameterDefinition.component_version_id == db.ComponentVersion.id)
         .filter(
-            db.ComponentParameterDefinition.component_id == component_id,
+            db.ComponentVersion.component_id == component_id,
         )
         .delete(synchronize_session=False)
     )
@@ -167,25 +233,9 @@ def delete_component_by_id(
     return True
 
 
-def get_component_parameter_definition_by_component_id(
+def get_subcomponent_param_def_by_component_version(
     session: Session,
-    component_id: UUID,
-) -> list[db.ComponentParameterDefinition]:
-    """
-    Retrieves all parameter definitions for a given component.
-    """
-    return (
-        session.query(db.ComponentParameterDefinition)
-        .filter(
-            db.ComponentParameterDefinition.component_id == component_id,
-        )
-        .all()
-    )
-
-
-def get_subcomponent_param_def_by_component_id(
-    session: Session,
-    component_id: UUID,
+    component_version_id: UUID,
 ) -> list[tuple[db.ComponentParameterDefinition, db.ComponentParameterChildRelationship]]:
     return (
         session.query(db.ComponentParameterDefinition, db.ComponentParameterChildRelationship)
@@ -195,7 +245,7 @@ def get_subcomponent_param_def_by_component_id(
             == db.ComponentParameterDefinition.id,
         )
         .filter(
-            db.ComponentParameterDefinition.component_id == component_id,
+            db.ComponentParameterDefinition.component_version_id == component_version_id,
             db.ComponentParameterDefinition.type == ParameterType.COMPONENT,
         )
         .all()
@@ -297,6 +347,48 @@ def get_component_sub_components(
     )
 
 
+def get_component_name_from_instance(
+    session: Session,
+    component_instance_id: UUID,
+) -> Optional[str]:
+    """
+    Retrieves the component name associated with a specific component instance.
+    """
+    result = (
+        session.query(db.Component.name)
+        .join(
+            db.ComponentVersion,
+            db.Component.id == db.ComponentVersion.component_id,
+        )
+        .join(
+            db.ComponentInstance,
+            db.ComponentInstance.component_version_id == db.ComponentVersion.id,
+        )
+        .filter(db.ComponentInstance.id == component_instance_id)
+        .first()
+    )
+    return result[0] if result else None
+
+
+def get_base_component_from_version(
+    session: Session,
+    component_version_id: UUID,
+) -> Optional[str]:
+    """
+    Retrieves the base component name associated with a specific component version.
+    """
+    result = (
+        session.query(db.Component.base_component)
+        .join(
+            db.ComponentVersion,
+            db.Component.id == db.ComponentVersion.component_id,
+        )
+        .filter(db.ComponentVersion.id == component_version_id)
+        .first()
+    )
+    return result[0] if result else None
+
+
 def get_tool_description(
     session: Session,
     component_instance_id: UUID,
@@ -317,18 +409,18 @@ def get_tool_description(
 
 def get_tool_description_component(
     session: Session,
-    component_id: UUID,
+    component_version_id: UUID,
 ) -> Optional[db.ToolDescription]:
     """
-    Retrieves the tool description associated with a specific component.
+    Retrieves the tool description associated with a specific component version id.
     """
     return (
         session.query(db.ToolDescription)
         .join(
-            db.Component,
-            db.Component.default_tool_description_id == db.ToolDescription.id,
+            db.ComponentVersion,
+            db.ComponentVersion.default_tool_description_id == db.ToolDescription.id,
         )
-        .filter(db.Component.id == component_id)
+        .filter(db.ComponentVersion.id == component_version_id)
         .first()
     )
 
@@ -354,41 +446,89 @@ def is_tool_description_default_for_component(
     tool_description_id: UUID,
 ) -> bool:
     """
-    Checks if a tool description is used as a default tool description for any component.
+    Checks if a tool description is used as a default tool description for any component version.
     Returns True if it's a default tool description, False otherwise.
     """
-    count = session.query(db.Component).filter(db.Component.default_tool_description_id == tool_description_id).count()
+    count = (
+        session.query(db.ComponentVersion)
+        .filter(db.ComponentVersion.default_tool_description_id == tool_description_id)
+        .count()
+    )
     return count > 0
 
 
-def get_tool_parameter_by_component_id(
+def get_tool_parameter_by_component_version(
     session: Session,
-    component_id: UUID,
-) -> Optional[db.Component]:
+    component_version_id: UUID,
+) -> Optional[db.ComponentParameterDefinition]:
     """
     Retrieves the tool component associated with a specific component instance.
     """
     return (
         session.query(db.ComponentParameterDefinition)
         .filter(
-            db.ComponentParameterDefinition.component_id == component_id,
+            db.ComponentParameterDefinition.component_version_id == component_version_id,
             db.ComponentParameterDefinition.type == ParameterType.TOOL,
         )
         .first()
     )
 
 
+def get_current_component_versions(
+    session: Session,
+    allowed_stages: Optional[List[ReleaseStage]],
+) -> list[ComponentWithVersionDTO]:
+    """
+    Retrieves the current version of all components.
+    """
+
+    query = (
+        session.query(db.Component, db.ComponentVersion)
+        .join(db.Component, db.Component.id == db.ComponentVersion.component_id)
+        .join(
+            db.ReleaseStageToCurrentVersionMapping,
+            db.ReleaseStageToCurrentVersionMapping.component_id == db.Component.id,
+        )
+        .filter(db.ReleaseStageToCurrentVersionMapping.release_stage.in_(allowed_stages))
+    )
+
+    result = query.all()
+
+    return [
+        ComponentWithVersionDTO(
+            component_id=comp.id,
+            name=comp.name,
+            icon=comp.icon,
+            description=ver.description,
+            component_version_id=ver.id,
+            version_tag=ver.version_tag,
+            release_stage=ver.release_stage,
+            is_agent=comp.is_agent,
+            function_callable=comp.function_callable,
+            can_use_function_calling=comp.can_use_function_calling,
+            is_protected=comp.is_protected,
+            integration_id=ver.integration_id,
+            default_tool_description_id=ver.default_tool_description_id,
+        )
+        for comp, ver in result
+    ]
+
+
 # TODO: Put in service layer or write as query
-def get_canonical_ports_for_components(
-    session: Session, component_ids: list[UUID]
+def get_canonical_ports_for_component_versions(
+    session: Session, component_version_ids: list[UUID]
 ) -> dict[UUID, dict[str, Optional[str]]]:
-    if not component_ids:
+    if not component_version_ids:
         return {}
-    ports = session.query(db.PortDefinition).filter(db.PortDefinition.component_id.in_(component_ids)).all()
+    ports = (
+        session.query(db.PortDefinition)
+        .filter(db.PortDefinition.component_version_id.in_(component_version_ids))
+        .all()
+    )
     result: dict[UUID, dict[str, Optional[str]]] = {}
     for p in ports:
         if p.is_canonical:
-            entry = result.setdefault(p.component_id, {})
+            entry = result.setdefault(p.component_version_id, {})
             if p.port_type == db.PortType.INPUT:
                 entry["input"] = p.name
             elif p.port_type == db.PortType.OUTPUT:
@@ -396,18 +536,22 @@ def get_canonical_ports_for_components(
     return result
 
 
-def get_port_definitions_for_component_ids(
+def get_port_definitions_for_component_version_ids(
     session: Session,
-    component_ids: list[UUID],
+    component_version_ids: list[UUID],
 ) -> list[db.PortDefinition]:
-    if not component_ids:
+    if not component_version_ids:
         return []
-    return session.query(db.PortDefinition).filter(db.PortDefinition.component_id.in_(component_ids)).all()
+    return (
+        session.query(db.PortDefinition)
+        .filter(db.PortDefinition.component_version_id.in_(component_version_ids))
+        .all()
+    )
 
 
 def get_all_components_with_parameters(
     session: Session,
-    allowed_stages: Optional[List[ReleaseStage]] = None,
+    allowed_stages: Optional[List[ReleaseStage]],
 ) -> List[ComponentWithParametersDTO]:
     """
     Retrieves all components and their parameter definitions from the database.
@@ -422,28 +566,24 @@ def get_all_components_with_parameters(
         List[ComponentWithParametersDTO]: A list of DTOs containing components,
         their tools (component parameters) and other parameter definitions.
     """
-    if allowed_stages:
-
-        components = session.query(db.Component).filter(db.Component.release_stage.in_(allowed_stages)).all()
-    else:
-        components = session.query(db.Component).all()
+    components_with_version = get_current_component_versions(session, allowed_stages)
 
     # For each component, get its parameter definitions and build result
     result = []
-    for component in components:
+    for component_with_version in components_with_version:
         try:
-            parameters = get_component_parameter_definition_by_component_id(
+            parameters = get_component_parameter_definition_by_component_version(
                 session,
-                component.id,
+                component_with_version.component_version_id,
             )
 
             # Hide parameters enforced globally for this component from the UI
-            global_params = get_global_parameters_by_component_id(session, component.id)
+            global_params = get_global_parameters_by_component_version_id(session, component_with_version.component_id)
             global_param_def_ids = {gp.parameter_definition_id for gp in global_params}
 
-            subcomponent_params = get_subcomponent_param_def_by_component_id(
+            subcomponent_params = get_subcomponent_param_def_by_component_version(
                 session,
-                component.id,
+                component_with_version.component_version_id,
             )
 
             parameters_to_fill = []
@@ -454,7 +594,7 @@ def get_all_components_with_parameters(
                         tool_param_name = param.name
                     else:
                         raise ValueError(
-                            f"Multiple tool parameters found for component {component.name}: "
+                            f"Multiple tool parameters found for component {component_with_version.name}: "
                             f"{tool_param_name}, {param.name}"
                         )
                 elif param.type != ParameterType.COMPONENT:
@@ -464,7 +604,7 @@ def get_all_components_with_parameters(
                     parameters_to_fill.append(
                         ComponentParamDefDTO(
                             id=param.id,
-                            component_id=param.component_id,
+                            component_version_id=param.component_version_id,
                             name=param.name,
                             type=param.type,
                             nullable=param.nullable,
@@ -476,7 +616,9 @@ def get_all_components_with_parameters(
                         )
                     )
 
-            default_tool_description_db = get_tool_description_component(session=session, component_id=component.id)
+            default_tool_description_db = get_tool_description_component(
+                session=session, component_version_id=component_with_version.component_version_id
+            )
             tool_description = (
                 ToolDescriptionSchema(
                     id=default_tool_description_db.id,
@@ -488,50 +630,52 @@ def get_all_components_with_parameters(
                 if default_tool_description_db
                 else None
             )
-            if component.integration_id:
-                integration = get_integration(session, component.integration_id)
+            if component_with_version.integration_id:
+                integration = get_integration(session, component_with_version.integration_id)
             # Create ComponentWithParametersDTO
             result.append(
                 ComponentWithParametersDTO(
-                    id=component.id,
-                    name=component.name,
-                    description=component.description,
-                    is_agent=component.is_agent,
+                    id=component_with_version.component_id,
+                    name=component_with_version.name,
+                    component_version_id=component_with_version.component_version_id,
+                    version_tag=component_with_version.version_tag,
+                    description=component_with_version.description,
+                    is_agent=component_with_version.is_agent,
                     integration=(
                         IntegrationSchema(
                             id=integration.id,
                             name=integration.name,
                             service=integration.service,
                         )
-                        if component.integration_id
+                        if component_with_version.integration_id
                         else None
                     ),
                     tool_parameter_name=tool_param_name,
-                    function_callable=component.function_callable,
-                    release_stage=component.release_stage,
-                    can_use_function_calling=component.can_use_function_calling,
+                    function_callable=component_with_version.function_callable,
+                    release_stage=component_with_version.release_stage,
+                    can_use_function_calling=component_with_version.can_use_function_calling,
                     tool_description=tool_description,
                     parameters=parameters_to_fill,
-                    icon=component.icon,
+                    icon=component_with_version.icon,
                     subcomponents_info=[
                         SubComponentParamSchema(
-                            id=param_child_def.child_component_id,
+                            component_version_id=param_child_def.child_component_version_id,
                             parameter_name=subcomponent_param.name,
                             is_optional=subcomponent_param.nullable,
                         )
                         for subcomponent_param, param_child_def in subcomponent_params
                     ],
-                    categories=fetch_associated_category_names(session, component.id),
+                    categories=fetch_associated_category_names(session, component_with_version.component_id),
                 )
             )
         except Exception as e:
-            LOGGER.error(f"Error getting component {component.name}: {e}")
+            LOGGER.error(f"Error getting component {component_with_version.name}: {e}")
     return result
 
 
 def insert_component_parameter_definition(
     session: Session,
-    component_id: UUID,
+    component_version_id: UUID,
     name: str,
     param_type: ParameterType,
     nullable: bool,
@@ -544,7 +688,7 @@ def insert_component_parameter_definition(
     Inserts a new component parameter definition into the database.
     """
     component_parameter_definition = db.ComponentParameterDefinition(
-        component_id=component_id,
+        component_version_id=component_version_id,
         name=name,
         type=param_type,
         nullable=nullable,
@@ -561,7 +705,7 @@ def insert_component_parameter_definition(
 
 def upsert_component_instance(
     session: Session,
-    component_id: UUID,
+    component_version_id: UUID,
     name: Optional[str] = None,
     ref: Optional[str] = None,
     tool_description_id: Optional[UUID] = None,
@@ -572,13 +716,13 @@ def upsert_component_instance(
     If id_ is provided, performs an upsert operation.
     If id_ is not provided, creates a new instance.
     """
-    if not component_id:
+    if not component_version_id:
         raise ValueError(
-            "Impossible to create a component instance without a component",
+            "Impossible to create a component instance without a component version",
         )
 
     component_instance = db.ComponentInstance(
-        component_id=component_id,
+        component_version_id=component_version_id,
         name=name,
         ref=ref,
         tool_description_id=tool_description_id,
@@ -608,14 +752,14 @@ def upsert_basic_parameter(
     component_instance_id and parameter_definition_id exists, updates it.
     """
     # Prevent overriding global parameters
-    parent_component_id = (
-        session.query(db.ComponentInstance.component_id)
+    parent_component_version_id = (
+        session.query(db.ComponentInstance.component_version_id)
         .filter(db.ComponentInstance.id == component_instance_id)
         .scalar()
     )
-    if parent_component_id and has_global_parameter(
+    if parent_component_version_id and has_global_parameter(
         session,
-        component_id=parent_component_id,
+        component_version_id=parent_component_version_id,
         parameter_definition_id=parameter_definition_id,
     ):
         raise ValueError("This parameter is enforced globally for the component and cannot be set per instance.")
@@ -834,28 +978,36 @@ def upsert_specific_api_component_with_defaults(
     headers_json: Optional[str],
     timeout_val: Optional[int],
     fixed_params_json: Optional[str],
-) -> db.Component:
+) -> db.ComponentVersion:
     """
     Ensure a specific API component exists with default parameter definitions.
 
     Returns the component.
     """
     component = get_component_by_name(session, tool_display_name)
-    if not component:
-        component = db.Component(
-            name=tool_display_name,
-            base_component="API Call",
-            description=f"Preconfigured API tool for {tool_display_name}.",
-            is_agent=False,
-            function_callable=True,
-            can_use_function_calling=False,
-            release_stage=db.ReleaseStage.INTERNAL,
-        )
-        upsert_components(session, [component])
+    if component:
+        raise ValueError(f"Component {tool_display_name} already exists")
+    component = db.Component(
+        name=tool_display_name,
+        base_component="API Call",
+        is_agent=False,
+        function_callable=True,
+        can_use_function_calling=False,
+    )
+    upsert_components(session, [component])
+    component_version = db.ComponentVersion(
+        component_id=component.id,
+        description=f"Preconfigured API tool for {tool_display_name}.",
+        release_stage=db.ReleaseStage.INTERNAL,
+        version_tag="0.0.1",
+    )
+    session.add(component_version)
+    session.commit()
+    session.refresh(component_version)
 
     param_defs = [
         db.ComponentParameterDefinition(
-            component_id=component.id,
+            component_version_id=component_version.id,
             name="endpoint",
             type=ParameterType.STRING,
             nullable=False,
@@ -868,7 +1020,7 @@ def upsert_specific_api_component_with_defaults(
             ).model_dump(exclude_unset=True, exclude_none=True),
         ),
         db.ComponentParameterDefinition(
-            component_id=component.id,
+            component_version_id=component_version.id,
             name="method",
             type=ParameterType.STRING,
             nullable=False,
@@ -886,7 +1038,7 @@ def upsert_specific_api_component_with_defaults(
             ).model_dump(exclude_unset=True, exclude_none=True),
         ),
         db.ComponentParameterDefinition(
-            component_id=component.id,
+            component_version_id=component_version.id,
             name="headers",
             type=ParameterType.JSON,
             nullable=True,
@@ -898,7 +1050,7 @@ def upsert_specific_api_component_with_defaults(
             ).model_dump(exclude_unset=True, exclude_none=True),
         ),
         db.ComponentParameterDefinition(
-            component_id=component.id,
+            component_version_id=component_version.id,
             name="timeout",
             type=ParameterType.INTEGER,
             nullable=True,
@@ -914,7 +1066,7 @@ def upsert_specific_api_component_with_defaults(
             is_advanced=True,
         ),
         db.ComponentParameterDefinition(
-            component_id=component.id,
+            component_version_id=component_version.id,
             name="fixed_parameters",
             type=ParameterType.JSON,
             nullable=True,
@@ -928,31 +1080,34 @@ def upsert_specific_api_component_with_defaults(
     ]
 
     upsert_components_parameter_definitions(session, param_defs)
-    return component
+    upsert_release_stage_to_current_version_mapping(
+        session, component.id, component_version.release_stage, component_version.id
+    )
+    return component_version
 
 
-def set_component_default_tool_description(
+def set_component_version_default_tool_description(
     session: Session,
-    component_id: UUID,
+    component_version_id: UUID,
     tool_description_id: UUID,
-) -> db.Component:
-    component = get_component_by_id(session, component_id)
-    if component is None:
-        raise ValueError("Component not found when setting default tool description")
-    component.default_tool_description_id = tool_description_id
+) -> db.ComponentVersion:
+    component_version = get_component_version_by_id(session, component_version_id)
+    if component_version is None:
+        raise ValueError("Component version not found when setting default tool description")
+    component_version.default_tool_description_id = tool_description_id
     session.commit()
-    session.refresh(component)
-    return component
+    session.refresh(component_version)
+    return component_version
 
 
 def insert_component_global_parameter(
     session: Session,
-    component_id: UUID,
+    component_version_id: UUID,
     parameter_definition_id: UUID,
     value: str,
 ) -> ComponentGlobalParameter:
     global_param = ComponentGlobalParameter(
-        component_id=component_id,
+        component_version_id=component_version_id,
         parameter_definition_id=parameter_definition_id,
         value=value,
     )
