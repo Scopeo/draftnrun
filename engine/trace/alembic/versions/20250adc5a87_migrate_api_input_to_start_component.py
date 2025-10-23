@@ -22,8 +22,8 @@ def upgrade() -> None:
     # Update span names from "API Input" to "Start" in the spans table
     op.execute(
         """
-        UPDATE spans 
-        SET name = 'Start' 
+        UPDATE spans
+        SET name = 'Start'
         WHERE name = 'API Input'
         """
     )
@@ -33,8 +33,8 @@ def downgrade() -> None:
     # Revert span names from "Start" back to "API Input" in the spans table
     op.execute(
         """
-        UPDATE spans 
-        SET name = 'API Input' 
+        UPDATE spans
+        SET name = 'API Input'
         WHERE name = 'Start'
         """
     )

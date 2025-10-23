@@ -9,7 +9,6 @@ Create Date: 2025-01-03 00:00:00.000000
 from typing import Sequence, Union
 
 from alembic import op
-import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
@@ -23,8 +22,8 @@ def upgrade() -> None:
     # Update component name and description from "API Input" to "Start" in the components table
     op.execute(
         """
-        UPDATE components 
-        SET name = 'Start', 
+        UPDATE components
+        SET name = 'Start',
             description = 'Start node that receives initial workflow input and configures triggers'
         WHERE name = 'API Input'
         """
@@ -33,16 +32,16 @@ def upgrade() -> None:
     # Update component instance names and refs from "API Input" to "Start"
     op.execute(
         """
-        UPDATE component_instances 
-        SET name = 'Start' 
+        UPDATE component_instances
+        SET name = 'Start'
         WHERE name = 'API Input'
         """
     )
 
     op.execute(
         """
-        UPDATE component_instances 
-        SET ref = 'Start' 
+        UPDATE component_instances
+        SET ref = 'Start'
         WHERE ref = 'API Input'
         """
     )
@@ -50,7 +49,7 @@ def upgrade() -> None:
     # Remove Trigger category association for the Input/Start component
     op.execute(
         """
-        DELETE FROM component_categories 
+        DELETE FROM component_categories
         WHERE component_id IN (
             SELECT id FROM components WHERE name IN ('API Input', 'Start')
         )
@@ -65,7 +64,7 @@ def downgrade() -> None:
     # Revert component name and description from "Start" back to "API Input" in the components table
     op.execute(
         """
-        UPDATE components 
+        UPDATE components
         SET name = 'API Input',
             description = 'This block is triggered by an API call'
         WHERE name = 'Start'
@@ -75,16 +74,16 @@ def downgrade() -> None:
     # Revert component instance names and refs from "Start" back to "API Input"
     op.execute(
         """
-        UPDATE component_instances 
-        SET name = 'API Input' 
+        UPDATE component_instances
+        SET name = 'API Input'
         WHERE name = 'Start'
         """
     )
 
     op.execute(
         """
-        UPDATE component_instances 
-        SET ref = 'API Input' 
+        UPDATE component_instances
+        SET ref = 'API Input'
         WHERE ref = 'Start'
         """
     )
@@ -97,7 +96,7 @@ def downgrade() -> None:
         FROM components c, categories cat
         WHERE c.name = 'API Input' AND cat.name = 'Trigger'
         AND NOT EXISTS (
-            SELECT 1 FROM component_categories cc 
+            SELECT 1 FROM component_categories cc
             WHERE cc.component_id = c.id AND cc.category_id = cat.id
         )
         """
