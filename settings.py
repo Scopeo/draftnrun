@@ -76,13 +76,14 @@ class BaseConfig(BaseSettings):
     ADA_API_KEY: Optional[str] = None
 
     # Database settings
-    ADA_DB_DRIVER: str = "sqlite"
+    ADA_DB_DRIVER: str = "postgresql"
     ADA_DB_HOST: Optional[str] = None
     ADA_DB_PORT: int = 5432
     ADA_DB_USER: Optional[str] = None
     ADA_DB_PASSWORD: Optional[str] = None
     ADA_DB_NAME: Optional[str] = None
     ADA_DB_URL: Optional[str] = None
+    ADA_TEST_DB_URL: Optional[str] = None
 
     # Ingestion database settings
     INGESTION_DB_URL: Optional[str] = None
@@ -150,38 +151,28 @@ class BaseConfig(BaseSettings):
     def sync_db_settings(cls, values):
         url = values.ADA_DB_URL
 
-        if values.ADA_DB_DRIVER == "sqlite":
-            if not url:
-                raise ValidationError("ADA_DB_URL is required for SQLite")
-            return values
-
-        has_url = bool(url)
-        has_components = any([values.ADA_DB_HOST, values.ADA_DB_USER, values.ADA_DB_PASSWORD, values.ADA_DB_NAME])
-
-        if has_url and has_components and values.ADA_DB_DRIVER != "sqlite":
-            raise ValidationError("You cannot define ADA_DB_URL and individual components simultaneously")
-
         if url:
             parsed = urlparse(url)
-            if parsed.scheme.startswith("postgresql"):
-                values.ADA_DB_DRIVER = "postgresql"
-                values.ADA_DB_HOST = parsed.hostname
-                values.ADA_DB_PORT = parsed.port or 5432
-                values.ADA_DB_USER = parsed.username
-                values.ADA_DB_PASSWORD = parsed.password
-                values.ADA_DB_NAME = parsed.path.lstrip("/") if parsed.path else None
-
+            if not parsed.scheme.startswith("postgresql"):
+                raise ValidationError("ADA_DB_URL must use a PostgreSQL scheme")
+            values.ADA_DB_DRIVER = "postgresql"
+            values.ADA_DB_HOST = parsed.hostname
+            values.ADA_DB_PORT = parsed.port or 5432
+            values.ADA_DB_USER = parsed.username
+            values.ADA_DB_PASSWORD = parsed.password
+            values.ADA_DB_NAME = parsed.path.lstrip("/") if parsed.path else None
         elif all(
-            [values.ADA_DB_DRIVER, values.ADA_DB_HOST, values.ADA_DB_USER, values.ADA_DB_PASSWORD, values.ADA_DB_NAME]
+            [values.ADA_DB_HOST, values.ADA_DB_USER, values.ADA_DB_PASSWORD, values.ADA_DB_NAME]
         ):
-            driver = values.ADA_DB_DRIVER
             host = values.ADA_DB_HOST
             port = values.ADA_DB_PORT or 5432
             user = values.ADA_DB_USER
             password = values.ADA_DB_PASSWORD
             name = values.ADA_DB_NAME
-
-            values.ADA_DB_URL = f"{driver}://{user}:{password}@{host}:{port}/{name}"
+            values.ADA_DB_DRIVER = "postgresql"
+            values.ADA_DB_URL = f"postgresql://{user}:{password}@{host}:{port}/{name}"
+        else:
+            raise ValidationError("ADA_DB_URL must be provided for PostgreSQL deployments")
 
         return values
 

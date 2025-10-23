@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from croniter import croniter
 import pytz
 
-from ada_backend.database.models import CronJob
+from ada_backend.database.models import CronJob, EnvType
 from ada_backend.repositories.cron_repository import (
     get_cron_job,
     get_cron_jobs_by_organization,
@@ -44,6 +44,10 @@ from ada_backend.services.cron.errors import (
 from ada_backend.services.cron.constants import CRON_MIN_INTERVAL_MINUTES
 
 LOGGER = logging.getLogger(__name__)
+
+# Backend implementation detail: All cron jobs internally target production environment
+# This is transparent to frontend - they just define crons at project level
+CRON_TARGET_ENV = EnvType.PRODUCTION
 
 
 def _validate_cron_expression(cron_expr: str):
@@ -169,7 +173,11 @@ def create_cron_job(
     cron_data: CronJobCreate,
     **kwargs,  # For user_id, etc.
 ) -> CronJobResponse:
-    """Create a cron job and schedule it."""
+    """Create a cron job and schedule it.
+
+    IMPORTANT: Only ONE cron job per project is allowed.
+    Note: Environment targeting (production) is handled internally by the backend.
+    """
     _validate_cron_expression(cron_data.cron_expr)
     _validate_timezone(cron_data.tz)
     _validate_maximum_frequency(cron_data.cron_expr)
@@ -181,6 +189,22 @@ def create_cron_job(
         organization_id=organization_id,
         **kwargs,
     )
+
+    # Check if this is an agent_inference job for a project
+    if cron_data.entrypoint == CronEntrypoint.AGENT_INFERENCE:
+        project_id = execution_payload.get("project_id")
+        if project_id:
+            # Check if a cron job already exists for this project (only one allowed per project)
+            existing_jobs = get_cron_jobs_by_organization(session, organization_id, enabled_only=False)
+            for job in existing_jobs:
+                job_payload = job.payload or {}
+                # Only check project_id since we always use production environment internally
+                if job_payload.get("project_id") == project_id:
+                    raise CronValidationError(
+                        f"A cron job already exists for this project. "
+                        f"Only one cron job per project is allowed. "
+                        f"Please update or delete the existing job (ID: {job.id}) instead."
+                    )
 
     cron_id = uuid.uuid4()
 
@@ -354,3 +378,9 @@ def get_cron_runs(
         runs=runs,
         total=len(runs),
     )
+
+
+# NOTE: sync_project_cron_jobs function has been removed
+# Cron jobs should be managed through standard CRUD operations (create/update/delete)
+# Start nodes only contain payload schema, not cron configuration
+# Use the /projects/{project_id}/sync-cron-payload endpoint to sync input_data from Start node defaults

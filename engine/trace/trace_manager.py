@@ -70,7 +70,8 @@ class TraceManager:
         if params:
             attributes["organization_id"] = params.organization_id
             attributes["organization_llm_providers"] = params.organization_llm_providers
-            attributes["conversation_id"] = params.conversation_id
+            if params.conversation_id is not None:
+                attributes["conversation_id"] = params.conversation_id
 
             if params.project_id:
                 attributes["project_id"] = params.project_id

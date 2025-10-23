@@ -10,7 +10,7 @@ from sqlalchemy import select, exists
 from ada_backend.database import models as db
 from ada_backend.database.seed.utils import COMPONENT_UUIDS
 from ada_backend.schemas.pipeline.graph_schema import ComponentNodeDTO
-from ada_backend.repositories.utils import create_input_component
+from ada_backend.repositories.utils import create_start_component
 
 
 LOGGER = logging.getLogger(__name__)
@@ -63,7 +63,7 @@ def insert_graph_runner(
     graph_runner = db.GraphRunner(id=graph_id)
     session.add(graph_runner)
     if add_input:
-        add_input_component_to_graph(session, graph_id)
+        add_start_component_to_graph(session, graph_id)
     session.commit()
     return graph_runner
 
@@ -181,9 +181,9 @@ def get_start_components(session: Session, graph_runner_id: UUID) -> list[db.Com
     )
 
 
-def get_input_component(session: Session, graph_runner_id: UUID) -> db.ComponentInstance:
+def get_start_component(session: Session, graph_runner_id: UUID) -> db.ComponentInstance:
     """
-    Retrieve input nodes of a graph.
+    Retrieve start nodes of a graph.
     source_node_id is None
     """
     return (
@@ -192,7 +192,7 @@ def get_input_component(session: Session, graph_runner_id: UUID) -> db.Component
         .join(db.Component, db.Component.id == db.ComponentInstance.component_id)
         .filter(
             db.GraphRunnerNode.graph_runner_id == graph_runner_id,
-            db.Component.id == COMPONENT_UUIDS["input"],
+            db.Component.id == COMPONENT_UUIDS["start"],
             db.GraphRunnerNode.is_start_node.is_(True),
         )
         .first()
@@ -236,27 +236,27 @@ def delete_graph_runner(session: Session, graph_id: UUID) -> None:
 
 
 # TODO: move to service
-def add_input_component_to_graph(session: Session, graph_runner_id: UUID) -> db.ComponentInstance:
+def add_start_component_to_graph(session: Session, graph_runner_id: UUID) -> db.ComponentInstance:
     """
-    Adds an input component as a start node to the graph runner.
+    Adds a start component as a start node to the graph runner.
 
     Args:
         session (Session): SQLAlchemy session
         graph_runner_id (UUID): ID of the graph runner
 
     Returns:
-        ComponentInstance: The created input component instance
+        ComponentInstance: The created start component instance
     """
-    # Create input component instance
-    input_component = create_input_component(session)
+    # Create start component instance
+    start_component = create_start_component(session)
 
     # Add it as a start node to the graph
     upsert_component_node(
-        session=session, graph_runner_id=graph_runner_id, component_instance_id=input_component.id, is_start_node=True
+        session=session, graph_runner_id=graph_runner_id, component_instance_id=start_component.id, is_start_node=True
     )
 
     session.commit()
-    return input_component
+    return start_component
 
 
 def delete_temp_folder(uuid_for_temp_folder: str) -> None:

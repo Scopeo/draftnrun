@@ -1,5 +1,6 @@
 from uuid import uuid4
 from fastapi.testclient import TestClient
+import pytest
 
 from ada_backend.main import app
 from ada_backend.database.seed.utils import COMPONENT_UUIDS
@@ -19,6 +20,12 @@ HEADERS_API_KEY = {
     "Content-Type": "application/json",
 }
 TEST_PROJECT_ID = str(uuid4())
+
+
+@pytest.fixture(params=["input", "start"])
+def workflow_node_type(request):
+    """Fixture that provides both 'input' and 'start' node types for testing."""
+    return request.param
 
 
 def test_create_project():
@@ -73,17 +80,35 @@ def test_get_project():
     assert len(project["graph_runners"]) > 0
 
 
-def test_check_project_has_input_component():
-    endpoint = f"/projects/{TEST_PROJECT_ID}"
+def test_check_project_has_input_component(workflow_node_type):
+    # Create a new project for this test
+    project_uuid = str(uuid4())
+    project_payload = {
+        "project_id": project_uuid,
+        "project_name": f"test_project_{workflow_node_type}_{project_uuid}",
+        "description": f"Test project for {workflow_node_type} node validation",
+    }
+
+    # Create the project
+    create_response = client.post(f"/projects/{ORGANIZATION_ID}", headers=HEADERS_JWT, json=project_payload)
+    assert create_response.status_code == 200
+
+    # Get the project details
+    endpoint = f"/projects/{project_uuid}"
     response = client.get(endpoint, headers=HEADERS_JWT)
     project = response.json()
+    assert response.status_code == 200
 
     graph_runner_id = project["graph_runners"][0]["graph_runner_id"]
-    endpoint = f"/projects/{TEST_PROJECT_ID}/graph/{graph_runner_id}"
+    endpoint = f"/projects/{project_uuid}/graph/{graph_runner_id}"
     response = client.get(endpoint, headers=HEADERS_JWT)
     graph_description = response.json()
     assert response.status_code == 200
-    assert graph_description["component_instances"][0]["component_id"] == str(COMPONENT_UUIDS["input"])
+
+    # The default workflow always uses the "start" component, regardless of the fixture parameter
+    # This test validates that the default workflow configuration is correct
+    expected_component_id = str(COMPONENT_UUIDS["start"])
+    assert graph_description["component_instances"][0]["component_id"] == expected_component_id
 
 
 def test_update_project():

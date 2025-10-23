@@ -1,8 +1,11 @@
 from uuid import uuid4
 from fastapi.testclient import TestClient
+import pytest
+import json
 
 from ada_backend.main import app
 from ada_backend.scripts.get_supabase_token import get_user_jwt
+from ada_backend.database.seed.utils import COMPONENT_UUIDS
 from settings import settings
 
 client = TestClient(app)
@@ -13,8 +16,20 @@ HEADERS_JWT = {
     "Authorization": f"Bearer {JWT_TOKEN}",
 }
 
-# JSON constants for test workflow configuration
-DEFAULT_PAYLOAD_SCHEMA = {"messages": [{"role": "user", "content": "Hello"}], "additional_info": "info"}
+DEFAULT_PAYLOAD_SCHEMA = json.dumps(
+    {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "properties": {
+            "messages": {
+                "type": "array",
+                "items": {"type": "object", "properties": {"role": {"type": "string"}, "content": {"type": "string"}}},
+                "default": [{"role": "user", "content": "Hello"}],
+            },
+            "additional_info": {"type": "string", "default": "info"},
+        },
+    }
+)
 
 DEFAULT_FILTER_SCHEMA = {
     "type": "object",
@@ -64,6 +79,133 @@ DEFAULT_FILTER_SCHEMA = {
     },
     "required": ["messages"],
 }
+
+
+@pytest.fixture(params=["input", "start"])
+def workflow_node_type(request):
+    """Fixture that provides both 'input' and 'start' node types for testing."""
+    return request.param
+
+
+@pytest.fixture
+def dummy_agent_workflow_config(workflow_node_type):
+    """Create dummy agent workflow configuration with either input or start node."""
+    # Create dummy UUIDs for the workflow components
+    api_input_id = str(uuid4())
+    filter_id = str(uuid4())
+    edge_id = str(uuid4())
+
+    # Choose component ID based on node type
+    component_id = str(COMPONENT_UUIDS[workflow_node_type])
+    component_name = "API Input" if workflow_node_type == "input" else "Start"
+    component_ref = "API Input" if workflow_node_type == "input" else "Start"
+    if workflow_node_type == "input":
+        component_description = "This block is triggered by an API call"
+    else:
+        component_description = "Start node that receives initial workflow input and configures triggers"
+
+    return {
+        "component_instances": [
+            {
+                "is_agent": True,
+                "is_protected": True,
+                "function_callable": False,
+                "can_use_function_calling": False,
+                "release_stage": "beta",
+                "tool_parameter_name": None,
+                "subcomponents_info": [],
+                "id": api_input_id,
+                "name": component_name,
+                "ref": component_ref,
+                "is_start_node": True,
+                "component_id": component_id,
+                "parameters": [
+                    {
+                        "value": DEFAULT_PAYLOAD_SCHEMA,
+                        "name": "payload_schema",
+                        "order": None,
+                        "id": "48332255-4a0e-4432-8fb4-46267e8ffd4d",
+                        "type": "string",
+                        "nullable": False,
+                        "default": json.dumps(
+                            {"messages": [{"role": "user", "content": "Hello"}], "additional_info": "info"}
+                        ),
+                        "ui_component": "Textarea",
+                        "ui_component_properties": {
+                            "label": "An exemple of your payload schema",
+                            "description": "Give here an example of the payload schema "
+                            "of your input for the workflow. Must be a correct json. "
+                            "The keys of this dictonary can be referenced in the next components"
+                            " as variables, for example: {{additional_info}}",
+                        },
+                        "is_advanced": False,
+                    }
+                ],
+                "tool_description": {
+                    "name": "default",
+                    "description": "",
+                    "tool_properties": {},
+                    "required_tool_properties": [],
+                },
+                "integration": None,
+                "component_name": component_name,
+                "component_description": component_description,
+            },
+            {
+                "is_agent": True,
+                "is_protected": True,
+                "function_callable": False,
+                "can_use_function_calling": False,
+                "release_stage": "beta",
+                "tool_parameter_name": None,
+                "subcomponents_info": [],
+                "id": filter_id,
+                "name": "Filter",
+                "ref": "Filter",
+                "is_start_node": False,
+                "component_id": "02468c0b-bc99-44ce-a435-995acc5e2545",  # filter component UUID
+                "parameters": [
+                    {
+                        "value": DEFAULT_FILTER_SCHEMA,
+                        "name": "filtering_json_schema",
+                        "order": None,
+                        "id": "59443366-5b1f-5543-9fc5-57378f9aaf6e",
+                        "type": "string",
+                        "nullable": False,
+                        "default": DEFAULT_FILTER_SCHEMA,
+                        "ui_component": "Textarea",
+                        "ui_component_properties": {
+                            "label": "Filtering schema to apply",
+                            "description": "Describe here the schema for filtering "
+                            "the final workflow response. Must be a correct json schema."
+                            " The output will be validated against this schema and "
+                            "filtered to only include the specified fields.",
+                        },
+                        "is_advanced": False,
+                    }
+                ],
+                "tool_description": {
+                    "name": "Filter_Tool",
+                    "description": "An filter tool that filters the input data to return an AgentPayload.",
+                    "tool_properties": {"input_data": {"type": "json", "description": "An filter tool"}},
+                    "required_tool_properties": [],
+                },
+                "integration": None,
+                "component_name": "Filter",
+                "component_description": "Filter: takes a json and filters it according to a given json schema",
+            },
+        ],
+        "relationships": [],
+        "edges": [{"id": edge_id, "origin": api_input_id, "destination": filter_id, "order": 0}],
+        "port_mappings": [
+            {
+                "source_instance_id": api_input_id,
+                "source_port_name": "messages",
+                "target_instance_id": filter_id,
+                "target_port_name": "messages",
+            }
+        ],
+    }
 
 
 def test_version_management():
@@ -221,124 +363,15 @@ def test_input_groundtruth_basic_operations():
     client.delete(f"/projects/{project_uuid}", headers=HEADERS_JWT)
 
 
-def _create_dummy_agent_workflow_config():
-    """Helper function to create the dummy agent workflow configuration."""
-    # Create dummy UUIDs for the workflow components
-    api_input_id = str(uuid4())
-    filter_id = str(uuid4())
-    edge_id = str(uuid4())
-
-    return {
-        "component_instances": [
-            {
-                "is_agent": True,
-                "is_protected": True,
-                "function_callable": False,
-                "can_use_function_calling": False,
-                "release_stage": "beta",
-                "tool_parameter_name": None,
-                "subcomponents_info": [],
-                "id": api_input_id,
-                "name": "API Input",
-                "ref": "API Input",
-                "is_start_node": True,
-                "component_id": "01357c0b-bc99-44ce-a435-995acc5e2544",  # input component UUID
-                "parameters": [
-                    {
-                        "value": DEFAULT_PAYLOAD_SCHEMA,
-                        "name": "payload_schema",
-                        "order": None,
-                        "id": "48332255-4a0e-4432-8fb4-46267e8ffd4d",
-                        "type": "string",
-                        "nullable": False,
-                        "default": DEFAULT_PAYLOAD_SCHEMA,
-                        "ui_component": "Textarea",
-                        "ui_component_properties": {
-                            "label": "An exemple of your payload schema",
-                            "description": "Give here an example of the payload schema "
-                            "of your input for the workflow. Must be a correct json. "
-                            "The keys of this dictonary can be referenced in the next components"
-                            " as variables, for example: {{additional_info}}",
-                        },
-                        "is_advanced": False,
-                    }
-                ],
-                "tool_description": {
-                    "name": "default",
-                    "description": "",
-                    "tool_properties": {},
-                    "required_tool_properties": [],
-                },
-                "integration": None,
-                "component_name": "API Input",
-                "component_description": "This block is triggered by an API call",
-            },
-            {
-                "is_agent": True,
-                "is_protected": True,
-                "function_callable": False,
-                "can_use_function_calling": False,
-                "release_stage": "beta",
-                "tool_parameter_name": None,
-                "subcomponents_info": [],
-                "id": filter_id,
-                "name": "Filter",
-                "ref": "Filter",
-                "is_start_node": False,
-                "component_id": "02468c0b-bc99-44ce-a435-995acc5e2545",  # filter component UUID
-                "parameters": [
-                    {
-                        "value": DEFAULT_FILTER_SCHEMA,
-                        "name": "filtering_json_schema",
-                        "order": None,
-                        "id": "59443366-5b1f-5543-9fc5-57378f9aaf6e",
-                        "type": "string",
-                        "nullable": False,
-                        "default": DEFAULT_FILTER_SCHEMA,
-                        "ui_component": "Textarea",
-                        "ui_component_properties": {
-                            "label": "Filtering schema to apply",
-                            "description": "Describe here the schema for filtering "
-                            "the final workflow response. Must be a correct json schema."
-                            " The output will be validated against this schema and "
-                            "filtered to only include the specified fields.",
-                        },
-                        "is_advanced": False,
-                    }
-                ],
-                "tool_description": {
-                    "name": "Filter_Tool",
-                    "description": "An filter tool that filters the input data to return an AgentPayload.",
-                    "tool_properties": {"input_data": {"type": "json", "description": "An filter tool"}},
-                    "required_tool_properties": [],
-                },
-                "integration": None,
-                "component_name": "Filter",
-                "component_description": "Filter: takes a json and filters it according to a given json schema",
-            },
-        ],
-        "relationships": [],
-        "edges": [{"id": edge_id, "origin": api_input_id, "destination": filter_id, "order": 0}],
-        "port_mappings": [
-            {
-                "source_instance_id": api_input_id,
-                "source_port_name": "messages",
-                "target_instance_id": filter_id,
-                "target_port_name": "messages",
-            }
-        ],
-    }
-
-
-def test_run_qa_endpoint():
+def test_run_qa_endpoint(dummy_agent_workflow_config, workflow_node_type):
     """Test the run_qa endpoint with graph_runner_id (migrated from version field)."""
 
     # Create a project for testing
     project_uuid = str(uuid4())
     project_payload = {
         "project_id": project_uuid,
-        "project_name": f"qa_run_test_{project_uuid}",
-        "description": "Test project for QA run endpoint",
+        "project_name": f"qa_run_test_{project_uuid}_{workflow_node_type}",
+        "description": f"Test project for QA run endpoint with {workflow_node_type} node",
     }
 
     project_response = client.post(f"/projects/{ORGANIZATION_ID}", headers=HEADERS_JWT, json=project_payload)
@@ -361,8 +394,8 @@ def test_run_qa_endpoint():
     assert draft_graph_runner is not None, "Draft graph runner not found"
     graph_runner_id = draft_graph_runner["graph_runner_id"]
 
-    # Update the project's workflow configuration using the helper function
-    workflow_config = _create_dummy_agent_workflow_config()
+    # Update the project's workflow configuration using the fixture
+    workflow_config = dummy_agent_workflow_config
 
     # Update the graph
     update_graph_response = client.put(
@@ -487,15 +520,15 @@ def test_run_qa_endpoint():
     client.delete(f"/projects/{project_uuid}", headers=HEADERS_JWT)
 
 
-def test_quality_assurance_complete_workflow():
+def test_quality_assurance_complete_workflow(dummy_agent_workflow_config, workflow_node_type):
     """Test a complete quality assurance workflow with graph_runner_id."""
 
     # Create a project
     project_uuid = str(uuid4())
     project_payload = {
         "project_id": project_uuid,
-        "project_name": f"qa_complete_workflow_{project_uuid}",
-        "description": "Test project for complete QA workflow",
+        "project_name": f"qa_complete_workflow_{project_uuid}_{workflow_node_type}",
+        "description": f"Test project for complete QA workflow with {workflow_node_type} node",
     }
 
     project_response = client.post(f"/projects/{ORGANIZATION_ID}", headers=HEADERS_JWT, json=project_payload)

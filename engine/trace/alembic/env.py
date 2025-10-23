@@ -3,8 +3,6 @@ from logging.config import fileConfig
 from sqlalchemy import engine_from_config
 from sqlalchemy import pool
 from alembic import context
-import sqlalchemy as sa
-from sqlalchemy.dialects import postgresql
 
 from engine.trace.models import Base
 from settings import settings
@@ -17,7 +15,6 @@ if not settings.TRACES_DB_URL:
 # access to the values within the .ini file in use.
 config = context.config
 config.set_main_option("sqlalchemy.url", settings.TRACES_DB_URL)
-is_sqlite = True
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.
 if config.config_file_name is not None:
@@ -33,27 +30,6 @@ target_metadata = Base.metadata
 # can be acquired:
 # my_important_option = config.get_main_option("my_important_option")
 # ... etc.
-
-
-# Define a custom include_object function to ignore NUMERIC to UUID changes in SQLite
-def include_object(object, name, type_, reflected, compare_to):
-    """
-    Custom filter function to determine which database objects should be included in migrations.
-
-    This function specifically excludes UUID to NUMERIC type changes in SQLite databases,
-    which are false positives due to SQLite's limited type system.
-    """
-    if type_ == "column" and is_sqlite:
-        # Check if this is a UUID to NUMERIC change (or vice versa)
-        if (
-            isinstance(object.type, postgresql.UUID)
-            and hasattr(compare_to, "type")
-            and isinstance(compare_to.type, sa.NUMERIC)
-        ):
-            # Exclude UUID to NUMERIC type changes in SQLite
-            return False
-
-    return True  # Include all other objects
 
 
 def run_migrations_offline() -> None:
@@ -74,7 +50,6 @@ def run_migrations_offline() -> None:
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
-        include_object=include_object,  # Add the custom include_object function
     )
 
     with context.begin_transaction():
@@ -98,7 +73,6 @@ def run_migrations_online() -> None:
         context.configure(
             connection=connection,
             target_metadata=target_metadata,
-            include_object=include_object,  # Add the custom include_object function
         )
 
         with context.begin_transaction():

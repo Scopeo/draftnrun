@@ -20,7 +20,7 @@ def test_connection():
         db_url = get_db_url()
         masked_url = db_url.replace(settings.ADA_DB_PASSWORD or "", "******") if settings.ADA_DB_PASSWORD else db_url
         print(f"Database URL: {masked_url}")
-        print(f"Database Type: {settings.ADA_DB_DRIVER or 'sqlite'}")
+        print("Database Type: postgresql")
     except Exception as e:
         print(f"ERROR: Failed to get database URL: {str(e)}")
         return False
@@ -47,13 +47,9 @@ def test_connection():
             print("\nNo tables found in database. Run setup_db.py to create tables.")
 
         # Print database-specific info
-        if settings.ADA_DB_DRIVER == "postgresql":
-            print(f"\nPostgreSQL Database: {settings.ADA_DB_NAME}")
-            print(f"Host: {settings.ADA_DB_HOST}:{settings.ADA_DB_PORT}")
-            print(f"User: {settings.ADA_DB_USER}")
-        else:
-            sqlite_path = settings.ADA_DB_URL.replace("sqlite:///", "") if settings.ADA_DB_URL else "unknown"
-            print("\nSQLite Database:", sqlite_path)
+        print(f"\nPostgreSQL Database: {settings.ADA_DB_NAME}")
+        print(f"Host: {settings.ADA_DB_HOST}:{settings.ADA_DB_PORT}")
+        print(f"User: {settings.ADA_DB_USER}")
 
         return True
 

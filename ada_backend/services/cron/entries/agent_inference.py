@@ -19,8 +19,9 @@ class AgentInferenceUserPayload(BaseUserPayload):
     """
 
     project_id: UUID = Field(..., description="Project ID to run the agent for")
+    # env field is optional - backend always uses production for cron jobs
     env: EnvType = Field(
-        description="Environment (draft/production)",
+        description="Environment (internally always set to production for cron jobs)",
         default=EnvType.PRODUCTION,
     )
     input_data: dict[str, Any] = Field(..., description="Input data for the agent")
@@ -53,6 +54,8 @@ def validate_registration(user_input: AgentInferenceUserPayload, **kwargs) -> Ag
     """
     Validate user input and return the execution payload
     that will be used to execute the job.
+
+    NOTE: Always uses production environment for cron jobs, regardless of user input.
     """
     # TODO: Access & consistency checks (DB):
     # - Verify organization has access to project_id
@@ -81,7 +84,7 @@ def validate_registration(user_input: AgentInferenceUserPayload, **kwargs) -> Ag
 
     return AgentInferenceExecutionPayload(
         project_id=user_input.project_id,
-        env=user_input.env,
+        env=EnvType.PRODUCTION,  # Always use production for cron jobs
         input_data=user_input.input_data,
         organization_id=organization_id,
         created_by=user_id,
@@ -122,6 +125,8 @@ async def execute(execution_payload: AgentInferenceExecutionPayload, **kwargs) -
         "artifacts": result.artifacts,
         "project_id": str(execution_payload.project_id),
         "env": execution_payload.env,
+        "input_data": execution_payload.input_data,
+        "trace_id": result.trace_id,
     }
 
 

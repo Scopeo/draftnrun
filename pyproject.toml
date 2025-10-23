@@ -30,7 +30,6 @@ dependencies = [
     "tavily-python>=0.5.0,<0.6",
     "more-itertools>=10.5.0,<11",
     "sqladmin>=0.20.1,<0.21",
-    "aiosqlite>=0.20.0,<0.21",
     "supabase>=2.13.0,<3",
     "fastapi>=0.115.8,<0.116",
     "alembic>=1.14.1,<2",
@@ -64,6 +63,7 @@ dependencies = [
     "pytz>=2023.3",
     "md2docx-python>=1.0.0",
     "pymupdf4llm>=0.0.25",
+    "jsonschema>=4.25.1",
 ]
 [dependency-groups]
 dev = [
