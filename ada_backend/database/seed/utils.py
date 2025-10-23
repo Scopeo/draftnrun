@@ -75,6 +75,7 @@ COMPONENT_UUIDS: dict[str, UUID] = {
     "document_enhanced_llm_call_agent": UUID("6460b304-640c-4468-abd3-67bbff6902d4"),
     "document_react_loader_agent": UUID("1c2fdf5b-4a8d-4788-acb6-86b00124c7ce"),
     "ocr_call": UUID("a3b4c5d6-e7f8-9012-3456-789abcdef012"),
+    "input": UUID("01357c0b-bc99-44ce-a435-995acc5e2544"),  # Same UUID as start for backward compatibility
     "start": UUID("01357c0b-bc99-44ce-a435-995acc5e2544"),
     "filter": UUID("02468c0b-bc99-44ce-a435-995acc5e2545"),
     "gmail_sender": UUID("af96bb40-c9ea-4851-a663-f0e64363fcb2"),
