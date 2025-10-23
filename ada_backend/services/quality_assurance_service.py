@@ -18,6 +18,7 @@ from ada_backend.repositories.quality_assurance_repository import (
     get_datasets_by_project,
     clear_version_outputs_for_input_ids,
     get_outputs_by_graph_runner,
+    create_output_groundtruths,
 )
 from ada_backend.schemas.input_groundtruth_schema import (
     InputGroundtruthResponse,
@@ -31,6 +32,10 @@ from ada_backend.schemas.input_groundtruth_schema import (
     QARunResult,
     QARunResponse,
     QARunSummary,
+    InputGroundtruthCreate,
+    OutputGroundtruthCreate,
+    ConversationSaveResponse,
+    OutputGroundtruthResponse,
 )
 from ada_backend.schemas.dataset_schema import (
     DatasetCreateList,
@@ -39,8 +44,9 @@ from ada_backend.schemas.dataset_schema import (
     DatasetListResponse,
 )
 from ada_backend.services.agent_runner_service import run_agent
-from ada_backend.database.models import CallType
+from ada_backend.database.models import CallType, RoleType
 from ada_backend.repositories.env_repository import get_env_relationship_by_graph_runner_id
+from ada_backend.services.metrics.utils import query_conversation_messages
 
 LOGGER = logging.getLogger(__name__)
 
@@ -298,7 +304,7 @@ def update_inputs_groundtruths_service(
     """
     try:
         # Prepare updates data
-        updates_data = [(ig.id, ig.input, ig.groundtruth) for ig in inputs_groundtruths_data.inputs_groundtruths]
+        updates_data = [(ig.id, ig.input) for ig in inputs_groundtruths_data.inputs_groundtruths]
 
         updated_inputs_groundtruths = update_inputs_groundtruths(
             session,
@@ -467,3 +473,69 @@ def delete_datasets_service(
     except Exception as e:
         LOGGER.error(f"Error in delete_datasets_service: {str(e)}")
         raise ValueError(f"Failed to delete datasets: {str(e)}") from e
+
+
+def save_conversation_to_groundtruth_service(
+    session: Session,
+    conversation_id: str,
+    dataset_id: UUID,
+) -> ConversationSaveResponse:
+    """
+    Save conversation history to groundtruth tables.
+
+    Args:
+        session: SQLAlchemy session
+        conversation_id: The conversation ID
+        dataset_id: The dataset ID to save to
+
+    Returns:
+        ConversationSaveResponse: Summary of saved data
+    """
+    LOGGER.info(f"Saving conversation {conversation_id} to groundtruth tables")
+
+    # Get conversation history
+    input_messages, output_messages = query_conversation_messages(conversation_id)
+
+    if not input_messages and not output_messages:
+        raise ValueError(f"No spans found for conversation_id {conversation_id}")
+
+    # Create input entries first
+    input_entries_data = []
+    order = 0
+    for message in input_messages:
+        input_entry = InputGroundtruthCreate(
+            conversation_id=conversation_id,
+            input=message["content"],
+            role=RoleType(message["role"]),
+            order=order,
+        )
+        input_entries_data.append(input_entry)
+        order += 1
+
+    # Save input entries to get their IDs
+    input_entries = create_inputs_groundtruths(
+        session,
+        dataset_id,
+        input_entries_data,
+    )
+
+    # Get the ID of the last input message
+    last_input_id = input_entries[-1].id if input_entries else None
+
+    # Create output entries with the correct message_id
+    output_entries_data = []
+    for message in output_messages:
+        output_entry = OutputGroundtruthCreate(message=message["content"], message_id=last_input_id)
+        output_entries_data.append(output_entry)
+
+    # Save output entries
+    output_entries = create_output_groundtruths(
+        session,
+        output_entries_data,
+    )
+
+    return ConversationSaveResponse(
+        inputs=[InputGroundtruthResponse.model_validate(entry) for entry in input_entries],
+        outputs=[OutputGroundtruthResponse.model_validate(entry) for entry in output_entries],
+        total_messages=len(input_entries),
+    )
