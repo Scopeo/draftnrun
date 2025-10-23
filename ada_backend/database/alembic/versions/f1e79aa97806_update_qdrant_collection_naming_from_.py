@@ -21,7 +21,7 @@ from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
 
 # revision identifiers, used by Alembic.
 revision: str = "f1e79aa97806"
-down_revision: Union[str, None] = "558db5695d27"
+down_revision: Union[str, None] = "db6ec45f87f4"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
