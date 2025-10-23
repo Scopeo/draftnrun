@@ -6,16 +6,15 @@ from sqlalchemy.orm import Session
 
 from ada_backend.database.models import (
     BasicParameter,
-    Component,
     ComponentInstance,
+    ComponentParameterDefinition,
     ParameterType,
 )
 from ada_backend.database.seed.utils import COMPONENT_UUIDS
-from ada_backend.repositories.component_repository import get_component_parameter_definition_by_component_id
 
 
 def create_component_instance(
-    session: Session, component_id: uuid.UUID, name: str, component_instance_id: Optional[uuid.UUID] = None
+    session: Session, component_version_id: uuid.UUID, name: str, component_instance_id: Optional[uuid.UUID] = None
 ) -> ComponentInstance:
     """
     Creates a new component instance for the given component ID.
@@ -28,12 +27,14 @@ def create_component_instance(
     Returns:
         ComponentInstance: The created component instance
     """
-    component = session.query(Component).filter(Component.id == component_id).first()
     # Fetch parameter definitions for this component
-    parameter_definitions = get_component_parameter_definition_by_component_id(session, component_id)
+    parameter_definitions = (
+        session.query(ComponentParameterDefinition)
+        .filter(ComponentParameterDefinition.component_version_id == component_version_id)
+        .all()
+    )
 
-    if component_instance_id is None:
-        component_instance_id = uuid.uuid4()
+    component_instance_id = component_instance_id or uuid.uuid4()
     basic_parameters = [
         BasicParameter(
             id=uuid.uuid4(),
@@ -53,8 +54,8 @@ def create_component_instance(
     ]
 
     instance = ComponentInstance(
-        id=component_instance_id,
-        component_id=component.id,
+        id=component_instance_id,  # uuid.uuid4(),  # Generate a new UUID for the instance
+        component_version_id=component_version_id,
         name=name,
         basic_parameters=basic_parameters,
     )
@@ -66,4 +67,4 @@ def create_component_instance(
 # TODO: move to service
 def create_input_component(session: Session, name: str = "API Input") -> ComponentInstance:
     """Creates a new input component instance"""
-    return create_component_instance(session, COMPONENT_UUIDS["input"], name)
+    return create_component_instance(session, component_version_id=COMPONENT_UUIDS["input"], name=name)

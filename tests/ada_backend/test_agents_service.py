@@ -155,7 +155,9 @@ def test_update_agent_service_builds_graph_and_calls_update(monkeypatch):
 
     # prepare agent_data with one tool and one model parameter
     tool_id = uuid.uuid4()
-    tool_instance = ComponentInstanceSchema(id=tool_id, component_id=uuid.uuid4(), parameters=[])
+    tool_instance = ComponentInstanceSchema(
+        id=tool_id, component_id=uuid.uuid4(), parameters=[], component_version_id=uuid.uuid4()
+    )
     model_param = PipelineParameterSchema(name="model_param", value="v1")
     agent_data = AgentUpdateSchema(
         name="A",
@@ -202,7 +204,7 @@ def test_update_agent_service_builds_graph_and_calls_update(monkeypatch):
     assert called["user_id"] == user_id
 
     graph_project = called["graph_project"]
-    # relationships should include one entry linking version_id to the tool
+    # relationships should include one entry linking component_version_id to the tool
     assert len(graph_project.relationships) == 1
     rel = graph_project.relationships[0]
     assert rel.parent_component_instance_id == graph_runner_id

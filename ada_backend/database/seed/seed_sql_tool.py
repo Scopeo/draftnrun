@@ -5,9 +5,11 @@ from sqlalchemy.orm import Session
 from ada_backend.database import models as db
 from ada_backend.database.models import ParameterType
 from ada_backend.database.component_definition_seeding import (
+    upsert_component_versions,
     upsert_components,
     upsert_components_parameter_child_relationships,
     upsert_components_parameter_definitions,
+    upsert_release_stage_to_current_version_mapping,
 )
 from ada_backend.database.seed.seed_tool_description import TOOL_DESCRIPTION_UUIDS
 from ada_backend.database.seed.utils import (
@@ -22,21 +24,15 @@ def seed_sql_tool_components(session: Session):
     sql_tool = db.Component(
         id=COMPONENT_UUIDS["sql_tool"],
         name="SQLTool",
-        description="SQL Tool for querying databases",
         is_agent=False,
         function_callable=True,
-        release_stage=db.ReleaseStage.PUBLIC,
-        default_tool_description_id=TOOL_DESCRIPTION_UUIDS["default_tool_description"],
         icon="tabler-database-search",
     )
     run_sql_query_tool = db.Component(
         id=COMPONENT_UUIDS["run_sql_query_tool"],
         name="RunSQLQueryTool",
-        description="Run SQL Query Tool",
         is_agent=False,
         function_callable=True,
-        release_stage=db.ReleaseStage.PUBLIC,
-        default_tool_description_id=TOOL_DESCRIPTION_UUIDS["default_run_sql_query_tool_description"],
         icon="tabler-database-search",
     )
     upsert_components(
@@ -46,10 +42,33 @@ def seed_sql_tool_components(session: Session):
             run_sql_query_tool,
         ],
     )
+    sql_tool_version = db.ComponentVersion(
+        id=COMPONENT_UUIDS["sql_tool"],
+        component_id=COMPONENT_UUIDS["sql_tool"],
+        version_tag="0.0.1",
+        release_stage=db.ReleaseStage.PUBLIC,
+        description="SQL Tool for querying databases",
+        default_tool_description_id=TOOL_DESCRIPTION_UUIDS["default_tool_description"],
+    )
+    run_sql_query_tool_version = db.ComponentVersion(
+        id=COMPONENT_UUIDS["run_sql_query_tool"],
+        component_id=COMPONENT_UUIDS["run_sql_query_tool"],
+        version_tag="0.0.1",
+        description="Run SQL Query Tool",
+        release_stage=db.ReleaseStage.PUBLIC,
+        default_tool_description_id=TOOL_DESCRIPTION_UUIDS["default_run_sql_query_tool_description"],
+    )
+    upsert_component_versions(
+        session=session,
+        component_versions=[
+            sql_tool_version,
+            run_sql_query_tool_version,
+        ],
+    )
     # SQL Run Tool
     run_sql_tool_db_service_param = db.ComponentParameterDefinition(
         id=UUID("1160d57c-77cd-4a5c-a569-4c14fca875d6"),
-        component_id=run_sql_query_tool.id,
+        component_version_id=run_sql_query_tool_version.id,
         name="db_service",
         type=ParameterType.COMPONENT,
         nullable=False,
@@ -64,7 +83,7 @@ def seed_sql_tool_components(session: Session):
             db.ComponentParameterChildRelationship(
                 id=UUID("8440ddee-bc05-4274-bcec-877e9e978af1"),
                 component_parameter_definition_id=run_sql_tool_db_service_param.id,
-                child_component_id=COMPONENT_UUIDS["sql_db_service"],
+                child_component_version_id=COMPONENT_UUIDS["sql_db_service"],
             ),
         ],
     )
@@ -75,34 +94,34 @@ def seed_sql_tool_components(session: Session):
             # SQL Tool
             db.ComponentParameterDefinition(
                 id=UUID("1e15c7d2-9f86-4428-8722-b39b8ddafac8"),
-                component_id=sql_tool.id,
+                component_version_id=sql_tool_version.id,
                 name="db_service",
                 type=ParameterType.COMPONENT,
                 nullable=False,
             ),
             db.ComponentParameterDefinition(
                 id=UUID("1299b4db-4cc9-4a02-b4a0-16c2802281ee"),
-                component_id=sql_tool.id,
+                component_version_id=sql_tool_version.id,
                 name="include_tables",
                 type=ParameterType.STRING,
                 nullable=True,
             ),
             db.ComponentParameterDefinition(
                 id=UUID("4f2e918f-842a-4f32-b378-8b08c9cb9da9"),
-                component_id=sql_tool.id,
+                component_version_id=sql_tool_version.id,
                 name="additional_db_description",
                 type=ParameterType.STRING,
                 nullable=True,
             ),
             db.ComponentParameterDefinition(
                 id=UUID("4ffb10e0-b5cb-487e-970e-ef8decbf77da"),
-                component_id=sql_tool.id,
+                component_version_id=sql_tool_version.id,
                 name="synthesize",
                 type=ParameterType.BOOLEAN,
                 default="False",
             ),
             *build_completion_service_config_definitions(
-                component_id=sql_tool.id,
+                component_version_id=sql_tool_version.id,
                 params_to_seed=[
                     ParameterLLMConfig(
                         param_name=COMPLETION_MODEL_IN_DB,
@@ -115,4 +134,18 @@ def seed_sql_tool_components(session: Session):
                 ],
             ),
         ],
+    )
+
+    # Create release stage mappings
+    upsert_release_stage_to_current_version_mapping(
+        session=session,
+        component_id=sql_tool_version.component_id,
+        release_stage=sql_tool_version.release_stage,
+        component_version_id=sql_tool_version.id,
+    )
+    upsert_release_stage_to_current_version_mapping(
+        session=session,
+        component_id=run_sql_query_tool_version.component_id,
+        release_stage=run_sql_query_tool_version.release_stage,
+        component_version_id=run_sql_query_tool_version.id,
     )

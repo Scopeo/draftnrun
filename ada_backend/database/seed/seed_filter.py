@@ -11,8 +11,10 @@ from ada_backend.database.models import (
 )
 from ada_backend.database.component_definition_seeding import (
     upsert_component_categories,
+    upsert_component_versions,
     upsert_components,
     upsert_components_parameter_definitions,
+    upsert_release_stage_to_current_version_mapping,
 )
 from ada_backend.database.seed.seed_categories import CATEGORY_UUIDS
 from ada_backend.database.seed.seed_tool_description import TOOL_DESCRIPTION_UUIDS
@@ -73,11 +75,8 @@ def seed_filter_components(session: Session):
     filter = db.Component(
         id=COMPONENT_UUIDS["filter"],
         name="Filter",
-        description="Filter: takes a json and filters it according to a given json schema",
         is_agent=True,
         is_protected=True,
-        release_stage=db.ReleaseStage.PUBLIC,
-        default_tool_description_id=TOOL_DESCRIPTION_UUIDS["default_filter_tool_description"],
         icon="tabler-json",
     )
     upsert_components(
@@ -86,12 +85,24 @@ def seed_filter_components(session: Session):
             filter,
         ],
     )
+    filter_version = db.ComponentVersion(
+        id=COMPONENT_UUIDS["filter"],
+        component_id=COMPONENT_UUIDS["filter"],
+        version_tag="0.0.1",
+        release_stage=db.ReleaseStage.PUBLIC,
+        description="Filter: takes a json and filters it according to a given json schema",
+        default_tool_description_id=TOOL_DESCRIPTION_UUIDS["default_filter_tool_description"],
+    )
+    upsert_component_versions(
+        session=session,
+        component_versions=[filter_version],
+    )
     upsert_components_parameter_definitions(
         session=session,
         component_parameter_definitions=[
             db.ComponentParameterDefinition(
                 id=UUID("59443366-5b1f-5543-9fc5-57378f9aaf6e"),
-                component_id=filter.id,
+                component_version_id=filter_version.id,
                 name=FILTER_SCHEMA_PARAMETER_NAME,
                 type=ParameterType.STRING,
                 nullable=False,
@@ -106,9 +117,48 @@ def seed_filter_components(session: Session):
             ),
         ],
     )
+    # LEGACY: Manual port seeding for unmigrated Filter component
+    existing = session.query(db.ComponentVersion).filter(db.ComponentVersion.id == filter_version.id).first()
+    if existing:
+        # Ensure INPUT and OUTPUT canonical 'messages' ports exist
+        port_defs = (
+            session.query(db.PortDefinition).filter(db.PortDefinition.component_version_id == filter_version.id).all()
+        )
+        have_messages_input = any(pd.port_type == db.PortType.INPUT and pd.name == "messages" for pd in port_defs)
+        have_messages_output = any(pd.port_type == db.PortType.OUTPUT and pd.name == "messages" for pd in port_defs)
+
+        if not have_messages_input:
+            session.add(
+                db.PortDefinition(
+                    component_version_id=filter_version.id,
+                    name="messages",
+                    port_type=db.PortType.INPUT,
+                    is_canonical=True,
+                    description="Canonical input carrying chat messages",
+                )
+            )
+        if not have_messages_output:
+            session.add(
+                db.PortDefinition(
+                    component_version_id=filter_version.id,
+                    name="messages",
+                    port_type=db.PortType.OUTPUT,
+                    is_canonical=True,
+                    description="Canonical output carrying chat messages",
+                )
+            )
+        session.commit()
 
     upsert_component_categories(
         session=session,
         component_id=filter.id,
         category_ids=[CATEGORY_UUIDS["processing"]],
+    )
+
+    # Create release stage mapping
+    upsert_release_stage_to_current_version_mapping(
+        session=session,
+        component_id=filter_version.component_id,
+        release_stage=filter_version.release_stage,
+        component_version_id=filter_version.id,
     )
