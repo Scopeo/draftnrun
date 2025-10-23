@@ -275,6 +275,6 @@ def seed_ai_agent_components(session: Session):
     )
     upsert_component_categories(
         session=session,
-        component_id=base_ai_agent.id,
+        component_id=base_ai_agent_component.id,
         category_ids=[CATEGORY_UUIDS["most_used"]],
     )
