@@ -1,7 +1,7 @@
 from typing import Any
 from enum import StrEnum
 
-from engine.agent.inputs_outputs.input import Input
+from engine.agent.inputs_outputs.start import Start
 from engine.agent.filter import Filter
 from engine.agent.llm_call_agent import LLMCallAgent
 from engine.agent.sql.react_sql_tool import ReactSQLAgent
@@ -96,7 +96,7 @@ class SupportedEntityType(StrEnum):
     DOCUMENT_REACT_LOADER_AGENT = "Document AI Agent"
     OCR_CALL = "OCR Call"
     STATIC_RESPONDER = "Static Responder"
-    INPUT = "API Input"
+    START = "Start"
     FILTER = "Filter"
     PROJECT_REFERENCE = "ProjectReference"
     CHUNK_PROCESSOR = "ChunkProcessor"
@@ -477,9 +477,9 @@ def create_factory_registry() -> FactoryRegistry:
     )
 
     registry.register(
-        name=SupportedEntityType.INPUT,
+        name=SupportedEntityType.START,
         factory=AgentFactory(
-            entity_class=Input,
+            entity_class=Start,
         ),
     )
 

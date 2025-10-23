@@ -192,7 +192,7 @@ def get_input_component(session: Session, graph_runner_id: UUID) -> db.Component
         .join(db.ComponentVersion, db.ComponentVersion.id == db.ComponentInstance.component_version_id)
         .filter(
             db.GraphRunnerNode.graph_runner_id == graph_runner_id,
-            db.ComponentVersion.id == COMPONENT_UUIDS["input"],
+            db.ComponentVersion.id == COMPONENT_UUIDS["start"],
             db.GraphRunnerNode.is_start_node.is_(True),
         )
         .first()

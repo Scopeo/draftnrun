@@ -12,20 +12,20 @@ from engine.trace.serializer import serialize_to_json
 
 LOGGER = logging.getLogger(__name__)
 
-DEFAULT_INPUT_TOOL_DESCRIPTION = ToolDescription(
-    name="Input_Tool",
-    description=("An input tool that filters the input data to return an AgentPayload."),
+DEFAULT_START_TOOL_DESCRIPTION = ToolDescription(
+    name="Start_Tool",
+    description=("A start node that initializes the workflow with input data."),
     tool_properties={
         "input_data": {
             "type": "json",
-            "description": "An input tool",
+            "description": "The starting input data for the workflow",
         },
     },
     required_tool_properties=[],
 )
 
 
-class Input:
+class Start:
     # LEGACY: Mark as unmigrated for retro-compatibility
     # TODO: Remove after migration to Agent base class
     migrated: bool = False
