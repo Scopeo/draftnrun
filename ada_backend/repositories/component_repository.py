@@ -446,10 +446,14 @@ def is_tool_description_default_for_component(
     tool_description_id: UUID,
 ) -> bool:
     """
-    Checks if a tool description is used as a default tool description for any component.
+    Checks if a tool description is used as a default tool description for any component version.
     Returns True if it's a default tool description, False otherwise.
     """
-    count = session.query(db.Component).filter(db.Component.default_tool_description_id == tool_description_id).count()
+    count = (
+        session.query(db.ComponentVersion)
+        .filter(db.ComponentVersion.default_tool_description_id == tool_description_id)
+        .count()
+    )
     return count > 0
 
 
