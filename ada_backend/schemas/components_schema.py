@@ -22,7 +22,7 @@ class SubComponentParamSchema(BaseModel):
     is_optional: bool
 
 
-class ComponentUseInfoSchema(BaseModel):
+class ComponentVersionUseInfoSchema(BaseModel):
     component_version_id: UUID
     version_tag: str
     is_agent: bool
@@ -43,7 +43,7 @@ class PortDefinitionSchema(BaseModel):
     description: Optional[str] = None
 
 
-class ComponentWithParametersDTO(ComponentUseInfoSchema, ComponentSchema):
+class ComponentWithParametersDTO(ComponentVersionUseInfoSchema, ComponentSchema):
     description: Optional[str]
     tool_description: Optional[dict] = None
     integration: Optional[IntegrationSchema] = None
