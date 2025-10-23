@@ -578,7 +578,9 @@ def get_all_components_with_parameters(
             )
 
             # Hide parameters enforced globally for this component from the UI
-            global_params = get_global_parameters_by_component_version_id(session, component_with_version.component_id)
+            global_params = get_global_parameters_by_component_version_id(
+                session, component_with_version.component_version_id
+            )
             global_param_def_ids = {gp.parameter_definition_id for gp in global_params}
 
             subcomponent_params = get_subcomponent_param_def_by_component_version(
