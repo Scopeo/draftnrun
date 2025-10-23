@@ -85,17 +85,18 @@ def create_source_by_organization(
         source_id = create_source(
             session,
             organization_id,
-            source_data.name,
-            source_data.type,
-            source_data.database_table_name,
-            source_data.database_schema,
-            source_data.qdrant_collection_name,
-            source_data.qdrant_schema,
-            source_data.embedding_model_reference,
-            source_data.attributes,
+            source_name=source_data.name,
+            source_type=source_data.type,
+            database_table_name=source_data.database_table_name,
+            database_schema=source_data.database_schema,
+            qdrant_collection_name=source_data.qdrant_collection_name,
+            qdrant_schema=source_data.qdrant_schema,
+            embedding_model_reference=source_data.embedding_model_reference,
+            attributes=source_data.attributes,
+            source_id=source_data.id,
         )
 
-        LOGGER.info(f"Source {source_data.name} created for organization {organization_id}")
+        LOGGER.info(f"Source {source_id} created for organization {organization_id}")
         return source_id
 
     except Exception as e:

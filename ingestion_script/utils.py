@@ -3,6 +3,7 @@ import inspect
 from typing import Optional
 from uuid import UUID
 from datetime import datetime
+import uuid
 import requests
 
 from ada_backend.schemas.ingestion_task_schema import IngestionTaskUpdate
@@ -25,12 +26,12 @@ FILE_ID_COLUMN_NAME = "source_identifier"
 URL_COLUMN_NAME = "url"
 
 
-def get_sanitize_names(source_name: str, organization_id: str) -> tuple[str, str, str]:
-    sanitize_source_name = sanitize_filename(source_name)
+def get_sanitize_names(organization_id: str, source_id: str) -> tuple[str, str, str]:
     sanitize_organization_id = sanitize_filename(organization_id)
+    sanitize_source_id = sanitize_filename(source_id)
     schema_name = f"org_{sanitize_organization_id}"
-    table_name = f"{sanitize_source_name}_table"
-    qdrant_collection_name = f"{sanitize_organization_id}_{sanitize_source_name}_collection"
+    table_name = f"source_{sanitize_source_id}"
+    qdrant_collection_name = f"{sanitize_source_id}_collection"
     return (
         schema_name,
         table_name,
@@ -162,7 +163,7 @@ async def upload_source(
     ingestion_function: callable,
     update_existing: bool = False,
     attributes: Optional[SourceAttributes] = None,
-    source_id: Optional[str] = None,
+    source_id: Optional[UUID] = None,
 ) -> None:
     check_signature(
         ingestion_function,
@@ -177,9 +178,15 @@ async def upload_source(
     if settings.INGESTION_DB_URL is None:
         raise ValueError("INGESTION_DB_URL is not set")
     db_service = SQLLocalService(engine_url=settings.INGESTION_DB_URL)
+    if source_id:
+        result_source_id = source_id
+        update_task = True
+    else:
+        result_source_id = uuid.uuid4()
+        update_task = False
     schema_name, table_name, qdrant_collection_name = get_sanitize_names(
-        source_name=source_name,
         organization_id=organization_id,
+        source_id=str(result_source_id),
     )
 
     ingestion_task = IngestionTaskUpdate(
@@ -187,6 +194,7 @@ async def upload_source(
         source_name=source_name,
         source_type=source_type,
         status=db.TaskStatus.FAILED,
+        source_id=result_source_id,
     )
     embedding_service = EmbeddingService(
         provider="openai",
@@ -238,6 +246,7 @@ async def upload_source(
         return
 
     source_data = DataSourceSchema(
+        id=result_source_id,
         name=source_name,
         type=source_type,
         database_schema=schema_name,
@@ -247,14 +256,12 @@ async def upload_source(
         embedding_model_reference=f"{embedding_service._provider}:{embedding_service._model_name}",
         attributes=attributes,
     )
-    LOGGER.info(f"Upserting source {source_name} for organization {organization_id} in database")
-    if source_id:
-        result_source_id = source_id
-    else:
-        result_source_id = create_source(
+    if not update_task:
+        create_source(
             organization_id=organization_id,
             source_data=source_data,
         )
+    LOGGER.info(f"Upserting source {source_name} for organization {organization_id} in database")
 
     ingestion_task = IngestionTaskUpdate(
         id=task_id,

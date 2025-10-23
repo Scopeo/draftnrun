@@ -49,7 +49,7 @@ async def ingestion_main_async(
     task_id: UUID,
     source_type: SourceType,
     source_attributes: dict,
-    source_id: Optional[str] = None,
+    source_id: Optional[UUID] = None,
 ):
     LOGGER.info(
         f"[INGESTION_MAIN] Starting ingestion - Source: '{source_name}', Type: {source_type}, "
@@ -84,6 +84,7 @@ async def ingestion_main_async(
         source_name=source_name,
         source_type=source_type,
         status=db.TaskStatus.FAILED,
+        source_id=source_id,
     )
     LOGGER.debug(f"Starting ingestion for source: {source_name}, type: {source_type}, organization: {organization_id}")
     if source_type == SourceType.GOOGLE_DRIVE:
@@ -111,6 +112,7 @@ async def ingestion_main_async(
                 add_doc_description_to_chunks=False,
                 chunk_size=chunk_size,
                 chunk_overlap=chunk_overlap,
+                source_id=source_id,
             )
         except Exception as e:
             LOGGER.error(f"Error during google drive ingestion: {str(e)}")
@@ -139,6 +141,7 @@ async def ingestion_main_async(
                 add_doc_description_to_chunks=False,
                 chunk_size=chunk_size,
                 chunk_overlap=chunk_overlap,
+                source_id=source_id,
             )
         except Exception as e:
             LOGGER.error(f"Error during local ingestion: {str(e)}")
