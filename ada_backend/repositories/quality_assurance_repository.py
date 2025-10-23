@@ -5,8 +5,8 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 
-from ada_backend.database.models import InputGroundtruth, DatasetProject, VersionOutput
-from ada_backend.schemas.input_groundtruth_schema import InputGroundtruthCreate
+from ada_backend.database.models import InputGroundtruth, DatasetProject, VersionOutput, OutputGroundtruth
+from ada_backend.schemas.input_groundtruth_schema import InputGroundtruthCreate, OutputGroundtruthCreate
 
 LOGGER = logging.getLogger(__name__)
 
@@ -57,7 +57,9 @@ def create_inputs_groundtruths(
         input_groundtruth = InputGroundtruth(
             dataset_id=dataset_id,
             input=input_groundtruth_data.input,
-            groundtruth=input_groundtruth_data.groundtruth,
+            conversation_id=input_groundtruth_data.conversation_id,
+            role=input_groundtruth_data.role,
+            order=input_groundtruth_data.order,
         )
         inputs_groundtruths.append(input_groundtruth)
 
@@ -74,13 +76,13 @@ def create_inputs_groundtruths(
 
 def update_inputs_groundtruths(
     session: Session,
-    updates_data: List[Tuple[UUID, Optional[str], Optional[str]]],
+    updates_data: List[Tuple[UUID, Optional[str]]],
     dataset_id: UUID,
 ) -> List[InputGroundtruth]:
     """Update multiple input-groundtruth entries."""
     updated_inputs_groundtruths = []
 
-    for input_id, input_text, groundtruth in updates_data:
+    for input_id, input_text in updates_data:
         input_groundtruth = (
             session.query(InputGroundtruth)
             .filter(InputGroundtruth.id == input_id, InputGroundtruth.dataset_id == dataset_id)
@@ -90,8 +92,6 @@ def update_inputs_groundtruths(
         if input_groundtruth:
             if input_text is not None:
                 input_groundtruth.input = input_text
-            if groundtruth is not None:
-                input_groundtruth.groundtruth = groundtruth
 
             updated_inputs_groundtruths.append(input_groundtruth)
 
@@ -294,3 +294,43 @@ def delete_datasets(
 
     LOGGER.info(f"Deleted {deleted_count} datasets for project {project_id}")
     return deleted_count
+
+
+# Output Groundtruth functions
+def create_output_groundtruths(
+    session: Session,
+    outputs_data: List[OutputGroundtruthCreate],
+) -> List[OutputGroundtruth]:
+    """Create multiple output groundtruth entries."""
+    outputs = []
+
+    for output_data in outputs_data:
+        output_entry = OutputGroundtruth(
+            message=output_data.message,
+            message_id=output_data.message_id,
+        )
+        outputs.append(output_entry)
+
+    session.add_all(outputs)
+    session.commit()
+
+    # Refresh all objects to get their IDs
+    for output_entry in outputs:
+        session.refresh(output_entry)
+
+    LOGGER.info(f"Created {len(outputs)} output groundtruth entries")
+    return outputs
+
+
+def get_outputs_by_conversation(
+    session: Session,
+    conversation_id: str,
+) -> List[Tuple[InputGroundtruth, OutputGroundtruth]]:
+    """Get all output groundtruth entries for a conversation."""
+    return (
+        session.query(InputGroundtruth, OutputGroundtruth)
+        .join(OutputGroundtruth, InputGroundtruth.id == OutputGroundtruth.message_id)
+        .filter(InputGroundtruth.conversation_id == conversation_id)
+        .order_by(InputGroundtruth.order)
+        .all()
+    )
