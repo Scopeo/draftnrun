@@ -1,6 +1,7 @@
 from uuid import UUID
 from typing import Optional
 import logging
+import uuid
 
 from sqlalchemy.orm import Session
 from sqlalchemy import func, and_
@@ -68,8 +69,12 @@ def create_source(
     qdrant_schema: Optional[dict] = None,
     embedding_model_reference: Optional[str] = None,
     attributes: Optional[SourceAttributes] = None,
+    source_id: Optional[UUID] = None,
 ) -> UUID:
+    if source_id is None:
+        source_id = uuid.uuid4()
     source_data_create = db.DataSource(
+        id=source_id,
         name=source_name,
         type=source_type,
         organization_id=organization_id,

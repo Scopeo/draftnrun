@@ -8,6 +8,7 @@ from ada_backend.schemas.ingestion_task_schema import SourceAttributes
 
 
 class DataSourceSchema(BaseModel):
+    id: Optional[UUID] = None
     name: str
     type: db.SourceType
     database_schema: Optional[str] = None
