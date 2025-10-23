@@ -62,7 +62,21 @@ def mock_agent():
 @pytest.fixture
 def mock_trace_manager():
     """Mock trace manager fixture."""
-    return MagicMock(spec=TraceManager)
+    mock_tm = MagicMock(spec=TraceManager)
+
+    # Create a mock span that has a proper to_json() method
+    mock_span = MagicMock()
+    mock_span.to_json.return_value = json.dumps({"context": {"trace_id": "test_trace_id", "span_id": "test_span_id"}})
+
+    # Create a context manager that returns the mock span
+    mock_context_manager = MagicMock()
+    mock_context_manager.__enter__.return_value = mock_span
+    mock_context_manager.__exit__.return_value = None
+
+    # Configure the trace manager to return our mock context manager
+    mock_tm.start_span.return_value = mock_context_manager
+
+    return mock_tm
 
 
 @pytest.fixture

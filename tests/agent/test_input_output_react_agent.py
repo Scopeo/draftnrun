@@ -114,10 +114,6 @@ def test_template_variable_injection(
     agent_calls_mock, get_span_mock, input_component, mock_trace_manager, mock_llm_service, real_rag_component
 ):
     get_span_mock.return_value.project_id = "test_project"
-    # Ensure span.to_json() returns a real JSON string with proper structure, not a MagicMock
-    get_span_mock.return_value.start_span.return_value.__enter__.return_value.to_json.return_value = json.dumps(
-        {"context": {"trace_id": "test_trace_id", "span_id": "test_span_id"}}
-    )
     counter_mock = MagicMock()
     agent_calls_mock.labels.return_value = counter_mock
 
@@ -191,10 +187,6 @@ def test_rag_filter_superseding_react_function_calling_rag_filter(
     mock_qdrant_service,
 ):
     get_span_mock.return_value.project_id = "test_project"
-    # Ensure span.to_json() returns a real JSON string with proper structure, not a MagicMock
-    get_span_mock.return_value.start_span.return_value.__enter__.return_value.to_json.return_value = json.dumps(
-        {"context": {"trace_id": "test_trace_id", "span_id": "test_span_id"}}
-    )
     counter_mock = MagicMock()
     agent_calls_mock.labels.return_value = counter_mock
 
