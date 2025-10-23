@@ -28,7 +28,7 @@ def seed_web_search_components(session: Session):
         name="Internet Search with OpenAI",
         is_agent=True,
         function_callable=True,
-        icon="tabler-brand-openai",
+        icon="tabler-world-search",
     )
     upsert_components(
         session=session,
