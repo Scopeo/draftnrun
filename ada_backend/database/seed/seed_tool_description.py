@@ -9,7 +9,7 @@ from engine.agent.llm_call_agent import DEFAULT_LLM_CALL_TOOL_DESCRIPTION
 from engine.agent.tools.tavily_search_tool import TAVILY_TOOL_DESCRIPTION
 from engine.agent.tools.api_call_tool import API_CALL_TOOL_DESCRIPTION
 from engine.agent.document_enhanced_llm_call import DEFAULT_DOCUMENT_ENHANCED_LLM_CALL_TOOL_DESCRIPTION
-from engine.agent.inputs_outputs.input import DEFAULT_INPUT_TOOL_DESCRIPTION
+from engine.agent.inputs_outputs.start import DEFAULT_START_TOOL_DESCRIPTION
 from engine.agent.filter import DEFAULT_FILTER_TOOL_DESCRIPTION
 from engine.agent.rag.rag import format_rag_tool_description
 from engine.agent.react_function_calling import get_dummy_ai_agent_description
@@ -79,8 +79,8 @@ def seed_tool_description(session: Session):
         id=TOOL_DESCRIPTION_UUIDS["default_document_enhanced_llm_agent"],
         **DEFAULT_DOCUMENT_ENHANCED_LLM_CALL_TOOL_DESCRIPTION.model_dump(),
     )
-    default_input_tool_description = db.ToolDescription(
-        id=TOOL_DESCRIPTION_UUIDS["default_input_tool_description"], **DEFAULT_INPUT_TOOL_DESCRIPTION.model_dump()
+    default_start_tool_description = db.ToolDescription(
+        id=TOOL_DESCRIPTION_UUIDS["default_input_tool_description"], **DEFAULT_START_TOOL_DESCRIPTION.model_dump()
     )
     default_filter_tool_description = db.ToolDescription(
         id=TOOL_DESCRIPTION_UUIDS["default_filter_tool_description"], **DEFAULT_FILTER_TOOL_DESCRIPTION.model_dump()
@@ -125,7 +125,7 @@ def seed_tool_description(session: Session):
             default_tool_description,
             default_web_search_openai_tool_description,
             default_document_enhanced_llm_agent,
-            default_input_tool_description,
+            default_start_tool_description,
             default_filter_tool_description,
             gmail_sender_tool_description,
             python_code_runner_tool_description,

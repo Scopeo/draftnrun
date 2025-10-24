@@ -239,8 +239,8 @@ def _create_dummy_agent_workflow_config():
                 "tool_parameter_name": None,
                 "subcomponents_info": [],
                 "id": api_input_id,
-                "name": "API Input",
-                "ref": "API Input",
+                "name": "Start",
+                "ref": "Start",
                 "is_start_node": True,
                 "component_id": "01357c0b-bc99-44ce-a435-995acc5e2544",  # input component UUID
                 "component_version_id": "01357c0b-bc99-44ce-a435-995acc5e2544",
@@ -271,7 +271,7 @@ def _create_dummy_agent_workflow_config():
                     "required_tool_properties": [],
                 },
                 "integration": None,
-                "component_name": "API Input",
+                "component_name": "Start",
                 "component_description": "This block is triggered by an API call",
             },
             {

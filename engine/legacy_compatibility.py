@@ -23,7 +23,7 @@ LOGGER = logging.getLogger(__name__)
 # ============================================================================
 
 
-def get_unmigrated_output_type(component, port_name: str) -> Type | None:
+def get_unmigrated_output_type(agent, port_name: str) -> Type | None:
     """Get output type for unmigrated components using known patterns.
 
     LEGACY FUNCTION: This is a temporary solution for unmigrated components.
@@ -39,11 +39,11 @@ def get_unmigrated_output_type(component, port_name: str) -> Type | None:
         "is_final": Optional[bool],
     }
 
-    component_name = component.__class__.__name__
+    component_name = agent.__class__.__name__
 
     # Special case: Input component has different pattern
     # Input component actually outputs list[dict], not list[ChatMessage]
-    if component_name == "Input":
+    if component_name == "Start":
         return {"messages": list[dict]}.get(port_name)
 
     # Default: All other unmigrated components use AgentPayload pattern
@@ -56,9 +56,9 @@ def get_unmigrated_output_type(component, port_name: str) -> Type | None:
 
 
 def create_legacy_input_schema() -> Type[BaseModel]:
-    """Create legacy input schema for unmigrated Input component.
+    """Create legacy input schema for unmigrated Start/Input component.
 
-    LEGACY FUNCTION: DELETE after Input component is migrated to Agent base class.
+    LEGACY FUNCTION: DELETE after Start/Input component is migrated to Agent base class.
     """
 
     class InputSchema(BaseModel):

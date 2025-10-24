@@ -4,7 +4,7 @@ import pytest
 import asyncio
 from unittest.mock import MagicMock, patch
 from types import SimpleNamespace
-from engine.agent.inputs_outputs.input import Input
+from engine.agent.inputs_outputs.start import Start
 from engine.agent.llm_call_agent import LLMCallAgent
 from engine.agent.react_function_calling import ReActAgent
 from engine.agent.types import NodeData, ComponentAttributes, ToolDescription, AgentPayload, ChatMessage
@@ -22,7 +22,7 @@ def mock_trace_manager():
 @pytest.fixture
 def input_block(mock_trace_manager):
     """Input block with template vars in payload_schema."""
-    return Input(
+    return Start(
         trace_manager=mock_trace_manager,
         tool_description=ToolDescription(
             name="input", description="input", tool_properties={}, required_tool_properties=[]
@@ -269,7 +269,7 @@ def test_llm_call_with_file_handling(get_span_mock, agent_calls_mock, get_models
 def test_input_block_with_flat_template_vars(mock_trace_manager):
     """Test Input block handles flat template vars correctly."""
     # Create a fresh input block without schema defaults
-    input_block = Input(
+    input_block = Start(
         trace_manager=mock_trace_manager,
         tool_description=ToolDescription(
             name="input", description="input", tool_properties={}, required_tool_properties=[]

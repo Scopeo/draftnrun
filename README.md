@@ -662,9 +662,9 @@ AI models are the primary agents that you can run
 - **LLM Call**: Templated LLM Call
 - **Database Query Agent**: Agent able to interrogate a SQL database
 
-# Input
+# Start
 
-The input block is at the begining of each flow. It allows the user to determine what information the AI agent can use during the flow.
+The start block is at the begining of each flow. It allows the user to determine what information the AI agent can use during the flow.
 
 # Tools
 
