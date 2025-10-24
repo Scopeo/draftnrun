@@ -77,7 +77,7 @@ def get_projects_by_organization_with_details_service(
     session: Session,
     organization_id: UUID,
     user_id: UUID = None,
-    type: Optional[ProjectType] = None,
+    type: Optional[ProjectType] = ProjectType.WORKFLOW,
     include_templates: Optional[bool] = False,
 ) -> list[ProjectWithGraphRunnersSchema]:
     if user_id:

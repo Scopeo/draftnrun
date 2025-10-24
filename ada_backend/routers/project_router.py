@@ -60,7 +60,7 @@ def get_projects_by_organization_endpoint(
         ),
     ],
     session: Session = Depends(get_db),
-    type: Optional[ProjectType] = None,
+    type: Optional[ProjectType] = ProjectType.WORKFLOW,
     include_templates: Optional[bool] = False,
 ):
     if not user.id:

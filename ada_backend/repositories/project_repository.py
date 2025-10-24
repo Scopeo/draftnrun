@@ -98,7 +98,7 @@ def get_workflows_by_organization(
 def get_projects_by_organization_with_details(
     session: Session,
     organization_id: UUID,
-    type: Optional[db.ProjectType] = None,
+    type: Optional[db.ProjectType] = db.ProjectType.WORKFLOW,
     include_templates: bool = False,
 ) -> list[ProjectWithGraphRunnersSchema]:
     """
@@ -121,26 +121,20 @@ def get_projects_by_organization_with_details(
 
     projects = query.order_by(db.Project.created_at).all()
 
-    projects_dict = {}
-    for project in projects:
-        if project.id not in projects_dict:
-            projects_dict[project.id] = {"project": project, "graph_runners": []}
-
-        for env_binding in project.envs:
-            if env_binding.graph_runner:
-                projects_dict[project.id]["graph_runners"].append(
-                    GraphRunnerEnvDTO(
-                        graph_runner_id=env_binding.graph_runner.id,
-                        env=env_binding.environment,
-                        tag_version=env_binding.graph_runner.tag_version,
-                        version_name=env_binding.graph_runner.version_name,
-                        change_log=env_binding.graph_runner.change_log,
-                    )
-                )
-
     project_schemas = []
-    for project_data in projects_dict.values():
-        project = project_data["project"]
+    for project in projects:
+        graph_runners = [
+            GraphRunnerEnvDTO(
+                graph_runner_id=env_binding.graph_runner.id,
+                env=env_binding.environment,
+                tag_version=env_binding.graph_runner.tag_version,
+                version_name=env_binding.graph_runner.version_name,
+                change_log=env_binding.graph_runner.change_log,
+            )
+            for env_binding in project.envs
+            if env_binding.graph_runner
+        ]
+
         is_template = str(project.organization_id) == TEMPLATE_ORGANIZATION_ID
 
         project_schema = ProjectWithGraphRunnersSchema(
@@ -151,7 +145,7 @@ def get_projects_by_organization_with_details(
             project_type=project.type,
             created_at=str(project.created_at),
             updated_at=str(project.updated_at),
-            graph_runners=project_data["graph_runners"],
+            graph_runners=graph_runners,
             is_template=is_template,
         )
 
