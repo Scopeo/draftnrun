@@ -24,7 +24,7 @@ from ada_backend.database import models as db
 def seed_terminal_command_runner_components(session: Session):
     terminal_command_runner_component = Component(
         id=COMPONENT_UUIDS["terminal_command_runner"],
-        name="Terminal Command Runner",
+        name="Terminal Code Execution",
         is_agent=False,
         function_callable=True,
         can_use_function_calling=False,

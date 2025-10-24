@@ -24,7 +24,7 @@ from ada_backend.database import models as db
 def seed_api_call_components(session: Session):
     api_call_component = Component(
         id=COMPONENT_UUIDS["api_call_tool"],
-        name="API Call",
+        name="API Query",
         is_agent=False,
         function_callable=True,
         can_use_function_calling=False,

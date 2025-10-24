@@ -38,7 +38,7 @@ def seed_static_responder_components(session: Session):
         id=COMPONENT_UUIDS["static_responder"],
         component_id=COMPONENT_UUIDS["static_responder"],
         version_tag="0.0.1",
-        release_stage=db.ReleaseStage.PUBLIC,
+        release_stage=db.ReleaseStage.INTERNAL,
         description="A static responder tool that responds with a static message.",
         default_tool_description_id=TOOL_DESCRIPTION_UUIDS["default_tool_description"],
     )
