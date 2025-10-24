@@ -94,7 +94,7 @@ class SupportedEntityType(StrEnum):
     RUN_SQL_QUERY_TOOL = "RunSQLQueryTool"
     DOCUMENT_ENHANCED_LLM_CALL = "Document Enhanced LLM Agent"
     DOCUMENT_REACT_LOADER_AGENT = "Document AI Agent"
-    OCR_CALL = "OCR Call"
+    OCR_CALL = "Text recognition"
     STATIC_RESPONDER = "Static Responder"
     START = "Start"
     FILTER = "Json Filter"
