@@ -83,7 +83,7 @@ def test_check_project_has_input_component():
     response = client.get(endpoint, headers=HEADERS_JWT)
     graph_description = response.json()
     assert response.status_code == 200
-    assert graph_description["component_instances"][0]["component_id"] == str(COMPONENT_UUIDS["input"])
+    assert graph_description["component_instances"][0]["component_id"] == str(COMPONENT_UUIDS["start"])
 
 
 def test_update_project():

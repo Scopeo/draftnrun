@@ -65,6 +65,7 @@ def create_component_instance(
 
 
 # TODO: move to service
-def create_input_component(session: Session, name: str = "API Input") -> ComponentInstance:
+def create_input_component(session: Session, name: str = "Start") -> ComponentInstance:
     """Creates a new input component instance"""
-    return create_component_instance(session, component_version_id=COMPONENT_UUIDS["input"], name=name)
+    component_version_id = COMPONENT_UUIDS["start"]
+    return create_component_instance(session, component_version_id=component_version_id, name=name)
