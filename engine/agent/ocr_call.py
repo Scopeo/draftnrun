@@ -27,7 +27,7 @@ class OCRCall(Agent):
         self._ocr_service = ocr_service
         self._file_content = file_content
 
-    async def _run_without_io_trace(self, *input_payloads: AgentPayload | dict) -> AgentPayload:
+    async def _run_without_io_trace(self, *input_payloads: AgentPayload | dict, ctx: dict) -> AgentPayload:
 
         for payload in input_payloads:
             payload_json = (

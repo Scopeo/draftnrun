@@ -22,9 +22,9 @@ from ada_backend.database.seed.constants import COMPLETION_MODEL_IN_DB
 def seed_ocr_call_components(session: Session):
     ocr_call = db.Component(
         id=COMPONENT_UUIDS["ocr_call"],
-        name="OCR Call",
+        name="Text recognition",
         is_agent=True,
-        function_callable=True,
+        function_callable=False,
         icon="tabler-text-scan-2",
     )
     upsert_components(
@@ -39,7 +39,7 @@ def seed_ocr_call_components(session: Session):
         component_id=COMPONENT_UUIDS["ocr_call"],
         version_tag="0.0.1",
         release_stage=db.ReleaseStage.PUBLIC,
-        description="Extract text from PDF files using OCR (Optical Character Recognition)",
+        description="Extract text from scanned PDFs and images",
         default_tool_description_id=TOOL_DESCRIPTION_UUIDS["default_tool_description"],
     )
     upsert_component_versions(
