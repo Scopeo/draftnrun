@@ -17,7 +17,6 @@ from ada_backend.database.component_definition_seeding import (
 )
 
 from ada_backend.repositories.component_repository import get_component_version_by_id
-from ada_backend.repositories.component_repository import get_component_by_id
 from ada_backend.database.seed.seed_tool_description import TOOL_DESCRIPTION_UUIDS
 from ada_backend.database.seed.utils import COMPONENT_UUIDS
 
@@ -54,12 +53,6 @@ def seed_start_components(session: Session):
     # LEGACY: Manual port seeding for unmigrated Input component
 
     existing = get_component_version_by_id(session, start_version.id)
-    if existing:
-        # Ensure an OUTPUT canonical 'messages' port exists
-        port_defs = (
-            session.query(db.PortDefinition).filter(db.PortDefinition.component_version_id == start_version.id).all()
-        )
-    existing = get_component_by_id(session, start_component.id)
     if existing:
         # Ensure an OUTPUT canonical 'messages' port exists
         port_defs = (
