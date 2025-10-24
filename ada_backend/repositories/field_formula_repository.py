@@ -43,10 +43,6 @@ def get_field_formulas_for_instances(
     session: Session,
     component_instance_ids: list[UUID],
 ) -> list[db.FieldFormula]:
-    if not component_instance_ids:
-        return []
     return (
-        session.query(db.FieldFormula)
-        .filter(db.FieldFormula.component_instance_id.in_(component_instance_ids))
-        .all()
+        session.query(db.FieldFormula).filter(db.FieldFormula.component_instance_id.in_(component_instance_ids)).all()
     )

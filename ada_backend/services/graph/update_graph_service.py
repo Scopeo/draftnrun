@@ -428,4 +428,6 @@ def _create_port_mappings_for_pure_ref_formulas(
         target_port_definition_id=target_port_def_id,
         dispatch_strategy="direct",
     )
-    print(f"✅ Created port mapping for {ref_node.instance}.{ref_node.port} -> {component_instance_id}.{field_name}")
+    LOGGER.info(
+        f"Created port mapping for {ref_node.instance}.{ref_node.port} -> {component_instance_id}.{field_name}"
+    )
