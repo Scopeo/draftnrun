@@ -620,7 +620,6 @@ def get_all_components_with_parameters(
                 component_with_version.component_version_id,
             )
 
-            # Get parameter groups for this component version
             parameter_groups = get_component_parameter_groups(session, component_with_version.component_version_id)
             parameter_groups_dto = [
                 ParameterGroupSchema(
@@ -647,7 +646,6 @@ def get_all_components_with_parameters(
                     if param.id in global_param_def_ids:
                         continue
 
-                    # Get parameter group name if parameter belongs to a group
                     parameter_group_name = None
                     if param.parameter_group:
                         parameter_group_name = param.parameter_group.name
