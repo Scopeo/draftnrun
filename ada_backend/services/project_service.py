@@ -1,6 +1,7 @@
 from uuid import UUID
 from logging import getLogger
 import uuid
+from typing import Optional
 
 from sqlalchemy.orm import Session
 
@@ -15,6 +16,7 @@ from ada_backend.services.graph.deploy_graph_service import clone_graph_runner
 from ada_backend.repositories.project_repository import (
     get_project_with_details,
     get_workflows_by_organization,
+    get_projects_by_organization_with_details,
     delete_project,
     insert_project,
     update_project,
@@ -69,6 +71,18 @@ def get_workflows_by_organization_service(
         )
         for project in projects
     ]
+
+
+def get_projects_by_organization_with_details_service(
+    session: Session,
+    organization_id: UUID,
+    user_id: UUID = None,
+    type: Optional[str] = None,
+    include_templates: Optional[bool] = True,
+) -> list[ProjectWithGraphRunnersSchema]:
+    if user_id:
+        track_user_get_project_list(user_id, organization_id)
+    return get_projects_by_organization_with_details(session, organization_id, type, include_templates)
 
 
 def delete_project_service(session: Session, project_id: UUID) -> ProjectDeleteResponse:

@@ -5,7 +5,11 @@ import logging
 from sqlalchemy.orm import Session
 
 from ada_backend.database import models as db
-from ada_backend.schemas.project_schema import GraphRunnerEnvDTO, ProjectWithGraphRunnersSchema
+from ada_backend.schemas.project_schema import (
+    GraphRunnerEnvDTO,
+    ProjectWithGraphRunnersSchema,
+)
+from ada_backend.repositories.template_repository import TEMPLATE_ORGANIZATION_ID
 
 LOGGER = logging.getLogger(__name__)
 
@@ -89,6 +93,65 @@ def get_workflows_by_organization(
     organization_id: UUID,
 ) -> list[db.WorkflowProject]:
     return session.query(db.WorkflowProject).filter(db.WorkflowProject.organization_id == organization_id).all()
+
+
+def get_projects_by_organization_with_details(
+    session: Session,
+    organization_id: UUID,
+    type: Optional[str] = None,
+    include_templates: bool = True,
+) -> list[ProjectWithGraphRunnersSchema]:
+    """
+    Get projects (both workflow and agent) by organization with graph runners and templates.
+    """
+
+    projects = (
+        session.query(db.Project, db.GraphRunner, db.ProjectEnvironmentBinding)
+        .join(db.ProjectEnvironmentBinding, db.ProjectEnvironmentBinding.project_id == db.Project.id)
+        .join(db.GraphRunner, db.GraphRunner.id == db.ProjectEnvironmentBinding.graph_runner_id)
+        .filter(
+            (db.Project.organization_id == organization_id)
+            | (db.Project.organization_id == TEMPLATE_ORGANIZATION_ID if include_templates else False),
+            db.Project.type == type if type else True,
+        )
+        .order_by(db.Project.created_at, db.GraphRunner.created_at)
+    ).all()
+
+    projects_dict = {}
+    for project, graph_runner, env_binding in projects:
+        if project.id not in projects_dict:
+            projects_dict[project.id] = {"project": project, "graph_runners": []}
+
+        projects_dict[project.id]["graph_runners"].append(
+            GraphRunnerEnvDTO(
+                graph_runner_id=graph_runner.id,
+                env=env_binding.environment,
+                tag_version=graph_runner.tag_version,
+                version_name=graph_runner.version_name,
+                change_log=graph_runner.change_log,
+            )
+        )
+
+    project_schemas = []
+    for project_data in projects_dict.values():
+        project = project_data["project"]
+        is_template = str(project.organization_id) == TEMPLATE_ORGANIZATION_ID
+
+        project_schema = ProjectWithGraphRunnersSchema(
+            project_id=project.id,
+            project_name=project.name,
+            description=project.description,
+            organization_id=project.organization_id,
+            project_type=project.type,
+            created_at=str(project.created_at),
+            updated_at=str(project.updated_at),
+            graph_runners=project_data["graph_runners"],
+            is_template=is_template,
+        )
+
+        project_schemas.append(project_schema)
+
+    return project_schemas
 
 
 # --- CREATE operations ---
