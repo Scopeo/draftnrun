@@ -474,7 +474,7 @@ class GraphRunner(Base):
     updated_at = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     tag_version = mapped_column(String, nullable=True)
     version_name = mapped_column(String, nullable=True)
-    change_log = mapped_column(Text, nullable=True)
+    change_log = mapped_column(String, nullable=True)
 
     graph_edges = relationship("GraphRunnerEdge", back_populates="graph_runner")
     nodes = relationship("GraphRunnerNode", back_populates="graph_runner")
