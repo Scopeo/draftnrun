@@ -3,7 +3,7 @@ from typing import Optional, List
 from uuid import UUID
 from pydantic import BaseModel, field_validator
 
-from ada_backend.database.models import EnvType
+from ada_backend.database.models import EnvType, RoleType
 
 
 class Pagination(BaseModel):
@@ -17,7 +17,9 @@ class InputGroundtruthCreate(BaseModel):
     """Schema for creating a new input-groundtruth entry."""
 
     input: str
-    groundtruth: Optional[str] = None
+    conversation_id: str
+    role: RoleType
+    order: int
 
 
 class InputGroundtruthWithVersionResponse(BaseModel):
@@ -109,7 +111,6 @@ class InputGroundtruthUpdateWithId(BaseModel):
 
     id: UUID
     input: Optional[str] = None
-    groundtruth: Optional[str] = None
 
 
 class InputGroundtruthUpdateList(BaseModel):
@@ -130,7 +131,9 @@ class InputGroundtruthResponse(BaseModel):
     id: UUID
     dataset_id: UUID
     input: str
-    groundtruth: Optional[str] = None
+    conversation_id: str
+    role: RoleType
+    order: int
     created_at: datetime
     updated_at: datetime
 
@@ -142,3 +145,38 @@ class InputGroundtruthResponseList(BaseModel):
     """Schema for multiple input-groundtruth responses."""
 
     inputs_groundtruths: List[InputGroundtruthResponse]
+
+
+class OutputGroundtruthCreate(BaseModel):
+    """Schema for creating a new output groundtruth entry."""
+
+    message: str
+    message_id: UUID
+
+
+class OutputGroundtruthResponse(BaseModel):
+    """Schema for output groundtruth response."""
+
+    id: UUID
+    message: str
+    message_id: UUID
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class ConversationSaveRequest(BaseModel):
+    """Schema for saving a conversation to the database."""
+
+    conversation_id: str
+    dataset_id: UUID
+
+
+class ConversationSaveResponse(BaseModel):
+    """Schema for conversation save response."""
+
+    inputs: List[InputGroundtruthResponse]
+    outputs: List[OutputGroundtruthResponse]
+    total_messages: int

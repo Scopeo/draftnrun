@@ -14,6 +14,8 @@ from ada_backend.schemas.input_groundtruth_schema import (
     PaginatedInputGroundtruthResponse,
     QARunRequest,
     QARunResponse,
+    ConversationSaveRequest,
+    ConversationSaveResponse,
 )
 from ada_backend.schemas.dataset_schema import (
     DatasetCreateList,
@@ -36,6 +38,7 @@ from ada_backend.services.quality_assurance_service import (
     update_dataset_service,
     delete_datasets_service,
     get_datasets_by_project_service,
+    save_conversation_to_groundtruth_service,
 )
 from ada_backend.database.setup_db import get_db
 
@@ -359,6 +362,31 @@ def delete_input_groundtruth_endpoint(
         raise HTTPException(status_code=400, detail="Bad request") from e
     except Exception as e:
         LOGGER.error(f"Failed to delete input-groundtruth entries for dataset {dataset_id}: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error") from e
+
+
+@router.post(
+    "/projects/{project_id}/qa/conversations/save",
+    response_model=ConversationSaveResponse,
+    summary="Save Conversation to Groundtruth",
+    tags=["Quality Assurance"],
+)
+async def save_conversation_to_groundtruth(
+    project_id: UUID,
+    conversation_data: ConversationSaveRequest,
+    session: Session = Depends(get_db),
+) -> ConversationSaveResponse:
+    try:
+        return save_conversation_to_groundtruth_service(
+            session=session,
+            conversation_id=conversation_data.conversation_id,
+            dataset_id=conversation_data.dataset_id,
+        )
+    except ValueError as e:
+        LOGGER.error(f"Failed to save conversation {conversation_data.conversation_id}: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except Exception as e:
+        LOGGER.error(f"Failed to save conversation {conversation_data.conversation_id}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
