@@ -1,6 +1,7 @@
 import pandas as pd
 import asyncio
 from uuid import uuid4
+from unittest.mock import AsyncMock, MagicMock
 
 from engine.qdrant_service import QdrantCollectionSchema, QdrantService, FieldSchema
 from engine.llm_services.llm_service import EmbeddingService
@@ -252,3 +253,68 @@ def test_multiple_metadata_fields_index_creation():
 
     # Cleanup
     asyncio.run(qdrant_service.delete_collection_async(TEST_COLLECTION_NAME_MULTI))
+
+
+def test_custom_embedding_size_collection_creation():
+    """
+    Test that verifies Qdrant collections are created with the correct embedding size
+    from the embedding service, especially for custom/local models with different dimensions.
+    """
+    TEST_COLLECTION_NAME_CUSTOM = f"test_custom_embedding_{uuid4()}"
+    CUSTOM_EMBEDDING_SIZE = 1536
+
+    mock_embedding_service = MagicMock()
+    mock_embedding_service.embedding_size = CUSTOM_EMBEDDING_SIZE
+
+    fake_embeddings = [[0.1] * CUSTOM_EMBEDDING_SIZE, [0.2] * CUSTOM_EMBEDDING_SIZE]
+    mock_embedding_data = [MagicMock(embedding=emb) for emb in fake_embeddings]
+    mock_embedding_service.embed_text_async = AsyncMock(return_value=mock_embedding_data)
+
+    qdrant_schema = QdrantCollectionSchema(
+        chunk_id_field="chunk_id",
+        content_field="content",
+        file_id_field="file_id",
+        url_id_field="url",
+    )
+
+    qdrant_service = QdrantService.from_defaults(
+        embedding_service=mock_embedding_service,
+        default_collection_schema=qdrant_schema,
+        timeout=60.0,
+    )
+
+    if asyncio.run(qdrant_service.collection_exists_async(TEST_COLLECTION_NAME_CUSTOM)):
+        asyncio.run(qdrant_service.delete_collection_async(TEST_COLLECTION_NAME_CUSTOM))
+
+    asyncio.run(qdrant_service.create_collection_async(collection_name=TEST_COLLECTION_NAME_CUSTOM))
+
+    assert asyncio.run(qdrant_service.collection_exists_async(TEST_COLLECTION_NAME_CUSTOM))
+
+    chunks = [
+        {
+            "chunk_id": "1",
+            "content": "test content 1",
+            "file_id": "file_1",
+            "url": "https://test1.com",
+        },
+        {
+            "chunk_id": "2",
+            "content": "test content 2",
+            "file_id": "file_2",
+            "url": "https://test2.com",
+        },
+    ]
+
+    result = asyncio.run(
+        qdrant_service.add_chunks_async(
+            list_chunks=chunks,
+            collection_name=TEST_COLLECTION_NAME_CUSTOM,
+        )
+    )
+
+    assert result is True
+    assert asyncio.run(qdrant_service.count_points_async(TEST_COLLECTION_NAME_CUSTOM)) == 2
+
+    mock_embedding_service.embed_text_async.assert_called_with(["test content 1", "test content 2"])
+
+    asyncio.run(qdrant_service.delete_collection_async(TEST_COLLECTION_NAME_CUSTOM))
