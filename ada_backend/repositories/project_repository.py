@@ -104,14 +104,25 @@ def get_projects_by_organization_with_details(
     """
     Get projects (both workflow and agent) by organization with graph runners and templates.
     """
+    from sqlalchemy import or_, and_, exists
 
     query = session.query(db.Project).options(
         joinedload(db.Project.envs).joinedload(db.ProjectEnvironmentBinding.graph_runner)
     )
 
     if include_templates:
+        # Include own projects + production templates from template org
+        has_production = exists().where(
+            and_(
+                db.ProjectEnvironmentBinding.project_id == db.Project.id,
+                db.ProjectEnvironmentBinding.environment == db.EnvType.PRODUCTION
+            )
+        )
         query = query.filter(
-            (db.Project.organization_id == organization_id) | (db.Project.organization_id == TEMPLATE_ORGANIZATION_ID)
+            or_(
+                db.Project.organization_id == organization_id,
+                and_(db.Project.organization_id == TEMPLATE_ORGANIZATION_ID, has_production)
+            )
         )
     else:
         query = query.filter(db.Project.organization_id == organization_id)
@@ -135,9 +146,13 @@ def get_projects_by_organization_with_details(
             if env_binding.graph_runner
         ]
 
-        is_template = str(project.organization_id) == TEMPLATE_ORGANIZATION_ID
+        # Context-aware: templates only when viewed from other orgs
+        is_template = (
+            str(organization_id) != TEMPLATE_ORGANIZATION_ID
+            and str(project.organization_id) == TEMPLATE_ORGANIZATION_ID
+        )
 
-        project_schema = ProjectWithGraphRunnersSchema(
+        project_schemas.append(ProjectWithGraphRunnersSchema(
             project_id=project.id,
             project_name=project.name,
             description=project.description,
@@ -147,9 +162,7 @@ def get_projects_by_organization_with_details(
             updated_at=str(project.updated_at),
             graph_runners=graph_runners,
             is_template=is_template,
-        )
-
-        project_schemas.append(project_schema)
+        ))
 
     return project_schemas
 
