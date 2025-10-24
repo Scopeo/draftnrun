@@ -14,7 +14,6 @@ from pydantic import BaseModel
 
 from engine.agent.types import ChatMessage, AgentPayload, NodeData
 from engine.trace.serializer import serialize_to_json
-from ada_backend.database.seed.utils import COMPONENT_UUIDS
 
 LOGGER = logging.getLogger(__name__)
 
@@ -24,7 +23,7 @@ LOGGER = logging.getLogger(__name__)
 # ============================================================================
 
 
-def get_unmigrated_output_type(component, port_name: str) -> Type | None:
+def get_unmigrated_output_type(agent, port_name: str) -> Type | None:
     """Get output type for unmigrated components using known patterns.
 
     LEGACY FUNCTION: This is a temporary solution for unmigrated components.
@@ -40,10 +39,11 @@ def get_unmigrated_output_type(component, port_name: str) -> Type | None:
         "is_final": Optional[bool],
     }
 
-    # Special case: Start/Input component has different pattern
-    # Start/Input component actually outputs list[dict], not list[ChatMessage]
-    component_id = component.id
-    if component_id in [COMPONENT_UUIDS["start"]]:
+    component_name = agent.__class__.__name__
+
+    # Special case: Input component has different pattern
+    # Input component actually outputs list[dict], not list[ChatMessage]
+    if component_name == "Start":
         return {"messages": list[dict]}.get(port_name)
 
     # Default: All other unmigrated components use AgentPayload pattern
