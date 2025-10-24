@@ -81,7 +81,7 @@ class SupportedEntityType(StrEnum):
     SNOWFLAKE_DB_SERVICE = "SnowflakeDBService"
     TAVILY_AGENT = "Internet Search with Tavily"
     OPENAI_WEB_SEARCH_AGENT = "Internet Search (OpenAI)"
-    API_CALL_TOOL = "API Query"
+    API_CALL_TOOL = "API Call"
 
     PYTHON_CODE_RUNNER_TOOL = "Code Execution (Python)"
     TERMINAL_COMMAND_RUNNER_TOOL = "Terminal code execution"
