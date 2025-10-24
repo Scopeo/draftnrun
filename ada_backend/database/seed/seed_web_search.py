@@ -25,8 +25,8 @@ from ada_backend.database.seed.constants import (
 def seed_web_search_components(session: Session):
     web_search_openai_agent = db.Component(
         id=COMPONENT_UUIDS["web_search_openai_agent"],
-        name="Internet Search with OpenAI",
-        is_agent=True,
+        name="Internet Search (OpenAI)",
+        is_agent=False,
         function_callable=True,
         icon="tabler-world-search",
     )

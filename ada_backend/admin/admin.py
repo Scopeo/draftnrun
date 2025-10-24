@@ -220,7 +220,7 @@ class ComponentVersionAdmin(EnhancedModelView, model=db.ComponentVersion):
         "updated_at",
     ]
     column_searchable_list = ["version_tag", "description", "release_stage"]
-    form_columns = ["component", "version_tag", "description", "release_stage", "default_tool_description"]
+    form_columns = ["component", "version_tag", "description", "release_stage"]
 
 
 class ReleaseStageToCurrentVersionMappingAdmin(EnhancedModelView, model=db.ReleaseStageToCurrentVersionMapping):

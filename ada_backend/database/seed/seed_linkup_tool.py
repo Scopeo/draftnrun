@@ -15,7 +15,7 @@ from ada_backend.database.seed.utils import COMPONENT_UUIDS
 def seed_linkup_tool_components(session: Session):
     linkup_tool = db.Component(
         id=COMPONENT_UUIDS["linkup_search_tool"],
-        name="Linkup Search Tool",
+        name="Internet Search (Linkup)",
         is_agent=False,
         function_callable=True,
         icon="tabler-world-search",

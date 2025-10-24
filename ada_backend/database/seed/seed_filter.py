@@ -74,7 +74,7 @@ DEFAULT_OUTPUT_FORMAT = {
 def seed_filter_components(session: Session):
     filter = db.Component(
         id=COMPONENT_UUIDS["filter"],
-        name="Filter",
+        name="Json Filter",
         is_agent=True,
         is_protected=True,
         icon="tabler-json",
