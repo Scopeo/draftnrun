@@ -237,18 +237,16 @@ def get_subcomponent_param_def_by_component_version(
     session: Session,
     component_version_id: UUID,
 ) -> list[tuple[db.ComponentParameterDefinition, db.ComponentParameterChildRelationship]]:
-    """
-    Retrieves all parameter definitions for a given component version with their child relationships.
-    """
     return (
         session.query(db.ComponentParameterDefinition, db.ComponentParameterChildRelationship)
         .join(
             db.ComponentParameterChildRelationship,
-            db.ComponentParameterDefinition.id
-            == db.ComponentParameterChildRelationship.component_parameter_definition_id,
+            db.ComponentParameterChildRelationship.component_parameter_definition_id
+            == db.ComponentParameterDefinition.id,
         )
         .filter(
             db.ComponentParameterDefinition.component_version_id == component_version_id,
+            db.ComponentParameterDefinition.type == ParameterType.COMPONENT,
         )
         .all()
     )
