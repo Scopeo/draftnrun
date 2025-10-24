@@ -33,7 +33,7 @@ router = APIRouter(tags=["Agents"])
 LOGGER = logging.getLogger(__name__)
 
 
-@router.get("/org/{organization_id}/agents", response_model=list[AgentWithGraphRunnersSchema])
+@router.get("/org/{organization_id}/agents", response_model=list[AgentWithGraphRunnersSchema], deprecated=True)
 def get_all_agents(
     organization_id: UUID,
     user: Annotated[

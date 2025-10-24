@@ -39,6 +39,7 @@ class GraphRunnerEnvDTO(BaseModel):
 class ProjectWithGraphRunnersSchema(ProjectResponse):
     project_type: Optional[ProjectType] = None
     graph_runners: List[GraphRunnerEnvDTO] = Field(default_factory=list)
+    is_template: bool = False
 
 
 class ChatResponse(BaseModel):

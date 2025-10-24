@@ -1,10 +1,11 @@
-from typing import Annotated, List
+from typing import Annotated, List, Optional
 from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Body
 from sqlalchemy.orm import Session
 import logging
 
-from ada_backend.database.models import EnvType, CallType
+
+from ada_backend.database.models import EnvType, CallType, ProjectType
 from ada_backend.database.setup_db import get_db
 from ada_backend.schemas.auth_schema import SupabaseUser
 from ada_backend.schemas.chart_schema import ChartsResponse
@@ -12,7 +13,6 @@ from ada_backend.schemas.monitor_schema import KPISResponse
 from ada_backend.schemas.project_schema import (
     ChatResponse,
     ProjectDeleteResponse,
-    ProjectResponse,
     ProjectSchema,
     ProjectWithGraphRunnersSchema,
     ProjectUpdateSchema,
@@ -34,7 +34,7 @@ from ada_backend.services.project_service import (
     create_workflow,
     delete_project_service,
     get_project_service,
-    get_workflows_by_organization_service,
+    get_projects_by_organization_with_details_service,
     update_project_service,
 )
 from ada_backend.repositories.env_repository import get_env_relationship_by_graph_runner_id
@@ -48,9 +48,8 @@ LOGGER = logging.getLogger(__name__)
 router = APIRouter(prefix="/projects")
 
 
-# TODO: move to workflow_router
-@router.get("/org/{organization_id}", response_model=List[ProjectResponse], tags=["Workflows"])
-def get_workflows_by_organization_endpoint(
+@router.get("/org/{organization_id}", response_model=List[ProjectWithGraphRunnersSchema], tags=["Projects"])
+def get_projects_by_organization_endpoint(
     organization_id: UUID,
     user: Annotated[
         SupabaseUser,
@@ -61,11 +60,15 @@ def get_workflows_by_organization_endpoint(
         ),
     ],
     session: Session = Depends(get_db),
+    type: Optional[ProjectType] = ProjectType.WORKFLOW,
+    include_templates: Optional[bool] = False,
 ):
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
     try:
-        return get_workflows_by_organization_service(session, organization_id, user.id)
+        return get_projects_by_organization_with_details_service(
+            session, organization_id, user.id, type, include_templates
+        )
     except ValueError as e:
         LOGGER.error(
             f"Failed to list workflows for organization {organization_id} and user {user.id}: {str(e)}", exc_info=True
