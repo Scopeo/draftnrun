@@ -250,14 +250,12 @@ def upsert_release_stage_to_current_version_mapping(
     Upserts a single release stage to current version mapping in the database.
     This allows manual control over which component version is considered "current"
     for a specific release stage. This is required for get_current_component_versions to work properly.
-
     Args:
         session: SQLAlchemy session
         component_id: ID of the component
         release_stage: The release stage (PUBLIC, BETA, EARLY_ACCESS, INTERNAL)
         component_version_id: ID of the component version to set as current for this stage
     """
-    # Check if mapping already exists
     existing_mapping = (
         session.query(db.ReleaseStageToCurrentVersionMapping)
         .filter(
@@ -266,7 +264,6 @@ def upsert_release_stage_to_current_version_mapping(
         )
         .first()
     )
-
     if existing_mapping:
         # Update the mapping to point to the specified version
         if existing_mapping.component_version_id != component_version_id:
@@ -292,7 +289,31 @@ def upsert_release_stage_to_current_version_mapping(
             f"Created release stage mapping for component {component_id} "
             f"stage {release_stage} to version {component_version_id}"
         )
+    stage_order = [
+        db.ReleaseStage.INTERNAL,
+        db.ReleaseStage.BETA,
+        db.ReleaseStage.EARLY_ACCESS,
+        db.ReleaseStage.PUBLIC,
+    ]
+    target_stage_index = stage_order.index(release_stage)
 
+    higher_stages = stage_order[target_stage_index + 1 :]
+    if higher_stages:
+        deleted_count = (
+            session.query(db.ReleaseStageToCurrentVersionMapping)
+            .filter(
+                db.ReleaseStageToCurrentVersionMapping.component_id == component_id,
+                db.ReleaseStageToCurrentVersionMapping.component_version_id == component_version_id,
+                db.ReleaseStageToCurrentVersionMapping.release_stage.in_(higher_stages),
+            )
+            .delete(synchronize_session=False)
+        )
+
+        if deleted_count > 0:
+            LOGGER.info(
+                f"Removed {deleted_count} higher release stage mapping(s) for component {component_id} "
+                f"version {component_version_id} (downgrade to {release_stage})"
+            )
     session.commit()
 
 

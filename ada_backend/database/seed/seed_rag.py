@@ -142,7 +142,7 @@ def seed_rag_components(session: Session):
 
     rag_agent = db.Component(
         id=COMPONENT_UUIDS["rag_agent"],
-        name="RAG",
+        name="Knowledge Search",
         is_agent=True,
         function_callable=True,
         icon="tabler-report-search",
