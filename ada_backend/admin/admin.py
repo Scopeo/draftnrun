@@ -181,7 +181,7 @@ class ComponentParameterDefinitionAdmin(EnhancedModelView, model=db.ComponentPar
         "parameter_order_within_group",
     ]
     form_columns = [
-        "component",
+        "component_version",
         "name",
         "type",
         "nullable",
@@ -193,7 +193,7 @@ class ComponentParameterDefinitionAdmin(EnhancedModelView, model=db.ComponentPar
         "parameter_order_within_group",
     ]
     column_filters = ["type", "is_advanced", "nullable", "ui_component", "parameter_group"]
-    column_searchable_list = ["name", "component.name", "parameter_group.name"]
+    column_searchable_list = ["name", "component_version.component.name", "parameter_group.name"]
 
 
 class ComponentAdmin(EnhancedModelView, model=db.Component):
@@ -316,16 +316,16 @@ class ComponentParameterGroupAdmin(EnhancedModelView, model=db.ComponentParamete
     icon = "fas fa-layer-group"
     column_list = [
         "id",
-        "component",
+        "component_version",
         "parameter_group",
         "group_order_within_component",
     ]
     form_columns = [
-        "component",
+        "component_version",
         "parameter_group",
         "group_order_within_component",
     ]
-    column_searchable_list = ["component.name", "parameter_group.name"]
+    column_searchable_list = ["component_version.component.name", "parameter_group.name"]
 
 
 class BasicParameterAdmin(EnhancedModelView, model=db.BasicParameter):
