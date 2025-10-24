@@ -12,7 +12,6 @@ from ada_backend.database.component_definition_seeding import (
     upsert_component_categories,
     upsert_component_versions,
     upsert_components,
-    upsert_components_parameter_child_relationships,
     upsert_components_parameter_definitions,
     upsert_release_stage_to_current_version_mapping,
 )
@@ -24,7 +23,7 @@ from ada_backend.database.seed.utils import (
     ParameterLLMConfig,
     build_function_calling_service_config_definitions,
 )
-from ada_backend.database.seed.constants import COMPLETION_MODEL_IN_DB
+from ada_backend.database.seed.constants import COMPLETION_MODEL_IN_DB, TEMPERATURE_IN_DB
 from engine.agent.sql.react_sql_tool import DEFAULT_REACT_SQL_TOOL_PROMPT
 
 
@@ -34,7 +33,7 @@ def seed_react_sql_components(session: Session):
         name="Database Query Agent",
         is_agent=True,
         function_callable=True,
-        can_use_function_calling=True,
+        can_use_function_calling=False,
         icon="tabler-database-cog",
     )
     upsert_components(
@@ -48,43 +47,25 @@ def seed_react_sql_components(session: Session):
         component_id=COMPONENT_UUIDS["react_sql_agent"],
         version_tag="0.0.1",
         release_stage=db.ReleaseStage.PUBLIC,
-        description="ReAct Agent with SQL query tools",
+        description="Agent that can query databases",
         default_tool_description_id=TOOL_DESCRIPTION_UUIDS["default_react_sql_tool_description"],
     )
     upsert_component_versions(
         session=session,
         component_versions=[react_sql_agent_version],
     )
-    # ReAct SQL Agent
-    react_sql_agent_param = db.ComponentParameterDefinition(
-        id=UUID("3f510f8c-79e9-4cf0-abe3-880e89c9372d"),
-        component_version_id=react_sql_agent_version.id,
-        name="db_service",
-        type=ParameterType.COMPONENT,
-        nullable=False,
-    )
-    upsert_components_parameter_definitions(
-        session=session,
-        component_parameter_definitions=[react_sql_agent_param],
-    )
-    upsert_components_parameter_child_relationships(
-        session=session,
-        component_parameter_child_relationships=[
-            db.ComponentParameterChildRelationship(
-                id=UUID("f4749274-abc6-4de7-8ef2-2e7424895151"),
-                component_parameter_definition_id=react_sql_agent_param.id,
-                child_component_version_id=COMPONENT_VERSION_UUIDS["snowflake_db_service"],
-            ),
-            db.ComponentParameterChildRelationship(
-                id=UUID("12e869f3-0465-4e47-a810-d79a4f9a7bd0"),
-                component_parameter_definition_id=react_sql_agent_param.id,
-                child_component_version_id=COMPONENT_VERSION_UUIDS["sql_db_service"],
-            ),
-        ],
-    )
+    # ReAct SQL Agent - db_service is now handled by the processor
+    # The processor will instantiate the DB service from the configuration
     upsert_components_parameter_definitions(
         session=session,
         component_parameter_definitions=[
+            db.ComponentParameterDefinition(
+                id=UUID("3f510f8c-79e9-4cf0-abe3-880e89c9372d"),
+                component_version_id=react_sql_agent_version.id,
+                name="db_service",
+                type=ParameterType.JSON,
+                nullable=True,
+            ),
             db.ComponentParameterDefinition(
                 id=UUID("3253a083-0a54-4d7b-b438-6a7c13d67dc8"),
                 component_version_id=react_sql_agent_version.id,
@@ -121,7 +102,7 @@ def seed_react_sql_components(session: Session):
                 ui_component=UIComponent.TEXTFIELD,
                 ui_component_properties=UIComponentProperties(
                     label="Schema Name",
-                    placeholder="Enter the snowflake schema name",
+                    placeholder="Enter the schema name",
                 ).model_dump(exclude_unset=True, exclude_none=True),
                 is_advanced=True,
             ),
@@ -131,6 +112,10 @@ def seed_react_sql_components(session: Session):
                     ParameterLLMConfig(
                         param_name=COMPLETION_MODEL_IN_DB,
                         param_id=UUID("3d858a3a-1730-414f-9a57-45f72cbd3cfd"),
+                    ),
+                    ParameterLLMConfig(
+                        param_name=TEMPERATURE_IN_DB,
+                        param_id=UUID("374924b3-fd84-4f1c-9bd3-c8445fc535e3"),
                     ),
                     ParameterLLMConfig(
                         param_name="api_key",
