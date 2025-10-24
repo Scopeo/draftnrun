@@ -83,7 +83,7 @@ class SupportedEntityType(StrEnum):
     OPENAI_WEB_SEARCH_AGENT = "Internet Search (OpenAI)"
     API_CALL_TOOL = "API Query"
 
-    PYTHON_CODE_RUNNER_TOOL = "Code execution (Python)"
+    PYTHON_CODE_RUNNER_TOOL = "Code Execution (Python)"
     TERMINAL_COMMAND_RUNNER_TOOL = "Terminal code execution"
     PDF_GENERATION_TOOL = "PDF Generation Tool"
     DOCX_GENERATION_TOOL = "DOCX Generation Tool"
