@@ -307,15 +307,15 @@ def seed_ai_agent_parameter_groups(session: Session):
 
     session.flush()  # Ensure groups are saved before creating relationships
 
-    # Create component-parameter group relationships
+    # Create component version-parameter group relationships
     component_parameter_groups = [
         db.ComponentParameterGroup(
-            component_id=COMPONENT_UUIDS["base_ai_agent"],
+            component_version_id=COMPONENT_UUIDS["base_ai_agent"],
             parameter_group_id=PARAMETER_GROUP_UUIDS["agent_behavior_settings"],
             group_order_within_component=1,
         ),
         db.ComponentParameterGroup(
-            component_id=COMPONENT_UUIDS["base_ai_agent"],
+            component_version_id=COMPONENT_UUIDS["base_ai_agent"],
             parameter_group_id=PARAMETER_GROUP_UUIDS["history_management"],
             group_order_within_component=2,
         ),
@@ -326,7 +326,7 @@ def seed_ai_agent_parameter_groups(session: Session):
         existing_cpg = (
             session.query(db.ComponentParameterGroup)
             .filter_by(
-                component_id=component_parameter_group.component_id,
+                component_version_id=component_parameter_group.component_version_id,
                 parameter_group_id=component_parameter_group.parameter_group_id,
             )
             .first()

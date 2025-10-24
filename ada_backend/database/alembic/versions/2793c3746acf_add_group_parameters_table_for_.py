@@ -1,8 +1,8 @@
-"""Add group parameters table
+"""add group parameters table for versioned components parameters
 
-Revision ID: b82b2dc24cf3
-Revises: 558db5695d27
-Create Date: 2025-10-23 11:10:48.922968
+Revision ID: 2793c3746acf
+Revises: db6ec45f87f4
+Create Date: 2025-10-23 18:09:44.339101
 
 """
 
@@ -13,8 +13,8 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = "b82b2dc24cf3"
-down_revision: Union[str, None] = "558db5695d27"
+revision: str = "2793c3746acf"
+down_revision: Union[str, None] = "db6ec45f87f4"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
@@ -30,10 +30,10 @@ def upgrade() -> None:
     op.create_table(
         "component_parameter_groups",
         sa.Column("id", sa.UUID(), nullable=False),
-        sa.Column("component_id", sa.UUID(), nullable=False),
+        sa.Column("component_version_id", sa.UUID(), nullable=False),
         sa.Column("parameter_group_id", sa.UUID(), nullable=False),
         sa.Column("group_order_within_component", sa.Integer(), nullable=False),
-        sa.ForeignKeyConstraint(["component_id"], ["components.id"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(["component_version_id"], ["component_versions.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(
             ["parameter_group_id"],
             ["parameter_groups.id"],
@@ -41,7 +41,7 @@ def upgrade() -> None:
             ondelete="CASCADE",
         ),
         sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("component_id", "parameter_group_id", name="uq_component_parameter_group"),
+        sa.UniqueConstraint("component_version_id", "parameter_group_id", name="uq_component_version_parameter_group"),
     )
     op.add_column("component_parameter_definitions", sa.Column("parameter_group_id", sa.UUID(), nullable=True))
     op.add_column(

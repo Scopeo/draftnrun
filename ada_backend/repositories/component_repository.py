@@ -236,14 +236,19 @@ def delete_component_by_id(
 def get_subcomponent_param_def_by_component_version(
     session: Session,
     component_version_id: UUID,
-) -> list[db.ComponentParameterDefinition]:
+) -> list[tuple[db.ComponentParameterDefinition, db.ComponentParameterChildRelationship]]:
     """
-    Retrieves all parameter definitions for a given component.
+    Retrieves all parameter definitions for a given component version with their child relationships.
     """
     return (
-        session.query(db.ComponentParameterDefinition)
+        session.query(db.ComponentParameterDefinition, db.ComponentParameterChildRelationship)
+        .join(
+            db.ComponentParameterChildRelationship,
+            db.ComponentParameterDefinition.id
+            == db.ComponentParameterChildRelationship.component_parameter_definition_id,
+        )
         .filter(
-            db.ComponentParameterDefinition.component_id == component_id,
+            db.ComponentParameterDefinition.component_version_id == component_version_id,
         )
         .all()
     )
@@ -251,14 +256,14 @@ def get_subcomponent_param_def_by_component_version(
 
 def get_component_parameter_groups(
     session: Session,
-    component_id: UUID,
+    component_version_id: UUID,
 ) -> list[db.ComponentParameterGroup]:
     """
-    Retrieves parameter groups for a given component.
+    Retrieves parameter groups for a given component version.
     """
     return (
         session.query(db.ComponentParameterGroup)
-        .filter(db.ComponentParameterGroup.component_id == component_id)
+        .filter(db.ComponentParameterGroup.component_version_id == component_version_id)
         .order_by(db.ComponentParameterGroup.group_order_within_component)
         .all()
     )
@@ -266,7 +271,7 @@ def get_component_parameter_groups(
 
 def get_component_parameters_with_groups(
     session: Session,
-    component_id: UUID,
+    component_version_id: UUID,
 ) -> list[tuple[db.ComponentParameterDefinition, Optional[db.ParameterGroup]]]:
     """
     Retrieves parameter definitions with their associated parameter groups.
@@ -274,7 +279,7 @@ def get_component_parameters_with_groups(
     return (
         session.query(db.ComponentParameterDefinition, db.ParameterGroup)
         .outerjoin(db.ParameterGroup, db.ComponentParameterDefinition.parameter_group_id == db.ParameterGroup.id)
-        .filter(db.ComponentParameterDefinition.component_id == component_id)
+        .filter(db.ComponentParameterDefinition.component_version_id == component_version_id)
         .all()
     )
 
@@ -615,13 +620,13 @@ def get_all_components_with_parameters(
                 component_with_version.component_version_id,
             )
 
-            # Get parameter groups for this component
-            parameter_groups = get_component_parameter_groups(session, component.id)
+            # Get parameter groups for this component version
+            parameter_groups = get_component_parameter_groups(session, component_with_version.component_version_id)
             parameter_groups_dto = [
                 ParameterGroupSchema(
                     id=pg.parameter_group.id,
                     name=pg.parameter_group.name,
-                    group_order_within_component=pg.group_order_within_component,
+                    group_order_within_component_version=pg.group_order_within_component,
                 )
                 for pg in parameter_groups
             ]
