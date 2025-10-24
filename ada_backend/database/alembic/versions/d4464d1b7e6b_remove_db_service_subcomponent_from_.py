@@ -12,7 +12,6 @@ instead of a sub-component relationship, following the LLM service pattern.
 from typing import Sequence, Union
 
 from alembic import op
-import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
@@ -36,7 +35,7 @@ def upgrade() -> None:
         INSERT INTO component_parameter_definitions (id, component_version_id, name, type, nullable, is_advanced)
         SELECT '{DB_SERVICE_PARAM_ID}', '{REACT_SQL_AGENT_VERSION_ID}', 'engine_url', 'string', FALSE, FALSE
         WHERE NOT EXISTS (
-            SELECT 1 FROM component_parameter_definitions 
+            SELECT 1 FROM component_parameter_definitions
             WHERE id = '{DB_SERVICE_PARAM_ID}'
         )
         """
@@ -47,7 +46,7 @@ def upgrade() -> None:
     op.execute(
         f"""
         INSERT INTO basic_parameters (id, component_instance_id, parameter_definition_id, value, "order")
-        SELECT 
+        SELECT
             gen_random_uuid(),
             parent_ci.id,
             '{DB_SERVICE_PARAM_ID}',
@@ -73,7 +72,7 @@ def upgrade() -> None:
         f"""
         DELETE FROM component_sub_inputs csi
         WHERE csi.parent_component_instance_id IN (
-            SELECT ci.id 
+            SELECT ci.id
             FROM component_instances ci
             JOIN component_versions cv ON ci.component_version_id = cv.id
             WHERE cv.id = '{REACT_SQL_AGENT_VERSION_ID}'
@@ -109,7 +108,7 @@ def downgrade() -> None:
         INSERT INTO component_parameter_definitions (id, component_version_id, name, type, nullable, is_advanced)
         SELECT '{DB_SERVICE_PARAM_ID}', '{REACT_SQL_AGENT_VERSION_ID}', 'db_service', 'component', FALSE, FALSE
         WHERE NOT EXISTS (
-            SELECT 1 FROM component_parameter_definitions 
+            SELECT 1 FROM component_parameter_definitions
             WHERE id = '{DB_SERVICE_PARAM_ID}'
         )
         """
@@ -118,8 +117,15 @@ def downgrade() -> None:
     # Restore the component_parameter_child_relationship (idempotent)
     op.execute(
         f"""
-        INSERT INTO comp_param_child_comps_relationships (id, component_parameter_definition_id, child_component_version_id)
-        SELECT '{DB_SERVICE_CHILD_RELATIONSHIP_ID}', '{DB_SERVICE_PARAM_ID}', '{SQL_DB_SERVICE_VERSION_ID}'
+        INSERT INTO comp_param_child_comps_relationships (
+            id,
+            component_parameter_definition_id,
+            child_component_version_id
+        )
+        SELECT 
+            '{DB_SERVICE_CHILD_RELATIONSHIP_ID}',
+            '{DB_SERVICE_PARAM_ID}',
+            '{SQL_DB_SERVICE_VERSION_ID}'
         WHERE NOT EXISTS (
             SELECT 1 FROM comp_param_child_comps_relationships 
             WHERE id = '{DB_SERVICE_CHILD_RELATIONSHIP_ID}'
