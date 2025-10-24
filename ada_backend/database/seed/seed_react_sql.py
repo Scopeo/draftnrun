@@ -54,17 +54,22 @@ def seed_react_sql_components(session: Session):
         session=session,
         component_versions=[react_sql_agent_version],
     )
-    # ReAct SQL Agent - db_service is now handled by the processor
-    # The processor will instantiate the DB service from the configuration
+    # ReAct SQL Agent - db_service handled by processor (like LLM service)
     upsert_components_parameter_definitions(
         session=session,
         component_parameter_definitions=[
             db.ComponentParameterDefinition(
                 id=UUID("3f510f8c-79e9-4cf0-abe3-880e89c9372d"),
                 component_version_id=react_sql_agent_version.id,
-                name="db_service",
-                type=ParameterType.JSON,
-                nullable=True,
+                name="engine_url",
+                type=ParameterType.STRING,
+                nullable=False,
+                ui_component=UIComponent.TEXTFIELD,
+                ui_component_properties=UIComponentProperties(
+                    label="Database Engine URL",
+                    placeholder="e.g., postgresql://user:password@localhost:5432/database",
+                ).model_dump(exclude_unset=True, exclude_none=True),
+                is_advanced=False,
             ),
             db.ComponentParameterDefinition(
                 id=UUID("3253a083-0a54-4d7b-b438-6a7c13d67dc8"),
