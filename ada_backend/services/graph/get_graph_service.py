@@ -10,7 +10,10 @@ from ada_backend.repositories.graph_runner_repository import (
     graph_runner_exists,
 )
 from ada_backend.repositories.port_mapping_repository import list_port_mappings_for_graph
+from ada_backend.repositories.field_formula_repository import get_field_formulas_for_instances
 from ada_backend.schemas.pipeline.graph_schema import GraphGetResponse, EdgeSchema
+from ada_backend.schemas.pipeline.field_formula_schema import FieldFormulaReadSchema
+from ada_backend.services.field_formulas.ast import unparse_formula_dict
 from ada_backend.services.errors import GraphNotFound
 from ada_backend.schemas.pipeline.port_mapping_schema import PortMappingSchema
 from ada_backend.services.pipeline.get_pipeline_service import get_component_instance, get_relationships
@@ -42,6 +45,7 @@ def get_graph_service(
     relationships = []
     edges = []
     port_mappings = []
+    field_formulas = []
 
     for component_node in component_nodes:
         component_instances_with_definitions.append(
@@ -83,12 +87,26 @@ def get_graph_service(
             )
         )
 
+    # Include field formulas at top-level so GET->PUT roundtrips
+    component_instance_ids = [node.id for node in component_nodes]
+    field_formula_records = get_field_formulas_for_instances(session, component_instance_ids)
+    for formula in field_formula_records:
+        field_formulas.append(
+            FieldFormulaReadSchema(
+                component_instance_id=formula.component_instance_id,
+                field_name=formula.field_name,
+                formula_json=formula.formula_json,
+                formula_text=unparse_formula_dict(formula.formula_json) if formula.formula_json else None,
+            )
+        )
+
     # Build response, omitting change_log if unset (None)
     response = GraphGetResponse(
         component_instances=component_instances_with_definitions,
         relationships=relationships,
         edges=edges,
         port_mappings=port_mappings,
+        field_formulas=field_formulas,
         tag_name=compose_tag_name(
             project_env_binding.graph_runner.tag_version,
             project_env_binding.graph_runner.version_name,

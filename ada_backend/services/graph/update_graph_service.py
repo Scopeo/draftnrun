@@ -26,6 +26,8 @@ from ada_backend.repositories.port_mapping_repository import (
     get_output_port_definition_id,
     get_input_port_definition_id,
     get_port_definition_by_id,
+    insert_port_mapping,
+    delete_port_mapping_for_target_input,
 )
 from ada_backend.database import models as db
 from ada_backend.schemas.pipeline.graph_schema import GraphUpdateResponse, GraphUpdateSchema
@@ -33,6 +35,12 @@ from ada_backend.services.agent_runner_service import get_agent_for_project
 from ada_backend.services.graph.delete_graph_service import delete_component_instances_from_nodes
 from ada_backend.services.pipeline.update_pipeline_service import create_or_update_component_instance
 from ada_backend.segment_analytics import track_project_saved
+from ada_backend.repositories.field_formula_repository import (
+    upsert_field_formula,
+)
+from ada_backend.services.field_formulas.parser import parse_field_formula
+from ada_backend.services.field_formulas.errors import FieldFormulaParseError
+from ada_backend.services.field_formulas.ast import RefNode, FormulaNode
 
 
 LOGGER = logging.getLogger(__name__)
@@ -192,6 +200,34 @@ async def update_graph_service(
     # Port mappings: ensure explicit wiring for all edges (save-time defaults)
     _ensure_port_mappings_for_edges(session, graph_runner_id, graph_project)
 
+    # Field formulas
+    if graph_project.field_formulas:
+        for formula in graph_project.field_formulas:
+            if formula.component_instance_id not in instance_ids:
+                raise ValueError(
+                    f"Invalid field formula target: component instance {formula.component_instance_id} not in update"
+                )
+
+            try:
+                ast = parse_field_formula(formula.formula_text)
+            except FieldFormulaParseError:
+                raise
+
+            upsert_field_formula(
+                session=session,
+                component_instance_id=formula.component_instance_id,
+                field_name=formula.field_name,
+                formula_json=ast.to_dict(),
+            )
+
+            _create_port_mappings_for_pure_ref_formulas(
+                session=session,
+                graph_runner_id=graph_runner_id,
+                component_instance_id=formula.component_instance_id,
+                field_name=formula.field_name,
+                ast=ast,
+            )
+
     nodes_to_delete = previous_graph_nodes - instance_ids
     if len(nodes_to_delete) > 0:
         delete_component_instances_from_nodes(session, nodes_to_delete)
@@ -335,3 +371,63 @@ def _ensure_port_mappings_for_edges(
     if auto_generated_mappings:
         session.bulk_save_objects(auto_generated_mappings)
         session.commit()
+
+
+def _create_port_mappings_for_pure_ref_formulas(
+    session: Session,
+    graph_runner_id: UUID,
+    component_instance_id: UUID,
+    field_name: str,
+    ast: FormulaNode,
+) -> None:
+    """
+    Create a port mapping when the formula is a pure reference.
+    Skip mapping creation for non-ref (literal/concat/multi-ref) formulas.
+    This will be harmonized with port mappings later.
+    """
+    if not isinstance(ast, RefNode):
+        return
+
+    ref_node = ast
+
+    source_component_version_id = resolve_component_version_id_from_instance_id(session, UUID(ref_node.instance))
+    target_component_version_id = resolve_component_version_id_from_instance_id(session, component_instance_id)
+
+    source_port_def_id = get_output_port_definition_id(session, source_component_version_id, ref_node.port)
+    if not source_port_def_id:
+        LOGGER.warning(
+            msg=f"Output port '{ref_node.port}' not found for component "
+            f"{source_component_version_id}, skipping port mapping"
+        )
+        return
+
+    target_port_def_id = get_input_port_definition_id(session, target_component_version_id, field_name)
+    if not target_port_def_id:
+        LOGGER.warning(
+            msg=f"Input port '{field_name}' not found for component "
+            f"{target_component_version_id}, skipping port mapping"
+        )
+        return
+
+    validate_port_definition_types(session, source_port_def_id, target_port_def_id)
+
+    # Ensure only one mapping exists for this target input
+    delete_port_mapping_for_target_input(
+        session=session,
+        graph_runner_id=graph_runner_id,
+        target_instance_id=component_instance_id,
+        target_port_definition_id=target_port_def_id,
+    )
+
+    insert_port_mapping(
+        session=session,
+        graph_runner_id=graph_runner_id,
+        source_instance_id=UUID(ref_node.instance),
+        source_port_definition_id=source_port_def_id,
+        target_instance_id=component_instance_id,
+        target_port_definition_id=target_port_def_id,
+        dispatch_strategy="direct",
+    )
+    LOGGER.info(
+        f"Created port mapping for {ref_node.instance}.{ref_node.port} -> {component_instance_id}.{field_name}"
+    )

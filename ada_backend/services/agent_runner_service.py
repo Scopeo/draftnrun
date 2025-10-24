@@ -22,6 +22,7 @@ from ada_backend.repositories.graph_runner_repository import (
     delete_temp_folder,
 )
 from ada_backend.repositories.port_mapping_repository import list_port_mappings_for_graph
+from ada_backend.repositories.field_formula_repository import get_field_formulas_for_instances
 from ada_backend.repositories.project_repository import get_project, get_project_with_details
 from ada_backend.repositories.organization_repository import get_organization_secrets
 from engine.graph_runner.runnable import Runnable
@@ -73,6 +74,18 @@ async def build_graph_runner(
         for pm in pms
     ]
 
+    # Fetch field formulas for this graph
+    component_instance_ids = [str(node.id) for node in component_nodes]
+    field_formulas = get_field_formulas_for_instances(session, component_instance_ids)
+    formulas = [
+        {
+            "target_instance_id": str(formula.component_instance_id),
+            "field_name": formula.field_name,
+            "formula_json": formula.formula_json,
+        }
+        for formula in field_formulas
+    ]
+
     runnables: dict[str, Runnable] = {}
     graph = nx.DiGraph()
 
@@ -95,6 +108,7 @@ async def build_graph_runner(
         start_nodes,
         trace_manager=trace_manager,
         port_mappings=port_mappings,
+        formulas=formulas,
     )
 
 

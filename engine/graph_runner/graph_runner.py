@@ -17,6 +17,7 @@ from engine.graph_runner.port_management import (
     validate_port_mappings,
     synthesize_default_mappings,
 )
+from engine.graph_runner.field_formula_management import evaluate_formula
 from engine import legacy_compatibility
 from engine.trace.trace_manager import TraceManager
 from engine.trace.serializer import serialize_to_json
@@ -37,6 +38,7 @@ class GraphRunner:
         trace_manager: TraceManager,
         *,
         port_mappings: list[dict[str, Any]] | None = None,
+        formulas: list[dict[str, Any]] | None = None,
         coercion_matrix: CoercionMatrix | None = None,
     ):
         self.trace_manager = trace_manager
@@ -64,13 +66,23 @@ class GraphRunner:
         for pm in self.port_mappings:
             self._mappings_by_target.setdefault(pm.target_instance_id, []).append(pm)
 
+        # Formulas lookup index by target node and field
+        self.formulas: list[dict[str, Any]] = formulas or []
+        self._formulas_by_target: dict[tuple[str, str], dict[str, Any]] = {}
+        for formula in self.formulas:
+            key = (formula["target_instance_id"], formula["field_name"])
+            self._formulas_by_target[key] = formula
+
         self.tasks: dict[str, Task] = {}
         self._input_node_id = "__input__"
         self._add_virtual_input_node()
         # Synthesize explicit default mappings for single-predecessor nodes without mappings
         self._synthesize_default_mappings()
+        # Augment graph topology with dependencies from port mappings (including synthesized) and formulas
+        self._augment_graph_with_dependencies()
         self._validate_graph()
         validate_port_mappings(self.port_mappings, self.runnables)
+        self._validate_formulas()
 
     def _initialize_execution(self, input_data: dict[str, Any]) -> None:
         """Initialize the execution state including dependencies and input data."""
@@ -171,6 +183,44 @@ class GraphRunner:
                 start_node,
             )
 
+    def _augment_graph_with_dependencies(self) -> None:
+        """Augment the graph with edges derived from port mappings and formulas, then validate DAG.
+
+        - For each port mapping, ensure an edge source -> target exists.
+        - For each formula with ref nodes, add edges ref.instance -> target.
+        - Forbid self-loops; raise on cycles.
+        """
+        for pm in self.port_mappings:
+            src = pm.source_instance_id
+            dst = pm.target_instance_id
+            if not self.graph.has_edge(src, dst):
+                self.graph.add_edge(src, dst)
+
+        def collect_ref_instances(node_dict: dict) -> set[str]:
+            """Collect all ref instances from a node dictionary."""
+            refs: set[str] = set()
+            match node_dict:
+                case {"type": "ref", "instance": inst}:
+                    refs.add(inst)
+                case {"type": "concat", "parts": parts}:
+                    for part in parts:
+                        refs.update(collect_ref_instances(part))
+                case _:
+                    pass
+            return refs
+
+        for formula in self.formulas:
+            target = formula["target_instance_id"]
+            refs = collect_ref_instances(formula.get("formula_json", {}))
+            for src in refs:
+                if not self.graph.has_edge(src, target):
+                    self.graph.add_edge(src, target)
+
+        if not nx.is_directed_acyclic_graph(self.graph):
+            raise ValueError(
+                f"Graph contains cycles after dependency augmentation. Edges: {dict(self.graph.edges())}",
+            )
+
     def _gather_inputs(self, node_id: str) -> dict[str, Any]:
         """Assembles the input data for a node based on explicit mappings,
         keeping start-node passthrough. Default mapping synthesis happens during
@@ -186,9 +236,9 @@ class GraphRunner:
             real_predecessors = [p for p in predecessors if p != self._input_node_id]
             if is_start_node and not real_predecessors:
                 input_task_result = self.tasks[self._input_node_id].result
-                return input_task_result.data if input_task_result else {}
-            # Otherwise, no explicit mappings -> no inputs
-            return {}
+                input_data = input_task_result.data if input_task_result else {}
+            else:
+                input_data = {}
 
         direct_port_mappings = [
             port_mapping for port_mapping in port_mappings_for_target if port_mapping.dispatch_strategy == "direct"
@@ -204,7 +254,7 @@ class GraphRunner:
 
                     # Check if target component is unmigrated (doesn't have migrated attribute)
                     target_component = self.runnables.get(node_id)
-                    is_unmigrated = target_component and not hasattr(target_component, "migrated")
+                    is_unmigrated = bool(target_component) and not hasattr(target_component, "migrated")
 
                     if is_unmigrated:
                         # For unmigrated components, pass the entire output structure
@@ -243,6 +293,27 @@ class GraphRunner:
             structured_values = apply_function_call_strategy(node_id, function_call_port_mappings)
             input_data.update(structured_values)
 
+        # Handle field formulas for inputs (non-ref formulas like concat/literal)
+        # Apply regardless of whether explicit port mappings exist; non-ref formulas override mapped values.
+        # Pure-ref formulas are ignored at runtime (port mappings authoritative).
+        if self._formulas_by_target:
+            non_ref_formulas = [
+                (field_name, formula.get("formula_json", {}))
+                for (target_id, field_name), formula in self._formulas_by_target.items()
+                if target_id == node_id and formula.get("formula_json", {}).get("type") != "ref"
+            ]
+
+            target_component = self.runnables[node_id]
+            for field_name, formula_json in non_ref_formulas:
+                evaluated_value = evaluate_formula(formula_json, field_name, self.tasks)
+                LOGGER.debug(f"Evaluating non-ref formula for {node_id}.{field_name}")
+                target_type = get_target_field_type(target_component, field_name)
+                if target_type is not str:
+                    LOGGER.warning(f"Coercing formula result to {target_type} for field {field_name}")
+                    evaluated_value = self.coercion_matrix.coerce(evaluated_value, target_type, str)
+                input_data[field_name] = evaluated_value
+                LOGGER.debug(f"Set {node_id}.{field_name} from formula: {evaluated_value}")
+
         return input_data
 
     def reset(self):
@@ -260,6 +331,37 @@ class GraphRunner:
 
         if set(self.runnables.keys()) != set(self.graph.nodes()) - {self._input_node_id}:
             raise ValueError("All runnables must be in the graph")
+
+    def _validate_formulas(self):
+        """
+        Ensures all formulas target valid components and fields.
+        - Formulas must target valid components
+        - Formulas must target fields that are in the component's input schema
+        """
+        for formula in self.formulas:
+            target_instance_id = formula["target_instance_id"]
+            field_name = formula["field_name"]
+
+            if target_instance_id not in self.runnables:
+                raise ValueError(
+                    f"Formula targets non-existent component '{target_instance_id}' "
+                    f"for field '{field_name}'. Component must exist in the graph."
+                )
+
+            target_component = self.runnables[target_instance_id]
+            if not bool(getattr(target_component, "migrated", False)):
+                raise ValueError(
+                    f"Formulas are not supported for unmigrated component '{target_instance_id}'. "
+                    f"Please migrate the component or remove the formula for field '{field_name}'."
+                )
+
+            inputs_schema = target_component.get_inputs_schema()
+            input_fields = list(inputs_schema.model_fields.keys())
+            if field_name not in input_fields:
+                raise ValueError(
+                    f"Formula targets non-existent field '{field_name}' on component '{target_instance_id}'. "
+                    f"Available input fields: {input_fields}"
+                )
 
     def _synthesize_default_mappings(self) -> None:
         """Create explicit direct port mappings for nodes with exactly one real predecessor

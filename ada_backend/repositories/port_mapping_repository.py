@@ -89,3 +89,23 @@ def insert_port_mapping(
     session.add(mapping)
     session.commit()
     return mapping
+
+
+def delete_port_mapping_for_target_input(
+    session: Session,
+    graph_runner_id: UUID,
+    target_instance_id: UUID,
+    target_port_definition_id: UUID,
+) -> int:
+    """Delete existing port mappings for a specific target input (by ids)."""
+    deleted = (
+        session.query(db.PortMapping)
+        .filter(
+            db.PortMapping.graph_runner_id == graph_runner_id,
+            db.PortMapping.target_instance_id == target_instance_id,
+            db.PortMapping.target_port_definition_id == target_port_definition_id,
+        )
+        .delete(synchronize_session=False)
+    )
+    session.commit()
+    return deleted

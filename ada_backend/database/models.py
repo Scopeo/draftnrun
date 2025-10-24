@@ -927,6 +927,32 @@ class ToolDescription(Base):
         return f"ToolDescription({self.name})"
 
 
+class FieldFormula(Base):
+    """Stores user-authored formulas for field values (inputs-first).
+
+    One row per (component_instance, field_name).
+    Dependencies can be derived from the formula_json structure.
+    """
+
+    __tablename__ = "field_formulas"
+
+    id = mapped_column(UUID(as_uuid=True), primary_key=True, index=True, default=uuid.uuid4)
+    component_instance_id = mapped_column(
+        UUID(as_uuid=True), ForeignKey("component_instances.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    field_name = mapped_column(String, nullable=False)
+    formula_json = mapped_column(JSONB, nullable=False)
+    updated_at = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    __table_args__ = (
+        UniqueConstraint(
+            "component_instance_id",
+            "field_name",
+            name="uq_field_expr_instance_field",
+        ),
+    )
+
+
 class Project(Base):
     """
     Tracks projects, which are collections of components and their configurations.
