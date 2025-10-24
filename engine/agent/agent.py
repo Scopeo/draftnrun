@@ -170,6 +170,8 @@ class Agent(ABC):
                             content = data.get("input")
                             if isinstance(content, str):
                                 legacy_arg = AgentPayload(messages=[ChatMessage(role="user", content=content)])
+                            elif isinstance(content, list):
+                                legacy_arg = {"messages": content}
                             else:
                                 legacy_arg = AgentPayload(messages=[])
                         legacy_output = await self._run_without_io_trace(legacy_arg, ctx=input_node_data.ctx)

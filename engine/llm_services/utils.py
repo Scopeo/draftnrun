@@ -141,7 +141,7 @@ def check_usage(provider: str) -> None:
     return None
 
 
-def make_mistral_ocr_compatible(payload_json: dict) -> list[dict]:
+def make_mistral_ocr_compatible(payload_json: dict) -> dict | None:
     if "messages" not in payload_json or not payload_json["messages"]:
         return None
 
