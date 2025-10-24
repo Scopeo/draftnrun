@@ -63,7 +63,7 @@ def seed_start_components(session: Session):
     if existing:
         # Ensure an OUTPUT canonical 'messages' port exists
         port_defs = (
-            session.query(db.PortDefinition).filter(db.PortDefinition.component_version_id == start_component.id).all()
+            session.query(db.PortDefinition).filter(db.PortDefinition.component_version_id == start_version.id).all()
         )
         have_messages_output = any(pd.port_type == db.PortType.OUTPUT and pd.name == "messages" for pd in port_defs)
         if not have_messages_output:

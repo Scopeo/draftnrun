@@ -69,5 +69,5 @@ def create_input_component(session: Session, name: str = "Start") -> ComponentIn
     """Creates a new input component instance"""
 
     # Use "start" UUID for new instances, but fall back to "input" for backward compatibility
-    component_version_id = COMPONENT_UUIDS.get("start", COMPONENT_UUIDS["input"])
+    component_version_id = COMPONENT_UUIDS.get(COMPONENT_UUIDS["start"], COMPONENT_UUIDS["input"])
     return create_component_instance(session, component_version_id=component_version_id, name=name)
