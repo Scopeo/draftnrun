@@ -122,12 +122,12 @@ def downgrade() -> None:
             component_parameter_definition_id,
             child_component_version_id
         )
-        SELECT 
+        SELECT
             '{DB_SERVICE_CHILD_RELATIONSHIP_ID}',
             '{DB_SERVICE_PARAM_ID}',
             '{SQL_DB_SERVICE_VERSION_ID}'
         WHERE NOT EXISTS (
-            SELECT 1 FROM comp_param_child_comps_relationships 
+            SELECT 1 FROM comp_param_child_comps_relationships
             WHERE id = '{DB_SERVICE_CHILD_RELATIONSHIP_ID}'
         )
         """
