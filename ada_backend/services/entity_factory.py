@@ -529,33 +529,15 @@ def build_project_reference_processor(target_name: str = "graph_runner") -> Para
 def build_db_service_processor(target_name: str = "db_service") -> ParameterProcessor:
     """
     Returns a processor function to instantiate a database service from engine_url.
-
-    This processor consumes the following parameter from the input:
-    - engine_url: Required. Database connection URL (e.g., "postgresql://user:pass@host:port/db").
-
-    The processor creates a SQLLocalService instance and injects it into the params
-    dictionary under the key specified by target_name.
-
-    Similar to completion_service_processor pattern - no sub-component relationships.
-
-    Args:
-        target_name (str): The parameter name to use for the created DB service.
-                          Defaults to "db_service".
-
-    Returns:
-        ParameterProcessor: A function that processes parameters to inject a DB service.
     """
 
     def processor(params: dict, constructor_params: dict[str, Any]) -> dict:
         engine_url = params.pop("engine_url", None)
         if not engine_url:
-            # If engine_url is not in params, skip processing
             return params
 
-        # Import here to avoid circular imports
         from engine.storage_service.local_service import SQLLocalService
 
-        # Create the DB service instance
         try:
             db_service_instance = SQLLocalService(engine_url=engine_url)
             LOGGER.debug(f"Instantiated SQLLocalService with engine_url: {engine_url}")
@@ -563,7 +545,6 @@ def build_db_service_processor(target_name: str = "db_service") -> ParameterProc
             LOGGER.error(f"Error instantiating SQLLocalService: {e}")
             raise ValueError(f"Failed to create DB service: {e}") from e
 
-        # Inject the service instance
         params[target_name] = db_service_instance
         return params
 
