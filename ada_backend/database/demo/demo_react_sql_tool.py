@@ -1,7 +1,6 @@
 from uuid import UUID, uuid4
 
 from ada_backend.schemas.pipeline.base import (
-    ComponentRelationshipSchema,
     PipelineParameterSchema,
     ComponentInstanceSchema,
 )
