@@ -99,7 +99,7 @@ def get_projects_by_organization_with_details(
     session: Session,
     organization_id: UUID,
     type: Optional[str] = None,
-    include_templates: bool = True,
+    include_templates: bool = False,
 ) -> list[ProjectWithGraphRunnersSchema]:
     """
     Get projects (both workflow and agent) by organization with graph runners and templates.

@@ -78,7 +78,7 @@ def get_projects_by_organization_with_details_service(
     organization_id: UUID,
     user_id: UUID = None,
     type: Optional[str] = None,
-    include_templates: Optional[bool] = True,
+    include_templates: Optional[bool] = False,
 ) -> list[ProjectWithGraphRunnersSchema]:
     if user_id:
         track_user_get_project_list(user_id, organization_id)

@@ -62,7 +62,7 @@ def get_workflows_by_organization_endpoint(
     ],
     session: Session = Depends(get_db),
     type: Optional[str] = None,
-    include_templates: Optional[bool] = True,
+    include_templates: Optional[bool] = False,
 ):
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
