@@ -68,7 +68,7 @@ def seed_db_service_components(session: Session):
                 ui_component=UIComponent.TEXTFIELD,
                 ui_component_properties=UIComponentProperties(
                     label="Engine URL",
-                    placeholder="Enter the engine URL here",
+                    placeholder="e.g., postgresql://user:password@localhost:5432/database",
                 ).model_dump(exclude_unset=True, exclude_none=True),
                 is_advanced=False,
             ),

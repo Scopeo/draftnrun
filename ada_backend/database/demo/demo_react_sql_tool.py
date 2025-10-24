@@ -1,7 +1,6 @@
 from uuid import UUID, uuid4
 
 from ada_backend.schemas.pipeline.base import (
-    ComponentRelationshipSchema,
     PipelineParameterSchema,
     ComponentInstanceSchema,
 )
@@ -71,31 +70,12 @@ def build_react_sql_agent_chatbot(components: dict[str, UUID], graph_runner_id: 
                     name="additional_db_description",
                     value=ADDITIONAL_DB_DESCRIPTION,
                 ),
-            ],
-        ),
-        ComponentInstanceSchema(
-            id=COMPONENT_INSTANCES_IDS["snowflake_service"],
-            name="Snowflake DB Service",
-            component_id=components["snowflake_db_service"],
-            component_version_id=components["snowflake_db_service"],
-            parameters=[
                 PipelineParameterSchema(
-                    name="database_name",
-                    value="SCOPEO",
-                ),
-                PipelineParameterSchema(
-                    name="role_to_use",
-                    value="SCOPEO_READ_ROLE",
+                    name="engine_url",
+                    value="postgresql://postgres:postgres@localhost:5432/postgres",
                 ),
             ],
-        ),
-    ]
-    relations = [
-        ComponentRelationshipSchema(
-            parent_component_instance_id=COMPONENT_INSTANCES_IDS["react_sql_agent"],
-            child_component_instance_id=COMPONENT_INSTANCES_IDS["snowflake_service"],
-            parameter_name="db_service",
-        ),
+        )
     ]
     edges = []
-    return GraphUpdateSchema(component_instances=instances, relationships=relations, edges=edges)
+    return GraphUpdateSchema(component_instances=instances, relationships=[], edges=edges)

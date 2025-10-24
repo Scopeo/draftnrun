@@ -526,6 +526,31 @@ def build_project_reference_processor(target_name: str = "graph_runner") -> Para
     return processor
 
 
+def build_db_service_processor(target_name: str = "db_service") -> ParameterProcessor:
+    """
+    Returns a processor function to instantiate a database service from engine_url.
+    """
+
+    def processor(params: dict, constructor_params: dict[str, Any]) -> dict:
+        engine_url = params.pop("engine_url", None)
+        if not engine_url:
+            return params
+
+        from engine.storage_service.local_service import SQLLocalService
+
+        try:
+            db_service_instance = SQLLocalService(engine_url=engine_url)
+            LOGGER.debug(f"Instantiated SQLLocalService with engine_url: {engine_url}")
+        except Exception as e:
+            LOGGER.error(f"Error instantiating SQLLocalService: {e}")
+            raise ValueError(f"Failed to create DB service: {e}") from e
+
+        params[target_name] = db_service_instance
+        return params
+
+    return processor
+
+
 def compose_processors(*processors: ParameterProcessor) -> ParameterProcessor:
     """
     Composes multiple parameter processors into a single processor.

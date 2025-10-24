@@ -47,6 +47,7 @@ from ada_backend.services.entity_factory import (
     build_web_service_processor,
     build_ocr_service_processor,
     build_project_reference_processor,
+    build_db_service_processor,
 )
 from ada_backend.database.seed.constants import (
     COMPLETION_MODEL_IN_DB,
@@ -227,6 +228,7 @@ def create_factory_registry() -> FactoryRegistry:
         ),
         build_ocr_service_processor(),
     )
+    db_service_processor = build_db_service_processor()
 
     # Register components
     registry.register(
@@ -444,6 +446,7 @@ def create_factory_registry() -> FactoryRegistry:
         factory=AgentFactory(
             entity_class=ReactSQLAgent,
             parameter_processors=[
+                db_service_processor,
                 completion_service_processor,
             ],
         ),
