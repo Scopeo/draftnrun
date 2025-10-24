@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 import logging
 
 
-from ada_backend.database.models import EnvType, CallType
+from ada_backend.database.models import EnvType, CallType, ProjectType
 from ada_backend.database.setup_db import get_db
 from ada_backend.schemas.auth_schema import SupabaseUser
 from ada_backend.schemas.chart_schema import ChartsResponse
@@ -48,9 +48,8 @@ LOGGER = logging.getLogger(__name__)
 router = APIRouter(prefix="/projects")
 
 
-# TODO: move to workflow_router
-@router.get("/org/{organization_id}", response_model=List[ProjectWithGraphRunnersSchema], tags=["Workflows"])
-def get_workflows_by_organization_endpoint(
+@router.get("/org/{organization_id}", response_model=List[ProjectWithGraphRunnersSchema], tags=["Projects"])
+def get_projects_by_organization_endpoint(
     organization_id: UUID,
     user: Annotated[
         SupabaseUser,
@@ -61,7 +60,7 @@ def get_workflows_by_organization_endpoint(
         ),
     ],
     session: Session = Depends(get_db),
-    type: Optional[str] = None,
+    type: Optional[ProjectType] = None,
     include_templates: Optional[bool] = False,
 ):
     if not user.id:

@@ -5,7 +5,7 @@ from typing import Optional
 
 from sqlalchemy.orm import Session
 
-from ada_backend.database.models import EnvType
+from ada_backend.database.models import EnvType, ProjectType
 from ada_backend.repositories.env_repository import bind_graph_runner_to_project
 from ada_backend.repositories.graph_runner_repository import (
     get_graph_runners_by_project,
@@ -77,7 +77,7 @@ def get_projects_by_organization_with_details_service(
     session: Session,
     organization_id: UUID,
     user_id: UUID = None,
-    type: Optional[str] = None,
+    type: Optional[ProjectType] = None,
     include_templates: Optional[bool] = False,
 ) -> list[ProjectWithGraphRunnersSchema]:
     if user_id:

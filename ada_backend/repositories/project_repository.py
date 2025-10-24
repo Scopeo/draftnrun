@@ -2,7 +2,7 @@ from typing import Optional
 from uuid import UUID
 import logging
 
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from ada_backend.database import models as db
 from ada_backend.schemas.project_schema import (
@@ -87,7 +87,7 @@ def get_project_with_details(
     )
 
 
-# TODO: move to workflow_repository
+# TODO: legacy: remove this function
 def get_workflows_by_organization(
     session: Session,
     organization_id: UUID,
@@ -98,39 +98,45 @@ def get_workflows_by_organization(
 def get_projects_by_organization_with_details(
     session: Session,
     organization_id: UUID,
-    type: Optional[str] = None,
+    type: Optional[db.ProjectType] = None,
     include_templates: bool = False,
 ) -> list[ProjectWithGraphRunnersSchema]:
     """
     Get projects (both workflow and agent) by organization with graph runners and templates.
     """
 
-    projects = (
-        session.query(db.Project, db.GraphRunner, db.ProjectEnvironmentBinding)
-        .join(db.ProjectEnvironmentBinding, db.ProjectEnvironmentBinding.project_id == db.Project.id)
-        .join(db.GraphRunner, db.GraphRunner.id == db.ProjectEnvironmentBinding.graph_runner_id)
-        .filter(
-            (db.Project.organization_id == organization_id)
-            | (db.Project.organization_id == TEMPLATE_ORGANIZATION_ID if include_templates else False),
-            db.Project.type == type if type else True,
+    query = session.query(db.Project).options(
+        joinedload(db.Project.envs).joinedload(db.ProjectEnvironmentBinding.graph_runner)
+    )
+
+    if include_templates:
+        query = query.filter(
+            (db.Project.organization_id == organization_id) | (db.Project.organization_id == TEMPLATE_ORGANIZATION_ID)
         )
-        .order_by(db.Project.created_at, db.GraphRunner.created_at)
-    ).all()
+    else:
+        query = query.filter(db.Project.organization_id == organization_id)
+
+    if type:
+        query = query.filter(db.Project.type == type)
+
+    projects = query.order_by(db.Project.created_at).all()
 
     projects_dict = {}
-    for project, graph_runner, env_binding in projects:
+    for project in projects:
         if project.id not in projects_dict:
             projects_dict[project.id] = {"project": project, "graph_runners": []}
 
-        projects_dict[project.id]["graph_runners"].append(
-            GraphRunnerEnvDTO(
-                graph_runner_id=graph_runner.id,
-                env=env_binding.environment,
-                tag_version=graph_runner.tag_version,
-                version_name=graph_runner.version_name,
-                change_log=graph_runner.change_log,
-            )
-        )
+        for env_binding in project.envs:
+            if env_binding.graph_runner:
+                projects_dict[project.id]["graph_runners"].append(
+                    GraphRunnerEnvDTO(
+                        graph_runner_id=env_binding.graph_runner.id,
+                        env=env_binding.environment,
+                        tag_version=env_binding.graph_runner.tag_version,
+                        version_name=env_binding.graph_runner.version_name,
+                        change_log=env_binding.graph_runner.change_log,
+                    )
+                )
 
     project_schemas = []
     for project_data in projects_dict.values():
