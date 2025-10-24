@@ -179,7 +179,7 @@ class ComponentParameterDefinitionAdmin(EnhancedModelView, model=db.ComponentPar
         "is_advanced",
     ]
     form_columns = [
-        "component",
+        "component_version",
         "name",
         "type",
         "nullable",

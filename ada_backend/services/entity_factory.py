@@ -526,6 +526,65 @@ def build_project_reference_processor(target_name: str = "graph_runner") -> Para
     return processor
 
 
+def build_db_service_processor(target_name: str = "db_service") -> ParameterProcessor:
+    """
+    Returns a processor function to instantiate a database service from component configuration.
+
+    This processor handles two cases:
+    1. If db_service is already an instantiated DBService object (from recursive component
+       instantiation), it passes it through unchanged.
+    2. If db_service is a configuration dictionary (for programmatic creation), it instantiates
+       the appropriate DBService from the configuration.
+
+    For case 2, the configuration dict should contain:
+    - component_name: The name of the database service component (e.g., "SQLDBService", "SnowflakeDBService")
+    - Other component-specific parameters (e.g., engine_url, database_name, etc.)
+
+    Args:
+        target_name (str): The parameter name to use for the created DB service.
+                          Defaults to "db_service".
+
+    Returns:
+        ParameterProcessor: A function that processes parameters to inject a DB service.
+    """
+
+    def processor(params: dict, constructor_params: dict[str, Any]) -> dict:
+        db_service_value = params.get(target_name)
+        if not db_service_value:
+            # If db_service is not in params, skip processing
+            return params
+
+        # If it's already an object (not a dict), assume it's already instantiated
+        if not isinstance(db_service_value, dict):
+            LOGGER.debug(f"db_service is already instantiated: {type(db_service_value)}")
+            return params
+
+        # Import here to avoid circular imports
+        from ada_backend.services.registry import FACTORY_REGISTRY
+
+        # Extract component info from the configuration dict
+        component_name = db_service_value.get("component_name")
+        if not component_name:
+            raise ValueError("db_service configuration must include 'component_name'")
+
+        # Remove component_name from config before passing to factory
+        service_params = {k: v for k, v in db_service_value.items() if k != "component_name"}
+
+        # Instantiate the DB service using the registry
+        try:
+            db_service_instance = FACTORY_REGISTRY.create(component_name, **service_params)
+            LOGGER.debug(f"Instantiated DB service '{component_name}': {type(db_service_instance)}")
+        except Exception as e:
+            LOGGER.error(f"Error instantiating DB service '{component_name}': {e}")
+            raise ValueError(f"Failed to create DB service '{component_name}': {e}") from e
+
+        # Replace the config dict with the actual service instance
+        params[target_name] = db_service_instance
+        return params
+
+    return processor
+
+
 def compose_processors(*processors: ParameterProcessor) -> ParameterProcessor:
     """
     Composes multiple parameter processors into a single processor.
