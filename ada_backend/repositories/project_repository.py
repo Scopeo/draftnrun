@@ -2,10 +2,14 @@ from typing import Optional
 from uuid import UUID
 import logging
 
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from ada_backend.database import models as db
-from ada_backend.schemas.project_schema import GraphRunnerEnvDTO, ProjectWithGraphRunnersSchema
+from ada_backend.schemas.project_schema import (
+    GraphRunnerEnvDTO,
+    ProjectWithGraphRunnersSchema,
+)
+from ada_backend.repositories.template_repository import TEMPLATE_ORGANIZATION_ID
 
 LOGGER = logging.getLogger(__name__)
 
@@ -83,12 +87,84 @@ def get_project_with_details(
     )
 
 
-# TODO: move to workflow_repository
+# TODO: legacy: remove this function
 def get_workflows_by_organization(
     session: Session,
     organization_id: UUID,
 ) -> list[db.WorkflowProject]:
     return session.query(db.WorkflowProject).filter(db.WorkflowProject.organization_id == organization_id).all()
+
+
+def get_projects_by_organization_with_details(
+    session: Session,
+    organization_id: UUID,
+    type: Optional[db.ProjectType] = db.ProjectType.WORKFLOW,
+    include_templates: bool = False,
+) -> list[ProjectWithGraphRunnersSchema]:
+    """
+    Get projects (both workflow and agent) by organization with graph runners and templates.
+    """
+    from sqlalchemy import or_, and_, exists
+
+    query = session.query(db.Project).options(
+        joinedload(db.Project.envs).joinedload(db.ProjectEnvironmentBinding.graph_runner)
+    )
+
+    if include_templates:
+        # Include own projects + production templates from template org
+        has_production = exists().where(
+            and_(
+                db.ProjectEnvironmentBinding.project_id == db.Project.id,
+                db.ProjectEnvironmentBinding.environment == db.EnvType.PRODUCTION
+            )
+        )
+        query = query.filter(
+            or_(
+                db.Project.organization_id == organization_id,
+                and_(db.Project.organization_id == TEMPLATE_ORGANIZATION_ID, has_production)
+            )
+        )
+    else:
+        query = query.filter(db.Project.organization_id == organization_id)
+
+    if type:
+        query = query.filter(db.Project.type == type)
+
+    projects = query.order_by(db.Project.created_at).all()
+
+    project_schemas = []
+    for project in projects:
+        graph_runners = [
+            GraphRunnerEnvDTO(
+                graph_runner_id=env_binding.graph_runner.id,
+                env=env_binding.environment,
+                tag_version=env_binding.graph_runner.tag_version,
+                version_name=env_binding.graph_runner.version_name,
+                change_log=env_binding.graph_runner.change_log,
+            )
+            for env_binding in project.envs
+            if env_binding.graph_runner
+        ]
+
+        # Context-aware: templates only when viewed from other orgs
+        is_template = (
+            str(organization_id) != TEMPLATE_ORGANIZATION_ID
+            and str(project.organization_id) == TEMPLATE_ORGANIZATION_ID
+        )
+
+        project_schemas.append(ProjectWithGraphRunnersSchema(
+            project_id=project.id,
+            project_name=project.name,
+            description=project.description,
+            organization_id=project.organization_id,
+            project_type=project.type,
+            created_at=str(project.created_at),
+            updated_at=str(project.updated_at),
+            graph_runners=graph_runners,
+            is_template=is_template,
+        ))
+
+    return project_schemas
 
 
 # --- CREATE operations ---
