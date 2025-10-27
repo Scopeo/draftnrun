@@ -623,10 +623,39 @@ class CompletionService(LLMService):
         span.set_attributes({SpanAttributes.LLM_INVOCATION_PARAMETERS: json.dumps(self._invocation_parameters)})
 
         match self._provider:
-            case "openai" | "google":
+            case "openai":
                 import openai
 
                 client = openai.AsyncOpenAI(api_key=self._api_key, base_url=self._base_url)
+                response = await client.chat.completions.create(
+                    model=self._model_name,
+                    messages=messages,
+                    tools=openai_tools,
+                    temperature=self._invocation_parameters.get("temperature"),
+                    stream=stream,
+                    tool_choice=tool_choice,
+                )
+                span.set_attributes(
+                    {
+                        SpanAttributes.LLM_TOKEN_COUNT_COMPLETION: response.usage.completion_tokens,
+                        SpanAttributes.LLM_TOKEN_COUNT_PROMPT: response.usage.prompt_tokens,
+                        SpanAttributes.LLM_TOKEN_COUNT_TOTAL: response.usage.total_tokens,
+                    }
+                )
+                return response
+
+            case "google":
+                import openai
+
+                client = openai.AsyncOpenAI(api_key=self._api_key, base_url=self._base_url)
+                if not openai_tools:
+                    non_op_tool = ToolDescription(**{
+                        "name": "no_op_tool",
+                        "description": "This tool does nothing and is to never by used/called.",
+                        "tool_properties": {},
+                        "required_tool_properties": [],
+                    })
+                    openai_tools = [non_op_tool.openai_format]
                 response = await client.chat.completions.create(
                     model=self._model_name,
                     messages=messages,
