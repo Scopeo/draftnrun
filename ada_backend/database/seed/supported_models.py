@@ -133,6 +133,7 @@ ALL_SUPPORTED_MODELS = [
             ModelCapability.COMPLETION,
             ModelCapability.IMAGE,
             ModelCapability.CONSTRAINED_OUTPUT,
+            ModelCapability.FUNCTION_CALLING,
         ],
     },
     {
