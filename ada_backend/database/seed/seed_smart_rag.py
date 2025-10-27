@@ -18,6 +18,7 @@ from ada_backend.database.component_definition_seeding import (
 from ada_backend.database.seed.seed_tool_description import TOOL_DESCRIPTION_UUIDS
 from ada_backend.database.seed.utils import (
     COMPONENT_UUIDS,
+    COMPONENT_VERSION_UUIDS,
     ParameterLLMConfig,
     build_function_calling_service_config_definitions,
 )
@@ -37,7 +38,7 @@ def seed_smart_rag_components(session: Session):
         ],
     )
     document_search_version = db.ComponentVersion(
-        id=COMPONENT_UUIDS["document_search"],
+        id=COMPONENT_VERSION_UUIDS["document_search"],
         component_id=COMPONENT_UUIDS["document_search"],
         version_tag="0.0.1",
         release_stage=db.ReleaseStage.BETA,
@@ -67,7 +68,7 @@ def seed_smart_rag_components(session: Session):
         ],
     )
     document_enhanced_llm_call_agent_version = db.ComponentVersion(
-        id=COMPONENT_UUIDS["document_enhanced_llm_call_agent"],
+        id=COMPONENT_VERSION_UUIDS["document_enhanced_llm_call_agent"],
         component_id=COMPONENT_UUIDS["document_enhanced_llm_call_agent"],
         version_tag="0.0.1",
         release_stage=db.ReleaseStage.BETA,
@@ -75,7 +76,7 @@ def seed_smart_rag_components(session: Session):
         default_tool_description_id=TOOL_DESCRIPTION_UUIDS["default_document_enhanced_llm_agent"],
     )
     document_react_loader_agent_version = db.ComponentVersion(
-        id=COMPONENT_UUIDS["document_react_loader_agent"],
+        id=COMPONENT_VERSION_UUIDS["document_react_loader_agent"],
         component_id=COMPONENT_UUIDS["document_react_loader_agent"],
         version_tag="0.0.1",
         release_stage=db.ReleaseStage.BETA,
@@ -146,12 +147,12 @@ def seed_smart_rag_components(session: Session):
             db.ComponentParameterChildRelationship(
                 id=UUID("a0d97386-2eca-477f-81d6-759d0a8833f6"),
                 component_parameter_definition_id=document_enhanced_llm_call_agent_synthesizer_param.id,
-                child_component_version_id=COMPONENT_UUIDS["synthesizer"],
+                child_component_version_id=COMPONENT_VERSION_UUIDS["synthesizer"],
             ),
             db.ComponentParameterChildRelationship(
                 id=UUID("c2176066-08ed-4b6a-8165-6e05105275c5"),
                 component_parameter_definition_id=document_search_db_service_param.id,
-                child_component_version_id=COMPONENT_UUIDS["snowflake_db_service"],
+                child_component_version_id=COMPONENT_VERSION_UUIDS["snowflake_db_service"],
             ),
         ],
     )

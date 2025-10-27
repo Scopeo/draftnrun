@@ -230,23 +230,22 @@ def instantiate_component(
         component_instance_id=component_instance.id,
     )
     # Instantiate the component using its factory
-    LOGGER.debug(f"Trying to create component: {component_name} with input params: {input_params}\n")
+    LOGGER.debug(
+        f"Trying to create component: {component_name} "
+        f"(version ID: {component_instance.component_version_id}) "
+        f"with input params: {input_params}\n"
+    )
     try:
-        # Prefer explicit base_component when provided
-        base_component = get_base_component_from_version(session, component_instance.component_version_id)
-        if base_component:
-            return FACTORY_REGISTRY.create(
-                entity_name=base_component,
-                **input_params,
-            )
+        # Create component instance using the component version ID
         return FACTORY_REGISTRY.create(
-            entity_name=component_name,
+            component_version_id=component_instance.component_version_id,
             **input_params,
         )
     except Exception as e:
         raise ValueError(
             f"Failed to instantiate component '{component_name}' "
-            f"with instance ID {component_instance.id}: {e}\n"
+            f"with version ID {component_instance.component_version_id} "
+            f"and instance ID {component_instance.id}: {e}\n"
             f"Input parameters: {input_params}"
         ) from e
 

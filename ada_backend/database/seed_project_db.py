@@ -8,7 +8,7 @@ from ada_backend.database import models as db
 from ada_backend.database.demo.demo_graph_test import build_graph_test_chatbot, build_graph_test_source
 from ada_backend.database.demo.demo_react_sql_tool import build_react_sql_agent_chatbot
 from ada_backend.services.graph.update_graph_service import update_graph_service
-from ada_backend.database.seed_db import COMPONENT_UUIDS
+from ada_backend.database.seed_db import COMPONENT_VERSION_UUIDS
 
 LOGGER = logging.getLogger(__name__)
 
@@ -159,7 +159,7 @@ def seed_projects_db(session: Session):
 
         LOGGER.info("Starting to build prod graph test project")
         graph_test_pipeline = build_graph_test_chatbot(
-            COMPONENT_UUIDS,
+            COMPONENT_VERSION_UUIDS,
             graph_runner_id=GRAPH_RUNNER_UUIDS["graph_runner_prod"],
             source_id=SOURCE_UUIDS["graph_test_source"],
         )
@@ -174,7 +174,7 @@ def seed_projects_db(session: Session):
         )
         LOGGER.info("Starting to build draft graph test project")
         graph_test_pipeline = build_graph_test_chatbot(
-            COMPONENT_UUIDS,
+            COMPONENT_VERSION_UUIDS,
             graph_runner_id=GRAPH_RUNNER_UUIDS["graph_runner_draft"],
             source_id=SOURCE_UUIDS["graph_test_source"],
         )
@@ -190,7 +190,7 @@ def seed_projects_db(session: Session):
 
         LOGGER.info("Starting to build ReAct SQL Agent project")
         react_sql_agent_pipeline = build_react_sql_agent_chatbot(
-            COMPONENT_UUIDS, graph_runner_id=GRAPH_RUNNER_UUIDS["react_sql_agent_prod"]
+            COMPONENT_VERSION_UUIDS, graph_runner_id=GRAPH_RUNNER_UUIDS["react_sql_agent_prod"]
         )
         asyncio.run(
             update_graph_service(
@@ -203,7 +203,7 @@ def seed_projects_db(session: Session):
         )
         LOGGER.info("Starting to build ReAct SQL Agent draft project")
         react_sql_agent_staging = build_react_sql_agent_chatbot(
-            COMPONENT_UUIDS, graph_runner_id=GRAPH_RUNNER_UUIDS["react_sql_agent_draft"]
+            COMPONENT_VERSION_UUIDS, graph_runner_id=GRAPH_RUNNER_UUIDS["react_sql_agent_draft"]
         )
         asyncio.run(
             update_graph_service(

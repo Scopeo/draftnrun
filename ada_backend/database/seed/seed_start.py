@@ -18,7 +18,7 @@ from ada_backend.database.component_definition_seeding import (
 
 from ada_backend.repositories.component_repository import get_component_version_by_id
 from ada_backend.database.seed.seed_tool_description import TOOL_DESCRIPTION_UUIDS
-from ada_backend.database.seed.utils import COMPONENT_UUIDS
+from ada_backend.database.seed.utils import COMPONENT_UUIDS, COMPONENT_VERSION_UUIDS
 
 
 START_PAYLOAD_PARAMETER_NAME = "payload_schema"
@@ -39,7 +39,7 @@ def seed_start_components(session: Session):
         ],
     )
     start_version = db.ComponentVersion(
-        id=COMPONENT_UUIDS["start"],
+        id=COMPONENT_VERSION_UUIDS["start"],
         component_id=COMPONENT_UUIDS["start"],
         version_tag="0.0.1",
         release_stage=db.ReleaseStage.PUBLIC,

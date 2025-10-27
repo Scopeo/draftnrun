@@ -2,7 +2,7 @@ from uuid import uuid4
 from fastapi.testclient import TestClient
 
 from ada_backend.main import app
-from ada_backend.database.seed.utils import COMPONENT_UUIDS
+from ada_backend.database.seed.utils import COMPONENT_VERSION_UUIDS
 from ada_backend.scripts.get_supabase_token import get_user_jwt
 from settings import settings
 
@@ -83,7 +83,7 @@ def test_check_project_has_input_component():
     response = client.get(endpoint, headers=HEADERS_JWT)
     graph_description = response.json()
     assert response.status_code == 200
-    assert graph_description["component_instances"][0]["component_id"] == str(COMPONENT_UUIDS["start"])
+    assert graph_description["component_instances"][0]["component_id"] == str(COMPONENT_VERSION_UUIDS["start"])
 
 
 def test_update_project():

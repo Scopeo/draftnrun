@@ -20,6 +20,7 @@ from ada_backend.database.seed.seed_categories import CATEGORY_UUIDS
 from ada_backend.database.seed.seed_tool_description import TOOL_DESCRIPTION_UUIDS
 from ada_backend.database.seed.utils import (
     COMPONENT_UUIDS,
+    COMPONENT_VERSION_UUIDS,
     ParameterLLMConfig,
     build_completion_service_config_definitions,
 )
@@ -46,7 +47,7 @@ def seed_llm_call_components(session: Session):
         ],
     )
     llm_call_version = db.ComponentVersion(
-        id=COMPONENT_UUIDS["llm_call"],
+        id=COMPONENT_VERSION_UUIDS["llm_call"],
         component_id=COMPONENT_UUIDS["llm_call"],
         version_tag="0.0.1",
         release_stage=db.ReleaseStage.PUBLIC,

@@ -20,6 +20,7 @@ from ada_backend.database.seed.seed_categories import CATEGORY_UUIDS
 from ada_backend.database.seed.seed_tool_description import TOOL_DESCRIPTION_UUIDS
 from ada_backend.database.seed.utils import (
     COMPONENT_UUIDS,
+    COMPONENT_VERSION_UUIDS,
     ParameterLLMConfig,
     build_function_calling_service_config_definitions,
 )
@@ -61,7 +62,7 @@ def seed_ai_agent_components(session: Session):
         ],
     )
     base_ai_agent_version = db.ComponentVersion(
-        id=COMPONENT_UUIDS["base_ai_agent"],
+        id=COMPONENT_VERSION_UUIDS["base_ai_agent"],
         component_id=COMPONENT_UUIDS["base_ai_agent"],
         version_tag="0.0.1",
         release_stage=db.ReleaseStage.PUBLIC,

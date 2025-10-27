@@ -9,7 +9,7 @@ from ada_backend.database.component_definition_seeding import (
 )
 from ada_backend.database.seed.seed_categories import CATEGORY_UUIDS
 from ada_backend.database.seed.seed_tool_description import TOOL_DESCRIPTION_UUIDS
-from ada_backend.database.seed.utils import COMPONENT_UUIDS
+from ada_backend.database.seed.utils import COMPONENT_UUIDS, COMPONENT_VERSION_UUIDS
 
 
 def seed_linkup_tool_components(session: Session):
@@ -28,7 +28,7 @@ def seed_linkup_tool_components(session: Session):
         ],
     )
     linkup_tool_version = db.ComponentVersion(
-        id=COMPONENT_UUIDS["linkup_search_tool"],
+        id=COMPONENT_VERSION_UUIDS["linkup_search_tool"],
         component_id=COMPONENT_UUIDS["linkup_search_tool"],
         version_tag="0.0.1",
         release_stage=db.ReleaseStage.PUBLIC,

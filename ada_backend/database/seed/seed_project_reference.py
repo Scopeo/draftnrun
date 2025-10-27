@@ -10,7 +10,7 @@ from ada_backend.database.component_definition_seeding import (
     upsert_components_parameter_definitions,
     upsert_release_stage_to_current_version_mapping,
 )
-from ada_backend.database.seed.utils import COMPONENT_UUIDS
+from ada_backend.database.seed.utils import COMPONENT_UUIDS, COMPONENT_VERSION_UUIDS
 
 
 def seed_project_reference_components(session: Session):
@@ -30,7 +30,7 @@ def seed_project_reference_components(session: Session):
     )
 
     project_reference_version = db.ComponentVersion(
-        id=COMPONENT_UUIDS["project_reference"],
+        id=COMPONENT_VERSION_UUIDS["project_reference"],
         component_id=COMPONENT_UUIDS["project_reference"],
         version_tag="0.0.1",
         release_stage=db.ReleaseStage.INTERNAL,

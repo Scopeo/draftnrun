@@ -10,7 +10,7 @@ from ada_backend.database.component_definition_seeding import (
     upsert_components_parameter_definitions,
     upsert_release_stage_to_current_version_mapping,
 )
-from ada_backend.database.seed.utils import COMPONENT_UUIDS
+from ada_backend.database.seed.utils import COMPONENT_UUIDS, COMPONENT_VERSION_UUIDS
 
 
 def seed_chunk_processor_components(session: Session):
@@ -29,7 +29,7 @@ def seed_chunk_processor_components(session: Session):
     )
 
     chunk_processor_version = db.ComponentVersion(
-        id=COMPONENT_UUIDS["chunk_processor"],
+        id=COMPONENT_VERSION_UUIDS["chunk_processor"],
         component_id=chunk_processor.id,
         description="Process data in chunks using a project's graph workflow",
         release_stage=db.ReleaseStage.INTERNAL,

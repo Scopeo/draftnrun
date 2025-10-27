@@ -20,16 +20,16 @@ def seed_port_definitions(session: Session):
     # Track which ports should exist for each component
     expected_ports_by_component_version = {}
 
-    for component_name, factory in FACTORY_REGISTRY._registry.items():
+    for component_version_id, factory in FACTORY_REGISTRY._registry.items():
         agent_class = factory.entity_class
         if not issubclass(agent_class, Agent):
             continue
 
-        component_version = (
-            session.query(db.ComponentVersion).join(db.Component).filter_by(name=component_name).first()
-        )
+        component_version = session.query(db.ComponentVersion).filter_by(id=component_version_id).first()
         if not component_version:
-            LOGGER.warning(f"Component '{component_name}' not found in the database for port seeding. Skipping.")
+            LOGGER.warning(
+                f"Component version ID '{component_version_id}' not found in the database for port seeding. Skipping."
+            )
             continue
 
         LOGGER.info(f"Processing component for ports: {component_version.component.name}")
@@ -39,7 +39,7 @@ def seed_port_definitions(session: Session):
             outputs_schema = agent_class.get_outputs_schema()
             canonical_ports = agent_class.get_canonical_ports()
         except Exception as e:
-            LOGGER.error(f"Could not retrieve schemas for {component_name}: {e}")
+            LOGGER.error(f"Could not retrieve schemas for {component_version.component.name}: {e}")
             continue
 
         # Track expected ports for this component

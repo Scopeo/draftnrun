@@ -18,7 +18,7 @@ from ada_backend.database.component_definition_seeding import (
 )
 from ada_backend.database.seed.seed_categories import CATEGORY_UUIDS
 from ada_backend.database.seed.seed_tool_description import TOOL_DESCRIPTION_UUIDS
-from ada_backend.database.seed.utils import COMPONENT_UUIDS
+from ada_backend.database.seed.utils import COMPONENT_UUIDS, COMPONENT_VERSION_UUIDS
 
 FILTER_SCHEMA_PARAMETER_NAME = "filtering_json_schema"
 DEFAULT_OUTPUT_FORMAT = {
@@ -86,7 +86,7 @@ def seed_filter_components(session: Session):
         ],
     )
     filter_version = db.ComponentVersion(
-        id=COMPONENT_UUIDS["filter"],
+        id=COMPONENT_VERSION_UUIDS["filter"],
         component_id=COMPONENT_UUIDS["filter"],
         version_tag="0.0.1",
         release_stage=db.ReleaseStage.PUBLIC,

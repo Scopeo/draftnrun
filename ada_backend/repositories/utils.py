@@ -10,7 +10,7 @@ from ada_backend.database.models import (
     ComponentParameterDefinition,
     ParameterType,
 )
-from ada_backend.database.seed.utils import COMPONENT_UUIDS
+from ada_backend.database.seed.utils import COMPONENT_VERSION_UUIDS
 
 
 def create_component_instance(
@@ -67,5 +67,5 @@ def create_component_instance(
 # TODO: move to service
 def create_input_component(session: Session, name: str = "Start") -> ComponentInstance:
     """Creates a new input component instance"""
-    component_version_id = COMPONENT_UUIDS["start"]
+    component_version_id = COMPONENT_VERSION_UUIDS["start"]
     return create_component_instance(session, component_version_id=component_version_id, name=name)

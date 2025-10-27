@@ -22,6 +22,7 @@ from ada_backend.database.seed.seed_categories import CATEGORY_UUIDS
 from ada_backend.database.seed.seed_tool_description import TOOL_DESCRIPTION_UUIDS
 from ada_backend.database.seed.utils import (
     COMPONENT_UUIDS,
+    COMPONENT_VERSION_UUIDS,
     ParameterLLMConfig,
     build_completion_service_config_definitions,
 )
@@ -79,49 +80,49 @@ def seed_rag_components(session: Session):
         ],
     )
     synthesizer_version = db.ComponentVersion(
-        id=COMPONENT_UUIDS["synthesizer"],
+        id=COMPONENT_VERSION_UUIDS["synthesizer"],
         component_id=COMPONENT_UUIDS["synthesizer"],
         version_tag="0.0.1",
         description="Synthesizer for generating outputs",
         release_stage=db.ReleaseStage.PUBLIC,
     )
     hybrid_synthesizer_version = db.ComponentVersion(
-        id=COMPONENT_UUIDS["hybrid_synthesizer"],
+        id=COMPONENT_VERSION_UUIDS["hybrid_synthesizer"],
         component_id=COMPONENT_UUIDS["hybrid_synthesizer"],
         version_tag="0.0.1",
         description="Hybrid Synthesizer for generating outputs",
         release_stage=db.ReleaseStage.BETA,
     )
     chunk_selector_version = db.ComponentVersion(
-        id=COMPONENT_UUIDS["relevant_chunk_selector"],
+        id=COMPONENT_VERSION_UUIDS["relevant_chunk_selector"],
         component_id=COMPONENT_UUIDS["relevant_chunk_selector"],
         version_tag="0.0.1",
         description="Chunk Selector for selecting relevant chunks",
         release_stage=db.ReleaseStage.BETA,
     )
     retriever_version = db.ComponentVersion(
-        id=COMPONENT_UUIDS["retriever"],
+        id=COMPONENT_VERSION_UUIDS["retriever"],
         component_id=COMPONENT_UUIDS["retriever"],
         version_tag="0.0.1",
         description="Retriever for fetching chunks",
         release_stage=db.ReleaseStage.PUBLIC,
     )
     cohere_reranker_version = db.ComponentVersion(
-        id=COMPONENT_UUIDS["cohere_reranker"],
+        id=COMPONENT_VERSION_UUIDS["cohere_reranker"],
         component_id=COMPONENT_UUIDS["cohere_reranker"],
         version_tag="0.0.1",
         description="Cohere API-based Reranker",
         release_stage=db.ReleaseStage.PUBLIC,
     )
     rag_formatter_version = db.ComponentVersion(
-        id=COMPONENT_UUIDS["formatter"],
+        id=COMPONENT_VERSION_UUIDS["formatter"],
         component_id=COMPONENT_UUIDS["formatter"],
         version_tag="0.0.1",
         description="Rag formatter. Design to customize how to display sources on answer",
         release_stage=db.ReleaseStage.PUBLIC,
     )
     vocabulary_search_version = db.ComponentVersion(
-        id=COMPONENT_UUIDS["vocabulary_search"],
+        id=COMPONENT_VERSION_UUIDS["vocabulary_search"],
         component_id=COMPONENT_UUIDS["vocabulary_search"],
         version_tag="0.0.1",
         description="Vocabulary Search for retrieving information from a user-defined vocabulary",
@@ -161,7 +162,7 @@ def seed_rag_components(session: Session):
         ],
     )
     rag_agent_version = db.ComponentVersion(
-        id=COMPONENT_UUIDS["rag_agent"],
+        id=COMPONENT_VERSION_UUIDS["rag_agent"],
         component_id=COMPONENT_UUIDS["rag_agent"],
         version_tag="0.0.1",
         description="RAG Agent for retrieving information from knowledge bases",
@@ -169,7 +170,7 @@ def seed_rag_components(session: Session):
         release_stage=db.ReleaseStage.PUBLIC,
     )
     hybrid_rag_agent_version = db.ComponentVersion(
-        id=COMPONENT_UUIDS["hybrid_rag_agent"],
+        id=COMPONENT_VERSION_UUIDS["hybrid_rag_agent"],
         component_id=COMPONENT_UUIDS["hybrid_rag_agent"],
         version_tag="0.0.1",
         description="Hybrid RAG Agent for retrieving information from knowledge bases",

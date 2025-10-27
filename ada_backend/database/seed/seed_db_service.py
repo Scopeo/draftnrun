@@ -14,7 +14,7 @@ from ada_backend.database.component_definition_seeding import (
     upsert_components_parameter_definitions,
     upsert_release_stage_to_current_version_mapping,
 )
-from ada_backend.database.seed.utils import COMPONENT_UUIDS
+from ada_backend.database.seed.utils import COMPONENT_UUIDS, COMPONENT_VERSION_UUIDS
 
 
 def seed_db_service_components(session: Session):
@@ -35,14 +35,14 @@ def seed_db_service_components(session: Session):
     )
 
     sql_db_service_version = db.ComponentVersion(
-        id=COMPONENT_UUIDS["sql_db_service"],
+        id=COMPONENT_VERSION_UUIDS["sql_db_service"],
         component_id=COMPONENT_UUIDS["sql_db_service"],
         version_tag="0.0.1",
         release_stage=db.ReleaseStage.PUBLIC,
         description="SQL Database service for querying databases",
     )
     snowflake_db_service_version = db.ComponentVersion(
-        id=COMPONENT_UUIDS["snowflake_db_service"],
+        id=COMPONENT_VERSION_UUIDS["snowflake_db_service"],
         component_id=COMPONENT_UUIDS["snowflake_db_service"],
         version_tag="0.0.1",
         release_stage=db.ReleaseStage.PUBLIC,

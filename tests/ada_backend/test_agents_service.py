@@ -120,7 +120,7 @@ def test_get_agent_by_id_service_with_components(monkeypatch):
         return proj
 
     # Create a component instance that matches base_ai_agent
-    base_ai_component_id = agents_service.COMPONENT_UUIDS["base_ai_agent"]
+    base_ai_component_id = agents_service.COMPONENT_VERSION_UUIDS["base_ai_agent"]
     # parameter with SYSTEM_PROMPT_PARAMETER_DEF_ID
     pp = PipelineParameterReadSchema(
         id=agents_service.SYSTEM_PROMPT_PARAMETER_DEF_ID,
