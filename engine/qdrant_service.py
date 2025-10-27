@@ -933,6 +933,7 @@ class QdrantService:
     ) -> bool:
         """Async version of create_collection."""
         if self._embedding_service is None:
+            # TODO : suppress vector size from the method and clean the code
             embedding_size = vector_size
         else:
             embedding_size = self._embedding_service.embedding_size
