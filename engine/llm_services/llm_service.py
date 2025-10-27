@@ -649,12 +649,14 @@ class CompletionService(LLMService):
 
                 client = openai.AsyncOpenAI(api_key=self._api_key, base_url=self._base_url)
                 if not openai_tools:
-                    non_op_tool = ToolDescription(**{
-                        "name": "no_op_tool",
-                        "description": "This tool does nothing and is to never by used/called.",
-                        "tool_properties": {},
-                        "required_tool_properties": [],
-                    })
+                    non_op_tool = ToolDescription(
+                        **{
+                            "name": "no_op_tool",
+                            "description": "This tool does nothing and is to never by used/called.",
+                            "tool_properties": {},
+                            "required_tool_properties": [],
+                        }
+                    )
                     openai_tools = [non_op_tool.openai_format]
                 response = await client.chat.completions.create(
                     model=self._model_name,
