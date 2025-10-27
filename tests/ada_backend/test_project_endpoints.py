@@ -2,7 +2,7 @@ from uuid import uuid4
 from fastapi.testclient import TestClient
 
 from ada_backend.main import app
-from ada_backend.database.seed.utils import COMPONENT_UUIDS, COMPONENT_VERSION_UUIDS
+from ada_backend.database.seed.utils import COMPONENT_UUIDS
 from ada_backend.scripts.get_supabase_token import get_user_jwt
 from settings import settings
 

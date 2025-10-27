@@ -13,7 +13,6 @@ from ada_backend.schemas.pipeline.base import ToolDescriptionSchema
 from engine.agent.types import ComponentAttributes, ToolDescription
 from ada_backend.database.models import ComponentInstance
 from ada_backend.repositories.component_repository import (
-    get_base_component_from_version,
     get_component_instance_by_id,
     get_component_basic_parameters,
     get_component_name_from_instance,
