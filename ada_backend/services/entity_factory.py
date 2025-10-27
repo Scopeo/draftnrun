@@ -285,9 +285,6 @@ def build_param_name_translator(mapping: dict[str, str]) -> ParameterProcessor:
 def get_llm_provider_and_model(llm_model: str) -> tuple[str, str]:
     """
     Extracts the LLM provider and model name from a string in the format "provider:model_name".
-    
-    This function handles model names that contain colons by splitting only on the first colon.
-    For example: "provider:model:with:colons" -> ("provider", "model:with:colons")
 
     Args:
         llm_model (str): The LLM model string in "provider:model_name" format.
@@ -300,9 +297,11 @@ def get_llm_provider_and_model(llm_model: str) -> tuple[str, str]:
     """
     if ":" not in llm_model:
         raise ValueError(f"Invalid LLM model format: {llm_model}. Expected 'provider:model_name'.")
-    
-    # Split only on the first colon to handle model names with colons
-    provider, model = llm_model.split(":", 1)
+    parts = llm_model.split(":")
+    if len(parts) == 2:
+        provider, model = parts
+    else:
+        raise ValueError(f"Format invalide pour llm_model: {llm_model}")
     return provider, model
 
 
