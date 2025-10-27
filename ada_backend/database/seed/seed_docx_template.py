@@ -3,12 +3,10 @@ from sqlalchemy.orm import Session
 
 from ada_backend.database.models import (
     Component,
-    ParameterType,
-    UIComponent,
-    UIComponentProperties,
 )
 from ada_backend.database.component_definition_seeding import (
     upsert_component_categories,
+    upsert_component_versions,
     upsert_components,
     upsert_components_parameter_definitions,
 )
@@ -30,20 +28,27 @@ def seed_docx_template_components(session: Session):
     docx_template_component = Component(
         id=COMPONENT_UUIDS["docx_template"],
         name="DOCX Template Tool",
-        description="Analyze DOCX templates, generate content using AI based on business briefs, and fill templates with structured data.",
         is_agent=False,
         function_callable=True,
         can_use_function_calling=False,
-        release_stage=db.ReleaseStage.INTERNAL,
-        default_tool_description_id=TOOL_DESCRIPTION_UUIDS["docx_template_tool_description"],
     )
     upsert_components(session, [docx_template_component])
+
+    docx_template_component_version = db.ComponentVersion(
+        id=COMPONENT_UUIDS["docx_template"],
+        component_id=COMPONENT_UUIDS["docx_template"],
+        version_tag="0.0.1",
+        release_stage=db.ReleaseStage.INTERNAL,
+        description="Analyze DOCX templates, generate content using AI based on business briefs, and fill templates with structured data.",
+        default_tool_description_id=TOOL_DESCRIPTION_UUIDS["docx_template_tool_description"],
+    )
+    upsert_component_versions(session, [docx_template_component_version])
 
     # Add LLM configuration parameters
     upsert_components_parameter_definitions(
         session=session,
         component_parameter_definitions=build_function_calling_service_config_definitions(
-            component_id=docx_template_component.id,
+            component_version_id=docx_template_component_version.id,
             params_to_seed=[
                 ParameterLLMConfig(
                     param_name=COMPLETION_MODEL_IN_DB,
