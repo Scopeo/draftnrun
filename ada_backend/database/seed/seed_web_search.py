@@ -68,7 +68,7 @@ def seed_web_search_components(session: Session):
                 ],
             ),
             db.ComponentParameterDefinition(
-                id=UUID("b2c3d4e5-f6a7-8901-bcde-f12345678901"),
+                id=UUID("b2c3d4e5-f6a7-8901-abba-f12347653901"),
                 component_version_id=web_search_openai_agent_version.id,
                 name="allowed_domains",
                 type=ParameterType.STRING,
