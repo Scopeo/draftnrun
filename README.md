@@ -676,3 +676,11 @@ Tools are available for the AI Agent. Note that the AI Agent can also have other
 - **Internet Search with OpenAI**: Answer a question using web search.
 - **SQL tool**: Builds SQL queries from natural language
 - **RunSQLquery tool**: Builds and executes SQL queries
+
+## Testing with fake local llms
+You have a `local_llms_for_testing.json` file at the root of the folder that you can copy and rename as `custom_mdodels.json` if you want to have a "fake" llm service for embedding and chat completion.
+You can run `make db-seed` if you want to have the models available on the front end. You can also ingest with fake embedding documents by turning `INGESTION_VIA_CUSTOM_MODEL=True` in the 
+`credentials.env`
+
+You can then simulate a local llms serving by running
+```uv run python -m scripts.local_llm_simulator.py```
