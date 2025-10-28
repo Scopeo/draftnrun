@@ -226,6 +226,7 @@ class ReActAgent(Agent):
         self,
         *original_agent_inputs: AgentPayload,
         tool_call: ChatCompletionMessageToolCall,
+        ctx: Optional[dict] = None,
     ) -> tuple[str, AgentPayload]:
         tool_call_id = tool_call.id
         tool_function_name = tool_call.function.name
@@ -239,8 +240,7 @@ class ReActAgent(Agent):
             tool_arguments["shared_sandbox"] = await self._ensure_shared_sandbox()
         try:
             LOGGER.info(f"Calling tool {tool_function_name} with arguments: {tool_arguments}")
-            # No context propagation for tool usage
-            tool_output = await tool_to_use.run(*original_agent_inputs, **tool_arguments)
+            tool_output = await tool_to_use.run(*original_agent_inputs, ctx=ctx, **tool_arguments)
             LOGGER.info(f"Tool {tool_function_name} returned: {tool_output}")
         except Exception as e:
             LOGGER.error(f"Error running tool {tool_function_name}: {e}")
@@ -248,7 +248,7 @@ class ReActAgent(Agent):
         return tool_call_id, tool_output
 
     async def _process_tool_calls(
-        self, *original_agent_inputs: AgentPayload, tool_calls: list[dict]
+        self, *original_agent_inputs: AgentPayload, tool_calls: list[dict], ctx: Optional[dict] = None
     ) -> tuple[dict[str, AgentPayload], list[dict]]:
         tool_outputs: dict[str, AgentPayload] = {}
 
@@ -268,6 +268,7 @@ class ReActAgent(Agent):
                 self._run_tool_call(
                     *original_agent_inputs,
                     tool_call=tool_call,
+                    ctx=ctx,
                 )
                 for tool_call in tools_to_process
             ]
@@ -280,6 +281,7 @@ class ReActAgent(Agent):
                 tool_call_id, tool_output = await self._run_tool_call(
                     *original_agent_inputs,
                     tool_call=tool_call,
+                    ctx=ctx,
                 )
                 tool_outputs[tool_call_id] = tool_output
         return tool_outputs, tools_to_process
@@ -372,6 +374,7 @@ class ReActAgent(Agent):
         agent_outputs, processed_tool_calls = await self._process_tool_calls(
             original_agent_input,
             tool_calls=all_tool_calls,
+            ctx=ctx,
         )
 
         agent_input.messages.append(
@@ -410,7 +413,7 @@ class ReActAgent(Agent):
                 message=(f"Number of successful tool outputs: {successful_output_count}. " f"Running the agent again.")
             )
             self._current_iteration += 1
-            return await self._run_core(agent_input, ctx=ctx)
+            return await self._run_core(agent_input, ctx=ctx, **kwargs)
         else:
             LOGGER.error(
                 f"Reached the maximum number of iterations ({self._max_iterations}) and still asks for tools."
