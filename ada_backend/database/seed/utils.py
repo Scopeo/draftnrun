@@ -106,7 +106,7 @@ COMPONENT_VERSION_UUIDS: dict[str, UUID] = {
     "hybrid_rag_agent": UUID("69ce9852-00cb-4c9d-86fe-8b8926afa994"),
     "relevant_chunk_selector": UUID("9870dd91-53fd-426b-aa99-7639da706f45"),
     "react_sql_agent": UUID("c0f1a2b3-4d5e-6f7a-8b9c-0d1e2f3a4b5c"),
-    "react_sql_agent_v2": UUID(""),
+    "react_sql_agent_v2": UUID("d0e83ab2-fed1-4e32-9347-0c41353f3eb8"),
     "run_sql_query_tool": UUID("667420c1-e2ca-446f-8e54-e0edd7e660bf"),
     "document_search": UUID("79399392-25ba-4cea-9f25-2738765dc329"),
     "document_enhanced_llm_call_agent": UUID("6460b304-640c-4468-abd3-67bbff6902d4"),
