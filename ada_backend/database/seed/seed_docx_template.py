@@ -13,6 +13,7 @@ from ada_backend.database.component_definition_seeding import (
 from ada_backend.database.seed.seed_categories import CATEGORY_UUIDS
 from ada_backend.database.seed.utils import (
     COMPONENT_UUIDS,
+    COMPONENT_VERSION_UUIDS,
     ParameterLLMConfig,
     build_function_calling_service_config_definitions,
 )
@@ -35,7 +36,7 @@ def seed_docx_template_components(session: Session):
     upsert_components(session, [docx_template_component])
 
     docx_template_component_version = db.ComponentVersion(
-        id=COMPONENT_UUIDS["docx_template"],
+        id=COMPONENT_VERSION_UUIDS["docx_template_agent"],
         component_id=COMPONENT_UUIDS["docx_template"],
         version_tag="0.0.1",
         release_stage=db.ReleaseStage.INTERNAL,

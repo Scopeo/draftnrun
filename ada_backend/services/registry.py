@@ -465,7 +465,7 @@ def create_factory_registry() -> FactoryRegistry:
     )
 
     registry.register(
-        name=COMPONENT_VERSION_UUIDS["docx_template_agent"],
+        component_version_id=COMPONENT_VERSION_UUIDS["docx_template_agent"],
         factory=AgentFactory(
             entity_class=DocxTemplateAgent,
             parameter_processors=[
