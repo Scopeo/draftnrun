@@ -43,9 +43,9 @@ def seed_react_sql_components(session: Session):
         ],
     )
     react_sql_agent_version = db.ComponentVersion(
-        id=COMPONENT_VERSION_UUIDS["react_sql_agent"],
+        id=COMPONENT_VERSION_UUIDS["react_sql_agent_v2"],
         component_id=COMPONENT_UUIDS["react_sql_agent"],
-        version_tag="0.0.1",
+        version_tag="0.1.0",
         release_stage=db.ReleaseStage.PUBLIC,
         description="Agent that can query databases",
         default_tool_description_id=TOOL_DESCRIPTION_UUIDS["default_react_sql_tool_description"],
@@ -59,7 +59,7 @@ def seed_react_sql_components(session: Session):
         session=session,
         component_parameter_definitions=[
             db.ComponentParameterDefinition(
-                id=UUID("3f510f8c-79e9-4cf0-abe3-880e89c9372d"),
+                id=UUID("a3e69895-d0b2-4d99-8fc8-c5daddc05663"),
                 component_version_id=react_sql_agent_version.id,
                 name="engine_url",
                 type=ParameterType.STRING,
@@ -72,14 +72,14 @@ def seed_react_sql_components(session: Session):
                 is_advanced=False,
             ),
             db.ComponentParameterDefinition(
-                id=UUID("3253a083-0a54-4d7b-b438-6a7c13d67dc8"),
+                id=UUID("06d6132e-4d2e-4540-97a3-70345120816d"),
                 component_version_id=react_sql_agent_version.id,
                 name="include_tables",
                 type=ParameterType.JSON,
                 nullable=True,
             ),
             db.ComponentParameterDefinition(
-                id=UUID("18baf91c-bdc2-4a14-a9db-bf573e2153d0"),
+                id=UUID("35678901-2345-6789-0123-456789012345"),
                 component_version_id=react_sql_agent_version.id,
                 name="additional_db_description",
                 type=ParameterType.STRING,
@@ -91,7 +91,7 @@ def seed_react_sql_components(session: Session):
                 ).model_dump(exclude_unset=True, exclude_none=True),
             ),
             db.ComponentParameterDefinition(
-                id=UUID("69728a7d-0dd2-412d-b3d4-9348de3b92cd"),
+                id=UUID("76543210-9876-5432-1098-765432109876"),
                 component_version_id=react_sql_agent_version.id,
                 name="prompt",
                 type=ParameterType.STRING,
@@ -99,7 +99,7 @@ def seed_react_sql_components(session: Session):
                 default=DEFAULT_REACT_SQL_TOOL_PROMPT,
             ),
             db.ComponentParameterDefinition(
-                id=UUID("81ad2034-3c5e-4f10-bc57-1fe5ea450d92"),
+                id=UUID("98765432-1098-7654-3210-987654321098"),
                 component_version_id=react_sql_agent_version.id,
                 name="db_schema_name",
                 type=ParameterType.STRING,
@@ -116,15 +116,15 @@ def seed_react_sql_components(session: Session):
                 params_to_seed=[
                     ParameterLLMConfig(
                         param_name=COMPLETION_MODEL_IN_DB,
-                        param_id=UUID("3d858a3a-1730-414f-9a57-45f72cbd3cfd"),
+                        param_id=UUID("12345678-9012-3456-7890-123456789012"),
                     ),
                     ParameterLLMConfig(
                         param_name=TEMPERATURE_IN_DB,
-                        param_id=UUID("374924b3-fd84-4f1c-9bd3-c8445fc535e3"),
+                        param_id=UUID("45678901-2345-6789-0123-456789012345"),
                     ),
                     ParameterLLMConfig(
                         param_name="api_key",
-                        param_id=UUID("260e7556-824b-4798-9bf1-436bb6eeb7ec"),
+                        param_id=UUID("78901234-5678-9012-3456-789012345678"),
                     ),
                 ],
             ),

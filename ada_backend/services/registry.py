@@ -400,6 +400,15 @@ def create_factory_registry() -> FactoryRegistry:
         factory=AgentFactory(
             entity_class=ReactSQLAgent,
             parameter_processors=[
+                completion_service_processor,
+            ],
+        ),
+    )
+    registry.register(
+        component_version_id=COMPONENT_VERSION_UUIDS["react_sql_agent_v2"],
+        factory=AgentFactory(
+            entity_class=ReactSQLAgent,
+            parameter_processors=[
                 db_service_processor,
                 completion_service_processor,
             ],
