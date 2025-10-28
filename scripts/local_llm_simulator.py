@@ -11,6 +11,9 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 import uvicorn
 
+# Configuration
+DEFAULT_EMBEDDING_SIZE = 3072
+
 
 @dataclass
 class EmbeddingData:
@@ -101,11 +104,12 @@ class ChatCompletionResponse(BaseModel):
 
 class DummyEmbeddingService:
     """
-    Dummy embedding service that generates fixed 1536-dimensional vectors.
+    Dummy embedding service that generates fixed-dimensional vectors.
     Each vector contains values of 0.1 for all dimensions.
+    Default size is 3072 dimensions but can be configured.
     """
 
-    def __init__(self, embedding_size: int = 1536):
+    def __init__(self, embedding_size: int = DEFAULT_EMBEDDING_SIZE):
         self.embedding_size = embedding_size
         # Pre-generate a fixed vector of 0.1 values
         self._fixed_vector = [0.1] * embedding_size
@@ -262,7 +266,7 @@ class DummyEmbeddingEndpoint:
     Mimics OpenAI's embedding API structure.
     """
 
-    def __init__(self, embedding_size: int = 1536):
+    def __init__(self, embedding_size: int = DEFAULT_EMBEDDING_SIZE):
         self.embedding_service = DummyEmbeddingService(embedding_size)
 
     async def create_embeddings(
@@ -345,8 +349,8 @@ async def main():
     """Example usage of the dummy embedding and chat completion services."""
 
     # Create dummy services
-    embedding_service = DummyEmbeddingService(embedding_size=1536)
-    embedding_endpoint = DummyEmbeddingEndpoint(embedding_size=1536)
+    embedding_service = DummyEmbeddingService(embedding_size=DEFAULT_EMBEDDING_SIZE)
+    embedding_endpoint = DummyEmbeddingEndpoint(embedding_size=DEFAULT_EMBEDDING_SIZE)
     chat_service = DummyChatCompletionService()
     chat_endpoint = DummyChatCompletionEndpoint()
 
@@ -407,13 +411,21 @@ async def main():
 # FastAPI application
 app = FastAPI(
     title="Dummy LLM Service",
-    description="A dummy LLM service that generates fixed 1536-dimensional vectors and chat completions",
+    description=f"A dummy LLM service that generates fixed"
+    f" {DEFAULT_EMBEDDING_SIZE}-dimensional vectors and chat completions",
     version="1.0.0",
 )
 
-# Global service instances
-embedding_service = DummyEmbeddingService(embedding_size=1536)
-chat_service = DummyChatCompletionService()
+# Global service instances (will be updated based on command line args)
+embedding_service = None
+chat_service = None
+
+
+def initialize_services(embedding_size: int = DEFAULT_EMBEDDING_SIZE):
+    """Initialize the global service instances."""
+    global embedding_service, chat_service
+    embedding_service = DummyEmbeddingService(embedding_size=embedding_size)
+    chat_service = DummyChatCompletionService()
 
 
 @app.get("/")
@@ -573,9 +585,13 @@ async def list_models():
     }
 
 
-def start_server(host: str = "0.0.0.0", port: int = 8081):
+def start_server(host: str = "0.0.0.0", port: int = 8081, embedding_size: int = DEFAULT_EMBEDDING_SIZE):
     """Start the uvicorn server."""
+    # Initialize services with the specified embedding size
+    initialize_services(embedding_size)
+
     print(f"Starting Dummy LLM Service on http://{host}:{port}")
+    print(f"Embedding size: {embedding_size} dimensions")
     print(f"API Documentation: http://{host}:{port}/docs")
     print(f"Health Check: http://{host}:{port}/health")
     print(f"Embeddings Endpoint: http://{host}:{port}/v1/embeddings")
@@ -588,19 +604,32 @@ def start_server(host: str = "0.0.0.0", port: int = 8081):
     print("API Key: dummy-api-key")
     print("Available Models:")
     print("  - dummy-chat (completion)")
-    print("  - dummy-embedding:latest (embedding)")
+    print(f"  - dummy-embedding:latest (embedding, {embedding_size} dimensions)")
     print()
-    print("Configuration file: dummy_llm_models.json")
+    print("Configuration file: custom_models.json")
 
     uvicorn.run(app, host=host, port=port, log_level="info")
 
 
 if __name__ == "__main__":
-    import sys
+    import argparse
 
-    if len(sys.argv) > 1 and sys.argv[1] == "test":
+    parser = argparse.ArgumentParser(description="Dummy LLM Service")
+    parser.add_argument("--test", action="store_true", help="Run test examples instead of starting server")
+    parser.add_argument("--host", default="0.0.0.0", help="Host to bind to (default: 0.0.0.0)")
+    parser.add_argument("--port", type=int, default=8081, help="Port to bind to (default: 8081)")
+    parser.add_argument(
+        "--embedding-size",
+        type=int,
+        default=DEFAULT_EMBEDDING_SIZE,
+        help=f"Embedding vector size (default: {DEFAULT_EMBEDDING_SIZE})",
+    )
+
+    args = parser.parse_args()
+
+    if args.test:
         # Run the example usage
         asyncio.run(main())
     else:
         # Start the server by default
-        start_server()
+        start_server(host=args.host, port=args.port, embedding_size=args.embedding_size)
