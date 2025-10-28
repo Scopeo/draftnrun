@@ -57,16 +57,3 @@ def delete_component_service(session: Session, component_id) -> None:
         if instance_count > 0:
             raise ComponentHasInstancesDeletionError(component_id, instance_count)
         delete_component_by_id(session, component_id)
-
-
-def update_component_release_stage_service(
-    session: Session,
-    component_id,
-    release_stage: ReleaseStage,
-) -> None:
-    component = get_component_by_id(session, component_id)
-    if component is None:
-        raise ComponentNotFound(component_id)
-    component.release_stage = release_stage
-    session.add(component)
-    session.commit()

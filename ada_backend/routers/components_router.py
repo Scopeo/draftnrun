@@ -7,10 +7,7 @@ from sqlalchemy.orm import Session
 from ada_backend.database.models import ReleaseStage
 from ada_backend.database.setup_db import get_db
 from ada_backend.schemas.auth_schema import SupabaseUser
-from ada_backend.schemas.components_schema import (
-    ComponentsResponse,
-    UpdateComponentReleaseStageRequest,
-)
+from ada_backend.schemas.components_schema import ComponentsResponse
 from ada_backend.routers.auth_router import (
     user_has_access_to_organization_dependency,
     UserRights,
@@ -18,7 +15,6 @@ from ada_backend.routers.auth_router import (
 from ada_backend.services.components_service import (
     get_all_components_endpoint,
     delete_component_service,
-    update_component_release_stage_service,
 )
 from ada_backend.services.errors import (
     ComponentNotFound,
@@ -101,36 +97,4 @@ async def delete_component(
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
         LOGGER.error(f"Failed to delete component {component_id}: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Internal server error") from e
-
-
-@router.put("/{component_id}/release-stage")
-async def update_component_release_stage(
-    component_id: UUID,
-    payload: UpdateComponentReleaseStageRequest,
-    user: Annotated[SupabaseUser, Depends(get_user_from_supabase_token)],
-    session: Session = Depends(get_db),
-):
-    """Update a component's release stage. Super admin only."""
-    if not user.id:
-        raise HTTPException(status_code=400, detail="User ID not found")
-    try:
-        is_super = await is_user_super_admin(user)
-        if not is_super:
-            raise HTTPException(status_code=403, detail="Access denied")
-        update_component_release_stage_service(
-            session,
-            component_id,
-            payload.release_stage,
-        )
-        return {"status": "ok"}
-    except HTTPException:
-        raise
-    except ComponentNotFound as e:
-        raise HTTPException(status_code=404, detail="Resource not found") from e
-    except Exception as e:
-        LOGGER.error(
-            f"Failed to update component {component_id} release stage to {payload.release_stage}: {str(e)}",
-            exc_info=True,
-        )
         raise HTTPException(status_code=500, detail="Internal server error") from e
