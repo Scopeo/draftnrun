@@ -2,7 +2,7 @@ from uuid import UUID, uuid4
 
 from fastapi.testclient import TestClient
 
-from ada_backend.database.seed.utils import COMPONENT_UUIDS
+from ada_backend.database.seed.utils import COMPONENT_UUIDS, COMPONENT_VERSION_UUIDS
 from ada_backend.database.setup_db import SessionLocal
 from ada_backend.main import app
 from ada_backend.repositories.graph_runner_repository import delete_graph_runner
@@ -17,7 +17,7 @@ HEADERS_JWT = {
     "Authorization": f"Bearer {JWT_TOKEN}",
 }
 COMPONENT_ID = str(COMPONENT_UUIDS["llm_call"])
-COMPONENT_VERSION_ID = str(COMPONENT_UUIDS["llm_call"])
+COMPONENT_VERSION_ID = str(COMPONENT_VERSION_UUIDS["llm_call"])
 
 
 def test_create_empty_graph_runner():

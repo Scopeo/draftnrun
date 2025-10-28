@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import select, exists
 
 from ada_backend.database import models as db
-from ada_backend.database.seed.utils import COMPONENT_UUIDS
+from ada_backend.database.seed.utils import COMPONENT_VERSION_UUIDS
 from ada_backend.schemas.pipeline.graph_schema import ComponentNodeDTO
 from ada_backend.repositories.utils import create_input_component
 
@@ -192,7 +192,7 @@ def get_input_component(session: Session, graph_runner_id: UUID) -> db.Component
         .join(db.ComponentVersion, db.ComponentVersion.id == db.ComponentInstance.component_version_id)
         .filter(
             db.GraphRunnerNode.graph_runner_id == graph_runner_id,
-            db.ComponentVersion.id == COMPONENT_UUIDS["start"],
+            db.ComponentVersion.id == COMPONENT_VERSION_UUIDS["start"],
             db.GraphRunnerNode.is_start_node.is_(True),
         )
         .first()

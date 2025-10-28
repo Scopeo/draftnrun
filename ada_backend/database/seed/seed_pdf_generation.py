@@ -10,7 +10,7 @@ from ada_backend.database.component_definition_seeding import (
     upsert_components_parameter_definitions,
     upsert_release_stage_to_current_version_mapping,
 )
-from ada_backend.database.seed.utils import COMPONENT_UUIDS
+from ada_backend.database.seed.utils import COMPONENT_UUIDS, COMPONENT_VERSION_UUIDS
 from ada_backend.database.seed.seed_tool_description import TOOL_DESCRIPTION_UUIDS
 from ada_backend.database.seed.seed_categories import CATEGORY_UUIDS
 from ada_backend.database import models as db
@@ -29,7 +29,7 @@ def seed_pdf_generation_components(session: Session):
     upsert_components(session, [pdf_generation_component])
 
     pdf_generation_component_version = db.ComponentVersion(
-        id=COMPONENT_UUIDS["pdf_generation"],
+        id=COMPONENT_VERSION_UUIDS["pdf_generation"],
         component_id=COMPONENT_UUIDS["pdf_generation"],
         version_tag="0.0.1",
         release_stage=db.ReleaseStage.INTERNAL,

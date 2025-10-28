@@ -20,6 +20,7 @@ from ada_backend.database.seed.seed_categories import CATEGORY_UUIDS
 from ada_backend.database.seed.seed_tool_description import TOOL_DESCRIPTION_UUIDS
 from ada_backend.database.seed.utils import (
     COMPONENT_UUIDS,
+    COMPONENT_VERSION_UUIDS,
     ParameterLLMConfig,
     build_function_calling_service_config_definitions,
 )
@@ -43,7 +44,7 @@ def seed_react_sql_components(session: Session):
         ],
     )
     react_sql_agent_version = db.ComponentVersion(
-        id=COMPONENT_UUIDS["react_sql_agent"],
+        id=COMPONENT_VERSION_UUIDS["react_sql_agent"],
         component_id=COMPONENT_UUIDS["react_sql_agent"],
         version_tag="0.0.1",
         release_stage=db.ReleaseStage.PUBLIC,
@@ -72,12 +73,12 @@ def seed_react_sql_components(session: Session):
             db.ComponentParameterChildRelationship(
                 id=UUID("f4749274-abc6-4de7-8ef2-2e7424895151"),
                 component_parameter_definition_id=react_sql_agent_param.id,
-                child_component_version_id=COMPONENT_UUIDS["snowflake_db_service"],
+                child_component_version_id=COMPONENT_VERSION_UUIDS["snowflake_db_service"],
             ),
             db.ComponentParameterChildRelationship(
                 id=UUID("12e869f3-0465-4e47-a810-d79a4f9a7bd0"),
                 component_parameter_definition_id=react_sql_agent_param.id,
-                child_component_version_id=COMPONENT_UUIDS["sql_db_service"],
+                child_component_version_id=COMPONENT_VERSION_UUIDS["sql_db_service"],
             ),
         ],
     )

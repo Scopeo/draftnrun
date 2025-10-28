@@ -13,6 +13,7 @@ from ada_backend.database.seed.seed_categories import CATEGORY_UUIDS
 from ada_backend.database.seed.seed_tool_description import TOOL_DESCRIPTION_UUIDS
 from ada_backend.database.seed.utils import (
     COMPONENT_UUIDS,
+    COMPONENT_VERSION_UUIDS,
 )
 from ada_backend.database.models import (
     ParameterType,
@@ -35,7 +36,7 @@ def seed_static_responder_components(session: Session):
         ],
     )
     static_responder_version = db.ComponentVersion(
-        id=COMPONENT_UUIDS["static_responder"],
+        id=COMPONENT_VERSION_UUIDS["static_responder"],
         component_id=COMPONENT_UUIDS["static_responder"],
         version_tag="0.0.1",
         release_stage=db.ReleaseStage.INTERNAL,

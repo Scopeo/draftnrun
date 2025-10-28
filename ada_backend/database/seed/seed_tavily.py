@@ -14,6 +14,7 @@ from ada_backend.database.component_definition_seeding import (
 from ada_backend.database.seed.seed_tool_description import TOOL_DESCRIPTION_UUIDS
 from ada_backend.database.seed.utils import (
     COMPONENT_UUIDS,
+    COMPONENT_VERSION_UUIDS,
     ParameterLLMConfig,
     build_completion_service_config_definitions,
 )
@@ -35,7 +36,7 @@ def seed_tavily_components(session: Session):
         ],
     )
     tavily_agent_version = db.ComponentVersion(
-        id=COMPONENT_UUIDS["tavily_agent"],
+        id=COMPONENT_VERSION_UUIDS["tavily_agent"],
         component_id=COMPONENT_UUIDS["tavily_agent"],
         version_tag="v0.1.0",
         release_stage=db.ReleaseStage.INTERNAL,
@@ -64,7 +65,7 @@ def seed_tavily_components(session: Session):
             db.ComponentParameterChildRelationship(
                 id=UUID("5592a748-efc1-4dd0-9600-d4a41e9bba94"),
                 component_parameter_definition_id=tavily_synthesizer_param.id,
-                child_component_version_id=COMPONENT_UUIDS["synthesizer"],
+                child_component_version_id=COMPONENT_VERSION_UUIDS["synthesizer"],
             ),
         ],
     )

@@ -11,7 +11,7 @@ from ada_backend.database.seed.seed_ai_agent import (
     SYSTEM_PROMPT_PARAMETER_DEF_ID,
     SYSTEM_PROMPT_PARAMETER_NAME,
 )
-from ada_backend.database.seed.utils import COMPONENT_UUIDS
+from ada_backend.database.seed.utils import COMPONENT_UUIDS, COMPONENT_VERSION_UUIDS
 from ada_backend.repositories.agent_repository import fetch_agents_with_graph_runners_by_organization
 from ada_backend.repositories.env_repository import bind_graph_runner_to_project
 from ada_backend.repositories.graph_runner_repository import insert_graph_runner, upsert_component_node
@@ -104,7 +104,8 @@ def get_agent_by_id_service(session: Session, agent_id: UUID, graph_runner_id: U
 
     for component_instance in graph_data.component_instances:
         is_ai_agent_component = (
-            component_instance.is_start_node and component_instance.component_id == COMPONENT_UUIDS["base_ai_agent"]
+            component_instance.is_start_node
+            and component_instance.component_id == COMPONENT_VERSION_UUIDS["base_ai_agent"]
         )
 
         if is_ai_agent_component:
@@ -135,7 +136,7 @@ def add_ai_agent_component_to_graph(session: Session, graph_runner_id: UUID) -> 
     """
     ai_agent_component = create_component_instance(
         session,
-        component_version_id=COMPONENT_UUIDS["base_ai_agent"],
+        component_version_id=COMPONENT_VERSION_UUIDS["base_ai_agent"],
         name="AI Agent",
         component_instance_id=graph_runner_id,
     )
@@ -203,7 +204,7 @@ def build_ai_agent_component(
     return ComponentInstanceSchema(
         id=ai_agent_instance_id,
         component_id=COMPONENT_UUIDS["base_ai_agent"],
-        component_version_id=COMPONENT_UUIDS["base_ai_agent"],
+        component_version_id=COMPONENT_VERSION_UUIDS["base_ai_agent"],
         name="AI Agent",
         parameters=parameters,
         is_start_node=True,

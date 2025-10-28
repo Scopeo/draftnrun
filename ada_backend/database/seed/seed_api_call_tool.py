@@ -16,7 +16,7 @@ from ada_backend.database.component_definition_seeding import (
     upsert_release_stage_to_current_version_mapping,
 )
 from ada_backend.database.seed.seed_categories import CATEGORY_UUIDS
-from ada_backend.database.seed.utils import COMPONENT_UUIDS
+from ada_backend.database.seed.utils import COMPONENT_UUIDS, COMPONENT_VERSION_UUIDS
 from ada_backend.database.seed.seed_tool_description import TOOL_DESCRIPTION_UUIDS
 from ada_backend.database import models as db
 
@@ -33,7 +33,7 @@ def seed_api_call_components(session: Session):
     upsert_components(session, [api_call_component])
 
     api_call_component_version = db.ComponentVersion(
-        id=COMPONENT_UUIDS["api_call_tool"],
+        id=COMPONENT_VERSION_UUIDS["api_call_tool"],
         component_id=COMPONENT_UUIDS["api_call_tool"],
         version_tag="0.0.1",
         release_stage=db.ReleaseStage.PUBLIC,

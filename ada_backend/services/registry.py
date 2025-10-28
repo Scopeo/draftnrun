@@ -1,5 +1,5 @@
 from typing import Any
-from enum import StrEnum
+from uuid import UUID
 
 from engine.agent.inputs_outputs.start import Start
 from engine.agent.filter import Filter
@@ -55,124 +55,78 @@ from ada_backend.database.seed.constants import (
     VERBOSITY_IN_DB,
     REASONING_IN_DB,
 )
+from ada_backend.database.seed.utils import COMPONENT_VERSION_UUIDS
 from engine.agent.static_responder import StaticResponder
-
-
-class SupportedEntityType(StrEnum):
-    """
-    Supported entity types for instantiation. The names should match
-    the component names in the database.
-    """
-
-    # Components
-    SYNTHESIZER = "Synthesizer"
-    HYBRRID_SYNTHESIZER = "HybridSynthesizer"
-    RETRIEVER = "Retriever"
-    COHERE_RERANKER = "CohereReranker"
-    RAG_ANSWER_FORMATTER = "Formatter"
-    VOCABULARY_SEARCH = "Vocabulary Search"
-    SQL_DB_SERVICE = "SQLDBService"
-    CHUNK_SELECTOR = "ChunkSelector"
-    DOCUMENT_SEARCH = "Document Search"
-    # Agents
-    REACT_AGENT = "AI Agent"
-    RAG_AGENT = "Knowledge Search"
-    HYBRID_RAG_AGENT = "HybridRAGAgent"
-    SNOWFLAKE_DB_SERVICE = "SnowflakeDBService"
-    TAVILY_AGENT = "Internet Search with Tavily"
-    OPENAI_WEB_SEARCH_AGENT = "Internet Search (OpenAI)"
-    API_CALL_TOOL = "API Call"
-
-    PYTHON_CODE_RUNNER_TOOL = "Code Execution (Python)"
-    TERMINAL_COMMAND_RUNNER_TOOL = "Terminal code execution"
-    PDF_GENERATION_TOOL = "PDF Generation Tool"
-    DOCX_GENERATION_TOOL = "DOCX Generation Tool"
-    SQL_TOOL = "SQLTool"
-    LINKUP_SEARCH_TOOL = "Internet Search (Linkup)"
-    LLM_CALL_AGENT = "Ask AI"
-    REACT_SQL_AGENT = "Database Query Agent"
-    RUN_SQL_QUERY_TOOL = "RunSQLQueryTool"
-    DOCUMENT_ENHANCED_LLM_CALL = "Document Enhanced LLM Agent"
-    DOCUMENT_REACT_LOADER_AGENT = "Document AI Agent"
-    OCR_CALL = "Text recognition"
-    STATIC_RESPONDER = "Static Responder"
-    START = "Start"
-    FILTER = "Json Filter"
-    PROJECT_REFERENCE = "ProjectReference"
-    CHUNK_PROCESSOR = "ChunkProcessor"
-
-    # Integrations
-    GMAIL_SENDER = "Gmail Sender"
 
 
 class FactoryRegistry:
     """
     A registry for factories, allowing flexible registration and instantiation
-    of entities (agents, components, etc.).
+    of entities (agents, components, etc.) by component version ID.
     """
 
     def __init__(self) -> None:
-        self._registry: dict[str, EntityFactory] = {}
+        self._registry: dict[UUID, EntityFactory] = {}
 
     def register(
         self,
-        name: str,
+        component_version_id: UUID,
         factory: EntityFactory,
     ) -> None:
         """
         Register a factory with the registry.
 
         Args:
-            name (str): The name of the entity to register.
+            component_version_id (UUID): The component version ID to register the factory under.
             factory (EntityFactory): The factory class responsible for creating the entity.
         """
-        # Allow only supported names to be registered to avoid runtime surprises.
-        # Accept both enum members and their string values.
-        normalized_name = name.value if isinstance(name, SupportedEntityType) else str(name)
-        if normalized_name not in [e.value for e in SupportedEntityType]:
-            raise ValueError(
-                f"Unsupported entity name '{normalized_name}'. Must be one of: "
-                f"{', '.join(e.value for e in SupportedEntityType)}",
-            )
-        self._registry[normalized_name] = factory
+        self._registry[component_version_id] = factory
 
-    def get(self, entity_name: str) -> EntityFactory:
+    def get(self, component_version_id: UUID) -> EntityFactory:
         """
         Retrieve the factory for a registered entity.
 
         Args:
-            name (str): The name of the registered entity.
+            component_version_id (UUID): The component version ID of the registered entity.
 
         Returns:
-            EntityFactory[Any]: The factory for the entity.
-        """
-        if entity_name not in self._registry:
-            raise ValueError(f"Entity '{entity_name}' is not registered.")
-        return self._registry[entity_name]
+            EntityFactory: The factory for the entity.
 
-    def create(self, entity_name: str, *args, **kwargs) -> Any:
+        Raises:
+            ValueError: If the component version is not registered.
+        """
+        if component_version_id not in self._registry:
+            raise ValueError(f"Component version ID {component_version_id} is not registered.")
+        return self._registry[component_version_id]
+
+    def create(
+        self,
+        component_version_id: UUID,
+        *args,
+        **kwargs,
+    ) -> Any:
         """
         Create an instance of a registered entity using its factory.
 
         Args:
-            name (str): The name of the registered entity.
+            component_version_id (UUID): The component version ID of the registered entity.
             *args: Positional arguments for the entity factory.
             **kwargs: Keyword arguments for the entity factory.
 
         Returns:
             Any: The instantiated entity.
         """
-        factory = self.get(entity_name)
+        factory = self.get(component_version_id=component_version_id)
         return factory(*args, **kwargs)
 
-    def list_supported(self) -> list[str]:
+    def list_registered_versions(self) -> list[UUID]:
         """
-        List the supported entity types.
+        List all registered component version IDs.
 
         Returns:
-            list[str]: The list of supported entity types.
+            list[UUID]: The list of registered component version IDs.
         """
-        return [entity_type.value for entity_type in SupportedEntityType]
+        return list(self._registry.keys())
 
 
 def create_factory_registry() -> FactoryRegistry:
@@ -230,7 +184,7 @@ def create_factory_registry() -> FactoryRegistry:
 
     # Register components
     registry.register(
-        name=SupportedEntityType.SYNTHESIZER,
+        component_version_id=COMPONENT_VERSION_UUIDS["synthesizer"],
         factory=EntityFactory(
             entity_class=Synthesizer,
             parameter_processors=[
@@ -241,7 +195,7 @@ def create_factory_registry() -> FactoryRegistry:
         ),
     )
     registry.register(
-        name=SupportedEntityType.HYBRRID_SYNTHESIZER,
+        component_version_id=COMPONENT_VERSION_UUIDS["hybrid_synthesizer"],
         factory=EntityFactory(
             entity_class=HybridSynthesizer,
             parameter_processors=[
@@ -252,7 +206,7 @@ def create_factory_registry() -> FactoryRegistry:
         ),
     )
     registry.register(
-        name=SupportedEntityType.CHUNK_SELECTOR,
+        component_version_id=COMPONENT_VERSION_UUIDS["relevant_chunk_selector"],
         factory=EntityFactory(
             entity_class=RelevantChunkSelector,
             parameter_processors=[
@@ -262,7 +216,7 @@ def create_factory_registry() -> FactoryRegistry:
         ),
     )
     registry.register(
-        name=SupportedEntityType.RETRIEVER,
+        component_version_id=COMPONENT_VERSION_UUIDS["retriever"],
         factory=EntityFactory(
             entity_class=Retriever,
             parameter_processors=[
@@ -272,7 +226,7 @@ def create_factory_registry() -> FactoryRegistry:
         ),
     )
     registry.register(
-        name=SupportedEntityType.COHERE_RERANKER,
+        component_version_id=COMPONENT_VERSION_UUIDS["cohere_reranker"],
         factory=EntityFactory(
             entity_class=CohereReranker,
             parameter_processors=[trace_manager_processor],
@@ -280,32 +234,32 @@ def create_factory_registry() -> FactoryRegistry:
     )
 
     registry.register(
-        name=SupportedEntityType.RAG_ANSWER_FORMATTER,
+        component_version_id=COMPONENT_VERSION_UUIDS["formatter"],
         factory=EntityFactory(
             entity_class=Formatter,
         ),
     )
     registry.register(
-        name=SupportedEntityType.VOCABULARY_SEARCH,
+        component_version_id=COMPONENT_VERSION_UUIDS["vocabulary_search"],
         factory=EntityFactory(
             entity_class=VocabularySearch,
             parameter_processors=[trace_manager_processor],
         ),
     )
     registry.register(
-        name=SupportedEntityType.SQL_DB_SERVICE,
+        component_version_id=COMPONENT_VERSION_UUIDS["sql_db_service"],
         factory=EntityFactory(
             entity_class=SQLLocalService,
         ),
     )
     registry.register(
-        name=SupportedEntityType.SNOWFLAKE_DB_SERVICE,
+        component_version_id=COMPONENT_VERSION_UUIDS["snowflake_db_service"],
         factory=EntityFactory(
             entity_class=SnowflakeService,
         ),
     )
     registry.register(
-        name=SupportedEntityType.DOCUMENT_SEARCH,
+        component_version_id=COMPONENT_VERSION_UUIDS["document_search"],
         factory=EntityFactory(
             entity_class=DocumentSearch,
             parameter_processors=[trace_manager_processor],
@@ -314,7 +268,7 @@ def create_factory_registry() -> FactoryRegistry:
 
     # Register agents
     registry.register(
-        name=SupportedEntityType.REACT_AGENT,
+        component_version_id=COMPONENT_VERSION_UUIDS["base_ai_agent"],
         factory=AgentFactory(
             entity_class=ReActAgent,
             parameter_processors=[
@@ -323,7 +277,7 @@ def create_factory_registry() -> FactoryRegistry:
         ),
     )
     registry.register(
-        name=SupportedEntityType.LLM_CALL_AGENT,
+        component_version_id=COMPONENT_VERSION_UUIDS["llm_call"],
         factory=AgentFactory(
             entity_class=LLMCallAgent,
             parameter_processors=[
@@ -332,7 +286,7 @@ def create_factory_registry() -> FactoryRegistry:
         ),
     )
     registry.register(
-        name=SupportedEntityType.PROJECT_REFERENCE,
+        component_version_id=COMPONENT_VERSION_UUIDS["project_reference"],
         factory=NonToolCallableBlockFactory(
             entity_class=GraphRunnerBlock,
             parameter_processors=[
@@ -341,7 +295,7 @@ def create_factory_registry() -> FactoryRegistry:
         ),
     )
     registry.register(
-        name=SupportedEntityType.CHUNK_PROCESSOR,
+        component_version_id=COMPONENT_VERSION_UUIDS["chunk_processor"],
         factory=NonToolCallableBlockFactory(
             entity_class=ChunkProcessor,
             parameter_processors=[
@@ -350,7 +304,7 @@ def create_factory_registry() -> FactoryRegistry:
         ),
     )
     registry.register(
-        name=SupportedEntityType.OCR_CALL,
+        component_version_id=COMPONENT_VERSION_UUIDS["ocr_call"],
         factory=AgentFactory(
             entity_class=OCRCall,
             parameter_processors=[
@@ -359,19 +313,19 @@ def create_factory_registry() -> FactoryRegistry:
         ),
     )
     registry.register(
-        name=SupportedEntityType.RAG_AGENT,
+        component_version_id=COMPONENT_VERSION_UUIDS["rag_agent"],
         factory=AgentFactory(
             entity_class=RAG,
         ),
     )
     registry.register(
-        name=SupportedEntityType.HYBRID_RAG_AGENT,
+        component_version_id=COMPONENT_VERSION_UUIDS["hybrid_rag_agent"],
         factory=AgentFactory(
             entity_class=HybridRAG,
         ),
     )
     registry.register(
-        name=SupportedEntityType.TAVILY_AGENT,
+        component_version_id=COMPONENT_VERSION_UUIDS["tavily_agent"],
         factory=AgentFactory(
             entity_class=TavilyApiTool,
             parameter_processors=[
@@ -380,7 +334,7 @@ def create_factory_registry() -> FactoryRegistry:
         ),
     )
     registry.register(
-        name=SupportedEntityType.OPENAI_WEB_SEARCH_AGENT,
+        component_version_id=COMPONENT_VERSION_UUIDS["web_search_openai_agent"],
         factory=AgentFactory(
             entity_class=WebSearchOpenAITool,
             parameter_processors=[
@@ -389,25 +343,25 @@ def create_factory_registry() -> FactoryRegistry:
         ),
     )
     registry.register(
-        name=SupportedEntityType.API_CALL_TOOL,
+        component_version_id=COMPONENT_VERSION_UUIDS["api_call_tool"],
         factory=AgentFactory(
             entity_class=APICallTool,
         ),
     )
     registry.register(
-        name=SupportedEntityType.PYTHON_CODE_RUNNER_TOOL,
+        component_version_id=COMPONENT_VERSION_UUIDS["python_code_runner"],
         factory=AgentFactory(
             entity_class=PythonCodeRunner,
         ),
     )
     registry.register(
-        name=SupportedEntityType.TERMINAL_COMMAND_RUNNER_TOOL,
+        component_version_id=COMPONENT_VERSION_UUIDS["terminal_command_runner"],
         factory=AgentFactory(
             entity_class=TerminalCommandRunner,
         ),
     )
     registry.register(
-        name=SupportedEntityType.PDF_GENERATION_TOOL,
+        component_version_id=COMPONENT_VERSION_UUIDS["pdf_generation"],
         factory=AgentFactory(
             entity_class=PDFGenerationTool,
             parameter_processors=[
@@ -416,7 +370,7 @@ def create_factory_registry() -> FactoryRegistry:
         ),
     )
     registry.register(
-        name=SupportedEntityType.DOCX_GENERATION_TOOL,
+        component_version_id=COMPONENT_VERSION_UUIDS["docx_generation"],
         factory=AgentFactory(
             entity_class=DOCXGenerationTool,
             parameter_processors=[
@@ -425,7 +379,7 @@ def create_factory_registry() -> FactoryRegistry:
         ),
     )
     registry.register(
-        name=SupportedEntityType.SQL_TOOL,
+        component_version_id=COMPONENT_VERSION_UUIDS["sql_tool"],
         factory=AgentFactory(
             entity_class=SQLTool,
             parameter_processors=[
@@ -434,13 +388,13 @@ def create_factory_registry() -> FactoryRegistry:
         ),
     )
     registry.register(
-        name=SupportedEntityType.LINKUP_SEARCH_TOOL,
+        component_version_id=COMPONENT_VERSION_UUIDS["linkup_search_tool"],
         factory=AgentFactory(
             entity_class=LinkupSearchTool,
         ),
     )
     registry.register(
-        name=SupportedEntityType.REACT_SQL_AGENT,
+        component_version_id=COMPONENT_VERSION_UUIDS["react_sql_agent"],
         factory=AgentFactory(
             entity_class=ReactSQLAgent,
             parameter_processors=[
@@ -449,19 +403,19 @@ def create_factory_registry() -> FactoryRegistry:
         ),
     )
     registry.register(
-        name=SupportedEntityType.RUN_SQL_QUERY_TOOL,
+        component_version_id=COMPONENT_VERSION_UUIDS["run_sql_query_tool"],
         factory=AgentFactory(
             entity_class=RunSQLQueryTool,
         ),
     )
     registry.register(
-        name=SupportedEntityType.DOCUMENT_ENHANCED_LLM_CALL,
+        component_version_id=COMPONENT_VERSION_UUIDS["document_enhanced_llm_call_agent"],
         factory=AgentFactory(
             entity_class=DocumentEnhancedLLMCallAgent,
         ),
     )
     registry.register(
-        name=SupportedEntityType.DOCUMENT_REACT_LOADER_AGENT,
+        component_version_id=COMPONENT_VERSION_UUIDS["document_react_loader_agent"],
         factory=AgentFactory(
             entity_class=DocumentReactLoaderAgent,
             parameter_processors=[
@@ -470,28 +424,28 @@ def create_factory_registry() -> FactoryRegistry:
         ),
     )
     registry.register(
-        name=SupportedEntityType.STATIC_RESPONDER,
+        component_version_id=COMPONENT_VERSION_UUIDS["static_responder"],
         factory=AgentFactory(
             entity_class=StaticResponder,
         ),
     )
 
     registry.register(
-        name=SupportedEntityType.START,
+        component_version_id=COMPONENT_VERSION_UUIDS["start"],
         factory=AgentFactory(
             entity_class=Start,
         ),
     )
 
     registry.register(
-        name=SupportedEntityType.FILTER,
+        component_version_id=COMPONENT_VERSION_UUIDS["filter"],
         factory=AgentFactory(
             entity_class=Filter,
         ),
     )
 
     registry.register(
-        name=SupportedEntityType.GMAIL_SENDER,
+        component_version_id=COMPONENT_VERSION_UUIDS["gmail_sender"],
         factory=AgentFactory(
             entity_class=GmailSender,
         ),
