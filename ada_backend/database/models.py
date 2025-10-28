@@ -291,6 +291,11 @@ class ComponentVersion(Base):
         cascade="all, delete-orphan",
     )
     child_definitions = relationship("ComponentParameterChildRelationship", back_populates="child_component")
+    parameter_groups = relationship(
+        "ComponentParameterGroup",
+        back_populates="component_version",
+        cascade="all, delete-orphan",
+    )
 
     __table_args__ = (
         CheckConstraint("version_tag ~ '^[0-9]+\\.[0-9]+\\.[0-9]+$'", name="check_version_semver"),
@@ -514,6 +519,14 @@ class ComponentParameterDefinition(Base):
     is_advanced = mapped_column(Boolean, nullable=False, default=False)
 
     component_version = relationship("ComponentVersion", back_populates="definitions")
+    parameter_group_id = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("parameter_groups.id", name="fk_component_parameter_definitions_parameter_group_id"),
+        nullable=True,
+    )
+    parameter_order_within_group = mapped_column(Integer, nullable=True)
+
+    parameter_group = relationship("ParameterGroup")
     child_components = relationship(
         "ComponentParameterChildRelationship", back_populates="component_parameter_definition"
     )
@@ -609,6 +622,43 @@ class ComponentInstance(Base):
 
     def __str__(self):
         return f"ComponentInstance(ref={self.ref})"
+
+
+class ParameterGroup(Base):
+    """Global parameter group definitions that can be reused across components."""
+
+    __tablename__ = "parameter_groups"
+
+    id = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name = mapped_column(String, nullable=False)
+
+    parameters = relationship("ComponentParameterDefinition", back_populates="parameter_group")
+
+
+class ComponentParameterGroup(Base):
+    """Component version-specific configuration for parameter groups.
+    Help define for a given component version the order of the groups.
+    """
+
+    __tablename__ = "component_parameter_groups"
+
+    id = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    component_version_id = mapped_column(
+        UUID(as_uuid=True), ForeignKey("component_versions.id", ondelete="CASCADE"), nullable=False
+    )
+    parameter_group_id = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("parameter_groups.id", ondelete="CASCADE", name="fk_component_parameter_groups_parameter_group_id"),
+        nullable=False,
+    )
+    group_order_within_component = mapped_column(Integer, nullable=False, default=0)
+
+    component_version = relationship("ComponentVersion", back_populates="parameter_groups")
+    parameter_group = relationship("ParameterGroup")
+
+    __table_args__ = (
+        sa.UniqueConstraint("component_version_id", "parameter_group_id", name="uq_component_version_parameter_group"),
+    )
 
 
 class GraphRunnerNode(Base):

@@ -18,7 +18,7 @@ from ada_backend.schemas.components_schema import (
     SubComponentParamSchema,
 )
 from ada_backend.schemas.integration_schema import IntegrationSchema
-from ada_backend.schemas.parameter_schema import ComponentParamDefDTO
+from ada_backend.schemas.parameter_schema import ComponentParamDefDTO, ParameterGroupSchema
 from ada_backend.database.models import ComponentGlobalParameter
 from ada_backend.database.component_definition_seeding import (
     upsert_components,
@@ -248,6 +248,36 @@ def get_subcomponent_param_def_by_component_version(
             db.ComponentParameterDefinition.component_version_id == component_version_id,
             db.ComponentParameterDefinition.type == ParameterType.COMPONENT,
         )
+        .all()
+    )
+
+
+def get_component_parameter_groups(
+    session: Session,
+    component_version_id: UUID,
+) -> list[db.ComponentParameterGroup]:
+    """
+    Retrieves parameter groups for a given component version.
+    """
+    return (
+        session.query(db.ComponentParameterGroup)
+        .filter(db.ComponentParameterGroup.component_version_id == component_version_id)
+        .order_by(db.ComponentParameterGroup.group_order_within_component)
+        .all()
+    )
+
+
+def get_component_parameters_with_groups(
+    session: Session,
+    component_version_id: UUID,
+) -> list[tuple[db.ComponentParameterDefinition, Optional[db.ParameterGroup]]]:
+    """
+    Retrieves parameter definitions with their associated parameter groups.
+    """
+    return (
+        session.query(db.ComponentParameterDefinition, db.ParameterGroup)
+        .outerjoin(db.ParameterGroup, db.ComponentParameterDefinition.parameter_group_id == db.ParameterGroup.id)
+        .filter(db.ComponentParameterDefinition.component_version_id == component_version_id)
         .all()
     )
 
@@ -588,6 +618,16 @@ def get_all_components_with_parameters(
                 component_with_version.component_version_id,
             )
 
+            parameter_groups = get_component_parameter_groups(session, component_with_version.component_version_id)
+            parameter_groups_dto = [
+                ParameterGroupSchema(
+                    id=pg.parameter_group.id,
+                    name=pg.parameter_group.name,
+                    group_order_within_component_version=pg.group_order_within_component,
+                )
+                for pg in parameter_groups
+            ]
+
             parameters_to_fill = []
             tool_param_name = None
             for param in parameters:
@@ -603,6 +643,11 @@ def get_all_components_with_parameters(
                     # Skip globally enforced parameters (they are not instance-editable)
                     if param.id in global_param_def_ids:
                         continue
+
+                    parameter_group_name = None
+                    if param.parameter_group:
+                        parameter_group_name = param.parameter_group.name
+
                     parameters_to_fill.append(
                         ComponentParamDefDTO(
                             id=param.id,
@@ -615,6 +660,9 @@ def get_all_components_with_parameters(
                             ui_component_properties=param.ui_component_properties,
                             is_advanced=param.is_advanced,
                             order=param.order,
+                            parameter_group_id=param.parameter_group_id,
+                            parameter_order_within_group=param.parameter_order_within_group,
+                            parameter_group_name=parameter_group_name,
                         )
                     )
 
@@ -659,6 +707,7 @@ def get_all_components_with_parameters(
                     tool_description=tool_description,
                     parameters=parameters_to_fill,
                     icon=component_with_version.icon,
+                    parameter_groups=parameter_groups_dto,
                     subcomponents_info=[
                         SubComponentParamSchema(
                             component_version_id=param_child_def.child_component_version_id,

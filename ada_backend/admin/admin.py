@@ -177,9 +177,11 @@ class ComponentParameterDefinitionAdmin(EnhancedModelView, model=db.ComponentPar
         "default",
         "ui_component",
         "is_advanced",
+        "parameter_group",
+        "parameter_order_within_group",
     ]
     form_columns = [
-        "component",
+        "component_version",
         "name",
         "type",
         "nullable",
@@ -187,7 +189,11 @@ class ComponentParameterDefinitionAdmin(EnhancedModelView, model=db.ComponentPar
         "ui_component",
         "ui_component_properties",
         "is_advanced",
+        "parameter_group",
+        "parameter_order_within_group",
     ]
+    column_filters = ["type", "is_advanced", "nullable", "ui_component", "parameter_group"]
+    column_searchable_list = ["name", "component_version.component.name", "parameter_group.name"]
 
 
 class ComponentAdmin(EnhancedModelView, model=db.Component):
@@ -290,6 +296,36 @@ class ComponentParameterChildRelationshipAdmin(EnhancedModelView, model=db.Compo
         "component_parameter_definition_id",
         "child_component_id",
     ]
+
+
+class ParameterGroupAdmin(EnhancedModelView, model=db.ParameterGroup):
+    category = AdminCategory.COMPONENTS
+    icon = "fas fa-layer-group"
+    column_list = [
+        "id",
+        "name",
+    ]
+    form_columns = [
+        "name",
+    ]
+    column_searchable_list = ["name"]
+
+
+class ComponentParameterGroupAdmin(EnhancedModelView, model=db.ComponentParameterGroup):
+    category = AdminCategory.COMPONENTS
+    icon = "fas fa-layer-group"
+    column_list = [
+        "id",
+        "component_version",
+        "parameter_group",
+        "group_order_within_component",
+    ]
+    form_columns = [
+        "component_version",
+        "parameter_group",
+        "group_order_within_component",
+    ]
+    column_searchable_list = ["component_version.component.name", "parameter_group.name"]
 
 
 class BasicParameterAdmin(EnhancedModelView, model=db.BasicParameter):
@@ -565,6 +601,8 @@ def setup_admin(app: FastAPI):
     admin.add_view(GraphRunnerEdgeAdmin)
     admin.add_view(ComponentParameterDefinitionAdmin)
     admin.add_view(ComponentParameterChildRelationshipAdmin)
+    admin.add_view(ParameterGroupAdmin)
+    admin.add_view(ComponentParameterGroupAdmin)
     admin.add_view(ComponentInstanceAdmin)
     admin.add_view(BasicParameterAdmin)
     admin.add_view(ComponentSubInputAdmin)
