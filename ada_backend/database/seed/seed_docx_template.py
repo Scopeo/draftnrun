@@ -9,6 +9,7 @@ from ada_backend.database.component_definition_seeding import (
     upsert_component_versions,
     upsert_components,
     upsert_components_parameter_definitions,
+    upsert_release_stage_to_current_version_mapping,
 )
 from ada_backend.database.seed.seed_categories import CATEGORY_UUIDS
 from ada_backend.database.seed.utils import (
@@ -65,6 +66,13 @@ def seed_docx_template_components(session: Session):
                 ),
             ],
         ),
+    )
+
+    upsert_release_stage_to_current_version_mapping(
+        session=session,
+        component_id=docx_template_component_version.component_id,
+        release_stage=docx_template_component_version.release_stage,
+        component_version_id=docx_template_component_version.id,
     )
 
     upsert_component_categories(
