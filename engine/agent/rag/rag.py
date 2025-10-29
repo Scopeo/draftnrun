@@ -77,8 +77,10 @@ class RAG(Agent):
     async def _run_without_io_trace(self, inputs: RAGInputs, ctx: dict) -> RAGOutputs:
         if not inputs.query_text:
             raise ValueError("No query_text provided for the RAG tool.")
-
-        chunks = await self._retriever.get_chunks(query_text=inputs.query_text, filters=inputs.filters)
+        filter_to_process = inputs.filters if inputs.filters is not None else {}
+        if "rag_filter" in ctx and ctx["rag_filter"]:
+            filter_to_process = ctx["rag_filter"]
+        chunks = await self._retriever.get_chunks(query_text=inputs.query_text, filters=filter_to_process)
 
         if self._reranker is not None:
             chunks = await self._reranker.rerank(query=inputs.query_text, chunks=chunks)
