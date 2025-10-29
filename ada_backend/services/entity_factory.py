@@ -539,7 +539,7 @@ def build_db_service_processor(target_name: str = "db_service") -> ParameterProc
 
         try:
             db_service_instance = SQLLocalService(engine_url=engine_url)
-            LOGGER.debug(f"Instantiated SQLLocalService successfully")
+            LOGGER.debug("Instantiated SQLLocalService successfully")
         except ConnectionError as e:
             raise ConnectionError(
                 f"Failed to connect to database for component '{target_name}' Error: {str(e)}"
