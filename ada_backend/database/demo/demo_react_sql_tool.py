@@ -6,6 +6,7 @@ from ada_backend.schemas.pipeline.base import (
 )
 from ada_backend.schemas.pipeline.graph_schema import GraphUpdateSchema
 from ada_backend.database.seed.constants import COMPLETION_MODEL_IN_DB
+from settings import settings
 
 ADDITIONAL_DB_DESCRIPTION = (
     "Pour les tables, voici une explication des données: \n"
@@ -63,16 +64,12 @@ def build_react_sql_agent_chatbot(components: dict[str, UUID], graph_runner_id: 
             parameters=[
                 PipelineParameterSchema(name=COMPLETION_MODEL_IN_DB, value="openai:gpt-4o-mini"),
                 PipelineParameterSchema(
-                    name="db_schema_name",
-                    value="DATA_GOUV",
-                ),
-                PipelineParameterSchema(
                     name="additional_db_description",
                     value=ADDITIONAL_DB_DESCRIPTION,
                 ),
                 PipelineParameterSchema(
                     name="engine_url",
-                    value="postgresql://postgres:postgres@localhost:5432/postgres",
+                    value=f"snowflake://{settings.SNOWFLAKE_USER}:{settings.SNOWFLAKE_PASSWORD}@{settings.SNOWFLAKE_ACCOUNT}/SCOPEO/data_gouv?warehouse=TEST_WAREHOUSE&role=SCOPEO_READ_ROLE",
                 ),
             ],
         )
