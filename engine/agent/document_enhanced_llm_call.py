@@ -132,6 +132,7 @@ class DocumentEnhancedLLMCallAgent(Agent):
         *inputs: AgentPayload,
         query_text: Optional[str] = None,
         document_names: Optional[list[str]] = None,
+        ctx: Optional[dict] = None,
     ) -> AgentPayload:
         agent_input = inputs[0]
         content = query_text or agent_input.last_message.content
