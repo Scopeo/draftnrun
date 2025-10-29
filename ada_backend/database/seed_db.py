@@ -37,7 +37,7 @@ from ada_backend.database.seed.seed_chunk_processor import seed_chunk_processor_
 from ada_backend.database.seed.seed_static_responder import seed_static_responder_components
 from ada_backend.database.seed.seed_tool_description import seed_tool_description
 from ada_backend.database.seed.seed_ports import seed_port_definitions
-from ada_backend.database.seed.utils import COMPONENT_UUIDS, COMPONENT_VERSION_UUIDS
+from ada_backend.database.seed.utils import COMPONENT_UUIDS
 
 
 LOGGER = logging.getLogger(__name__)
