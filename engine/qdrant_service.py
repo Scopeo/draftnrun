@@ -932,10 +932,15 @@ class QdrantService:
         distance: str = "Cosine",
     ) -> bool:
         """Async version of create_collection."""
+        if self._embedding_service is None:
+            # TODO : suppress vector size from the method and clean the code
+            embedding_size = vector_size
+        else:
+            embedding_size = self._embedding_service.embedding_size
         if await self.collection_exists_async(collection_name):
             LOGGER.error(f"Collection {collection_name} already exists.")
             return False
-        payload = {"vectors": {"size": vector_size, "distance": distance}}
+        payload = {"vectors": {"size": embedding_size, "distance": distance}}
         response = await self._send_request_async(
             method="PUT", endpoint=f"collections/{collection_name}?wait=true", payload=payload
         )
