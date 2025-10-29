@@ -674,3 +674,82 @@ def test_react_agent_with_none_output_format(mock_trace_manager, mock_tool_descr
     # Verify that _get_output_tool_description returns None
     output_tool = react_agent._get_output_tool_description()
     assert output_tool is None
+
+
+@patch("engine.prometheus_metric.get_tracing_span")
+@patch("engine.prometheus_metric.agent_calls")
+def test_context_passed_to_tools(
+    agent_calls_mock, get_span_mock, mock_trace_manager, mock_tool_description, mock_llm_service
+):
+    """Test that context is properly passed to tools when running the agent with non-empty context."""
+    get_span_mock.return_value.project_id = "1234"
+    counter_mock = MagicMock()
+    agent_calls_mock.labels.return_value = counter_mock
+
+    # Create a mock tool that we can inspect
+    mock_tool = MagicMock()
+    mock_tool.tool_description = MagicMock(spec=ToolDescription)
+    mock_tool.tool_description.name = "test_context_tool"
+    mock_tool.tool_description.description = "A tool to test context passing"
+    mock_tool.tool_description.tool_properties = {"query": {"type": "string", "description": "Query string"}}
+    mock_tool.tool_description.required_tool_properties = ["query"]
+
+    # Mock the tool's run method to capture the ctx parameter
+    mock_tool.run = AsyncMock(
+        return_value=AgentPayload(
+            messages=[ChatMessage(role="assistant", content="Tool executed with context")], is_final=True
+        )
+    )
+
+    # Create the agent with the mock tool
+    react_agent = ReActAgent(
+        completion_service=mock_llm_service,
+        component_attributes=ComponentAttributes(component_instance_name="Test Context Agent"),
+        trace_manager=mock_trace_manager,
+        tool_description=mock_tool_description,
+        agent_tools=[mock_tool],
+    )
+
+    # Mock LLM response with a tool call
+    mock_tool_call = MagicMock()
+    mock_tool_call.id = "tool_call_1"
+    mock_tool_call.function.name = "test_context_tool"
+    mock_tool_call.function.arguments = json.dumps({"query": "test query"})
+
+    mock_message = MagicMock()
+    mock_message.content = None
+    mock_message.tool_calls = [mock_tool_call]
+    mock_message.model_dump = lambda: {
+        "role": "assistant",
+        "content": None,
+        "tool_calls": [
+            {
+                "id": "tool_call_1",
+                "function": {"name": "test_context_tool", "arguments": json.dumps({"query": "test query"})},
+            }
+        ],
+    }
+
+    mock_llm_service.function_call_async = AsyncMock(return_value=MagicMock(choices=[MagicMock(message=mock_message)]))
+
+    # Create input and context
+    agent_input = AgentPayload(messages=[ChatMessage(role="user", content="Test message")])
+    test_context = {"user_id": "12345", "session_id": "abc-def", "custom_data": "test_value"}
+
+    # Run the agent with context
+    output = react_agent.run_sync(agent_input, ctx=test_context)
+
+    # Verify the output
+    assert output.last_message.content == "Tool executed with context"
+    assert output.is_final
+
+    # Verify that the tool was called with the context
+    mock_tool.run.assert_called_once()
+    call_args = mock_tool.run.call_args
+
+    # Check that ctx was passed as a keyword argument
+    assert "ctx" in call_args.kwargs
+    assert call_args.kwargs["ctx"] == test_context
+    assert call_args.kwargs["ctx"]["user_id"] == "12345"
+    assert call_args.kwargs["ctx"]["session_id"] == "abc-def"
+    assert call_args.kwargs["ctx"]["custom_data"] == "test_value"
