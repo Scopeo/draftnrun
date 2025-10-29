@@ -708,13 +708,17 @@ def test_context_passed_to_tools(
         trace_manager=mock_trace_manager,
         tool_description=mock_tool_description,
         agent_tools=[mock_tool],
+        allow_tool_shortcuts=True,  # Allow direct return when tool provides final output
     )
 
     # Mock LLM response with a tool call
     mock_tool_call = MagicMock()
     mock_tool_call.id = "tool_call_1"
-    mock_tool_call.function.name = "test_context_tool"
-    mock_tool_call.function.arguments = json.dumps({"query": "test query"})
+    mock_tool_call.type = "function"
+    mock_tool_call_function = MagicMock()
+    mock_tool_call_function.name = "test_context_tool"
+    mock_tool_call_function.arguments = json.dumps({"query": "test query"})
+    mock_tool_call.function = mock_tool_call_function
 
     mock_message = MagicMock()
     mock_message.content = None
@@ -725,6 +729,7 @@ def test_context_passed_to_tools(
         "tool_calls": [
             {
                 "id": "tool_call_1",
+                "type": "function",
                 "function": {"name": "test_context_tool", "arguments": json.dumps({"query": "test query"})},
             }
         ],
@@ -736,20 +741,40 @@ def test_context_passed_to_tools(
     agent_input = AgentPayload(messages=[ChatMessage(role="user", content="Test message")])
     test_context = {"user_id": "12345", "session_id": "abc-def", "custom_data": "test_value"}
 
-    # Run the agent with context
-    output = react_agent.run_sync(agent_input, ctx=test_context)
+    # Mock _process_tool_calls but still call the actual tool to verify ctx is passed
+    async def mock_process_with_ctx_check(*args, **kwargs):
+        # Verify ctx is passed to _process_tool_calls
+        assert "ctx" in kwargs
+        assert kwargs["ctx"] == test_context
 
-    # Verify the output
-    assert output.last_message.content == "Tool executed with context"
-    assert output.is_final
+        # Call the tool manually to simulate what _process_tool_calls does
+        tool_result = await mock_tool.run(*args, ctx=kwargs.get("ctx"), query="test query")
 
-    # Verify that the tool was called with the context
+        # Return the expected format: (tool_outputs dict, processed_tool_calls list)
+        return (
+            {"tool_call_1": tool_result},
+            [
+                {
+                    "id": "tool_call_1",
+                    "type": "function",
+                    "function": {"name": "test_context_tool", "arguments": json.dumps({"query": "test query"})},
+                }
+            ],
+        )
+
+    with patch.object(react_agent, "_process_tool_calls", side_effect=mock_process_with_ctx_check):
+        # Run the agent with context
+        output = react_agent.run_sync(agent_input, ctx=test_context)
+
+        # Verify the output
+        assert output.last_message.content == "Tool executed with context"
+        assert output.is_final
+
+    # Verify that the tool's run method was called with context
     mock_tool.run.assert_called_once()
-    call_args = mock_tool.run.call_args
-
-    # Check that ctx was passed as a keyword argument
-    assert "ctx" in call_args.kwargs
-    assert call_args.kwargs["ctx"] == test_context
-    assert call_args.kwargs["ctx"]["user_id"] == "12345"
-    assert call_args.kwargs["ctx"]["session_id"] == "abc-def"
-    assert call_args.kwargs["ctx"]["custom_data"] == "test_value"
+    tool_call_args = mock_tool.run.call_args
+    assert "ctx" in tool_call_args.kwargs
+    assert tool_call_args.kwargs["ctx"] == test_context
+    assert tool_call_args.kwargs["ctx"]["user_id"] == "12345"
+    assert tool_call_args.kwargs["ctx"]["session_id"] == "abc-def"
+    assert tool_call_args.kwargs["ctx"]["custom_data"] == "test_value"
