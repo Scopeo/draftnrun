@@ -11,13 +11,33 @@ def connect_to_snowflake(
     snowflake_user: str = settings.SNOWFLAKE_USER,
     snowflake_password: str = settings.SNOWFLAKE_PASSWORD,
 ):
-    connector = snowflake.connector.connect(
-        user=snowflake_user,
-        password=snowflake_password,
-        account=snowflake_account_identifier,
-        client_session_keep_alive=True,
-    )
-    return connector
+    """
+    Connect to Snowflake with timeout and connection retry limits.
+    Raises ConnectionError if unable to connect.
+    """
+    if not all([snowflake_account_identifier, snowflake_user, snowflake_password]):
+        raise ConnectionError(
+            "Missing Snowflake credentials. Please ensure SNOWFLAKE_ACCOUNT, "
+            "SNOWFLAKE_USER, and SNOWFLAKE_PASSWORD are set."
+        )
+
+    try:
+        connector = snowflake.connector.connect(
+            user=snowflake_user,
+            password=snowflake_password,
+            account=snowflake_account_identifier,
+            client_session_keep_alive=True,
+            login_timeout=5,
+            network_timeout=5,
+        )
+        return connector
+    except Exception as e:
+        error_msg = (
+            f"Failed to connect to Snowflake. "
+            f"Account: {snowflake_account_identifier}, User: {snowflake_user}. "
+            f"Error: {str(e)}"
+        )
+        raise ConnectionError(error_msg) from e
 
 
 def escape_sql_string(val: str) -> str:

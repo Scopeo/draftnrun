@@ -71,7 +71,18 @@ class ReactSQLAgent(ReActAgent):
                 "schema_name": db_schema_name,
             }
             prompt += "Do not forget to add the schema name in the query.\n"
-        schema = db_service.get_db_description(table_names=include_tables, **kwargs)
+
+        try:
+            schema = db_service.get_db_description(table_names=include_tables, **kwargs)
+        except ConnectionError as e:
+            raise ConnectionError(
+                f"Failed to initialize ReactSQLAgent: Cannot connect to database. "
+                f"Please check your database connection settings (URL, credentials, etc.). "
+                f"Error: {str(e)}"
+            ) from e
+        except Exception as e:
+            raise ValueError(f"Failed to get database schema description. " f"Error: {str(e)}") from e
+
         initial_prompt = prompt.format(
             additional_db_description=additional_db_description, schema=schema, dialect=db_service.dialect
         )

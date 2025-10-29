@@ -39,9 +39,27 @@ DEFAULT_MAPPING = {"CURRENT_TIMESTAMP": sqlalchemy.func.current_timestamp()}
 class SQLLocalService(DBService):
     def __init__(self, engine_url: str, component_attributes: Optional[ComponentAttributes] = None):
         super().__init__(component_attributes=component_attributes)
-        self.engine = create_engine(engine_url)
+
+        self.engine = create_engine(
+            engine_url,
+            pool_pre_ping=True,
+            pool_recycle=3600,
+            connect_args={
+                "connect_timeout": 5,
+                "login_timeout": 5,
+                "network_timeout": 5,
+            },
+        )
         self.metadata = MetaData()
-        self.metadata.reflect(bind=self.engine)
+
+        try:
+            self.metadata.reflect(bind=self.engine)
+            LOGGER.info(f"Successfully connected to database: {self.engine.url.database}")
+        except Exception as e:
+            error_msg = f"Failed to connect to database with engine_url. Error: {str(e)}"
+            LOGGER.error(error_msg)
+            raise ConnectionError(error_msg) from e
+
         self.Session = sessionmaker(bind=self.engine)
         self.database_name = self.engine.url.database
 
