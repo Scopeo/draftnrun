@@ -1398,8 +1398,8 @@ class InputGroundtruth(Base):
     updated_at = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     input = mapped_column(String, nullable=False)
-    conversation_id = mapped_column(String, nullable=False)
-    role = mapped_column(make_pg_enum(RoleType), nullable=False)
+    conversation_id = mapped_column(UUID(as_uuid=True), nullable=False)
+    role = mapped_column(make_pg_enum(RoleType), nullable=True)
     order = mapped_column(Integer, nullable=False)
 
     # Relationships

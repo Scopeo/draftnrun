@@ -1,4 +1,4 @@
-from typing import Annotated, Dict, List
+from typing import Annotated, Dict, List, Optional
 from uuid import UUID
 import logging
 
@@ -8,14 +8,17 @@ from sqlalchemy.orm import Session
 from ada_backend.schemas.auth_schema import SupabaseUser
 from ada_backend.schemas.input_groundtruth_schema import (
     InputGroundtruthCreateList,
-    InputGroundtruthUpdateList,
     InputGroundtruthDeleteList,
     InputGroundtruthResponseList,
     PaginatedInputGroundtruthResponse,
     QARunRequest,
     QARunResponse,
-    ConversationSaveRequest,
-    ConversationSaveResponse,
+    ModeType,
+    InputGroundtruthResponse,
+    OutputGroundtruthResponseList,
+    InputGroundtruthUpdateWithId,
+    OutputGroundtruthUpdateWithId,
+    OutputGroundtruthResponse,
 )
 from ada_backend.schemas.dataset_schema import (
     DatasetCreateList,
@@ -29,9 +32,9 @@ from ada_backend.routers.auth_router import (
 )
 from ada_backend.services.quality_assurance_service import (
     create_inputs_groundtruths_service,
-    update_inputs_groundtruths_service,
+    update_inputs_service,
     delete_inputs_groundtruths_service,
-    get_inputs_groundtruths_with_version_outputs_service,
+    get_inputs_groundtruths_service,
     get_outputs_by_graph_runner_service,
     run_qa_service,
     create_datasets_service,
@@ -39,6 +42,7 @@ from ada_backend.services.quality_assurance_service import (
     delete_datasets_service,
     get_datasets_by_project_service,
     save_conversation_to_groundtruth_service,
+    update_output_groundtruth_service,
 )
 from ada_backend.database.setup_db import get_db
 
@@ -211,7 +215,7 @@ def get_inputs_groundtruths_by_dataset_endpoint(
         raise HTTPException(status_code=400, detail="User ID not found")
 
     try:
-        return get_inputs_groundtruths_with_version_outputs_service(session, dataset_id, page, page_size)
+        return get_inputs_groundtruths_service(session, dataset_id, page, page_size)
     except ValueError as e:
         LOGGER.error(f"Failed to get input-groundtruth entries for dataset {dataset_id}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=400, detail="Bad request") from e
@@ -262,7 +266,6 @@ def get_outputs_endpoint(
 
 @router.post(
     "/projects/{project_id}/qa/datasets/{dataset_id}/entries",
-    response_model=InputGroundtruthResponseList,
     summary="Create Input-Groundtruth Entries",
     tags=["Quality Assurance"],
 )
@@ -270,12 +273,13 @@ def create_input_groundtruth_endpoint(
     project_id: UUID,
     dataset_id: UUID,
     input_groundtruth_data: InputGroundtruthCreateList,
+    groundtruth_message: str,
     user: Annotated[
         SupabaseUser,
         Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.USER.value)),
     ],
     session: Session = Depends(get_db),
-) -> InputGroundtruthResponseList:
+) -> tuple[InputGroundtruthResponseList, OutputGroundtruthResponseList]:
     """
     Create input-groundtruth entries.
 
@@ -286,7 +290,10 @@ def create_input_groundtruth_endpoint(
         raise HTTPException(status_code=400, detail="User ID not found")
 
     try:
-        return create_inputs_groundtruths_service(session, dataset_id, input_groundtruth_data)
+        input_data, output_data = create_inputs_groundtruths_service(
+            session, dataset_id, input_groundtruth_data, groundtruth_message
+        )
+        return input_data, output_data
     except ValueError as e:
         LOGGER.error(f"Failed to create input-groundtruth entries for dataset {dataset_id}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=400, detail="Bad request") from e
@@ -297,31 +304,54 @@ def create_input_groundtruth_endpoint(
 
 @router.patch(
     "/projects/{project_id}/qa/datasets/{dataset_id}/entries",
-    response_model=InputGroundtruthResponseList,
+    response_model=tuple[list[InputGroundtruthResponse], Optional[OutputGroundtruthResponse]],
     summary="Update Input-Groundtruth Entries",
     tags=["Quality Assurance"],
 )
 def update_input_groundtruth_endpoint(
     project_id: UUID,
     dataset_id: UUID,
-    input_groundtruth_data: InputGroundtruthUpdateList,
     user: Annotated[
         SupabaseUser,
         Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.USER.value)),
     ],
     session: Session = Depends(get_db),
-) -> InputGroundtruthResponseList:
+    input_groundtruth_data: Optional[list[InputGroundtruthUpdateWithId]] = None,
+    output_groundtruth_data: Optional[OutputGroundtruthUpdateWithId] = None,
+) -> tuple[list[InputGroundtruthResponse], Optional[OutputGroundtruthResponse]]:
     """
-    Update input-groundtruth entries.
+    Update input-groundtruth entries and/or output groundtruth.
 
-    This endpoint allows users to update multiple input-groundtruth pairs.
+    This endpoint allows users to update:
+    - Multiple input-groundtruth pairs (if input_groundtruth_data is provided)
+    - Output groundtruth (if output_groundtruth_data is provided)
+    - Both or either can be provided
     Only the fields provided in the request will be updated.
     """
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
 
+    if not input_groundtruth_data and not output_groundtruth_data:
+        raise HTTPException(
+            status_code=400,
+            detail="At least one of input_groundtruth_data or output_groundtruth_data must be provided",
+        )
+
     try:
-        return update_inputs_groundtruths_service(session, dataset_id, input_groundtruth_data)
+        updated_inputs = []
+        if input_groundtruth_data:
+            updated_inputs = update_inputs_service(session, dataset_id, input_groundtruth_data) or []
+
+        updated_output = None
+        if output_groundtruth_data:
+            updated_output = update_output_groundtruth_service(
+                session=session,
+                output_id=output_groundtruth_data.id,
+                message_id=output_groundtruth_data.message_id,
+                output_message=output_groundtruth_data.message,
+            )
+
+        return updated_inputs, updated_output
     except ValueError as e:
         LOGGER.error(f"Failed to update input-groundtruth entries for dataset {dataset_id}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=400, detail="Bad request") from e
@@ -366,27 +396,34 @@ def delete_input_groundtruth_endpoint(
 
 
 @router.post(
-    "/projects/{project_id}/qa/conversations/save",
-    response_model=ConversationSaveResponse,
+    "/projects/{project_id}/qa/datasets/{dataset_id}/conversations/{conversation_id}/save",
+    response_model=List[InputGroundtruthResponse],
     summary="Save Conversation to Groundtruth",
     tags=["Quality Assurance"],
 )
 async def save_conversation_to_groundtruth(
     project_id: UUID,
-    conversation_data: ConversationSaveRequest,
+    conversation_id: UUID,
+    dataset_id: UUID,
+    message_index: int,
+    mode: ModeType = ModeType.CONVERSATION,
     session: Session = Depends(get_db),
-) -> ConversationSaveResponse:
+) -> List[InputGroundtruthResponse]:
+    print("message_index", message_index)
+    print("mode", mode)
     try:
         return save_conversation_to_groundtruth_service(
             session=session,
-            conversation_id=conversation_data.conversation_id,
-            dataset_id=conversation_data.dataset_id,
+            conversation_id=conversation_id,
+            dataset_id=dataset_id,
+            mode=mode,
+            message_index=message_index,
         )
     except ValueError as e:
-        LOGGER.error(f"Failed to save conversation {conversation_data.conversation_id}: {str(e)}", exc_info=True)
+        LOGGER.error(f"Failed to save conversation {conversation_id}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
-        LOGGER.error(f"Failed to save conversation {conversation_data.conversation_id}: {str(e)}", exc_info=True)
+        LOGGER.error(f"Failed to save conversation {conversation_id}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
