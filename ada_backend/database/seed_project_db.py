@@ -8,7 +8,7 @@ from ada_backend.database import models as db
 from ada_backend.database.demo.demo_graph_test import build_graph_test_chatbot, build_graph_test_source
 from ada_backend.database.demo.demo_react_sql_tool import build_react_sql_agent_chatbot
 from ada_backend.services.graph.update_graph_service import update_graph_service
-from ada_backend.database.utils import COMPONENT_VERSION_UUIDS
+from ada_backend.database.seed.utils import COMPONENT_VERSION_UUIDS
 
 LOGGER = logging.getLogger(__name__)
 
