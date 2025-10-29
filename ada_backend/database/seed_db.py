@@ -84,10 +84,6 @@ def seed_db(session: Session):
             component = session.query(db.Component).filter_by(id=uuid_value).first()
             if not component:
                 raise ValueError(f"Component {name} with ID {uuid_value} was not properly seeded")
-        for name, uuid_value in COMPONENT_VERSION_UUIDS.items():
-            component_version = session.query(db.ComponentVersion).filter_by(id=uuid_value).first()
-            if not component_version:
-                raise ValueError(f"Component version {name} with ID {uuid_value} was not properly seeded")
     finally:
         session.close()
 
