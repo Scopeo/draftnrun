@@ -116,6 +116,7 @@ class LinkupSearchTool(Agent):
         include_domains: Optional[list[str]] = None,
         from_date: Optional[date] = None,
         to_date: Optional[date] = None,
+        ctx: Optional[dict] = None,
     ) -> AgentPayload:
         agent_input = inputs[0]
         content = query or agent_input.last_message.content

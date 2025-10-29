@@ -108,6 +108,7 @@ class TavilyApiTool(Agent):
         topic: str,
         days: int = None,
         include_domains: list[str] = None,
+        ctx: Optional[dict] = None,
     ) -> AgentPayload:
         agent_input = inputs[0]
         if days is None:
