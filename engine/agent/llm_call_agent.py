@@ -116,7 +116,7 @@ class LLMCallAgent(Agent):
         self._file_url_key = file_url_key
         self.output_format = output_format
 
-    async def _run_without_io_trace(self, inputs: LLMCallInputs, ctx: dict) -> LLMCallOutputs:
+    async def _run_without_io_trace(self, inputs: LLMCallInputs, ctx: Optional[dict] = None) -> LLMCallOutputs:
         LOGGER.info(f"Running LLM call agent with inputs: {inputs} and ctx: {ctx}")
         prompt_vars = extract_vars_in_text_template(self._prompt_template)
         input_replacements = {}
@@ -141,7 +141,7 @@ class LLMCallAgent(Agent):
             if prompt_var in input_dict:
                 # Template var provided via function calling (tool mode)
                 input_replacements[prompt_var] = input_dict[prompt_var]
-            elif prompt_var in ctx:
+            elif ctx is not None and prompt_var in ctx:
                 # Template var provided via context (direct mode)
                 input_replacements[prompt_var] = ctx[prompt_var]
             elif prompt_var not in input_replacements:
@@ -157,7 +157,7 @@ class LLMCallAgent(Agent):
             file_data = None
             if self._file_content_key in input_dict:
                 file_data = input_dict[self._file_content_key]
-            elif self._file_content_key in ctx:
+            elif ctx is not None and self._file_content_key in ctx:
                 file_data = ctx[self._file_content_key]
             if isinstance(file_data, dict) and "filename" in file_data and "file_data" in file_data:
                 files_content.append({"type": "file", "file": file_data})
@@ -168,7 +168,7 @@ class LLMCallAgent(Agent):
             file_url = None
             if self._file_url_key in input_dict:
                 file_url = input_dict[self._file_url_key]
-            elif self._file_url_key in ctx:
+            elif ctx is not None and self._file_url_key in ctx:
                 file_url = ctx[self._file_url_key]
             if isinstance(file_url, str) and file_url:
                 files_content.append({"type": "file", "file_url": file_url})

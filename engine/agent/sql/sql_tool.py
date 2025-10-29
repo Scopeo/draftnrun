@@ -100,7 +100,7 @@ class SQLTool(Agent):
         self.synthesize_sql_prompt = synthesize_sql_prompt
 
     async def _run_without_io_trace(
-        self, *inputs: AgentPayload, natural_language_query: Optional[str] = None
+        self, *inputs: AgentPayload, natural_language_query: Optional[str] = None, ctx: Optional[dict] = None
     ) -> AgentPayload:
         agent_input = inputs[0]
         query_str = natural_language_query or agent_input.last_message.content
