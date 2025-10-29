@@ -345,12 +345,15 @@ class CompletionService(LLMService):
                 return response.output_parsed
 
             case "cerebras" | "google":  # all providers using only json schema for structured output go here
-                (answer, usage_completion_tokens, usage_prompt_tokens, usage_total_tokens) = await (
-                    self._default_constrained_complete_with_pydantic(
-                        messages=messages,
-                        response_format=response_format,
-                        stream=stream,
-                    )
+                (
+                    answer,
+                    usage_completion_tokens,
+                    usage_prompt_tokens,
+                    usage_total_tokens,
+                ) = await self._default_constrained_complete_with_pydantic(
+                    messages=messages,
+                    response_format=response_format,
+                    stream=stream,
                 )
                 span.set_attributes(
                     {
@@ -383,12 +386,15 @@ class CompletionService(LLMService):
                 return response.choices[0].message.parsed
 
             case _:
-                (answer, usage_completion_tokens, usage_prompt_tokens, usage_total_tokens) = await  (
-                    self._default_constrained_complete_with_pydantic(
-                        messages=messages,
-                        response_format=response_format,
-                        stream=stream,
-                    )
+                (
+                    answer,
+                    usage_completion_tokens,
+                    usage_prompt_tokens,
+                    usage_total_tokens,
+                ) = await self._default_constrained_complete_with_pydantic(
+                    messages=messages,
+                    response_format=response_format,
+                    stream=stream,
                 )
                 span.set_attributes(
                     {
