@@ -65,6 +65,7 @@ def copy_component_instance(
             parameters.append(
                 PipelineParameterSchema(name=parameter.name, value=parameter.value, order=parameter.order)
             )
+    LOGGER.info(f"Copied parameters: {parameters}")
     new_composant_instance = ComponentInstanceSchema(
         name=component_instance.name,
         component_id=component_instance.component_id,
