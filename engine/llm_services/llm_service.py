@@ -272,6 +272,42 @@ class CompletionService(LLMService):
             )
         )
 
+    async def _default_constrained_complete_with_pydantic(
+        self,
+        messages: list[dict] | str,
+        response_format: BaseModel,
+        stream: bool = False,
+    ) -> tuple[BaseModel, int, int, int]:
+        import openai
+
+        client = openai.AsyncOpenAI(api_key=self._api_key, base_url=self._base_url)
+
+        response_format_schema = {
+            "type": "json_schema",
+            "json_schema": {
+                "name": response_format.__name__,
+                "schema": response_format.model_json_schema(),
+                "strict": True,
+            },
+        }
+        if isinstance(messages, str):
+            messages = [{"role": "user", "content": messages}]
+
+        response = await client.chat.completions.create(
+            model=self._model_name,
+            messages=messages,
+            temperature=self._invocation_parameters.get("temperature"),
+            stream=stream,
+            response_format=response_format_schema,
+        )
+        response_dict = json.loads(response.choices[0].message.content)
+        return (
+            response_format(**response_dict),
+            response.usage.completion_tokens,
+            response.usage.prompt_tokens,
+            response.usage.total_tokens,
+        )
+
     @with_async_usage_check
     async def constrained_complete_with_pydantic_async(
         self,
@@ -309,37 +345,21 @@ class CompletionService(LLMService):
                 return response.output_parsed
 
             case "cerebras" | "google":  # all providers using only json schema for structured output go here
-                import openai
-
-                client = openai.AsyncOpenAI(api_key=self._api_key, base_url=self._base_url)
-
-                response_format_schema = {
-                    "type": "json_schema",
-                    "json_schema": {
-                        "name": response_format.__name__,
-                        "schema": response_format.model_json_schema(),
-                        "strict": True,
-                    },
-                }
-                if isinstance(messages, str):
-                    messages = [{"role": "user", "content": messages}]
-
-                response = await client.chat.completions.create(
-                    model=self._model_name,
-                    messages=messages,
-                    temperature=self._invocation_parameters.get("temperature"),
-                    stream=stream,
-                    response_format=response_format_schema,
+                (answer, usage_completion_tokens, usage_prompt_tokens, usage_total_tokens) = (
+                    self._default_constrained_complete_with_pydantic(
+                        messages=messages,
+                        response_format=response_format,
+                        stream=stream,
+                    )
                 )
                 span.set_attributes(
                     {
-                        SpanAttributes.LLM_TOKEN_COUNT_COMPLETION: response.usage.completion_tokens,
-                        SpanAttributes.LLM_TOKEN_COUNT_PROMPT: response.usage.prompt_tokens,
-                        SpanAttributes.LLM_TOKEN_COUNT_TOTAL: response.usage.total_tokens,
+                        SpanAttributes.LLM_TOKEN_COUNT_COMPLETION: usage_completion_tokens,
+                        SpanAttributes.LLM_TOKEN_COUNT_PROMPT: usage_prompt_tokens,
+                        SpanAttributes.LLM_TOKEN_COUNT_TOTAL: usage_total_tokens,
                     }
                 )
-                response_dict = json.loads(response.choices[0].message.content)
-                return response_format(**response_dict)
+                return answer
             case "mistral":
                 import mistralai
 
@@ -363,7 +383,64 @@ class CompletionService(LLMService):
                 return response.choices[0].message.parsed
 
             case _:
-                raise ValueError(f"Invalid provider: {self._provider}")
+                (answer, usage_completion_tokens, usage_prompt_tokens, usage_total_tokens) = (
+                    self._default_constrained_complete_with_pydantic(
+                        messages=messages,
+                        response_format=response_format,
+                        stream=stream,
+                    )
+                )
+                span.set_attributes(
+                    {
+                        SpanAttributes.LLM_TOKEN_COUNT_COMPLETION: usage_completion_tokens,
+                        SpanAttributes.LLM_TOKEN_COUNT_PROMPT: usage_prompt_tokens,
+                        SpanAttributes.LLM_TOKEN_COUNT_TOTAL: usage_total_tokens,
+                    }
+                )
+                return answer
+
+    async def _default_constrained_complete_with_json_schema(
+        self,
+        messages: list[dict] | str,
+        response_format: dict,
+        stream: bool = False,
+    ) -> tuple[str, int, int, int]:
+        import openai
+
+        schema = response_format.get("schema", {})
+        name = response_format.get("name", "response")
+
+        response_format = {
+            "type": "json_schema",
+            "json_schema": {
+                "name": name,
+                "schema": schema,
+            },
+        }
+
+        if isinstance(messages, str):
+            messages = [{"role": "user", "content": messages}]
+
+        client = openai.AsyncOpenAI(
+            api_key=self._api_key,
+            base_url=self._base_url,
+        )
+        response = await client.chat.completions.create(
+            model=self._model_name,
+            messages=messages,
+            temperature=self._invocation_parameters.get("temperature"),
+            stream=stream,
+            response_format=response_format,
+        )
+        # Post-process response to handle models that return schema instead of data
+        raw_content = response.choices[0].message.content
+        processed_content = validate_and_extract_json_response(raw_content, schema)
+        return (
+            processed_content,
+            response.usage.completion_tokens,
+            response.usage.prompt_tokens,
+            response.usage.total_tokens,
+        )
 
     @with_usage_check
     def constrained_complete_with_json_schema(
@@ -426,42 +503,18 @@ class CompletionService(LLMService):
                 )
                 return response.output_text
             case "cerebras" | "google":  # all the providers that are using openai chat completion go here
-                import openai
-
-                schema = response_format.get("schema", {})
-                name = response_format.get("name", "response")
-
-                response_format = {
-                    "type": "json_schema",
-                    "json_schema": {
-                        "name": name,
-                        "schema": schema,
-                    },
-                }
-
-                if isinstance(messages, str):
-                    messages = [{"role": "user", "content": messages}]
-
-                client = openai.AsyncOpenAI(
-                    api_key=self._api_key,
-                    base_url=self._base_url,
+                (processed_content, usage_completion_tokens, usage_prompt_tokens, usage_total_tokens) = (
+                    await self._default_constrained_complete_with_json_schema(
+                        messages=messages,
+                        response_format=response_format,
+                        stream=stream,
+                    )
                 )
-                response = await client.chat.completions.create(
-                    model=self._model_name,
-                    messages=messages,
-                    temperature=self._invocation_parameters.get("temperature"),
-                    stream=stream,
-                    response_format=response_format,
-                )
-                # Post-process response to handle models that return schema instead of data
-                raw_content = response.choices[0].message.content
-                processed_content = validate_and_extract_json_response(raw_content, schema)
-
                 span.set_attributes(
                     {
-                        SpanAttributes.LLM_TOKEN_COUNT_COMPLETION: response.usage.completion_tokens,
-                        SpanAttributes.LLM_TOKEN_COUNT_PROMPT: response.usage.prompt_tokens,
-                        SpanAttributes.LLM_TOKEN_COUNT_TOTAL: response.usage.total_tokens,
+                        SpanAttributes.LLM_TOKEN_COUNT_COMPLETION: usage_completion_tokens,
+                        SpanAttributes.LLM_TOKEN_COUNT_PROMPT: usage_prompt_tokens,
+                        SpanAttributes.LLM_TOKEN_COUNT_TOTAL: usage_total_tokens,
                     }
                 )
                 return processed_content
@@ -510,7 +563,21 @@ class CompletionService(LLMService):
                 )
                 return processed_content
             case _:
-                raise ValueError(f"Invalid provider for constrained complete with json schema: {self._provider}")
+                (processed_content, usage_completion_tokens, usage_prompt_tokens, usage_total_tokens) = (
+                    await self._default_constrained_complete_with_json_schema(
+                        messages=messages,
+                        response_format=response_format,
+                        stream=stream,
+                    )
+                )
+                span.set_attributes(
+                    {
+                        SpanAttributes.LLM_TOKEN_COUNT_COMPLETION: usage_completion_tokens,
+                        SpanAttributes.LLM_TOKEN_COUNT_PROMPT: usage_prompt_tokens,
+                        SpanAttributes.LLM_TOKEN_COUNT_TOTAL: usage_total_tokens,
+                    }
+                )
+                return processed_content
 
     @with_usage_check
     def function_call(
