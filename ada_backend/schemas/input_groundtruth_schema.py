@@ -2,6 +2,7 @@ from datetime import datetime
 from typing import Optional, List
 from uuid import UUID
 from pydantic import BaseModel, field_validator
+from enum import Enum
 
 from ada_backend.database.models import EnvType, RoleType
 
@@ -17,8 +18,8 @@ class InputGroundtruthCreate(BaseModel):
     """Schema for creating a new input-groundtruth entry."""
 
     input: str
-    conversation_id: str
-    role: RoleType
+    conversation_id: UUID
+    role: Optional[RoleType] = None
     order: int
 
 
@@ -36,10 +37,11 @@ class InputGroundtruthWithVersionResponse(BaseModel):
 
 
 class PaginatedInputGroundtruthResponse(BaseModel):
-    """Schema for paginated input-groundtruth responses."""
+    """Schema for paginated input-groundtruth responses with outputs."""
 
     pagination: Pagination
     inputs_groundtruths: List["InputGroundtruthResponse"]
+    output_groundtruths: List["OutputGroundtruthResponse"] = []
 
 
 # Run endpoint schemas
@@ -107,16 +109,20 @@ class InputGroundtruthCreateList(BaseModel):
 
 
 class InputGroundtruthUpdateWithId(BaseModel):
-    """Schema for updating an input-groundtruth entry with ID."""
+    """Schema for updating an input-groundtruth entry with ID and optional output."""
 
     id: UUID
     input: Optional[str] = None
+    role: Optional[RoleType] = None
+    order: Optional[int] = None
 
 
-class InputGroundtruthUpdateList(BaseModel):
-    """Schema for updating multiple input-groundtruth entries."""
+class OutputGroundtruthUpdateWithId(BaseModel):
+    """Schema for updating an output groundtruth entry with ID."""
 
-    inputs_groundtruths: List[InputGroundtruthUpdateWithId]
+    id: UUID
+    message_id: UUID
+    message: Optional[str] = None
 
 
 class InputGroundtruthDeleteList(BaseModel):
@@ -131,8 +137,8 @@ class InputGroundtruthResponse(BaseModel):
     id: UUID
     dataset_id: UUID
     input: str
-    conversation_id: str
-    role: RoleType
+    conversation_id: UUID
+    role: Optional[RoleType] = None
     order: int
     created_at: datetime
     updated_at: datetime
@@ -145,13 +151,6 @@ class InputGroundtruthResponseList(BaseModel):
     """Schema for multiple input-groundtruth responses."""
 
     inputs_groundtruths: List[InputGroundtruthResponse]
-
-
-class OutputGroundtruthCreate(BaseModel):
-    """Schema for creating a new output groundtruth entry."""
-
-    message: str
-    message_id: UUID
 
 
 class OutputGroundtruthResponse(BaseModel):
@@ -167,16 +166,12 @@ class OutputGroundtruthResponse(BaseModel):
         from_attributes = True
 
 
-class ConversationSaveRequest(BaseModel):
-    """Schema for saving a conversation to the database."""
+class OutputGroundtruthResponseList(BaseModel):
+    """Schema for multiple output groundtruth responses."""
 
-    conversation_id: str
-    dataset_id: UUID
+    output_groundtruths: List[OutputGroundtruthResponse]
 
 
-class ConversationSaveResponse(BaseModel):
-    """Schema for conversation save response."""
-
-    inputs: List[InputGroundtruthResponse]
-    outputs: List[OutputGroundtruthResponse]
-    total_messages: int
+class ModeType(str, Enum):
+    CONVERSATION = "conversation"
+    ROW = "row"
