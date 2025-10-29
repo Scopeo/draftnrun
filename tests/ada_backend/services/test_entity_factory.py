@@ -181,7 +181,7 @@ def test_agent_factory_invalid_tool_description():
 
 def test_get_llm_provider_and_model():
     correct_name = "openai:gpt-5"
-    correct_name_with_colons = "openai:gpt-5:2024"
+    correct_name_with_colons = "custom-provider:bge-m3:567m"
     bad_name = "unknown-model"
 
     provider_correct, model_correct = get_llm_provider_and_model(correct_name)
@@ -189,8 +189,8 @@ def test_get_llm_provider_and_model():
     assert model_correct == "gpt-5"
 
     provider_with_colons, model_with_colons = get_llm_provider_and_model(correct_name_with_colons)
-    assert provider_with_colons == "openai"
-    assert model_with_colons == "gpt-5:2024"
+    assert provider_with_colons == "custom-provider"
+    assert model_with_colons == "bge-m3:567m"
 
     with pytest.raises(ValueError, match="Invalid LLM model format: unknown-model. Expected 'provider:model_name'."):
         get_llm_provider_and_model(bad_name)
