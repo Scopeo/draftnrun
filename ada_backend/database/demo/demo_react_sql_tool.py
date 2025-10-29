@@ -69,7 +69,11 @@ def build_react_sql_agent_chatbot(components: dict[str, UUID], graph_runner_id: 
                 ),
                 PipelineParameterSchema(
                     name="engine_url",
-                    value=f"snowflake://{settings.SNOWFLAKE_USER}:{settings.SNOWFLAKE_PASSWORD}@{settings.SNOWFLAKE_ACCOUNT}/SCOPEO/data_gouv?warehouse=TEST_WAREHOUSE&role=SCOPEO_READ_ROLE",
+                    value=(
+                        f"snowflake://{settings.SNOWFLAKE_USER}:{settings.SNOWFLAKE_PASSWORD}"
+                        f"@{settings.SNOWFLAKE_ACCOUNT}/SCOPEO/data_gouv?warehouse=TEST_WAREHOUSE"
+                        "&role=SCOPEO_READ_ROLE"
+                    ),
                 ),
             ],
         )
