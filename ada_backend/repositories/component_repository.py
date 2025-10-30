@@ -157,6 +157,18 @@ def get_component_parameter_definition_by_component_version(
     )
 
 
+def count_component_instances(
+    session: Session,
+    component_id: UUID,
+) -> int:
+    return (
+        session.query(db.ComponentInstance)
+        .join(db.ComponentVersion, db.ComponentInstance.component_version_id == db.ComponentVersion.id)
+        .filter(db.ComponentVersion.component_id == component_id)
+        .count()
+    )
+
+
 def delete_component_global_parameters(
     session: Session,
     component_version_id: UUID,
@@ -175,60 +187,9 @@ def delete_component_by_id(
     Deletes a component definition and associated global parameters.
     Returns True if deleted, False if not found.
     """
-    component = get_component_by_id(session, component_id)
-    if not component:
-        return False
-
-    instance_ids: List[UUID] = [
-        ci.id
-        for ci in session.query(db.ComponentInstance)
-        .join(db.ComponentVersion, db.ComponentInstance.component_version_id == db.ComponentVersion.id)
-        .filter(db.ComponentVersion.component_id == component_id)
-        .all()
-    ]
-    if instance_ids:
-        delete_component_instances(session, component_instance_ids=instance_ids)
-
-    # Delete parameter child relationships and definitions before removing component
-    definition_ids: List[UUID] = [
-        d.id
-        for d in (
-            session.query(db.ComponentParameterDefinition)
-            .join(db.ComponentVersion, db.ComponentParameterDefinition.component_version_id == db.ComponentVersion.id)
-            .filter(
-                db.ComponentVersion.component_id == component_id,
-            )
-            .all()
-        )
-    ]
-    if definition_ids:
-        (
-            session.query(db.ComponentParameterChildRelationship)
-            .filter(
-                db.ComponentParameterChildRelationship.component_parameter_definition_id.in_(definition_ids),
-            )
-            .delete(synchronize_session=False)
-        )
-
-    (
-        session.query(db.ComponentParameterDefinition)
-        .join(db.ComponentVersion, db.ComponentParameterDefinition.component_version_id == db.ComponentVersion.id)
-        .filter(
-            db.ComponentVersion.component_id == component_id,
-        )
-        .delete(synchronize_session=False)
-    )
-
-    # Remove category links
-    (
-        session.query(db.ComponentCategory)
-        .filter(db.ComponentCategory.component_id == component_id)
-        .delete(synchronize_session=False)
-    )
-
-    delete_component_global_parameters(session, component_id)
-
-    session.delete(component)
+    session.query(db.Component).filter(
+        db.Component.id == component_id,
+    ).delete(synchronize_session=False)
     session.commit()
     return True
 
