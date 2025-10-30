@@ -1011,7 +1011,6 @@ def upsert_specific_api_component_with_defaults(
     )
     upsert_components(session, [component])
     component_version = db.ComponentVersion(
-        id=component.id,  # same UUID as component because no multiple versions for API tools (ComponentVersion ~ Component here)
         component_id=component.id,
         description=f"Preconfigured API tool for {tool_display_name}.",
         release_stage=db.ReleaseStage.INTERNAL,
