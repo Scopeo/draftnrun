@@ -158,11 +158,6 @@ class PortType(StrEnum):
     OUTPUT = "OUTPUT"
 
 
-class RoleType(StrEnum):
-    USER = "user"
-    ASSISTANT = "assistant"
-
-
 class SelectOption(BaseModel):
     """Option for Select and similar UI components"""
 
@@ -1397,42 +1392,15 @@ class InputGroundtruth(Base):
     created_at = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
-    input = mapped_column(String, nullable=False)
-    conversation_id = mapped_column(UUID(as_uuid=True), nullable=False)
-    role = mapped_column(make_pg_enum(RoleType), nullable=True)
-    order = mapped_column(Integer, nullable=False)
+    input = mapped_column(JSONB, nullable=False)
+    groundtruth = mapped_column(String, nullable=True)
 
     # Relationships
     dataset = relationship("DatasetProject", back_populates="input_groundtruths")
     version_outputs = relationship("VersionOutput", back_populates="input_groundtruth", cascade="all, delete-orphan")
-    output_groundtruths = relationship(
-        "OutputGroundtruth", back_populates="input_message", cascade="all, delete-orphan"
-    )
 
     def __str__(self):
         return f"InputGroundtruth(id={self.id}, input={self.input})"
-
-
-class OutputGroundtruth(Base):
-    __tablename__ = "output_groundtruth"
-    __table_args__ = {"schema": "quality_assurance"}
-
-    id = mapped_column(UUID(as_uuid=True), primary_key=True, index=True, server_default=func.gen_random_uuid())
-    message = mapped_column(String, nullable=False)
-    message_id = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("quality_assurance.input_groundtruth.id", ondelete="CASCADE"),
-        nullable=False,
-        index=True,
-    )
-    created_at = mapped_column(DateTime(timezone=True), server_default=func.now())
-    updated_at = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
-
-    # Relationships
-    input_message = relationship("InputGroundtruth", back_populates="output_groundtruths")
-
-    def __str__(self):
-        return f"OutputGroundtruth(id={self.id}, message={self.message}, message_id={self.message_id})"
 
 
 class DatasetProject(Base):

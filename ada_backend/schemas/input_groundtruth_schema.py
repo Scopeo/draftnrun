@@ -1,10 +1,11 @@
 from datetime import datetime
 from typing import Optional, List
+import json
 from uuid import UUID
 from pydantic import BaseModel, field_validator
 from enum import Enum
 
-from ada_backend.database.models import EnvType, RoleType
+from ada_backend.database.models import EnvType
 
 
 class Pagination(BaseModel):
@@ -17,17 +18,15 @@ class Pagination(BaseModel):
 class InputGroundtruthCreate(BaseModel):
     """Schema for creating a new input-groundtruth entry."""
 
-    input: str
-    conversation_id: UUID
-    role: Optional[RoleType] = None
-    order: int
+    input: dict
+    groundtruth: Optional[str] = None
 
 
 class InputGroundtruthWithVersionResponse(BaseModel):
     """Schema for input-groundtruth response with version output data."""
 
     input_id: UUID
-    input: str
+    input: dict
     groundtruth: Optional[str] = None
     output: Optional[str] = None
     version: Optional[EnvType] = None
@@ -37,11 +36,10 @@ class InputGroundtruthWithVersionResponse(BaseModel):
 
 
 class PaginatedInputGroundtruthResponse(BaseModel):
-    """Schema for paginated input-groundtruth responses with outputs."""
+    """Schema for paginated input-groundtruth responses."""
 
     pagination: Pagination
     inputs_groundtruths: List["InputGroundtruthResponse"]
-    output_groundtruths: List["OutputGroundtruthResponse"] = []
 
 
 # Run endpoint schemas
@@ -74,7 +72,7 @@ class QARunResult(BaseModel):
     """Schema for individual QA run result."""
 
     input_id: UUID
-    input: str
+    input: dict
     groundtruth: Optional[str] = None
     output: str
     graph_runner_id: UUID
@@ -109,20 +107,17 @@ class InputGroundtruthCreateList(BaseModel):
 
 
 class InputGroundtruthUpdateWithId(BaseModel):
-    """Schema for updating an input-groundtruth entry with ID and optional output."""
+    """Schema for updating an input-groundtruth entry with ID."""
 
     id: UUID
-    input: Optional[str] = None
-    role: Optional[RoleType] = None
-    order: Optional[int] = None
+    input: Optional[dict] = None
+    groundtruth: Optional[str] = None
 
 
-class OutputGroundtruthUpdateWithId(BaseModel):
-    """Schema for updating an output groundtruth entry with ID."""
+class InputGroundtruthUpdateList(BaseModel):
+    """Schema for updating multiple input-groundtruth entries."""
 
-    id: UUID
-    message_id: UUID
-    message: Optional[str] = None
+    inputs_groundtruths: List[InputGroundtruthUpdateWithId]
 
 
 class InputGroundtruthDeleteList(BaseModel):
@@ -136,12 +131,22 @@ class InputGroundtruthResponse(BaseModel):
 
     id: UUID
     dataset_id: UUID
-    input: str
-    conversation_id: UUID
-    role: Optional[RoleType] = None
-    order: int
+    input: dict
+    groundtruth: Optional[str] = None
     created_at: datetime
     updated_at: datetime
+
+    @field_validator("input", mode="before")
+    @classmethod
+    def ensure_dict(cls, v):
+        # DB may store input as text; accept both dict and JSON string
+        if isinstance(v, str):
+            try:
+                return json.loads(v)
+            except Exception:
+                # Fallback to empty dict to avoid 422; adjust as needed
+                return {}
+        return v
 
     class Config:
         from_attributes = True
@@ -153,25 +158,6 @@ class InputGroundtruthResponseList(BaseModel):
     inputs_groundtruths: List[InputGroundtruthResponse]
 
 
-class OutputGroundtruthResponse(BaseModel):
-    """Schema for output groundtruth response."""
-
-    id: UUID
-    message: str
-    message_id: UUID
-    created_at: datetime
-    updated_at: datetime
-
-    class Config:
-        from_attributes = True
-
-
-class OutputGroundtruthResponseList(BaseModel):
-    """Schema for multiple output groundtruth responses."""
-
-    output_groundtruths: List[OutputGroundtruthResponse]
-
-
 class ModeType(str, Enum):
     CONVERSATION = "conversation"
-    ROW = "row"
+    RAW = "raw"
