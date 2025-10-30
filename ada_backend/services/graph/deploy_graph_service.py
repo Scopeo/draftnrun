@@ -4,7 +4,7 @@ from uuid import UUID, uuid4
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
-from ada_backend.database.models import EnvType
+from ada_backend.database.models import EnvType, ParameterType
 from ada_backend.repositories.component_repository import (
     get_component_instance_by_id,
     get_component_parameter_definition_by_component_version,
@@ -50,16 +50,29 @@ def copy_component_instance(
         component_instance_id_to_copy,
         is_start_node=is_start_node,
     )
+    LOGGER.info(f"Copying component instance {component_instance.name} with ID {component_instance.id}")
+    component_parameters = get_component_parameter_definition_by_component_version(
+        session, component_instance.component_version_id
+    )
+    parameters = [
+        PipelineParameterSchema(name=parameter.name, value=parameter.value, order=parameter.order)
+        for parameter in component_instance.parameters
+    ]
+    for parameter in component_parameters:
+        if parameter.type not in [ParameterType.COMPONENT, ParameterType.TOOL] and parameter.name not in [
+            p.name for p in parameters
+        ]:
+            parameters.append(
+                PipelineParameterSchema(name=parameter.name, value=parameter.default, order=parameter.order)
+            )
+    LOGGER.info(f"Copied parameters: {parameters}")
     new_composant_instance = ComponentInstanceSchema(
         name=component_instance.name,
         component_id=component_instance.component_id,
         component_version_id=component_instance.component_version_id,
         tool_description=component_instance.tool_description,
         is_start_node=is_start_node,
-        parameters=[
-            PipelineParameterSchema(name=parameter.name, value=parameter.value, order=parameter.order)
-            for parameter in component_instance.parameters
-        ],
+        parameters=parameters,
         integration=component_instance.integration,
     )
     return create_or_update_component_instance(session, new_composant_instance, project_id)
