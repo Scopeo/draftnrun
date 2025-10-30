@@ -1,4 +1,5 @@
 from uuid import UUID
+from collections import defaultdict
 import logging
 
 from sqlalchemy.orm import Session
@@ -10,11 +11,15 @@ from ada_backend.repositories.graph_runner_repository import (
     graph_runner_exists,
 )
 from ada_backend.repositories.port_mapping_repository import list_port_mappings_for_graph
+from ada_backend.repositories.field_expression_repository import get_field_expressions_for_instances
 from ada_backend.schemas.pipeline.graph_schema import GraphGetResponse, EdgeSchema
+from ada_backend.schemas.pipeline.field_expression_schema import FieldExpressionReadSchema
 from ada_backend.services.errors import GraphNotFound
 from ada_backend.schemas.pipeline.port_mapping_schema import PortMappingSchema
 from ada_backend.services.pipeline.get_pipeline_service import get_component_instance, get_relationships
 from ada_backend.services.tag_service import compose_tag_name
+from engine.field_expressions.parser import unparse_expression
+from engine.field_expressions.serde import from_json as expr_from_json
 
 LOGGER = logging.getLogger(__name__)
 
@@ -42,6 +47,7 @@ def get_graph_service(
     relationships = []
     edges = []
     port_mappings = []
+    field_expressions_by_instance: dict[UUID, list[FieldExpressionReadSchema]] = defaultdict(list)
 
     for component_node in component_nodes:
         component_instances_with_definitions.append(
@@ -82,6 +88,24 @@ def get_graph_service(
                 dispatch_strategy=pm.dispatch_strategy,
             )
         )
+
+    # Fetch field expressions
+    component_instance_ids = [node.id for node in component_nodes]
+    field_expression_records = get_field_expressions_for_instances(session, component_instance_ids)
+    for expression in field_expression_records:
+        field_expressions_by_instance[expression.component_instance_id].append(
+            FieldExpressionReadSchema(
+                field_name=expression.field_name,
+                expression_json=expression.expression_json,
+                expression_text=(
+                    unparse_expression(expr_from_json(expression.expression_json))
+                    if expression.expression_json
+                    else None
+                ),
+            )
+        )
+    for ci in component_instances_with_definitions:
+        ci.field_expressions = field_expressions_by_instance.get(ci.id, [])
 
     # Build response, omitting change_log if unset (None)
     response = GraphGetResponse(

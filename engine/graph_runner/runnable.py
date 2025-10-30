@@ -1,5 +1,5 @@
-from typing import Protocol, runtime_checkable, Optional, Dict
-
+from typing import Protocol, runtime_checkable, Optional, Dict, Type
+from pydantic import BaseModel
 
 from engine.agent.types import ToolDescription, AgentPayload, NodeData
 
@@ -19,3 +19,11 @@ class Runnable(Protocol):
     def get_canonical_ports(cls) -> Dict[str, Optional[str]]:
         """Return canonical input/output port names. Defaults to {input: input, output: output}."""
         return {"input": "input", "output": "output"}
+
+    @classmethod
+    def get_inputs_schema(cls) -> Type[BaseModel]:
+        """Return the input schema for the runnable."""
+
+    @classmethod
+    def get_outputs_schema(cls) -> Type[BaseModel]:
+        """Return the output schema for the runnable."""

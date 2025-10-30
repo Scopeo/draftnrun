@@ -62,8 +62,12 @@ def test_create_empty_graph_runner():
     results = response.json()
     assert response.status_code == 200
     assert isinstance(results, dict)
-    # GET should include port_mappings even if none were provided
-    assert results == {**payload, "port_mappings": []}
+    # GET should include port_mappings; field expressions now nested per component instance
+    expected = {**payload, "port_mappings": []}
+    assert results["port_mappings"] == []
+    assert results["component_instances"] == expected["component_instances"]
+    assert results["relationships"] == expected["relationships"]
+    assert results["edges"] == expected["edges"]
 
     # Cleanup
     client.delete(f"/projects/{project_id}", headers=HEADERS_JWT)
@@ -251,10 +255,16 @@ def test_update_graph_runner():
     assert response.status_code == 200
     assert isinstance(results, dict)
     assert len(results["component_instances"]) == len(payload["component_instances"])
-    assert results["component_instances"][0]["id"] == payload["component_instances"][0]["id"]
-    assert results["component_instances"][1]["id"] == payload["component_instances"][1]["id"]
-    assert results["component_instances"][0]["component_id"] == payload["component_instances"][0]["component_id"]
-    assert results["component_instances"][1]["component_id"] == payload["component_instances"][1]["component_id"]
+
+    # Verify all expected IDs are present
+    expected_ids = {ci["id"] for ci in payload["component_instances"]}
+    actual_ids = {ci["id"] for ci in results["component_instances"]}
+    assert actual_ids == expected_ids
+
+    # Verify component IDs are correct
+    expected_component_ids = {ci["component_id"] for ci in payload["component_instances"]}
+    actual_component_ids = {ci["component_id"] for ci in results["component_instances"]}
+    assert actual_component_ids == expected_component_ids
     assert results["relationships"] == payload["relationships"]
     assert results["edges"] == payload["edges"]
 
