@@ -588,7 +588,8 @@ class CompletionService(LLMService):
                     LOGGER.error(f"Error in constrained_complete_with_json_schema_async: {e}")
                     raise ValueError(
                         "Error processing constrained completion"
-                        f" with JSON schema on the model {self._model_name} : {str(e)}"
+                        f" with JSON schema on the provider {self._provider}"
+                        f" with model {self._model_name} : {str(e)}"
                     )
                 span.set_attributes(
                     {
