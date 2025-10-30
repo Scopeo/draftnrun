@@ -466,18 +466,18 @@ class DocxTemplateAgent(Agent):
     async def _run_without_io_trace(
         self,
         *inputs: AgentPayload,
+        ctx: Optional[dict] = None,
         **kwargs: Any,
     ) -> AgentPayload:
         span = get_current_span()
 
         try:
-            template_input_path = kwargs.get("template_input_path")
-            template_base64 = kwargs.get("template_base64")
-            template_s3_url = kwargs.get("template_s3_url")
+            template_input_path = kwargs.get("template_input_path") or (ctx or {}).get("template_input_path")
+            template_base64 = kwargs.get("template_base64") or (ctx or {}).get("template_base64")
             template_information_brief = kwargs.get("template_information_brief", "")
             output_filename = kwargs.get("output_filename", "")
 
-            if not template_input_path and not template_base64 and not template_s3_url:
+            if not template_input_path and not template_base64:
                 error_msg = "Either template_input_path, template_base64, or template_s3_url must be provided"
                 LOGGER.error(error_msg)
                 span.set_attributes({SpanAttributes.OUTPUT_VALUE: error_msg})
@@ -487,7 +487,7 @@ class DocxTemplateAgent(Agent):
                     is_final=True,
                 )
 
-            template_sources = [template_input_path, template_base64, template_s3_url]
+            template_sources = [template_input_path, template_base64]
             provided_sources = [source for source in template_sources if source is not None]
             if len(provided_sources) > 1:
                 error_msg = "Only one of template_input_path, template_base64, or template_s3_url should be provided, not multiple"
@@ -546,23 +546,6 @@ class DocxTemplateAgent(Agent):
                         is_final=True,
                     )
 
-            elif template_s3_url:
-                try:
-                    LOGGER.info(f"Loading template from S3: {template_s3_url}")
-                    template_path = load_file_from_s3(template_s3_url)
-                    template_path = Path(template_path)
-                    LOGGER.info(f"Successfully loaded template from S3: {template_path}")
-
-                except Exception as e:
-                    error_msg = f"Failed to load template from S3: {str(e)}"
-                    LOGGER.error(error_msg)
-                    span.set_attributes({SpanAttributes.OUTPUT_VALUE: error_msg})
-                    return AgentPayload(
-                        messages=[ChatMessage(role="assistant", content=error_msg)],
-                        error=error_msg,
-                        is_final=True,
-                    )
-
             output_path = output_dir / Path(output_filename)
             output_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -611,7 +594,7 @@ class DocxTemplateAgent(Agent):
                 except Exception as e:
                     LOGGER.warning(f"Failed to clean up temporary file: {e}")
 
-            if template_s3_url and template_path and str(template_path).startswith(str(get_output_dir())):
+            if template_path and str(template_path).startswith(str(get_output_dir())):
                 try:
                     template_path.unlink()
                     LOGGER.info(f"Cleaned up S3 downloaded template file: {template_path}")
@@ -623,7 +606,7 @@ class DocxTemplateAgent(Agent):
             )
             LOGGER.info(success_msg)
 
-            template_type = "base64" if template_base64 else ("s3_url" if template_s3_url else "input_path")
+            template_type = "base64" if template_base64 else "input_path"
 
             span.set_attributes(
                 {
