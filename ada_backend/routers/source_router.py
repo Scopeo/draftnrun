@@ -95,6 +95,39 @@ def update_organization_source(
         raise HTTPException(status_code=500, detail="Internal Server Error") from e
 
 
+@router.post(
+    "/{organization_id}/{source_id}/api-key",
+    status_code=status.HTTP_200_OK,
+    summary="Update source in organization, authentication via user token or API key",
+    deprecated=True,
+)
+def update_organization_source_api_key(
+    organization_id: UUID,
+    source_id: UUID,
+    auth_ids: Annotated[
+        tuple[UUID | None, UUID | None],
+        Depends(user_has_access_to_organization_xor_verify_api_key(allowed_roles=UserRights.ADMIN.value)),
+    ],
+    session: Session = Depends(get_db),
+):
+    """
+    Update organization source with flexible authentication.
+    """
+    user_id, api_key_id = auth_ids
+    try:
+        if user_id:
+            return update_source_by_source_id(session, organization_id, source_id, user_id=user_id)
+        else:
+            return update_source_by_source_id(session, organization_id, source_id, api_key_id=api_key_id)
+    except Exception as e:
+        LOGGER.exception(
+            "Failed to update source %s for organization %s",
+            source_id,
+            organization_id,
+        )
+        raise HTTPException(status_code=500, detail="Internal Server Error") from e
+
+
 @router.delete("/{organization_id}/{source_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_organization_source(
     organization_id: UUID,
