@@ -20,6 +20,7 @@ dependencies = [
     { name = "e2b" },
     { name = "e2b-code-interpreter" },
     { name = "fastapi" },
+    { name = "func-timeout" },
     { name = "google-genai" },
     { name = "httpx" },
     { name = "itsdangerous" },
@@ -128,6 +129,7 @@ requires-dist = [
     { name = "e2b", specifier = ">=1.0.0,<2.0.0" },
     { name = "e2b-code-interpreter", specifier = ">=1.5.1,<1.6" },
     { name = "fastapi", specifier = ">=0.115.8,<0.116" },
+    { name = "func-timeout", specifier = ">=4.3.5,<5" },
     { name = "google-genai", specifier = ">=1.9.0,<2" },
     { name = "httpx", specifier = ">=0.28.1" },
     { name = "itsdangerous", specifier = ">=2.2.0,<3" },
@@ -1188,6 +1190,12 @@ sdist = { url = "https://files.pythonhosted.org/packages/00/f7/27f15d41f0ed38e8f
 wheels = [
     { url = "https://files.pythonhosted.org/packages/bb/61/78c7b3851add1481b048b5fdc29067397a1784e2910592bc81bb3f608635/fsspec-2025.5.1-py3-none-any.whl", hash = "sha256:24d3a2e663d5fc735ab256263c4075f374a174c3410c0b25e5bd1970bceaa462", size = 199052, upload-time = "2025-05-24T12:03:21.66Z" },
 ]
+
+[[package]]
+name = "func-timeout"
+version = "4.3.5"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/b3/0d/bf0567477f7281d9a3926c582bfef21bff7498fc0ffd3e9de21811896a0b/func_timeout-4.3.5.tar.gz", hash = "sha256:74cd3c428ec94f4edfba81f9b2f14904846d5ffccc27c92433b8b5939b5575dd", size = 44264, upload-time = "2019-08-19T21:32:07.43Z" }
 
 [[package]]
 name = "fuzzywuzzy"

@@ -37,7 +37,7 @@ from ada_backend.database.seed.seed_chunk_processor import seed_chunk_processor_
 from ada_backend.database.seed.seed_static_responder import seed_static_responder_components
 from ada_backend.database.seed.seed_tool_description import seed_tool_description
 from ada_backend.database.seed.seed_ports import seed_port_definitions
-from ada_backend.database.seed.utils import COMPONENT_VERSION_UUIDS
+from ada_backend.database.seed.utils import COMPONENT_UUIDS
 
 
 LOGGER = logging.getLogger(__name__)
@@ -80,7 +80,7 @@ def seed_db(session: Session):
         seed_port_definitions(session)
 
         # Verify components exist
-        for name, uuid_value in COMPONENT_VERSION_UUIDS.items():
+        for name, uuid_value in COMPONENT_UUIDS.items():
             component = session.query(db.Component).filter_by(id=uuid_value).first()
             if not component:
                 raise ValueError(f"Component {name} with ID {uuid_value} was not properly seeded")

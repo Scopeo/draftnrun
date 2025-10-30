@@ -1,12 +1,12 @@
 from uuid import UUID, uuid4
 
 from ada_backend.schemas.pipeline.base import (
-    ComponentRelationshipSchema,
     PipelineParameterSchema,
     ComponentInstanceSchema,
 )
 from ada_backend.schemas.pipeline.graph_schema import GraphUpdateSchema
 from ada_backend.database.seed.constants import COMPLETION_MODEL_IN_DB
+from settings import settings
 
 ADDITIONAL_DB_DESCRIPTION = (
     "Pour les tables, voici une explication des données: \n"
@@ -59,43 +59,24 @@ def build_react_sql_agent_chatbot(components: dict[str, UUID], graph_runner_id: 
             id=COMPONENT_INSTANCES_IDS["react_sql_agent"],
             name="ReAct SQL Agent",
             component_id=components["react_sql_agent"],
-            component_version_id=components["react_sql_agent"],
+            component_version_id=components["react_sql_agent_v2"],
             is_start_node=True,
             parameters=[
                 PipelineParameterSchema(name=COMPLETION_MODEL_IN_DB, value="openai:gpt-4o-mini"),
                 PipelineParameterSchema(
-                    name="db_schema_name",
-                    value="DATA_GOUV",
-                ),
-                PipelineParameterSchema(
                     name="additional_db_description",
                     value=ADDITIONAL_DB_DESCRIPTION,
                 ),
-            ],
-        ),
-        ComponentInstanceSchema(
-            id=COMPONENT_INSTANCES_IDS["snowflake_service"],
-            name="Snowflake DB Service",
-            component_id=components["snowflake_db_service"],
-            component_version_id=components["snowflake_db_service"],
-            parameters=[
                 PipelineParameterSchema(
-                    name="database_name",
-                    value="SCOPEO",
-                ),
-                PipelineParameterSchema(
-                    name="role_to_use",
-                    value="SCOPEO_READ_ROLE",
+                    name="engine_url",
+                    value=(
+                        f"snowflake://{settings.SNOWFLAKE_USER}:{settings.SNOWFLAKE_PASSWORD}"
+                        f"@{settings.SNOWFLAKE_ACCOUNT}/SCOPEO/data_gouv?warehouse=TEST_WAREHOUSE"
+                        "&role=SCOPEO_READ_ROLE"
+                    ),
                 ),
             ],
-        ),
-    ]
-    relations = [
-        ComponentRelationshipSchema(
-            parent_component_instance_id=COMPONENT_INSTANCES_IDS["react_sql_agent"],
-            child_component_instance_id=COMPONENT_INSTANCES_IDS["snowflake_service"],
-            parameter_name="db_service",
-        ),
+        )
     ]
     edges = []
-    return GraphUpdateSchema(component_instances=instances, relationships=relations, edges=edges)
+    return GraphUpdateSchema(component_instances=instances, relationships=[], edges=edges)

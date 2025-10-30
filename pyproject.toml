@@ -64,6 +64,7 @@ dependencies = [
     "pytz>=2023.3",
     "md2docx-python>=1.0.0",
     "pymupdf4llm>=0.0.25",
+    "func-timeout>=4.3.5,<5",
 ]
 [dependency-groups]
 dev = [
