@@ -202,6 +202,11 @@ async def run_env_agent_endpoint(
     except EnvironmentNotFound as e:
         LOGGER.error(f"Environment not found for project {project_id} in environment {env}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=404, detail=str(e)) from e
+    except ConnectionError as e:
+        LOGGER.error(
+            f"Database connection failed for project {project_id} in environment {env}: {str(e)}", exc_info=True
+        )
+        raise HTTPException(status_code=503, detail=f"Database connection error: {str(e)}") from e
     except ValueError as e:
         LOGGER.error(f"Failed to run agent for project {project_id} in environment {env}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=400, detail="Bad request") from e
@@ -301,6 +306,12 @@ async def chat(
             exc_info=True,
         )
         raise HTTPException(status_code=400, detail=str(e)) from e
+    except ConnectionError as e:
+        LOGGER.error(
+            f"Database connection failed for project {project_id}, graph_runner {graph_runner_id}: {str(e)}",
+            exc_info=True,
+        )
+        raise HTTPException(status_code=503, detail=f"Database connection error: {str(e)}") from e
     except ValueError as e:
         LOGGER.error(
             f"Failed to run agent chat for project {project_id}, graph_runner {graph_runner_id}: {str(e)}",
@@ -353,6 +364,11 @@ async def chat_env(
     except EnvironmentNotFound as e:
         LOGGER.error(f"Environment not found for project {project_id} in environment {env}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=404, detail=str(e)) from e
+    except ConnectionError as e:
+        LOGGER.error(
+            f"Database connection failed for project {project_id} in environment {env}: {str(e)}", exc_info=True
+        )
+        raise HTTPException(status_code=503, detail=f"Database connection error: {str(e)}") from e
     except ValueError as e:
         LOGGER.error(
             f"Failed to run agent chat for project {project_id} in environment {env}: {str(e)}", exc_info=True

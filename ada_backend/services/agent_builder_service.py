@@ -240,6 +240,11 @@ def instantiate_component(
             component_version_id=component_instance.component_version_id,
             **input_params,
         )
+    except ConnectionError as e:
+        raise ConnectionError(
+            f"Failed to connect to database for component '{component_name}' "
+            f"(instance ID: {component_instance.id}): {str(e)}"
+        ) from e
     except Exception as e:
         raise ValueError(
             f"Failed to instantiate component '{component_name}' "

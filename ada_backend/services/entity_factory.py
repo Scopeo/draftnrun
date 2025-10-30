@@ -19,6 +19,7 @@ from ada_backend.repositories.source_repository import get_data_source_by_id
 from ada_backend.repositories.project_repository import get_project
 from ada_backend.context import get_request_context
 from ada_backend.services.user_roles_service import get_user_access_to_organization
+from engine.storage_service.local_service import SQLLocalService
 
 LOGGER = logging.getLogger(__name__)
 
@@ -521,6 +522,33 @@ def build_project_reference_processor(target_name: str = "graph_runner") -> Para
 
         params[target_name] = graph_runner
 
+        return params
+
+    return processor
+
+
+def build_db_service_processor(target_name: str = "db_service") -> ParameterProcessor:
+    """
+    Returns a processor function to instantiate a database service from engine_url.
+    """
+
+    def processor(params: dict, constructor_params: dict[str, Any]) -> dict:
+        engine_url = params.pop("engine_url", None)
+        if not engine_url:
+            return params
+
+        try:
+            db_service_instance = SQLLocalService(engine_url=engine_url)
+            LOGGER.debug("Instantiated SQLLocalService successfully")
+        except ConnectionError as e:
+            raise ConnectionError(
+                f"Failed to connect to database for component '{target_name}' Error: {str(e)}"
+            ) from e
+        except Exception as e:
+            LOGGER.error(f"Error instantiating SQLLocalService: {e}")
+            raise ValueError(f"Failed to create DB service: {e}") from e
+
+        params[target_name] = db_service_instance
         return params
 
     return processor

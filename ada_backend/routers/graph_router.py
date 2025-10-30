@@ -50,6 +50,12 @@ def get_project_graph(
         raise HTTPException(status_code=404, detail=str(e)) from e
     except GraphNotFound as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
+    except ConnectionError as e:
+        LOGGER.error(
+            f"Database connection failed for project {project_id} and runner {graph_runner_id}: {str(e)}",
+            exc_info=True,
+        )
+        raise HTTPException(status_code=503, detail=f"Database connection error: {str(e)}") from e
     except ValueError as e:
         LOGGER.error(
             f"Failed to get graph for project {project_id} and runner {graph_runner_id}: {str(e)}", exc_info=True
@@ -93,6 +99,11 @@ async def update_project_pipeline(
             project_id=project_id,
             user_id=user.id,
         )
+    except ConnectionError as e:
+        LOGGER.error(
+            f"Database connection failed for project {project_id} runner {graph_runner_id}: {str(e)}", exc_info=True
+        )
+        raise HTTPException(status_code=503, detail=f"Database connection error: {str(e)}") from e
     except ValueError as e:
         error_msg = str(e)
         LOGGER.error(

@@ -30,13 +30,32 @@ class SnowflakeService(DBService):
     ):
         super().__init__(dialect="snowflake sql", component_attributes=component_attributes)
         self.database_name = database_name
-        self.connector = connect_to_snowflake()
-        LOGGER.info(
-            f"Connecting to Snowflake with {warehouse} warehouse, " f"{database_name} database and {role_to_use} role"
-        )
-        self.connector.cursor().execute(f"USE ROLE {role_to_use}")
-        self.connector.cursor().execute(f"USE WAREHOUSE {warehouse}")
-        self.connector.cursor().execute(f"USE DATABASE {database_name}")
+
+        try:
+            self.connector = connect_to_snowflake()
+            LOGGER.info(
+                f"Connecting to Snowflake with {warehouse} warehouse, "
+                f"{database_name} database and {role_to_use} role"
+            )
+            self.connector.cursor().execute(f"USE ROLE {role_to_use}")
+            self.connector.cursor().execute(f"USE WAREHOUSE {warehouse}")
+            self.connector.cursor().execute(f"USE DATABASE {database_name}")
+            LOGGER.info("Successfully connected to Snowflake")
+        except ConnectionError as e:
+            error_msg = (
+                f"Failed to initialize SnowflakeService: {str(e)}. "
+                f"Database: {database_name}, Warehouse: {warehouse}, Role: {role_to_use}"
+            )
+            LOGGER.error(error_msg)
+            raise ConnectionError(error_msg) from e
+        except Exception as e:
+            error_msg = (
+                f"Failed to initialize Snowflake connection or set database context. "
+                f"Database: {database_name}, Warehouse: {warehouse}, Role: {role_to_use}. "
+                f"Error: {str(e)}"
+            )
+            LOGGER.error(error_msg)
+            raise ConnectionError(error_msg) from e
 
     def schema_exists(self, schema_name: str) -> bool:
         """Check if a schema exists in the current database."""

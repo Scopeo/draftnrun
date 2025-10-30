@@ -7,6 +7,7 @@ from sqlalchemy import MetaData, text, create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.sql.type_api import TypeEngine
 import pandas as pd
+from func_timeout import func_timeout, FunctionTimedOut
 
 from engine.agent.agent import ComponentAttributes
 from engine.storage_service.db_service import DBService
@@ -37,11 +38,36 @@ DEFAULT_MAPPING = {"CURRENT_TIMESTAMP": sqlalchemy.func.current_timestamp()}
 
 
 class SQLLocalService(DBService):
-    def __init__(self, engine_url: str, component_attributes: Optional[ComponentAttributes] = None):
+    def __init__(
+        self, engine_url: str, component_attributes: Optional[ComponentAttributes] = None, connection_timeout: int = 7
+    ):
         super().__init__(component_attributes=component_attributes)
-        self.engine = create_engine(engine_url)
-        self.metadata = MetaData()
-        self.metadata.reflect(bind=self.engine)
+
+        def _initialize_connection():
+            """All connection logic wrapped in this function for timeout."""
+            engine = create_engine(
+                engine_url,
+                pool_pre_ping=True,
+                pool_recycle=3600,
+            )
+            metadata = MetaData()
+            metadata.reflect(bind=engine)
+            return engine, metadata
+
+        try:
+            LOGGER.info(f"Connecting to database (timeout: {connection_timeout}s)...")
+            self.engine, self.metadata = func_timeout(connection_timeout, _initialize_connection)
+            LOGGER.info(f"Successfully connected to database: {self.engine.url.database}")
+
+        except FunctionTimedOut:
+            error_msg = f"Database connection timed out after {connection_timeout} seconds"
+            LOGGER.error(error_msg)
+            raise ConnectionError(error_msg)
+        except Exception as e:
+            error_msg = f"Failed to connect to database. Error: {str(e)}"
+            LOGGER.error(error_msg)
+            raise ConnectionError(error_msg) from e
+
         self.Session = sessionmaker(bind=self.engine)
         self.database_name = self.engine.url.database
 

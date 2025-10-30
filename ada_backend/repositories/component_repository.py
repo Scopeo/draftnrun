@@ -480,7 +480,10 @@ def get_current_component_versions(
             db.ReleaseStageToCurrentVersionMapping,
             db.ReleaseStageToCurrentVersionMapping.component_id == db.Component.id,
         )
-        .filter(db.ReleaseStageToCurrentVersionMapping.release_stage.in_(allowed_stages))
+        .filter(
+            db.ReleaseStageToCurrentVersionMapping.component_version_id == db.ComponentVersion.id,
+            db.ReleaseStageToCurrentVersionMapping.release_stage.in_(allowed_stages),
+        )
     )
 
     result = query.all()
