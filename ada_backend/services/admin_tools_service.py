@@ -15,6 +15,8 @@ from ada_backend.schemas.admin_tools_schema import (
     CreateSpecificApiToolRequest,
     CreatedSpecificApiToolResponse,
 )
+from ada_backend.services.registry import FACTORY_REGISTRY, AgentFactory
+from engine.agent.tools.api_call_tool import APICallTool
 
 
 def _serialize_optional_json(value: Optional[dict]) -> Optional[str]:
@@ -41,6 +43,11 @@ def create_specific_api_tool_service(
         headers_json=headers_json,
         timeout_val=payload.timeout,
         fixed_params_json=fixed_params_json,
+    )
+
+    FACTORY_REGISTRY.register(
+        component_version_id=component_version.id,
+        factory=AgentFactory(entity_class=APICallTool),
     )
 
     # Upsert tool description
