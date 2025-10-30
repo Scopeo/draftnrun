@@ -19,7 +19,9 @@ from ada_backend.repositories.component_repository import (
     get_subcomponent_param_def_by_component_version,
     get_tool_parameter_by_component_version,
     get_component_sub_components,
+    get_component_parameter_definition_by_component_version,
 )
+from ada_backend.database.models import ParameterType
 from ada_backend.schemas.pipeline.base import ComponentRelationshipSchema
 from ada_backend.schemas.pipeline.get_pipeline_schema import ComponentInstanceReadSchema
 
@@ -42,6 +44,26 @@ def get_component_instance(
         session,
         component_instance_id,
     )
+    component_parameters = get_component_parameter_definition_by_component_version(
+        session,
+        component_instance.component_version_id,
+    )
+    for parameter in component_parameters:
+        if parameter.type not in [ParameterType.COMPONENT, ParameterType.TOOL] and parameter.name not in [
+            p.name for p in parameters
+        ]:
+            parameters.append(
+                PipelineParameterReadSchema(
+                    id=parameter.id,
+                    name=parameter.name,
+                    type=parameter.type,
+                    nullable=parameter.nullable,
+                    default=parameter.default,
+                    ui_component=parameter.ui_component,
+                    ui_component_properties=parameter.ui_component_properties,
+                    is_advanced=parameter.is_advanced,
+                )
+            )
 
     component_version = get_component_version_by_id(
         session, component_version_id=component_instance.component_version_id

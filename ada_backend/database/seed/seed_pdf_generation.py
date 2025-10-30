@@ -50,6 +50,7 @@ def seed_pdf_generation_components(session: Session):
                 name="css_formatting",
                 type=ParameterType.STRING,
                 default=DEFAULT_CSS_FORMATTING,
+                nullable=True,
                 ui_component=UIComponent.TEXTAREA,
                 ui_component_properties=UIComponentProperties(
                     label="CSS Formatting",
