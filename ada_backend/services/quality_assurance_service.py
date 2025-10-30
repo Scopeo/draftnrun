@@ -1,20 +1,17 @@
 import logging
-from typing import Dict, List, Optional
+from typing import Dict, List
 from uuid import UUID
-import uuid
+import json
 
 from sqlalchemy.orm import Session
 
 from ada_backend.repositories.quality_assurance_repository import (
     create_inputs_groundtruths,
     update_inputs_groundtruths,
-    update_output_groundtruth,
     delete_inputs_groundtruths,
     get_inputs_groundtruths_by_ids,
     get_inputs_groundtruths_by_dataset,
     get_inputs_groundtruths_count_by_dataset,
-    get_conversations_count_by_dataset,
-    get_conversations_with_outputs,
     upsert_version_output,
     create_datasets,
     update_dataset,
@@ -22,13 +19,11 @@ from ada_backend.repositories.quality_assurance_repository import (
     get_datasets_by_project,
     clear_version_outputs_for_input_ids,
     get_outputs_by_graph_runner,
-    create_output_groundtruths,
-    get_inputs_by_dataset_and_conversation_ids,
 )
 from ada_backend.schemas.input_groundtruth_schema import (
     InputGroundtruthResponse,
     InputGroundtruthCreateList,
-    InputGroundtruthUpdateWithId,
+    InputGroundtruthUpdateList,
     InputGroundtruthDeleteList,
     InputGroundtruthResponseList,
     Pagination,
@@ -37,10 +32,8 @@ from ada_backend.schemas.input_groundtruth_schema import (
     QARunResult,
     QARunResponse,
     QARunSummary,
-    InputGroundtruthCreate,
-    OutputGroundtruthResponse,
-    OutputGroundtruthResponseList,
     ModeType,
+    InputGroundtruthCreate,
 )
 from ada_backend.schemas.dataset_schema import (
     DatasetCreateList,
@@ -49,62 +42,52 @@ from ada_backend.schemas.dataset_schema import (
     DatasetListResponse,
 )
 from ada_backend.services.agent_runner_service import run_agent
-from ada_backend.database.models import CallType, RoleType, InputGroundtruth
+from ada_backend.database.models import CallType
 from ada_backend.repositories.env_repository import get_env_relationship_by_graph_runner_id
 from ada_backend.services.metrics.utils import query_conversation_messages
 
 LOGGER = logging.getLogger(__name__)
 
 
-def get_inputs_groundtruths_service(
+def get_inputs_groundtruths_with_version_outputs_service(
     session: Session,
     dataset_id: UUID,
     page: int = 1,
     page_size: int = 100,
 ) -> PaginatedInputGroundtruthResponse:
-    """Get conversations with their inputs and corresponding output groundtruths.
-
-    Each conversation includes all its inputs ordered by message order, and the output
-    groundtruth linked to the last input in the conversation.
+    """Get input-groundtruth entries for a dataset without version outputs.
 
     Args:
         session: SQLAlchemy session
         dataset_id: ID of the dataset
         page: Page number (1-based)
-        page_size: Number of conversations per page
+        page_size: Number of items per page
 
     Returns:
-        Paginated list of conversations with inputs and outputs
+        Paginated list of input-groundtruth entries without outputs
     """
     try:
         skip = (page - 1) * page_size
-        total_conversations = get_conversations_count_by_dataset(session, dataset_id)
-        total_pages = total_conversations // page_size + (1 if total_conversations % page_size > 0 else 0)
+        number_of_inputs_outputs = get_inputs_groundtruths_count_by_dataset(session, dataset_id)
+        number_of_pages = number_of_inputs_outputs // page_size + (
+            1 if number_of_inputs_outputs % page_size > 0 else 0
+        )
+        inputs = get_inputs_groundtruths_by_dataset(session, dataset_id, skip, page_size)
 
-        # Get conversations with outputs
-        conversations_data = get_conversations_with_outputs(session, dataset_id, skip, page_size)
-
-        # Flatten all inputs and collect all outputs
-        all_inputs = []
-        all_outputs = []
-        for inputs, output in conversations_data:
-            all_inputs.extend(inputs)
-            if output:
-                all_outputs.append(output)
+        response_list = [InputGroundtruthResponse.model_validate(input_groundtruth) for input_groundtruth in inputs]
 
         return PaginatedInputGroundtruthResponse(
             pagination=Pagination(
                 page=page,
                 size=page_size,
-                total_items=total_conversations,
-                total_pages=total_pages,
+                total_items=number_of_inputs_outputs,
+                total_pages=number_of_pages,
             ),
-            inputs_groundtruths=[InputGroundtruthResponse.model_validate(inp) for inp in all_inputs],
-            output_groundtruths=[OutputGroundtruthResponse.model_validate(output) for output in all_outputs],
+            inputs_groundtruths=response_list,
         )
     except Exception as e:
-        LOGGER.error(f"Error in get_conversations_with_outputs_service: {str(e)}")
-        raise ValueError(f"Failed to get conversations with outputs: {str(e)}") from e
+        LOGGER.error(f"Error in get_inputs_groundtruths_with_version_outputs_service: {str(e)}")
+        raise ValueError(f"Failed to get input-groundtruth entries with version outputs: {str(e)}") from e
 
 
 def get_outputs_by_graph_runner_service(
@@ -148,7 +131,6 @@ async def run_qa_service(
         Results of the QA run with summary
     """
     try:
-        # Resolve the scope of the run: build conversations to run
         if run_request.run_all:
             number_of_dataset_inputs = get_inputs_groundtruths_count_by_dataset(session, dataset_id)
             input_entries = get_inputs_groundtruths_by_dataset(
@@ -165,10 +147,6 @@ async def run_qa_service(
                 if entry.dataset_id != dataset_id:
                     raise ValueError(f"Input {entry.id} does not belong to dataset {dataset_id}")
 
-        # Separate entries by mode: row mode (role is None) vs conversation mode (role is not None)
-        row_mode_entries = [e for e in input_entries if e.role is None]
-        conversation_mode_entries = [e for e in input_entries if e.role is not None]
-
         results = []
         successful_runs = 0
         failed_runs = 0
@@ -180,13 +158,12 @@ async def run_qa_service(
             environment = env_relationship.environment
         except ValueError as e:
             raise ValueError(f"Graph runner {run_request.graph_runner_id} not found or not bound to project") from e
-
-        # Process row mode entries (each independently)
-        for entry in row_mode_entries:
+        for input_entry in input_entries:
             try:
-                # Use just the single entry's input as a message
-                messages = [{"role": "user", "content": entry.input}]
-                input_data = {"messages": messages}
+                # JSONB column should return dict, but handle both cases for safety
+                input_data = (
+                    input_entry.input if isinstance(input_entry.input, dict) else json.loads(input_entry.input)
+                )
 
                 chat_response = await run_agent(
                     session=session,
@@ -201,18 +178,17 @@ async def run_qa_service(
                 if chat_response.error:
                     output_content = f"Error: {chat_response.error}"
 
-                # Store output for this entry
                 upsert_version_output(
                     session=session,
-                    input_id=entry.id,
+                    input_id=input_entry.id,
                     output=output_content,
                     graph_runner_id=run_request.graph_runner_id,
                 )
 
                 result = QARunResult(
-                    input_id=entry.id,
-                    input=entry.input,
-                    groundtruth=None,
+                    input_id=input_entry.id,
+                    input=input_data,
+                    groundtruth=input_entry.groundtruth,
                     output=output_content,
                     graph_runner_id=run_request.graph_runner_id,
                     success=True,
@@ -222,20 +198,25 @@ async def run_qa_service(
                 successful_runs += 1
 
             except Exception as e:
-                LOGGER.error(f"Error processing row mode entry {entry.id}: {str(e)}")
+                LOGGER.error(f"Error processing input {input_entry.id}: {str(e)}")
 
                 error_output = f"Error: {str(e)}"
                 upsert_version_output(
                     session=session,
-                    input_id=entry.id,
+                    input_id=input_entry.id,
                     output=error_output,
                     graph_runner_id=run_request.graph_runner_id,
                 )
 
+                # JSONB column should return dict, but handle both cases for safety
+                input_data = (
+                    input_entry.input if isinstance(input_entry.input, dict) else json.loads(input_entry.input)
+                )
+
                 result = QARunResult(
-                    input_id=entry.id,
-                    input=entry.input,
-                    groundtruth=None,
+                    input_id=input_entry.id,
+                    input=input_data,
+                    groundtruth=input_entry.groundtruth,
                     output=error_output,
                     graph_runner_id=run_request.graph_runner_id,
                     success=False,
@@ -245,104 +226,6 @@ async def run_qa_service(
                 failed_runs += 1
 
             results.append(result)
-
-        # Process conversation mode entries (group by conversation_id and build full conversations)
-        if conversation_mode_entries:
-            conversation_ids = list({e.conversation_id for e in conversation_mode_entries})
-            conversation_entries = get_inputs_by_dataset_and_conversation_ids(
-                session=session,
-                dataset_id=dataset_id,
-                conversation_ids=conversation_ids,
-            )
-
-            # Build mapping conversation_id -> ordered entries
-            conv_to_entries: dict[UUID, list[InputGroundtruth]] = {}
-            for e in conversation_entries:
-                conv_to_entries.setdefault(e.conversation_id, []).append(e)
-            for entries in conv_to_entries.values():
-                entries.sort(key=lambda x: x.order)
-
-            # Only process conversations that have entries in our selection
-            selected_entry_ids = {entry.id for entry in conversation_mode_entries}
-            for conv_id, entries in conv_to_entries.items():
-                # Check if any entry in this conversation is in our selection
-                if not any(entry.id in selected_entry_ids for entry in entries):
-                    continue
-
-                try:
-                    # Build full conversation as messages
-                    messages = [
-                        {
-                            "role": (
-                                msg.role.value
-                                if msg.role and hasattr(msg.role, "value")
-                                else (str(msg.role) if msg.role else "user")
-                            ),
-                            "content": msg.input,
-                        }
-                        for msg in entries
-                    ]
-                    input_data = {"messages": messages}
-
-                    chat_response = await run_agent(
-                        session=session,
-                        project_id=project_id,
-                        graph_runner_id=run_request.graph_runner_id,
-                        input_data=input_data,
-                        environment=environment,
-                        call_type=CallType.QA,
-                    )
-
-                    output_content = chat_response.message
-                    if chat_response.error:
-                        output_content = f"Error: {chat_response.error}"
-
-                    # Store output for the last message of the conversation
-                    last_entry = entries[-1]
-                    upsert_version_output(
-                        session=session,
-                        input_id=last_entry.id,
-                        output=output_content,
-                        graph_runner_id=run_request.graph_runner_id,
-                    )
-
-                    result = QARunResult(
-                        input_id=last_entry.id,
-                        input=last_entry.input,
-                        groundtruth=None,
-                        output=output_content,
-                        graph_runner_id=run_request.graph_runner_id,
-                        success=True,
-                        error=None,
-                    )
-
-                    successful_runs += 1
-
-                except Exception as e:
-                    LOGGER.error(f"Error processing conversation {conv_id}: {str(e)}")
-
-                    error_output = f"Error: {str(e)}"
-                    last_entry = entries[-1]
-                    upsert_version_output(
-                        session=session,
-                        input_id=last_entry.id,
-                        output=error_output,
-                        graph_runner_id=run_request.graph_runner_id,
-                    )
-
-                    result = QARunResult(
-                        input_id=last_entry.id,
-                        input=last_entry.input,
-                        groundtruth=None,
-                        output=error_output,
-                        graph_runner_id=run_request.graph_runner_id,
-                        success=False,
-                        error=str(e),
-                    )
-
-                    failed_runs += 1
-
-                results.append(result)
 
         total_processed = len(results)
         success_rate = (successful_runs / total_processed * 100) if total_processed > 0 else 0.0
@@ -378,69 +261,77 @@ def create_inputs_groundtruths_service(
     session: Session,
     dataset_id: UUID,
     inputs_groundtruths_data: InputGroundtruthCreateList,
-    groundtruth_message: str,
-) -> tuple[InputGroundtruthResponseList, OutputGroundtruthResponseList]:
+) -> InputGroundtruthResponseList:
+    """
+    Create input-groundtruth entries.
 
+    Args:
+        session (Session): SQLAlchemy session
+        dataset_id (UUID): ID of the dataset
+        inputs_groundtruths_data (InputGroundtruthCreateList): Input-groundtruth data to create
+
+    Returns:
+        InputGroundtruthResponseList: The created input-groundtruth entries
+    """
     try:
         created_inputs_groundtruths = create_inputs_groundtruths(
             session,
             dataset_id,
             inputs_groundtruths_data.inputs_groundtruths,
         )
-        created_output_groundtruth = create_output_groundtruths(
-            session,
-            groundtruth_message,
-            created_inputs_groundtruths[-1].id,
-        )
+
         LOGGER.info(
-            f"Created {len(created_inputs_groundtruths)} input-groundtruth entries "
-            f"and 1 output-groundtruth for dataset {dataset_id}"
+            f"Created {len(created_inputs_groundtruths)} input-groundtruth " f"entries for dataset {dataset_id}"
         )
-        return (
-            InputGroundtruthResponseList(
-                inputs_groundtruths=[InputGroundtruthResponse.model_validate(ig) for ig in created_inputs_groundtruths]
-            ),
-            OutputGroundtruthResponseList(
-                output_groundtruths=[OutputGroundtruthResponse.model_validate(created_output_groundtruth)]
-            ),
+
+        return InputGroundtruthResponseList(
+            inputs_groundtruths=[InputGroundtruthResponse.model_validate(ig) for ig in created_inputs_groundtruths]
         )
     except Exception as e:
         LOGGER.error(f"Error in create_inputs_groundtruths_service: {str(e)}")
         raise ValueError(f"Failed to create input-groundtruth entries: {str(e)}") from e
 
 
-def update_inputs_service(
+def update_inputs_groundtruths_service(
     session: Session,
     dataset_id: UUID,
-    inputs_groundtruths_data: Optional[list[InputGroundtruthUpdateWithId]] = None,
-) -> Optional[list[InputGroundtruthResponse]]:
+    inputs_groundtruths_data: InputGroundtruthUpdateList,
+) -> InputGroundtruthResponseList:
+    """
+    Update multiple input-groundtruth entries.
+
+    Args:
+        session (Session): SQLAlchemy session
+        dataset_id (UUID): ID of the dataset
+        inputs_groundtruths_data (InputGroundtruthUpdateList): Input-groundtruth data to update
+
+    Returns:
+        InputGroundtruthResponseList: The updated input-groundtruth entries
+    """
     try:
-        if not inputs_groundtruths_data:
-            return None
-        updated_inputs_groundtruths = []
-        for input_groundtruth in inputs_groundtruths_data:
-            updated_inputs_groundtruths.extend(
-                update_inputs_groundtruths(
-                    session,
-                    dataset_id,
-                    input_id=input_groundtruth.id,
-                    input_text=input_groundtruth.input,
-                    role=input_groundtruth.role,
-                    order=input_groundtruth.order,
-                )
-            )
+        # Prepare updates data
+        updates_data = [(ig.id, ig.input, ig.groundtruth) for ig in inputs_groundtruths_data.inputs_groundtruths]
+
+        updated_inputs_groundtruths = update_inputs_groundtruths(
+            session,
+            updates_data,
+            dataset_id,
+        )
+
         # If any input texts were updated, clear corresponding version outputs across all versions
-        input_ids_changed = [ig.id for ig in updated_inputs_groundtruths if ig.input is not None]
+        input_ids_changed = [ig.id for ig in inputs_groundtruths_data.inputs_groundtruths if ig.input is not None]
         if input_ids_changed:
-            clear_version_outputs_for_input_ids(session=session, input_ids=input_ids_changed)
+            clear_version_outputs_for_input_ids(session, input_ids_changed)
 
         LOGGER.info(
             f"Updated {len(updated_inputs_groundtruths)} input-groundtruth " f"entries for dataset {dataset_id}"
         )
 
-        return [InputGroundtruthResponse.model_validate(ig) for ig in updated_inputs_groundtruths]
+        return InputGroundtruthResponseList(
+            inputs_groundtruths=[InputGroundtruthResponse.model_validate(ig) for ig in updated_inputs_groundtruths]
+        )
     except Exception as e:
-        LOGGER.error(f"Error in update_inputs_service: {str(e)}")
+        LOGGER.error(f"Error in update_inputs_groundtruths_service: {str(e)}")
         raise ValueError(f"Failed to update input-groundtruth entries: {str(e)}") from e
 
 
@@ -598,60 +489,28 @@ def save_conversation_to_groundtruth_service(
     mode: ModeType = ModeType.CONVERSATION,
 ) -> List[InputGroundtruthResponse]:
 
-    input_messages, output_messages = query_conversation_messages(conversation_id)
+    input_payload, output_payload = query_conversation_messages(conversation_id)
+    input_payload.pop("conversation_id", None)
 
-    if not input_messages and not output_messages:
-        raise ValueError(f"No spans found for conversation_id {conversation_id}")
+    messages = input_payload.get("messages", [])
 
+    # Prepare payload based on mode
     if mode == ModeType.CONVERSATION:
-        input_messages = input_messages[: message_index + 1]
-        input_entries_data = []
-        order = 0
-        test_case_id = uuid.uuid4()
-        for message in input_messages:
-            input_entry = InputGroundtruthCreate(
-                conversation_id=test_case_id,
-                input=message["content"],
-                role=RoleType(message["role"]),
-                order=order,
-            )
-            input_entries_data.append(input_entry)
-            order += 1
-        input_entries = create_inputs_groundtruths(
-            session,
-            dataset_id,
-            input_entries_data,
-        )
-        return [InputGroundtruthResponse.model_validate(entry) for entry in input_entries]
+        payload = {**input_payload, "messages": messages[: message_index + 1]}
+    else:  # ModeType.RAW
+        payload = {**input_payload, "messages": [messages[message_index]]}
 
-    elif mode == ModeType.ROW:
-        input_entry = InputGroundtruthCreate(
-            conversation_id=uuid.uuid4(),
-            input=input_messages[message_index]["content"],
-            role=None,
-            order=0,
-        )
-        input_entries = create_inputs_groundtruths(
-            session,
-            dataset_id,
-            [input_entry],
-        )
-        return [InputGroundtruthResponse.model_validate(entry) for entry in input_entries]
+    # Find groundtruth from next assistant message
+    groundtruth_text = None
+    next_idx = message_index + 1
+    if next_idx < len(messages) and messages[next_idx].get("role") == "assistant":
+        groundtruth_text = messages[next_idx].get("content")
+    elif output_payload:
+        for msg in output_payload.get("messages", []):
+            if msg.get("role") == "assistant":
+                groundtruth_text = msg.get("content")
+                break
 
-
-def update_output_groundtruth_service(
-    session: Session,
-    output_id: Optional[UUID],
-    message_id: Optional[UUID],
-    output_message: Optional[str],
-) -> Optional[OutputGroundtruthResponse]:
-
-    if not output_id and not output_message and not message_id:
-        return None
-
-    return update_output_groundtruth(
-        session,
-        output_id=output_id,
-        message_id=message_id,
-        output_message=output_message,
-    )
+    input_entry = InputGroundtruthCreate(input=payload, groundtruth=groundtruth_text)
+    input_entries = create_inputs_groundtruths(session, dataset_id, [input_entry])
+    return [InputGroundtruthResponse.model_validate(entry) for entry in input_entries]

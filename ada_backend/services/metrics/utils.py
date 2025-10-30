@@ -162,7 +162,7 @@ def count_conversations_per_day(df: pd.DataFrame, all_dates_df: pd.DataFrame) ->
     return conversation_id_usage
 
 
-def query_conversation_messages(conversation_id: str) -> tuple[list, list]:
+def query_conversation_messages(conversation_id: str) -> tuple[dict, dict]:
     """
     Query the most recent span with a specific conversation_id and return messages.
 
@@ -175,8 +175,8 @@ def query_conversation_messages(conversation_id: str) -> tuple[list, list]:
     query = text(
         f"""
     SELECT
-        (m.input_content::jsonb->0->'messages') as input_messages,
-        (m.output_content::jsonb->0->'messages') as output_messages
+        (m.input_content::jsonb->0) as input_payload,
+        (m.output_content::jsonb->0) as output_payload
     FROM spans s
     LEFT JOIN span_messages m ON m.span_id = s.span_id
     WHERE s.attributes->>'conversation_id' = '{conversation_id}'
@@ -190,9 +190,9 @@ def query_conversation_messages(conversation_id: str) -> tuple[list, list]:
     session.close()
 
     if not result:
-        return [], []
+        return {}, {}
 
-    input_messages = result[0] if result[0] else []
-    output_messages = result[1] if result[1] else []
+    input_payload = result[0] if result[0] else {}
+    output_payload = result[1] if result[1] else {}
 
-    return input_messages, output_messages
+    return input_payload, output_payload
