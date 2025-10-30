@@ -148,9 +148,6 @@ def count_component_instances_by_version_id(
     session: Session,
     component_version_id: UUID,
 ) -> int:
-    """
-    Counts the number of component instances using a specific component version.
-    """
     return (
         session.query(db.ComponentInstance)
         .filter(db.ComponentInstance.component_version_id == component_version_id)
@@ -162,9 +159,6 @@ def count_component_versions_by_component_id(
     session: Session,
     component_id: UUID,
 ) -> int:
-    """
-    Counts the number of versions for a specific component.
-    """
     return session.query(db.ComponentVersion).filter(db.ComponentVersion.component_id == component_id).count()
 
 
