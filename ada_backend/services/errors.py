@@ -24,21 +24,15 @@ class ComponentNotFound(Exception):
         super().__init__(f"Component not found: {component_id}")
 
 
-class ComponentHasInstancesDeletionError(Exception):
-    def __init__(self, component_id, instance_count):
-        self.component_id = component_id
-        super().__init__(
-            f"Deletion forbidden: component {component_id} currently has {instance_count} active instances in projects"
-        )
+class EntityInUseDeletionError(Exception):
+    """Raised when attempting to delete an entity that is currently in use by instances."""
 
-
-class ComponentVersionInUseError(Exception):
-    def __init__(self, component_version_id: UUID, instance_count: int):
-        self.component_version_id = component_version_id
+    def __init__(self, entity_id: UUID, instance_count: int, entity_type: str = "entity"):
+        self.entity_id = entity_id
         self.instance_count = instance_count
+        self.entity_type = entity_type
         super().__init__(
-            f"Cannot delete component version {component_version_id}: "
-            f"it is currently used by {instance_count} instance(s)"
+            f"Cannot delete {entity_type} {entity_id}: it is currently used by {instance_count} instance(s)"
         )
 
 

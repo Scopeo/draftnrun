@@ -14,7 +14,7 @@ from ada_backend.repositories.component_repository import (
 )
 from ada_backend.services.errors import (
     ComponentNotFound,
-    ComponentVersionInUseError,
+    EntityInUseDeletionError,
     ComponentVersionMismatchError,
 )
 
@@ -75,7 +75,7 @@ def delete_component_version_service(
             f"Cannot delete component version {component_version_id}: "
             f"it is currently used by {instance_count} instance(s)"
         )
-        raise ComponentVersionInUseError(component_version_id, instance_count)
+        raise EntityInUseDeletionError(component_version_id, instance_count, entity_type="component version")
 
     version_count = count_component_versions_by_component_id(session, component_id)
     if version_count == 1:

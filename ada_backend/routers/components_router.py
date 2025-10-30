@@ -16,7 +16,7 @@ from ada_backend.services.components_service import (
     get_all_components_endpoint,
     delete_component_service,
 )
-from ada_backend.services.errors import ComponentHasInstancesDeletionError
+from ada_backend.services.errors import EntityInUseDeletionError
 from ada_backend.services.user_roles_service import is_user_super_admin
 from ada_backend.routers.auth_router import get_user_from_supabase_token
 
@@ -90,8 +90,11 @@ async def delete_component(
         return None
     except HTTPException:
         raise
-    except ComponentHasInstancesDeletionError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
+    except EntityInUseDeletionError as e:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Cannot delete {e.entity_type}: it is currently used by {e.instance_count} instance(s)",
+        ) from e
     except Exception as e:
         LOGGER.error(f"Failed to delete component {component_id}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error") from e

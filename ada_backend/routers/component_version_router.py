@@ -14,7 +14,7 @@ from ada_backend.services.component_version_service import (
 )
 from ada_backend.services.errors import (
     ComponentNotFound,
-    ComponentVersionInUseError,
+    EntityInUseDeletionError,
     ComponentVersionMismatchError,
 )
 from ada_backend.services.user_roles_service import is_user_super_admin
@@ -75,10 +75,10 @@ async def delete_component_version(
 
         delete_component_version_service(session, component_id, component_version_id)
         return
-    except ComponentVersionInUseError as e:
+    except EntityInUseDeletionError as e:
         raise HTTPException(
             status_code=409,
-            detail=f"Cannot delete component version: it is currently used by {e.instance_count} instance(s)",
+            detail=f"Cannot delete {e.entity_type}: it is currently used by {e.instance_count} instance(s)",
         ) from e
     except ComponentVersionMismatchError as e:
         raise HTTPException(
