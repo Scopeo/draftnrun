@@ -22,7 +22,7 @@ from ada_backend.services.components_service import (
 )
 from ada_backend.services.errors import (
     ComponentNotFound,
-    ProtectedComponentDeletionError,
+    ComponentHasInstancesDeletionError,
 )
 from ada_backend.services.user_roles_service import is_user_super_admin
 from ada_backend.routers.auth_router import get_user_from_supabase_token
@@ -80,7 +80,7 @@ async def get_all_components_global(
     )
 
 
-@router.delete("/{component_id}")
+@router.delete("/{component_id}", status_code=204)
 async def delete_component(
     component_id: UUID,
     user: Annotated[SupabaseUser, Depends(get_user_from_supabase_token)],
@@ -94,13 +94,11 @@ async def delete_component(
         if not is_super:
             raise HTTPException(status_code=403, detail="Access denied")
         delete_component_service(session, component_id)
-        return {"status": "ok"}
+        return None
     except HTTPException:
         raise
-    except ComponentNotFound as e:
-        raise HTTPException(status_code=404, detail="Resource not found") from e
-    except ProtectedComponentDeletionError as e:
-        raise HTTPException(status_code=403, detail=str(e)) from e
+    except ComponentHasInstancesDeletionError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
         LOGGER.error(f"Failed to delete component {component_id}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error") from e

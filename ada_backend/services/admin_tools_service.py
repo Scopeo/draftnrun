@@ -5,7 +5,6 @@ from sqlalchemy.orm import Session
 
 from ada_backend.repositories.component_repository import (
     get_or_create_tool_description,
-    upsert_component_instance,
     get_component_parameter_definition_by_component_version,
     delete_component_global_parameters,
     upsert_specific_api_component_with_defaults,
@@ -54,13 +53,6 @@ def create_specific_api_tool_service(
     )
     # Ensure the component exposes this tool description as its default
     set_component_version_default_tool_description(session, component_version.id, tool_desc.id)
-    # Create instance bound to chosen component
-    instance = upsert_component_instance(
-        session=session,
-        component_version_id=component_version.id,
-        name=payload.tool_display_name,
-        tool_description_id=tool_desc.id,
-    )
 
     # Reset then write global component parameters (non-overridable)
     # Ensure idempotency when recreating/updating the same tool
@@ -93,7 +85,7 @@ def create_specific_api_tool_service(
     # Component-level defaults carry configuration.
 
     return CreatedSpecificApiToolResponse(
-        component_instance_id=instance.id,
-        name=instance.name,
+        component_version_id=component_version.id,
+        name=payload.tool_display_name,
         tool_description_id=tool_desc.id,
     )

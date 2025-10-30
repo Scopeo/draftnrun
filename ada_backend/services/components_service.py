@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from ada_backend.database.models import ReleaseStage
 from ada_backend.repositories.component_repository import (
     STAGE_HIERARCHY,
+    count_component_instances,
     delete_component_by_id,
     get_all_components_with_parameters,
     get_component_by_id,
@@ -14,7 +15,7 @@ from ada_backend.repositories.component_repository import (
 from ada_backend.schemas.components_schema import ComponentsResponse, PortDefinitionSchema
 from ada_backend.services.errors import (
     ComponentNotFound,
-    ProtectedComponentDeletionError,
+    ComponentHasInstancesDeletionError,
 )
 
 LOGGER = logging.getLogger(__name__)
@@ -51,13 +52,11 @@ def get_all_components_endpoint(
 
 def delete_component_service(session: Session, component_id) -> None:
     component = get_component_by_id(session, component_id)
-    if component is None:
-        raise ComponentNotFound(component_id)
-    if getattr(component, "is_protected", False):
-        raise ProtectedComponentDeletionError(component_id)
-    deleted = delete_component_by_id(session, component_id)
-    if not deleted:
-        raise ComponentNotFound(component_id)
+    if component:
+        instance_count = count_component_instances(session, component_id)
+        if instance_count > 0:
+            raise ComponentHasInstancesDeletionError(component_id, instance_count)
+        delete_component_by_id(session, component_id)
 
 
 def update_component_release_stage_service(

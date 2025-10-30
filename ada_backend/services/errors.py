@@ -24,10 +24,12 @@ class ComponentNotFound(Exception):
         super().__init__(f"Component not found: {component_id}")
 
 
-class ProtectedComponentDeletionError(Exception):
-    def __init__(self, component_id):
+class ComponentHasInstancesDeletionError(Exception):
+    def __init__(self, component_id, instance_count):
         self.component_id = component_id
-        super().__init__(f"Deletion forbidden: component {component_id} is protected and cannot be deleted")
+        super().__init__(
+            f"Deletion forbidden: component {component_id} currently has {instance_count} active instances in projects"
+        )
 
 
 class InvalidReleaseStageUpdate(Exception):
