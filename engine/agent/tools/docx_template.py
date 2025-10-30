@@ -18,7 +18,6 @@ from engine.agent.types import ToolDescription, ComponentAttributes, AgentPayloa
 from engine.llm_services.llm_service import CompletionService
 from engine.temps_folder_utils import get_output_dir
 from engine.trace.trace_manager import TraceManager
-from engine.storage_service.s3_loader import load_file_from_s3
 
 try:
     from docxtpl import DocxTemplate, InlineImage
@@ -85,17 +84,6 @@ def _segment_uses_bare_item(expr: str, item_var: str) -> bool:
 
 
 def _download_and_convert_image(img_path: str, output_dir: Path) -> Optional[str]:
-    """
-    Télécharge une image depuis HTTPS et la sauvegarde dans un format compatible.
-    Préserve le format original quand possible, convertit seulement si nécessaire.
-
-    Args:
-        img_path: URL HTTPS ou chemin local de l'image
-        output_dir: Répertoire de sortie pour sauvegarder l'image
-
-    Returns:
-        Chemin local de l'image sauvegardée ou None si échec
-    """
     try:
         if img_path.startswith(("http://", "https://")):
             LOGGER.info(f"Téléchargement de l'image depuis: {img_path}")
@@ -186,7 +174,13 @@ def analyze_docx_template(docx_path: str | Path) -> TemplateAnalysis:
         if m:
             lhs, rhs = m.group(1).strip(), m.group(2).strip()
             item_var = lhs.split(",")[-1].strip()
-            info = {"item_var": item_var, "list_expr": rhs, "fields": set(), "scalar": False, "segments": 0}
+            info = {
+                "item_var": item_var,
+                "list_expr": rhs,
+                "fields": set(),
+                "scalar": False,
+                "segments": 0,
+            }
             stack.append(("for", info))
             segs[id(info)] = []
             continue
@@ -293,10 +287,10 @@ def _materialize(fields: Dict) -> Dict:
 
 def build_context_response_model(analysis: TemplateAnalysis, image_keys: List[str]) -> Type[BaseModel]:
     """
-    Construit un modèle strict (tous champs requis, extra=forbid)
-    - context: variables scalaires + boucles (items stricts)
-    - images: un champ str requis par clé
-    - racine: {context, images} tous les deux requis
+    Builds a strict model (all fields required, extra=forbid)
+    - context: scalar variables + loops (strict items)
+    - images: one required str field per key
+    - root: {context, images} both required
     """
     root_fields: Dict[str, tuple[type, Field]] = {}
     loop_vars = set()
