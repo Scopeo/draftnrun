@@ -16,10 +16,7 @@ from ada_backend.services.components_service import (
     get_all_components_endpoint,
     delete_component_service,
 )
-from ada_backend.services.errors import (
-    ComponentNotFound,
-    ComponentHasInstancesDeletionError,
-)
+from ada_backend.services.errors import ComponentHasInstancesDeletionError
 from ada_backend.services.user_roles_service import is_user_super_admin
 from ada_backend.routers.auth_router import get_user_from_supabase_token
 

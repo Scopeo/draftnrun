@@ -32,8 +32,8 @@ def update_component_version_release_stage_service(
         raise ComponentNotFound(component_version_id)
     if component_version.component_id != component_id:
         LOGGER.warning(
-            f"Component version {component_version_id} does not belong to component {component_id}. "
-            f"Actual parent: {component_version.component_id}"
+            f"Component version {component_version_id} does not belong to "
+            f"component {component_id}. Actual parent: {component_version.component_id}"
         )
         raise ComponentVersionMismatchError(
             component_version_id,
@@ -80,7 +80,8 @@ def delete_component_version_service(
     version_count = count_component_versions_by_component_id(session, component_id)
     if version_count == 1:
         LOGGER.info(
-            f"Component version {component_version_id} is the last version for component {component_id}. "
+            f"Component version {component_version_id} is the last version for "
+            f"component {component_id}. "
             "Deleting the component directly (cascade will delete the version)."
         )
         delete_component_by_id(session, component_id)
