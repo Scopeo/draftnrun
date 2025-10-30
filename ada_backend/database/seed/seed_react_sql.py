@@ -98,19 +98,6 @@ def seed_react_sql_components(session: Session):
                 nullable=False,
                 default=DEFAULT_REACT_SQL_TOOL_PROMPT,
             ),
-            db.ComponentParameterDefinition(
-                id=UUID("98765432-1098-7654-3210-987654321098"),
-                component_version_id=react_sql_agent_version.id,
-                name="db_schema_name",
-                type=ParameterType.STRING,
-                nullable=True,
-                ui_component=UIComponent.TEXTFIELD,
-                ui_component_properties=UIComponentProperties(
-                    label="Schema Name",
-                    placeholder="Enter the schema name",
-                ).model_dump(exclude_unset=True, exclude_none=True),
-                is_advanced=True,
-            ),
             *build_function_calling_service_config_definitions(
                 component_version_id=react_sql_agent_version.id,
                 params_to_seed=[
