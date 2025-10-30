@@ -272,7 +272,7 @@ class CompletionService(LLMService):
             )
         )
 
-    async def _default_constrained_complete_with_pydantic(
+    async def _fallback_constrained_complete_with_json_format(
         self,
         messages: list[dict] | str,
         response_format: BaseModel,
@@ -350,7 +350,7 @@ class CompletionService(LLMService):
                     usage_completion_tokens,
                     usage_prompt_tokens,
                     usage_total_tokens,
-                ) = await self._default_constrained_complete_with_pydantic(
+                ) = await self._fallback_constrained_complete_with_json_format(
                     messages=messages,
                     response_format=response_format,
                     stream=stream,
@@ -386,16 +386,23 @@ class CompletionService(LLMService):
                 return response.choices[0].message.parsed
 
             case _:
-                (
-                    answer,
-                    usage_completion_tokens,
-                    usage_prompt_tokens,
-                    usage_total_tokens,
-                ) = await self._default_constrained_complete_with_pydantic(
-                    messages=messages,
-                    response_format=response_format,
-                    stream=stream,
-                )
+                try:
+                    (
+                        answer,
+                        usage_completion_tokens,
+                        usage_prompt_tokens,
+                        usage_total_tokens,
+                    ) = await self._fallback_constrained_complete_with_json_format(
+                        messages=messages,
+                        response_format=response_format,
+                        stream=stream,
+                    )
+                except Exception as e:
+                    LOGGER.error(f"Error in constrained_complete_with_pydantic_async: {e}")
+                    raise ValueError(
+                        "Error processing constrained completion"
+                        f" with pydantic schema on the model {self._model_name} : {str(e)}"
+                    )
                 span.set_attributes(
                     {
                         SpanAttributes.LLM_TOKEN_COUNT_COMPLETION: usage_completion_tokens,
@@ -569,13 +576,20 @@ class CompletionService(LLMService):
                 )
                 return processed_content
             case _:
-                (processed_content, usage_completion_tokens, usage_prompt_tokens, usage_total_tokens) = (
-                    await self._default_constrained_complete_with_json_schema(
-                        messages=messages,
-                        response_format=response_format,
-                        stream=stream,
+                try:
+                    (processed_content, usage_completion_tokens, usage_prompt_tokens, usage_total_tokens) = (
+                        await self._default_constrained_complete_with_json_schema(
+                            messages=messages,
+                            response_format=response_format,
+                            stream=stream,
+                        )
                     )
-                )
+                except Exception as e:
+                    LOGGER.error(f"Error in constrained_complete_with_json_schema_async: {e}")
+                    raise ValueError(
+                        "Error processing constrained completion"
+                        f" with JSON schema on the model {self._model_name} : {str(e)}"
+                    )
                 span.set_attributes(
                     {
                         SpanAttributes.LLM_TOKEN_COUNT_COMPLETION: usage_completion_tokens,
