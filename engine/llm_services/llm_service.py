@@ -344,25 +344,6 @@ class CompletionService(LLMService):
                 )
                 return response.output_parsed
 
-            case "cerebras" | "google":  # all providers using only json schema for structured output go here
-                (
-                    answer,
-                    usage_completion_tokens,
-                    usage_prompt_tokens,
-                    usage_total_tokens,
-                ) = await self._fallback_constrained_complete_with_json_format(
-                    messages=messages,
-                    response_format=response_format,
-                    stream=stream,
-                )
-                span.set_attributes(
-                    {
-                        SpanAttributes.LLM_TOKEN_COUNT_COMPLETION: usage_completion_tokens,
-                        SpanAttributes.LLM_TOKEN_COUNT_PROMPT: usage_prompt_tokens,
-                        SpanAttributes.LLM_TOKEN_COUNT_TOTAL: usage_total_tokens,
-                    }
-                )
-                return answer
             case "mistral":
                 import mistralai
 
@@ -385,7 +366,7 @@ class CompletionService(LLMService):
                 )
                 return response.choices[0].message.parsed
 
-            case _:
+            case "cerebras" | "google" | _:
                 try:
                     (
                         answer,
@@ -515,22 +496,7 @@ class CompletionService(LLMService):
                     }
                 )
                 return response.output_text
-            case "cerebras" | "google":  # all the providers that are using openai chat completion go here
-                (processed_content, usage_completion_tokens, usage_prompt_tokens, usage_total_tokens) = (
-                    await self._default_constrained_complete_with_json_schema(
-                        messages=messages,
-                        response_format=response_format,
-                        stream=stream,
-                    )
-                )
-                span.set_attributes(
-                    {
-                        SpanAttributes.LLM_TOKEN_COUNT_COMPLETION: usage_completion_tokens,
-                        SpanAttributes.LLM_TOKEN_COUNT_PROMPT: usage_prompt_tokens,
-                        SpanAttributes.LLM_TOKEN_COUNT_TOTAL: usage_total_tokens,
-                    }
-                )
-                return processed_content
+
             case "mistral":
                 import openai
 
@@ -575,7 +541,8 @@ class CompletionService(LLMService):
                     }
                 )
                 return processed_content
-            case _:
+
+            case "cerebras" | "google" | _:
                 try:
                     (processed_content, usage_completion_tokens, usage_prompt_tokens, usage_total_tokens) = (
                         await self._default_constrained_complete_with_json_schema(
