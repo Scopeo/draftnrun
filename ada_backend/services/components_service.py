@@ -13,10 +13,7 @@ from ada_backend.repositories.component_repository import (
     get_port_definitions_for_component_version_ids,
 )
 from ada_backend.schemas.components_schema import ComponentsResponse, PortDefinitionSchema
-from ada_backend.services.errors import (
-    ComponentNotFound,
-    ComponentHasInstancesDeletionError,
-)
+from ada_backend.services.errors import ComponentHasInstancesDeletionError
 
 LOGGER = logging.getLogger(__name__)
 
