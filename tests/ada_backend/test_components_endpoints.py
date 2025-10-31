@@ -156,7 +156,7 @@ def test_delete_component_with_instances(mock_is_super_admin, test_session):
 
         response = client.delete(f"/components/{TEST_IDS['component_id']}", headers=HEADERS_JWT)
 
-        assert response.status_code == 400
+        assert response.status_code == 409
         assert "instance" in response.json()["detail"].lower()
 
         assert get_component_by_id(test_session, TEST_IDS["component_id"]) is not None
