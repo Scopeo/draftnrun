@@ -1,7 +1,6 @@
 import logging
 from typing import Dict, List
 from uuid import UUID
-import json
 
 from sqlalchemy.orm import Session
 
@@ -160,16 +159,12 @@ async def run_qa_service(
             raise ValueError(f"Graph runner {run_request.graph_runner_id} not found or not bound to project") from e
         for input_entry in input_entries:
             try:
-                # JSONB column should return dict, but handle both cases for safety
-                input_data = (
-                    input_entry.input if isinstance(input_entry.input, dict) else json.loads(input_entry.input)
-                )
 
                 chat_response = await run_agent(
                     session=session,
                     project_id=project_id,
                     graph_runner_id=run_request.graph_runner_id,
-                    input_data=input_data,
+                    input_data=input_entry.input,
                     environment=environment,
                     call_type=CallType.QA,
                 )
@@ -187,7 +182,7 @@ async def run_qa_service(
 
                 result = QARunResult(
                     input_id=input_entry.id,
-                    input=input_data,
+                    input=input_entry.input,
                     groundtruth=input_entry.groundtruth,
                     output=output_content,
                     graph_runner_id=run_request.graph_runner_id,
@@ -208,14 +203,9 @@ async def run_qa_service(
                     graph_runner_id=run_request.graph_runner_id,
                 )
 
-                # JSONB column should return dict, but handle both cases for safety
-                input_data = (
-                    input_entry.input if isinstance(input_entry.input, dict) else json.loads(input_entry.input)
-                )
-
                 result = QARunResult(
                     input_id=input_entry.id,
-                    input=input_data,
+                    input=input_entry.input,
                     groundtruth=input_entry.groundtruth,
                     output=error_output,
                     graph_runner_id=run_request.graph_runner_id,

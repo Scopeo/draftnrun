@@ -3,7 +3,6 @@ from fastapi.testclient import TestClient
 
 from ada_backend.main import app
 from ada_backend.scripts.get_supabase_token import get_user_jwt
-from ada_backend.database.seed.utils import COMPONENT_UUIDS, COMPONENT_VERSION_UUIDS
 from settings import settings
 
 client = TestClient(app)
@@ -169,60 +168,49 @@ def test_input_groundtruth_basic_operations():
     dataset_data = dataset_response.json()
     dataset_id = dataset_data["datasets"][0]["id"]
 
-    # Test input-groundtruth creation (row mode - role is None)
+    # Test input-groundtruth creation
     input_endpoint = f"/projects/{project_uuid}/qa/datasets/{dataset_id}/entries"
-
-    # Create entries in row mode (each with unique conversation_id and role=None)
-    conv_id_1 = str(uuid4())
-    conv_id_2 = str(uuid4())
-    conv_id_3 = str(uuid4())
-
     create_payload = {
         "inputs_groundtruths": [
-            {"input": "What is 2 + 2?", "conversation_id": conv_id_1, "role": None, "order": 0},
-            {"input": "What is the capital of France?", "conversation_id": conv_id_2, "role": None, "order": 0},
-            {"input": "What is the weather like today?", "conversation_id": conv_id_3, "role": None, "order": 0},
+            {"input": {"messages": [{"role": "user", "content": "What is 2 + 2?"}]}, "groundtruth": "4"},
+            {
+                "input": {"messages": [{"role": "user", "content": "What is the capital of France?"}]},
+                "groundtruth": "Paris",
+            },
+            {
+                "input": {"messages": [{"role": "user", "content": "What is the weather like today?"}]}
+            },  # No groundtruth
         ]
     }
 
-    create_response = client.post(
-        f"{input_endpoint}?groundtruth_message=Test groundtruth", headers=HEADERS_JWT, json=create_payload
-    )
+    create_response = client.post(input_endpoint, headers=HEADERS_JWT, json=create_payload)
     assert create_response.status_code == 200
-    create_data = create_response.json()
-    # Endpoint returns tuple: [InputGroundtruthResponseList, OutputGroundtruthResponseList]
-    assert isinstance(create_data, list)
-    assert len(create_data) == 2
-    created_inputs = create_data[0]["inputs_groundtruths"]
-    created_outputs = create_data[1]["output_groundtruths"]
+    created_inputs = create_response.json()["inputs_groundtruths"]
     assert len(created_inputs) == 3
-    assert len(created_outputs) == 1  # Only one output_groundtruth is created (for the last entry)
 
     # Test input-groundtruth retrieval
     get_response = client.get(input_endpoint, headers=HEADERS_JWT)
     assert get_response.status_code == 200
-    retrieved_data = get_response.json()
-    retrieved_inputs = retrieved_data["inputs_groundtruths"]
+    retrieved_inputs = get_response.json()["inputs_groundtruths"]
     assert len(retrieved_inputs) == 3
 
     # Test input-groundtruth update
     input_to_update = created_inputs[0]["id"]
-    # The endpoint uses query parameters, but FastAPI can accept JSON body for Body parameters
-    # Let's try with JSON body first
-    update_response = client.patch(
-        input_endpoint,
-        headers=HEADERS_JWT,
-        json={
-            "input_groundtruth_data": [
-                {"id": input_to_update, "input": "What is 2 + 2? (updated)", "role": None, "order": 0}
-            ]
-        },
-    )
+    update_payload = {
+        "inputs_groundtruths": [
+            {
+                "id": input_to_update,
+                "input": {"messages": [{"role": "user", "content": "What is 2 + 2?"}]},
+                "groundtruth": "4 (updated)",
+            }
+        ]
+    }
+
+    update_response = client.patch(input_endpoint, headers=HEADERS_JWT, json=update_payload)
     assert update_response.status_code == 200
-    update_data = update_response.json()
-    updated_inputs = update_data[0]  # First element of tuple
+    updated_inputs = update_response.json()["inputs_groundtruths"]
     assert len(updated_inputs) == 1
-    assert updated_inputs[0]["input"] == "What is 2 + 2? (updated)"
+    assert updated_inputs[0]["groundtruth"] == "4 (updated)"
 
     # Test input-groundtruth deletion
     input_to_delete = created_inputs[1]["id"]
@@ -265,8 +253,8 @@ def _create_dummy_agent_workflow_config():
                 "name": "Start",
                 "ref": "Start",
                 "is_start_node": True,
-                "component_id": str(COMPONENT_UUIDS["start"]),  # input component UUID
-                "component_version_id": str(COMPONENT_VERSION_UUIDS["start"]),
+                "component_id": "01357c0b-bc99-44ce-a435-995acc5e2544",  # input component UUID
+                "component_version_id": "01357c0b-bc99-44ce-a435-995acc5e2544",
                 "parameters": [
                     {
                         "value": DEFAULT_PAYLOAD_SCHEMA,
@@ -309,8 +297,8 @@ def _create_dummy_agent_workflow_config():
                 "name": "Filter",
                 "ref": "Filter",
                 "is_start_node": False,
-                "component_id": str(COMPONENT_UUIDS["filter"]),  # filter component UUID
-                "component_version_id": str(COMPONENT_VERSION_UUIDS["filter"]),
+                "component_id": "02468c0b-bc99-44ce-a435-995acc5e2545",  # filter component UUID
+                "component_version_id": "02468c0b-bc99-44ce-a435-995acc5e2545",
                 "parameters": [
                     {
                         "value": DEFAULT_FILTER_SCHEMA,
@@ -419,30 +407,25 @@ def test_run_qa_endpoint():
     dataset_data = dataset_response.json()
     dataset_id = dataset_data["datasets"][0]["id"]
 
-    # Create input-groundtruth entries (row mode)
-    conv_id_1 = str(uuid4())
-    conv_id_2 = str(uuid4())
-    conv_id_3 = str(uuid4())
-
+    # Create input-groundtruth entries
     input_payload = {
         "inputs_groundtruths": [
-            {"input": "What is 2 + 2?", "conversation_id": conv_id_1, "role": None, "order": 0},
-            {"input": "What is the capital of France?", "conversation_id": conv_id_2, "role": None, "order": 0},
-            {"input": "What is the weather like today?", "conversation_id": conv_id_3, "role": None, "order": 0},
+            {"input": {"messages": [{"role": "user", "content": "What is 2 + 2?"}]}, "groundtruth": "4"},
+            {
+                "input": {"messages": [{"role": "user", "content": "What is the capital of France?"}]},
+                "groundtruth": "Paris",
+            },
+            {
+                "input": {"messages": [{"role": "user", "content": "What is the weather like today?"}]}
+            },  # No groundtruth
         ]
     }
 
     input_response = client.post(
-        f"/projects/{project_uuid}/qa/datasets/{dataset_id}/entries?groundtruth_message=Test",
-        headers=HEADERS_JWT,
-        json=input_payload,
+        f"/projects/{project_uuid}/qa/datasets/{dataset_id}/entries", headers=HEADERS_JWT, json=input_payload
     )
     assert input_response.status_code == 200
-    input_response_data = input_response.json()
-    # Returns tuple: [InputGroundtruthResponseList, OutputGroundtruthResponseList]
-    assert isinstance(input_response_data, list)
-    assert len(input_response_data) == 2
-    input_data = {"inputs_groundtruths": input_response_data[0]["inputs_groundtruths"]}
+    input_data = input_response.json()
     assert len(input_data["inputs_groundtruths"]) == 3
 
     # Test the run_qa endpoint with draft graph_runner_id on selected inputs
@@ -467,9 +450,10 @@ def test_run_qa_endpoint():
     for result in qa_results_selection["results"]:
         # Filter now outputs clean string content directly (not JSON)
         output_content = result["output"]
+        input_content = result["input"]["messages"][0]["content"]
         assert (
-            result["input"] == output_content
-        ), f"Input and output should be the same for dummy agent. Input: {result['input']}, Output: {result['output']}"
+            input_content == output_content
+        ), f"Input and output should be the same for dummy agent. Input: {input_content}, Output: {output_content}"
         assert result["success"] is True, f"All results should be successful. Result: {result}"
         assert result["graph_runner_id"] == graph_runner_id, f"graph_runner_id should match. Result: {result}"
 
@@ -503,9 +487,10 @@ def test_run_qa_endpoint():
     for result in qa_results_all["results"]:
         # Filter now outputs clean string content directly (not JSON)
         output_content = result["output"]
+        input_content = result["input"]["messages"][0]["content"]
         assert (
-            result["input"] == output_content
-        ), f"Input and output should be the same for dummy agent. Input: {result['input']}, Output: {result['output']}"
+            input_content == output_content
+        ), f"Input and output should be the same for dummy agent. Input: {input_content}, Output: {output_content}"
         assert result["success"] is True, f"All results should be successful. Result: {result}"
         assert (
             result["graph_runner_id"] == production_graph_runner_id
@@ -555,25 +540,18 @@ def test_quality_assurance_complete_workflow():
     assert dataset_response.status_code == 200
     dataset_id = dataset_response.json()["datasets"][0]["id"]
 
-    # Create input-groundtruth entries (row mode)
-    conv_id_1 = str(uuid4())
-    conv_id_2 = str(uuid4())
-
+    # Create input-groundtruth entries
     input_payload = {
         "inputs_groundtruths": [
-            {"input": "Test input 1", "conversation_id": conv_id_1, "role": None, "order": 0},
-            {"input": "Test input 2", "conversation_id": conv_id_2, "role": None, "order": 0},
+            {"input": {"messages": [{"role": "user", "content": "Test input 1"}]}, "groundtruth": "Expected output 1"},
+            {"input": {"messages": [{"role": "user", "content": "Test input 2"}]}, "groundtruth": "Expected output 2"},
         ]
     }
     input_response = client.post(
-        f"/projects/{project_uuid}/qa/datasets/{dataset_id}/entries?groundtruth_message=Expected output",
-        headers=HEADERS_JWT,
-        json=input_payload,
+        f"/projects/{project_uuid}/qa/datasets/{dataset_id}/entries", headers=HEADERS_JWT, json=input_payload
     )
     assert input_response.status_code == 200
-    input_response_data = input_response.json()
-    # Returns tuple: [InputGroundtruthResponseList, OutputGroundtruthResponseList]
-    input_data = {"inputs_groundtruths": input_response_data[0]["inputs_groundtruths"]}
+    input_data = input_response.json()
 
     # Test querying entries (migrated API - no longer supports version filter)
     get_response_initial = client.get(
@@ -622,236 +600,6 @@ def test_quality_assurance_complete_workflow():
     first_input_id = str(input_data["inputs_groundtruths"][0]["id"])
     assert first_input_id in draft_outputs_after_run, "Output should exist for the input that was run"
     assert draft_outputs_after_run[first_input_id] is not None, "Output should not be None"
-
-    # Cleanup
-    client.delete(f"/projects/{project_uuid}", headers=HEADERS_JWT)
-
-
-def test_qa_conversation_mode():
-    """Test QA run with conversation mode (multi-turn conversations)."""
-
-    # Create a project
-    project_uuid = str(uuid4())
-    project_payload = {
-        "project_id": project_uuid,
-        "project_name": f"qa_conversation_test_{project_uuid}",
-        "description": "Test project for conversation mode QA",
-    }
-
-    project_response = client.post(f"/projects/{ORGANIZATION_ID}", headers=HEADERS_JWT, json=project_payload)
-    assert project_response.status_code == 200
-
-    # Get graph runner ID
-    project_details_response = client.get(f"/projects/{project_uuid}", headers=HEADERS_JWT)
-    assert project_details_response.status_code == 200
-    project_details = project_details_response.json()
-
-    draft_graph_runner = None
-    for gr in project_details["graph_runners"]:
-        if gr["env"] == "draft":
-            draft_graph_runner = gr
-            break
-    assert draft_graph_runner is not None, "Draft graph runner not found"
-    graph_runner_id = draft_graph_runner["graph_runner_id"]
-
-    # Update workflow configuration
-    workflow_config = _create_dummy_agent_workflow_config()
-    update_graph_response = client.put(
-        f"/projects/{project_uuid}/graph/{graph_runner_id}", headers=HEADERS_JWT, json=workflow_config
-    )
-    assert update_graph_response.status_code == 200
-
-    # Create a dataset
-    dataset_uuid = str(uuid4())
-    dataset_payload = {"datasets_name": [f"qa_conversation_dataset_{dataset_uuid}"]}
-    dataset_response = client.post(f"/projects/{project_uuid}/qa/datasets", headers=HEADERS_JWT, json=dataset_payload)
-    assert dataset_response.status_code == 200
-    dataset_id = dataset_response.json()["datasets"][0]["id"]
-
-    # Create a conversation with multiple turns (conversation mode)
-    conversation_id = str(uuid4())
-    input_payload = {
-        "inputs_groundtruths": [
-            {
-                "input": "Hello, I need help",
-                "conversation_id": conversation_id,
-                "role": "user",  # Role is set, so conversation mode
-                "order": 0,
-            },
-            {
-                "input": "Hi! How can I assist you today?",
-                "conversation_id": conversation_id,
-                "role": "assistant",  # Role is set, so conversation mode
-                "order": 1,
-            },
-            {
-                "input": "What is the weather in Paris?",
-                "conversation_id": conversation_id,
-                "role": "user",  # Role is set, so conversation mode
-                "order": 2,
-            },
-        ]
-    }
-
-    input_response = client.post(
-        f"/projects/{project_uuid}/qa/datasets/{dataset_id}/entries?groundtruth_message=The weather is sunny",
-        headers=HEADERS_JWT,
-        json=input_payload,
-    )
-    assert input_response.status_code == 200
-    input_response_data = input_response.json()
-    # Returns tuple: [InputGroundtruthResponseList, OutputGroundtruthResponseList]
-    input_data = {"inputs_groundtruths": input_response_data[0]["inputs_groundtruths"]}
-    assert len(input_data["inputs_groundtruths"]) == 3
-
-    # Verify all entries have the same conversation_id
-    for entry in input_data["inputs_groundtruths"]:
-        assert entry["conversation_id"] == conversation_id
-        assert entry["role"] is not None  # Should be in conversation mode
-
-    # Test the run_qa endpoint with conversation mode
-    # Should group by conversation_id and build full conversation
-    last_entry_id = input_data["inputs_groundtruths"][-1]["id"]
-    run_qa_payload = {
-        "graph_runner_id": graph_runner_id,
-        "input_ids": [last_entry_id],  # Only pass the last entry
-    }
-
-    run_qa_response = client.post(
-        f"/projects/{project_uuid}/qa/datasets/{dataset_id}/run", headers=HEADERS_JWT, json=run_qa_payload
-    )
-    assert run_qa_response.status_code == 200
-    qa_results = run_qa_response.json()
-    assert "results" in qa_results
-    assert "summary" in qa_results
-
-    # Should have 1 result (for the conversation)
-    assert len(qa_results["results"]) == 1
-
-    # Verify the result
-    result = qa_results["results"][0]
-    assert result["success"] is True
-    assert result["graph_runner_id"] == str(graph_runner_id)
-    assert result["input"] is not None
-    assert result["output"] is not None
-    # The input should be the last message in the conversation
-    assert result["input"] == "What is the weather in Paris?"
-
-    # Verify summary
-    summary = qa_results["summary"]
-    assert summary["total"] == 1
-    assert summary["passed"] == 1
-    assert summary["failed"] == 0
-    assert summary["success_rate"] == 100.0
-
-    # Cleanup
-    client.delete(f"/projects/{project_uuid}", headers=HEADERS_JWT)
-
-
-def test_qa_mixed_mode():
-    """Test QA run with both row mode and conversation mode entries in the same dataset."""
-
-    # Create a project
-    project_uuid = str(uuid4())
-    project_payload = {
-        "project_id": project_uuid,
-        "project_name": f"qa_mixed_mode_test_{project_uuid}",
-        "description": "Test project for mixed mode QA",
-    }
-
-    project_response = client.post(f"/projects/{ORGANIZATION_ID}", headers=HEADERS_JWT, json=project_payload)
-    assert project_response.status_code == 200
-
-    # Get graph runner ID
-    project_details_response = client.get(f"/projects/{project_uuid}", headers=HEADERS_JWT)
-    assert project_details_response.status_code == 200
-    project_details = project_details_response.json()
-
-    draft_graph_runner = None
-    for gr in project_details["graph_runners"]:
-        if gr["env"] == "draft":
-            draft_graph_runner = gr
-            break
-    assert draft_graph_runner is not None, "Draft graph runner not found"
-    graph_runner_id = draft_graph_runner["graph_runner_id"]
-
-    # Update workflow configuration
-    workflow_config = _create_dummy_agent_workflow_config()
-    update_graph_response = client.put(
-        f"/projects/{project_uuid}/graph/{graph_runner_id}", headers=HEADERS_JWT, json=workflow_config
-    )
-    assert update_graph_response.status_code == 200
-
-    # Create a dataset
-    dataset_uuid = str(uuid4())
-    dataset_payload = {"datasets_name": [f"qa_mixed_dataset_{dataset_uuid}"]}
-    dataset_response = client.post(f"/projects/{project_uuid}/qa/datasets", headers=HEADERS_JWT, json=dataset_payload)
-    assert dataset_response.status_code == 200
-    dataset_id = dataset_response.json()["datasets"][0]["id"]
-
-    # Create row mode entries (role is None)
-    row_conv_id_1 = str(uuid4())
-    row_conv_id_2 = str(uuid4())
-
-    row_payload = {
-        "inputs_groundtruths": [
-            {"input": "Simple question 1", "conversation_id": row_conv_id_1, "role": None, "order": 0},
-            {"input": "Simple question 2", "conversation_id": row_conv_id_2, "role": None, "order": 0},
-        ]
-    }
-
-    row_response = client.post(
-        f"/projects/{project_uuid}/qa/datasets/{dataset_id}/entries?groundtruth_message=Row answer",
-        headers=HEADERS_JWT,
-        json=row_payload,
-    )
-    assert row_response.status_code == 200
-    row_data = {"inputs_groundtruths": row_response.json()[0]["inputs_groundtruths"]}
-
-    # Create conversation mode entries (role is set)
-    conv_id = str(uuid4())
-    conv_payload = {
-        "inputs_groundtruths": [
-            {"input": "Hello", "conversation_id": conv_id, "role": "user", "order": 0},
-            {"input": "Hi there!", "conversation_id": conv_id, "role": "assistant", "order": 1},
-            {"input": "How are you?", "conversation_id": conv_id, "role": "user", "order": 2},
-        ]
-    }
-
-    conv_response = client.post(
-        f"/projects/{project_uuid}/qa/datasets/{dataset_id}/entries?groundtruth_message=Conversation answer",
-        headers=HEADERS_JWT,
-        json=conv_payload,
-    )
-    assert conv_response.status_code == 200
-    conv_data = {"inputs_groundtruths": conv_response.json()[0]["inputs_groundtruths"]}
-
-    # Run QA on all entries (both row and conversation mode)
-    all_input_ids = [entry["id"] for entry in row_data["inputs_groundtruths"] + conv_data["inputs_groundtruths"]]
-
-    run_qa_payload = {
-        "graph_runner_id": graph_runner_id,
-        "input_ids": all_input_ids,
-    }
-
-    run_qa_response = client.post(
-        f"/projects/{project_uuid}/qa/datasets/{dataset_id}/run", headers=HEADERS_JWT, json=run_qa_payload
-    )
-    assert run_qa_response.status_code == 200
-    qa_results = run_qa_response.json()
-
-    # Should process:
-    # - 2 row mode entries (independently)
-    # - 1 conversation (from 3 conversation mode entries)
-    # Total: 3 results
-    assert len(qa_results["results"]) == 3
-
-    # Verify summary
-    summary = qa_results["summary"]
-    assert summary["total"] == 3
-    assert summary["passed"] == 3
-    assert summary["failed"] == 0
-    assert summary["success_rate"] == 100.0
 
     # Cleanup
     client.delete(f"/projects/{project_uuid}", headers=HEADERS_JWT)

@@ -1,7 +1,7 @@
 """use conversation history in qa
 
 Revision ID: c79f503f855e
-Revises: a86270305bab
+Revises: 5154754574cb
 Create Date: 2025-10-30 16:00:44.272757
 
 """
@@ -16,7 +16,7 @@ from sqlalchemy import text
 
 # revision identifiers, used by Alembic.
 revision: str = "c79f503f855e"
-down_revision: Union[str, None] = "a86270305bab"
+down_revision: Union[str, None] = "5154754574cb"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
@@ -73,7 +73,7 @@ def upgrade() -> None:
             text(
                 """
                 UPDATE quality_assurance.input_groundtruth
-                SET input_jsonb = :new_input::jsonb
+                SET input_jsonb = CAST(:new_input AS jsonb)
                 WHERE id = :record_id
             """
             ),
