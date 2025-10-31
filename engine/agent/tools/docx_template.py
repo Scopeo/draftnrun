@@ -361,6 +361,21 @@ SYSTEM = (
     "Pas de texte, pas de Markdown."
 )
 
+FILL_TEMPLATE_PROMPT = (
+    "Business brief:\n{brief}\n\n"
+    "Rules:\n"
+    "- Fill all possible keys.\n"
+    "- Lists must contain ≥ 1 coherent element.\n"
+    "- Dates in DD-MM-YYYY format.\n"
+    "- For images, provide an object with 'path' and 'size':\n"
+    "  - 'path': if it's an http link, use the link directly. "
+    "If it's a local image, use the relative path.\n"
+    "  - 'size': use EXACTLY the size specified below for each image:\n"
+    "{image_descriptions}\n"
+    "Don't invent any link or path, only use those that exist.\n"
+    "- Respond with a JSON that matches the schema expected by the response_format."
+)
+
 
 DOCX_TEMPLATE_TOOL_DESCRIPTION = ToolDescription(
     name="docx_template",
@@ -423,7 +438,6 @@ class DocxTemplateAgent(Agent):
         self,
         response_model: type[BaseModel],
         brief: str,
-        examples: Optional[dict] = None,
         image_specs: dict[str, dict] = None,
     ) -> BaseModel:
         image_specs = image_specs or {}
@@ -431,28 +445,11 @@ class DocxTemplateAgent(Agent):
         image_descriptions = []
         for key, spec in image_specs.items():
             size = spec.get("size", 25)
-            image_descriptions.append(f"- {key}: taille {size}mm")
+            image_descriptions.append(f"- {key}: size {size}mm")
 
-        user = (
-            f"Brief métier:\n{brief}\n\n"
-            "Règles:\n"
-            "- Remplis toutes les clés possibles.\n"
-            "- Les listes doivent contenir ≥ 1 élément cohérent.\n"
-            "- Dates au format YYYY-MM-DD.\n"
-            "- Pour les images, fournis un objet avec 'path' et 'size':\n"
-            "  - 'path': si c'est un lien http, utilise le lien directement. "
-            "Si c'est une image locale, utilise le chemin relatif.\n"
-            "  - 'size': utilise EXACTEMENT la taille spécifiée ci-dessous pour chaque image:\n"
-            + "\n".join(image_descriptions)
-            + "\n"
-            "N'invente pas de lien ou de chemin, utilise uniquement ceux qui existent.\n"
-            "- Réponds par un JSON qui matche le schéma attendu par le response_format."
-        )
+        image_descriptions_str = "\n".join(image_descriptions) if image_descriptions else ""
+        user = FILL_TEMPLATE_PROMPT.format(brief=brief, image_descriptions=image_descriptions_str)
         messages = [{"role": "system", "content": SYSTEM}, {"role": "user", "content": user}]
-        if examples:
-            messages.append(
-                {"role": "user", "content": f"Exemples (indicatifs):\n{json.dumps(examples, ensure_ascii=False)}"}
-            )
 
         return await self._completion_service.constrained_complete_with_pydantic_async(
             messages=messages,
