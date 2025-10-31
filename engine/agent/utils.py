@@ -147,12 +147,6 @@ def prepare_markdown_output_path(
     return markdown_content, output_path, filename
 
 
-def merge_qdrant_filters_with_and_conditions(filter_1: dict | None, filter_2: dict | None) -> dict:
-    merged_filter = {}
-    if filter_1 and filter_2:
-        merged_filter["must"] = [filter_1, filter_2]
-    if filter_1 and not filter_2:
-        merged_filter = filter_1
-    if filter_2 and not filter_1:
-        merged_filter = filter_2
+def merge_qdrant_filters_with_and_conditions(filter_1: dict, filter_2: dict) -> dict:
+    merged_filter = {"must": [filter_1, filter_2]}
     return merged_filter
