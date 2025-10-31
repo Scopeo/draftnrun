@@ -41,7 +41,7 @@ def seed_web_search_components(session: Session):
     web_search_openai_agent_version = db.ComponentVersion(
         id=COMPONENT_VERSION_UUIDS["web_search_openai_agent"],
         component_id=COMPONENT_UUIDS["web_search_openai_agent"],
-        version_tag="0.0.1",
+        version_tag="0.0.2",
         release_stage=db.ReleaseStage.PUBLIC,
         description="Agent that uses OpenAI to perform internet searches and answer questions based on the results.",
         default_tool_description_id=TOOL_DESCRIPTION_UUIDS["default_web_search_openai_tool_description"],
@@ -59,11 +59,11 @@ def seed_web_search_components(session: Session):
                 params_to_seed=[
                     ParameterLLMConfig(
                         param_name=COMPLETION_MODEL_IN_DB,
-                        param_id=UUID("329f22ec-0382-4fcf-963f-3281e68e6223"),
+                        param_id=UUID("329f22ec-0382-4fcf-963f-3281e68e6222"),
                     ),
                     ParameterLLMConfig(
                         param_name="api_key",
-                        param_id=UUID("f1e57044-3762-4791-bc4d-32fcfb9d87cf"),
+                        param_id=UUID("f1e57044-3762-4791-bc4d-32fcfb9d87ce"),
                     ),
                 ],
             ),
