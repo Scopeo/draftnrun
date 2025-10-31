@@ -41,7 +41,10 @@ def seed_docx_template_components(session: Session):
         component_id=COMPONENT_UUIDS["docx_template"],
         version_tag="0.0.1",
         release_stage=db.ReleaseStage.INTERNAL,
-        description="Analyze DOCX templates, generate content using AI based on business briefs, and fill templates with structured data.",
+        description=(
+            "Analyze DOCX templates, generate content using AI based on business briefs, "
+            "and fill templates with structured data."
+        ),
         default_tool_description_id=TOOL_DESCRIPTION_UUIDS["docx_template_tool_description"],
     )
     upsert_component_versions(session, [docx_template_component_version])
