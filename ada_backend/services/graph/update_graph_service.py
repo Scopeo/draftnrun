@@ -323,8 +323,8 @@ def _ensure_port_mappings_for_edges(
 
     instance_to_component_version: dict[UUID, UUID] = {}
     for inst in graph_project.component_instances:
-        if inst.id and inst.component_id:
-            instance_to_component_version[inst.id] = inst.component_id
+        if inst.id and inst.component_version_id:
+            instance_to_component_version[inst.id] = inst.component_version_id
 
     missing_instance_ids = {iid for pair in unmapped_edges for iid in pair if iid not in instance_to_component_version}
     if missing_instance_ids:

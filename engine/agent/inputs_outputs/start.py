@@ -35,12 +35,12 @@ class Start:
         trace_manager: TraceManager,
         tool_description: ToolDescription,
         component_attributes: ComponentAttributes,
-        payload_schema: str,
+        payload_schema: dict | str,
     ):
         self.trace_manager = trace_manager
         self.tool_description = tool_description
         self.component_attributes = component_attributes
-        self.payload_schema = load_str_to_json(payload_schema)
+        self.payload_schema = load_str_to_json(payload_schema) if isinstance(payload_schema, str) else payload_schema
 
     def get_canonical_ports(self) -> dict[str, str | None]:
         # Expose the canonical output as the messages list so default mappings

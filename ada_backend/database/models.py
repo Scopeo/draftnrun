@@ -112,6 +112,7 @@ class UIComponent(StrEnum):
     SWITCH = "Switch"
     TEXTAREA = "Textarea"
     TEXTFIELD = "Textfield"
+    JSON_BUILDER = "JSON Builder"
 
 
 class SourceType(StrEnum):
