@@ -177,3 +177,98 @@ def test_vocabulary_rag_run(
         "\n**Glossary definition of term1:**\ndefinition1\n\n**Glossary definition of term2:"
         "**\ndefinition2\n---What is the definition of term1 and term2?"
     )
+
+
+@pytest.fixture
+def mock_retriever_with_tracking():
+    """Create a mock retriever that tracks the filters passed to get_chunks."""
+    retriever = MagicMock(spec=Retriever)
+    retriever.get_chunks = AsyncMock(
+        return_value=[
+            SourceChunk(name="SourceChunk_1", document_name="SourceChunk_1", url="url1", content="Result 1"),
+        ]
+    )
+    return retriever
+
+
+@patch("engine.prometheus_metric.get_tracing_span")
+@patch("engine.prometheus_metric.agent_calls")
+@pytest.mark.parametrize(
+    "input_filters,context_rag_filter,expected_filter",
+    [
+        # Case 1: input_filter with value, rag_filter with value -> both combined in must
+        (
+            {"must": [{"key": "priority", "match": {"value": "high"}}]},
+            {"must": [{"key": "department", "match": {"value": "HR"}}]},
+            {
+                "must": [
+                    {"must": [{"key": "priority", "match": {"value": "high"}}]},
+                    {"must": [{"key": "department", "match": {"value": "HR"}}]},
+                ]
+            },
+        ),
+        # Case 2: input_filter with None, rag_filter with value -> rag_filter
+        (
+            None,
+            {"must": [{"key": "department", "match": {"value": "HR"}}]},
+            {"must": [{"key": "department", "match": {"value": "HR"}}]},
+        ),
+        # Case 3: input_filter with empty dict, rag_filter with value -> rag_filter
+        (
+            {},
+            {"must": [{"key": "department", "match": {"value": "HR"}}]},
+            {"must": [{"key": "department", "match": {"value": "HR"}}]},
+        ),
+        # Case 4: input_filter with value, rag_filter not in context -> input_filter
+        (
+            {"must": [{"key": "priority", "match": {"value": "high"}}]},
+            None,
+            {"must": [{"key": "priority", "match": {"value": "high"}}]},
+        ),
+        # Case 5: input_filter at None, no rag_filter -> filter_used = None
+        (
+            None,
+            None,
+            None,
+        ),
+    ],
+)
+def test_rag_filter_priority(
+    agent_calls_mock,
+    get_span_mock,
+    mock_trace_manager,
+    mock_retriever_with_tracking,
+    mock_synthesizer,
+    input_filters,
+    context_rag_filter,
+    expected_filter,
+):
+    """Test that RAG filter combination logic works correctly."""
+    get_span_mock.return_value.project_id = "1234"
+    counter_mock = MagicMock()
+    agent_calls_mock.labels.return_value = counter_mock
+
+    rag = RAG(
+        retriever=mock_retriever_with_tracking,
+        trace_manager=mock_trace_manager,
+        synthesizer=mock_synthesizer,
+        tool_description=MagicMock(),
+    )
+
+    mock_retriever_with_tracking.get_chunks.reset_mock()
+
+    message_data = {"messages": [ChatMessage(role="user", content="test query")]}
+    if input_filters is not None:
+        message_data["filters"] = input_filters
+
+    message = AgentPayload(**message_data)
+
+    ctx = {}
+    if context_rag_filter is not None:
+        ctx["rag_filter"] = context_rag_filter
+
+    rag.run_sync(message, ctx=ctx)
+
+    mock_retriever_with_tracking.get_chunks.assert_called_once()
+    call_args = mock_retriever_with_tracking.get_chunks.call_args
+    assert call_args[1]["filters"] == expected_filter

@@ -7,6 +7,7 @@ from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttribu
 from engine.agent.types import SourceChunk, ComponentAttributes
 from engine.qdrant_service import QdrantService
 from engine.trace.trace_manager import TraceManager
+from engine.trace.serializer import serialize_to_json
 
 
 def cast_string_to_list(string: Optional[str]) -> list[str]:
@@ -72,11 +73,12 @@ class Retriever:
                 query_text,
                 filters,
             )
+            input_data = {"Query": query_text, "Filter": filters}
             span.set_attributes(
                 {
                     SpanAttributes.OPENINFERENCE_SPAN_KIND: OpenInferenceSpanKindValues.RETRIEVER.value,
                     SpanAttributes.EMBEDDING_MODEL_NAME: self._vectorestore_service._embedding_service._model_name,
-                    SpanAttributes.INPUT_VALUE: query_text,
+                    SpanAttributes.INPUT_VALUE: serialize_to_json(input_data, shorten_string=False),
                     "component_instance_id": str(self.component_attributes.component_instance_id),
                 }
             )

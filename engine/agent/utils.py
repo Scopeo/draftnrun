@@ -10,7 +10,6 @@ from engine.temps_folder_utils import get_output_dir
 
 from fuzzywuzzy import fuzz, process
 
-
 LOGGER = logging.getLogger(__name__)
 BASE64_CHARS = set("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=")
 MAX_DISPLAY_CHARS = 10
@@ -146,3 +145,8 @@ def prepare_markdown_output_path(
     output_path = output_dir / filename
 
     return markdown_content, output_path, filename
+
+
+def merge_qdrant_filters_with_and_conditions(filter_1: dict, filter_2: dict) -> dict:
+    merged_filter = {"must": [filter_1, filter_2]}
+    return merged_filter

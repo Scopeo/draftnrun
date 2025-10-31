@@ -318,3 +318,120 @@ def test_custom_embedding_size_collection_creation():
     mock_embedding_service.embed_text_async.assert_called_with(["test content 1", "test content 2"])
 
     asyncio.run(qdrant_service.delete_collection_async(TEST_COLLECTION_NAME_CUSTOM))
+
+
+def test_merge_qdrant_filters():
+    async def run_test():
+        TEST_COLLECTION_NAME_MERGE = f"test_merge_filters_{uuid4()}"
+
+        mock_trace_manager = MockTraceManager(project_name="test")
+        embedding_service = EmbeddingService(
+            trace_manager=mock_trace_manager,
+            provider="openai",
+            model_name="text-embedding-3-large",
+        )
+
+        qdrant_schema = QdrantCollectionSchema(
+            chunk_id_field="chunk_id",
+            content_field="content",
+            file_id_field="file_id",
+            url_id_field="url",
+            metadata_fields_to_keep={"field_1", "field_2"},
+            metadata_field_types={
+                "field_1": "VARCHAR",
+                "field_2": "VARCHAR",
+            },
+        )
+
+        qdrant_service = QdrantService.from_defaults(
+            embedding_service=embedding_service,
+            default_collection_schema=qdrant_schema,
+            timeout=60.0,
+        )
+
+        if await qdrant_service.collection_exists_async(TEST_COLLECTION_NAME_MERGE):
+            await qdrant_service.delete_collection_async(TEST_COLLECTION_NAME_MERGE)
+
+        await qdrant_service.create_collection_async(collection_name=TEST_COLLECTION_NAME_MERGE)
+
+        chunks = [
+            {
+                "chunk_id": "1",
+                "content": "chunk1",
+                "file_id": "file_1",
+                "url": "https://test1.com",
+                "field_1": "value_1",
+                "field_2": None,
+            },
+            {
+                "chunk_id": "2",
+                "content": "chunk2",
+                "file_id": "file_2",
+                "url": "https://test2.com",
+                "field_1": "value_1",
+                "field_2": None,
+            },
+            {
+                "chunk_id": "3",
+                "content": "chunk3",
+                "file_id": "file_3",
+                "url": "https://test3.com",
+                "field_1": None,
+                "field_2": "value_2",
+            },
+            {
+                "chunk_id": "4",
+                "content": "chunk4",
+                "file_id": "file_4",
+                "url": "https://test4.com",
+                "field_1": None,
+                "field_2": "value_2",
+            },
+            {
+                "chunk_id": "5",
+                "content": "chunk5",
+                "file_id": "file_5",
+                "url": "https://test5.com",
+                "field_1": "value_1",
+                "field_2": "value_2",
+            },
+        ]
+
+        await qdrant_service.add_chunks_async(list_chunks=chunks, collection_name=TEST_COLLECTION_NAME_MERGE)
+
+        from engine.agent.utils import merge_qdrant_filters_with_and_conditions
+
+        filter_1 = {"must": [{"key": "field_1", "match": {"value": "value_1"}}]}
+        filter_2 = {"must": [{"key": "field_2", "match": {"value": "value_2"}}]}
+
+        results_filter_1 = await qdrant_service.retrieve_similar_chunks_async(
+            query_text="chunk",
+            collection_name=TEST_COLLECTION_NAME_MERGE,
+            filter=filter_1,
+            limit=10,
+        )
+        assert len(results_filter_1) == 3
+        assert set(chunk.name for chunk in results_filter_1) == {"1", "2", "5"}
+
+        results_filter_2 = await qdrant_service.retrieve_similar_chunks_async(
+            query_text="chunk",
+            collection_name=TEST_COLLECTION_NAME_MERGE,
+            filter=filter_2,
+            limit=10,
+        )
+        assert len(results_filter_2) == 3
+        assert set(chunk.name for chunk in results_filter_2) == {"3", "4", "5"}
+
+        merged_filter = merge_qdrant_filters_with_and_conditions(filter_1, filter_2)
+        results_merged = await qdrant_service.retrieve_similar_chunks_async(
+            query_text="chunk",
+            collection_name=TEST_COLLECTION_NAME_MERGE,
+            filter=merged_filter,
+            limit=10,
+        )
+        assert len(results_merged) == 1
+        assert results_merged[0].name == "5"
+
+        await qdrant_service.delete_collection_async(TEST_COLLECTION_NAME_MERGE)
+
+    asyncio.run(run_test())
