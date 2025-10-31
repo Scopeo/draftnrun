@@ -484,10 +484,13 @@ def save_conversation_to_groundtruth_service(
 
     messages = input_payload.get("messages", [])
 
+    if message_index < 0 or message_index >= len(messages):
+        raise ValueError("At the moment you cannot save the message. Please try again in a few seconds.")
+
     # Prepare payload based on mode
     if mode == ModeType.CONVERSATION:
         payload = {**input_payload, "messages": messages[: message_index + 1]}
-    else:  # ModeType.RAW
+    else:  # ModeType.SINGLE
         payload = {**input_payload, "messages": [messages[message_index]]}
 
     # Find groundtruth from next assistant message
