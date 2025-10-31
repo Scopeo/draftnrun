@@ -565,8 +565,6 @@ class DocxTemplateAgent(Agent):
             template = DocxTemplate(str(template_path))
             if images:
                 for key, img_data in images.items():
-                    print(img_data)
-                    print(key)
                     img_path = img_data["path"]
                     img_size = img_data["size"]
                     processed_img_path = _download_and_convert_image(img_path, output_dir)
@@ -590,13 +588,6 @@ class DocxTemplateAgent(Agent):
                     LOGGER.info(f"Cleaned up temporary template file: {temp_template_file.name}")
                 except Exception as e:
                     LOGGER.warning(f"Failed to clean up temporary file: {e}")
-
-            if template_path and str(template_path).startswith(str(get_output_dir())):
-                try:
-                    template_path.unlink()
-                    LOGGER.info(f"Cleaned up S3 downloaded template file: {template_path}")
-                except Exception as e:
-                    LOGGER.warning(f"Failed to clean up S3 downloaded file: {e}")
 
             success_msg = (
                 f"Successfully analyzed template, generated content, and saved to filename: {output_filename}"
