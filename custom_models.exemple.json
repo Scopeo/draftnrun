@@ -6,16 +6,14 @@
                 "function_calling": true,
                 "multimodal": true,
                 "image_format" : "png",
-                "constrained_completion_with_pydantic": true,
-                "constrained_completion_with_json_schema": true
+                "constrained_output" : true
             },
             {
                 "model_name": "my-llm-2-model-name",
                 "function_calling": false,
                 "multimodal": false,
                 "image_format" : "jpeg",
-                "constrained_completion_with_pydantic": false,
-                "constrained_completion_with_json_schema": false
+                "constrained_output" : true
             }
         ],
         "embedding_models": [
