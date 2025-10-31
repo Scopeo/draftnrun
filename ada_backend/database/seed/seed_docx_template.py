@@ -73,13 +73,11 @@ def seed_docx_template_components(session: Session):
                 name="template_base64",
                 type=ParameterType.STRING,
                 nullable=True,
-                ui_component=UIComponent.TEXTAREA,
+                ui_component=UIComponent.FILE_UPLOAD,
                 ui_component_properties=UIComponentProperties(
-                    label="Template (Base64)",
-                    placeholder=(
-                        "Base64 encoded DOCX template content. "
-                        "If not provided, template will be retrieved at run time."
-                    ),
+                    label="Template (Docx)",
+                    accept=".docx",
+                    multiple=False,
                 ).model_dump(exclude_unset=True, exclude_none=True),
             ),
             *build_function_calling_service_config_definitions(
