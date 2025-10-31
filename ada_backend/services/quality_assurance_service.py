@@ -487,7 +487,7 @@ def save_conversation_to_groundtruth_service(
 
     if message_index < 0 or message_index >= len(messages):
         LOGGER.error(
-            f"Message index {message_index} is out of range for messages {messages} for conversation {conversation_id}"
+            f"Message index {message_index} is out of range for conversation {conversation_id} in dataset {dataset_id}"
         )
         raise QAError("At the moment you cannot save the message to QA table. Please try again in a few seconds.")
 
