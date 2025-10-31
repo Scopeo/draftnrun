@@ -13,6 +13,7 @@ from ada_backend.schemas.pipeline.base import ToolDescriptionSchema
 from engine.agent.types import ComponentAttributes, ToolDescription
 from ada_backend.database.models import ComponentInstance
 from ada_backend.repositories.component_repository import (
+    get_base_component_from_version,
     get_component_instance_by_id,
     get_component_basic_parameters,
     get_component_name_from_instance,
@@ -23,6 +24,7 @@ from ada_backend.repositories.component_repository import (
 )
 from ada_backend.services.registry import FACTORY_REGISTRY
 from ada_backend.utils.secret_resolver import replace_secret_placeholders
+from ada_backend.database.seed.utils import COMPONENT_VERSION_UUIDS
 
 
 LOGGER = logging.getLogger(__name__)
@@ -235,9 +237,13 @@ def instantiate_component(
         f"with input params: {input_params}\n"
     )
     try:
+        component_version_id = component_instance.component_version_id
+        base_component = get_base_component_from_version(session, component_version_id)
+        if base_component and base_component == "API Call":
+            component_version_id = COMPONENT_VERSION_UUIDS["api_call_tool"]
         # Create component instance using the component version ID
         return FACTORY_REGISTRY.create(
-            component_version_id=component_instance.component_version_id,
+            component_version_id=component_version_id,
             **input_params,
         )
     except ConnectionError as e:
