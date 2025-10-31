@@ -51,7 +51,10 @@ class SQLLocalService(DBService):
                 pool_recycle=3600,
             )
             metadata = MetaData()
-            metadata.reflect(bind=engine)
+            try:
+                metadata.reflect(bind=engine)
+            except Exception as e:
+                LOGGER.debug(f"Metadata reflect encountered an issue (possibly empty database): {str(e)}")
             return engine, metadata
 
         try:
