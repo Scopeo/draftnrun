@@ -83,7 +83,10 @@ async def delete_component_version(
     except ComponentVersionMismatchError as e:
         raise HTTPException(
             status_code=400,
-            detail=f"Component version {e.component_version_id} does not belong to component {e.expected_component_id}",
+            detail=(
+                f"Component version {e.component_version_id} does not belong to "
+                f"component {e.expected_component_id}"
+            ),
         ) from e
     except Exception as e:
         LOGGER.error(f"Failed to delete component version {component_version_id}: {str(e)}", exc_info=True)
