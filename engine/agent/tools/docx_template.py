@@ -1,5 +1,4 @@
 import base64
-import json
 import logging
 import re
 import tempfile
@@ -420,6 +419,7 @@ class DocxTemplateAgent(Agent):
         trace_manager: TraceManager,
         component_attributes: ComponentAttributes,
         completion_service: CompletionService,
+        additional_instructions: Optional[str] = None,
         tool_description: ToolDescription = DOCX_TEMPLATE_TOOL_DESCRIPTION,
     ):
         super().__init__(
@@ -433,6 +433,7 @@ class DocxTemplateAgent(Agent):
                 "docxtpl library is required for DOCX template functionality. "
                 "Install it with: pip install python-docx-template"
             )
+        self.additional_instructions = additional_instructions
 
     async def _llm_generate_context(
         self,
@@ -448,7 +449,12 @@ class DocxTemplateAgent(Agent):
             image_descriptions.append(f"- {key}: size {size}mm")
 
         image_descriptions_str = "\n".join(image_descriptions) if image_descriptions else ""
-        user = FILL_TEMPLATE_PROMPT.format(brief=brief, image_descriptions=image_descriptions_str)
+        user = FILL_TEMPLATE_PROMPT.format(
+            brief=brief,
+            image_descriptions=image_descriptions_str,
+        )
+        if self.additional_instructions:
+            user += f"\n\nAdditional instructions:\n{self.additional_instructions}"
         messages = [{"role": "system", "content": SYSTEM}, {"role": "user", "content": user}]
 
         return await self._completion_service.constrained_complete_with_pydantic_async(

@@ -3,6 +3,9 @@ from sqlalchemy.orm import Session
 
 from ada_backend.database.models import (
     Component,
+    ParameterType,
+    UIComponent,
+    UIComponentProperties,
 )
 from ada_backend.database.component_definition_seeding import (
     upsert_component_categories,
@@ -49,26 +52,39 @@ def seed_docx_template_components(session: Session):
     )
     upsert_component_versions(session, [docx_template_component_version])
 
-    # Add LLM configuration parameters
     upsert_components_parameter_definitions(
         session=session,
-        component_parameter_definitions=build_function_calling_service_config_definitions(
-            component_version_id=docx_template_component_version.id,
-            params_to_seed=[
-                ParameterLLMConfig(
-                    param_name=COMPLETION_MODEL_IN_DB,
-                    param_id=UUID("a1b2c3d4-e5f6-7890-abcd-ef1234567890"),
-                ),
-                ParameterLLMConfig(
-                    param_name="api_key",
-                    param_id=UUID("b2c3d4e5-f6a7-8901-bcde-f23456789012"),
-                ),
-                ParameterLLMConfig(
-                    param_name=TEMPERATURE_IN_DB,
-                    param_id=UUID("c3d4e5f6-a7b8-9012-cdef-345678901234"),
-                ),
-            ],
-        ),
+        component_parameter_definitions=[
+            db.ComponentParameterDefinition(
+                id=UUID("12345678-90ab-cdef-1234-567890abcdef"),
+                component_version_id=docx_template_component_version.id,
+                name="additional_instructions",
+                type=ParameterType.STRING,
+                nullable=True,
+                ui_component=UIComponent.TEXTAREA,
+                ui_component_properties=UIComponentProperties(
+                    label="Additional Instructions",
+                    placeholder="Enter any additional instructions for the template filling process.",
+                ).model_dump(exclude_unset=True, exclude_none=True),
+            ),
+            *build_function_calling_service_config_definitions(
+                component_version_id=docx_template_component_version.id,
+                params_to_seed=[
+                    ParameterLLMConfig(
+                        param_name=COMPLETION_MODEL_IN_DB,
+                        param_id=UUID("a1b2c3d4-e5f6-7890-abcd-ef1234567890"),
+                    ),
+                    ParameterLLMConfig(
+                        param_name="api_key",
+                        param_id=UUID("b2c3d4e5-f6a7-8901-bcde-f23456789012"),
+                    ),
+                    ParameterLLMConfig(
+                        param_name=TEMPERATURE_IN_DB,
+                        param_id=UUID("c3d4e5f6-a7b8-9012-cdef-345678901234"),
+                    ),
+                ],
+            ),
+        ],
     )
 
     upsert_release_stage_to_current_version_mapping(
