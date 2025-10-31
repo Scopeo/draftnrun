@@ -56,3 +56,7 @@ class EnvironmentNotFound(Exception):
         self.project_id = project_id
         self.environment = environment
         super().__init__(f"Environment '{environment}' not found for project: {project_id}")
+
+
+class QAError(Exception):
+    pass

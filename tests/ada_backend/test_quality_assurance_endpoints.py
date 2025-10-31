@@ -172,9 +172,14 @@ def test_input_groundtruth_basic_operations():
     input_endpoint = f"/projects/{project_uuid}/qa/datasets/{dataset_id}/entries"
     create_payload = {
         "inputs_groundtruths": [
-            {"input": "What is 2 + 2?", "groundtruth": "4"},
-            {"input": "What is the capital of France?", "groundtruth": "Paris"},
-            {"input": "What is the weather like today?"},  # No groundtruth
+            {"input": {"messages": [{"role": "user", "content": "What is 2 + 2?"}]}, "groundtruth": "4"},
+            {
+                "input": {"messages": [{"role": "user", "content": "What is the capital of France?"}]},
+                "groundtruth": "Paris",
+            },
+            {
+                "input": {"messages": [{"role": "user", "content": "What is the weather like today?"}]}
+            },  # No groundtruth
         ]
     }
 
@@ -192,7 +197,13 @@ def test_input_groundtruth_basic_operations():
     # Test input-groundtruth update
     input_to_update = created_inputs[0]["id"]
     update_payload = {
-        "inputs_groundtruths": [{"id": input_to_update, "input": "What is 2 + 2?", "groundtruth": "4 (updated)"}]
+        "inputs_groundtruths": [
+            {
+                "id": input_to_update,
+                "input": {"messages": [{"role": "user", "content": "What is 2 + 2?"}]},
+                "groundtruth": "4 (updated)",
+            }
+        ]
     }
 
     update_response = client.patch(input_endpoint, headers=HEADERS_JWT, json=update_payload)
@@ -399,9 +410,14 @@ def test_run_qa_endpoint():
     # Create input-groundtruth entries
     input_payload = {
         "inputs_groundtruths": [
-            {"input": "What is 2 + 2?", "groundtruth": "4"},
-            {"input": "What is the capital of France?", "groundtruth": "Paris"},
-            {"input": "What is the weather like today?"},  # No groundtruth
+            {"input": {"messages": [{"role": "user", "content": "What is 2 + 2?"}]}, "groundtruth": "4"},
+            {
+                "input": {"messages": [{"role": "user", "content": "What is the capital of France?"}]},
+                "groundtruth": "Paris",
+            },
+            {
+                "input": {"messages": [{"role": "user", "content": "What is the weather like today?"}]}
+            },  # No groundtruth
         ]
     }
 
@@ -434,9 +450,10 @@ def test_run_qa_endpoint():
     for result in qa_results_selection["results"]:
         # Filter now outputs clean string content directly (not JSON)
         output_content = result["output"]
+        input_content = result["input"]["messages"][0]["content"]
         assert (
-            result["input"] == output_content
-        ), f"Input and output should be the same for dummy agent. Input: {result['input']}, Output: {result['output']}"
+            input_content == output_content
+        ), f"Input and output should be the same for dummy agent. Input: {input_content}, Output: {output_content}"
         assert result["success"] is True, f"All results should be successful. Result: {result}"
         assert result["graph_runner_id"] == graph_runner_id, f"graph_runner_id should match. Result: {result}"
 
@@ -470,9 +487,10 @@ def test_run_qa_endpoint():
     for result in qa_results_all["results"]:
         # Filter now outputs clean string content directly (not JSON)
         output_content = result["output"]
+        input_content = result["input"]["messages"][0]["content"]
         assert (
-            result["input"] == output_content
-        ), f"Input and output should be the same for dummy agent. Input: {result['input']}, Output: {result['output']}"
+            input_content == output_content
+        ), f"Input and output should be the same for dummy agent. Input: {input_content}, Output: {output_content}"
         assert result["success"] is True, f"All results should be successful. Result: {result}"
         assert (
             result["graph_runner_id"] == production_graph_runner_id
@@ -525,8 +543,8 @@ def test_quality_assurance_complete_workflow():
     # Create input-groundtruth entries
     input_payload = {
         "inputs_groundtruths": [
-            {"input": "Test input 1", "groundtruth": "Expected output 1"},
-            {"input": "Test input 2", "groundtruth": "Expected output 2"},
+            {"input": {"messages": [{"role": "user", "content": "Test input 1"}]}, "groundtruth": "Expected output 1"},
+            {"input": {"messages": [{"role": "user", "content": "Test input 2"}]}, "groundtruth": "Expected output 2"},
         ]
     }
     input_response = client.post(

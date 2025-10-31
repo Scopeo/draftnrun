@@ -8,7 +8,10 @@ from ada_backend.database.models import CallType, EnvType
 from ada_backend.routers.auth_router import get_user_from_supabase_token
 from ada_backend.schemas.auth_schema import SupabaseUser
 from ada_backend.schemas.trace_schema import TraceSpan, PaginatedRootTracesResponse
-from ada_backend.services.trace_service import get_root_traces_by_project, get_span_trace_service
+from ada_backend.services.trace_service import (
+    get_root_traces_by_project,
+    get_span_trace_service,
+)
 
 LOGGER = logging.getLogger(__name__)
 
