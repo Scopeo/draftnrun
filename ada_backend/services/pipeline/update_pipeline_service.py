@@ -147,15 +147,14 @@ def create_or_update_component_instance(
                     f"Parameter '{param.name}' cannot be None in component '{component_name}' "
                     f"because it is not nullable."
                 )
-            elif param.value is not None:
-                upsert_basic_parameter(
-                    session=session,
-                    component_instance_id=instance_id,
-                    parameter_definition_id=param_def.id,
-                    value=(
-                        json.dumps(param.value) if isinstance(param.value, dict) else str(param.value)
-                    ),  # Convert to string for storage
-                    order=param.order,
-                )
+            upsert_basic_parameter(
+                session=session,
+                component_instance_id=instance_id,
+                parameter_definition_id=param_def.id,
+                value=(
+                    json.dumps(param.value) if isinstance(param.value, dict) else str(param.value)
+                ),  # Convert to string for storage
+                order=param.order,
+            )
 
     return instance_id
