@@ -39,9 +39,9 @@ def seed_start_components(session: Session):
         ],
     )
     start_version = db.ComponentVersion(
-        id=COMPONENT_VERSION_UUIDS["start"],
+        id=COMPONENT_VERSION_UUIDS["start_v2"],
         component_id=COMPONENT_UUIDS["start"],
-        version_tag="0.0.1",
+        version_tag="0.1.0",
         release_stage=db.ReleaseStage.PUBLIC,
         description="Beginning of the workflow: setup the input format here.",
         default_tool_description_id=TOOL_DESCRIPTION_UUIDS["default_tool_description"],
@@ -74,20 +74,18 @@ def seed_start_components(session: Session):
         session=session,
         component_parameter_definitions=[
             db.ComponentParameterDefinition(
-                id=UUID("48332255-4a0e-4432-8fb4-46267e8ffd4d"),
+                id=UUID("1e50db7d-87cb-4c90-9082-451c4cbf93f9"),
                 component_version_id=start_version.id,
                 name=START_PAYLOAD_PARAMETER_NAME,
-                type=ParameterType.STRING,
+                type=ParameterType.JSON,
                 nullable=False,
-                default=json.dumps(
-                    {"messages": [{"role": "user", "content": "Hello"}], "additional_info": "info"}, indent=4
-                ),
-                ui_component=UIComponent.TEXTAREA,
+                default=json.dumps({"messages": [{"role": "user", "content": "Hello"}]}, indent=4),
+                ui_component=UIComponent.JSON_BUILDER,
                 ui_component_properties=UIComponentProperties(
-                    label="""An example of your payload schema""",
-                    description="Provide an example of the payload schema for your workflow input. "
-                    "This must be valid JSON. The keys of this dictionary can be referenced in subsequent components "
-                    "as variables, for example: {{additional_info}}",
+                    label="Payload Schema",
+                    description="Defines the structure of input data for this workflow. "
+                    "Keys can be referenced as template variables (e.g., {{additional_info}}). "
+                    "Values serve as defaults when not provided in requests.",
                 ).model_dump(exclude_unset=True, exclude_none=True),
             ),
         ],

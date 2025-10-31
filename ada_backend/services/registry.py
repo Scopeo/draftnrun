@@ -447,7 +447,7 @@ def create_factory_registry() -> FactoryRegistry:
     )
 
     registry.register(
-        component_version_id=COMPONENT_VERSION_UUIDS["start"],
+        component_version_id=COMPONENT_VERSION_UUIDS["start_v2"],
         factory=AgentFactory(
             entity_class=Start,
         ),
