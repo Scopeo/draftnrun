@@ -1,6 +1,5 @@
 from datetime import datetime
 from typing import Optional, List
-import json
 from uuid import UUID
 from pydantic import BaseModel, field_validator
 from enum import Enum
@@ -136,18 +135,6 @@ class InputGroundtruthResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    @field_validator("input", mode="before")
-    @classmethod
-    def ensure_dict(cls, v):
-        # DB may store input as text; accept both dict and JSON string
-        if isinstance(v, str):
-            try:
-                return json.loads(v)
-            except Exception:
-                # Fallback to empty dict to avoid 422; adjust as needed
-                return {}
-        return v
-
     class Config:
         from_attributes = True
 
@@ -160,4 +147,4 @@ class InputGroundtruthResponseList(BaseModel):
 
 class ModeType(str, Enum):
     CONVERSATION = "conversation"
-    RAW = "raw"
+    SINGLE = "single"
