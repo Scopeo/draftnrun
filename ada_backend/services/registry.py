@@ -335,14 +335,15 @@ def create_factory_registry() -> FactoryRegistry:
             ],
         ),
     )
+    web_search_factory = AgentFactory(
+        entity_class=WebSearchOpenAITool,
+        parameter_processors=[
+            web_service_processor,
+        ],
+    )
+    registry.register(component_version_id=UUID("d6020df0-a7e0-4d82-b731-0a653beef2e6"), factory=web_search_factory)
     registry.register(
-        component_version_id=COMPONENT_VERSION_UUIDS["web_search_openai_agent"],
-        factory=AgentFactory(
-            entity_class=WebSearchOpenAITool,
-            parameter_processors=[
-                web_service_processor,
-            ],
-        ),
+        component_version_id=COMPONENT_VERSION_UUIDS["web_search_openai_agent"], factory=web_search_factory
     )
     registry.register(
         component_version_id=COMPONENT_VERSION_UUIDS["api_call_tool"],
