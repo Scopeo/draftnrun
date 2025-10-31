@@ -486,6 +486,9 @@ def save_conversation_to_groundtruth_service(
     messages = input_payload.get("messages", [])
 
     if message_index < 0 or message_index >= len(messages):
+        LOGGER.error(
+            f"Message index {message_index} is out of range for messages {messages} for conversation {conversation_id}"
+        )
         raise QAError("At the moment you cannot save the message to QA table. Please try again in a few seconds.")
 
     # Prepare payload based on mode
