@@ -67,6 +67,18 @@ def seed_docx_template_components(session: Session):
                     placeholder="Enter any additional instructions for the template filling process.",
                 ).model_dump(exclude_unset=True, exclude_none=True),
             ),
+            db.ComponentParameterDefinition(
+                id=UUID("87654321-cdef-ab90-4321-987654321fed"),
+                component_version_id=docx_template_component_version.id,
+                name="template_base64",
+                type=ParameterType.STRING,
+                nullable=True,
+                ui_component=UIComponent.TEXTAREA,
+                ui_component_properties=UIComponentProperties(
+                    label="Template (Base64)",
+                    placeholder="Base64 encoded DOCX template content. Either this or template_input_path must be provided.",
+                ).model_dump(exclude_unset=True, exclude_none=True),
+            ),
             *build_function_calling_service_config_definitions(
                 component_version_id=docx_template_component_version.id,
                 params_to_seed=[

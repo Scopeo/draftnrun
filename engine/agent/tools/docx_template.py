@@ -420,6 +420,7 @@ class DocxTemplateAgent(Agent):
         component_attributes: ComponentAttributes,
         completion_service: CompletionService,
         additional_instructions: Optional[str] = None,
+        template_base64: Optional[str] = None,
         tool_description: ToolDescription = DOCX_TEMPLATE_TOOL_DESCRIPTION,
     ):
         super().__init__(
@@ -434,6 +435,7 @@ class DocxTemplateAgent(Agent):
                 "Install it with: pip install python-docx-template"
             )
         self.additional_instructions = additional_instructions
+        self.template_base64 = template_base64
 
     async def _llm_generate_context(
         self,
@@ -473,7 +475,9 @@ class DocxTemplateAgent(Agent):
 
         try:
             template_input_path = kwargs.get("template_input_path") or (ctx or {}).get("template_input_path")
-            template_base64 = kwargs.get("template_base64") or (ctx or {}).get("template_base64")
+            template_base64 = (
+                kwargs.get("template_base64") or self.template_base64 or (ctx or {}).get("template_base64")
+            )
             template_information_brief = kwargs.get("template_information_brief", "")
             output_filename = kwargs.get("output_filename", "")
 
