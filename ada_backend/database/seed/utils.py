@@ -80,6 +80,7 @@ COMPONENT_UUIDS: dict[str, UUID] = {
     "gmail_sender": UUID("af96bb40-c9ea-4851-a663-f0e64363fcb2"),
     "python_code_runner": UUID("e2b00000-0000-1111-2222-333333333333"),
     "terminal_command_runner": UUID("e2b10000-1111-2222-3333-444444444444"),
+    "docx_template": UUID("e2b20000-2222-3333-4444-555555555555"),
     "linkup_search_tool": UUID("f3e45678-9abc-def0-1234-56789abcdef0"),
     "pdf_generation": UUID("428baac0-0c5f-4374-b2de-8075218082b4"),
     "project_reference": UUID("4c8f9e2d-1a3b-4567-8901-234567890abc"),
@@ -123,6 +124,7 @@ COMPONENT_VERSION_UUIDS: dict[str, UUID] = {
     "chunk_processor": UUID("5d9f0f3e-2b4c-5678-9012-345678901bcd"),
     "docx_generation": UUID("b5195a0f-94f5-4f5c-8804-32dd19b16833"),
     "static_responder": UUID("1F7334BE-7164-4440-BBF3-E986EED0388F"),
+    "docx_template_agent": UUID("e2b30000-3333-4444-5555-666666666666"),
 }
 
 DEFAULT_MODEL = "openai:gpt-5-mini"

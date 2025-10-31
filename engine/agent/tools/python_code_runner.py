@@ -141,6 +141,8 @@ class PythonCodeRunner(Agent):
         for entry in new_entries:
             file_bytes = await sandbox.files.read(entry.path, format="bytes")
             local_path = output_dir / entry.name
+            LOGGER.info(f"Saving new file to: {local_path}")
+            local_path.parent.mkdir(parents=True, exist_ok=True)
             with open(local_path, "wb") as f:
                 f.write(file_bytes)
 

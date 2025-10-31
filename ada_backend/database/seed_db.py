@@ -32,6 +32,7 @@ from ada_backend.database.seed.seed_web_search import seed_web_search_components
 from ada_backend.database.seed.seed_ocr_call import seed_ocr_call_components
 from ada_backend.database.seed.seed_pdf_generation import seed_pdf_generation_components
 from ada_backend.database.seed.seed_docx_generation import seed_docx_generation_components
+from ada_backend.database.seed.seed_docx_template import seed_docx_template_components
 from ada_backend.database.seed.seed_project_reference import seed_project_reference_components
 from ada_backend.database.seed.seed_chunk_processor import seed_chunk_processor_components
 from ada_backend.database.seed.seed_static_responder import seed_static_responder_components
@@ -61,6 +62,7 @@ def seed_db(session: Session):
         seed_terminal_command_runner_components(session)
         seed_pdf_generation_components(session)
         seed_docx_generation_components(session)
+        seed_docx_template_components(session)
         seed_tavily_components(session)
         seed_llm_call_components(session)
         seed_sql_tool_components(session)
