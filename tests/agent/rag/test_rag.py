@@ -196,11 +196,16 @@ def mock_retriever_with_tracking():
 @pytest.mark.parametrize(
     "input_filters,context_rag_filter,expected_filter",
     [
-        # Case 1: input_filter with value, rag_filter with value -> rag_filter is used
+        # Case 1: input_filter with value, rag_filter with value -> both combined in must
         (
             {"must": [{"key": "priority", "match": {"value": "high"}}]},
             {"must": [{"key": "department", "match": {"value": "HR"}}]},
-            {"must": [{"key": "department", "match": {"value": "HR"}}]},
+            {
+                "must": [
+                    {"must": [{"key": "priority", "match": {"value": "high"}}]},
+                    {"must": [{"key": "department", "match": {"value": "HR"}}]},
+                ]
+            },
         ),
         # Case 2: input_filter with None, rag_filter with value -> rag_filter
         (
@@ -217,13 +222,13 @@ def mock_retriever_with_tracking():
         # Case 4: input_filter with value, rag_filter not in context -> input_filter
         (
             {"must": [{"key": "priority", "match": {"value": "high"}}]},
-            None,  # rag_filter not in context
+            None,
             {"must": [{"key": "priority", "match": {"value": "high"}}]},
         ),
         # Case 5: input_filter at None, no rag_filter -> filter_used = {}
         (
             None,
-            None,  # rag_filter not in context
+            None,
             {},
         ),
     ],
@@ -238,7 +243,7 @@ def test_rag_filter_priority(
     context_rag_filter,
     expected_filter,
 ):
-    """Test that RAG filter selection follows the correct priority logic."""
+    """Test that RAG filter combination logic works correctly."""
     get_span_mock.return_value.project_id = "1234"
     counter_mock = MagicMock()
     agent_calls_mock.labels.return_value = counter_mock

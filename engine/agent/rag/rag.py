@@ -16,6 +16,7 @@ from engine.agent.synthesizer import Synthesizer
 from engine.agent.rag.formatter import Formatter
 from engine.agent.rag.vocabulary_search import VocabularySearch
 from engine.agent.build_context import build_context_from_vocabulary_chunks
+from engine.agent.utils import merge_qdrant_filters_with_and_conditions
 
 LOGGER = logging.getLogger(__name__)
 
@@ -77,9 +78,7 @@ class RAG(Agent):
     async def _run_without_io_trace(self, inputs: RAGInputs, ctx: dict) -> RAGOutputs:
         if not inputs.query_text:
             raise ValueError("No query_text provided for the RAG tool.")
-        filter_to_process = inputs.filters if inputs.filters is not None else {}
-        if "rag_filter" in ctx and ctx["rag_filter"]:
-            filter_to_process = ctx["rag_filter"]
+        filter_to_process = merge_qdrant_filters_with_and_conditions(inputs.filters, ctx.get("rag_filter", None))
         chunks = await self._retriever.get_chunks(query_text=inputs.query_text, filters=filter_to_process)
 
         if self._reranker is not None:
