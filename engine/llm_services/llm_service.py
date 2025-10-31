@@ -367,6 +367,7 @@ class CompletionService(LLMService):
                 return response.choices[0].message.parsed
 
             case "cerebras" | "google" | _:
+                # TODO: modify to make it work with  models not handling response format
                 try:
                     (
                         answer,
