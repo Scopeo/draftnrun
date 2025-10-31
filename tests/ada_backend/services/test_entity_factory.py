@@ -9,6 +9,7 @@ from ada_backend.services.entity_factory import (
     build_trace_manager_processor,
     detect_and_convert_dataclasses,
     pydantic_processor,
+    get_llm_provider_and_model,
 )
 from engine.agent.types import ToolDescription
 from engine.trace.trace_context import get_trace_manager
@@ -176,3 +177,20 @@ def test_agent_factory_invalid_tool_description():
 
     with pytest.raises(ValueError, match="Tool description must be a ToolDescription object."):
         factory(tool_description=invalid_tool_description)
+
+
+def test_get_llm_provider_and_model():
+    correct_name = "openai:gpt-5"
+    correct_name_with_colons = "custom-provider:bge-m3:567m"
+    bad_name = "unknown-model"
+
+    provider_correct, model_correct = get_llm_provider_and_model(correct_name)
+    assert provider_correct == "openai"
+    assert model_correct == "gpt-5"
+
+    provider_with_colons, model_with_colons = get_llm_provider_and_model(correct_name_with_colons)
+    assert provider_with_colons == "custom-provider"
+    assert model_with_colons == "bge-m3:567m"
+
+    with pytest.raises(ValueError, match="Invalid LLM model format: unknown-model. Expected 'provider:model_name'."):
+        get_llm_provider_and_model(bad_name)

@@ -299,10 +299,8 @@ def get_llm_provider_and_model(llm_model: str) -> tuple[str, str]:
     if ":" not in llm_model:
         raise ValueError(f"Invalid LLM model format: {llm_model}. Expected 'provider:model_name'.")
     parts = llm_model.split(":")
-    if len(parts) == 2:
-        provider, model = parts
-    else:
-        raise ValueError(f"Format invalide pour llm_model: {llm_model}")
+    provider = parts[0]
+    model = ":".join(parts[1:])
     return provider, model
 
 
