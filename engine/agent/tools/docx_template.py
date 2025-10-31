@@ -18,6 +18,7 @@ from engine.agent.types import ToolDescription, ComponentAttributes, AgentPayloa
 from engine.llm_services.llm_service import CompletionService
 from engine.temps_folder_utils import get_output_dir
 from engine.trace.trace_manager import TraceManager
+from engine.trace.serializer import serialize_to_json
 
 try:
     from docxtpl import DocxTemplate, InlineImage
@@ -371,15 +372,16 @@ DOCX_TEMPLATE_TOOL_DESCRIPTION = ToolDescription(
     tool_properties={
         "template_input_path": {
             "type": "string",
-            "description": "Path to the DOCX template file (.docx) that contains Jinja2 placeholders. Either this or template_base64 or template_s3_url must be provided.",
+            "description": (
+                "Path to the DOCX template file (.docx) that contains Jinja2 placeholders. "
+                "Either this or template_base64 must be provided."
+            ),
         },
         "template_base64": {
             "type": "string",
-            "description": "Base64 encoded DOCX template content. Either this or template_input_path or template_s3_url must be provided.",
-        },
-        "template_s3_url": {
-            "type": "string",
-            "description": "S3 URL of the DOCX template file (.docx). Either this or template_input_path or template_base64 must be provided.",
+            "description": (
+                "Base64 encoded DOCX template content. Either this or template_input_path must be provided."
+            ),
         },
         "template_information_brief": {
             "type": "string",
@@ -433,17 +435,18 @@ class DocxTemplateAgent(Agent):
 
         user = (
             f"Brief métier:\n{brief}\n\n"
-            f"Règles:\n"
-            f"- Remplis toutes les clés possibles.\n"
-            f"- Les listes doivent contenir ≥ 1 élément cohérent.\n"
-            f"- Dates au format YYYY-MM-DD.\n"
-            f"- Pour les images, fournis un objet avec 'path' et 'size':\n"
-            f"  - 'path': si c'est un lien http, utilise le lien directement. Si c'est une image locale, utilise le chemin relatif.\n"
-            f"  - 'size': utilise EXACTEMENT la taille spécifiée ci-dessous pour chaque image:\n"
+            "Règles:\n"
+            "- Remplis toutes les clés possibles.\n"
+            "- Les listes doivent contenir ≥ 1 élément cohérent.\n"
+            "- Dates au format YYYY-MM-DD.\n"
+            "- Pour les images, fournis un objet avec 'path' et 'size':\n"
+            "  - 'path': si c'est un lien http, utilise le lien directement. "
+            "Si c'est une image locale, utilise le chemin relatif.\n"
+            "  - 'size': utilise EXACTEMENT la taille spécifiée ci-dessous pour chaque image:\n"
             + "\n".join(image_descriptions)
             + "\n"
-            f"N'invente pas de lien ou de chemin, utilise uniquement ceux qui existent.\n"
-            f"- Réponds par un JSON qui matche le schéma attendu par le response_format."
+            "N'invente pas de lien ou de chemin, utilise uniquement ceux qui existent.\n"
+            "- Réponds par un JSON qui matche le schéma attendu par le response_format."
         )
         messages = [{"role": "system", "content": SYSTEM}, {"role": "user", "content": user}]
         if examples:
@@ -472,7 +475,7 @@ class DocxTemplateAgent(Agent):
             output_filename = kwargs.get("output_filename", "")
 
             if not template_input_path and not template_base64:
-                error_msg = "Either template_input_path, template_base64, or template_s3_url must be provided"
+                error_msg = "Either template_input_path or template_base64 must be provided"
                 LOGGER.error(error_msg)
                 span.set_attributes({SpanAttributes.OUTPUT_VALUE: error_msg})
                 return AgentPayload(
@@ -484,7 +487,7 @@ class DocxTemplateAgent(Agent):
             template_sources = [template_input_path, template_base64]
             provided_sources = [source for source in template_sources if source is not None]
             if len(provided_sources) > 1:
-                error_msg = "Only one of template_input_path, template_base64, or template_s3_url should be provided, not multiple"
+                error_msg = "Only one of template_input_path or template_base64 should be provided, not multiple"
                 LOGGER.error(error_msg)
                 span.set_attributes({SpanAttributes.OUTPUT_VALUE: error_msg})
                 return AgentPayload(
@@ -604,7 +607,19 @@ class DocxTemplateAgent(Agent):
 
             span.set_attributes(
                 {
-                    SpanAttributes.INPUT_VALUE: f"template: {template_type}, brief: {template_information_brief[:100]}..., output_filename: {output_filename}",
+                    SpanAttributes.INPUT_VALUE: serialize_to_json(
+                        {
+                            "template": template_type,
+                            "brief": (
+                                template_information_brief[:100]
+                                if len(template_information_brief) > 100
+                                else template_information_brief
+                            ),
+                            "output_filename": output_filename,
+                        },
+                        shorten_string=False,
+                        indent=0,
+                    ),
                     SpanAttributes.OUTPUT_VALUE: success_msg,
                 }
             )
