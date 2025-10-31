@@ -39,8 +39,8 @@ VAR_TAG_RE = re.compile(r"^{{-?\s*(.+?)\s*-?}}$", flags=re.S)
 
 def _read_docx_plaintext(docx_path: str | Path) -> str:
     """
-    Concatène *tout* le texte des XML Word et supprime les tags XML,
-    pour recoller les balises Jinja même si elles sont fragmentées.
+    Concatenates *all* text from Word XML files and removes XML tags,
+    to reassemble Jinja tags even if they are fragmented.
     """
     docx_path = Path(docx_path)
     buf: List[str] = []
@@ -62,10 +62,9 @@ def _extract_item_fields(expr: str, item_var: str) -> List[str]:
         path = m.group(0).split(".")[1:]  # remove "item"
         if path:
             fields.append(".".join(path))
-    # indexation: item["sku"] or item['sku']
     for m in re.finditer(rf"\b{re.escape(item_var)}\s*\[\s*(['\"])(.+?)\1\s*\]", expr):
         fields.append(m.group(2))
-    # dedupe
+
     seen = set()
     out = []
     for f in fields:
@@ -86,7 +85,7 @@ def _segment_uses_bare_item(expr: str, item_var: str) -> bool:
 def _download_and_convert_image(img_path: str, output_dir: Path) -> Optional[str]:
     try:
         if img_path.startswith(("http://", "https://")):
-            LOGGER.info(f"Téléchargement de l'image depuis: {img_path}")
+            LOGGER.info(f"Downloading image from: {img_path}")
             response = requests.get(img_path, timeout=30)
             response.raise_for_status()
 
@@ -104,7 +103,7 @@ def _download_and_convert_image(img_path: str, output_dir: Path) -> Optional[str
                     output_path = output_dir / filename
 
                     img.save(output_path, original_format)
-                    LOGGER.info(f"Image sauvegardée dans le format original {original_format}: {output_path}")
+                    LOGGER.info(f"Image saved in original format {original_format}: {output_path}")
                 else:
                     filename = f"image_{hash(img_path) % 100000}.png"
                     output_path = output_dir / filename
@@ -113,7 +112,7 @@ def _download_and_convert_image(img_path: str, output_dir: Path) -> Optional[str
                         img = img.convert("RGB")
 
                     img.save(output_path, "PNG")
-                    LOGGER.info(f"Image convertie de {original_format} vers PNG: {output_path}")
+                    LOGGER.info(f"Image converted from {original_format} to PNG: {output_path}")
 
                 Path(temp_file.name).unlink()
 
@@ -230,7 +229,7 @@ def analyze_docx_template(docx_path: str | Path) -> TemplateAnalysis:
         if m:
             expr = m.group(1).strip()
             variables.add(expr)
-            # si on est dans un for, accumule ce tag pour analyse du segment
+            # if we're in a for loop, accumulate this tag for segment analysis
             for kind, info in reversed(stack):
                 if kind == "for":
                     segs[id(info)].append(tok)
@@ -306,7 +305,7 @@ def build_context_response_model(analysis: TemplateAnalysis, image_keys: List[st
         if parts:
             _ensure_nested_fields(root_fields, parts)
 
-    # 2) conditions -> bool requis
+    # 2) conditions -> bool required
     for cond in analysis.conditions:
         parts = [p for p in cond.split(".") if p]
         if not parts:
@@ -322,7 +321,6 @@ def build_context_response_model(analysis: TemplateAnalysis, image_keys: List[st
 
     for list_name, info in analysis.loops.items():
         if info.get("scalar") and not info.get("fields"):
-            # boucle scalaire: pros: list[str] requis
             root_fields[list_name] = (List[str], Field(...))
         else:
             item_fields = {attr: (str, Field(...)) for attr in sorted(info.get("fields") or [])}
@@ -356,8 +354,8 @@ def build_context_response_model(analysis: TemplateAnalysis, image_keys: List[st
 
 
 SYSTEM = (
-    "Tu renvoies UNIQUEMENT un JSON valide qui respecte strictement le schéma implicite du response_format. "
-    "Pas de texte, pas de Markdown."
+    "You return ONLY valid JSON that strictly adheres to the implicit schema of the response_format. "
+    "No text, no Markdown."
 )
 
 FILL_TEMPLATE_PROMPT = (
