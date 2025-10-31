@@ -76,7 +76,7 @@ def seed_docx_template_components(session: Session):
                 ui_component=UIComponent.TEXTAREA,
                 ui_component_properties=UIComponentProperties(
                     label="Template (Base64)",
-                    placeholder="Base64 encoded DOCX template content. Either this or template_input_path must be provided.",
+                    placeholder="Base64 encoded DOCX template content. If not provided, template will be get at run time.",
                 ).model_dump(exclude_unset=True, exclude_none=True),
             ),
             *build_function_calling_service_config_definitions(
