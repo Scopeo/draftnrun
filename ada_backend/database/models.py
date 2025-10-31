@@ -284,13 +284,18 @@ class ComponentVersion(Base):
     definitions = relationship(
         "ComponentParameterDefinition",
         back_populates="component_version",
+        cascade="all, delete-orphan",
     )
     port_definitions = relationship(
         "PortDefinition",
         back_populates="component_version",
         cascade="all, delete-orphan",
     )
-    child_definitions = relationship("ComponentParameterChildRelationship", back_populates="child_component")
+    child_definitions = relationship(
+        "ComponentParameterChildRelationship",
+        back_populates="child_component",
+        cascade="all, delete-orphan",
+    )
     parameter_groups = relationship(
         "ComponentParameterGroup",
         back_populates="component_version",

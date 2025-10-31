@@ -16,6 +16,7 @@ from ada_backend.routers.auth_router import router as auth_router
 from ada_backend.routers.source_router import router as source_router
 from ada_backend.routers.ingestion_task_router import router as ingestion_task_router
 from ada_backend.routers.components_router import router as components_router
+from ada_backend.routers.component_version_router import router as component_version_router
 from ada_backend.routers.graph_router import router as graph_router
 from ada_backend.routers.s3_files_router import router as s3_files_router
 from ada_backend.routers.quality_assurance_router import router as quality_assurance_router
@@ -135,6 +136,7 @@ app.include_router(source_router)
 app.include_router(ingestion_task_router)
 app.include_router(s3_files_router)
 app.include_router(components_router)
+app.include_router(component_version_router)
 app.include_router(categories_router)
 app.include_router(graph_router)
 app.include_router(quality_assurance_router)
