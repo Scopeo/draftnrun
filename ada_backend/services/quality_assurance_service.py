@@ -44,6 +44,7 @@ from ada_backend.services.agent_runner_service import run_agent
 from ada_backend.database.models import CallType
 from ada_backend.repositories.env_repository import get_env_relationship_by_graph_runner_id
 from ada_backend.services.metrics.utils import query_conversation_messages
+from ada_backend.services.errors import QAError
 
 LOGGER = logging.getLogger(__name__)
 
@@ -485,7 +486,7 @@ def save_conversation_to_groundtruth_service(
     messages = input_payload.get("messages", [])
 
     if message_index < 0 or message_index >= len(messages):
-        raise ValueError("At the moment you cannot save the message. Please try again in a few seconds.")
+        raise QAError("At the moment you cannot save the message to QA table. Please try again in a few seconds.")
 
     # Prepare payload based on mode
     if mode == ModeType.CONVERSATION:
