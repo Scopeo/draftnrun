@@ -237,7 +237,6 @@ def instantiate_component(
         f"with input params: {input_params}\n"
     )
     try:
-        # Use the 'api_call_tool' factory if this component was created with the API Tool Builder
         component_version_id = component_instance.component_version_id
         base_component = get_base_component_from_version(session, component_version_id)
         if base_component and base_component == "API Call":
