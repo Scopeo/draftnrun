@@ -78,7 +78,7 @@ class RAG(Agent):
     async def _run_without_io_trace(self, inputs: RAGInputs, ctx: dict) -> RAGOutputs:
         if not inputs.query_text:
             raise ValueError("No query_text provided for the RAG tool.")
-        filter_to_process = inputs.filters if inputs.filters is not None else {}
+        filter_to_process = inputs.filters
         if "rag_filter" in ctx and ctx["rag_filter"]:
             if not filter_to_process:
                 filter_to_process = ctx["rag_filter"]

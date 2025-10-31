@@ -225,11 +225,11 @@ def mock_retriever_with_tracking():
             None,
             {"must": [{"key": "priority", "match": {"value": "high"}}]},
         ),
-        # Case 5: input_filter at None, no rag_filter -> filter_used = {}
+        # Case 5: input_filter at None, no rag_filter -> filter_used = None
         (
             None,
             None,
-            {},
+            None,
         ),
     ],
 )
