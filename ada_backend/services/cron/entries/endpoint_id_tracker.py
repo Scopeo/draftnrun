@@ -17,7 +17,6 @@ import httpx
 
 from ada_backend.repositories.tracker_history_repository import (
     create_tracked_id,
-    delete_tracked_ids_history,
     get_tracked_ids_history,
 )
 from ada_backend.services.cron.core import BaseUserPayload, BaseExecutionPayload, CronEntrySpec
@@ -38,7 +37,11 @@ class EndpointIdTrackerUserPayload(BaseUserPayload):
     )
     filter_fields: Optional[dict[str, str]] = Field(
         default=None,
-        description="Dictionary mapping filter field paths to their target values (e.g., {'data[].status': 'processing', 'data[].priority': 'high'}). Only IDs matching all filter conditions will be tracked.",
+        description=(
+            "Dictionary mapping filter field paths to their target values (e.g., "
+            "{'data[].status': 'processing', 'data[].priority': 'high'}). "
+            "Only IDs matching all filter conditions will be tracked."
+        ),
     )
     headers: Optional[dict[str, str]] = Field(default=None, description="Optional HTTP headers for the request")
     timeout: int = Field(default=30, ge=1, le=300, description="Request timeout in seconds")
@@ -52,7 +55,10 @@ class EndpointIdTrackerUserPayload(BaseUserPayload):
     )
     workflow_input_template: Optional[str] = Field(
         default=None,
-        description="Template for the workflow input message. Use {id} for the detected ID and {item} for the full item (JSON). If None, defaults to just the ID string.",
+        description=(
+            "Template for the workflow input message. Use {id} for the detected ID "
+            "and {item} for the full item (JSON). If None, defaults to just the ID string."
+        ),
     )
 
     class Config:
@@ -273,7 +279,8 @@ def _extract_ids_and_filter_values_from_response(
     Args:
         data: The API response data
         id_field_path: Path to the ID field (e.g., 'data[].id')
-        filter_field_paths: List of paths to filter fields (e.g., ['data[].status', 'data[].priority'])
+        filter_field_paths: List of paths to filter fields
+           (e.g., ['data[].status', 'data[].priority'])
 
     Returns:
         Dictionary mapping ID to a dict containing all filter values.
@@ -372,7 +379,8 @@ async def execute(execution_payload: EndpointIdTrackerExecutionPayload, **kwargs
                 endpoint_ids.add(item_id)
 
         LOGGER.info(
-            f"Found {len(endpoint_ids)} IDs matching filter conditions out of {len(items_with_filter_values)} total IDs"
+            f"Found {len(endpoint_ids)} IDs matching filter "
+            f"conditions out of {len(items_with_filter_values)} total IDs"
         )
     else:
         endpoint_ids = _extract_ids_from_response(endpoint_data, execution_payload.id_field_path)
