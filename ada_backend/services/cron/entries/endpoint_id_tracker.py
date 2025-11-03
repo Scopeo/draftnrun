@@ -57,7 +57,7 @@ class EndpointIdTrackerUserPayload(BaseUserPayload):
         default=None,
         description=(
             "Template for the workflow input message. Use {id} for the detected ID "
-            "and {item} for the full item (JSON). If None, defaults to just the ID string."
+            "and {item} for the full item (JSON). If None, defaults to just the item JSON."
         ),
     )
 
