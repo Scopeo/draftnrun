@@ -98,6 +98,7 @@ def _validate_and_enrich_payload_for_entrypoint(
     payload: dict[str, Any],
     session: Session,
     organization_id: UUID,
+    cron_id: UUID,
     **kwargs,
 ) -> dict[str, Any]:
     """Validate user payload and produce persisted execution payload."""
@@ -112,11 +113,16 @@ def _validate_and_enrich_payload_for_entrypoint(
         user_input = spec.user_payload_model(**payload)
 
         # User Pydantic Model -> Registration Validator -> Execution Pydantic Model
+        # Pass cron_id if available in kwargs (when updating existing cron)
+        execution_kwargs = {
+            "db": session,
+            "organization_id": organization_id,
+            "cron_id": cron_id,
+            **kwargs,
+        }
         execution_model = spec.registration_validator(
             user_input=user_input,
-            db=session,
-            organization_id=organization_id,
-            **kwargs,
+            **execution_kwargs,
         )
 
         # Execution Pydantic Model -> Store as JSON (dict)
@@ -174,15 +180,17 @@ def create_cron_job(
     _validate_timezone(cron_data.tz)
     _validate_maximum_frequency(cron_data.cron_expr)
 
+    # Generate cron_id early so it can be passed to registration validator
+    cron_id = uuid.uuid4()
+
     execution_payload = _validate_and_enrich_payload_for_entrypoint(
         entrypoint=cron_data.entrypoint,
         payload=cron_data.payload,
         session=session,
         organization_id=organization_id,
+        cron_id=cron_id,
         **kwargs,
     )
-
-    cron_id = uuid.uuid4()
 
     cron_job = insert_cron_job(
         session=session,
@@ -237,6 +245,7 @@ def update_cron_job_service(
             payload=cron_data.payload,
             session=session,
             organization_id=organization_id,
+            cron_id=cron_id,
             **kwargs,
         )
 

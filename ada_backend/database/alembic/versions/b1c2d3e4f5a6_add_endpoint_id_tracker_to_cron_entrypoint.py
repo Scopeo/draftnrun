@@ -20,7 +20,6 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    # Add 'endpoint_id_tracker' to the existing cron_entrypoint enum
     op.execute(
         """
         ALTER TYPE scheduler.cron_entrypoint ADD VALUE IF NOT EXISTS 'endpoint_id_tracker';
@@ -31,17 +30,4 @@ def upgrade() -> None:
 def downgrade() -> None:
     # Note: PostgreSQL does not support removing enum values directly
     # This would require recreating the enum type, which is complex
-    # For now, we'll leave a comment about this limitation
-    # In practice, you would need to:
-    # 1. Create a new enum without the value
-    # 2. Update all columns using the old enum
-    # 3. Drop the old enum
-    # 4. Rename the new enum
-    # This is a destructive operation and should be done carefully
-    op.execute(
-        """
-        -- Cannot remove enum value directly in PostgreSQL
-        -- Manual intervention required if downgrade is necessary
-        -- Comment kept for reference
-        """
-    )
+    pass
