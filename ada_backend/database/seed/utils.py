@@ -155,9 +155,7 @@ OCR_MODELS = [
     for model in get_models_by_capability(ModelCapability.OCR)
 ]
 
-COMPLETION_MODELS.extend(
-    add_custom_llm_model(settings.custom_models, "completion_models", "constrained_completion_with_pydantic")
-)
+COMPLETION_MODELS.extend(add_custom_llm_model(settings.custom_models, "completion_models", "constrained_output"))
 FUNCTION_CALLING_MODELS.extend(add_custom_llm_model(settings.custom_models, "completion_models", "function_calling"))
 
 EMBEDDING_MODELS.extend(add_custom_llm_model(settings.custom_models, "embedding_models"))

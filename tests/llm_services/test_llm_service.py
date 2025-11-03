@@ -1,4 +1,4 @@
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch, AsyncMock
 import json
 from pydantic import BaseModel
 import pytest
@@ -135,3 +135,111 @@ async def test_embedding_service_async():
     assert response is not None
     assert isinstance(response, list)
     assert len(response) > 0
+
+
+@pytest.mark.asyncio
+async def test_custom_provider_constrained_output():
+    """Test that custom providers work with constrained output methods and handle errors."""
+    with (
+        patch("engine.llm_services.llm_service.settings") as mock_settings,
+        patch("engine.llm_services.llm_service.check_usage", return_value=None),
+    ):
+        mock_settings.custom_models = {
+            "dummy-provider": {"api_key": "dummy-api-key", "base_url": "https://dummy-api.com/v1"}
+        }
+
+        completion_service = CompletionService(
+            trace_manager=MagicMock(), provider="dummy-provider", model_name="dummy-model"
+        )
+
+        assert completion_service._provider == "dummy-provider"
+        assert completion_service._api_key == "dummy-api-key"
+        assert completion_service._base_url == "https://dummy-api.com/v1"
+
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock()]
+        mock_response.choices[0].message.content = '{"response": "Test response", "is_successful": true}'
+        mock_response.usage = MagicMock()
+        mock_response.usage.completion_tokens = 10
+        mock_response.usage.prompt_tokens = 5
+        mock_response.usage.total_tokens = 15
+
+        with patch("openai.AsyncOpenAI") as mock_openai:
+            mock_client = AsyncMock()
+            mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
+            mock_openai.return_value = mock_client
+
+            response = await completion_service.constrained_complete_with_pydantic_async(
+                "Test message", ResponseFormat
+            )
+            assert isinstance(response, ResponseFormat)
+            assert response.response == "Test response"
+            assert response.is_successful is True
+
+            response_json = {
+                "name": "test_response",
+                "type": "json_schema",
+                "schema": {
+                    "type": "object",
+                    "properties": {"text": {"type": "string"}},
+                    "required": ["text"],
+                    "additionalProperties": False,
+                },
+            }
+
+            response = await completion_service.constrained_complete_with_json_schema_async(
+                "Test message", json.dumps(response_json)
+            )
+            assert isinstance(response, str)
+            assert len(response) > 0
+
+        mock_error_response = MagicMock()
+        mock_error_response.choices = [MagicMock()]
+        mock_error_response.choices[0].message.content = '{"invalid": json}'  # Invalid JSON
+        mock_error_response.usage = MagicMock()
+        mock_error_response.usage.completion_tokens = 5
+        mock_error_response.usage.prompt_tokens = 3
+        mock_error_response.usage.total_tokens = 8
+
+        with patch("openai.AsyncOpenAI") as mock_openai:
+            mock_client = AsyncMock()
+            mock_client.chat.completions.create = AsyncMock(return_value=mock_error_response)
+            mock_openai.return_value = mock_client
+
+            with pytest.raises(ValueError, match="Error processing constrained completion.*dummy-model"):
+                await completion_service.constrained_complete_with_pydantic_async("Test message", ResponseFormat)
+
+            response_invalid = await completion_service.constrained_complete_with_json_schema_async(
+                "Test message", json.dumps(response_json)
+            )
+            assert isinstance(response_invalid, str)
+            assert len(response_invalid) > 0
+
+        # Test error case - API exception
+        with patch("openai.AsyncOpenAI") as mock_openai:
+            mock_client = AsyncMock()
+            mock_client.chat.completions.create = AsyncMock(side_effect=Exception("API Error"))
+            mock_openai.return_value = mock_client
+
+            # Test that API errors are properly handled and re-raised with custom provider context
+            with pytest.raises(ValueError, match="Error processing constrained completion.*dummy-model.*API Error"):
+                await completion_service.constrained_complete_with_pydantic_async("Test message", ResponseFormat)
+
+            with pytest.raises(ValueError, match="Error processing constrained completion.*dummy-model.*API Error"):
+                await completion_service.constrained_complete_with_json_schema_async(
+                    "Test message", json.dumps(response_json)
+                )
+
+        # Simple generic error smoke test: ensure try/except surfaces ValueError for both methods
+        with patch("openai.AsyncOpenAI") as mock_openai:
+            mock_client = AsyncMock()
+            mock_client.chat.completions.create = AsyncMock(side_effect=Exception("boom"))
+            mock_openai.return_value = mock_client
+
+            with pytest.raises(ValueError):
+                await completion_service.constrained_complete_with_pydantic_async("Test message", ResponseFormat)
+
+            with pytest.raises(ValueError):
+                await completion_service.constrained_complete_with_json_schema_async(
+                    "Test message", json.dumps(response_json)
+                )
