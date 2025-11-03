@@ -32,13 +32,17 @@ class EndpointIdTrackerUserPayload(BaseUserPayload):
         default="id",
         description="Path to the ID field in the response (e.g., 'id', 'data[].id', 'items[].id')",
     )
-    step_field_path: Optional[str] = Field(
+    filter_field_path: Optional[str] = Field(
         default=None,
-        description="Path to the step field in the response (e.g., 'step', 'data[].step', 'items[].status'). If provided, will filter to track items that just arrived in target_step.",
+        description="Path to a single filter field in the response (e.g., 'status', 'data[].status'). Deprecated: use filter_fields for multiple fields.",
     )
-    target_step: Optional[str] = Field(
+    target_filter_value: Optional[str] = Field(
         default=None,
-        description="Target step value to track. Only items that just arrived in this step will be returned. Required if step_field_path is provided.",
+        description="Target filter value for the single filter field. Deprecated: use filter_fields for multiple fields.",
+    )
+    filter_fields: Optional[dict[str, str]] = Field(
+        default=None,
+        description="Dictionary mapping filter field paths to their target values (e.g., {'data[].status': 'processing', 'data[].priority': 'high'}). All conditions must be met for an item to be tracked.",
     )
     headers: Optional[dict[str, str]] = Field(default=None, description="Optional HTTP headers for the request")
     timeout: int = Field(default=30, ge=1, le=300, description="Request timeout in seconds")
@@ -49,8 +53,7 @@ class EndpointIdTrackerUserPayload(BaseUserPayload):
                 "endpoint_url": "https://api.example.com/items",
                 "source_id": "123e4567-e89b-12d3-a456-426614174000",
                 "id_field_path": "data[].id",
-                "step_field_path": "data[].step",
-                "target_step": "processing",
+                "filter_fields": {"data[].status": "processing", "data[].priority": "high"},
                 "headers": {"Authorization": "Bearer token"},
                 "timeout": 30,
             }
@@ -63,8 +66,9 @@ class EndpointIdTrackerExecutionPayload(BaseExecutionPayload):
     endpoint_url: str
     source_id: UUID
     id_field_path: str
-    step_field_path: Optional[str]
-    target_step: Optional[str]
+    filter_field_path: Optional[str]
+    target_filter_value: Optional[str]
+    filter_fields: Optional[dict[str, str]]
     headers: Optional[dict[str, str]]
     timeout: int
     organization_id: UUID
@@ -103,19 +107,27 @@ def validate_registration(
             "This source must have ingestion database configuration."
         )
 
-    # Validate step filter configuration
-    if user_input.step_field_path and not user_input.target_step:
-        raise ValueError("target_step is required when step_field_path is provided")
-
-    if user_input.target_step and not user_input.step_field_path:
-        raise ValueError("step_field_path is required when target_step is provided")
+    # Normalize filter configuration: convert single field to filter_fields dict if needed
+    filter_fields = user_input.filter_fields
+    if user_input.filter_field_path and user_input.target_filter_value:
+        # Support legacy single field format
+        if filter_fields:
+            raise ValueError(
+                "Cannot use both filter_field_path/target_filter_value and filter_fields. Use filter_fields only."
+            )
+        filter_fields = {user_input.filter_field_path: user_input.target_filter_value}
+    elif user_input.filter_field_path or user_input.target_filter_value:
+        raise ValueError(
+            "Both filter_field_path and target_filter_value must be provided together (or use filter_fields for multiple fields)"
+        )
 
     return EndpointIdTrackerExecutionPayload(
         endpoint_url=str(user_input.endpoint_url),
         source_id=user_input.source_id,
         id_field_path=user_input.id_field_path,
-        step_field_path=user_input.step_field_path,
-        target_step=user_input.target_step,
+        filter_field_path=user_input.filter_field_path,
+        target_filter_value=user_input.target_filter_value,
+        filter_fields=filter_fields,
         headers=user_input.headers,
         timeout=user_input.timeout,
         organization_id=organization_id,
@@ -276,16 +288,22 @@ def _extract_ids_from_response(data: Any, field_path: str) -> set[str]:
     return ids
 
 
-def _extract_ids_and_steps_from_response(
-    data: Any, id_field_path: str, step_field_path: str
+def _extract_ids_and_filter_values_from_response(
+    data: Any, id_field_path: str, filter_field_paths: list[str]
 ) -> dict[str, dict[str, Any]]:
     """
-    Extract IDs and their corresponding step values from API response.
+    Extract IDs and their corresponding filter field values from API response.
 
-    Returns a dictionary mapping ID to a dict containing the step value and full item data.
+    Args:
+        data: The API response data
+        id_field_path: Path to the ID field (e.g., 'data[].id')
+        filter_field_paths: List of paths to filter fields (e.g., ['data[].status', 'data[].priority'])
+
+    Returns:
+        Dictionary mapping ID to a dict containing all filter values and full item data.
     """
     if "[]" not in id_field_path:
-        raise ValueError("id_field_path must use array notation (e.g., 'data[].id') when step_field_path is provided")
+        raise ValueError("id_field_path must use array notation (e.g., 'data[].id') when filter fields are provided")
 
     # Extract the array path from id_field_path
     id_parts = id_field_path.split("[]")
@@ -309,13 +327,16 @@ def _extract_ids_and_steps_from_response(
     if not isinstance(current, list):
         raise ValueError(f"Path '{array_path}' does not point to an array")
 
-    # Extract step field path components
-    step_parts = step_field_path.split("[]")
-    if len(step_parts) != 2:
-        # If step path doesn't have array notation, assume it's relative to each item
-        step_field = step_field_path.lstrip(".")
-    else:
-        step_field = step_parts[1].lstrip(".")
+    # Extract filter field names from paths
+    filter_field_extractors = []
+    for filter_field_path in filter_field_paths:
+        filter_parts = filter_field_path.split("[]")
+        if len(filter_parts) != 2:
+            # If filter path doesn't have array notation, assume it's relative to each item
+            filter_field = filter_field_path.lstrip(".")
+        else:
+            filter_field = filter_parts[1].lstrip(".")
+        filter_field_extractors.append((filter_field_path, filter_field))
 
     result = {}
     for item in current:
@@ -324,15 +345,18 @@ def _extract_ids_and_steps_from_response(
             if not item_id:
                 continue
 
-            # Extract step value
-            step_value = None
-            if step_field in item:
-                step_value = str(item[step_field])
-            elif hasattr(item, step_field):
-                step_value = str(getattr(item, step_field))
+            # Extract all filter values
+            filter_values = {}
+            for filter_field_path, filter_field in filter_field_extractors:
+                filter_value = None
+                if filter_field in item:
+                    filter_value = str(item[filter_field])
+                elif hasattr(item, filter_field):
+                    filter_value = str(getattr(item, filter_field))
+                filter_values[filter_field_path] = filter_value
 
             result[item_id] = {
-                "step": step_value,
+                "filter_values": filter_values,
                 "data": item,
             }
 
@@ -343,18 +367,23 @@ async def execute(execution_payload: EndpointIdTrackerExecutionPayload, **kwargs
     """
     Execute the endpoint ID tracker job:
     1. Query the GET endpoint to fetch data with IDs
-    2. Extract IDs and optionally steps from the response
-    3. Get previous run state (if step filtering is enabled)
+    2. Extract IDs and optionally filter field values from the response
+    3. Get previous run state (if filter field filtering is enabled)
     4. Get existing IDs from the ingestion database
-    5. Compare and identify new IDs or IDs that just arrived in target_step
+    5. Compare and identify new IDs or IDs that just arrived at target_filter_value
     """
     db = kwargs.get("db")
     if not db:
         raise ValueError("db missing from context")
 
     cron_id = kwargs.get("cron_id")
-    if execution_payload.step_field_path and execution_payload.target_step and not cron_id:
-        raise ValueError("cron_id is required when step filtering is enabled")
+    # Normalize filter_fields from legacy single field format if needed
+    filter_fields = execution_payload.filter_fields
+    if execution_payload.filter_field_path and execution_payload.target_filter_value and not filter_fields:
+        filter_fields = {execution_payload.filter_field_path: execution_payload.target_filter_value}
+
+    if filter_fields and not cron_id:
+        raise ValueError("cron_id is required when filter field filtering is enabled")
 
     LOGGER.info(f"Starting endpoint ID tracker for source {execution_payload.source_id}")
 
@@ -373,18 +402,19 @@ async def execute(execution_payload: EndpointIdTrackerExecutionPayload, **kwargs
         response.raise_for_status()
         endpoint_data = response.json()
 
-    # Step 2: Extract IDs and steps from the response
-    if execution_payload.step_field_path and execution_payload.target_step:
-        # Extract IDs with their step values
-        items_with_steps = _extract_ids_and_steps_from_response(
-            endpoint_data, execution_payload.id_field_path, execution_payload.step_field_path
+    # Step 2: Extract IDs and filter values from the response
+    if filter_fields:
+        # Extract IDs with their filter field values
+        filter_field_paths = list(filter_fields.keys())
+        items_with_filter_values = _extract_ids_and_filter_values_from_response(
+            endpoint_data, execution_payload.id_field_path, filter_field_paths
         )
-        endpoint_ids = set(items_with_steps.keys())
-        LOGGER.info(f"Found {len(endpoint_ids)} IDs from endpoint with step information")
+        endpoint_ids = set(items_with_filter_values.keys())
+        LOGGER.info(f"Found {len(endpoint_ids)} IDs from endpoint with filter field information")
     else:
         # Simple ID extraction
         endpoint_ids = _extract_ids_from_response(endpoint_data, execution_payload.id_field_path)
-        items_with_steps = {}
+        items_with_filter_values = {}
         LOGGER.info(f"Found {len(endpoint_ids)} IDs from endpoint")
 
     # Step 3: Get existing IDs from ingestion database
@@ -437,41 +467,53 @@ async def execute(execution_payload: EndpointIdTrackerExecutionPayload, **kwargs
 
     LOGGER.info(f"Found {len(stored_ids)} existing IDs in ingestion database")
 
-    # Step 4: Handle step filtering if enabled
-    if execution_payload.step_field_path and execution_payload.target_step:
-        # Get previous run to compare step changes
+    # Step 4: Handle filter field filtering if enabled
+    if filter_fields:
+        # Get previous run to compare filter value changes
         previous_runs = get_cron_runs_by_cron_id(db, cron_id, limit=1)
-        previous_steps = {}
+        previous_filter_values = {}
 
         if previous_runs and len(previous_runs) > 0:
             previous_run = previous_runs[0]
             if previous_run.status == CronStatus.SUCCESS and previous_run.result:
                 # Extract previous state from result
                 prev_result = previous_run.result
-                if isinstance(prev_result, dict) and "items_with_steps" in prev_result:
-                    previous_steps = prev_result["items_with_steps"]
-                    LOGGER.info(f"Found previous state with {len(previous_steps)} items")
+                if isinstance(prev_result, dict) and "items_with_filter_values" in prev_result:
+                    previous_filter_values = prev_result["items_with_filter_values"]
+                    LOGGER.info(f"Found previous state with {len(previous_filter_values)} items")
 
-        # Identify items that just arrived in target_step
-        # (items that are now in target_step but weren't in target_step before)
+        # Identify items that just arrived at all target filter values
+        # (items that now match all filter conditions but didn't match all conditions before)
         items_just_arrived = []
-        for item_id, item_data in items_with_steps.items():
-            current_step = item_data.get("step")
-            if current_step == execution_payload.target_step:
-                previous_step = previous_steps.get(item_id, {}).get("step")
-                if previous_step != execution_payload.target_step:
-                    # This item just arrived in target_step
+        for item_id, item_data in items_with_filter_values.items():
+            current_filter_values = item_data.get("filter_values", {})
+
+            # Check if current item matches all filter conditions
+            matches_all_current = all(
+                current_filter_values.get(field_path) == target_value
+                for field_path, target_value in filter_fields.items()
+            )
+
+            if matches_all_current:
+                # Check previous state
+                previous_filter_values_dict = previous_filter_values.get(item_id, {}).get("filter_values", {})
+                matches_all_previous = all(
+                    previous_filter_values_dict.get(field_path) == target_value
+                    for field_path, target_value in filter_fields.items()
+                )
+
+                if not matches_all_previous:
+                    # This item just arrived at all target filter values
                     items_just_arrived.append(
                         {
                             "id": item_id,
-                            "step": current_step,
-                            "previous_step": previous_step,
+                            "filter_values": current_filter_values,
+                            "previous_filter_values": previous_filter_values_dict,
                         }
                     )
 
-        LOGGER.info(
-            f"Found {len(items_just_arrived)} items that just arrived in step '{execution_payload.target_step}'"
-        )
+        filter_summary = ", ".join([f"{k}={v}" for k, v in filter_fields.items()])
+        LOGGER.info(f"Found {len(items_just_arrived)} items that just arrived at filter conditions: {filter_summary}")
 
         # Still compare with stored IDs for new items
         new_ids = endpoint_ids - stored_ids
@@ -480,7 +522,7 @@ async def execute(execution_payload: EndpointIdTrackerExecutionPayload, **kwargs
         return {
             "endpoint_url": execution_payload.endpoint_url,
             "source_id": str(execution_payload.source_id),
-            "target_step": execution_payload.target_step,
+            "filter_fields": filter_fields,
             "total_endpoint_ids": len(endpoint_ids),
             "total_stored_ids": len(stored_ids),
             "new_ids_count": len(new_ids),
@@ -489,7 +531,10 @@ async def execute(execution_payload: EndpointIdTrackerExecutionPayload, **kwargs
             "new_ids": sorted(list(new_ids)) if new_ids else [],
             "removed_ids": sorted(list(removed_ids)) if removed_ids else [],
             "items_just_arrived": items_just_arrived,
-            "items_with_steps": {item_id: {"step": data["step"]} for item_id, data in items_with_steps.items()},
+            "items_with_filter_values": {
+                item_id: {"filter_values": data.get("filter_values", {})}
+                for item_id, data in items_with_filter_values.items()
+            },
         }
     else:
         # Step 4: Compare and identify new IDs (no step filtering)
