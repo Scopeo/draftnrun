@@ -606,6 +606,26 @@ class CompletionService(LLMService):
                 tool_choice=tool_choice,
             )
 
+    async def _default_function_call_without_structured_output(
+        self,
+        messages: list[dict] | str,
+        stream: bool,
+        tools: list[dict],
+        tool_choice: str,
+    ) -> tuple[ChatCompletion, int, int, int]:
+        import openai
+
+        client = openai.AsyncOpenAI(api_key=self._api_key, base_url=self._base_url)
+        response = await client.chat.completions.create(
+            model=self._model_name,
+            messages=messages,
+            tools=tools,
+            temperature=self._invocation_parameters.get("temperature"),
+            stream=stream,
+            tool_choice=tool_choice,
+        )
+        return response, response.usage.completion_tokens, response.usage.prompt_tokens, response.usage.total_tokens
+
     @with_async_usage_check
     async def function_call_without_structured_output_async(
         self,
@@ -624,56 +644,50 @@ class CompletionService(LLMService):
 
         match self._provider:
             case "openai":
-                import openai
-
-                client = openai.AsyncOpenAI(api_key=self._api_key, base_url=self._base_url)
-                response = await client.chat.completions.create(
-                    model=self._model_name,
-                    messages=messages,
-                    tools=openai_tools,
-                    temperature=self._invocation_parameters.get("temperature"),
-                    stream=stream,
-                    tool_choice=tool_choice,
+                (response, usage_completion_tokens, usage_prompt_tokens, usage_total_tokens) = (
+                    await self._default_function_call_without_structured_output(
+                        messages=messages,
+                        stream=stream,
+                        tools=openai_tools,
+                        tool_choice=tool_choice,
+                    )
                 )
                 span.set_attributes(
                     {
-                        SpanAttributes.LLM_TOKEN_COUNT_COMPLETION: response.usage.completion_tokens,
-                        SpanAttributes.LLM_TOKEN_COUNT_PROMPT: response.usage.prompt_tokens,
-                        SpanAttributes.LLM_TOKEN_COUNT_TOTAL: response.usage.total_tokens,
+                        SpanAttributes.LLM_TOKEN_COUNT_COMPLETION: usage_completion_tokens,
+                        SpanAttributes.LLM_TOKEN_COUNT_PROMPT: usage_prompt_tokens,
+                        SpanAttributes.LLM_TOKEN_COUNT_TOTAL: usage_total_tokens,
                     }
                 )
                 return response
 
             case "google":
-                import openai
-
-                client = openai.AsyncOpenAI(api_key=self._api_key, base_url=self._base_url)
                 if not openai_tools:
-                    non_op_tool = ToolDescription(
+                    empty_function_tool = ToolDescription(
                         **{
-                            "name": "no_op_tool",
+                            "name": "empty_function_tool",
                             "description": "This tool does nothing and is to never by used/called.",
                             "tool_properties": {},
                             "required_tool_properties": [],
                         }
                     )
-                    openai_tools = [non_op_tool.openai_format]
-                response = await client.chat.completions.create(
-                    model=self._model_name,
-                    messages=messages,
-                    tools=openai_tools,
-                    temperature=self._invocation_parameters.get("temperature"),
-                    stream=stream,
-                    tool_choice=tool_choice,
-                )
-                span.set_attributes(
-                    {
-                        SpanAttributes.LLM_TOKEN_COUNT_COMPLETION: response.usage.completion_tokens,
-                        SpanAttributes.LLM_TOKEN_COUNT_PROMPT: response.usage.prompt_tokens,
-                        SpanAttributes.LLM_TOKEN_COUNT_TOTAL: response.usage.total_tokens,
-                    }
-                )
-                return response
+                    openai_tools = [empty_function_tool.openai_format]
+                    (response, usage_completion_tokens, usage_prompt_tokens, usage_total_tokens) = (
+                        await self._default_function_call_without_structured_output(
+                            messages=messages,
+                            stream=stream,
+                            tools=openai_tools,
+                            tool_choice=tool_choice,
+                        )
+                    )
+                    span.set_attributes(
+                        {
+                            SpanAttributes.LLM_TOKEN_COUNT_COMPLETION: usage_completion_tokens,
+                            SpanAttributes.LLM_TOKEN_COUNT_PROMPT: usage_prompt_tokens,
+                            SpanAttributes.LLM_TOKEN_COUNT_TOTAL: usage_total_tokens,
+                        }
+                    )
+                    return response
 
             case "mistral":
                 import openai
