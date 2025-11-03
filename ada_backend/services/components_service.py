@@ -13,10 +13,7 @@ from ada_backend.repositories.component_repository import (
     get_port_definitions_for_component_version_ids,
 )
 from ada_backend.schemas.components_schema import ComponentsResponse, PortDefinitionSchema
-from ada_backend.services.errors import (
-    ComponentNotFound,
-    ComponentHasInstancesDeletionError,
-)
+from ada_backend.services.errors import EntityInUseDeletionError
 
 LOGGER = logging.getLogger(__name__)
 
@@ -55,18 +52,5 @@ def delete_component_service(session: Session, component_id) -> None:
     if component:
         instance_count = count_component_instances(session, component_id)
         if instance_count > 0:
-            raise ComponentHasInstancesDeletionError(component_id, instance_count)
+            raise EntityInUseDeletionError(component_id, instance_count, entity_type="component")
         delete_component_by_id(session, component_id)
-
-
-def update_component_release_stage_service(
-    session: Session,
-    component_id,
-    release_stage: ReleaseStage,
-) -> None:
-    component = get_component_by_id(session, component_id)
-    if component is None:
-        raise ComponentNotFound(component_id)
-    component.release_stage = release_stage
-    session.add(component)
-    session.commit()

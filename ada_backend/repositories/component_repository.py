@@ -144,6 +144,24 @@ def get_component_version_by_id(
     )
 
 
+def count_component_instances_by_version_id(
+    session: Session,
+    component_version_id: UUID,
+) -> int:
+    return (
+        session.query(db.ComponentInstance)
+        .filter(db.ComponentInstance.component_version_id == component_version_id)
+        .count()
+    )
+
+
+def count_component_versions_by_component_id(
+    session: Session,
+    component_id: UUID,
+) -> int:
+    return session.query(db.ComponentVersion).filter(db.ComponentVersion.component_id == component_id).count()
+
+
 def get_component_parameter_definition_by_component_version(
     session: Session,
     component_version_id: UUID,
@@ -177,6 +195,18 @@ def delete_component_global_parameters(
         ComponentGlobalParameter.component_version_id == component_version_id
     ).delete()
     session.commit()
+
+
+def delete_component_version_by_id(
+    session: Session,
+    component_version_id: UUID,
+) -> bool:
+    component_version = get_component_version_by_id(session, component_version_id)
+    if not component_version:
+        return False
+    session.delete(component_version)
+    session.commit()
+    return True
 
 
 def delete_component_by_id(
