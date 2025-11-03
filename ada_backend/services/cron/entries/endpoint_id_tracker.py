@@ -47,7 +47,7 @@ class EndpointIdTrackerUserPayload(BaseUserPayload):
     timeout: int = Field(default=30, ge=1, le=300, description="Request timeout in seconds")
     project_id: Optional[UUID] = Field(
         default=None,
-        description="Project ID to trigger workflows for each new ID detected. If None, no workflows will be triggered.",
+        description=("Project ID to trigger workflows for each new ID detected."),
     )
     env: EnvType = Field(
         default=EnvType.PRODUCTION,
