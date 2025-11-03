@@ -2,7 +2,7 @@ import pytest
 
 from engine.field_expressions.parser import parse_expression, unparse_expression
 from engine.field_expressions.ast import LiteralNode, RefNode, ConcatNode
-from engine.field_expressions.serde import to_json, from_json
+from engine.field_expressions.serializer import to_json, from_json
 from engine.field_expressions.errors import FieldExpressionParseError
 
 
@@ -36,9 +36,8 @@ def test_parse_single_ref_only():
     # serde roundtrip
     j = to_json(ast)
     ast2 = from_json(j)
-    # unparse should format to a single ref marker
-    assert unparse_expression(ast2) in ("@{comp1.output}", "@{{comp1.output}}".replace("{{", "{").replace("}}", "}"))
-    assert unparse_expression(ast2) in ("@{comp1.output}", "@{comp1.output}")
+    # unparse should format to match parser input (double braces)
+    assert unparse_expression(ast2) == "@{{comp1.output}}"
 
 
 def test_parse_mixed_literals_and_refs():
@@ -58,10 +57,73 @@ def test_parse_mixed_literals_and_refs():
     j = to_json(ast)
     ast2 = from_json(j)
     assert isinstance(ast2, ConcatNode)
-    assert unparse_expression(ast2) == "task: @{comp1.output}\nstyle: @{comp2.out}"
-    assert unparse_expression(ast2) == "task: @{comp1.output}\nstyle: @{comp2.out}"
+    assert unparse_expression(ast2) == "task: @{{comp1.output}}\nstyle: @{{comp2.out}}"
 
 
 def test_malformed_unbalanced_delimiters():
     with pytest.raises(FieldExpressionParseError):
         parse_expression("hello @{{comp.out}")
+
+
+def test_parse_ref_with_key():
+    ast = parse_expression("@{{comp1.output::messages}}")
+    assert isinstance(ast, ConcatNode) or isinstance(ast, RefNode)
+    # Parser returns ConcatNode even for single refs
+    if isinstance(ast, ConcatNode):
+        assert len(ast.parts) == 1
+        ref_node = ast.parts[0]
+        assert isinstance(ref_node, RefNode)
+        assert ref_node.instance == "comp1"
+        assert ref_node.port == "output"
+        assert ref_node.key == "messages"
+    else:
+        assert ast.instance == "comp1"
+        assert ast.port == "output"
+        assert ast.key == "messages"
+
+    # serde roundtrip
+    j = to_json(ast)
+    if j["type"] == "ref":
+        assert j == {"type": "ref", "instance": "comp1", "port": "output", "key": "messages"}
+    else:
+        assert j == {
+            "type": "concat",
+            "parts": [
+                {"type": "ref", "instance": "comp1", "port": "output", "key": "messages"},
+            ],
+        }
+    ast2 = from_json(j)
+
+    # unparse roundtrip
+    unparsed = unparse_expression(ast2)
+    assert unparsed == "@{{comp1.output::messages}}"
+
+
+def test_parse_ref_without_key():
+    ast = parse_expression("@{{comp1.output}}")
+    assert isinstance(ast, ConcatNode) or isinstance(ast, RefNode)
+    # Parser returns ConcatNode even for single refs
+    if isinstance(ast, ConcatNode):
+        assert len(ast.parts) == 1
+        ref_node = ast.parts[0]
+        assert isinstance(ref_node, RefNode)
+        assert ref_node.instance == "comp1"
+        assert ref_node.port == "output"
+        assert ref_node.key is None
+    else:
+        assert ast.instance == "comp1"
+        assert ast.port == "output"
+        assert ast.key is None
+
+
+def test_parse_concat_with_key():
+    text = "prefix: @{{comp1.output::key}} suffix"
+    ast = parse_expression(text)
+    assert isinstance(ast, ConcatNode)
+    parts_json = to_json(ast)["parts"]
+    ref_part = [p for p in parts_json if p["type"] == "ref"][0]
+    assert ref_part == {"type": "ref", "instance": "comp1", "port": "output", "key": "key"}
+
+    # unparse preserves key
+    unparsed = unparse_expression(ast)
+    assert unparsed == "prefix: @{{comp1.output::key}} suffix"

@@ -1,9 +1,10 @@
 import asyncio
 import networkx as nx
+import pytest
 from pydantic import BaseModel, Field
 
 from engine.trace.trace_manager import TraceManager
-from engine.field_expressions.serde import from_json as expr_from_json
+from engine.field_expressions.serializer import from_json as expr_from_json
 from engine.graph_runner.graph_runner import GraphRunner
 from engine.agent.types import ComponentAttributes, ChatMessage, ToolDescription
 from engine.agent.agent import Agent
@@ -173,6 +174,42 @@ class DualConcat(Agent):
 
     async def _run_without_io_trace(self, inputs: Inputs, ctx: dict) -> Outputs:  # type: ignore
         return DualConcat.Outputs(output=f"a[{inputs.a}]|b[{inputs.b}]")
+
+
+class DictOutputSource(Agent):
+    """Source that outputs a dict with multiple keys."""
+
+    migrated = True
+
+    class Inputs(BaseModel):
+        input: str | None = None
+
+    class Outputs(BaseModel):
+        output: dict
+
+    @classmethod
+    def get_inputs_schema(cls):
+        return DictOutputSource.Inputs
+
+    @classmethod
+    def get_outputs_schema(cls):
+        return DictOutputSource.Outputs
+
+    def __init__(self, trace_manager: TraceManager, name: str = "dict_source"):
+        super().__init__(
+            trace_manager=trace_manager,
+            tool_description=ToolDescription(
+                name=f"DictSource_{name}",
+                description="Dict output source",
+                tool_properties={},
+                required_tool_properties=[],
+            ),
+            component_attributes=ComponentAttributes(component_instance_name=name),
+        )
+        self._value = {"messages": "hello", "data": 42, "status": "ok"}
+
+    async def _run_without_io_trace(self, inputs: Inputs, ctx: dict) -> Outputs:
+        return DictOutputSource.Outputs(output=self._value)
 
 
 class MessagesSink(Agent):
@@ -765,3 +802,167 @@ class TestGraphRunnerComplexFormulas:
         )
         result = asyncio.run(gr.run({"input": "seed"}))
         assert "upper[echo[AA]]" in result.messages[0].content and "lower[echo[AA]]" in result.messages[0].content
+
+    def test_pure_ref_with_key_extraction(self):
+        tm = TraceManager(project_name="test")
+        set_tracing_span(project_id="test_proj", organization_id="org", organization_llm_providers=["mock"])
+
+        dict_source = DictOutputSource(tm, name="A")
+        str_echo = StrEcho(tm, name="B")
+        runnables = {"A": dict_source, "B": str_echo}
+
+        g = nx.DiGraph()
+        g.add_nodes_from(["A", "B"])
+        g.add_edge("A", "B")
+
+        mappings = [
+            {
+                "source_instance_id": "A",
+                "source_port_name": "output",
+                "target_instance_id": "B",
+                "target_port_name": "input",
+                "dispatch_strategy": "direct",
+            }
+        ]
+        expressions = [
+            {
+                "target_instance_id": "B",
+                "field_name": "input",
+                "expression_ast": expr_from_json(
+                    {"type": "ref", "instance": "A", "port": "output", "key": "messages"}
+                ),
+            }
+        ]
+
+        gr = GraphRunner(
+            graph=g,
+            runnables=runnables,
+            start_nodes=["A"],
+            trace_manager=tm,
+            port_mappings=mappings,
+            expressions=expressions,
+        )
+        result = asyncio.run(gr.run({"input": "seed"}))
+        assert result.messages[0].content == "echo[hello]"
+
+    def test_non_pure_ref_with_key_extraction(self):
+        tm = TraceManager(project_name="test")
+        set_tracing_span(project_id="test_proj", organization_id="org", organization_llm_providers=["mock"])
+
+        dict_source = DictOutputSource(tm, name="A")
+        str_echo = StrEcho(tm, name="B")
+        runnables = {"A": dict_source, "B": str_echo}
+
+        g = nx.DiGraph()
+        g.add_nodes_from(["A", "B"])
+        g.add_edge("A", "B")
+
+        expressions = [
+            {
+                "target_instance_id": "B",
+                "field_name": "input",
+                "expression_ast": expr_from_json(
+                    {
+                        "type": "concat",
+                        "parts": [
+                            {"type": "literal", "value": "prefix: "},
+                            {"type": "ref", "instance": "A", "port": "output", "key": "messages"},
+                        ],
+                    }
+                ),
+            }
+        ]
+
+        gr = GraphRunner(
+            graph=g,
+            runnables=runnables,
+            start_nodes=["A"],
+            trace_manager=tm,
+            expressions=expressions,
+        )
+        result = asyncio.run(gr.run({"input": "seed"}))
+        assert result.messages[0].content == "echo[prefix: hello]"
+
+    def test_key_extraction_missing_key_raises(self):
+        tm = TraceManager(project_name="test")
+        set_tracing_span(project_id="test_proj", organization_id="org", organization_llm_providers=["mock"])
+
+        dict_source = DictOutputSource(tm, name="A")
+        str_echo = StrEcho(tm, name="B")
+        runnables = {"A": dict_source, "B": str_echo}
+
+        g = nx.DiGraph()
+        g.add_nodes_from(["A", "B"])
+        g.add_edge("A", "B")
+
+        mappings = [
+            {
+                "source_instance_id": "A",
+                "source_port_name": "output",
+                "target_instance_id": "B",
+                "target_port_name": "input",
+                "dispatch_strategy": "direct",
+            }
+        ]
+        expressions = [
+            {
+                "target_instance_id": "B",
+                "field_name": "input",
+                "expression_ast": expr_from_json(
+                    {"type": "ref", "instance": "A", "port": "output", "key": "nonexistent"}
+                ),
+            }
+        ]
+
+        gr = GraphRunner(
+            graph=g,
+            runnables=runnables,
+            start_nodes=["A"],
+            trace_manager=tm,
+            port_mappings=mappings,
+            expressions=expressions,
+        )
+        with pytest.raises(ValueError, match="not found in dict"):
+            asyncio.run(gr.run({"input": "seed"}))
+
+    def test_key_extraction_non_dict_raises(self):
+        tm = TraceManager(project_name="test")
+        set_tracing_span(project_id="test_proj", organization_id="org", organization_llm_providers=["mock"])
+
+        str_source = FixedStringSource(tm, value="hello", name="A")
+        str_echo = StrEcho(tm, name="B")
+        runnables = {"A": str_source, "B": str_echo}
+
+        g = nx.DiGraph()
+        g.add_nodes_from(["A", "B"])
+        g.add_edge("A", "B")
+
+        mappings = [
+            {
+                "source_instance_id": "A",
+                "source_port_name": "output",
+                "target_instance_id": "B",
+                "target_port_name": "input",
+                "dispatch_strategy": "direct",
+            }
+        ]
+        expressions = [
+            {
+                "target_instance_id": "B",
+                "field_name": "input",
+                "expression_ast": expr_from_json(
+                    {"type": "ref", "instance": "A", "port": "output", "key": "messages"}
+                ),
+            }
+        ]
+
+        gr = GraphRunner(
+            graph=g,
+            runnables=runnables,
+            start_nodes=["A"],
+            trace_manager=tm,
+            port_mappings=mappings,
+            expressions=expressions,
+        )
+        with pytest.raises(ValueError, match="not a dict"):
+            asyncio.run(gr.run({"input": "seed"}))

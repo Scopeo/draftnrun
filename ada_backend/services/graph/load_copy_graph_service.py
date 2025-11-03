@@ -2,18 +2,22 @@ from uuid import UUID, uuid4
 
 from sqlalchemy.orm import Session
 
-from ada_backend.schemas.parameter_schema import PipelineParameterSchema
-from ada_backend.schemas.pipeline.base import ComponentInstanceSchema, ComponentRelationshipSchema
+from ada_backend.schemas.pipeline.base import ComponentRelationshipSchema
 from ada_backend.schemas.pipeline.graph_schema import EdgeSchema, GraphLoadResponse
+from ada_backend.schemas.pipeline.get_pipeline_schema import ComponentInstanceReadSchema
+from ada_backend.schemas.pipeline.field_expression_schema import FieldExpressionReadSchema
 from ada_backend.services.graph.get_graph_service import get_graph_service
 from ada_backend.services.pipeline.get_pipeline_service import get_component_instance
+from ada_backend.services.field_expression_remap_service import remap_field_expressions_for_cloning
+from engine.field_expressions.parser import parse_expression
+from engine.field_expressions.serializer import to_json as expr_to_json
 
 
 def instanciate_copy_component_instance(
     session: Session,
     component_instance_id_to_copy: UUID,
     is_start_node: bool,
-) -> ComponentInstanceSchema:
+) -> ComponentInstanceReadSchema:
     component_instance_to_copy = get_component_instance(
         session,
         component_instance_id_to_copy,
@@ -21,18 +25,7 @@ def instanciate_copy_component_instance(
     )
     if not component_instance_to_copy:
         raise ValueError("Component instance not found")
-    return ComponentInstanceSchema(
-        id=uuid4(),
-        name=component_instance_to_copy.name,
-        is_start_node=component_instance_to_copy.is_start_node,
-        component_id=component_instance_to_copy.component_id,
-        tool_description=component_instance_to_copy.tool_description,
-        parameters=[
-            PipelineParameterSchema(name=param.name, value=param.value, order=param.order)
-            for param in component_instance_to_copy.parameters
-        ],
-        integration=component_instance_to_copy.integration,
-    )
+    return component_instance_to_copy.model_copy(update={"id": uuid4(), "field_expressions": []})
 
 
 def load_copy_graph_service(
@@ -43,22 +36,37 @@ def load_copy_graph_service(
     graph_get_response = get_graph_service(
         session=session, project_id=project_id_to_copy, graph_runner_id=graph_runner_id_to_copy
     )
-    component_instance_map: dict[UUID, ComponentInstanceSchema] = {}
+    component_instance_map: dict[UUID, ComponentInstanceReadSchema] = {}
     for component_instance_to_copy in graph_get_response.component_instances:
-        component_instance = ComponentInstanceSchema(
-            id=uuid4(),
-            name=component_instance_to_copy.name,
-            is_start_node=component_instance_to_copy.is_start_node,
-            component_id=component_instance_to_copy.component_id,
-            component_version_id=component_instance_to_copy.component_version_id,
-            tool_description=component_instance_to_copy.tool_description,
-            parameters=[
-                PipelineParameterSchema(name=param.name, value=param.value, order=param.order)
-                for param in component_instance_to_copy.parameters
-            ],
-            integration=component_instance_to_copy.integration,
+        source_id = component_instance_to_copy.id
+        if source_id is None:
+            raise ValueError("Component instance missing id in GET response")
+        component_instance = component_instance_to_copy.model_copy(update={"id": uuid4(), "field_expressions": []})
+        component_instance_map[source_id] = component_instance
+
+    if graph_get_response.component_instances:
+        source_instance_ids = [ci.id for ci in graph_get_response.component_instances if ci.id is not None]
+        id_mapping: dict[UUID, UUID] = {}
+        for source_id in source_instance_ids:
+            target_id = component_instance_map[source_id].id
+            if target_id is None:
+                raise ValueError("Target component instance missing id during load-copy")
+            id_mapping[source_id] = target_id
+        remapped_expressions_by_source_id = remap_field_expressions_for_cloning(
+            session=session,
+            source_instance_ids=source_instance_ids,
+            id_mapping=id_mapping,
         )
-        component_instance_map[component_instance_to_copy.id] = component_instance
+        for source_instance_id, target_instance in component_instance_map.items():
+            if source_instance_id in remapped_expressions_by_source_id:
+                target_instance.field_expressions = [
+                    FieldExpressionReadSchema(
+                        field_name=expr.field_name,
+                        expression_json=expr_to_json(parse_expression(expr.expression_text)),
+                        expression_text=expr.expression_text,
+                    )
+                    for expr in remapped_expressions_by_source_id[source_instance_id]
+                ]
 
     load_copy_relationships: list[ComponentRelationshipSchema] = []
     for old_relation in graph_get_response.relationships:
@@ -76,11 +84,14 @@ def load_copy_graph_service(
         ):
             raise ValueError("Invalid relationship: component instance not found")
 
+        parent_new_id = component_instance_map[old_relation.parent_component_instance_id].id
+        child_new_id = component_instance_map[old_relation.child_component_instance_id].id
+        if parent_new_id is None or child_new_id is None:
+            raise ValueError("New relationship endpoint missing id during load-copy")
         load_copy_relationships.append(
             ComponentRelationshipSchema(
-                id=uuid4(),
-                parent_component_instance_id=component_instance_map[old_relation.parent_component_instance_id].id,
-                child_component_instance_id=component_instance_map[old_relation.child_component_instance_id].id,
+                parent_component_instance_id=parent_new_id,
+                child_component_instance_id=child_new_id,
                 parameter_name=old_relation.parameter_name,
                 order=old_relation.order,
             )
@@ -88,11 +99,15 @@ def load_copy_graph_service(
 
     load_copy_edges: list[EdgeSchema] = []
     for edge in graph_get_response.edges:
+        origin_new_id = component_instance_map[edge.origin].id
+        destination_new_id = component_instance_map[edge.destination].id
+        if origin_new_id is None or destination_new_id is None:
+            raise ValueError("New edge endpoint missing id during load-copy")
         load_copy_edges.append(
             EdgeSchema(
                 id=uuid4(),  # Generate a new UUID for the edge
-                origin=component_instance_map[edge.origin].id,
-                destination=component_instance_map[edge.destination].id,
+                origin=origin_new_id,
+                destination=destination_new_id,
                 order=edge.order,
             )
         )

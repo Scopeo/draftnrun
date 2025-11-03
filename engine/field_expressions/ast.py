@@ -1,7 +1,7 @@
 """AST nodes for field expressions."""
 
 from dataclasses import dataclass
-from typing import List, Union
+from typing import List, Optional, Union
 
 
 @dataclass(frozen=True)
@@ -13,10 +13,14 @@ class LiteralNode:
 
 @dataclass(frozen=True)
 class RefNode:
-    """Reference to another component's output."""
+    """Reference to another component's output.
+
+    Optionally supports extracting a key from dict outputs using `::key` syntax.
+    """
 
     instance: str
     port: str
+    key: Optional[str] = None
 
 
 @dataclass(frozen=True)

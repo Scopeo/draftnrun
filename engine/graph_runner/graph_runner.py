@@ -255,20 +255,42 @@ class GraphRunner:
                         input_data = task_result.data
                     else:
                         # For migrated components, use coercion system
+                        value_to_coerce = source_value
+                        # TODO: Pure refs with keys create coupling between port mappings and expressions.
+                        # Decouple after system is stable/harmonized
+                        pure_ref_expr = self._expressions_by_target_ast.get((node_id, port_mapping.target_port_name))
+
+                        if isinstance(pure_ref_expr, RefNode) and pure_ref_expr.key:
+                            if not isinstance(source_value, dict):
+                                raise ValueError(
+                                    f"Key extraction '::{pure_ref_expr.key}' cannot be used on "
+                                    f"{port_mapping.source_instance_id}.{port_mapping.source_port_name}: "
+                                    f"port value is not a dict, got {type(source_value)}"
+                                )
+                            if pure_ref_expr.key not in source_value:
+                                raise ValueError(
+                                    f"Key '{pure_ref_expr.key}' not found in dict from "
+                                    f"{port_mapping.source_instance_id}.{port_mapping.source_port_name}"
+                                )
+                            value_to_coerce = source_value[pure_ref_expr.key]
+                            LOGGER.debug(
+                                f"Extracted key '{pure_ref_expr.key}' from {port_mapping.source_instance_id}."
+                                f"{port_mapping.source_port_name}"
+                            )
+
                         target_type = (
                             get_target_field_type(target_component, port_mapping.target_port_name)
                             if target_component
                             else str
                         )
 
-                        # Get source type for accurate coercion
-                        source_type = get_source_type_for_mapping(port_mapping, source_value, self.runnables)
+                        source_type = get_source_type_for_mapping(port_mapping, value_to_coerce, self.runnables)
                         LOGGER.debug(
                             f"Coercing {port_mapping.source_instance_id}.{port_mapping.source_port_name} "
                             f"({source_type}) → {port_mapping.target_instance_id}.{port_mapping.target_port_name} "
                             f"({target_type})"
                         )
-                        coerced_value = self.coercion_matrix.coerce(source_value, target_type, source_type)
+                        coerced_value = self.coercion_matrix.coerce(value_to_coerce, target_type, source_type)
                         input_data[port_mapping.target_port_name] = coerced_value
                 else:
                     LOGGER.warning(

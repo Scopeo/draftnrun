@@ -26,6 +26,7 @@ from ada_backend.services.graph.load_copy_graph_service import load_copy_graph_s
 from ada_backend.services.graph.update_graph_service import update_graph_service
 from ada_backend.services.graph.get_graph_service import get_graph_service
 from ada_backend.services.graph.delete_graph_service import delete_graph_runner_service
+from engine.field_expressions.errors import FieldExpressionError
 
 router = APIRouter(
     prefix="/projects/{project_id}/graph",
@@ -104,6 +105,12 @@ async def update_project_pipeline(
             f"Database connection failed for project {project_id} runner {graph_runner_id}: {str(e)}", exc_info=True
         )
         raise HTTPException(status_code=503, detail=f"Database connection error: {str(e)}") from e
+    except FieldExpressionError as e:
+        error_msg = str(e)
+        LOGGER.error(
+            f"Failed to update graph for project {project_id} runner {graph_runner_id}: {error_msg}", exc_info=True
+        )
+        raise HTTPException(status_code=400, detail=error_msg) from e
     except ValueError as e:
         error_msg = str(e)
         LOGGER.error(
@@ -138,6 +145,12 @@ def deploy_graph(
             graph_runner_id=graph_runner_id,
             project_id=project_id,
         )
+    except FieldExpressionError as e:
+        error_msg = str(e)
+        LOGGER.error(
+            f"Failed to deploy graph for project {project_id} runner {graph_runner_id}: {error_msg}", exc_info=True
+        )
+        raise HTTPException(status_code=400, detail=error_msg) from e
     except ValueError as e:
         LOGGER.error(
             f"Failed to deploy graph for project {project_id} runner {graph_runner_id}: {str(e)}", exc_info=True
@@ -171,6 +184,13 @@ def load_copy_graph_runner(
             project_id_to_copy=project_id,
             graph_runner_id_to_copy=graph_runner_id,
         )
+    except FieldExpressionError as e:
+        error_msg = str(e)
+        LOGGER.error(
+            f"Failed to load copy of graph for project {project_id} runner {graph_runner_id}: {error_msg}",
+            exc_info=True,
+        )
+        raise HTTPException(status_code=400, detail=error_msg) from e
     except ValueError as e:
         LOGGER.error(
             f"Failed to load copy of graph for project {project_id} runner {graph_runner_id}: {str(e)}", exc_info=True

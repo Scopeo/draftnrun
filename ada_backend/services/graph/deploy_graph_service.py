@@ -17,6 +17,10 @@ from ada_backend.repositories.env_repository import (
     update_graph_runner_env,
 )
 from ada_backend.repositories.port_mapping_repository import list_port_mappings_for_graph, insert_port_mapping
+from ada_backend.repositories.field_expression_repository import upsert_field_expression
+from ada_backend.services.field_expression_remap_service import remap_field_expressions_for_cloning
+from engine.field_expressions.parser import parse_expression
+from engine.field_expressions.serializer import to_json as expr_to_json
 from ada_backend.services.tag_service import compute_next_tag_version
 from ada_backend.repositories.tag_repository import update_graph_runner_tag_fields
 from ada_backend.repositories.graph_runner_repository import (
@@ -42,7 +46,7 @@ def copy_component_instance(
     project_id: UUID,
 ) -> UUID:
     """
-    This function copies a component instance and its parameters to a new component instance.
+    This function copies a component instance, its parameters, and field expressions to a new component instance.
     It returns the ID of the new component instance.
     """
     component_instance = get_component_instance(
@@ -75,7 +79,9 @@ def copy_component_instance(
         parameters=parameters,
         integration=component_instance.integration,
     )
-    return create_or_update_component_instance(session, new_composant_instance, project_id)
+    new_instance_id = create_or_update_component_instance(session, new_composant_instance, project_id)
+
+    return new_instance_id
 
 
 def clone_graph_runner(
@@ -183,6 +189,32 @@ def clone_graph_runner(
         )
 
     LOGGER.info(f"Copied port mappings to new graph runner with ID {new_graph_runner_id}")
+
+    source_instance_ids = list(ids_map.keys())
+    if source_instance_ids:
+        remapped_expressions_by_source_id = remap_field_expressions_for_cloning(
+            session=session,
+            source_instance_ids=source_instance_ids,
+            id_mapping=ids_map,
+        )
+        for source_instance_id, remapped_expressions in remapped_expressions_by_source_id.items():
+            target_instance_id = ids_map[source_instance_id]
+            for remapped_expr in remapped_expressions:
+                remapped_ast = parse_expression(remapped_expr.expression_text)
+                upsert_field_expression(
+                    session=session,
+                    component_instance_id=target_instance_id,
+                    field_name=remapped_expr.field_name,
+                    expression_json=expr_to_json(remapped_ast),
+                )
+        total_expressions = sum(len(exprs) for exprs in remapped_expressions_by_source_id.values())
+        if total_expressions > 0:
+            LOGGER.info(
+                "Remapped and copied %d field expressions for %d component instances",
+                total_expressions,
+                len(remapped_expressions_by_source_id),
+            )
+
     return new_graph_runner_id
 
 

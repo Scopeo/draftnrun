@@ -890,7 +890,7 @@ class CompletionService(LLMService):
                     response.choices[0].message.tool_calls = None
                     return response
                 except Exception as e:
-                    raise ValueError(f"Error parsing structured output tool response: {e}")
+                    raise ValueError(f"Error parsing structured output tool response: {e}") from e
         return response
 
 

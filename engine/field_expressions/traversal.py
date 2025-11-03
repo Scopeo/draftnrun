@@ -30,6 +30,31 @@ def select_nodes(
             yield node
 
 
+def map_expression(
+    expr: ExpressionNode,
+    fn: Callable[[ExpressionNode], ExpressionNode],
+) -> ExpressionNode:
+    """Transform an expression by applying fn to each node and rebuilding the AST.
+
+    Recursively walks the expression tree, applies fn to each node, and reconstructs
+    the tree with transformed nodes. The function fn should return a transformed node
+    or the original node if no transformation is needed.
+
+    Args:
+        expr: The expression AST to transform
+        fn: Function that takes a node and returns a transformed node
+
+    Returns:
+        A new expression AST with transformed nodes
+    """
+    transformed = fn(expr)
+    match transformed:
+        case ConcatNode(parts=parts):
+            return ConcatNode(parts=[map_expression(part, fn) for part in parts])
+        case _:
+            return transformed
+
+
 def get_pure_ref(expr: ExpressionNode) -> RefNode | None:
     """Return the single RefNode if the expression semantically represents exactly one reference.
 
