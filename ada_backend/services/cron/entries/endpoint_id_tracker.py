@@ -7,6 +7,7 @@ and identifies new IDs (endpoint_ids - stored_ids).
 """
 
 import logging
+import json
 from typing import Any, Optional
 from uuid import UUID
 from datetime import datetime, timezone
@@ -14,14 +15,15 @@ from pydantic import Field, HttpUrl
 
 import httpx
 
+from ada_backend.repositories.tracker_history_repository import (
+    create_tracked_id,
+    delete_tracked_ids_history,
+    get_tracked_ids_history,
+)
 from ada_backend.services.cron.core import BaseUserPayload, BaseExecutionPayload, CronEntrySpec
 from ada_backend.repositories.project_repository import get_project
 from ada_backend.services.agent_runner_service import run_env_agent
 from ada_backend.database.models import CallType, EnvType
-from ingestion_script.utils import get_sanitize_names
-from engine.storage_service.local_service import SQLLocalService
-from engine.storage_service.db_utils import DBDefinition, DBColumn, PROCESSED_DATETIME_FIELD
-from settings import settings
 
 LOGGER = logging.getLogger(__name__)
 
@@ -50,7 +52,7 @@ class EndpointIdTrackerUserPayload(BaseUserPayload):
     )
     workflow_input_template: Optional[str] = Field(
         default=None,
-        description="Template for the workflow input message. Use {id} as placeholder for the detected ID. If None, defaults to just the ID string.",
+        description="Template for the workflow input message. Use {id} for the detected ID and {item} for the full item (JSON). If None, defaults to just the ID string.",
     )
 
     class Config:
@@ -63,7 +65,7 @@ class EndpointIdTrackerUserPayload(BaseUserPayload):
                 "timeout": 30,
                 "project_id": "123e4567-e89b-12d3-a456-426614174000",
                 "env": "production",
-                "workflow_input_template": "Process item with ID {id}",
+                "workflow_input_template": "Process item: {item}",
             }
         }
 
@@ -138,6 +140,27 @@ def validate_execution(execution_payload: EndpointIdTrackerExecutionPayload, **k
             raise ValueError("Project organization mismatch at execution time")
 
 
+def _extract_nested_path(data: Any, path: str) -> Any:
+    """
+    Extract value from nested path in data structure.
+
+    Supports paths like:
+    - "data" -> data["data"]
+    - "data.items" -> data["data"]["items"]
+    - Works with dict and object attributes
+    """
+    current = data
+    for key in path.split("."):
+        if key:
+            if isinstance(current, dict):
+                current = current.get(key)
+            elif hasattr(current, key):
+                current = getattr(current, key)
+            else:
+                return None
+    return current
+
+
 def _extract_ids_from_response(data: Any, field_path: str) -> set[str]:
     """
     Extract IDs from API response using field path.
@@ -170,16 +193,7 @@ def _extract_ids_from_response(data: Any, field_path: str) -> set[str]:
     array_path = parts[0]
     nested_field = parts[1].lstrip(".")
 
-    current = data
-    for key in array_path.split("."):
-        if key:
-            if isinstance(current, dict):
-                current = current.get(key)
-            elif hasattr(current, key):
-                current = getattr(current, key)
-            else:
-                raise ValueError(f"Path '{key}' not found in response")
-
+    current = _extract_nested_path(data, array_path)
     if current is None:
         raise ValueError(f"Array path '{array_path}' returned None")
 
@@ -199,6 +213,54 @@ def _extract_ids_from_response(data: Any, field_path: str) -> set[str]:
             ids.add(str(item))
 
     return ids
+
+
+def _extract_items_with_ids(data: Any, id_field_path: str) -> dict[str, dict[str, Any]]:
+    """
+    Extract all items from response with their IDs.
+
+    Returns a dictionary mapping item_id -> complete item.
+    """
+    items_by_id: dict[str, dict[str, Any]] = {}
+
+    if "[]" in id_field_path:
+        # Array notation: extract all items from array
+        id_parts = id_field_path.split("[]")
+        if len(id_parts) == 2:
+            array_path = id_parts[0].rstrip(".")
+            id_field = id_parts[1].lstrip(".")
+
+            # Extract the array
+            current = _extract_nested_path(data, array_path)
+            if isinstance(current, list):
+                for item in current:
+                    if isinstance(item, dict) and id_field in item:
+                        item_id = str(item.get(id_field, ""))
+                        if item_id:
+                            items_by_id[item_id] = item
+    else:
+        # Simple path: extract single item
+        if isinstance(data, dict):
+            # Try to get the item directly
+            if id_field_path in data:
+                item_id = str(data[id_field_path])
+                if item_id:
+                    items_by_id[item_id] = data
+            else:
+                # Try nested path
+                path_parts = id_field_path.split(".")
+                if len(path_parts) > 1:
+                    # Get parent object
+                    parent_path = ".".join(path_parts[:-1])
+                    current = _extract_nested_path(data, parent_path)
+                    if isinstance(current, dict):
+                        id_field = path_parts[-1]
+                        if id_field in current:
+                            item_id = str(current[id_field])
+                            if item_id:
+                                items_by_id[item_id] = current
+
+    return items_by_id
 
 
 def _extract_ids_and_filter_values_from_response(
@@ -228,15 +290,9 @@ def _extract_ids_and_filter_values_from_response(
     id_field = id_parts[1].lstrip(".")
 
     # Extract the array
-    current = data
-    for key in array_path.split("."):
-        if key:
-            if isinstance(current, dict):
-                current = current.get(key)
-            elif hasattr(current, key):
-                current = getattr(current, key)
-            else:
-                raise ValueError(f"Array path '{key}' not found in response")
+    current = _extract_nested_path(data, array_path)
+    if current is None:
+        raise ValueError(f"Array path '{array_path}' not found in response")
 
     if not isinstance(current, list):
         raise ValueError(f"Path '{array_path}' does not point to an array")
@@ -246,7 +302,6 @@ def _extract_ids_and_filter_values_from_response(
     for filter_field_path in filter_field_paths:
         filter_parts = filter_field_path.split("[]")
         if len(filter_parts) != 2:
-            # If filter path doesn't have array notation, assume it's relative to each item
             filter_field = filter_field_path.lstrip(".")
         else:
             filter_field = filter_parts[1].lstrip(".")
@@ -271,6 +326,7 @@ def _extract_ids_and_filter_values_from_response(
 
             result[item_id] = {
                 "filter_values": filter_values,
+                "item": item,  # Store the complete item
             }
 
     return result
@@ -283,13 +339,9 @@ async def execute(execution_payload: EndpointIdTrackerExecutionPayload, **kwargs
 
     cron_id = kwargs.get("cron_id")
     if not cron_id:
-        raise ValueError("cron_id is required for table naming")
+        raise ValueError("cron_id is required")
 
     LOGGER.info(f"Starting endpoint ID tracker for endpoint {execution_payload.endpoint_url}")
-
-    # Generate table names dynamically using organization_id and cron_id
-    # This matches how tables are saved in the ingestion database
-    schema_name, table_name, _ = get_sanitize_names(str(execution_payload.organization_id), str(cron_id))
 
     # Step 1: Query the endpoint
     LOGGER.info(f"Querying endpoint: {execution_payload.endpoint_url}")
@@ -301,7 +353,8 @@ async def execute(execution_payload: EndpointIdTrackerExecutionPayload, **kwargs
         response.raise_for_status()
         endpoint_data = response.json()
 
-    # Step 2: Extract IDs from the response (with filtering if filter_fields provided)
+    items_by_id = _extract_items_with_ids(endpoint_data, execution_payload.id_field_path)
+
     filter_fields = execution_payload.filter_fields
     if filter_fields:
         filter_field_paths = list(filter_fields.keys())
@@ -325,99 +378,38 @@ async def execute(execution_payload: EndpointIdTrackerExecutionPayload, **kwargs
         endpoint_ids = _extract_ids_from_response(endpoint_data, execution_payload.id_field_path)
         LOGGER.info(f"Found {len(endpoint_ids)} IDs from endpoint")
 
-    # Step 3: Ensure simple tracking table exists and get existing data
-    if not settings.INGESTION_DB_URL:
-        raise ValueError("INGESTION_DB_URL is not configured")
+    stored_history = get_tracked_ids_history(db, cron_id)
+    stored_ids = {str(record.tracked_id) for record in stored_history}
+    LOGGER.info(f"Found {len(stored_ids)} already processed IDs")
 
-    db_service = SQLLocalService(engine_url=settings.INGESTION_DB_URL)
-
-    # Simple table: just track processed IDs
-    table_definition = DBDefinition(
-        columns=[
-            DBColumn(name=PROCESSED_DATETIME_FIELD, type="DATETIME", default="CURRENT_TIMESTAMP"),
-            DBColumn(name="id", type="VARCHAR", is_primary=True),
-            DBColumn(name="created_at", type="TIMESTAMP", default="CURRENT_TIMESTAMP"),
-            DBColumn(name="updated_at", type="TIMESTAMP", default="CURRENT_TIMESTAMP"),
-        ]
-    )
-
-    if not db_service.schema_exists(schema_name):
-        db_service.create_schema(schema_name)
-
-    if not db_service.table_exists(table_name, schema_name):
-        db_service.create_table(
-            table_name=table_name,
-            table_definition=table_definition,
-            schema_name=schema_name,
-        )
-        LOGGER.info(f"Created tracking table {table_name} in schema {schema_name}")
-
-    try:
-        df = db_service.get_table_df(
-            table_name=table_name,
-            schema_name=schema_name,
-        )
-
-        # Simple: just get the list of already processed IDs
-        if df.empty:
-            stored_ids = set()
-        else:
-            stored_ids = set(df["id"].astype(str).unique())
-
-        LOGGER.info(f"Found {len(stored_ids)} already processed IDs")
-    except Exception as e:
-        LOGGER.warning(f"Error querying tracking table: {e}, starting with empty state")
-        stored_ids = set()
-
-    # Step 4: Identify new IDs and save processed ones
     current_time = datetime.now(timezone.utc)
     new_ids = endpoint_ids - stored_ids
     removed_ids = stored_ids - endpoint_ids
-
-    # Save all current IDs as processed (upsert)
-    for item_id in endpoint_ids:
-        is_new = item_id not in stored_ids
-        values = {
-            "updated_at": current_time,
-        }
-        if is_new:
-            values["created_at"] = current_time
-        db_service.upsert_value(
-            table_name=table_name,
-            id_column_name="id",
-            id=str(item_id),
-            values=values,
-            schema_name=schema_name,
-        )
-
-    # Remove IDs that are no longer in endpoint (batch delete)
-    if removed_ids:
-        db_service.delete_rows_from_table(
-            table_name=table_name,
-            ids=[str(rid) for rid in removed_ids],
-            schema_name=schema_name,
-            id_column_name="id",
-        )
+    for item_id in new_ids:
+        create_tracked_id(db, cron_id, item_id, execution_payload.organization_id, current_time)
 
     LOGGER.info(f"Identified {len(new_ids)} new IDs and {len(removed_ids)} removed IDs")
 
-    # Trigger workflows for new IDs if project_id is configured
     workflow_results = []
     if execution_payload.project_id and new_ids:
         LOGGER.info(f"Triggering workflows for {len(new_ids)} new IDs in project {execution_payload.project_id}")
         for new_id in new_ids:
             try:
-                # Create input message using template or default to ID
+                item = items_by_id.get(new_id, {})
                 if execution_payload.workflow_input_template:
-                    input_message = execution_payload.workflow_input_template.format(id=new_id)
+                    item_json = json.dumps(item, default=str) if item else "{}"
+                    input_message = execution_payload.workflow_input_template.format(id=new_id, item=item_json)
                 else:
-                    input_message = str(new_id)
+                    if item:
+                        input_message = json.dumps(item, default=str)
+                    else:
+                        input_message = str(new_id)
 
-                # Create input data with the customized message
                 input_data = {
                     "messages": [
                         {"role": "user", "content": input_message},
-                    ]
+                    ],
+                    "item": item,  # Pass item as separate field for easy access
                 }
                 workflow_result = await run_env_agent(
                     session=db,
@@ -434,7 +426,7 @@ async def execute(execution_payload: EndpointIdTrackerExecutionPayload, **kwargs
                         "trace_id": workflow_result.trace_id,
                     }
                 )
-                LOGGER.info(f"Successfully triggered workflow for ID {new_id} with message: {input_message}")
+                LOGGER.info(f"Successfully triggered workflow for ID {new_id}")
             except Exception as e:
                 LOGGER.error(f"Failed to trigger workflow for ID {new_id}: {e}")
                 workflow_results.append(
@@ -447,8 +439,6 @@ async def execute(execution_payload: EndpointIdTrackerExecutionPayload, **kwargs
 
     return {
         "endpoint_url": execution_payload.endpoint_url,
-        "schema_name": schema_name,
-        "table_name": table_name,
         "total_endpoint_ids": len(endpoint_ids),
         "total_stored_ids": len(stored_ids),
         "new_ids_count": len(new_ids),
