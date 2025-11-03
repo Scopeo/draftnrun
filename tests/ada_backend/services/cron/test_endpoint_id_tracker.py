@@ -1,0 +1,509 @@
+"""
+Tests for endpoint_id_tracker cron entrypoint.
+"""
+
+import pytest
+from unittest.mock import Mock, AsyncMock, patch, MagicMock
+from uuid import UUID, uuid4
+
+from ada_backend.services.cron.entries.endpoint_id_tracker import (
+    EndpointIdTrackerUserPayload,
+    EndpointIdTrackerExecutionPayload,
+    validate_registration,
+    validate_execution,
+    execute,
+    _extract_ids_from_response,
+    _extract_ids_and_filter_values_from_response,
+)
+from ada_backend.database.models import DataSource, CronStatus, CronRun
+from ada_backend.repositories.source_repository import get_data_source_by_id
+from engine.storage_service.local_service import SQLLocalService
+from settings import settings
+
+
+@pytest.fixture
+def mock_source():
+    """Create a mock DataSource."""
+    source = Mock(spec=DataSource)
+    source.id = uuid4()
+    source.organization_id = uuid4()
+    source.database_schema = "test_schema"
+    source.database_table_name = "test_table"
+    return source
+
+
+@pytest.fixture
+def mock_db_session():
+    """Create a mock database session."""
+    session = Mock()
+    return session
+
+
+@pytest.fixture
+def sample_endpoint_response():
+    """Sample API response with IDs."""
+    return {
+        "data": [
+            {"id": "1", "status": "pending", "priority": "low"},
+            {"id": "2", "status": "processing", "priority": "high"},
+            {"id": "3", "status": "processing", "priority": "high"},
+            {"id": "4", "status": "completed", "priority": "medium"},
+        ]
+    }
+
+
+class TestExtractIdsFromResponse:
+    """Tests for ID extraction from API responses."""
+
+    def test_extract_simple_id(self):
+        """Test extracting a simple ID field."""
+        data = {"id": "123"}
+        result = _extract_ids_from_response(data, "id")
+        assert result == {"123"}
+
+    def test_extract_ids_from_array(self):
+        """Test extracting IDs from an array."""
+        data = {
+            "items": [
+                {"id": "1", "name": "item1"},
+                {"id": "2", "name": "item2"},
+            ]
+        }
+        result = _extract_ids_from_response(data, "items[].id")
+        assert result == {"1", "2"}
+
+    def test_extract_ids_with_nested_path(self):
+        """Test extracting IDs with nested path."""
+        data = {
+            "response": {
+                "data": [
+                    {"id": "1"},
+                    {"id": "2"},
+                ]
+            }
+        }
+        result = _extract_ids_from_response(data, "response.data[].id")
+        assert result == {"1", "2"}
+
+    def test_extract_ids_invalid_path(self):
+        """Test that invalid path raises error."""
+        data = {"id": "123"}
+        with pytest.raises(ValueError, match="not found in response"):
+            _extract_ids_from_response(data, "invalid_path")
+
+
+class TestExtractIdsAndFilterValues:
+    """Tests for extracting IDs with filter values."""
+
+    def test_extract_with_single_filter(self, sample_endpoint_response):
+        """Test extracting IDs with a single filter field."""
+        result = _extract_ids_and_filter_values_from_response(sample_endpoint_response, "data[].id", ["data[].status"])
+
+        assert "1" in result
+        assert "2" in result
+        assert "3" in result
+        assert "4" in result
+        assert result["1"]["filter_values"]["data[].status"] == "pending"
+        assert result["2"]["filter_values"]["data[].status"] == "processing"
+        assert result["3"]["filter_values"]["data[].status"] == "processing"
+
+    def test_extract_with_multiple_filters(self, sample_endpoint_response):
+        """Test extracting IDs with multiple filter fields."""
+        result = _extract_ids_and_filter_values_from_response(
+            sample_endpoint_response,
+            "data[].id",
+            ["data[].status", "data[].priority"],
+        )
+
+        assert "2" in result
+        assert result["2"]["filter_values"]["data[].status"] == "processing"
+        assert result["2"]["filter_values"]["data[].priority"] == "high"
+
+        assert "3" in result
+        assert result["3"]["filter_values"]["data[].status"] == "processing"
+        assert result["3"]["filter_values"]["data[].priority"] == "high"
+
+    def test_extract_with_missing_filter_field(self):
+        """Test extraction when filter field is missing."""
+        data = {
+            "data": [
+                {"id": "1", "status": "pending"},
+                {"id": "2"},  # Missing status
+            ]
+        }
+        result = _extract_ids_and_filter_values_from_response(data, "data[].id", ["data[].status"])
+
+        assert "1" in result
+        assert "2" in result
+        assert result["1"]["filter_values"]["data[].status"] == "pending"
+        assert result["2"]["filter_values"]["data[].status"] is None
+
+
+class TestValidateRegistration:
+    """Tests for registration validation."""
+
+    def test_validate_success(self, mock_db_session, mock_source):
+        """Test successful validation."""
+        with patch("ada_backend.services.cron.entries.endpoint_id_tracker.get_data_source_by_id") as mock_get:
+            mock_get.return_value = mock_source
+
+            user_input = EndpointIdTrackerUserPayload(
+                endpoint_url="https://api.example.com/items",
+                source_id=mock_source.id,
+                id_field_path="data[].id",
+            )
+
+            organization_id = mock_source.organization_id
+            user_id = uuid4()
+
+            result = validate_registration(user_input, organization_id, user_id, db=mock_db_session)
+
+            assert isinstance(result, EndpointIdTrackerExecutionPayload)
+            assert result.source_id == mock_source.id
+            assert result.organization_id == organization_id
+
+    def test_validate_with_filter_fields(self, mock_db_session, mock_source):
+        """Test validation with filter fields."""
+        with patch("ada_backend.services.cron.entries.endpoint_id_tracker.get_data_source_by_id") as mock_get:
+            mock_get.return_value = mock_source
+
+            user_input = EndpointIdTrackerUserPayload(
+                endpoint_url="https://api.example.com/items",
+                source_id=mock_source.id,
+                id_field_path="data[].id",
+                filter_fields={"data[].status": "processing"},
+            )
+
+            organization_id = mock_source.organization_id
+            user_id = uuid4()
+
+            result = validate_registration(user_input, organization_id, user_id, db=mock_db_session)
+
+            assert result.filter_fields == {"data[].status": "processing"}
+
+    def test_validate_with_legacy_single_filter(self, mock_db_session, mock_source):
+        """Test validation with legacy single filter format."""
+        with patch("ada_backend.services.cron.entries.endpoint_id_tracker.get_data_source_by_id") as mock_get:
+            mock_get.return_value = mock_source
+
+            user_input = EndpointIdTrackerUserPayload(
+                endpoint_url="https://api.example.com/items",
+                source_id=mock_source.id,
+                id_field_path="data[].id",
+                filter_field_path="data[].status",
+                target_filter_value="processing",
+            )
+
+            organization_id = mock_source.organization_id
+            user_id = uuid4()
+
+            result = validate_registration(user_input, organization_id, user_id, db=mock_db_session)
+
+            assert result.filter_fields == {"data[].status": "processing"}
+
+    def test_validate_source_not_found(self, mock_db_session):
+        """Test validation fails when source not found."""
+        with patch("ada_backend.services.cron.entries.endpoint_id_tracker.get_data_source_by_id") as mock_get:
+            mock_get.return_value = None
+
+            user_input = EndpointIdTrackerUserPayload(
+                endpoint_url="https://api.example.com/items",
+                source_id=uuid4(),
+                id_field_path="data[].id",
+            )
+
+            with pytest.raises(ValueError, match="DataSource not found"):
+                validate_registration(user_input, uuid4(), uuid4(), db=mock_db_session)
+
+    def test_validate_wrong_organization(self, mock_db_session, mock_source):
+        """Test validation fails when source belongs to different org."""
+        with patch("ada_backend.services.cron.entries.endpoint_id_tracker.get_data_source_by_id") as mock_get:
+            mock_get.return_value = mock_source
+
+            user_input = EndpointIdTrackerUserPayload(
+                endpoint_url="https://api.example.com/items",
+                source_id=mock_source.id,
+                id_field_path="data[].id",
+            )
+
+            wrong_org_id = uuid4()
+
+            with pytest.raises(ValueError, match="does not belong"):
+                validate_registration(user_input, wrong_org_id, uuid4(), db=mock_db_session)
+
+    def test_validate_missing_database_config(self, mock_db_session, mock_source):
+        """Test validation fails when source lacks database config."""
+        with patch("ada_backend.services.cron.entries.endpoint_id_tracker.get_data_source_by_id") as mock_get:
+            mock_source.database_schema = None
+            mock_get.return_value = mock_source
+
+            user_input = EndpointIdTrackerUserPayload(
+                endpoint_url="https://api.example.com/items",
+                source_id=mock_source.id,
+                id_field_path="data[].id",
+            )
+
+            with pytest.raises(ValueError, match="missing database_schema"):
+                validate_registration(user_input, mock_source.organization_id, uuid4(), db=mock_db_session)
+
+
+class TestValidateExecution:
+    """Tests for execution validation."""
+
+    def test_validate_execution_success(self, mock_db_session, mock_source):
+        """Test successful execution validation."""
+        with patch("ada_backend.services.cron.entries.endpoint_id_tracker.get_data_source_by_id") as mock_get:
+            mock_get.return_value = mock_source
+
+            payload = EndpointIdTrackerExecutionPayload(
+                endpoint_url="https://api.example.com/items",
+                source_id=mock_source.id,
+                id_field_path="data[].id",
+                filter_field_path=None,
+                target_filter_value=None,
+                filter_fields=None,
+                headers=None,
+                timeout=30,
+                organization_id=mock_source.organization_id,
+                created_by=uuid4(),
+            )
+
+            # Should not raise
+            validate_execution(payload, db=mock_db_session)
+
+    def test_validate_execution_source_not_found(self, mock_db_session):
+        """Test execution validation fails when source not found."""
+        with patch("ada_backend.services.cron.entries.endpoint_id_tracker.get_data_source_by_id") as mock_get:
+            mock_get.return_value = None
+
+            payload = EndpointIdTrackerExecutionPayload(
+                endpoint_url="https://api.example.com/items",
+                source_id=uuid4(),
+                id_field_path="data[].id",
+                filter_field_path=None,
+                target_filter_value=None,
+                filter_fields=None,
+                headers=None,
+                timeout=30,
+                organization_id=uuid4(),
+                created_by=uuid4(),
+            )
+
+            with pytest.raises(ValueError, match="DataSource not found"):
+                validate_execution(payload, db=mock_db_session)
+
+
+class TestExecute:
+    """Tests for the execute function."""
+
+    @pytest.fixture
+    def mock_httpx_client(self, sample_endpoint_response):
+        """Mock httpx client for API calls."""
+        with patch("ada_backend.services.cron.entries.endpoint_id_tracker.httpx") as mock_httpx:
+            mock_response = Mock()
+            mock_response.json.return_value = sample_endpoint_response
+            mock_response.raise_for_status = Mock()
+
+            async def mock_get(*args, **kwargs):
+                return mock_response
+
+            mock_client = AsyncMock()
+            mock_client.get = mock_get
+            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client.__aexit__ = AsyncMock(return_value=None)
+
+            mock_httpx.AsyncClient.return_value = mock_client
+
+            yield mock_client
+
+    @pytest.fixture
+    def mock_db_service(self):
+        """Mock database service for ingestion database."""
+        import pandas as pd
+
+        # Create a real pandas DataFrame for more realistic mocking
+        mock_df = pd.DataFrame(
+            {
+                "source_identifier": ["id1", "id2"],
+                "chunk_id": ["chunk1", "chunk2"],
+            }
+        )
+
+        mock_instance = Mock()
+        mock_instance.get_table_df.return_value = mock_df
+
+        with patch("ada_backend.services.cron.entries.endpoint_id_tracker.SQLLocalService") as mock_service:
+            mock_service.return_value = mock_instance
+            yield mock_instance
+
+    @pytest.mark.asyncio
+    async def test_execute_simple_id_extraction(
+        self, mock_db_session, mock_source, mock_httpx_client, mock_db_service
+    ):
+        """Test basic execution without filter fields."""
+        with patch("ada_backend.services.cron.entries.endpoint_id_tracker.get_data_source_by_id") as mock_get:
+            with patch("ada_backend.services.cron.entries.endpoint_id_tracker.settings") as mock_settings:
+                mock_get.return_value = mock_source
+                mock_settings.INGESTION_DB_URL = "postgresql://test"
+
+                payload = EndpointIdTrackerExecutionPayload(
+                    endpoint_url="https://api.example.com/items",
+                    source_id=mock_source.id,
+                    id_field_path="data[].id",
+                    filter_field_path=None,
+                    target_filter_value=None,
+                    filter_fields=None,
+                    headers=None,
+                    timeout=30,
+                    organization_id=mock_source.organization_id,
+                    created_by=uuid4(),
+                )
+
+                result = await execute(payload, db=mock_db_session, cron_id=uuid4())
+
+                assert "new_ids" in result
+                assert "removed_ids" in result
+                assert "total_endpoint_ids" in result
+
+    @pytest.mark.asyncio
+    async def test_execute_with_filter_fields(self, mock_db_session, mock_source, mock_httpx_client, mock_db_service):
+        """Test execution with filter fields."""
+        with patch("ada_backend.services.cron.entries.endpoint_id_tracker.get_data_source_by_id") as mock_get:
+            with patch("ada_backend.services.cron.entries.endpoint_id_tracker.settings") as mock_settings:
+                with patch(
+                    "ada_backend.services.cron.entries.endpoint_id_tracker.get_cron_runs_by_cron_id"
+                ) as mock_runs:
+                    mock_get.return_value = mock_source
+                    mock_settings.INGESTION_DB_URL = "postgresql://test"
+
+                    # Mock previous run (no previous state)
+                    mock_runs.return_value = []
+
+                    payload = EndpointIdTrackerExecutionPayload(
+                        endpoint_url="https://api.example.com/items",
+                        source_id=mock_source.id,
+                        id_field_path="data[].id",
+                        filter_field_path=None,
+                        target_filter_value=None,
+                        filter_fields={"data[].status": "processing", "data[].priority": "high"},
+                        headers=None,
+                        timeout=30,
+                        organization_id=mock_source.organization_id,
+                        created_by=uuid4(),
+                    )
+
+                    result = await execute(payload, db=mock_db_session, cron_id=uuid4())
+
+                    assert "filter_fields" in result
+                    assert "items_just_arrived" in result
+                    assert result["filter_fields"] == {"data[].status": "processing", "data[].priority": "high"}
+
+    @pytest.mark.asyncio
+    async def test_execute_with_previous_run_state(
+        self, mock_db_session, mock_source, mock_httpx_client, mock_db_service
+    ):
+        """Test execution with previous run state to detect changes."""
+        with patch("ada_backend.services.cron.entries.endpoint_id_tracker.get_data_source_by_id") as mock_get:
+            with patch("ada_backend.services.cron.entries.endpoint_id_tracker.settings") as mock_settings:
+                with patch(
+                    "ada_backend.services.cron.entries.endpoint_id_tracker.get_cron_runs_by_cron_id"
+                ) as mock_runs:
+                    mock_get.return_value = mock_source
+                    mock_settings.INGESTION_DB_URL = "postgresql://test"
+
+                    # Mock previous run with state
+                    previous_run = Mock(spec=CronRun)
+                    previous_run.status = CronStatus.SUCCESS
+                    previous_run.result = {
+                        "items_with_filter_values": {
+                            "2": {"filter_values": {"data[].status": "pending", "data[].priority": "low"}},
+                            "3": {"filter_values": {"data[].status": "processing", "data[].priority": "high"}},
+                        }
+                    }
+                    mock_runs.return_value = [previous_run]
+
+                    payload = EndpointIdTrackerExecutionPayload(
+                        endpoint_url="https://api.example.com/items",
+                        source_id=mock_source.id,
+                        id_field_path="data[].id",
+                        filter_field_path=None,
+                        target_filter_value=None,
+                        filter_fields={"data[].status": "processing", "data[].priority": "high"},
+                        headers=None,
+                        timeout=30,
+                        organization_id=mock_source.organization_id,
+                        created_by=uuid4(),
+                    )
+
+                    result = await execute(payload, db=mock_db_session, cron_id=uuid4())
+
+                    # Item "2" changed from pending/low to processing/high, should be in just_arrived
+                    # Item "3" was already processing/high, so shouldn't be in just_arrived
+                    assert "items_just_arrived_count" in result
+                    assert "items_just_arrived" in result
+                    # Item "2" should be detected as just arrived
+                    items_arrived = result["items_just_arrived"]
+                    item_ids = [item["id"] for item in items_arrived]
+                    assert "2" in item_ids
+                    assert "3" not in item_ids  # Already had the filter values
+
+    @pytest.mark.asyncio
+    async def test_execute_missing_ingestion_db_url(self, mock_db_session, mock_source, mock_httpx_client):
+        """Test execution fails when INGESTION_DB_URL is not configured."""
+        with patch("ada_backend.services.cron.entries.endpoint_id_tracker.get_data_source_by_id") as mock_get:
+            with patch("ada_backend.services.cron.entries.endpoint_id_tracker.settings") as mock_settings:
+                mock_get.return_value = mock_source
+                mock_settings.INGESTION_DB_URL = None
+
+                payload = EndpointIdTrackerExecutionPayload(
+                    endpoint_url="https://api.example.com/items",
+                    source_id=mock_source.id,
+                    id_field_path="data[].id",
+                    filter_field_path=None,
+                    target_filter_value=None,
+                    filter_fields=None,
+                    headers=None,
+                    timeout=30,
+                    organization_id=mock_source.organization_id,
+                    created_by=uuid4(),
+                )
+
+                with pytest.raises(ValueError, match="INGESTION_DB_URL is not configured"):
+                    await execute(payload, db=mock_db_session, cron_id=uuid4())
+
+    @pytest.mark.asyncio
+    async def test_execute_empty_ingestion_db(self, mock_db_session, mock_source, mock_httpx_client):
+        """Test execution with empty ingestion database."""
+        import pandas as pd
+
+        with patch("ada_backend.services.cron.entries.endpoint_id_tracker.get_data_source_by_id") as mock_get:
+            with patch("ada_backend.services.cron.entries.endpoint_id_tracker.settings") as mock_settings:
+                with patch("ada_backend.services.cron.entries.endpoint_id_tracker.SQLLocalService") as mock_service:
+                    mock_get.return_value = mock_source
+                    mock_settings.INGESTION_DB_URL = "postgresql://test"
+
+                    # Mock empty database with real pandas DataFrame
+                    mock_instance = Mock()
+                    mock_df = pd.DataFrame()  # Empty DataFrame
+                    mock_instance.get_table_df.return_value = mock_df
+                    mock_service.return_value = mock_instance
+
+                    payload = EndpointIdTrackerExecutionPayload(
+                        endpoint_url="https://api.example.com/items",
+                        source_id=mock_source.id,
+                        id_field_path="data[].id",
+                        filter_field_path=None,
+                        target_filter_value=None,
+                        filter_fields=None,
+                        headers=None,
+                        timeout=30,
+                        organization_id=mock_source.organization_id,
+                        created_by=uuid4(),
+                    )
+
+                    result = await execute(payload, db=mock_db_session, cron_id=uuid4())
+
+                    assert result["total_stored_ids"] == 0
+                    # All endpoint IDs (1, 2, 3, 4) should be new
+                    assert len(result["new_ids"]) == 4
+                    assert set(result["new_ids"]) == {"1", "2", "3", "4"}
