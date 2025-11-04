@@ -429,37 +429,13 @@ class TestExecute:
 
             yield mock_client
 
-    @pytest.fixture
-    def mock_db_service(self):
-        """Mock database service for ingestion database with simple tracking table."""
-        import pandas as pd
-
-        # Simple tracking table: id, filter_values (JSON), created_at, updated_at
-        mock_df = pd.DataFrame(
-            {
-                "id": ["id1", "id2"],
-                "filter_values": ['{"status": "pending"}', '{"status": "processing"}'],
-                "created_at": [datetime.now(), datetime.now()],
-                "updated_at": [datetime.now(), datetime.now()],
-            }
-        )
-        mock_instance = Mock()
-        mock_instance.get_table_df.return_value = mock_df
-        mock_instance.table_exists.return_value = True
-        mock_instance.schema_exists.return_value = True
-
-        with patch("ada_backend.services.cron.entries.endpoint_polling.SQLLocalService") as mock_service:
-            mock_service.return_value = mock_instance
-            yield mock_instance
-
     @pytest.mark.asyncio
-    async def test_execute_simple_id_extraction(
-        self, mock_db_session, mock_source, mock_httpx_client, mock_db_service
-    ):
+    async def test_execute_simple_id_extraction(self, mock_db_session, mock_source, mock_httpx_client):
         """Test basic execution without filter fields."""
-        with patch(
-            "ada_backend.repositories.tracker_history_repository.get_tracked_values_history"
-        ) as mock_get_history:
+        with (
+            patch("ada_backend.services.cron.entries.endpoint_polling.get_tracked_values_history") as mock_get_history,
+            patch("ada_backend.services.cron.entries.endpoint_polling.create_tracked_values_bulk") as mock_create_bulk,
+        ):
             mock_get_history.return_value = []
 
             payload = EndpointPollingExecutionPayload(
@@ -475,15 +451,15 @@ class TestExecute:
             result = await execute(payload, db=mock_db_session, cron_id=uuid4())
 
             assert "new_values" in result
-            assert "removed_ids" in result
             assert "total_polled_values" in result
 
     @pytest.mark.asyncio
-    async def test_execute_with_filter_fields(self, mock_db_session, mock_source, mock_httpx_client, mock_db_service):
+    async def test_execute_with_filter_fields(self, mock_db_session, mock_source, mock_httpx_client):
         """Test execution with filter fields."""
-        with patch(
-            "ada_backend.repositories.tracker_history_repository.get_tracked_values_history"
-        ) as mock_get_history:
+        with (
+            patch("ada_backend.services.cron.entries.endpoint_polling.get_tracked_values_history") as mock_get_history,
+            patch("ada_backend.services.cron.entries.endpoint_polling.create_tracked_values_bulk") as mock_create_bulk,
+        ):
             mock_get_history.return_value = []
 
             payload = EndpointPollingExecutionPayload(
@@ -499,12 +475,9 @@ class TestExecute:
             result = await execute(payload, db=mock_db_session, cron_id=uuid4())
 
             assert "new_values" in result
-            assert "removed_ids" in result
 
     @pytest.mark.asyncio
-    async def test_execute_with_previous_run_state(
-        self, mock_db_session, mock_source, mock_httpx_client, mock_db_service
-    ):
+    async def test_execute_with_previous_run_state(self, mock_db_session, mock_source, mock_httpx_client):
         """Test execution with previous run state to detect changes."""
         from ada_backend.database.models import EndpointPollingHistory
 
@@ -514,9 +487,10 @@ class TestExecute:
             Mock(spec=EndpointPollingHistory, tracked_value="3"),
         ]
 
-        with patch(
-            "ada_backend.repositories.tracker_history_repository.get_tracked_values_history"
-        ) as mock_get_history:
+        with (
+            patch("ada_backend.services.cron.entries.endpoint_polling.get_tracked_values_history") as mock_get_history,
+            patch("ada_backend.services.cron.entries.endpoint_polling.create_tracked_values_bulk") as mock_create_bulk,
+        ):
             mock_get_history.return_value = mock_history
 
             payload = EndpointPollingExecutionPayload(
@@ -532,14 +506,14 @@ class TestExecute:
             result = await execute(payload, db=mock_db_session, cron_id=uuid4())
 
             assert "new_values" in result
-            assert "removed_ids" in result
 
     @pytest.mark.asyncio
     async def test_execute_missing_ingestion_db_url(self, mock_db_session, mock_source, mock_httpx_client):
         """Test execution with missing database."""
-        with patch(
-            "ada_backend.repositories.tracker_history_repository.get_tracked_values_history"
-        ) as mock_get_history:
+        with (
+            patch("ada_backend.services.cron.entries.endpoint_polling.get_tracked_values_history") as mock_get_history,
+            patch("ada_backend.services.cron.entries.endpoint_polling.create_tracked_values_bulk") as mock_create_bulk,
+        ):
             mock_get_history.return_value = []
 
             payload = EndpointPollingExecutionPayload(
@@ -559,9 +533,10 @@ class TestExecute:
     @pytest.mark.asyncio
     async def test_execute_empty_ingestion_db(self, mock_db_session, mock_source, mock_httpx_client):
         """Test execution with empty history database."""
-        with patch(
-            "ada_backend.repositories.tracker_history_repository.get_tracked_values_history"
-        ) as mock_get_history:
+        with (
+            patch("ada_backend.services.cron.entries.endpoint_polling.get_tracked_values_history") as mock_get_history,
+            patch("ada_backend.services.cron.entries.endpoint_polling.create_tracked_values_bulk") as mock_create_bulk,
+        ):
             mock_get_history.return_value = []
 
             payload = EndpointPollingExecutionPayload(
