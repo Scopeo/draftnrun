@@ -112,6 +112,7 @@ class UIComponent(StrEnum):
     SWITCH = "Switch"
     TEXTAREA = "Textarea"
     TEXTFIELD = "Textfield"
+    FILE_UPLOAD = "FileUpload"
 
 
 class SourceType(StrEnum):
@@ -188,6 +189,10 @@ class UIComponentProperties(BaseModel):
 
     # Password field property
     type: Optional[str] = Field(None, description="Set to 'password' for password fields")
+
+    # File upload property
+    accept: Optional[str] = None
+    multiple: Optional[bool] = None
 
 
 def cast_value(
