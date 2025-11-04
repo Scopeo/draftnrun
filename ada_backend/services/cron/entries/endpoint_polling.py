@@ -20,10 +20,14 @@ from ada_backend.repositories.tracker_history_repository import (
     get_tracked_values_history,
 )
 from ada_backend.services.cron.core import BaseUserPayload, BaseExecutionPayload, CronEntrySpec
+from ada_backend.services.cron.entries.agent_inference import AgentInferenceExecutionPayload, AgentInferenceUserPayload
 from ada_backend.services.cron.errors import CronValidationError
-from ada_backend.repositories.project_repository import get_project
 from ada_backend.services.agent_runner_service import run_env_agent
-from ada_backend.database.models import CallType, EnvType
+from ada_backend.database.models import CallType
+from ada_backend.services.cron.entries.agent_inference import (
+    validate_registration as validate_registration_agent_inference,
+    validate_execution as validate_execution_agent_inference,
+)
 
 LOGGER = logging.getLogger(__name__)
 
@@ -92,14 +96,7 @@ class EndpointPollingUserPayload(BaseUserPayload):
     )
     headers: Optional[dict[str, str]] = Field(default=None, description="Optional HTTP headers for the request")
     timeout: int = Field(default=30, ge=1, le=300, description="Request timeout in seconds")
-    project_id: Optional[UUID] = Field(
-        default=None,
-        description=("Project ID to trigger workflows for each new value detected."),
-    )
-    env: EnvType = Field(
-        default=EnvType.PRODUCTION,
-        description="Environment (draft/production) for workflow execution",
-    )
+    workflow_input: AgentInferenceUserPayload = Field(..., description="Agent inference input")
     workflow_input_template: Optional[str] = Field(
         default=None,
         description=(
@@ -117,8 +114,15 @@ class EndpointPollingUserPayload(BaseUserPayload):
                 "filter_fields": {"data[].status": "processing"},
                 "headers": {"Authorization": "Bearer token"},
                 "timeout": 30,
-                "project_id": "123e4567-e89b-12d3-a456-426614174000",
-                "env": "production",
+                "workflow_input": {
+                    "project_id": "123e4567-e89b-12d3-a456-426614174000",
+                    "env": "production",
+                    "input_data": {
+                        "messages": [
+                            {"role": "user", "content": "Hello, run the daily report"},
+                        ]
+                    },
+                },
                 "workflow_input_template": "Process item: {item}",
             }
         }
@@ -132,10 +136,7 @@ class EndpointPollingExecutionPayload(BaseExecutionPayload):
     filter_fields: Optional[dict[str, str]] = None
     headers: Optional[dict[str, str]]
     timeout: int
-    organization_id: UUID
-    created_by: UUID
-    project_id: Optional[UUID] = None
-    env: EnvType = EnvType.PRODUCTION
+    workflow_input: AgentInferenceExecutionPayload
     workflow_input_template: Optional[str] = None
 
 
@@ -152,23 +153,12 @@ def validate_registration(
     - The tracking_field_path can successfully extract IDs from the response
     - If filter_fields are provided, they can be extracted from the response
     """
-    if not organization_id:
-        raise ValueError("organization_id missing from context")
-
-    if not user_id:
-        raise ValueError("user_id missing from context")
-
-    db = kwargs.get("db")
-    if not db:
-        raise ValueError("db missing from context")
-
-    # If project_id is provided, validate it exists and belongs to the organization
-    if user_input.project_id:
-        project = get_project(db, project_id=user_input.project_id)
-        if not project:
-            raise ValueError(f"Project {user_input.project_id} not found")
-        if project.organization_id != organization_id:
-            raise ValueError(f"Project {user_input.project_id} does not belong to organization {organization_id}")
+    agent_inference_execution_payload = validate_registration_agent_inference(
+        user_input.workflow_input,
+        organization_id=organization_id,
+        user_id=user_id,
+        **kwargs,
+    )
 
     # Validate endpoint accessibility and ID extraction
     LOGGER.info(f"Validating endpoint polling configuration: {user_input.endpoint_url}")
@@ -296,27 +286,14 @@ def validate_registration(
         filter_fields=user_input.filter_fields,
         headers=user_input.headers,
         timeout=user_input.timeout,
-        organization_id=organization_id,
-        created_by=user_id,
-        project_id=user_input.project_id,
-        env=user_input.env,
+        workflow_input=agent_inference_execution_payload,
         workflow_input_template=user_input.workflow_input_template,
     )
 
 
 def validate_execution(execution_payload: EndpointPollingExecutionPayload, **kwargs) -> None:
     """Validate execution payload and return None."""
-    db = kwargs.get("db")
-    if not db:
-        raise ValueError("db missing from context")
-
-    # If project_id is provided, validate it still exists and belongs to the organization
-    if execution_payload.project_id:
-        project = get_project(db, project_id=execution_payload.project_id)
-        if not project:
-            raise ValueError(f"Project {execution_payload.project_id} not found at execution time")
-        if project.organization_id != execution_payload.organization_id:
-            raise ValueError("Project organization mismatch at execution time")
+    validate_execution_agent_inference(execution_payload.workflow_input, **kwargs)
 
 
 def _extract_nested_path(data: Any, path: str) -> Any:
@@ -702,8 +679,11 @@ async def execute(execution_payload: EndpointPollingExecutionPayload, **kwargs) 
     LOGGER.info(f"Identified {len(new_values)} new values")
 
     workflow_results = []
-    if execution_payload.project_id and new_values:
-        LOGGER.info(f"Triggering workflows for {len(new_values)} new values in project {execution_payload.project_id}")
+    agent_inference_execution_payload = execution_payload.workflow_input
+    if agent_inference_execution_payload.project_id and new_values:
+        LOGGER.info(
+            f"Triggering workflows for {len(new_values)} new values in project {agent_inference_execution_payload.project_id}"
+        )
         for new_value in new_values:
             try:
                 item = items_by_id.get(new_value, {})
@@ -723,8 +703,8 @@ async def execute(execution_payload: EndpointPollingExecutionPayload, **kwargs) 
                 }
                 workflow_result = await run_env_agent(
                     session=db,
-                    project_id=execution_payload.project_id,
-                    env=execution_payload.env,
+                    project_id=agent_inference_execution_payload.project_id,
+                    env=agent_inference_execution_payload.env,
                     input_data=input_data,
                     call_type=CallType.API,
                 )

@@ -15,8 +15,12 @@ from ada_backend.services.cron.entries.endpoint_polling import (
     _extract_ids_from_response,
     _extract_ids_and_filter_values_from_response,
 )
+from ada_backend.services.cron.entries.agent_inference import (
+    AgentInferenceUserPayload,
+    AgentInferenceExecutionPayload,
+)
 from ada_backend.services.cron.errors import CronValidationError
-from ada_backend.database.models import DataSource
+from ada_backend.database.models import DataSource, EnvType
 
 
 @pytest.fixture
@@ -35,6 +39,28 @@ def mock_db_session():
     """Create a mock database session."""
     session = Mock()
     return session
+
+
+@pytest.fixture
+def sample_workflow_input(mock_source):
+    """Create a sample workflow input for testing."""
+    return AgentInferenceUserPayload(
+        project_id=uuid4(),
+        env=EnvType.PRODUCTION,
+        input_data={"messages": [{"role": "user", "content": "Test message"}]},
+    )
+
+
+@pytest.fixture
+def sample_agent_inference_execution_payload(mock_source):
+    """Create a sample agent inference execution payload for testing."""
+    return AgentInferenceExecutionPayload(
+        project_id=uuid4(),
+        env=EnvType.PRODUCTION,
+        input_data={"messages": [{"role": "user", "content": "Test message"}]},
+        organization_id=mock_source.organization_id,
+        created_by=uuid4(),
+    )
 
 
 @pytest.fixture
@@ -142,7 +168,18 @@ class TestValidateRegistration:
 
     def test_validate_success(self, mock_db_session, sample_endpoint_response):
         """Test successful validation."""
-        with patch("ada_backend.services.cron.entries.endpoint_polling.httpx.Client") as mock_client_class:
+        from ada_backend.database.models import Project
+
+        project_id = uuid4()
+        organization_id = uuid4()
+
+        mock_project = Mock(spec=Project)
+        mock_project.organization_id = organization_id
+
+        with (
+            patch("ada_backend.services.cron.entries.endpoint_polling.httpx.Client") as mock_client_class,
+            patch("ada_backend.services.cron.entries.endpoint_polling.get_project", return_value=mock_project),
+        ):
             mock_response = Mock()
             mock_response.json.return_value = sample_endpoint_response
             mock_response.raise_for_status = Mock()
@@ -158,9 +195,13 @@ class TestValidateRegistration:
             user_input = EndpointPollingUserPayload(
                 endpoint_url="https://api.example.com/items",
                 tracking_field_path="data[].id",
+                workflow_input=AgentInferenceUserPayload(
+                    project_id=project_id,
+                    env=EnvType.PRODUCTION,
+                    input_data={"messages": [{"role": "user", "content": "Test"}]},
+                ),
             )
 
-            organization_id = uuid4()
             user_id = uuid4()
 
             result = validate_registration(
@@ -171,13 +212,24 @@ class TestValidateRegistration:
             )
 
             assert isinstance(result, EndpointPollingExecutionPayload)
-            assert result.organization_id == organization_id
+            assert result.agent_inference_execution_payload.organization_id == organization_id
             assert result.tracking_field_path == "data[].id"
             mock_client.get.assert_called_once()
 
     def test_validate_with_filter_fields(self, mock_db_session, sample_endpoint_response):
         """Test validation with filter fields."""
-        with patch("ada_backend.services.cron.entries.endpoint_polling.httpx.Client") as mock_client_class:
+        from ada_backend.database.models import Project
+
+        project_id = uuid4()
+        organization_id = uuid4()
+
+        mock_project = Mock(spec=Project)
+        mock_project.organization_id = organization_id
+
+        with (
+            patch("ada_backend.services.cron.entries.endpoint_polling.httpx.Client") as mock_client_class,
+            patch("ada_backend.services.cron.entries.endpoint_polling.get_project", return_value=mock_project),
+        ):
             mock_response = Mock()
             mock_response.json.return_value = sample_endpoint_response
             mock_response.raise_for_status = Mock()
@@ -194,9 +246,13 @@ class TestValidateRegistration:
                 endpoint_url="https://api.example.com/items",
                 tracking_field_path="data[].id",
                 filter_fields={"data[].status": "processing"},
+                workflow_input=AgentInferenceUserPayload(
+                    project_id=project_id,
+                    env=EnvType.PRODUCTION,
+                    input_data={"messages": [{"role": "user", "content": "Test"}]},
+                ),
             )
 
-            organization_id = uuid4()
             user_id = uuid4()
 
             result = validate_registration(
@@ -210,7 +266,18 @@ class TestValidateRegistration:
 
     def test_validate_invalid_endpoint_url(self, mock_db_session):
         """Test validation fails with unreachable endpoint."""
-        with patch("ada_backend.services.cron.entries.endpoint_polling.httpx.Client") as mock_client_class:
+        from ada_backend.database.models import Project
+
+        project_id = uuid4()
+        organization_id = uuid4()
+
+        mock_project = Mock(spec=Project)
+        mock_project.organization_id = organization_id
+
+        with (
+            patch("ada_backend.services.cron.entries.endpoint_polling.httpx.Client") as mock_client_class,
+            patch("ada_backend.services.cron.entries.endpoint_polling.get_project", return_value=mock_project),
+        ):
             import httpx
 
             mock_client = Mock()
@@ -224,9 +291,13 @@ class TestValidateRegistration:
             user_input = EndpointPollingUserPayload(
                 endpoint_url="https://invalid-endpoint.example.com/items",
                 tracking_field_path="data[].id",
+                workflow_input=AgentInferenceUserPayload(
+                    project_id=project_id,
+                    env=EnvType.PRODUCTION,
+                    input_data={"messages": [{"role": "user", "content": "Test"}]},
+                ),
             )
 
-            organization_id = uuid4()
             user_id = uuid4()
 
             with pytest.raises(CronValidationError, match="Failed to connect to endpoint"):
@@ -239,7 +310,18 @@ class TestValidateRegistration:
 
     def test_validate_invalid_tracking_path(self, mock_db_session, sample_endpoint_response):
         """Test validation fails with invalid tracking field path."""
-        with patch("ada_backend.services.cron.entries.endpoint_polling.httpx.Client") as mock_client_class:
+        from ada_backend.database.models import Project
+
+        project_id = uuid4()
+        organization_id = uuid4()
+
+        mock_project = Mock(spec=Project)
+        mock_project.organization_id = organization_id
+
+        with (
+            patch("ada_backend.services.cron.entries.endpoint_polling.httpx.Client") as mock_client_class,
+            patch("ada_backend.services.cron.entries.endpoint_polling.get_project", return_value=mock_project),
+        ):
             mock_response = Mock()
             mock_response.json.return_value = sample_endpoint_response
             mock_response.raise_for_status = Mock()
@@ -255,9 +337,13 @@ class TestValidateRegistration:
             user_input = EndpointPollingUserPayload(
                 endpoint_url="https://api.example.com/items",
                 tracking_field_path="invalid.path",
+                workflow_input=AgentInferenceUserPayload(
+                    project_id=project_id,
+                    env=EnvType.PRODUCTION,
+                    input_data={"messages": [{"role": "user", "content": "Test"}]},
+                ),
             )
 
-            organization_id = uuid4()
             user_id = uuid4()
 
             with pytest.raises(CronValidationError, match="Failed to extract IDs"):
@@ -270,7 +356,18 @@ class TestValidateRegistration:
 
     def test_validate_invalid_json_response(self, mock_db_session):
         """Test validation fails with invalid JSON response."""
-        with patch("ada_backend.services.cron.entries.endpoint_polling.httpx.Client") as mock_client_class:
+        from ada_backend.database.models import Project
+
+        project_id = uuid4()
+        organization_id = uuid4()
+
+        mock_project = Mock(spec=Project)
+        mock_project.organization_id = organization_id
+
+        with (
+            patch("ada_backend.services.cron.entries.endpoint_polling.httpx.Client") as mock_client_class,
+            patch("ada_backend.services.cron.entries.endpoint_polling.get_project", return_value=mock_project),
+        ):
             import json
 
             mock_response = Mock()
@@ -288,9 +385,13 @@ class TestValidateRegistration:
             user_input = EndpointPollingUserPayload(
                 endpoint_url="https://api.example.com/items",
                 tracking_field_path="data[].id",
+                workflow_input=AgentInferenceUserPayload(
+                    project_id=project_id,
+                    env=EnvType.PRODUCTION,
+                    input_data={"messages": [{"role": "user", "content": "Test"}]},
+                ),
             )
 
-            organization_id = uuid4()
             user_id = uuid4()
 
             with pytest.raises(CronValidationError, match="returned invalid JSON"):
@@ -303,7 +404,18 @@ class TestValidateRegistration:
 
     def test_validate_filter_fields_without_array_notation(self, mock_db_session):
         """Test validation fails when filter_fields used without array notation."""
-        with patch("ada_backend.services.cron.entries.endpoint_polling.httpx.Client") as mock_client_class:
+        from ada_backend.database.models import Project
+
+        project_id = uuid4()
+        organization_id = uuid4()
+
+        mock_project = Mock(spec=Project)
+        mock_project.organization_id = organization_id
+
+        with (
+            patch("ada_backend.services.cron.entries.endpoint_polling.httpx.Client") as mock_client_class,
+            patch("ada_backend.services.cron.entries.endpoint_polling.get_project", return_value=mock_project),
+        ):
             mock_response = Mock()
             mock_response.json.return_value = {"id": "123"}
             mock_response.raise_for_status = Mock()
@@ -320,9 +432,13 @@ class TestValidateRegistration:
                 endpoint_url="https://api.example.com/items",
                 tracking_field_path="id",
                 filter_fields={"status": "processing"},
+                workflow_input=AgentInferenceUserPayload(
+                    project_id=project_id,
+                    env=EnvType.PRODUCTION,
+                    input_data={"messages": [{"role": "user", "content": "Test"}]},
+                ),
             )
 
-            organization_id = uuid4()
             user_id = uuid4()
 
             with pytest.raises(
@@ -338,7 +454,18 @@ class TestValidateRegistration:
 
     def test_validate_http_error(self, mock_db_session):
         """Test validation fails with HTTP error status."""
-        with patch("ada_backend.services.cron.entries.endpoint_polling.httpx.Client") as mock_client_class:
+        from ada_backend.database.models import Project
+
+        project_id = uuid4()
+        organization_id = uuid4()
+
+        mock_project = Mock(spec=Project)
+        mock_project.organization_id = organization_id
+
+        with (
+            patch("ada_backend.services.cron.entries.endpoint_polling.httpx.Client") as mock_client_class,
+            patch("ada_backend.services.cron.entries.endpoint_polling.get_project", return_value=mock_project),
+        ):
             import httpx
 
             mock_response = Mock()
@@ -357,9 +484,13 @@ class TestValidateRegistration:
             user_input = EndpointPollingUserPayload(
                 endpoint_url="https://api.example.com/items",
                 tracking_field_path="data[].id",
+                workflow_input=AgentInferenceUserPayload(
+                    project_id=project_id,
+                    env=EnvType.PRODUCTION,
+                    input_data={"messages": [{"role": "user", "content": "Test"}]},
+                ),
             )
 
-            organization_id = uuid4()
             user_id = uuid4()
 
             with pytest.raises(CronValidationError, match="returned HTTP 404"):
@@ -374,35 +505,49 @@ class TestValidateRegistration:
 class TestValidateExecution:
     """Tests for execution validation."""
 
-    def test_validate_execution_success(self, mock_db_session, mock_source):
+    def test_validate_execution_success(self, mock_db_session, mock_source, sample_agent_inference_execution_payload):
         """Test successful execution validation."""
-        payload = EndpointPollingExecutionPayload(
-            endpoint_url="https://api.example.com/items",
-            tracking_field_path="data[].id",
-            filter_fields=None,
-            headers=None,
-            timeout=30,
-            organization_id=mock_source.organization_id,
-            created_by=uuid4(),
-        )
+        from ada_backend.repositories.project_repository import get_project
+        from ada_backend.database.models import Project
 
-        # Should not raise
-        validate_execution(payload, db=mock_db_session)
+        mock_project = Mock(spec=Project)
+        mock_project.organization_id = sample_agent_inference_execution_payload.organization_id
 
-    def test_validate_execution_succeeds_when_source_exists(self, mock_db_session, mock_source):
+        with patch("ada_backend.services.cron.entries.endpoint_polling.get_project", return_value=mock_project):
+            payload = EndpointPollingExecutionPayload(
+                endpoint_url="https://api.example.com/items",
+                tracking_field_path="data[].id",
+                filter_fields=None,
+                headers=None,
+                timeout=30,
+                agent_inference_execution_payload=sample_agent_inference_execution_payload,
+            )
+
+            # Should not raise
+            validate_execution(payload, db=mock_db_session)
+
+    def test_validate_execution_succeeds_when_source_exists(
+        self, mock_db_session, mock_source, sample_agent_inference_execution_payload
+    ):
         """Test execution validation succeeds when source exists."""
-        payload = EndpointPollingExecutionPayload(
-            endpoint_url="https://api.example.com/items",
-            tracking_field_path="data[].id",
-            filter_fields=None,
-            headers=None,
-            timeout=30,
-            organization_id=mock_source.organization_id,
-            created_by=uuid4(),
-        )
+        from ada_backend.repositories.project_repository import get_project
+        from ada_backend.database.models import Project
 
-        # Should not raise
-        validate_execution(payload, db=mock_db_session)
+        mock_project = Mock(spec=Project)
+        mock_project.organization_id = sample_agent_inference_execution_payload.organization_id
+
+        with patch("ada_backend.services.cron.entries.endpoint_polling.get_project", return_value=mock_project):
+            payload = EndpointPollingExecutionPayload(
+                endpoint_url="https://api.example.com/items",
+                tracking_field_path="data[].id",
+                filter_fields=None,
+                headers=None,
+                timeout=30,
+                agent_inference_execution_payload=sample_agent_inference_execution_payload,
+            )
+
+            # Should not raise
+            validate_execution(payload, db=mock_db_session)
 
 
 class TestExecute:
@@ -429,7 +574,9 @@ class TestExecute:
             yield mock_client
 
     @pytest.mark.asyncio
-    async def test_execute_simple_id_extraction(self, mock_db_session, mock_source, mock_httpx_client):
+    async def test_execute_simple_id_extraction(
+        self, mock_db_session, mock_source, mock_httpx_client, sample_agent_inference_execution_payload
+    ):
         """Test basic execution without filter fields."""
         with (
             patch("ada_backend.services.cron.entries.endpoint_polling.get_tracked_values_history") as mock_get_history,
@@ -443,8 +590,7 @@ class TestExecute:
                 filter_fields=None,
                 headers=None,
                 timeout=30,
-                organization_id=mock_source.organization_id,
-                created_by=uuid4(),
+                agent_inference_execution_payload=sample_agent_inference_execution_payload,
             )
 
             result = await execute(payload, db=mock_db_session, cron_id=uuid4())
@@ -453,7 +599,9 @@ class TestExecute:
             assert "total_polled_values" in result
 
     @pytest.mark.asyncio
-    async def test_execute_with_filter_fields(self, mock_db_session, mock_source, mock_httpx_client):
+    async def test_execute_with_filter_fields(
+        self, mock_db_session, mock_source, mock_httpx_client, sample_agent_inference_execution_payload
+    ):
         """Test execution with filter fields."""
         with (
             patch("ada_backend.services.cron.entries.endpoint_polling.get_tracked_values_history") as mock_get_history,
@@ -467,8 +615,7 @@ class TestExecute:
                 filter_fields={"data[].status": "processing", "data[].priority": "high"},
                 headers=None,
                 timeout=30,
-                organization_id=mock_source.organization_id,
-                created_by=uuid4(),
+                agent_inference_execution_payload=sample_agent_inference_execution_payload,
             )
 
             result = await execute(payload, db=mock_db_session, cron_id=uuid4())
@@ -476,7 +623,9 @@ class TestExecute:
             assert "new_values" in result
 
     @pytest.mark.asyncio
-    async def test_execute_with_previous_run_state(self, mock_db_session, mock_source, mock_httpx_client):
+    async def test_execute_with_previous_run_state(
+        self, mock_db_session, mock_source, mock_httpx_client, sample_agent_inference_execution_payload
+    ):
         """Test execution with previous run state to detect changes."""
         from ada_backend.database.models import EndpointPollingHistory
 
@@ -498,8 +647,7 @@ class TestExecute:
                 filter_fields={"data[].status": "processing", "data[].priority": "high"},
                 headers=None,
                 timeout=30,
-                organization_id=mock_source.organization_id,
-                created_by=uuid4(),
+                agent_inference_execution_payload=sample_agent_inference_execution_payload,
             )
 
             result = await execute(payload, db=mock_db_session, cron_id=uuid4())
@@ -507,7 +655,9 @@ class TestExecute:
             assert "new_values" in result
 
     @pytest.mark.asyncio
-    async def test_execute_missing_ingestion_db_url(self, mock_db_session, mock_source, mock_httpx_client):
+    async def test_execute_missing_ingestion_db_url(
+        self, mock_db_session, mock_source, mock_httpx_client, sample_agent_inference_execution_payload
+    ):
         """Test execution with missing database."""
         with (
             patch("ada_backend.services.cron.entries.endpoint_polling.get_tracked_values_history") as mock_get_history,
@@ -521,8 +671,7 @@ class TestExecute:
                 filter_fields=None,
                 headers=None,
                 timeout=30,
-                organization_id=mock_source.organization_id,
-                created_by=uuid4(),
+                agent_inference_execution_payload=sample_agent_inference_execution_payload,
             )
 
             # Should not raise
@@ -530,7 +679,9 @@ class TestExecute:
             assert "new_values" in result
 
     @pytest.mark.asyncio
-    async def test_execute_empty_ingestion_db(self, mock_db_session, mock_source, mock_httpx_client):
+    async def test_execute_empty_ingestion_db(
+        self, mock_db_session, mock_source, mock_httpx_client, sample_agent_inference_execution_payload
+    ):
         """Test execution with empty history database."""
         with (
             patch("ada_backend.services.cron.entries.endpoint_polling.get_tracked_values_history") as mock_get_history,
@@ -544,8 +695,7 @@ class TestExecute:
                 filter_fields=None,
                 headers=None,
                 timeout=30,
-                organization_id=mock_source.organization_id,
-                created_by=uuid4(),
+                agent_inference_execution_payload=sample_agent_inference_execution_payload,
             )
 
             result = await execute(payload, db=mock_db_session, cron_id=uuid4())
