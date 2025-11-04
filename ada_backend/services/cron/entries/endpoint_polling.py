@@ -8,6 +8,7 @@ and identifies new values (endpoint_values - stored_values).
 
 import logging
 import json
+import re
 from typing import Any, Optional
 from uuid import UUID
 from pydantic import Field, HttpUrl
@@ -25,6 +26,52 @@ from ada_backend.services.agent_runner_service import run_env_agent
 from ada_backend.database.models import CallType, EnvType
 
 LOGGER = logging.getLogger(__name__)
+
+
+def format_workflow_template(template: str, item: dict[str, Any]) -> str:
+    """
+    Format workflow input template with support for:
+    - {item} - the full item as JSON string
+    - {item.key} - access nested fields from the item (e.g., {item.name}, {item.step})
+
+    Args:
+        template: Template string with placeholders
+        item: The complete item dictionary
+
+    Returns:
+        Formatted template string
+    """
+    result = template
+
+    # Replace {item.key} patterns FIRST (before replacing {item})
+    # Pattern matches {item.any_field_name} or {item.nested.field}
+    item_pattern = r"\{item\.([^}]+)\}"
+
+    def replace_item_field(match):
+        field_path = match.group(1)
+        try:
+            # Navigate through nested fields
+            value = item
+            for key in field_path.split("."):
+                if isinstance(value, dict):
+                    value = value.get(key)
+                elif hasattr(value, key):
+                    value = getattr(value, key)
+                else:
+                    return ""  # Field not found, return empty string
+                if value is None:
+                    return ""
+            return str(value)
+        except (AttributeError, KeyError, TypeError):
+            return ""  # Return empty string if field doesn't exist
+
+    result = re.sub(item_pattern, replace_item_field, result)
+
+    # Replace {item} with JSON string (after {item.key} patterns are replaced)
+    item_json = json.dumps(item, default=str) if item else "{}"
+    result = result.replace("{item}", item_json)
+
+    return result
 
 
 class EndpointPollingUserPayload(BaseUserPayload):
@@ -56,8 +103,9 @@ class EndpointPollingUserPayload(BaseUserPayload):
     workflow_input_template: Optional[str] = Field(
         default=None,
         description=(
-            "Template for the workflow input message. Use {id} for the detected value "
-            "and {item} for the full item (JSON). If None, defaults to just the item JSON."
+            "Template for the workflow input message. Use {item} for the full item (JSON), "
+            "or {item.key} to access specific fields (e.g., {item.name}, {item.step}). "
+            "If None, defaults to just the item JSON."
         ),
     )
 
@@ -661,8 +709,7 @@ async def execute(execution_payload: EndpointPollingExecutionPayload, **kwargs) 
             try:
                 item = items_by_id.get(new_value, {})
                 if execution_payload.workflow_input_template:
-                    item_json = json.dumps(item, default=str) if item else "{}"
-                    input_message = execution_payload.workflow_input_template.format(id=new_value, item=item_json)
+                    input_message = format_workflow_template(execution_payload.workflow_input_template, item)
                 else:
                     if item:
                         input_message = json.dumps(item, default=str)
