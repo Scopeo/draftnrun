@@ -27,6 +27,26 @@ def create_tracked_value(
     session.commit()
 
 
+def create_tracked_values_bulk(
+    session: Session,
+    cron_id: UUID,
+    tracked_values: list[str],
+) -> None:
+    """Bulk insert tracked values in a single query."""
+    if not tracked_values:
+        return
+
+    new_records = [
+        EndpointPollingHistory(
+            cron_id=cron_id,
+            tracked_value=str(tracked_value),
+        )
+        for tracked_value in tracked_values
+    ]
+    session.bulk_save_objects(new_records)
+    session.commit()
+
+
 def delete_tracked_values_history(session: Session, cron_id: UUID, tracked_values: list[UUID]) -> None:
     session.query(EndpointPollingHistory).filter(
         EndpointPollingHistory.cron_id == cron_id,

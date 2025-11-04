@@ -282,7 +282,9 @@ class TestExecute:
         self, mock_db_session, mock_source, mock_httpx_client, mock_db_service
     ):
         """Test basic execution without filter fields."""
-        with patch("ada_backend.repositories.tracker_history_repository.get_tracked_values_history") as mock_get_history:
+        with patch(
+            "ada_backend.repositories.tracker_history_repository.get_tracked_values_history"
+        ) as mock_get_history:
             mock_get_history.return_value = []
 
             payload = EndpointPollingExecutionPayload(
@@ -297,14 +299,16 @@ class TestExecute:
 
             result = await execute(payload, db=mock_db_session, cron_id=uuid4())
 
-            assert "new_ids" in result
+            assert "new_values" in result
             assert "removed_ids" in result
-            assert "total_endpoint_ids" in result
+            assert "total_polled_values" in result
 
     @pytest.mark.asyncio
     async def test_execute_with_filter_fields(self, mock_db_session, mock_source, mock_httpx_client, mock_db_service):
         """Test execution with filter fields."""
-        with patch("ada_backend.repositories.tracker_history_repository.get_tracked_values_history") as mock_get_history:
+        with patch(
+            "ada_backend.repositories.tracker_history_repository.get_tracked_values_history"
+        ) as mock_get_history:
             mock_get_history.return_value = []
 
             payload = EndpointPollingExecutionPayload(
@@ -319,7 +323,7 @@ class TestExecute:
 
             result = await execute(payload, db=mock_db_session, cron_id=uuid4())
 
-            assert "new_ids" in result
+            assert "new_values" in result
             assert "removed_ids" in result
 
     @pytest.mark.asyncio
@@ -335,7 +339,9 @@ class TestExecute:
             Mock(spec=EndpointPollingHistory, tracked_value="3"),
         ]
 
-        with patch("ada_backend.repositories.tracker_history_repository.get_tracked_values_history") as mock_get_history:
+        with patch(
+            "ada_backend.repositories.tracker_history_repository.get_tracked_values_history"
+        ) as mock_get_history:
             mock_get_history.return_value = mock_history
 
             payload = EndpointPollingExecutionPayload(
@@ -350,13 +356,15 @@ class TestExecute:
 
             result = await execute(payload, db=mock_db_session, cron_id=uuid4())
 
-            assert "new_ids" in result
+            assert "new_values" in result
             assert "removed_ids" in result
 
     @pytest.mark.asyncio
     async def test_execute_missing_ingestion_db_url(self, mock_db_session, mock_source, mock_httpx_client):
         """Test execution with missing database."""
-        with patch("ada_backend.repositories.tracker_history_repository.get_tracked_values_history") as mock_get_history:
+        with patch(
+            "ada_backend.repositories.tracker_history_repository.get_tracked_values_history"
+        ) as mock_get_history:
             mock_get_history.return_value = []
 
             payload = EndpointPollingExecutionPayload(
@@ -371,12 +379,14 @@ class TestExecute:
 
             # Should not raise
             result = await execute(payload, db=mock_db_session, cron_id=uuid4())
-            assert "new_ids" in result
+            assert "new_values" in result
 
     @pytest.mark.asyncio
     async def test_execute_empty_ingestion_db(self, mock_db_session, mock_source, mock_httpx_client):
         """Test execution with empty history database."""
-        with patch("ada_backend.repositories.tracker_history_repository.get_tracked_values_history") as mock_get_history:
+        with patch(
+            "ada_backend.repositories.tracker_history_repository.get_tracked_values_history"
+        ) as mock_get_history:
             mock_get_history.return_value = []
 
             payload = EndpointPollingExecutionPayload(
@@ -393,5 +403,5 @@ class TestExecute:
 
             assert result["total_stored_ids"] == 0
             # All endpoint IDs (1, 2, 3, 4) should be new
-            assert len(result["new_ids"]) == 4
-            assert set(result["new_ids"]) == {"1", "2", "3", "4"}
+            assert len(result["new_values"]) == 4
+            assert set(result["new_values"]) == {"1", "2", "3", "4"}

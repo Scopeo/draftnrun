@@ -16,7 +16,7 @@ from pydantic import Field, HttpUrl
 import httpx
 
 from ada_backend.repositories.tracker_history_repository import (
-    create_tracked_value,
+    create_tracked_values_bulk,
     get_tracked_values_history,
 )
 from ada_backend.services.cron.core import BaseUserPayload, BaseExecutionPayload, CronEntrySpec
@@ -371,49 +371,52 @@ async def execute(execution_payload: EndpointPollingExecutionPayload, **kwargs) 
             endpoint_data, execution_payload.tracking_field_path, filter_field_paths
         )
 
-        endpoint_ids = set()
+        polled_values = set()
         for item_id, item_data in items_with_filter_values.items():
             filter_values = item_data.get("filter_values", {})
             matches_all = all(
                 filter_values.get(field_path) == target_value for field_path, target_value in filter_fields.items()
             )
             if matches_all:
-                endpoint_ids.add(item_id)
+                polled_values.add(item_id)
 
         LOGGER.info(
-            f"Found {len(endpoint_ids)} values matching filter "
+            f"Found {len(polled_values)} values matching filter "
             f"conditions out of {len(items_with_filter_values)} total values"
         )
     else:
-        endpoint_ids = _extract_ids_from_response(endpoint_data, execution_payload.tracking_field_path)
-        LOGGER.info(f"Found {len(endpoint_ids)} values from endpoint")
+        polled_values = _extract_ids_from_response(endpoint_data, execution_payload.tracking_field_path)
+        LOGGER.info(f"Found {len(polled_values)} values from endpoint")
 
     stored_history = get_tracked_values_history(db, cron_id)
     stored_ids = {str(record.tracked_value) for record in stored_history}
     LOGGER.info(f"Found {len(stored_ids)} already processed values")
 
-    current_time = datetime.now(timezone.utc)
-    new_ids = endpoint_ids - stored_ids
-    removed_ids = stored_ids - endpoint_ids
-    for item_id in new_ids:
-        create_tracked_value(db, cron_id, item_id, execution_payload.organization_id, current_time)
+    new_values = polled_values - stored_ids
+    removed_ids = stored_ids - polled_values
+    if new_values:
+        create_tracked_values_bulk(
+            session=db,
+            cron_id=cron_id,
+            tracked_values=list(new_values),
+        )
 
-    LOGGER.info(f"Identified {len(new_ids)} new values and {len(removed_ids)} removed values")
+    LOGGER.info(f"Identified {len(new_values)} new values and {len(removed_ids)} removed values")
 
     workflow_results = []
-    if execution_payload.project_id and new_ids:
-        LOGGER.info(f"Triggering workflows for {len(new_ids)} new values in project {execution_payload.project_id}")
-        for new_id in new_ids:
+    if execution_payload.project_id and new_values:
+        LOGGER.info(f"Triggering workflows for {len(new_values)} new values in project {execution_payload.project_id}")
+        for new_value in new_values:
             try:
-                item = items_by_id.get(new_id, {})
+                item = items_by_id.get(new_value, {})
                 if execution_payload.workflow_input_template:
                     item_json = json.dumps(item, default=str) if item else "{}"
-                    input_message = execution_payload.workflow_input_template.format(id=new_id, item=item_json)
+                    input_message = execution_payload.workflow_input_template.format(id=new_value, item=item_json)
                 else:
                     if item:
                         input_message = json.dumps(item, default=str)
                     else:
-                        input_message = str(new_id)
+                        input_message = str(new_value)
 
                 input_data = {
                     "messages": [
@@ -430,18 +433,18 @@ async def execute(execution_payload: EndpointPollingExecutionPayload, **kwargs) 
                 )
                 workflow_results.append(
                     {
-                        "id": new_id,
+                        "id": new_value,
                         "status": "success",
                         "message": workflow_result.message,
                         "trace_id": workflow_result.trace_id,
                     }
                 )
-                LOGGER.info(f"Successfully triggered workflow for value {new_id}")
+                LOGGER.info(f"Successfully triggered workflow for value {new_value}")
             except Exception as e:
-                LOGGER.error(f"Failed to trigger workflow for value {new_id}: {e}")
+                LOGGER.error(f"Failed to trigger workflow for value {new_value}: {e}")
                 workflow_results.append(
                     {
-                        "id": new_id,
+                        "id": new_value,
                         "status": "error",
                         "error": str(e),
                     }
@@ -449,11 +452,11 @@ async def execute(execution_payload: EndpointPollingExecutionPayload, **kwargs) 
 
     return {
         "endpoint_url": execution_payload.endpoint_url,
-        "total_endpoint_ids": len(endpoint_ids),
+        "total_polled_values": len(polled_values),
         "total_stored_ids": len(stored_ids),
-        "new_ids_count": len(new_ids),
+        "new_values_count": len(new_values),
         "removed_ids_count": len(removed_ids),
-        "new_ids": sorted(list(new_ids)) if new_ids else [],
+        "new_values": sorted(list(new_values)) if new_values else [],
         "removed_ids": sorted(list(removed_ids)) if removed_ids else [],
         "workflows_triggered": workflow_results,
     }
