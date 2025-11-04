@@ -282,9 +282,7 @@ class TestExecute:
         self, mock_db_session, mock_source, mock_httpx_client, mock_db_service
     ):
         """Test basic execution without filter fields."""
-        with patch(
-            "ada_backend.repositories.tracker_history_repository.get_tracked_values_history"
-        ) as mock_get_history:
+        with patch("ada_backend.repositories.tracker_history_repository.get_tracked_values_history") as mock_get_history:
             mock_get_history.return_value = []
 
             payload = EndpointPollingExecutionPayload(
@@ -306,9 +304,7 @@ class TestExecute:
     @pytest.mark.asyncio
     async def test_execute_with_filter_fields(self, mock_db_session, mock_source, mock_httpx_client, mock_db_service):
         """Test execution with filter fields."""
-        with patch(
-            "ada_backend.repositories.tracker_history_repository.get_tracked_values_history"
-        ) as mock_get_history:
+        with patch("ada_backend.repositories.tracker_history_repository.get_tracked_values_history") as mock_get_history:
             mock_get_history.return_value = []
 
             payload = EndpointPollingExecutionPayload(
@@ -339,9 +335,7 @@ class TestExecute:
             Mock(spec=EndpointPollingHistory, tracked_value="3"),
         ]
 
-        with patch(
-            "ada_backend.repositories.tracker_history_repository.get_tracked_values_history"
-        ) as mock_get_history:
+        with patch("ada_backend.repositories.tracker_history_repository.get_tracked_values_history") as mock_get_history:
             mock_get_history.return_value = mock_history
 
             payload = EndpointPollingExecutionPayload(
@@ -362,9 +356,7 @@ class TestExecute:
     @pytest.mark.asyncio
     async def test_execute_missing_ingestion_db_url(self, mock_db_session, mock_source, mock_httpx_client):
         """Test execution with missing database."""
-        with patch(
-            "ada_backend.repositories.tracker_history_repository.get_tracked_values_history"
-        ) as mock_get_history:
+        with patch("ada_backend.repositories.tracker_history_repository.get_tracked_values_history") as mock_get_history:
             mock_get_history.return_value = []
 
             payload = EndpointPollingExecutionPayload(
@@ -384,9 +376,7 @@ class TestExecute:
     @pytest.mark.asyncio
     async def test_execute_empty_ingestion_db(self, mock_db_session, mock_source, mock_httpx_client):
         """Test execution with empty history database."""
-        with patch(
-            "ada_backend.repositories.tracker_history_repository.get_tracked_values_history"
-        ) as mock_get_history:
+        with patch("ada_backend.repositories.tracker_history_repository.get_tracked_values_history") as mock_get_history:
             mock_get_history.return_value = []
 
             payload = EndpointPollingExecutionPayload(

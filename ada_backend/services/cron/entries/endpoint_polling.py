@@ -1,9 +1,9 @@
 """
-Endpoint ID tracker cron entry: models, validators, executor, and spec.
+Endpoint polling cron entry: models, validators, executor, and spec.
 
-This cron job queries a GET endpoint to fetch data with IDs,
-compares them with existing IDs stored in the ingestion database,
-and identifies new IDs (endpoint_ids - stored_ids).
+This cron job queries a GET endpoint to fetch data with values,
+compares them with existing values stored in the ingestion database,
+and identifies new values (endpoint_values - stored_values).
 """
 
 import logging
@@ -16,8 +16,8 @@ from pydantic import Field, HttpUrl
 import httpx
 
 from ada_backend.repositories.tracker_history_repository import (
-    create_tracked_id,
-    get_tracked_ids_history,
+    create_tracked_value,
+    get_tracked_values_history,
 )
 from ada_backend.services.cron.core import BaseUserPayload, BaseExecutionPayload, CronEntrySpec
 from ada_backend.repositories.project_repository import get_project
@@ -27,27 +27,27 @@ from ada_backend.database.models import CallType, EnvType
 LOGGER = logging.getLogger(__name__)
 
 
-class EndpointIdTrackerUserPayload(BaseUserPayload):
-    """User input for endpoint ID tracker cron jobs."""
+class EndpointPollingUserPayload(BaseUserPayload):
+    """User input for endpoint polling cron jobs."""
 
-    endpoint_url: HttpUrl = Field(..., description="GET endpoint URL to query for IDs")
-    id_field_path: str = Field(
+    endpoint_url: HttpUrl = Field(..., description="GET endpoint URL to query for values")
+    tracking_field_path: str = Field(
         default="id",
-        description="Path to the ID field in the response (e.g., 'id', 'data[].id', 'items[].id')",
+        description="Path to the tracking field in the response (e.g., 'id', 'data[].id', 'items[].id')",
     )
     filter_fields: Optional[dict[str, str]] = Field(
         default=None,
         description=(
             "Dictionary mapping filter field paths to their target values (e.g., "
             "{'data[].status': 'processing', 'data[].priority': 'high'}). "
-            "Only IDs matching all filter conditions will be tracked."
+            "Only values matching all filter conditions will be tracked."
         ),
     )
     headers: Optional[dict[str, str]] = Field(default=None, description="Optional HTTP headers for the request")
     timeout: int = Field(default=30, ge=1, le=300, description="Request timeout in seconds")
     project_id: Optional[UUID] = Field(
         default=None,
-        description=("Project ID to trigger workflows for each new ID detected."),
+        description=("Project ID to trigger workflows for each new value detected."),
     )
     env: EnvType = Field(
         default=EnvType.PRODUCTION,
@@ -56,7 +56,7 @@ class EndpointIdTrackerUserPayload(BaseUserPayload):
     workflow_input_template: Optional[str] = Field(
         default=None,
         description=(
-            "Template for the workflow input message. Use {id} for the detected ID "
+            "Template for the workflow input message. Use {id} for the detected value "
             "and {item} for the full item (JSON). If None, defaults to just the item JSON."
         ),
     )
@@ -65,7 +65,7 @@ class EndpointIdTrackerUserPayload(BaseUserPayload):
         json_schema_extra = {
             "example": {
                 "endpoint_url": "https://api.example.com/items",
-                "id_field_path": "data[].id",
+                "tracking_field_path": "data[].id",
                 "filter_fields": {"data[].status": "processing"},
                 "headers": {"Authorization": "Bearer token"},
                 "timeout": 30,
@@ -76,11 +76,11 @@ class EndpointIdTrackerUserPayload(BaseUserPayload):
         }
 
 
-class EndpointIdTrackerExecutionPayload(BaseExecutionPayload):
-    """Execution payload stored in database for endpoint ID tracker jobs."""
+class EndpointPollingExecutionPayload(BaseExecutionPayload):
+    """Execution payload stored in database for endpoint polling jobs."""
 
     endpoint_url: str
-    id_field_path: str
+    tracking_field_path: str
     filter_fields: Optional[dict[str, str]] = None
     headers: Optional[dict[str, str]]
     timeout: int
@@ -92,8 +92,8 @@ class EndpointIdTrackerExecutionPayload(BaseExecutionPayload):
 
 
 def validate_registration(
-    user_input: EndpointIdTrackerUserPayload, organization_id: UUID, user_id: UUID, **kwargs
-) -> EndpointIdTrackerExecutionPayload:
+    user_input: EndpointPollingUserPayload, organization_id: UUID, user_id: UUID, **kwargs
+) -> EndpointPollingExecutionPayload:
     """
     Validate user input and return the execution payload
     that will be used to execute the job.
@@ -117,9 +117,9 @@ def validate_registration(
         if project.organization_id != organization_id:
             raise ValueError(f"Project {user_input.project_id} does not belong to organization {organization_id}")
 
-    return EndpointIdTrackerExecutionPayload(
+    return EndpointPollingExecutionPayload(
         endpoint_url=str(user_input.endpoint_url),
-        id_field_path=user_input.id_field_path,
+        tracking_field_path=user_input.tracking_field_path,
         filter_fields=user_input.filter_fields,
         headers=user_input.headers,
         timeout=user_input.timeout,
@@ -131,7 +131,7 @@ def validate_registration(
     )
 
 
-def validate_execution(execution_payload: EndpointIdTrackerExecutionPayload, **kwargs) -> None:
+def validate_execution(execution_payload: EndpointPollingExecutionPayload, **kwargs) -> None:
     """Validate execution payload and return None."""
     db = kwargs.get("db")
     if not db:
@@ -221,17 +221,17 @@ def _extract_ids_from_response(data: Any, field_path: str) -> set[str]:
     return ids
 
 
-def _extract_items_with_ids(data: Any, id_field_path: str) -> dict[str, dict[str, Any]]:
+def _extract_items_with_ids(data: Any, tracking_field_path: str) -> dict[str, dict[str, Any]]:
     """
-    Extract all items from response with their IDs.
+    Extract all items from response with their values.
 
-    Returns a dictionary mapping item_id -> complete item.
+    Returns a dictionary mapping item_value -> complete item.
     """
     items_by_id: dict[str, dict[str, Any]] = {}
 
-    if "[]" in id_field_path:
+    if "[]" in tracking_field_path:
         # Array notation: extract all items from array
-        id_parts = id_field_path.split("[]")
+        id_parts = tracking_field_path.split("[]")
         if len(id_parts) == 2:
             array_path = id_parts[0].rstrip(".")
             id_field = id_parts[1].lstrip(".")
@@ -248,13 +248,13 @@ def _extract_items_with_ids(data: Any, id_field_path: str) -> dict[str, dict[str
         # Simple path: extract single item
         if isinstance(data, dict):
             # Try to get the item directly
-            if id_field_path in data:
-                item_id = str(data[id_field_path])
+            if tracking_field_path in data:
+                item_id = str(data[tracking_field_path])
                 if item_id:
                     items_by_id[item_id] = data
             else:
                 # Try nested path
-                path_parts = id_field_path.split(".")
+                path_parts = tracking_field_path.split(".")
                 if len(path_parts) > 1:
                     # Get parent object
                     parent_path = ".".join(path_parts[:-1])
@@ -270,28 +270,30 @@ def _extract_items_with_ids(data: Any, id_field_path: str) -> dict[str, dict[str
 
 
 def _extract_ids_and_filter_values_from_response(
-    data: Any, id_field_path: str, filter_field_paths: list[str]
+    data: Any, tracking_field_path: str, filter_field_paths: list[str]
 ) -> dict[str, dict[str, Any]]:
     """
-    Extract IDs and their corresponding filter field values from API response.
+    Extract values and their corresponding filter field values from API response.
     Used only for filtering - filter_values are not saved to DB.
 
     Args:
         data: The API response data
-        id_field_path: Path to the ID field (e.g., 'data[].id')
+        tracking_field_path: Path to the tracking field (e.g., 'data[].id')
         filter_field_paths: List of paths to filter fields
            (e.g., ['data[].status', 'data[].priority'])
 
     Returns:
-        Dictionary mapping ID to a dict containing all filter values.
+        Dictionary mapping value to a dict containing all filter values.
     """
-    if "[]" not in id_field_path:
-        raise ValueError("id_field_path must use array notation (e.g., 'data[].id') when filter fields are provided")
+    if "[]" not in tracking_field_path:
+        raise ValueError(
+            "tracking_field_path must use array notation (e.g., 'data[].id') when filter fields are provided"
+        )
 
-    # Extract the array path from id_field_path
-    id_parts = id_field_path.split("[]")
+    # Extract the array path from tracking_field_path
+    id_parts = tracking_field_path.split("[]")
     if len(id_parts) != 2:
-        raise ValueError(f"Invalid id_field_path format: {id_field_path}")
+        raise ValueError(f"Invalid tracking_field_path format: {tracking_field_path}")
 
     array_path = id_parts[0].rstrip(".")
     id_field = id_parts[1].lstrip(".")
@@ -339,7 +341,7 @@ def _extract_ids_and_filter_values_from_response(
     return result
 
 
-async def execute(execution_payload: EndpointIdTrackerExecutionPayload, **kwargs) -> dict[str, Any]:
+async def execute(execution_payload: EndpointPollingExecutionPayload, **kwargs) -> dict[str, Any]:
     db = kwargs.get("db")
     if not db:
         raise ValueError("db missing from context")
@@ -348,7 +350,7 @@ async def execute(execution_payload: EndpointIdTrackerExecutionPayload, **kwargs
     if not cron_id:
         raise ValueError("cron_id is required")
 
-    LOGGER.info(f"Starting endpoint ID tracker for endpoint {execution_payload.endpoint_url}")
+    LOGGER.info(f"Starting endpoint polling for endpoint {execution_payload.endpoint_url}")
 
     # Step 1: Query the endpoint
     LOGGER.info(f"Querying endpoint: {execution_payload.endpoint_url}")
@@ -360,13 +362,13 @@ async def execute(execution_payload: EndpointIdTrackerExecutionPayload, **kwargs
         response.raise_for_status()
         endpoint_data = response.json()
 
-    items_by_id = _extract_items_with_ids(endpoint_data, execution_payload.id_field_path)
+    items_by_id = _extract_items_with_ids(endpoint_data, execution_payload.tracking_field_path)
 
     filter_fields = execution_payload.filter_fields
     if filter_fields:
         filter_field_paths = list(filter_fields.keys())
         items_with_filter_values = _extract_ids_and_filter_values_from_response(
-            endpoint_data, execution_payload.id_field_path, filter_field_paths
+            endpoint_data, execution_payload.tracking_field_path, filter_field_paths
         )
 
         endpoint_ids = set()
@@ -379,28 +381,28 @@ async def execute(execution_payload: EndpointIdTrackerExecutionPayload, **kwargs
                 endpoint_ids.add(item_id)
 
         LOGGER.info(
-            f"Found {len(endpoint_ids)} IDs matching filter "
-            f"conditions out of {len(items_with_filter_values)} total IDs"
+            f"Found {len(endpoint_ids)} values matching filter "
+            f"conditions out of {len(items_with_filter_values)} total values"
         )
     else:
-        endpoint_ids = _extract_ids_from_response(endpoint_data, execution_payload.id_field_path)
-        LOGGER.info(f"Found {len(endpoint_ids)} IDs from endpoint")
+        endpoint_ids = _extract_ids_from_response(endpoint_data, execution_payload.tracking_field_path)
+        LOGGER.info(f"Found {len(endpoint_ids)} values from endpoint")
 
-    stored_history = get_tracked_ids_history(db, cron_id)
-    stored_ids = {str(record.tracked_id) for record in stored_history}
-    LOGGER.info(f"Found {len(stored_ids)} already processed IDs")
+    stored_history = get_tracked_values_history(db, cron_id)
+    stored_ids = {str(record.tracked_value) for record in stored_history}
+    LOGGER.info(f"Found {len(stored_ids)} already processed values")
 
     current_time = datetime.now(timezone.utc)
     new_ids = endpoint_ids - stored_ids
     removed_ids = stored_ids - endpoint_ids
     for item_id in new_ids:
-        create_tracked_id(db, cron_id, item_id, execution_payload.organization_id, current_time)
+        create_tracked_value(db, cron_id, item_id, execution_payload.organization_id, current_time)
 
-    LOGGER.info(f"Identified {len(new_ids)} new IDs and {len(removed_ids)} removed IDs")
+    LOGGER.info(f"Identified {len(new_ids)} new values and {len(removed_ids)} removed values")
 
     workflow_results = []
     if execution_payload.project_id and new_ids:
-        LOGGER.info(f"Triggering workflows for {len(new_ids)} new IDs in project {execution_payload.project_id}")
+        LOGGER.info(f"Triggering workflows for {len(new_ids)} new values in project {execution_payload.project_id}")
         for new_id in new_ids:
             try:
                 item = items_by_id.get(new_id, {})
@@ -434,9 +436,9 @@ async def execute(execution_payload: EndpointIdTrackerExecutionPayload, **kwargs
                         "trace_id": workflow_result.trace_id,
                     }
                 )
-                LOGGER.info(f"Successfully triggered workflow for ID {new_id}")
+                LOGGER.info(f"Successfully triggered workflow for value {new_id}")
             except Exception as e:
-                LOGGER.error(f"Failed to trigger workflow for ID {new_id}: {e}")
+                LOGGER.error(f"Failed to trigger workflow for value {new_id}: {e}")
                 workflow_results.append(
                     {
                         "id": new_id,
@@ -458,8 +460,8 @@ async def execute(execution_payload: EndpointIdTrackerExecutionPayload, **kwargs
 
 
 spec = CronEntrySpec(
-    user_payload_model=EndpointIdTrackerUserPayload,
-    execution_payload_model=EndpointIdTrackerExecutionPayload,
+    user_payload_model=EndpointPollingUserPayload,
+    execution_payload_model=EndpointPollingExecutionPayload,
     registration_validator=validate_registration,
     execution_validator=validate_execution,
     executor=execute,
