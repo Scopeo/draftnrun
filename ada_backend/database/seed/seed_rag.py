@@ -162,6 +162,7 @@ def seed_rag_components(session: Session):
             hybrid_rag_agent,
         ],
     )
+    # TODO: remove this first RAG version once the copy of prod db is done for tests
     rag_agent_version = db.ComponentVersion(
         id=COMPONENT_VERSION_UUIDS["rag_agent"],
         component_id=COMPONENT_UUIDS["rag_agent"],
