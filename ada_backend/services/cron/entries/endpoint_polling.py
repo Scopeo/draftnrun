@@ -692,7 +692,6 @@ async def execute(execution_payload: EndpointPollingExecutionPayload, **kwargs) 
     LOGGER.info(f"Found {len(stored_ids)} already processed values")
 
     new_values = polled_values - stored_ids
-    removed_ids = stored_ids - polled_values
     if new_values:
         create_tracked_values_bulk(
             session=db,
@@ -700,7 +699,7 @@ async def execute(execution_payload: EndpointPollingExecutionPayload, **kwargs) 
             tracked_values=list(new_values),
         )
 
-    LOGGER.info(f"Identified {len(new_values)} new values and {len(removed_ids)} removed values")
+    LOGGER.info(f"Identified {len(new_values)} new values")
 
     workflow_results = []
     if execution_payload.project_id and new_values:
@@ -753,9 +752,7 @@ async def execute(execution_payload: EndpointPollingExecutionPayload, **kwargs) 
         "total_polled_values": len(polled_values),
         "total_stored_ids": len(stored_ids),
         "new_values_count": len(new_values),
-        "removed_ids_count": len(removed_ids),
         "new_values": sorted(list(new_values)) if new_values else [],
-        "removed_ids": sorted(list(removed_ids)) if removed_ids else [],
         "workflows_triggered": workflow_results,
     }
 
