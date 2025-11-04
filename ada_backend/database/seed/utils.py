@@ -95,6 +95,7 @@ COMPONENT_VERSION_UUIDS: dict[str, UUID] = {
     "formatter": UUID("079512c6-28e2-455f-af2c-f196015534bd"),
     "vocabulary_search": UUID("323cfc43-76d9-4ae1-b950-2791faf798c2"),
     "rag_agent": UUID("fe26eac8-61c6-4158-a571-61fd680676c8"),
+    "rag_agent_v2": UUID("e0f94ab3-fed2-4e43-a458-1d52464f4fc9"),
     "base_ai_agent": UUID("22292e7f-a3ba-4c63-a4c7-dd5c0c75cdaa"),
     "api_call_tool": UUID("674b8c1d-0cc6-4887-be92-e3a2906830ed"),
     "tavily_agent": UUID("449f8f59-7aff-4b2d-b244-d2fcc09f6651"),
