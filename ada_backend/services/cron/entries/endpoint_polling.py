@@ -137,7 +137,8 @@ def validate_registration(
             except json.JSONDecodeError as e:
                 raise CronValidationError(
                     f"Endpoint {user_input.endpoint_url} returned invalid JSON: {e}. "
-                    f"Response status: {response.status_code}, Content-Type: {response.headers.get('content-type', 'unknown')}"
+                    f"Response status: {response.status_code}, "
+                    f"Content-Type: {response.headers.get('content-type', 'unknown')}"
                 ) from e
 
             # Validate tracking_field_path extraction
@@ -145,16 +146,19 @@ def validate_registration(
                 extracted_ids = _extract_ids_from_response(endpoint_data, user_input.tracking_field_path)
                 if not extracted_ids:
                     LOGGER.warning(
-                        f"Endpoint {user_input.endpoint_url} returned no IDs using path '{user_input.tracking_field_path}'. "
+                        f"Endpoint {user_input.endpoint_url} returned no IDs "
+                        f"using path '{user_input.tracking_field_path}'. "
                         f"This may be expected if the endpoint is currently empty."
                     )
                 else:
                     LOGGER.info(
-                        f"Successfully extracted {len(extracted_ids)} IDs from endpoint using path '{user_input.tracking_field_path}'"
+                        f"Successfully extracted {len(extracted_ids)} IDs from endpoint "
+                        f"using path '{user_input.tracking_field_path}'"
                     )
             except ValueError as e:
                 raise CronValidationError(
-                    f"Failed to extract IDs from endpoint {user_input.endpoint_url} using path '{user_input.tracking_field_path}': {e}. "
+                    f"Failed to extract IDs from endpoint {user_input.endpoint_url} "
+                    f"using path '{user_input.tracking_field_path}': {e}. "
                     f"Please verify the path is correct for the endpoint response structure."
                 ) from e
 
@@ -162,7 +166,8 @@ def validate_registration(
             if user_input.filter_fields:
                 if "[]" not in user_input.tracking_field_path:
                     raise CronValidationError(
-                        f"filter_fields can only be used when tracking_field_path uses array notation (e.g., 'data[].id'), "
+                        "filter_fields can only be used when tracking_field_path "
+                        "uses array notation (e.g., 'data[].id'), "
                         f"but got '{user_input.tracking_field_path}'"
                     )
 
