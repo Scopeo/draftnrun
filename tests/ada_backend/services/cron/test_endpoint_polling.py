@@ -16,6 +16,7 @@ from ada_backend.services.cron.entries.endpoint_polling import (
     _extract_ids_from_response,
     _extract_ids_and_filter_values_from_response,
 )
+from ada_backend.services.cron.errors import CronValidationError
 from ada_backend.database.models import DataSource
 
 
@@ -140,61 +141,235 @@ class TestExtractIdsAndFilterValues:
 class TestValidateRegistration:
     """Tests for registration validation."""
 
-    def test_validate_success(self, mock_db_session, mock_source):
+    def test_validate_success(self, mock_db_session, sample_endpoint_response):
         """Test successful validation."""
-        with patch("ada_backend.services.cron.entries.endpoint_polling.create_source") as mock_create:
-            with patch("ada_backend.services.cron.entries.endpoint_polling.get_data_source_by_id") as mock_get:
-                mock_create.return_value = mock_source.id
-                mock_get.return_value = mock_source
+        with patch("ada_backend.services.cron.entries.endpoint_polling.httpx.Client") as mock_client_class:
+            mock_response = Mock()
+            mock_response.json.return_value = sample_endpoint_response
+            mock_response.raise_for_status = Mock()
+            mock_response.status_code = 200
+            mock_response.headers = {"content-type": "application/json"}
 
-                user_input = EndpointPollingUserPayload(
-                    endpoint_url="https://api.example.com/items",
-                    tracking_field_path="data[].id",
-                )
+            mock_client = Mock()
+            mock_client.get.return_value = mock_response
+            mock_client.__enter__ = Mock(return_value=mock_client)
+            mock_client.__exit__ = Mock(return_value=None)
+            mock_client_class.return_value = mock_client
 
-                organization_id = mock_source.organization_id
-                user_id = uuid4()
+            user_input = EndpointPollingUserPayload(
+                endpoint_url="https://api.example.com/items",
+                tracking_field_path="data[].id",
+            )
 
-                cron_id = uuid4()
-                result = validate_registration(
-                    user_input,
-                    organization_id,
-                    user_id,
-                    db=mock_db_session,
-                    cron_id=cron_id,
-                    cron_job_name="Test Cron Job",
-                )
+            organization_id = uuid4()
+            user_id = uuid4()
 
-                assert isinstance(result, EndpointPollingExecutionPayload)
-                assert result.organization_id == organization_id
+            result = validate_registration(
+                user_input,
+                organization_id,
+                user_id,
+                db=mock_db_session,
+            )
 
-    def test_validate_with_filter_fields(self, mock_db_session, mock_source):
+            assert isinstance(result, EndpointPollingExecutionPayload)
+            assert result.organization_id == organization_id
+            assert result.tracking_field_path == "data[].id"
+            mock_client.get.assert_called_once()
+
+    def test_validate_with_filter_fields(self, mock_db_session, sample_endpoint_response):
         """Test validation with filter fields."""
-        with patch("ada_backend.services.cron.entries.endpoint_polling.create_source") as mock_create:
-            with patch("ada_backend.services.cron.entries.endpoint_polling.get_data_source_by_id") as mock_get:
-                mock_create.return_value = mock_source.id
-                mock_get.return_value = mock_source
+        with patch("ada_backend.services.cron.entries.endpoint_polling.httpx.Client") as mock_client_class:
+            mock_response = Mock()
+            mock_response.json.return_value = sample_endpoint_response
+            mock_response.raise_for_status = Mock()
+            mock_response.status_code = 200
+            mock_response.headers = {"content-type": "application/json"}
 
-                user_input = EndpointPollingUserPayload(
-                    endpoint_url="https://api.example.com/items",
-                    tracking_field_path="data[].id",
-                    filter_fields={"data[].status": "processing"},
-                )
+            mock_client = Mock()
+            mock_client.get.return_value = mock_response
+            mock_client.__enter__ = Mock(return_value=mock_client)
+            mock_client.__exit__ = Mock(return_value=None)
+            mock_client_class.return_value = mock_client
 
-                organization_id = mock_source.organization_id
-                user_id = uuid4()
+            user_input = EndpointPollingUserPayload(
+                endpoint_url="https://api.example.com/items",
+                tracking_field_path="data[].id",
+                filter_fields={"data[].status": "processing"},
+            )
 
-                cron_id = uuid4()
-                result = validate_registration(
+            organization_id = uuid4()
+            user_id = uuid4()
+
+            result = validate_registration(
+                user_input,
+                organization_id,
+                user_id,
+                db=mock_db_session,
+            )
+
+            assert result.filter_fields == {"data[].status": "processing"}
+
+    def test_validate_invalid_endpoint_url(self, mock_db_session):
+        """Test validation fails with unreachable endpoint."""
+        with patch("ada_backend.services.cron.entries.endpoint_polling.httpx.Client") as mock_client_class:
+            import httpx
+
+            mock_client = Mock()
+            # httpx.ConnectError requires a request parameter, so we'll use a mock request
+            mock_request = Mock()
+            mock_client.get.side_effect = httpx.ConnectError("Connection failed", request=mock_request)
+            mock_client.__enter__ = Mock(return_value=mock_client)
+            mock_client.__exit__ = Mock(return_value=None)
+            mock_client_class.return_value = mock_client
+
+            user_input = EndpointPollingUserPayload(
+                endpoint_url="https://invalid-endpoint.example.com/items",
+                tracking_field_path="data[].id",
+            )
+
+            organization_id = uuid4()
+            user_id = uuid4()
+
+            with pytest.raises(CronValidationError, match="Failed to connect to endpoint"):
+                validate_registration(
                     user_input,
                     organization_id,
                     user_id,
                     db=mock_db_session,
-                    cron_id=cron_id,
-                    cron_job_name="Test Cron Job",
                 )
 
-                assert result.filter_fields == {"data[].status": "processing"}
+    def test_validate_invalid_tracking_path(self, mock_db_session, sample_endpoint_response):
+        """Test validation fails with invalid tracking field path."""
+        with patch("ada_backend.services.cron.entries.endpoint_polling.httpx.Client") as mock_client_class:
+            mock_response = Mock()
+            mock_response.json.return_value = sample_endpoint_response
+            mock_response.raise_for_status = Mock()
+            mock_response.status_code = 200
+            mock_response.headers = {"content-type": "application/json"}
+
+            mock_client = Mock()
+            mock_client.get.return_value = mock_response
+            mock_client.__enter__ = Mock(return_value=mock_client)
+            mock_client.__exit__ = Mock(return_value=None)
+            mock_client_class.return_value = mock_client
+
+            user_input = EndpointPollingUserPayload(
+                endpoint_url="https://api.example.com/items",
+                tracking_field_path="invalid.path",
+            )
+
+            organization_id = uuid4()
+            user_id = uuid4()
+
+            with pytest.raises(CronValidationError, match="Failed to extract IDs"):
+                validate_registration(
+                    user_input,
+                    organization_id,
+                    user_id,
+                    db=mock_db_session,
+                )
+
+    def test_validate_invalid_json_response(self, mock_db_session):
+        """Test validation fails with invalid JSON response."""
+        with patch("ada_backend.services.cron.entries.endpoint_polling.httpx.Client") as mock_client_class:
+            import json
+
+            mock_response = Mock()
+            mock_response.json.side_effect = json.JSONDecodeError("Invalid JSON", "", 0)
+            mock_response.raise_for_status = Mock()
+            mock_response.status_code = 200
+            mock_response.headers = {"content-type": "text/html"}
+
+            mock_client = Mock()
+            mock_client.get.return_value = mock_response
+            mock_client.__enter__ = Mock(return_value=mock_client)
+            mock_client.__exit__ = Mock(return_value=None)
+            mock_client_class.return_value = mock_client
+
+            user_input = EndpointPollingUserPayload(
+                endpoint_url="https://api.example.com/items",
+                tracking_field_path="data[].id",
+            )
+
+            organization_id = uuid4()
+            user_id = uuid4()
+
+            with pytest.raises(CronValidationError, match="returned invalid JSON"):
+                validate_registration(
+                    user_input,
+                    organization_id,
+                    user_id,
+                    db=mock_db_session,
+                )
+
+    def test_validate_filter_fields_without_array_notation(self, mock_db_session):
+        """Test validation fails when filter_fields used without array notation."""
+        with patch("ada_backend.services.cron.entries.endpoint_polling.httpx.Client") as mock_client_class:
+            mock_response = Mock()
+            mock_response.json.return_value = {"id": "123"}
+            mock_response.raise_for_status = Mock()
+            mock_response.status_code = 200
+            mock_response.headers = {"content-type": "application/json"}
+
+            mock_client = Mock()
+            mock_client.get.return_value = mock_response
+            mock_client.__enter__ = Mock(return_value=mock_client)
+            mock_client.__exit__ = Mock(return_value=None)
+            mock_client_class.return_value = mock_client
+
+            user_input = EndpointPollingUserPayload(
+                endpoint_url="https://api.example.com/items",
+                tracking_field_path="id",
+                filter_fields={"status": "processing"},
+            )
+
+            organization_id = uuid4()
+            user_id = uuid4()
+
+            with pytest.raises(
+                CronValidationError,
+                match="filter_fields can only be used when tracking_field_path uses array notation",
+            ):
+                validate_registration(
+                    user_input,
+                    organization_id,
+                    user_id,
+                    db=mock_db_session,
+                )
+
+    def test_validate_http_error(self, mock_db_session):
+        """Test validation fails with HTTP error status."""
+        with patch("ada_backend.services.cron.entries.endpoint_polling.httpx.Client") as mock_client_class:
+            import httpx
+
+            mock_response = Mock()
+            mock_response.status_code = 404
+            mock_response.text = "Not Found"
+            mock_response.raise_for_status.side_effect = httpx.HTTPStatusError(
+                "Not Found", request=Mock(), response=mock_response
+            )
+
+            mock_client = Mock()
+            mock_client.get.return_value = mock_response
+            mock_client.__enter__ = Mock(return_value=mock_client)
+            mock_client.__exit__ = Mock(return_value=None)
+            mock_client_class.return_value = mock_client
+
+            user_input = EndpointPollingUserPayload(
+                endpoint_url="https://api.example.com/items",
+                tracking_field_path="data[].id",
+            )
+
+            organization_id = uuid4()
+            user_id = uuid4()
+
+            with pytest.raises(CronValidationError, match="returned HTTP 404"):
+                validate_registration(
+                    user_input,
+                    organization_id,
+                    user_id,
+                    db=mock_db_session,
+                )
 
 
 class TestValidateExecution:

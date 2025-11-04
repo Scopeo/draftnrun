@@ -10,7 +10,6 @@ import logging
 import json
 from typing import Any, Optional
 from uuid import UUID
-from datetime import datetime, timezone
 from pydantic import Field, HttpUrl
 
 import httpx
@@ -20,6 +19,7 @@ from ada_backend.repositories.tracker_history_repository import (
     get_tracked_values_history,
 )
 from ada_backend.services.cron.core import BaseUserPayload, BaseExecutionPayload, CronEntrySpec
+from ada_backend.services.cron.errors import CronValidationError
 from ada_backend.repositories.project_repository import get_project
 from ada_backend.services.agent_runner_service import run_env_agent
 from ada_backend.database.models import CallType, EnvType
@@ -98,6 +98,11 @@ def validate_registration(
     Validate user input and return the execution payload
     that will be used to execute the job.
     Table names are generated dynamically using organization_id and cron_id during execution.
+
+    This function also validates that:
+    - The endpoint is accessible and returns valid JSON
+    - The tracking_field_path can successfully extract IDs from the response
+    - If filter_fields are provided, they can be extracted from the response
     """
     if not organization_id:
         raise ValueError("organization_id missing from context")
@@ -116,6 +121,94 @@ def validate_registration(
             raise ValueError(f"Project {user_input.project_id} not found")
         if project.organization_id != organization_id:
             raise ValueError(f"Project {user_input.project_id} does not belong to organization {organization_id}")
+
+    # Validate endpoint accessibility and ID extraction
+    LOGGER.info(f"Validating endpoint polling configuration: {user_input.endpoint_url}")
+    try:
+        with httpx.Client(timeout=user_input.timeout) as client:
+            response = client.get(
+                str(user_input.endpoint_url),
+                headers=user_input.headers,
+            )
+            response.raise_for_status()
+
+            try:
+                endpoint_data = response.json()
+            except json.JSONDecodeError as e:
+                raise CronValidationError(
+                    f"Endpoint {user_input.endpoint_url} returned invalid JSON: {e}. "
+                    f"Response status: {response.status_code}, Content-Type: {response.headers.get('content-type', 'unknown')}"
+                ) from e
+
+            # Validate tracking_field_path extraction
+            try:
+                extracted_ids = _extract_ids_from_response(endpoint_data, user_input.tracking_field_path)
+                if not extracted_ids:
+                    LOGGER.warning(
+                        f"Endpoint {user_input.endpoint_url} returned no IDs using path '{user_input.tracking_field_path}'. "
+                        f"This may be expected if the endpoint is currently empty."
+                    )
+                else:
+                    LOGGER.info(
+                        f"Successfully extracted {len(extracted_ids)} IDs from endpoint using path '{user_input.tracking_field_path}'"
+                    )
+            except ValueError as e:
+                raise CronValidationError(
+                    f"Failed to extract IDs from endpoint {user_input.endpoint_url} using path '{user_input.tracking_field_path}': {e}. "
+                    f"Please verify the path is correct for the endpoint response structure."
+                ) from e
+
+            # Validate filter_fields extraction if provided
+            if user_input.filter_fields:
+                if "[]" not in user_input.tracking_field_path:
+                    raise CronValidationError(
+                        f"filter_fields can only be used when tracking_field_path uses array notation (e.g., 'data[].id'), "
+                        f"but got '{user_input.tracking_field_path}'"
+                    )
+
+                filter_field_paths = list(user_input.filter_fields.keys())
+                try:
+                    items_with_filter_values = _extract_ids_and_filter_values_from_response(
+                        endpoint_data, user_input.tracking_field_path, filter_field_paths
+                    )
+
+                    # Check if any items match the filter conditions
+                    matching_ids = _filter_matching_items(items_with_filter_values, user_input.filter_fields)
+                    matching_count = len(matching_ids)
+
+                    LOGGER.info(
+                        f"Filter validation: {matching_count} items match filter conditions out of "
+                        f"{len(items_with_filter_values)} total items"
+                    )
+                except ValueError as e:
+                    raise CronValidationError(
+                        f"Failed to extract filter fields from endpoint {user_input.endpoint_url}: {e}. "
+                        f"Please verify the filter field paths are correct for the endpoint response structure."
+                    ) from e
+
+    except httpx.HTTPStatusError as e:
+        raise CronValidationError(
+            f"Endpoint {user_input.endpoint_url} returned HTTP {e.response.status_code}: {e.response.text[:200]}. "
+            f"Please verify the endpoint URL is correct and accessible."
+        ) from e
+    except httpx.TimeoutException as e:
+        raise CronValidationError(
+            f"Timeout while connecting to endpoint {user_input.endpoint_url} (timeout: {user_input.timeout}s). "
+            f"Please verify the endpoint is accessible or increase the timeout."
+        ) from e
+    except httpx.RequestError as e:
+        raise CronValidationError(
+            f"Failed to connect to endpoint {user_input.endpoint_url}: {e}. "
+            f"Please verify the endpoint URL is correct and accessible."
+        ) from e
+    except CronValidationError:
+        # Re-raise validation errors as-is
+        raise
+    except Exception as e:
+        raise CronValidationError(
+            f"Unexpected error validating endpoint {user_input.endpoint_url}: {e}. "
+            f"Please verify the endpoint configuration is correct."
+        ) from e
 
     return EndpointPollingExecutionPayload(
         endpoint_url=str(user_input.endpoint_url),
@@ -341,6 +434,30 @@ def _extract_ids_and_filter_values_from_response(
     return result
 
 
+def _filter_matching_items(
+    items_with_filter_values: dict[str, dict[str, Any]], filter_fields: dict[str, str]
+) -> set[str]:
+    """
+    Filter items that match all filter conditions.
+
+    Args:
+        items_with_filter_values: Dictionary mapping item_id to dict with filter_values
+        filter_fields: Dictionary mapping filter field paths to target values
+
+    Returns:
+        Set of item IDs that match all filter conditions
+    """
+    matching_ids = set()
+    for item_id, item_data in items_with_filter_values.items():
+        filter_values = item_data.get("filter_values", {})
+        matches_all = all(
+            filter_values.get(field_path) == target_value for field_path, target_value in filter_fields.items()
+        )
+        if matches_all:
+            matching_ids.add(item_id)
+    return matching_ids
+
+
 async def execute(execution_payload: EndpointPollingExecutionPayload, **kwargs) -> dict[str, Any]:
     db = kwargs.get("db")
     if not db:
@@ -371,14 +488,7 @@ async def execute(execution_payload: EndpointPollingExecutionPayload, **kwargs) 
             endpoint_data, execution_payload.tracking_field_path, filter_field_paths
         )
 
-        polled_values = set()
-        for item_id, item_data in items_with_filter_values.items():
-            filter_values = item_data.get("filter_values", {})
-            matches_all = all(
-                filter_values.get(field_path) == target_value for field_path, target_value in filter_fields.items()
-            )
-            if matches_all:
-                polled_values.add(item_id)
+        polled_values = _filter_matching_items(items_with_filter_values, filter_fields)
 
         LOGGER.info(
             f"Found {len(polled_values)} values matching filter "
