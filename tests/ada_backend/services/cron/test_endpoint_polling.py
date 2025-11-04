@@ -5,7 +5,6 @@ Tests for endpoint_polling cron entrypoint.
 import pytest
 from unittest.mock import Mock, AsyncMock, patch
 from uuid import uuid4
-from datetime import datetime
 
 from ada_backend.services.cron.entries.endpoint_polling import (
     EndpointPollingUserPayload,
@@ -434,7 +433,7 @@ class TestExecute:
         """Test basic execution without filter fields."""
         with (
             patch("ada_backend.services.cron.entries.endpoint_polling.get_tracked_values_history") as mock_get_history,
-            patch("ada_backend.services.cron.entries.endpoint_polling.create_tracked_values_bulk") as mock_create_bulk,
+            patch("ada_backend.services.cron.entries.endpoint_polling.create_tracked_values_bulk") as _,
         ):
             mock_get_history.return_value = []
 
@@ -458,7 +457,7 @@ class TestExecute:
         """Test execution with filter fields."""
         with (
             patch("ada_backend.services.cron.entries.endpoint_polling.get_tracked_values_history") as mock_get_history,
-            patch("ada_backend.services.cron.entries.endpoint_polling.create_tracked_values_bulk") as mock_create_bulk,
+            patch("ada_backend.services.cron.entries.endpoint_polling.create_tracked_values_bulk") as _,
         ):
             mock_get_history.return_value = []
 
@@ -489,7 +488,7 @@ class TestExecute:
 
         with (
             patch("ada_backend.services.cron.entries.endpoint_polling.get_tracked_values_history") as mock_get_history,
-            patch("ada_backend.services.cron.entries.endpoint_polling.create_tracked_values_bulk") as mock_create_bulk,
+            patch("ada_backend.services.cron.entries.endpoint_polling.create_tracked_values_bulk") as _,
         ):
             mock_get_history.return_value = mock_history
 
@@ -512,7 +511,7 @@ class TestExecute:
         """Test execution with missing database."""
         with (
             patch("ada_backend.services.cron.entries.endpoint_polling.get_tracked_values_history") as mock_get_history,
-            patch("ada_backend.services.cron.entries.endpoint_polling.create_tracked_values_bulk") as mock_create_bulk,
+            patch("ada_backend.services.cron.entries.endpoint_polling.create_tracked_values_bulk") as _,
         ):
             mock_get_history.return_value = []
 
@@ -535,7 +534,7 @@ class TestExecute:
         """Test execution with empty history database."""
         with (
             patch("ada_backend.services.cron.entries.endpoint_polling.get_tracked_values_history") as mock_get_history,
-            patch("ada_backend.services.cron.entries.endpoint_polling.create_tracked_values_bulk") as mock_create_bulk,
+            patch("ada_backend.services.cron.entries.endpoint_polling.create_tracked_values_bulk") as _,
         ):
             mock_get_history.return_value = []
 
