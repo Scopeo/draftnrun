@@ -87,6 +87,22 @@ class CronRunAdmin(EnhancedModelView, model=db.CronRun):
     can_edit = False
 
 
+class EndpointPollingHistoryAdmin(EnhancedModelView, model=db.EndpointPollingHistory):
+    category = AdminCategory.SCHEDULER
+    icon = "fas fa-list-check"
+    column_list = [
+        "id",
+        "cron_job",
+        "tracked_value",
+        "created_at",
+    ]
+    column_searchable_list = ["tracked_value", "cron_job.name"]
+    column_filters = ["cron_job"]
+    can_create = False
+    can_edit = False
+    column_default_sort = ("created_at", True)  # Sort by created_at descending
+
+
 class ProjectAdmin(EnhancedModelView, model=db.Project):
     category = AdminCategory.PROJECTS
     icon = "fas fa-users"
@@ -614,5 +630,6 @@ def setup_admin(app: FastAPI):
     admin.add_view(PortMappingAdmin)
     admin.add_view(CronJobAdmin)
     admin.add_view(CronRunAdmin)
+    admin.add_view(EndpointPollingHistoryAdmin)
 
     return admin
