@@ -1,7 +1,7 @@
 """use conversation history in qa
 
 Revision ID: c79f503f855e
-Revises: 5154754574cb
+Revises: b1c2d3e4f5a6
 Create Date: 2025-10-30 16:00:44.272757
 
 """
@@ -16,7 +16,7 @@ from sqlalchemy import text
 
 # revision identifiers, used by Alembic.
 revision: str = "c79f503f855e"
-down_revision: Union[str, None] = "efe584a51dd"
+down_revision: Union[str, None] = "b1c2d3e4f5a6"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
