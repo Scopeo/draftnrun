@@ -31,6 +31,7 @@ from ada_backend.schemas.input_groundtruth_schema import (
     QARunResult,
     QARunResponse,
     QARunSummary,
+    InputGroundtruthCreate,
 )
 from ada_backend.schemas.dataset_schema import (
     DatasetCreateList,
@@ -41,6 +42,8 @@ from ada_backend.schemas.dataset_schema import (
 from ada_backend.services.agent_runner_service import run_agent
 from ada_backend.database.models import CallType
 from ada_backend.repositories.env_repository import get_env_relationship_by_graph_runner_id
+from ada_backend.services.metrics.utils import query_conversation_messages
+from ada_backend.services.errors import QAError
 
 LOGGER = logging.getLogger(__name__)
 
@@ -156,13 +159,12 @@ async def run_qa_service(
             raise ValueError(f"Graph runner {run_request.graph_runner_id} not found or not bound to project") from e
         for input_entry in input_entries:
             try:
-                input_data = {"messages": [{"role": "user", "content": input_entry.input}]}
 
                 chat_response = await run_agent(
                     session=session,
                     project_id=project_id,
                     graph_runner_id=run_request.graph_runner_id,
-                    input_data=input_data,
+                    input_data=input_entry.input,
                     environment=environment,
                     call_type=CallType.QA,
                 )
@@ -467,3 +469,41 @@ def delete_datasets_service(
     except Exception as e:
         LOGGER.error(f"Error in delete_datasets_service: {str(e)}")
         raise ValueError(f"Failed to delete datasets: {str(e)}") from e
+
+
+def save_conversation_to_groundtruth_service(
+    session: Session,
+    conversation_id: UUID,
+    dataset_id: UUID,
+    message_index: int,
+) -> List[InputGroundtruthResponse]:
+
+    input_payload, output_payload = query_conversation_messages(conversation_id)
+    input_payload.pop("conversation_id", None)
+
+    messages = input_payload.get("messages", [])
+
+    if message_index < 0 or message_index >= len(messages):
+        LOGGER.error(
+            f"Message index {message_index} is out of range for conversation {conversation_id} in dataset {dataset_id}"
+        )
+        raise QAError(
+            "At the moment, you cannot save the conversation to QA table. Please try again in a few seconds."
+        )
+
+    payload = {**input_payload, "messages": messages[: message_index + 1]}
+
+    # Find groundtruth from next assistant message
+    groundtruth_text = None
+    next_idx = message_index + 1
+    if next_idx < len(messages) and messages[next_idx].get("role") == "assistant":
+        groundtruth_text = messages[next_idx].get("content")
+    elif output_payload:
+        for msg in output_payload.get("messages", []):
+            if msg.get("role") == "assistant":
+                groundtruth_text = msg.get("content")
+                break
+
+    input_entry = InputGroundtruthCreate(input=payload, groundtruth=groundtruth_text)
+    input_entries = create_inputs_groundtruths(session, dataset_id, [input_entry])
+    return [InputGroundtruthResponse.model_validate(entry) for entry in input_entries]

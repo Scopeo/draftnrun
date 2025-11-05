@@ -16,7 +16,7 @@ class Pagination(BaseModel):
 class InputGroundtruthCreate(BaseModel):
     """Schema for creating a new input-groundtruth entry."""
 
-    input: str
+    input: dict
     groundtruth: Optional[str] = None
 
 
@@ -24,7 +24,7 @@ class InputGroundtruthWithVersionResponse(BaseModel):
     """Schema for input-groundtruth response with version output data."""
 
     input_id: UUID
-    input: str
+    input: dict
     groundtruth: Optional[str] = None
     output: Optional[str] = None
     version: Optional[EnvType] = None
@@ -70,7 +70,7 @@ class QARunResult(BaseModel):
     """Schema for individual QA run result."""
 
     input_id: UUID
-    input: str
+    input: dict
     groundtruth: Optional[str] = None
     output: str
     graph_runner_id: UUID
@@ -108,7 +108,7 @@ class InputGroundtruthUpdateWithId(BaseModel):
     """Schema for updating an input-groundtruth entry with ID."""
 
     id: UUID
-    input: Optional[str] = None
+    input: Optional[dict] = None
     groundtruth: Optional[str] = None
 
 
@@ -129,7 +129,7 @@ class InputGroundtruthResponse(BaseModel):
 
     id: UUID
     dataset_id: UUID
-    input: str
+    input: dict
     groundtruth: Optional[str] = None
     created_at: datetime
     updated_at: datetime

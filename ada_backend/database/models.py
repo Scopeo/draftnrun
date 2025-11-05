@@ -1392,7 +1392,7 @@ class InputGroundtruth(Base):
     created_at = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
-    input = mapped_column(String, nullable=False)
+    input = mapped_column(JSONB, nullable=False)
     groundtruth = mapped_column(String, nullable=True)
 
     # Relationships
