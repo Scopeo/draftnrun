@@ -179,70 +179,65 @@ def validate_registration(
                     f"Content-Type: {response.headers.get('content-type', 'unknown')}"
                 ) from e
 
-            # Validate tracking_field_path extraction
-            try:
-                extracted_ids = _extract_ids_from_response(endpoint_data, user_input.tracking_field_path)
-                if not extracted_ids:
-                    LOGGER.warning(
-                        f"Endpoint {user_input.endpoint_url} returned no IDs "
-                        f"using path '{user_input.tracking_field_path}'. "
-                        f"This may be expected if the endpoint is currently empty."
-                    )
-                else:
-                    LOGGER.info(
-                        f"Successfully extracted {len(extracted_ids)} IDs from endpoint "
-                        f"using path '{user_input.tracking_field_path}'"
-                    )
-            except ValueError as e:
+        try:
+            extracted_ids = _extract_ids_from_response(endpoint_data, user_input.tracking_field_path)
+            if not extracted_ids:
+                LOGGER.warning(
+                    f"Endpoint {user_input.endpoint_url} returned no IDs "
+                    f"using path '{user_input.tracking_field_path}'. "
+                    f"This may be expected if the endpoint is currently empty."
+                )
+            else:
+                LOGGER.info(
+                    f"Successfully extracted {len(extracted_ids)} IDs from endpoint "
+                    f"using path '{user_input.tracking_field_path}'"
+                )
+        except ValueError as e:
+            raise CronValidationError(
+                f"Failed to extract IDs from endpoint {user_input.endpoint_url} "
+                f"using path '{user_input.tracking_field_path}': {e}. "
+                f"Please verify the path is correct for the endpoint response structure."
+            ) from e
+
+        if user_input.filter_fields:
+            uses_array_notation = "[]" in user_input.tracking_field_path
+            is_root_level_array = _is_root_level_array(endpoint_data)
+
+            if not uses_array_notation and not is_root_level_array:
                 raise CronValidationError(
-                    f"Failed to extract IDs from endpoint {user_input.endpoint_url} "
-                    f"using path '{user_input.tracking_field_path}': {e}. "
-                    f"Please verify the path is correct for the endpoint response structure."
-                ) from e
-
-            # Validate filter_fields extraction if provided
-            if user_input.filter_fields:
-                # Check if tracking_field_path uses array notation or if response is a root-level array
-                uses_array_notation = "[]" in user_input.tracking_field_path
-                is_root_level_array = _is_root_level_array(endpoint_data)
-
-                if not uses_array_notation and not is_root_level_array:
-                    raise CronValidationError(
-                        "filter_fields can only be used when tracking_field_path "
-                        "uses array notation (e.g., 'data[].id' or '[].id') or when "
-                        f"the response is a root-level array, but got '{user_input.tracking_field_path}' "
-                        f"and response is not an array."
-                    )
-
-                # Normalize paths to array notation
-                effective_tracking_path, effective_filter_fields, filter_field_paths = _normalize_filter_paths(
-                    endpoint_data, user_input.tracking_field_path, user_input.filter_fields
+                    "filter_fields can only be used when tracking_field_path "
+                    "uses array notation (e.g., 'data[].id' or '[].id') or when "
+                    f"the response is a root-level array, but got '{user_input.tracking_field_path}' "
+                    f"and response is not an array."
                 )
 
-                if effective_tracking_path != user_input.tracking_field_path:
-                    LOGGER.info(
-                        f"Auto-converting tracking_field_path '{user_input.tracking_field_path}' "
-                        f"to '{effective_tracking_path}' for filter validation"
-                    )
+            effective_tracking_path, effective_filter_fields, filter_field_paths = _normalize_filter_paths(
+                endpoint_data, user_input.tracking_field_path, user_input.filter_fields
+            )
 
-                try:
-                    items_with_filter_values = _extract_ids_and_filter_values_from_response(
-                        endpoint_data, effective_tracking_path, filter_field_paths
-                    )
+            if effective_tracking_path != user_input.tracking_field_path:
+                LOGGER.info(
+                    f"Auto-converting tracking_field_path '{user_input.tracking_field_path}' "
+                    f"to '{effective_tracking_path}' for filter validation"
+                )
 
-                    # Check if any items match the filter conditions
-                    matching_ids = _filter_matching_items(items_with_filter_values, effective_filter_fields)
-                    matching_count = len(matching_ids)
+            try:
+                items_with_filter_values = _extract_ids_and_filter_values_from_response(
+                    endpoint_data, effective_tracking_path, filter_field_paths
+                )
 
-                    LOGGER.info(
-                        f"Filter validation: {matching_count} items match filter conditions out of "
-                        f"{len(items_with_filter_values)} total items"
-                    )
-                except ValueError as e:
-                    raise CronValidationError(
-                        f"Failed to extract filter fields from endpoint {user_input.endpoint_url}: {e}. "
-                        f"Please verify the filter field paths are correct for the endpoint response structure."
-                    ) from e
+                matching_ids = _filter_matching_items(items_with_filter_values, effective_filter_fields)
+                matching_count = len(matching_ids)
+
+                LOGGER.info(
+                    f"Filter validation: {matching_count} items match filter conditions out of "
+                    f"{len(items_with_filter_values)} total items"
+                )
+            except ValueError as e:
+                raise CronValidationError(
+                    f"Failed to extract filter fields from endpoint {user_input.endpoint_url}: {e}. "
+                    f"Please verify the filter field paths are correct for the endpoint response structure."
+                ) from e
 
     except httpx.HTTPStatusError as e:
         raise CronValidationError(
@@ -260,7 +255,6 @@ def validate_registration(
             f"Please verify the endpoint URL is correct and accessible."
         ) from e
     except CronValidationError:
-        # Re-raise validation errors as-is
         raise
     except Exception as e:
         raise CronValidationError(
@@ -366,14 +360,12 @@ def _get_array_from_path(data: Any, array_path: str, raise_on_error: bool = True
         The array, or empty list if raise_on_error is False and path is invalid
     """
     if not array_path:
-        # Root-level array
         if not isinstance(data, list):
             if raise_on_error:
                 raise ValueError(f"Array path '{array_path}' (root) does not point to an array")
             return []
         return data
 
-    # Nested array path
     array = _extract_nested_path(data, array_path)
     if array is None:
         if raise_on_error:
@@ -431,7 +423,6 @@ def _normalize_field_path(data: Any, field_path: str) -> tuple[str, bool]:
     if "[]" in field_path:
         return field_path, True
 
-    # Auto-convert simple paths for root-level arrays
     if _is_root_level_array(data):
         first_item = data[0]
         value = _extract_field_value(first_item, field_path)
@@ -454,10 +445,8 @@ def _extract_ids_from_response(data: Any, field_path: str) -> set[str]:
     if not field_path:
         raise ValueError("field_path cannot be empty")
 
-    # Normalize path (auto-convert simple paths to array notation for root arrays)
     normalized_path, is_array_notation = _normalize_field_path(data, field_path)
 
-    # Handle non-array notation (simple single value extraction)
     if not is_array_notation:
         value = _extract_field_value(data, field_path)
         if value is None:
@@ -467,11 +456,9 @@ def _extract_ids_from_response(data: Any, field_path: str) -> set[str]:
             )
         return {str(value)}
 
-    # Parse array notation path and extract array
     array_path, nested_field = _parse_array_path(normalized_path)
     array = _get_array_from_path(data, array_path)
 
-    # Extract IDs from the array
     return _extract_ids_from_array(array, nested_field)
 
 
@@ -479,12 +466,11 @@ def _extract_items_with_ids_from_array(array: list[Any], id_field: str) -> dict[
     """Extract items from an array, mapping them by their ID field."""
     items_by_id: dict[str, dict[str, Any]] = {}
     for item in array:
-        # Only process dict items (objects are handled but items must be dicts for the mapping)
         if isinstance(item, dict):
             value = _extract_field_value(item, id_field)
             if value is not None:
                 item_id = str(value)
-                if item_id:  # Only add non-empty IDs
+                if item_id:
                     items_by_id[item_id] = item
     return items_by_id
 
@@ -495,10 +481,8 @@ def _extract_items_with_ids(data: Any, tracking_field_path: str) -> dict[str, di
 
     Returns a dictionary mapping item_value -> complete item.
     """
-    # Normalize path (auto-convert simple paths to array notation for root arrays)
     normalized_path, is_array_notation = _normalize_field_path(data, tracking_field_path)
 
-    # Handle array notation
     if is_array_notation:
         try:
             array_path, id_field = _parse_array_path(normalized_path)
@@ -507,17 +491,14 @@ def _extract_items_with_ids(data: Any, tracking_field_path: str) -> dict[str, di
                 return {}
             return _extract_items_with_ids_from_array(array, id_field)
         except ValueError:
-            return {}  # Invalid format, return empty dict
+            return {}
 
-    # Handle simple path (single value extraction)
-    # Try direct field in dict first
     if isinstance(data, dict) and tracking_field_path in data:
         value = data[tracking_field_path]
         item_id = str(value)
         if item_id:
             return {item_id: data}
 
-    # Try nested path
     path_parts = tracking_field_path.split(".")
     if len(path_parts) > 1:
         parent_path = ".".join(path_parts[:-1])
@@ -529,12 +510,10 @@ def _extract_items_with_ids(data: Any, tracking_field_path: str) -> dict[str, di
             if item_id:
                 return {item_id: parent}
 
-    # Try object attribute access
     value = _extract_field_value(data, tracking_field_path)
     if value is not None:
         item_id = str(value)
         if item_id:
-            # For object attributes, use the data itself as the item
             return {item_id: data}
 
     return {}
@@ -561,25 +540,20 @@ def _extract_ids_and_filter_values_from_response(
             "tracking_field_path must use array notation (e.g., 'data[].id') when filter fields are provided"
         )
 
-    # Parse array path and extract array
     array_path, id_field = _parse_array_path(tracking_field_path)
     current = _get_array_from_path(data, array_path)
 
-    # Extract filter field names from paths
     filter_field_extractors = []
     for filter_field_path in filter_field_paths:
         try:
-            # Parse array path to get nested field
             _, filter_field = _parse_array_path(filter_field_path)
         except ValueError:
-            # If not array notation, use path as-is (strip leading dot if present)
             filter_field = filter_field_path.lstrip(".")
         filter_field_extractors.append((filter_field_path, filter_field))
 
     result = {}
     for item in current:
         if isinstance(item, dict):
-            # Extract ID using helper function
             id_value = _extract_field_value(item, id_field)
             if id_value is None:
                 continue
@@ -587,7 +561,6 @@ def _extract_ids_and_filter_values_from_response(
             if not item_id:
                 continue
 
-            # Extract all filter values using helper function
             filter_values = {}
             for filter_field_path, filter_field in filter_field_extractors:
                 value = _extract_field_value(item, filter_field)
@@ -649,7 +622,6 @@ async def execute(execution_payload: EndpointPollingExecutionPayload, **kwargs) 
 
     filter_fields = execution_payload.filter_fields
     if filter_fields:
-        # Normalize paths to array notation
         effective_tracking_path, effective_filter_fields, filter_field_paths = _normalize_filter_paths(
             endpoint_data, execution_payload.tracking_field_path, filter_fields
         )
