@@ -178,7 +178,7 @@ class TestValidateRegistration:
 
         with (
             patch("ada_backend.services.cron.entries.endpoint_polling.httpx.Client") as mock_client_class,
-            patch("ada_backend.services.cron.entries.endpoint_polling.get_project", return_value=mock_project),
+            patch("ada_backend.services.cron.entries.agent_inference.get_project", return_value=mock_project),
         ):
             mock_response = Mock()
             mock_response.json.return_value = sample_endpoint_response
@@ -212,7 +212,7 @@ class TestValidateRegistration:
             )
 
             assert isinstance(result, EndpointPollingExecutionPayload)
-            assert result.agent_inference_execution_payload.organization_id == organization_id
+            assert result.workflow_input.organization_id == organization_id
             assert result.tracking_field_path == "data[].id"
             mock_client.get.assert_called_once()
 
@@ -228,7 +228,7 @@ class TestValidateRegistration:
 
         with (
             patch("ada_backend.services.cron.entries.endpoint_polling.httpx.Client") as mock_client_class,
-            patch("ada_backend.services.cron.entries.endpoint_polling.get_project", return_value=mock_project),
+            patch("ada_backend.services.cron.entries.agent_inference.get_project", return_value=mock_project),
         ):
             mock_response = Mock()
             mock_response.json.return_value = sample_endpoint_response
@@ -276,7 +276,7 @@ class TestValidateRegistration:
 
         with (
             patch("ada_backend.services.cron.entries.endpoint_polling.httpx.Client") as mock_client_class,
-            patch("ada_backend.services.cron.entries.endpoint_polling.get_project", return_value=mock_project),
+            patch("ada_backend.services.cron.entries.agent_inference.get_project", return_value=mock_project),
         ):
             import httpx
 
@@ -320,7 +320,7 @@ class TestValidateRegistration:
 
         with (
             patch("ada_backend.services.cron.entries.endpoint_polling.httpx.Client") as mock_client_class,
-            patch("ada_backend.services.cron.entries.endpoint_polling.get_project", return_value=mock_project),
+            patch("ada_backend.services.cron.entries.agent_inference.get_project", return_value=mock_project),
         ):
             mock_response = Mock()
             mock_response.json.return_value = sample_endpoint_response
@@ -366,7 +366,7 @@ class TestValidateRegistration:
 
         with (
             patch("ada_backend.services.cron.entries.endpoint_polling.httpx.Client") as mock_client_class,
-            patch("ada_backend.services.cron.entries.endpoint_polling.get_project", return_value=mock_project),
+            patch("ada_backend.services.cron.entries.agent_inference.get_project", return_value=mock_project),
         ):
             import json
 
@@ -413,7 +413,7 @@ class TestValidateRegistration:
 
         with (
             patch("ada_backend.services.cron.entries.endpoint_polling.httpx.Client") as mock_client_class,
-            patch("ada_backend.services.cron.entries.endpoint_polling.get_project", return_value=mock_project),
+            patch("ada_backend.services.cron.entries.agent_inference.get_project", return_value=mock_project),
         ):
             mock_response = Mock()
             mock_response.json.return_value = {"id": "123"}
@@ -462,7 +462,7 @@ class TestValidateRegistration:
 
         with (
             patch("ada_backend.services.cron.entries.endpoint_polling.httpx.Client") as mock_client_class,
-            patch("ada_backend.services.cron.entries.endpoint_polling.get_project", return_value=mock_project),
+            patch("ada_backend.services.cron.entries.agent_inference.get_project", return_value=mock_project),
         ):
             import httpx
 
@@ -509,14 +509,14 @@ class TestValidateExecution:
         mock_project = Mock(spec=Project)
         mock_project.organization_id = sample_agent_inference_execution_payload.organization_id
 
-        with patch("ada_backend.services.cron.entries.endpoint_polling.get_project", return_value=mock_project):
+        with patch("ada_backend.services.cron.entries.agent_inference.get_project", return_value=mock_project):
             payload = EndpointPollingExecutionPayload(
                 endpoint_url="https://api.example.com/items",
                 tracking_field_path="data[].id",
                 filter_fields=None,
                 headers=None,
                 timeout=30,
-                agent_inference_execution_payload=sample_agent_inference_execution_payload,
+                workflow_input=sample_agent_inference_execution_payload,
             )
 
             # Should not raise
@@ -530,14 +530,14 @@ class TestValidateExecution:
         mock_project = Mock(spec=Project)
         mock_project.organization_id = sample_agent_inference_execution_payload.organization_id
 
-        with patch("ada_backend.services.cron.entries.endpoint_polling.get_project", return_value=mock_project):
+        with patch("ada_backend.services.cron.entries.agent_inference.get_project", return_value=mock_project):
             payload = EndpointPollingExecutionPayload(
                 endpoint_url="https://api.example.com/items",
                 tracking_field_path="data[].id",
                 filter_fields=None,
                 headers=None,
                 timeout=30,
-                agent_inference_execution_payload=sample_agent_inference_execution_payload,
+                workflow_input=sample_agent_inference_execution_payload,
             )
 
             # Should not raise
@@ -584,7 +584,7 @@ class TestExecute:
                 filter_fields=None,
                 headers=None,
                 timeout=30,
-                agent_inference_execution_payload=sample_agent_inference_execution_payload,
+                workflow_input=sample_agent_inference_execution_payload,
             )
 
             result = await execute(payload, db=mock_db_session, cron_id=uuid4())
@@ -609,7 +609,7 @@ class TestExecute:
                 filter_fields={"data[].status": "processing", "data[].priority": "high"},
                 headers=None,
                 timeout=30,
-                agent_inference_execution_payload=sample_agent_inference_execution_payload,
+                workflow_input=sample_agent_inference_execution_payload,
             )
 
             result = await execute(payload, db=mock_db_session, cron_id=uuid4())
@@ -640,7 +640,7 @@ class TestExecute:
                 filter_fields={"data[].status": "processing", "data[].priority": "high"},
                 headers=None,
                 timeout=30,
-                agent_inference_execution_payload=sample_agent_inference_execution_payload,
+                workflow_input=sample_agent_inference_execution_payload,
             )
 
             result = await execute(payload, db=mock_db_session, cron_id=uuid4())
@@ -664,7 +664,7 @@ class TestExecute:
                 filter_fields=None,
                 headers=None,
                 timeout=30,
-                agent_inference_execution_payload=sample_agent_inference_execution_payload,
+                workflow_input=sample_agent_inference_execution_payload,
             )
 
             # Should not raise
@@ -688,7 +688,7 @@ class TestExecute:
                 filter_fields=None,
                 headers=None,
                 timeout=30,
-                agent_inference_execution_payload=sample_agent_inference_execution_payload,
+                workflow_input=sample_agent_inference_execution_payload,
             )
 
             result = await execute(payload, db=mock_db_session, cron_id=uuid4())

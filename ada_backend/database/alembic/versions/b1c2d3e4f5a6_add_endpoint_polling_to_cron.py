@@ -1,7 +1,7 @@
 """add endpoint_polling to cron_entrypoint
 
 Revision ID: b1c2d3e4f5a6
-Revises: a86270305bab
+Revises: efe584a51dd
 Create Date: 2025-01-20 12:00:00.000000
 
 """

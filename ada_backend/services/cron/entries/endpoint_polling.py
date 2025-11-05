@@ -204,7 +204,7 @@ def validate_registration(
             if user_input.filter_fields:
                 # Check if tracking_field_path uses array notation or if response is a root-level array
                 uses_array_notation = "[]" in user_input.tracking_field_path
-                is_root_level_array = isinstance(endpoint_data, list) and len(endpoint_data) > 0
+                is_root_level_array = _is_root_level_array(endpoint_data)
 
                 if not uses_array_notation and not is_root_level_array:
                     raise CronValidationError(
@@ -214,28 +214,16 @@ def validate_registration(
                         f"and response is not an array."
                     )
 
-                # For root-level arrays with simple paths, we need to convert to array notation for filtering
-                effective_tracking_path = user_input.tracking_field_path
-                if is_root_level_array and not uses_array_notation:
-                    # Auto-convert to array notation for filtering
-                    effective_tracking_path = f"[].{user_input.tracking_field_path}"
+                # Normalize paths to array notation
+                effective_tracking_path, effective_filter_fields, filter_field_paths = _normalize_filter_paths(
+                    endpoint_data, user_input.tracking_field_path, user_input.filter_fields
+                )
+
+                if effective_tracking_path != user_input.tracking_field_path:
                     LOGGER.info(
                         f"Auto-converting tracking_field_path '{user_input.tracking_field_path}' "
                         f"to '{effective_tracking_path}' for filter validation"
                     )
-
-                # Convert filter field paths to array notation if needed
-                effective_filter_fields = {}
-                filter_field_paths = []
-                for filter_path, filter_value in user_input.filter_fields.items():
-                    if is_root_level_array and not uses_array_notation and "[]" not in filter_path:
-                        # Auto-convert simple filter paths to array notation
-                        effective_filter_path = f"[].{filter_path}"
-                        effective_filter_fields[effective_filter_path] = filter_value
-                        filter_field_paths.append(effective_filter_path)
-                    else:
-                        effective_filter_fields[filter_path] = filter_value
-                        filter_field_paths.append(filter_path)
 
                 try:
                     items_with_filter_values = _extract_ids_and_filter_values_from_response(
@@ -317,6 +305,142 @@ def _extract_nested_path(data: Any, path: str) -> Any:
     return current
 
 
+def _extract_field_value(item: Any, field_name: str) -> Any:
+    """
+    Extract a field value from an item (dict or object).
+
+    If field_name is empty, returns the item itself.
+    Returns None if the field doesn't exist.
+    """
+    if not field_name:
+        return item
+
+    if isinstance(item, dict):
+        return item.get(field_name)
+    elif hasattr(item, field_name):
+        return getattr(item, field_name)
+    return None
+
+
+def _extract_ids_from_array(array: list[Any], field_name: str) -> set[str]:
+    """Extract IDs from an array of items using a field name."""
+    ids = set()
+    for item in array:
+        value = _extract_field_value(item, field_name)
+        if value is not None:
+            ids.add(str(value))
+    return ids
+
+
+def _is_root_level_array(data: Any) -> bool:
+    """Check if data is a root-level array."""
+    return isinstance(data, list) and len(data) > 0
+
+
+def _parse_array_path(path: str) -> tuple[str, str]:
+    """
+    Parse array notation path into array_path and nested_field.
+
+    Args:
+        path: Path with array notation (e.g., 'data[].id' or '[].id')
+
+    Returns:
+        Tuple of (array_path, nested_field)
+    """
+    parts = path.split("[]")
+    if len(parts) != 2:
+        raise ValueError(f"Invalid field path format: {path}")
+    return parts[0].rstrip("."), parts[1].lstrip(".")
+
+
+def _get_array_from_path(data: Any, array_path: str, raise_on_error: bool = True) -> list[Any]:
+    """
+    Extract array from data using array path.
+
+    Args:
+        data: The data structure
+        array_path: Path to the array (empty string for root-level)
+        raise_on_error: Whether to raise ValueError on errors
+
+    Returns:
+        The array, or empty list if raise_on_error is False and path is invalid
+    """
+    if not array_path:
+        # Root-level array
+        if not isinstance(data, list):
+            if raise_on_error:
+                raise ValueError(f"Array path '{array_path}' (root) does not point to an array")
+            return []
+        return data
+
+    # Nested array path
+    array = _extract_nested_path(data, array_path)
+    if array is None:
+        if raise_on_error:
+            raise ValueError(f"Array path '{array_path}' returned None")
+        return []
+    if not isinstance(array, list):
+        if raise_on_error:
+            raise ValueError(f"Path '{array_path}' does not point to an array")
+        return []
+    return array
+
+
+def _normalize_filter_paths(
+    data: Any, tracking_field_path: str, filter_fields: dict[str, str]
+) -> tuple[str, dict[str, str], list[str]]:
+    """
+    Normalize tracking and filter field paths to array notation when needed.
+
+    Args:
+        data: The endpoint response data
+        tracking_field_path: The tracking field path
+        filter_fields: Dictionary of filter field paths to values
+
+    Returns:
+        Tuple of (effective_tracking_path, effective_filter_fields, filter_field_paths)
+    """
+    uses_array_notation = "[]" in tracking_field_path
+    is_root_level_array = _is_root_level_array(data)
+
+    effective_tracking_path = tracking_field_path
+    if is_root_level_array and not uses_array_notation:
+        effective_tracking_path = f"[].{tracking_field_path}"
+
+    effective_filter_fields = {}
+    filter_field_paths = []
+    for filter_path, filter_value in filter_fields.items():
+        if is_root_level_array and not uses_array_notation and "[]" not in filter_path:
+            effective_filter_path = f"[].{filter_path}"
+            effective_filter_fields[effective_filter_path] = filter_value
+            filter_field_paths.append(effective_filter_path)
+        else:
+            effective_filter_fields[filter_path] = filter_value
+            filter_field_paths.append(filter_path)
+
+    return effective_tracking_path, effective_filter_fields, filter_field_paths
+
+
+def _normalize_field_path(data: Any, field_path: str) -> tuple[str, bool]:
+    """
+    Normalize field path to array notation when needed.
+
+    Returns:
+        Tuple of (normalized_path, is_array_notation)
+    """
+    if "[]" in field_path:
+        return field_path, True
+
+    # Auto-convert simple paths for root-level arrays
+    if _is_root_level_array(data):
+        first_item = data[0]
+        value = _extract_field_value(first_item, field_path)
+        if value is not None:
+            return f"[].{field_path}", True
+
+    return field_path, False
+
+
 def _extract_ids_from_response(data: Any, field_path: str) -> set[str]:
     """
     Extract IDs from API response using field path.
@@ -330,106 +454,39 @@ def _extract_ids_from_response(data: Any, field_path: str) -> set[str]:
     if not field_path:
         raise ValueError("field_path cannot be empty")
 
-    # Handle root-level array: if data is directly a list and path starts with []
-    if isinstance(data, list) and field_path.startswith("[]"):
-        nested_field = field_path[2:].lstrip(".")  # Remove "[]" and any leading dot
-        ids = set()
-        for item in data:
-            if isinstance(item, dict):
-                if nested_field in item:
-                    ids.add(str(item[nested_field]))
-                elif not nested_field:  # If no nested field, use the item itself
-                    ids.add(str(item))
-            elif hasattr(item, nested_field):
-                ids.add(str(getattr(item, nested_field)))
-            elif not nested_field:
-                ids.add(str(item))
-        return ids
+    # Normalize path (auto-convert simple paths to array notation for root arrays)
+    normalized_path, is_array_notation = _normalize_field_path(data, field_path)
 
-    # Simple path without array notation
-    if "[]" not in field_path:
-        # If data is a root-level array and path doesn't use array notation,
-        # automatically treat it as array notation (e.g., "id" -> "[].id")
-        if isinstance(data, list) and len(data) > 0:
-            # Check if items in the array have the field
-            first_item = data[0]
-            if isinstance(first_item, dict) and field_path in first_item:
-                # Auto-convert to array notation
-                ids = set()
-                for item in data:
-                    if isinstance(item, dict) and field_path in item:
-                        ids.add(str(item[field_path]))
-                return ids
-            elif hasattr(first_item, field_path):
-                # Auto-convert to array notation for objects
-                ids = set()
-                for item in data:
-                    if hasattr(item, field_path):
-                        ids.add(str(getattr(item, field_path)))
-                return ids
-
-        if isinstance(data, dict):
-            if field_path in data:
-                return {str(data[field_path])}
-            else:
-                raise ValueError(
-                    f"Field path '{field_path}' not found in response. "
-                    f"If the response is an array, use array notation like '[].{field_path}'"
-                )
-        elif hasattr(data, field_path):
-            return {str(getattr(data, field_path))}
-        else:
+    # Handle non-array notation (simple single value extraction)
+    if not is_array_notation:
+        value = _extract_field_value(data, field_path)
+        if value is None:
             raise ValueError(
                 f"Field path '{field_path}' not found in response. "
                 f"If the response is an array, use array notation like '[].{field_path}'"
             )
+        return {str(value)}
 
-    # Array notation path like "data[].id" or "items[].id"
-    parts = field_path.split("[]")
-    if len(parts) != 2:
-        raise ValueError(f"Invalid field path format: {field_path}")
+    # Parse array notation path and extract array
+    array_path, nested_field = _parse_array_path(normalized_path)
+    array = _get_array_from_path(data, array_path)
 
-    array_path = parts[0]
-    nested_field = parts[1].lstrip(".")
+    # Extract IDs from the array
+    return _extract_ids_from_array(array, nested_field)
 
-    # Handle empty array_path (root level array) - already handled above, but keep for nested cases
-    if not array_path:
-        if isinstance(data, list):
-            ids = set()
-            for item in data:
-                if isinstance(item, dict):
-                    if nested_field in item:
-                        ids.add(str(item[nested_field]))
-                    elif not nested_field:
-                        ids.add(str(item))
-                elif hasattr(item, nested_field):
-                    ids.add(str(getattr(item, nested_field)))
-                elif not nested_field:
-                    ids.add(str(item))
-            return ids
-        else:
-            raise ValueError(f"Array path '{array_path}' (root) does not point to an array")
 
-    current = _extract_nested_path(data, array_path)
-    if current is None:
-        raise ValueError(f"Array path '{array_path}' returned None")
-
-    if not isinstance(current, list):
-        raise ValueError(f"Path '{array_path}' does not point to an array")
-
-    ids = set()
-    for item in current:
+def _extract_items_with_ids_from_array(array: list[Any], id_field: str) -> dict[str, dict[str, Any]]:
+    """Extract items from an array, mapping them by their ID field."""
+    items_by_id: dict[str, dict[str, Any]] = {}
+    for item in array:
+        # Only process dict items (objects are handled but items must be dicts for the mapping)
         if isinstance(item, dict):
-            if nested_field in item:
-                ids.add(str(item[nested_field]))
-            elif not nested_field:  # If no nested field, use the item itself
-                ids.add(str(item))
-        elif hasattr(item, nested_field):
-            ids.add(str(getattr(item, nested_field)))
-        elif not nested_field:
-            ids.add(str(item))
-
-    return ids
+            value = _extract_field_value(item, id_field)
+            if value is not None:
+                item_id = str(value)
+                if item_id:  # Only add non-empty IDs
+                    items_by_id[item_id] = item
+    return items_by_id
 
 
 def _extract_items_with_ids(data: Any, tracking_field_path: str) -> dict[str, dict[str, Any]]:
@@ -438,69 +495,49 @@ def _extract_items_with_ids(data: Any, tracking_field_path: str) -> dict[str, di
 
     Returns a dictionary mapping item_value -> complete item.
     """
-    items_by_id: dict[str, dict[str, Any]] = {}
+    # Normalize path (auto-convert simple paths to array notation for root arrays)
+    normalized_path, is_array_notation = _normalize_field_path(data, tracking_field_path)
 
-    if "[]" in tracking_field_path:
-        # Array notation: extract all items from array
-        id_parts = tracking_field_path.split("[]")
-        if len(id_parts) == 2:
-            array_path = id_parts[0].rstrip(".")
-            id_field = id_parts[1].lstrip(".")
+    # Handle array notation
+    if is_array_notation:
+        try:
+            array_path, id_field = _parse_array_path(normalized_path)
+            array = _get_array_from_path(data, array_path, raise_on_error=False)
+            if not array:
+                return {}
+            return _extract_items_with_ids_from_array(array, id_field)
+        except ValueError:
+            return {}  # Invalid format, return empty dict
 
-            # Handle root-level array (empty array_path)
-            if not array_path:
-                if isinstance(data, list):
-                    for item in data:
-                        if isinstance(item, dict) and id_field in item:
-                            item_id = str(item.get(id_field, ""))
-                            if item_id:
-                                items_by_id[item_id] = item
-                return items_by_id
+    # Handle simple path (single value extraction)
+    # Try direct field in dict first
+    if isinstance(data, dict) and tracking_field_path in data:
+        value = data[tracking_field_path]
+        item_id = str(value)
+        if item_id:
+            return {item_id: data}
 
-            # Extract the array
-            current = _extract_nested_path(data, array_path)
-            if isinstance(current, list):
-                for item in current:
-                    if isinstance(item, dict) and id_field in item:
-                        item_id = str(item.get(id_field, ""))
-                        if item_id:
-                            items_by_id[item_id] = item
-    else:
-        # Simple path: extract single item
-        # If data is a root-level array and path doesn't use array notation,
-        # automatically treat it as array notation
-        if isinstance(data, list) and len(data) > 0:
-            first_item = data[0]
-            if isinstance(first_item, dict) and tracking_field_path in first_item:
-                # Auto-convert to array notation
-                for item in data:
-                    if isinstance(item, dict) and tracking_field_path in item:
-                        item_id = str(item.get(tracking_field_path, ""))
-                        if item_id:
-                            items_by_id[item_id] = item
-                return items_by_id
+    # Try nested path
+    path_parts = tracking_field_path.split(".")
+    if len(path_parts) > 1:
+        parent_path = ".".join(path_parts[:-1])
+        id_field = path_parts[-1]
+        parent = _extract_nested_path(data, parent_path)
+        if isinstance(parent, dict) and id_field in parent:
+            value = parent[id_field]
+            item_id = str(value)
+            if item_id:
+                return {item_id: parent}
 
-        if isinstance(data, dict):
-            # Try to get the item directly
-            if tracking_field_path in data:
-                item_id = str(data[tracking_field_path])
-                if item_id:
-                    items_by_id[item_id] = data
-            else:
-                # Try nested path
-                path_parts = tracking_field_path.split(".")
-                if len(path_parts) > 1:
-                    # Get parent object
-                    parent_path = ".".join(path_parts[:-1])
-                    current = _extract_nested_path(data, parent_path)
-                    if isinstance(current, dict):
-                        id_field = path_parts[-1]
-                        if id_field in current:
-                            item_id = str(current[id_field])
-                            if item_id:
-                                items_by_id[item_id] = current
+    # Try object attribute access
+    value = _extract_field_value(data, tracking_field_path)
+    if value is not None:
+        item_id = str(value)
+        if item_id:
+            # For object attributes, use the data itself as the item
+            return {item_id: data}
 
-    return items_by_id
+    return {}
 
 
 def _extract_ids_and_filter_values_from_response(
@@ -524,54 +561,37 @@ def _extract_ids_and_filter_values_from_response(
             "tracking_field_path must use array notation (e.g., 'data[].id') when filter fields are provided"
         )
 
-    # Extract the array path from tracking_field_path
-    id_parts = tracking_field_path.split("[]")
-    if len(id_parts) != 2:
-        raise ValueError(f"Invalid tracking_field_path format: {tracking_field_path}")
-
-    array_path = id_parts[0].rstrip(".")
-    id_field = id_parts[1].lstrip(".")
-
-    # Handle root-level array (empty array_path)
-    if not array_path:
-        if not isinstance(data, list):
-            raise ValueError(f"Array path '{array_path}' (root) does not point to an array")
-        current = data
-    else:
-        # Extract the array
-        current = _extract_nested_path(data, array_path)
-        if current is None:
-            raise ValueError(f"Array path '{array_path}' not found in response")
-
-        if not isinstance(current, list):
-            raise ValueError(f"Path '{array_path}' does not point to an array")
+    # Parse array path and extract array
+    array_path, id_field = _parse_array_path(tracking_field_path)
+    current = _get_array_from_path(data, array_path)
 
     # Extract filter field names from paths
     filter_field_extractors = []
     for filter_field_path in filter_field_paths:
-        filter_parts = filter_field_path.split("[]")
-        if len(filter_parts) != 2:
+        try:
+            # Parse array path to get nested field
+            _, filter_field = _parse_array_path(filter_field_path)
+        except ValueError:
+            # If not array notation, use path as-is (strip leading dot if present)
             filter_field = filter_field_path.lstrip(".")
-        else:
-            filter_field = filter_parts[1].lstrip(".")
         filter_field_extractors.append((filter_field_path, filter_field))
 
     result = {}
     for item in current:
         if isinstance(item, dict):
-            item_id = str(item.get(id_field, ""))
+            # Extract ID using helper function
+            id_value = _extract_field_value(item, id_field)
+            if id_value is None:
+                continue
+            item_id = str(id_value)
             if not item_id:
                 continue
 
-            # Extract all filter values
+            # Extract all filter values using helper function
             filter_values = {}
             for filter_field_path, filter_field in filter_field_extractors:
-                filter_value = None
-                if filter_field in item:
-                    filter_value = str(item[filter_field])
-                elif hasattr(item, filter_field):
-                    filter_value = str(getattr(item, filter_field))
-                filter_values[filter_field_path] = filter_value
+                value = _extract_field_value(item, filter_field)
+                filter_values[filter_field_path] = str(value) if value is not None else None
 
             result[item_id] = {
                 "filter_values": filter_values,
@@ -616,7 +636,6 @@ async def execute(execution_payload: EndpointPollingExecutionPayload, **kwargs) 
 
     LOGGER.info(f"Starting endpoint polling for endpoint {execution_payload.endpoint_url}")
 
-    # Step 1: Query the endpoint
     LOGGER.info(f"Querying endpoint: {execution_payload.endpoint_url}")
     async with httpx.AsyncClient(timeout=execution_payload.timeout) as client:
         response = await client.get(
@@ -630,25 +649,10 @@ async def execute(execution_payload: EndpointPollingExecutionPayload, **kwargs) 
 
     filter_fields = execution_payload.filter_fields
     if filter_fields:
-        # Check if we need to convert paths to array notation for root-level arrays
-        uses_array_notation = "[]" in execution_payload.tracking_field_path
-        is_root_level_array = isinstance(endpoint_data, list) and len(endpoint_data) > 0
-
-        effective_tracking_path = execution_payload.tracking_field_path
-        if is_root_level_array and not uses_array_notation:
-            effective_tracking_path = f"[].{execution_payload.tracking_field_path}"
-
-        # Convert filter field paths to array notation if needed
-        effective_filter_fields = {}
-        filter_field_paths = []
-        for filter_path, filter_value in filter_fields.items():
-            if is_root_level_array and not uses_array_notation and "[]" not in filter_path:
-                effective_filter_path = f"[].{filter_path}"
-                effective_filter_fields[effective_filter_path] = filter_value
-                filter_field_paths.append(effective_filter_path)
-            else:
-                effective_filter_fields[filter_path] = filter_value
-                filter_field_paths.append(filter_path)
+        # Normalize paths to array notation
+        effective_tracking_path, effective_filter_fields, filter_field_paths = _normalize_filter_paths(
+            endpoint_data, execution_payload.tracking_field_path, filter_fields
+        )
 
         items_with_filter_values = _extract_ids_and_filter_values_from_response(
             endpoint_data, effective_tracking_path, filter_field_paths
