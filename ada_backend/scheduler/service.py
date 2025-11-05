@@ -106,7 +106,7 @@ async def _execute_cron_job(cron_id: UUID, entrypoint: CronEntrypoint, payload: 
 
         with get_db_session() as session:
             # Execution Pydantic Model -> Execution Validator
-            spec.execution_validator(execution_payload, db=session, cron_id=cron_id, db=session)
+            spec.execution_validator(execution_payload, db=session, cron_id=cron_id)
 
             # Execution Pydantic Model -> Executor
             result = await spec.executor(execution_payload, db=session, cron_id=cron_id)
