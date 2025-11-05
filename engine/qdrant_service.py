@@ -615,11 +615,11 @@ class QdrantService:
                     internal_type = schema.metadata_field_types[metadata_field]
                     field_type = map_internal_type_to_qdrant_field_schema(internal_type)
 
-            await self.create_index_if_needed_async(
-                collection_name=collection_name,
-                field_name=metadata_field,
-                field_schema_type=field_type,
-            )
+                    await self.create_index_if_needed_async(
+                        collection_name=collection_name,
+                        field_name=metadata_field,
+                        field_schema_type=field_type,
+                    )
         if schema.last_edited_ts_field:
             await self.create_index_if_needed_async(
                 collection_name=collection_name,
