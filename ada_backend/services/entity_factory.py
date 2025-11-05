@@ -610,11 +610,7 @@ def build_retriever_processor(target_name: str = "retriever") -> ParameterProces
         enable_date_penalty = params.pop("enable_date_penalty_for_chunks", None)
         if enable_date_penalty is not None:
             try:
-                enable_date_penalty = (
-                    enable_date_penalty.lower() in ("true", "1")
-                    if isinstance(enable_date_penalty, str)
-                    else bool(enable_date_penalty)
-                )
+                enable_date_penalty = bool(enable_date_penalty)
             except (AttributeError, ValueError) as e:
                 raise ValueError(f"enable_date_penalty_for_chunks must be a boolean, got {enable_date_penalty}: {e}")
 
@@ -633,8 +629,6 @@ def build_retriever_processor(target_name: str = "retriever") -> ParameterProces
                 raise ValueError(f"default_penalty_rate must be a float, got {default_penalty_rate}: {e}")
 
         metadata_date_key = params.pop("metadata_date_key", None)
-        if metadata_date_key == "None" or metadata_date_key == "":
-            metadata_date_key = None
 
         max_retrieved_chunks_after_penalty = params.pop("max_retrieved_chunks_after_penalty", None)
         if max_retrieved_chunks_after_penalty is not None:
@@ -645,7 +639,6 @@ def build_retriever_processor(target_name: str = "retriever") -> ParameterProces
                     "max_retrieved_chunks_after_penalty must be an integer, "
                     f"got {max_retrieved_chunks_after_penalty}: {e}"
                 )
-
         retriever = Retriever(
             trace_manager=get_trace_manager(),
             qdrant_service=qdrant_service,
