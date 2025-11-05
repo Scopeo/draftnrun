@@ -113,7 +113,6 @@ def _validate_and_enrich_payload_for_entrypoint(
         user_input = spec.user_payload_model(**payload)
 
         # User Pydantic Model -> Registration Validator -> Execution Pydantic Model
-        # Pass cron_id if available in kwargs (when updating existing cron)
         execution_kwargs = {
             "db": session,
             "organization_id": organization_id,
@@ -122,7 +121,10 @@ def _validate_and_enrich_payload_for_entrypoint(
         }
         execution_model = spec.registration_validator(
             user_input=user_input,
-            **execution_kwargs,
+            db=session,
+            organization_id=organization_id,
+            cron_id=cron_id,
+            **kwargs,
         )
 
         # Execution Pydantic Model -> Store as JSON (dict)
