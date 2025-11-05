@@ -7,6 +7,7 @@ from opentelemetry.trace import get_current_span
 
 from engine.agent.agent import Agent
 from engine.agent.types import ChatMessage, ToolDescription, ComponentAttributes
+from engine.agent.errors import MissingKeyFromPromptTemplateError
 from engine.agent.utils import extract_vars_in_text_template, parse_openai_message_format
 from engine.llm_services.llm_service import CompletionService
 from engine.trace.trace_manager import TraceManager
@@ -156,7 +157,7 @@ class LLMCallAgent(Agent):
                 # Template var provided via context (direct mode)
                 input_replacements[prompt_var] = ctx[prompt_var]
             elif prompt_var not in input_replacements:
-                raise ValueError(
+                raise MissingKeyFromPromptTemplateError(
                     f"Missing template variable '{prompt_var}' needed in prompt template "
                     f"of component '{self.component_attributes.component_instance_name}'. "
                     f"Available template vars: {list(set(input_dict.keys()) | set(ctx.keys()))}"

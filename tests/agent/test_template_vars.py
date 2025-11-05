@@ -8,6 +8,7 @@ from engine.agent.inputs_outputs.start import Start
 from engine.agent.llm_call_agent import LLMCallAgent
 from engine.agent.react_function_calling import ReActAgent
 from engine.agent.types import NodeData, ComponentAttributes, ToolDescription, AgentPayload, ChatMessage
+from engine.agent.errors import MissingKeyFromPromptTemplateError
 from engine.trace.trace_manager import TraceManager
 
 # Mock services are available as fixtures from conftest.py
@@ -134,7 +135,7 @@ def test_llm_call_missing_template_var(get_span_mock, agent_calls_mock, mock_llm
         ctx={"yes": "LOL"},  # missing_var not provided
     )
 
-    with pytest.raises(ValueError, match="Missing template variable 'missing_var'"):
+    with pytest.raises(MissingKeyFromPromptTemplateError, match="Missing template variable 'missing_var'"):
         asyncio.run(agent.run(input_node_data))
 
 
