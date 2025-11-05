@@ -31,7 +31,6 @@ from ada_backend.schemas.input_groundtruth_schema import (
     QARunResult,
     QARunResponse,
     QARunSummary,
-    ModeType,
     InputGroundtruthCreate,
 )
 from ada_backend.schemas.dataset_schema import (
@@ -477,7 +476,6 @@ def save_conversation_to_groundtruth_service(
     conversation_id: UUID,
     dataset_id: UUID,
     message_index: int,
-    mode: ModeType = ModeType.CONVERSATION,
 ) -> List[InputGroundtruthResponse]:
 
     input_payload, output_payload = query_conversation_messages(conversation_id)
@@ -493,11 +491,7 @@ def save_conversation_to_groundtruth_service(
             "At the moment, you cannot save the conversation to QA table. Please try again in a few seconds."
         )
 
-    # Prepare payload based on mode
-    if mode == ModeType.CONVERSATION:
-        payload = {**input_payload, "messages": messages[: message_index + 1]}
-    else:  # ModeType.SINGLE
-        payload = {**input_payload, "messages": [messages[message_index]]}
+    payload = {**input_payload, "messages": messages[: message_index + 1]}
 
     # Find groundtruth from next assistant message
     groundtruth_text = None

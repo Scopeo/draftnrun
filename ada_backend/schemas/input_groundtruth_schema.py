@@ -143,8 +143,3 @@ class InputGroundtruthResponseList(BaseModel):
     """Schema for multiple input-groundtruth responses."""
 
     inputs_groundtruths: List[InputGroundtruthResponse]
-
-
-class ModeType(str, Enum):
-    CONVERSATION = "conversation"
-    SINGLE = "single"

@@ -14,7 +14,6 @@ from ada_backend.schemas.input_groundtruth_schema import (
     PaginatedInputGroundtruthResponse,
     QARunRequest,
     QARunResponse,
-    ModeType,
     InputGroundtruthResponse,
 )
 from ada_backend.schemas.dataset_schema import (
@@ -432,7 +431,6 @@ async def save_conversation_to_groundtruth(
     conversation_id: UUID,
     dataset_id: UUID,
     message_index: int,
-    mode: ModeType = ModeType.CONVERSATION,
     session: Session = Depends(get_db),
 ) -> List[InputGroundtruthResponse]:
     try:
@@ -440,7 +438,6 @@ async def save_conversation_to_groundtruth(
             session=session,
             conversation_id=conversation_id,
             dataset_id=dataset_id,
-            mode=mode,
             message_index=message_index,
         )
     except QAError as e:
