@@ -144,6 +144,7 @@ class ReleaseStage(StrEnum):
 class CronEntrypoint(StrEnum):
     AGENT_INFERENCE = "agent_inference"
     DUMMY_PRINT = "dummy_print"
+    ENDPOINT_POLLING = "endpoint_polling"
 
 
 class CronStatus(StrEnum):
@@ -1344,6 +1345,35 @@ class CronRun(Base):
 
     def __str__(self):
         return f"CronRun(cron_id={self.cron_id}, status={self.status}, scheduled_for={self.scheduled_for})"
+
+
+class EndpointPollingHistory(Base):
+    """
+    Tracks processed values for endpoint polling cron jobs.
+    Each row represents a value that has been processed by a specific cron job.
+    """
+
+    __tablename__ = "endpoint_polling_history"
+    __table_args__ = (
+        UniqueConstraint("cron_id", "tracked_value", name="uq_cron_tracked_value"),
+        {"schema": "scheduler"},
+    )
+
+    id = mapped_column(UUID(as_uuid=True), primary_key=True, index=True, default=uuid.uuid4)
+    cron_id = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("scheduler.cron_jobs.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    tracked_value = mapped_column(String, nullable=False, index=True)
+    created_at = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+    # Relationship
+    cron_job = relationship("CronJob", backref="endpoint_polling_history")
+
+    def __str__(self):
+        return f"EndpointPollingHistory(cron_id={self.cron_id}, tracked_value={self.tracked_value})"
 
 
 class InputGroundtruth(Base):
