@@ -2,7 +2,6 @@ from datetime import datetime
 from typing import Optional, List
 from uuid import UUID
 from pydantic import BaseModel, field_validator
-from enum import Enum
 
 from ada_backend.database.models import EnvType
 
