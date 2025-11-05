@@ -10,7 +10,7 @@ from engine.llm_services.llm_service import CompletionService
 from engine.agent.build_context import build_context_from_source_chunks
 from engine.agent.types import SourceChunk, SourcedResponse, ComponentAttributes
 from engine.trace.trace_manager import TraceManager
-from engine.agent.utils_prompt import fill_prompt_template_with_dictionary
+from engine.agent.utils_prompt import fill_prompt_template_with_priority
 
 
 class SynthesizerResponse(BaseModel):
@@ -46,8 +46,11 @@ class Synthesizer:
 
         with self.trace_manager.start_span(self.component_attributes.component_instance_name) as span:
             input_dict = {"context_str": context_str, "query_str": query_str, **optional_contexts}
-            input_str = fill_prompt_template_with_dictionary(
-                input_dict, self._prompt_template, component_name=self.component_attributes.component_instance_name
+            input_str = fill_prompt_template_with_priority(
+                prompt_template=self._prompt_template,
+                component_name=self.component_attributes.component_instance_name,
+                inputs_dict=input_dict,
+                ctx=None,
             )
             span.set_attributes(
                 {

@@ -22,7 +22,7 @@ from engine.agent.history_message_handling import HistoryMessageHandler
 from engine.agent.utils import load_str_to_json
 from engine.trace.trace_manager import TraceManager
 from engine.llm_services.llm_service import CompletionService
-from engine.agent.utils_prompt import fill_prompt_template_with_dictionary
+from engine.agent.utils_prompt import fill_prompt_template_with_priority
 from engine.agent.tools.python_code_runner import PYTHON_CODE_RUNNER_TOOL_DESCRIPTION
 from engine.agent.tools.terminal_command_runner import TERMINAL_COMMAND_RUNNER_TOOL_DESCRIPTION
 from settings import settings
@@ -295,6 +295,7 @@ class ReActAgent(Agent):
         ctx: Optional[dict] = None,
         initial_prompt: str,
         output_tool_description: ToolDescription | None,
+        inputs_dict: Optional[dict] = None,
         **kwargs,
     ) -> AgentPayload:
         # Exact previous logic
@@ -315,16 +316,26 @@ class ReActAgent(Agent):
             current_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             system_prompt_content = f"Current date and time: {current_date}\n\n{initial_prompt}"
 
+        # Merge inputs_dict and kwargs for template variable filling
+        # inputs_dict should come from the original ReActAgentInputs (not AgentPayload)
+        inputs_dict = inputs_dict or {}
+        if kwargs:
+            inputs_dict = {**inputs_dict, **kwargs}
+
+        # Fill template with priority: inputs_dict -> ctx
+        filled_system_prompt = fill_prompt_template_with_priority(
+            prompt_template=system_prompt_content,
+            component_name=self.component_attributes.component_instance_name,
+            inputs_dict=inputs_dict,
+            ctx=ctx,
+        )
+
         if system_message is None:
             original_agent_input.messages.insert(
                 0,
                 ChatMessage(
                     role="system",
-                    content=fill_prompt_template_with_dictionary(
-                        ctx or {},
-                        system_prompt_content,
-                        self.component_attributes.component_instance_name,
-                    ),
+                    content=filled_system_prompt,
                 ),
             )
         else:
@@ -332,11 +343,7 @@ class ReActAgent(Agent):
             # to replace the system message by the initial prompt
             original_agent_input.messages[0] = ChatMessage(
                 role="system",
-                content=fill_prompt_template_with_dictionary(
-                    ctx or {},
-                    system_prompt_content,
-                    self.component_attributes.component_instance_name,
-                ),
+                content=filled_system_prompt,
             )
         agent_input = original_agent_input.model_copy(deep=True)
         history_messages_handled = self._memory_handling.get_truncated_messages_history(agent_input.messages)
@@ -428,6 +435,7 @@ class ReActAgent(Agent):
                 ctx=ctx,
                 initial_prompt=initial_prompt,
                 output_tool_description=output_tool_description,
+                inputs_dict=inputs_dict,
                 **kwargs,
             )
         else:
@@ -452,11 +460,18 @@ class ReActAgent(Agent):
         payload_dict = inputs.model_dump(exclude_none=True)
         agent_payload = AgentPayload(**payload_dict) if "messages" in payload_dict else payload_dict
 
+        # Extract inputs_dict from original ReActAgentInputs for template variable filling
+        # Exclude messages and AgentPayload-specific fields (error, artifacts, is_final)
+        inputs_dict_for_template = {
+            k: v for k, v in payload_dict.items() if k not in ["messages", "error", "artifacts", "is_final"]
+        }
+
         core_result = await self._run_core(
             agent_payload,
             ctx=ctx,
             initial_prompt=initial_prompt,
             output_tool_description=output_tool_description,
+            inputs_dict=inputs_dict_for_template,
         )
 
         # Map original output back to typed outputs

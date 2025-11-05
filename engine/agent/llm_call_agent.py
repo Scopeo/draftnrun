@@ -7,7 +7,8 @@ from opentelemetry.trace import get_current_span
 
 from engine.agent.agent import Agent
 from engine.agent.types import ChatMessage, ToolDescription, ComponentAttributes
-from engine.agent.utils import extract_vars_in_text_template, parse_openai_message_format
+from engine.agent.utils import parse_openai_message_format
+from engine.agent.utils_prompt import fill_prompt_template_with_priority
 from engine.llm_services.llm_service import CompletionService
 from engine.trace.trace_manager import TraceManager
 from engine.trace.serializer import serialize_to_json
@@ -124,67 +125,71 @@ class LLMCallAgent(Agent):
         self._file_url_key = file_url_key
         self.output_format = output_format
 
+    def _extract_file_content(self, inputs: LLMCallInputs, ctx: Optional[dict], files_content: list) -> None:
+        """Extract file content from inputs or ctx and add to files_content list."""
+        if not self._file_content_key:
+            return
+
+        input_dict = inputs.model_dump(exclude_none=True)
+        file_data = None
+        if self._file_content_key in input_dict:
+            file_data = input_dict[self._file_content_key]
+        elif ctx is not None and self._file_content_key in ctx:
+            file_data = ctx[self._file_content_key]
+
+        if isinstance(file_data, dict) and "filename" in file_data and "file_data" in file_data:
+            files_content.append({"type": "file", "file": file_data})
+
+    def _extract_file_url(self, inputs: LLMCallInputs, ctx: Optional[dict], files_content: list) -> None:
+        """Extract file URL from inputs or ctx and add to files_content list."""
+        if not self._file_url_key:
+            return
+
+        input_dict = inputs.model_dump(exclude_none=True)
+        file_url = None
+        if self._file_url_key in input_dict:
+            file_url = input_dict[self._file_url_key]
+        elif ctx is not None and self._file_url_key in ctx:
+            file_url = ctx[self._file_url_key]
+
+        if isinstance(file_url, str) and file_url:
+            files_content.append({"type": "file", "file_url": file_url})
+
     async def _run_without_io_trace(self, inputs: LLMCallInputs, ctx: Optional[dict] = None) -> LLMCallOutputs:
         LOGGER.info(f"Running LLM call agent with inputs: {inputs} and ctx: {ctx}")
         prompt_template = inputs.prompt_template or self._prompt_template
         output_format = inputs.output_format or self.output_format
 
-        prompt_vars = extract_vars_in_text_template(prompt_template)
-        input_replacements = {}
         files_content = []
         images_content = []
 
-        # Extract input from messages
-        input_replacements["input"] = ""
+        # Extract input from messages (special handling for llm_call)
+        input_from_messages = ""
         if inputs.messages:
             last_message = inputs.messages[-1]
             if last_message.content:
                 text_content, payload_files_content, payload_images_content = parse_openai_message_format(
                     last_message.content, self._completion_service._provider
                 )
-                input_replacements["input"] = text_content
+                input_from_messages = text_content
                 files_content.extend(payload_files_content)
                 images_content.extend(payload_images_content)
 
-        # Fill template vars from inputs first (function calling), then context (direct calls)
+        # Build inputs_dict with all fields including "input" from messages
         input_dict = inputs.model_dump(exclude_none=True)
-        for prompt_var in prompt_vars:
-            if prompt_var in input_dict:
-                # Template var provided via function calling (tool mode)
-                input_replacements[prompt_var] = input_dict[prompt_var]
-            elif ctx is not None and prompt_var in ctx:
-                # Template var provided via context (direct mode)
-                input_replacements[prompt_var] = ctx[prompt_var]
-            elif prompt_var not in input_replacements:
-                raise ValueError(
-                    f"Missing template variable '{prompt_var}' needed in prompt template "
-                    f"of component '{self.component_attributes.component_instance_name}'. "
-                    f"Available template vars: {list(set(input_dict.keys()) | set(ctx.keys()))}"
-                )
+        input_dict["input"] = input_from_messages
 
-        # Handle file content from inputs first, then context
-        if self._file_content_key:
-            input_dict = inputs.model_dump(exclude_none=True)
-            file_data = None
-            if self._file_content_key in input_dict:
-                file_data = input_dict[self._file_content_key]
-            elif ctx is not None and self._file_content_key in ctx:
-                file_data = ctx[self._file_content_key]
-            if isinstance(file_data, dict) and "filename" in file_data and "file_data" in file_data:
-                files_content.append({"type": "file", "file": file_data})
+        # Use unified function to fill template variables with priority: inputs_dict -> ctx
+        text_content = fill_prompt_template_with_priority(
+            prompt_template=prompt_template,
+            component_name=self.component_attributes.component_instance_name,
+            inputs_dict=input_dict,
+            ctx=ctx,
+        )
 
-        # Handle file URLs from inputs first, then context
-        if self._file_url_key:
-            input_dict = inputs.model_dump(exclude_none=True)
-            file_url = None
-            if self._file_url_key in input_dict:
-                file_url = input_dict[self._file_url_key]
-            elif ctx is not None and self._file_url_key in ctx:
-                file_url = ctx[self._file_url_key]
-            if isinstance(file_url, str) and file_url:
-                files_content.append({"type": "file", "file_url": file_url})
-
-        text_content = prompt_template.format(**input_replacements)
+        # Handle file content and URLs
+        self._extract_file_content(inputs, ctx, files_content)
+        self._extract_file_url(inputs, ctx, files_content)
 
         # Check for file support
         file_supported_references = [
