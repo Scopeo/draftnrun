@@ -113,12 +113,6 @@ def _validate_and_enrich_payload_for_entrypoint(
         user_input = spec.user_payload_model(**payload)
 
         # User Pydantic Model -> Registration Validator -> Execution Pydantic Model
-        execution_kwargs = {
-            "db": session,
-            "organization_id": organization_id,
-            "cron_id": cron_id,
-            **kwargs,
-        }
         execution_model = spec.registration_validator(
             user_input=user_input,
             db=session,
