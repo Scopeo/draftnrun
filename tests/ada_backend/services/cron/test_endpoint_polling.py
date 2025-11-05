@@ -20,7 +20,7 @@ from ada_backend.services.cron.entries.agent_inference import (
     AgentInferenceExecutionPayload,
 )
 from ada_backend.services.cron.errors import CronValidationError
-from ada_backend.database.models import DataSource, EnvType
+from ada_backend.database.models import DataSource, EnvType, Project, EndpointPollingHistory
 
 
 @pytest.fixture
@@ -404,7 +404,6 @@ class TestValidateRegistration:
 
     def test_validate_filter_fields_without_array_notation(self, mock_db_session):
         """Test validation fails when filter_fields used without array notation."""
-        from ada_backend.database.models import Project
 
         project_id = uuid4()
         organization_id = uuid4()
@@ -454,7 +453,6 @@ class TestValidateRegistration:
 
     def test_validate_http_error(self, mock_db_session):
         """Test validation fails with HTTP error status."""
-        from ada_backend.database.models import Project
 
         project_id = uuid4()
         organization_id = uuid4()
@@ -507,8 +505,6 @@ class TestValidateExecution:
 
     def test_validate_execution_success(self, mock_db_session, mock_source, sample_agent_inference_execution_payload):
         """Test successful execution validation."""
-        from ada_backend.repositories.project_repository import get_project
-        from ada_backend.database.models import Project
 
         mock_project = Mock(spec=Project)
         mock_project.organization_id = sample_agent_inference_execution_payload.organization_id
@@ -530,8 +526,6 @@ class TestValidateExecution:
         self, mock_db_session, mock_source, sample_agent_inference_execution_payload
     ):
         """Test execution validation succeeds when source exists."""
-        from ada_backend.repositories.project_repository import get_project
-        from ada_backend.database.models import Project
 
         mock_project = Mock(spec=Project)
         mock_project.organization_id = sample_agent_inference_execution_payload.organization_id
@@ -627,7 +621,6 @@ class TestExecute:
         self, mock_db_session, mock_source, mock_httpx_client, sample_agent_inference_execution_payload
     ):
         """Test execution with previous run state to detect changes."""
-        from ada_backend.database.models import EndpointPollingHistory
 
         # Mock tracking history with previous state: item "2" and "3" were already tracked
         mock_history = [

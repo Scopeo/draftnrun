@@ -682,7 +682,8 @@ async def execute(execution_payload: EndpointPollingExecutionPayload, **kwargs) 
     agent_inference_execution_payload = execution_payload.workflow_input
     if agent_inference_execution_payload.project_id and new_values:
         LOGGER.info(
-            f"Triggering workflows for {len(new_values)} new values in project {agent_inference_execution_payload.project_id}"
+            f"Triggering workflows for {len(new_values)} new values"
+            f" in project {agent_inference_execution_payload.project_id}"
         )
         for new_value in new_values:
             try:
