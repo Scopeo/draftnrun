@@ -32,7 +32,7 @@ def evaluate_expression(
             case LiteralNode(value=value):
                 return value
 
-            case RefNode(instance=source_instance_id, port=source_port_name):
+            case RefNode(instance=source_instance_id, port=source_port_name, key=key):
                 task = tasks.get(source_instance_id)
                 task_result = task.result if task else None
                 if not task_result:
@@ -46,6 +46,19 @@ def evaluate_expression(
                         f"'{source_port_name}' not found in output of {source_instance_id}"
                     )
                 raw_value = task_result.data[source_port_name]
+
+                if key:
+                    if not isinstance(raw_value, dict):
+                        raise FieldExpressionError(
+                            f"Key extraction '::{key}' cannot be used on {source_instance_id}.{source_port_name}: "
+                            f"port value is not a dict, got {type(raw_value)}"
+                        )
+                    if key not in raw_value:
+                        raise FieldExpressionError(
+                            f"Key '{key}' not found in dict from {source_instance_id}.{source_port_name}"
+                        )
+                    raw_value = raw_value[key]
+
                 return to_string(raw_value)
 
             case ConcatNode(parts=parts):

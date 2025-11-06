@@ -25,6 +25,124 @@ HEADERS_JWT = {
 }
 
 
+def _create_component_instance(
+    instance_id: str,
+    name: str,
+    is_start_node: bool,
+    prompt_template_value: str,
+    field_expressions: list | None = None,
+) -> dict:
+    params = [
+        {"value": prompt_template_value, "name": "prompt_template", "order": None},
+        {"value": "openai:gpt-4o-mini", "name": "completion_model", "order": None},
+        {"value": 0.2, "name": "default_temperature", "order": None},
+    ]
+
+    instance = {
+        "is_agent": True,
+        "is_protected": False,
+        "function_callable": True,
+        "can_use_function_calling": False,
+        "tool_parameter_name": None,
+        "subcomponents_info": [],
+        "id": instance_id,
+        "name": name,
+        "ref": "",
+        "is_start_node": is_start_node,
+        "component_id": COMPONENT_ID,
+        "component_version_id": COMPONENT_VERSION_ID,
+        "parameters": params,
+        "tool_description": {
+            "name": "Test Tool",
+            "description": "d",
+            "tool_properties": {},
+            "required_tool_properties": [],
+        },
+        "component_name": "LLM Call",
+        "component_description": "Templated LLM Call",
+    }
+    if field_expressions:
+        instance["field_expressions"] = field_expressions
+    return instance
+
+
+def _create_graph_payload_with_field_expressions(
+    src_instance_id: str,
+    dst_instance_id: str,
+    edge_id: str,
+    expression_text: str,
+) -> dict:
+    return {
+        "component_instances": [
+            _create_component_instance(
+                instance_id=src_instance_id,
+                name="Source Agent",
+                is_start_node=True,
+                prompt_template_value="Hello",
+            ),
+            _create_component_instance(
+                instance_id=dst_instance_id,
+                name="Target Agent",
+                is_start_node=False,
+                prompt_template_value="Process: {input}",
+                field_expressions=[{"field_name": "prompt_template", "expression_text": expression_text}],
+            ),
+        ],
+        "relationships": [],
+        "edges": [{"id": edge_id, "origin": src_instance_id, "destination": dst_instance_id, "order": 0}],
+    }
+
+
+def _create_project_and_get_endpoint(project_name_prefix: str) -> tuple[str, str]:
+    project_id = str(uuid4())
+    project_response = client.post(
+        f"/projects/{ORGANIZATION_ID}",
+        headers=HEADERS_JWT,
+        json={
+            "project_id": project_id,
+            "project_name": f"{project_name_prefix}_{project_id}",
+            "description": f"Test {project_name_prefix}",
+        },
+    )
+    assert project_response.status_code == 200
+
+    project_details = client.get(f"/projects/{project_id}", headers=HEADERS_JWT).json()
+    graph_runner_id = next(gr["graph_runner_id"] for gr in project_details["graph_runners"] if gr["env"] == "draft")
+    endpoint = f"/projects/{project_id}/graph/{graph_runner_id}"
+    return project_id, endpoint
+
+
+def _assert_expression_remapped(
+    expr_json: dict,
+    expr_text: str,
+    original_instance_id: str,
+    new_instance_id: str,
+    context: str = "",
+) -> None:
+    """Assert that expression has been remapped from original_instance_id to new_instance_id."""
+    assert (
+        str(original_instance_id) not in expr_text
+    ), f"{context}Old instance ID {original_instance_id} should not be in expression"
+    assert str(new_instance_id) in expr_text, f"{context}New instance ID {new_instance_id} should be in expression"
+
+    if expr_json["type"] == "ref":
+        assert expr_json["instance"] == str(
+            new_instance_id
+        ), f"{context}Ref should use new instance ID {new_instance_id}, got {expr_json['instance']}"
+        assert expr_json["instance"] != str(
+            original_instance_id
+        ), f"{context}Ref should not use old instance ID {original_instance_id}"
+    elif expr_json["type"] == "concat":
+        for part in expr_json["parts"]:
+            if part["type"] == "ref":
+                assert part["instance"] == str(
+                    new_instance_id
+                ), f"{context}Ref part should use new instance ID {new_instance_id}, got {part['instance']}"
+                assert part["instance"] != str(
+                    original_instance_id
+                ), f"{context}Ref part should not use old instance ID {original_instance_id}"
+
+
 def test_field_expressions_e2e():
     """Test field expressions parsing and GraphRunner integration end-to-end."""
     # Create a unique project for this test
@@ -322,6 +440,154 @@ def test_invalid_reference_uuid_returns_400():
 
     # Cleanup
     client.delete(f"/projects/{project_id}", headers=HEADERS_JWT)
+
+
+def test_deploy_remaps_field_expression_instance_ids():
+    """Deploy should remap instance IDs in field expressions to new IDs."""
+    project_id, endpoint = _create_project_and_get_endpoint("deploy_expr")
+
+    src_instance_id = str(uuid4())
+    dst_instance_id = str(uuid4())
+    edge_id = str(uuid4())
+    expression_text = f"Task: @{{{{{src_instance_id}.output}}}} - Sources: @{{{{{src_instance_id}.artifacts::docs}}}}"
+
+    payload = _create_graph_payload_with_field_expressions(
+        src_instance_id=src_instance_id,
+        dst_instance_id=dst_instance_id,
+        edge_id=edge_id,
+        expression_text=expression_text,
+    )
+
+    put_resp = client.put(endpoint, headers=HEADERS_JWT, json=payload)
+    assert put_resp.status_code == 200
+
+    deploy_resp = client.post(f"{endpoint}/deploy", headers=HEADERS_JWT)
+    assert deploy_resp.status_code == 200
+    deploy_data = deploy_resp.json()
+    new_draft_graph_runner_id = deploy_data["draft_graph_runner_id"]
+
+    new_draft_endpoint = f"/projects/{project_id}/graph/{new_draft_graph_runner_id}"
+    get_resp = client.get(new_draft_endpoint, headers=HEADERS_JWT)
+    assert get_resp.status_code == 200
+    new_graph = get_resp.json()
+
+    target_instance = next(ci for ci in new_graph["component_instances"] if ci["name"] == "Target Agent")
+    assert "field_expressions" in target_instance
+    assert len(target_instance["field_expressions"]) == 1
+
+    expr_json = target_instance["field_expressions"][0]["expression_json"]
+    expr_text = target_instance["field_expressions"][0]["expression_text"]
+
+    src_instance_new = next(ci for ci in new_graph["component_instances"] if ci["name"] == "Source Agent")
+    new_src_id = src_instance_new["id"]
+
+    _assert_expression_remapped(expr_json, expr_text, src_instance_id, new_src_id)
+
+    client.delete(f"/projects/{project_id}", headers=HEADERS_JWT)
+
+
+def test_load_copy_includes_field_expressions_and_roundtrip():
+    """load-copy should include field expressions and remap refs to new IDs, and its payload should PUT cleanly."""
+    project_id, endpoint = _create_project_and_get_endpoint("load_copy_expr")
+
+    src_instance_id = str(uuid4())
+    dst_instance_id = str(uuid4())
+    edge_id = str(uuid4())
+    expression_text = f"Task: @{{{{{src_instance_id}.output}}}} - Style: @{{{{{src_instance_id}.output}}}}"
+
+    payload = _create_graph_payload_with_field_expressions(
+        src_instance_id=src_instance_id,
+        dst_instance_id=dst_instance_id,
+        edge_id=edge_id,
+        expression_text=expression_text,
+    )
+
+    put_resp = client.put(endpoint, headers=HEADERS_JWT, json=payload)
+    assert put_resp.status_code == 200
+
+    # GET load-copy
+    load_copy_resp = client.get(f"{endpoint}/load-copy", headers=HEADERS_JWT)
+    assert load_copy_resp.status_code == 200
+    load_payload = load_copy_resp.json()
+
+    # Ensure we have two instances and new IDs
+    assert len(load_payload["component_instances"]) == 2
+    new_src = next(ci for ci in load_payload["component_instances"] if ci["name"] == "Source Agent")
+    new_dst = next(ci for ci in load_payload["component_instances"] if ci["name"] == "Target Agent")
+    assert new_src["id"] != src_instance_id
+    assert new_dst["id"] != dst_instance_id
+
+    # Field expressions should be present on new_dst and reference new_src
+    assert "field_expressions" in new_dst
+    assert len(new_dst["field_expressions"]) == 1
+    expr_text_new = new_dst["field_expressions"][0]["expression_text"]
+    assert str(src_instance_id) not in expr_text_new
+    assert str(new_src["id"]) in expr_text_new
+
+    project_id_2, clone_endpoint = _create_project_and_get_endpoint("load_copy_expr_target")
+    clone_put = client.put(clone_endpoint, headers=HEADERS_JWT, json=load_payload)
+    assert clone_put.status_code == 200
+
+    # Verify cloned graph has the expressions
+    clone_get = client.get(clone_endpoint, headers=HEADERS_JWT)
+    assert clone_get.status_code == 200
+    cloned = clone_get.json()
+    cloned_dst = next(ci for ci in cloned["component_instances"] if ci["name"] == "Target Agent")
+    assert "field_expressions" in cloned_dst
+    assert len(cloned_dst["field_expressions"]) == 1
+
+    # Cleanup
+    client.delete(f"/projects/{project_id}", headers=HEADERS_JWT)
+    client.delete(f"/projects/{project_id_2}", headers=HEADERS_JWT)
+
+
+def test_load_copy_cloned_graph_has_remapped_field_expressions():
+    """After PUT load-copy payload, the cloned graph should have field expressions with remapped IDs."""
+    project_id, endpoint = _create_project_and_get_endpoint("load_copy_clone")
+
+    src_instance_id = str(uuid4())
+    dst_instance_id = str(uuid4())
+    edge_id = str(uuid4())
+    expression_text = f"Task: @{{{{{src_instance_id}.output}}}} - Sources: @{{{{{src_instance_id}.artifacts::docs}}}}"
+
+    payload = _create_graph_payload_with_field_expressions(
+        src_instance_id=src_instance_id,
+        dst_instance_id=dst_instance_id,
+        edge_id=edge_id,
+        expression_text=expression_text,
+    )
+
+    put_resp = client.put(endpoint, headers=HEADERS_JWT, json=payload)
+    assert put_resp.status_code == 200
+
+    load_copy_resp = client.get(f"{endpoint}/load-copy", headers=HEADERS_JWT)
+    assert load_copy_resp.status_code == 200
+    load_payload = load_copy_resp.json()
+
+    project_id_clone, clone_endpoint = _create_project_and_get_endpoint("load_copy_clone_target")
+    clone_put = client.put(clone_endpoint, headers=HEADERS_JWT, json=load_payload)
+    assert clone_put.status_code == 200
+
+    clone_get = client.get(clone_endpoint, headers=HEADERS_JWT)
+    assert clone_get.status_code == 200
+    cloned_graph = clone_get.json()
+
+    cloned_src = next(ci for ci in cloned_graph["component_instances"] if ci["name"] == "Source Agent")
+    cloned_dst = next(ci for ci in cloned_graph["component_instances"] if ci["name"] == "Target Agent")
+    cloned_src_id = cloned_src["id"]
+
+    assert "field_expressions" in cloned_dst
+    assert len(cloned_dst["field_expressions"]) == 1
+
+    cloned_expr_json = cloned_dst["field_expressions"][0]["expression_json"]
+    cloned_expr_text = cloned_dst["field_expressions"][0]["expression_text"]
+
+    _assert_expression_remapped(
+        cloned_expr_json, cloned_expr_text, src_instance_id, cloned_src_id, context="Cloned graph: "
+    )
+
+    client.delete(f"/projects/{project_id}", headers=HEADERS_JWT)
+    client.delete(f"/projects/{project_id_clone}", headers=HEADERS_JWT)
 
 
 def test_invalid_reference_unknown_port_returns_400():

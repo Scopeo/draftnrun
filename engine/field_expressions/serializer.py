@@ -19,8 +19,11 @@ def to_json(expression: ExpressionNode) -> Dict[str, Any]:
     match expression:
         case LiteralNode(value=value):
             return {"type": "literal", "value": value}
-        case RefNode(instance=instance, port=port):
-            return {"type": "ref", "instance": instance, "port": port}
+        case RefNode(instance=instance, port=port, key=key):
+            result = {"type": "ref", "instance": instance, "port": port}
+            if key is not None:
+                result["key"] = key
+            return result
         case ConcatNode(parts=parts):
             return {"type": "concat", "parts": [to_json(p) for p in parts]}
         case _:
@@ -32,8 +35,8 @@ def from_json(ast_dict: Dict[str, Any]) -> ExpressionNode:
     match ast_dict:
         case {"type": "literal", "value": value}:
             return LiteralNode(value=str(value))
-        case {"type": "ref", "instance": instance, "port": port}:
-            return RefNode(instance=str(instance), port=str(port))
+        case {"type": "ref", "instance": instance, "port": port, **rest}:
+            return RefNode(instance=str(instance), port=str(port), key=rest.get("key"))
         case {"type": "concat", "parts": parts}:
             hydrated: List[ExpressionNode] = [from_json(p) for p in (parts or [])]
             # Filter to only LiteralNode | RefNode for now; nested concat collapses by flattening literals

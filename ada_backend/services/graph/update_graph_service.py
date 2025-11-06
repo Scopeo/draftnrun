@@ -39,8 +39,8 @@ from ada_backend.repositories.field_expression_repository import (
     upsert_field_expression,
 )
 from engine.field_expressions.parser import parse_expression
-from engine.field_expressions.errors import FieldExpressionParseError
-from engine.field_expressions.serde import to_json as expr_to_json
+from engine.field_expressions.errors import FieldExpressionError, FieldExpressionParseError
+from engine.field_expressions.serializer import to_json as expr_to_json
 from engine.field_expressions.ast import RefNode, ExpressionNode
 from engine.field_expressions.traversal import select_nodes, get_pure_ref
 
@@ -452,17 +452,17 @@ def _validate_expression_references(session: Session, ast: ExpressionNode) -> No
         try:
             source_instance_uuid = UUID(ref_node.instance)
         except Exception:
-            raise ValueError(
+            raise FieldExpressionError(
                 f"Invalid referenced instance id in expression: '{ref_node.instance}' is not a UUID",
             )
 
         source_instance = get_component_instance_by_id(session, source_instance_uuid)
         if not source_instance:
-            raise ValueError(f"Referenced component instance not found: {ref_node.instance}")
+            raise FieldExpressionError(f"Referenced component instance not found: {ref_node.instance}")
 
         source_component_version_id = resolve_component_version_id_from_instance_id(session, source_instance_uuid)
         source_port_def_id = get_output_port_definition_id(session, source_component_version_id, ref_node.port)
         if not source_port_def_id:
-            raise ValueError(
+            raise FieldExpressionError(
                 f"Output port '{ref_node.port}' not found for component version '{source_component_version_id}'"
             )

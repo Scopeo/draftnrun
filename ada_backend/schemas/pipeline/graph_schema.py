@@ -31,7 +31,7 @@ class GraphGetResponse(BaseModel):
 class GraphLoadResponse(BaseModel):
     """Response model for loading a graph"""
 
-    component_instances: list[ComponentInstanceSchema]
+    component_instances: list[ComponentInstanceReadSchema]
     relationships: list[ComponentRelationshipSchema]
     edges: list[EdgeSchema]
 

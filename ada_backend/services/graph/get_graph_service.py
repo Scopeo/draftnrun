@@ -19,7 +19,7 @@ from ada_backend.schemas.pipeline.port_mapping_schema import PortMappingSchema
 from ada_backend.services.pipeline.get_pipeline_service import get_component_instance, get_relationships
 from ada_backend.services.tag_service import compose_tag_name
 from engine.field_expressions.parser import unparse_expression
-from engine.field_expressions.serde import from_json as expr_from_json
+from engine.field_expressions.serializer import from_json as expr_from_json
 
 LOGGER = logging.getLogger(__name__)
 
