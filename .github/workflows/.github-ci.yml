@@ -128,6 +128,7 @@ jobs:
           echo "PAGE_RESOLUTION_ZOOM=3.0" >> credentials.env
           echo "NUMBER_OF_PAGES_TO_DETECT_DOCUMENT_TYPE=5" >> credentials.env
           echo "LINKUP_API_KEY=${{secrets.LINKUP_API_KEY}}" >> cedentials.env
+          echo "PROD_DB_URL=${{ secrets.PROD_DB_URL }}" >> credentials.env
 
       - name: Upload credentials.env to EC2
         uses: appleboy/scp-action@master
@@ -203,7 +204,21 @@ jobs:
             echo "===> Waiting for PostgreSQL to be ready"
             timeout 30s bash -c 'until docker compose exec postgres pg_isready; do sleep 1; done'
 
-      - name: Copy staging DB to test DB
+      - name: Alembic migration checks
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.EC2_HOST_TEST }}
+          username: ${{ env.EC2_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          script: |
+            set -e
+            echo "===> Changing directory to ${{ env.EC2_PATH_BASE }}/${{env.EC2_FOLDER_NAME}}${{ env.RUN_ID }}"
+            cd ${{ env.EC2_PATH_BASE }}/${{env.EC2_FOLDER_NAME}}${{ env.RUN_ID }}
+            echo "===> Running pytest-alembic suite"
+            uv run pytest -q -m alembic tests/alembic
+
+      - name: Restore prod dump and seed
         uses: appleboy/ssh-action@master
         with:
           host: ${{ secrets.EC2_HOST_TEST }}
@@ -224,13 +239,75 @@ jobs:
               echo "===> PostgreSQL 16 client tools already installed"
             fi
 
-            echo "👁️ Re-setup the traces database"
-            make trace-db-upgrade
+            # Load credentials if present (optional)
+            if [ -f credentials.env ]; then
+              set -a; source credentials.env; set +a
+            fi
+
+            # Require PROD_DB_URL to be set on the EC2 host or in credentials.env
+            if [ -z "${PROD_DB_URL:-}" ]; then
+              echo "ERROR: PROD_DB_URL is not set on the test EC2 instance." >&2
+              exit 1
+            fi
+
+
+            # TTL cache for prod dumps
+            CACHE_DIR="/home/ec2-user/ci-cache/db-dumps"
+            mkdir -p "$CACHE_DIR"
+            DUMP_PATH="$CACHE_DIR/prod.latest.dump"
+            TTL_MINUTES=1440  # 24 hours
+
+            # Helper function to check dump age and TTL
+            check_dump_ttl() {
+              local dump_file="$1"
+              local dump_name="$2"
+              if [ ! -f "$dump_file" ]; then
+                echo "===> $dump_name: No cached dump found, will create new one"
+                return 1
+              fi
+              local current_time=$(date +%s)
+              local file_time=$(stat -c %Y "$dump_file")
+              local age_seconds=$((current_time - file_time))
+              local age_minutes=$((age_seconds / 60))
+              local remaining_minutes=$((TTL_MINUTES - age_minutes))
+              local age_hours=$((age_minutes / 60))
+              local remaining_hours=$((remaining_minutes / 60))
+              if [ $remaining_minutes -le 0 ]; then
+                echo "===> $dump_name: Cache expired (age: ${age_hours}h), will refresh"
+                return 1
+              else
+                echo "===> $dump_name: Cache age: ${age_hours}h, TTL remaining: ${remaining_hours}h (${remaining_minutes}m)"
+                return 0
+              fi
+            }
+
+            # Dump/refresh main DB
+            echo "===> Checking main DB dump cache at $DUMP_PATH (TTL 24h)"
+            if ! check_dump_ttl "$DUMP_PATH" "Main DB"; then
+              echo "===> Refreshing prod dump"
+              pg_dump -Fc "$PROD_DB_URL" -f "$DUMP_PATH"
+              echo "===> Main DB dump refreshed successfully"
+            else
+              echo "===> Using cached prod dump"
+            fi
+
+            echo "===> Copying dumps into postgres container"
+            cd services
+            CONTAINER_ID=$(docker compose ps -q postgres)
+            docker cp "$DUMP_PATH" "$CONTAINER_ID:/tmp/prod.dump"
+
+            # Restore main DB
+            echo "===> Dropping and creating target database (ada_backend)"
+            docker compose exec -T postgres bash -lc 'dropdb -U postgres ada_backend || true && createdb -U postgres ada_backend'
+
+            echo "===> Restoring main dump"
+            docker compose exec -T postgres pg_restore -U postgres -d ada_backend \
+              --clean --if-exists --no-owner --no-privileges -Fc /tmp/prod.dump
 
             echo "===> Running database migrations"
+            cd ${{ env.EC2_PATH_BASE }}/${{env.EC2_FOLDER_NAME}}${{ env.RUN_ID }}
             make db-upgrade
             make db-seed
-            uv run python -m ada_backend.database.seed_project_db
 
       - name: Start ada_backend server
         uses: appleboy/ssh-action@master
