@@ -80,6 +80,7 @@ dev = [
     "pytest-mock>=3.14.0,<4",
     "trio>=0.30.0",
     "pytest-trio>=0.8.0",
+    "pytest-alembic>=0.12.1",
 ]
 tracing = [
     "wrapt==1.17.2",
