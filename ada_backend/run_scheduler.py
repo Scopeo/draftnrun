@@ -4,6 +4,9 @@ import sys
 import logging
 from typing import Optional
 
+from logger import setup_logging
+from engine.trace.trace_context import set_trace_manager
+from engine.trace.trace_manager import TraceManager
 from ada_backend.scheduler.service import start_scheduler, stop_scheduler
 
 LOGGER = logging.getLogger(__name__)
@@ -14,7 +17,7 @@ SHUTDOWN_EVENT: Optional[asyncio.Event] = None
 def signal_handler(signum, frame):
     """
     Handle shutdown signals from the OS gracefully.
-    
+
     This function is called by the OS when:
     - SIGTERM is received (e.g., from systemd: systemctl stop)
     - SIGINT is received (e.g., from user: Ctrl+C)
@@ -45,6 +48,11 @@ def signal_handler(signum, frame):
 
 async def run_scheduler():
     global SHUTDOWN_EVENT
+
+    setup_logging(process_name="apscheduler")
+
+    set_trace_manager(tm=TraceManager(project_name="ada-backend-scheduler"))
+
     SHUTDOWN_EVENT = asyncio.Event()
 
     LOGGER.info("Starting APScheduler as standalone process")
