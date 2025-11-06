@@ -67,17 +67,19 @@ class APICallTool(Agent):
         else:
             self.fixed_parameters = fixed_parameters or {}
 
-    async def make_api_call(self, **kwargs) -> Dict[str, Any]:
+    async def make_api_call(self, ctx: Optional[dict] = None, **kwargs) -> Dict[str, Any]:
         """Make an HTTP request to the configured API endpoint."""
 
         request_headers = self.headers.copy()
 
-        all_parameters = self.fixed_parameters.copy()
-        all_parameters.update(kwargs)
+        all_parameters = kwargs.copy()
+        all_parameters.update(self.fixed_parameters.copy())
+        print(f"all_parameters: {all_parameters}")
         endpoint = self.endpoint.format(**all_parameters)
         formatter = string.Formatter()
         used_keys = {field_name for _, field_name, _, _ in formatter.parse(self.endpoint) if field_name}
         filtered_parameters = {key: value for key, value in all_parameters.items() if key not in used_keys}
+        print(f"filtered_parameters: {filtered_parameters}")
 
         request_kwargs = {
             "url": endpoint,
@@ -129,6 +131,7 @@ class APICallTool(Agent):
     async def _run_without_io_trace(
         self,
         *inputs: AgentPayload,
+        ctx: Optional[dict] = None,
         **kwargs: Any,
     ) -> AgentPayload:
         # Make the API call
