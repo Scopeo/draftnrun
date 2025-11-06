@@ -87,6 +87,7 @@ dev = [
     { name = "pytest" },
     { name = "pytest-alembic" },
     { name = "pytest-mock" },
+    { name = "pytest-mock-resources", extra = ["docker"] },
     { name = "pytest-trio" },
     { name = "requests-mock" },
     { name = "trio" },
@@ -195,6 +196,7 @@ dev = [
     { name = "pytest", specifier = "==7.4.4" },
     { name = "pytest-alembic", specifier = ">=0.12.1" },
     { name = "pytest-mock", specifier = ">=3.14.0,<4" },
+    { name = "pytest-mock-resources", extras = ["docker"], specifier = ">=2.12.4" },
     { name = "pytest-trio", specifier = ">=0.8.0" },
     { name = "requests-mock", specifier = "==1.11.0" },
     { name = "trio", specifier = ">=0.30.0" },
@@ -3318,6 +3320,26 @@ wheels = [
 ]
 
 [[package]]
+name = "pytest-mock-resources"
+version = "2.12.4"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "pytest" },
+    { name = "sqlalchemy" },
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/c5/9a/6ca1cc045dd45a2c0793b8d997e649a7e06c805a98a1d50ab1dab1aa3c4d/pytest_mock_resources-2.12.4.tar.gz", hash = "sha256:f3734b2f1eb851bc3c44375bd1fccc1571770a190ad16f1efa7655f436be2bf3", size = 41959 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/75/ce/8ec6e58bd916f215b45ab8c1f4f99d3a2470ff7dfb63b70bc8026ce5740e/pytest_mock_resources-2.12.4-py3-none-any.whl", hash = "sha256:9e737cdf9e67b7ce1b9b1da0373b377339b65d206ef5e1237ac8591934429e7e", size = 58849 },
+]
+
+[package.optional-dependencies]
+docker = [
+    { name = "filelock" },
+    { name = "python-on-whales" },
+]
+
+[[package]]
 name = "pytest-trio"
 version = "0.8.0"
 source = { registry = "https://pypi.org/simple" }
@@ -3410,6 +3432,19 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/f3/87/f44d7c9f274c7ee665a29b885ec97089ec5dc034c7f3fafa03da9e39a09e/python_multipart-0.0.20.tar.gz", hash = "sha256:8dd0cab45b8e23064ae09147625994d090fa46f5b0d1e13af944c331a7fa9d13", size = 37158 }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/45/58/38b5afbc1a800eeea951b9285d3912613f2603bdf897a4ab0f4bd7f405fc/python_multipart-0.0.20-py3-none-any.whl", hash = "sha256:8a62d3a8335e06589fe01f2a3e178cdcc632f3fbe0d492ad9ee0ec35aab1f104", size = 24546 },
+]
+
+[[package]]
+name = "python-on-whales"
+version = "0.79.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "pydantic" },
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/51/f5/3a283762a9528dea6c666d28ae4c47cc14ad4ce9994ee976852dd0cb166f/python_on_whales-0.79.0.tar.gz", hash = "sha256:919bba304cc04db4b75cdd7fb14c0a8fea6ebeafacf7989f6956641cb58210e0", size = 114675 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/32/f5/b8cf36274244c12fa1535a62fafdc72c89e8fe965ef1477a9279c09aa2f6/python_on_whales-0.79.0-py3-none-any.whl", hash = "sha256:4a39ab107a4e740e4302c853c0efc5ced4b4048f55acbb959a2faf53b7003c27", size = 118821 },
 ]
 
 [[package]]
