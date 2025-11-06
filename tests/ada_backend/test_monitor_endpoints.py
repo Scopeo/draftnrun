@@ -1,3 +1,5 @@
+from unittest.mock import patch, AsyncMock
+
 from fastapi.testclient import TestClient
 
 from ada_backend.main import app
@@ -12,7 +14,9 @@ from settings import settings
 client = TestClient(app)
 
 
-def test_monitor_endpoint():
+@patch("engine.qdrant_service.QdrantService.retrieve_similar_chunks_async", new_callable=AsyncMock)
+def test_monitor_endpoint(mock_retrieve_chunks):
+    mock_retrieve_chunks.return_value = []
     trace_manager = TraceManager(project_name="ada-backend-test")
     set_trace_manager(trace_manager)
     project_id = "f7ddbfcb-6843-4ae9-a15b-40aa565b955b"  # graph test project
