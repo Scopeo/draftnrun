@@ -38,12 +38,10 @@ def signal_handler(signum, frame):
                 # Loop exists but not running - this shouldn't happen in a normal flow
                 error_msg = "SHUTDOWN_EVENT was initialized outside of a running loop"
                 LOGGER.error(error_msg)
-                print(f"❌ {error_msg}", file=sys.stderr)
         except RuntimeError as e:
             # No event loop exists - this shouldn't happen if SHUTDOWN_EVENT exists
             error_msg = "SHUTDOWN_EVENT was initialized outside of a loop"
             LOGGER.error(f"{error_msg}: {e}")
-            print(f"❌ {error_msg}", file=sys.stderr)
 
 
 async def run_scheduler():
@@ -67,9 +65,8 @@ async def run_scheduler():
         LOGGER.info("Shutdown signal received")
 
     except Exception as e:
-        error_msg = f"❌ Failed to start scheduler: {e}"
+        error_msg = f"Failed to start scheduler: {e}"
         LOGGER.error(error_msg, exc_info=True)
-        print(error_msg, file=sys.stderr)
         raise
     finally:
         LOGGER.info("Shutting down APScheduler...")
@@ -77,9 +74,8 @@ async def run_scheduler():
             stop_scheduler()  # This waits for running jobs to complete (wait=True)
             LOGGER.info("APScheduler shut down successfully")
         except Exception as e:
-            error_msg = f"❌ Error during scheduler shutdown: {e}"
+            error_msg = f"Error during scheduler shutdown: {e}"
             LOGGER.error(error_msg, exc_info=True)
-            print(error_msg, file=sys.stderr)
             raise
 
 
@@ -91,10 +87,8 @@ def main():
         loop.run_until_complete(run_scheduler())
 
     except Exception as e:
-        error_msg = f"❌ Fatal error in scheduler: {e}"
+        error_msg = f"Fatal error in scheduler: {e}"
         LOGGER.error(error_msg, exc_info=True)
-        print(error_msg, file=sys.stderr)
-        print(f"   Error type: {type(e).__name__}", file=sys.stderr)
         # Exit with code 1 to indicate failure to systemd, CI/CD, and monitoring tools
         sys.exit(1)
     finally:

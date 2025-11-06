@@ -167,21 +167,8 @@ def get_projects_by_organization_with_details(
             )
         )
 
-<<<<<<< HEAD
-=======
-        project_schemas.append(
-            ProjectWithGraphRunnersSchema(
-                project_id=project.id,
-                project_name=project.name,
-                description=project.description,
-                organization_id=project.organization_id,
-                project_type=project.type,
-                created_at=str(project.created_at),
-                updated_at=str(project.updated_at),
-                graph_runners=graph_runners,
-                is_template=is_template,
-            )
-        )
+    return project_schemas
+
 
 # --- CREATE operations ---
 def insert_project(
