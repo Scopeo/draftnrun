@@ -257,7 +257,7 @@ jobs:
             echo "===> Using dump cache at $DUMP_PATH (TTL 24h)"
             if [ ! -f "$DUMP_PATH" ] || find "$DUMP_PATH" -mmin +1440 | grep -q .; then
               echo "===> Refreshing prod dump"
-              /usr/pgsql-16/bin/pg_dump -Fc "$PROD_DB_URL" -f "$DUMP_PATH"
+              pg_dump -Fc "$PROD_DB_URL" -f "$DUMP_PATH"
             else
               echo "===> Using cached prod dump"
             fi
@@ -271,7 +271,8 @@ jobs:
             docker compose exec -T postgres bash -lc 'dropdb -U postgres ada_backend || true && createdb -U postgres ada_backend'
 
             echo "===> Restoring dump"
-            docker compose exec -T postgres pg_restore -U postgres -d ada_backend --clean --if-exists -Fc /tmp/prod.dump
+            docker compose exec -T postgres pg_restore -U postgres -d ada_backend \
+              --clean --if-exists --no-owner --no-privileges -Fc /tmp/prod.dump
 
             echo "===> Running database migrations"
             make db-upgrade
