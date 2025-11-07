@@ -173,7 +173,8 @@ max-line-length = 119
 exclude = [".venv"]
 filename = ["*.py"]
 per-file-ignores = """
-    tests/conftest.py: F401
+    tests/conftest.py: F401, E402
+    tests/alembic/test_migrations.py: F401, E402
 """
 
 [tool.pytest.ini_options]
