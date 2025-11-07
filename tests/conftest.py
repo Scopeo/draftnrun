@@ -1,12 +1,8 @@
+import os
 import pytest
 from unittest.mock import patch
 from pytest_alembic.config import Config
 from pytest_mock_resources import create_postgres_fixture
-from ada_backend.database import setup_db as _setup
-from sqlalchemy.orm import sessionmaker as _sessionmaker
-import sqlalchemy as sa
-import os
-import uuid
 
 
 # Pin PMR Postgres image version for the ephemeral DB
