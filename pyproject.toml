@@ -175,6 +175,7 @@ filename = ["*.py"]
 per-file-ignores = """
     tests/conftest.py: F401, E402
     tests/alembic/test_migrations.py: F401, E402
+    tests/alembic/test_trace_migrations.py: F401, E402
 """
 
 [tool.pytest.ini_options]
