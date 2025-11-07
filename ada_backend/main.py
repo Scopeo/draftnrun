@@ -26,6 +26,7 @@ from ada_backend.routers.trace_router import router as trace_router
 from ada_backend.routers.admin_tools_router import router as admin_tools_router
 from ada_backend.routers.cron_router import router as cron_router
 from ada_backend.routers.agent_router import router as agent_router
+from ada_backend.routers.knowledge_router import router as knowledge_router
 from engine.trace.trace_context import set_trace_manager
 from engine.trace.trace_manager import TraceManager
 from settings import settings
@@ -115,6 +116,10 @@ app = FastAPI(
             "name": "Ingestion Database",
             "description": "Endpoints for managing ingestion database for organization sources",
         },
+        {
+            "name": "Knowledge",
+            "description": "Endpoints for exploring knowledge files and chunks",
+        },
     ],
 )
 
@@ -145,6 +150,7 @@ app.include_router(trace_router)
 app.include_router(admin_tools_router)
 app.include_router(cron_router)
 app.include_router(global_secret_router)
+app.include_router(knowledge_router)
 app.include_router(ingestion_database_router)
 
 app.add_middleware(RequestContextMiddleware)
