@@ -279,6 +279,7 @@ jobs:
             cd ${{ env.EC2_PATH_BASE }}/${{env.EC2_FOLDER_NAME}}${{ env.RUN_ID }}
             make db-upgrade
             make db-seed
+            make trace-db-upgrade
 
       - name: Start ada_backend server
         uses: appleboy/ssh-action@master
