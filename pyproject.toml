@@ -175,3 +175,7 @@ filename = ["*.py"]
 per-file-ignores = """
     tests/conftest.py: F401
 """
+
+[tool.pytest.ini_options]
+markers = ["alembic"]
+addopts = "-m 'not alembic'"
