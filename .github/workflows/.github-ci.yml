@@ -276,6 +276,7 @@ jobs:
               --clean --if-exists --no-owner --no-privileges -Fc /tmp/prod.dump
 
             echo "===> Running database migrations"
+            cd ${{ env.EC2_PATH_BASE }}/${{env.EC2_FOLDER_NAME}}${{ env.RUN_ID }}
             make db-upgrade
             make db-seed
             uv run python -m ada_backend.database.seed_project_db
