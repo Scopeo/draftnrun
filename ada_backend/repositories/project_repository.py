@@ -166,7 +166,7 @@ def get_projects_by_organization_with_details(
                 is_template=is_template,
             )
         )
-
+        
     return project_schemas
 
 
