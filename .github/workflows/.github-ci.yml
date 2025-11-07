@@ -128,6 +128,7 @@ jobs:
           echo "PAGE_RESOLUTION_ZOOM=3.0" >> credentials.env
           echo "NUMBER_OF_PAGES_TO_DETECT_DOCUMENT_TYPE=5" >> credentials.env
           echo "LINKUP_API_KEY=${{secrets.LINKUP_API_KEY}}" >> cedentials.env
+          echo "PROD_DB_URL=${{ secrets.PROD_DB_URL }}" >> credentials.env
 
       - name: Upload credentials.env to EC2
         uses: appleboy/scp-action@master
