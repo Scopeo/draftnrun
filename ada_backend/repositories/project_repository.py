@@ -115,13 +115,13 @@ def get_projects_by_organization_with_details(
         has_production = exists().where(
             and_(
                 db.ProjectEnvironmentBinding.project_id == db.Project.id,
-                db.ProjectEnvironmentBinding.environment == db.EnvType.PRODUCTION
+                db.ProjectEnvironmentBinding.environment == db.EnvType.PRODUCTION,
             )
         )
         query = query.filter(
             or_(
                 db.Project.organization_id == organization_id,
-                and_(db.Project.organization_id == TEMPLATE_ORGANIZATION_ID, has_production)
+                and_(db.Project.organization_id == TEMPLATE_ORGANIZATION_ID, has_production),
             )
         )
     else:
@@ -134,6 +134,13 @@ def get_projects_by_organization_with_details(
 
     project_schemas = []
     for project in projects:
+        # Context-aware: templates only when viewed from other orgs
+        is_template = (
+            str(organization_id) != TEMPLATE_ORGANIZATION_ID
+            and str(project.organization_id) == TEMPLATE_ORGANIZATION_ID
+        )
+
+        # For templates, only include production graph runners
         graph_runners = [
             GraphRunnerEnvDTO(
                 graph_runner_id=env_binding.graph_runner.id,
@@ -143,26 +150,22 @@ def get_projects_by_organization_with_details(
                 change_log=env_binding.graph_runner.change_log,
             )
             for env_binding in project.envs
-            if env_binding.graph_runner
+            if env_binding.graph_runner and (not is_template or env_binding.environment == db.EnvType.PRODUCTION)
         ]
 
-        # Context-aware: templates only when viewed from other orgs
-        is_template = (
-            str(organization_id) != TEMPLATE_ORGANIZATION_ID
-            and str(project.organization_id) == TEMPLATE_ORGANIZATION_ID
+        project_schemas.append(
+            ProjectWithGraphRunnersSchema(
+                project_id=project.id,
+                project_name=project.name,
+                description=project.description,
+                organization_id=project.organization_id,
+                project_type=project.type,
+                created_at=str(project.created_at),
+                updated_at=str(project.updated_at),
+                graph_runners=graph_runners,
+                is_template=is_template,
+            )
         )
-
-        project_schemas.append(ProjectWithGraphRunnersSchema(
-            project_id=project.id,
-            project_name=project.name,
-            description=project.description,
-            organization_id=project.organization_id,
-            project_type=project.type,
-            created_at=str(project.created_at),
-            updated_at=str(project.updated_at),
-            graph_runners=graph_runners,
-            is_template=is_template,
-        ))
 
     return project_schemas
 
