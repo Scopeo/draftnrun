@@ -217,7 +217,7 @@ jobs:
             echo "===> Running pytest-alembic suite"
             uv run pytest -q -m alembic tests/alembic
 
-      - name: Copy staging DB to test DB (BAD NAME)
+      - name: Restore prod dump and seed
         uses: appleboy/ssh-action@master
         with:
           host: ${{ secrets.EC2_HOST_TEST }}
@@ -238,8 +238,40 @@ jobs:
               echo "===> PostgreSQL 16 client tools already installed"
             fi
 
-            echo "👁️ Re-setup the traces database"
-            make trace-db-upgrade
+            # Load credentials if present (optional)
+            if [ -f credentials.env ]; then
+              set -a; source credentials.env; set +a
+            fi
+
+            # Require PROD_DB_URL to be set on the EC2 host or in credentials.env
+            if [ -z "${PROD_DB_URL:-}" ]; then
+              echo "ERROR: PROD_DB_URL is not set on the test EC2 instance." >&2
+              exit 1
+            fi
+
+            # TTL cache for prod dump
+            CACHE_DIR="/home/ec2-user/ci-cache/db-dumps"
+            mkdir -p "$CACHE_DIR"
+            DUMP_PATH="$CACHE_DIR/prod.latest.dump"
+
+            echo "===> Using dump cache at $DUMP_PATH (TTL 24h)"
+            if [ ! -f "$DUMP_PATH" ] || find "$DUMP_PATH" -mmin +1440 | grep -q .; then
+              echo "===> Refreshing prod dump"
+              /usr/pgsql-16/bin/pg_dump -Fc "$PROD_DB_URL" -f "$DUMP_PATH"
+            else
+              echo "===> Using cached prod dump"
+            fi
+
+            echo "===> Copying dump into postgres container"
+            cd services
+            CONTAINER_ID=$(docker compose ps -q postgres)
+            docker cp "$DUMP_PATH" "$CONTAINER_ID:/tmp/prod.dump"
+
+            echo "===> Dropping and creating target database"
+            docker compose exec -T postgres bash -lc 'dropdb -U postgres ada_backend || true && createdb -U postgres ada_backend'
+
+            echo "===> Restoring dump"
+            docker compose exec -T postgres pg_restore -U postgres -d ada_backend --clean --if-exists -Fc /tmp/prod.dump
 
             echo "===> Running database migrations"
             make db-upgrade
