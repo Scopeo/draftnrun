@@ -203,7 +203,21 @@ jobs:
             echo "===> Waiting for PostgreSQL to be ready"
             timeout 30s bash -c 'until docker compose exec postgres pg_isready; do sleep 1; done'
 
-      - name: Copy staging DB to test DB
+      - name: Alembic migration checks
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.EC2_HOST_TEST }}
+          username: ${{ env.EC2_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          script: |
+            set -e
+            echo "===> Changing directory to ${{ env.EC2_PATH_BASE }}/${{env.EC2_FOLDER_NAME}}${{ env.RUN_ID }}"
+            cd ${{ env.EC2_PATH_BASE }}/${{env.EC2_FOLDER_NAME}}${{ env.RUN_ID }}
+            echo "===> Running pytest-alembic suite"
+            uv run pytest -q -m alembic tests/alembic
+
+      - name: Copy staging DB to test DB (BAD NAME)
         uses: appleboy/ssh-action@master
         with:
           host: ${{ secrets.EC2_HOST_TEST }}
