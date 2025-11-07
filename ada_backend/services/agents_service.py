@@ -13,9 +13,8 @@ from ada_backend.database.seed.seed_ai_agent import (
 )
 from ada_backend.database.seed.utils import COMPONENT_UUIDS, COMPONENT_VERSION_UUIDS
 from ada_backend.repositories.agent_repository import fetch_agents_with_graph_runners_by_organization
-from ada_backend.repositories.env_repository import bind_graph_runner_to_project
-from ada_backend.repositories.graph_runner_repository import insert_graph_runner, upsert_component_node
-from ada_backend.repositories.project_repository import get_project, insert_project
+from ada_backend.repositories.graph_runner_repository import upsert_component_node
+from ada_backend.repositories.project_repository import get_project
 from ada_backend.repositories.utils import create_component_instance
 from ada_backend.schemas.agent_schema import (
     AgentUpdateSchema,
@@ -32,6 +31,7 @@ from ada_backend.services.errors import ProjectNotFound
 from ada_backend.database import models as db
 from ada_backend.services.graph.get_graph_service import get_graph_service
 from ada_backend.services.graph.update_graph_service import update_graph_service
+from ada_backend.services.project_service import create_project_with_graph_runner
 from ada_backend.services.tag_service import compose_tag_name
 from ada_backend.services.pipeline.update_pipeline_service import create_or_update_component_instance
 
@@ -153,28 +153,23 @@ def add_ai_agent_component_to_graph(session: Session, graph_runner_id: UUID) -> 
 def create_new_agent_service(
     session: Session, user_id: UUID, organization_id: UUID, agent_data: ProjectAgentSchema
 ) -> ProjectWithGraphRunnersSchema:
-    project = insert_project(
+    project, graph_runner_id = create_project_with_graph_runner(
         session=session,
+        organization_id=organization_id,
         project_id=agent_data.id,
         project_name=agent_data.name,
         description=agent_data.description,
-        organization_id=organization_id,
         project_type=db.ProjectType.AGENT,
-    )
-    graph_runner = insert_graph_runner(
-        session=session,
+        template=agent_data.template,
         graph_id=agent_data.id,
         add_input=False,
+        log_context="agent",
     )
-    graph_runner_id = graph_runner.id
-    bind_graph_runner_to_project(
-        session=session,
-        graph_runner_id=graph_runner_id,
-        project_id=project.id,
-        env=db.EnvType.DRAFT,
-    )
-    add_ai_agent_component_to_graph(session, graph_runner_id)
-    LOGGER.info(f"Created draft agent with version ID {graph_runner_id} for agent project {project.id}")
+
+    # Only add AI agent component if not using a template (template should already have it)
+    if agent_data.template is None:
+        add_ai_agent_component_to_graph(session, graph_runner_id)
+
     track_agent_created(user_id, organization_id, project.id, project.name)
     return ProjectWithGraphRunnersSchema(
         project_id=project.id,
