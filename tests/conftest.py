@@ -23,16 +23,24 @@ def alembic_config():
 
 
 @pytest.fixture(autouse=True)
-def align_app_db_to_alembic(alembic_engine, monkeypatch):
-    """Ensure the application DB session/engine uses the same ephemeral DB as alembic tests"""
+def align_app_db_to_alembic(alembic_engine, monkeypatch, request):
+    """For tests marked with 'alembic', use the alembic ephemeral DB in app setup; restore after."""
+    if "alembic" not in request.keywords:
+        # Only apply to alembic-marked tests
+        return
+
     monkeypatch.setenv("ADA_DB_URL", str(alembic_engine.url))
 
+    old_engine = _setup.engine
+    old_session_local = _setup.SessionLocal
     _setup.engine = alembic_engine
-    _setup.SessionLocal = _sessionmaker(
-        autocommit=False,
-        autoflush=False,
-        bind=alembic_engine,
-    )
+    _setup.SessionLocal = _sessionmaker(autocommit=False, autoflush=False, bind=alembic_engine)
+
+    yield
+
+    # Restore original engine/session for non-alembic tests
+    _setup.engine = old_engine
+    _setup.SessionLocal = old_session_local
 
 
 # Import LLM service mocks
