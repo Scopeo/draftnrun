@@ -24,7 +24,6 @@ def test_upgrade_and_seed(alembic_runner, alembic_engine):
     session = Session()
     try:
         seed_db(session)
-        # TODO: Uncomment when I know how to make this work in local
-        # seed_projects_db(session)
+        seed_projects_db(session)
     finally:
         session.close()
