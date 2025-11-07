@@ -8,3 +8,23 @@ from pytest_alembic.tests import test_up_down_consistency
 
 # TODO: Uncomment when non-empty revision issue is fixed
 # from pytest_alembic.tests import test_model_definitions_match_ddl
+
+from sqlalchemy.orm import sessionmaker
+from ada_backend.database.seed_db import seed_db
+from ada_backend.database.seed_project_db import seed_projects_db
+
+
+def test_upgrade_and_seed(alembic_runner, alembic_engine):
+    """Upgrade to head, then run full database seeding."""
+    # Upgrade migrations to head using pytest-alembic runner
+    alembic_runner.migrate_up_to("heads", return_current=False)
+
+    # Run seed against alembic-test-ephemeral DB
+    Session = sessionmaker(bind=alembic_engine)
+    session = Session()
+    try:
+        seed_db(session)
+        # TODO: Uncomment when I know how to make this work in local
+        # seed_projects_db(session)
+    finally:
+        session.close()
