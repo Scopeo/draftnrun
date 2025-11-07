@@ -2,6 +2,8 @@ import pytest
 from unittest.mock import patch
 from pytest_alembic.config import Config
 from pytest_mock_resources import create_postgres_fixture
+from ada_backend.database import setup_db as _setup
+from sqlalchemy.orm import sessionmaker as _sessionmaker
 import sqlalchemy as sa
 import os
 import uuid
@@ -18,6 +20,27 @@ alembic_engine = create_postgres_fixture()
 def alembic_config():
     cfg = Config(config_options={"file": "ada_backend/database/alembic.ini"})
     return cfg
+
+
+@pytest.fixture(autouse=True)
+def align_app_db_to_alembic(alembic_engine, monkeypatch, request):
+    """For tests marked with 'alembic', use the alembic ephemeral DB in app setup; restore after."""
+    if "alembic" not in request.keywords:
+        # Only apply to alembic-marked tests
+        return
+
+    monkeypatch.setenv("ADA_DB_URL", str(alembic_engine.url))
+
+    old_engine = _setup.engine
+    old_session_local = _setup.SessionLocal
+    _setup.engine = alembic_engine
+    _setup.SessionLocal = _sessionmaker(autocommit=False, autoflush=False, bind=alembic_engine)
+
+    yield
+
+    # Restore original engine/session for non-alembic tests
+    _setup.engine = old_engine
+    _setup.SessionLocal = old_session_local
 
 
 # Import LLM service mocks
