@@ -25,9 +25,12 @@ class TraceSpan(BaseModel):
     call_type: CallType | None
     graph_runner_id: UUID | None
     tag_name: str | None = None
+    conversation_id: str | None = None
+    trace_id: str | None = None
 
     @classmethod
     def from_dict(cls, data: dict) -> "TraceSpan":
+        attributes = data.get("attributes", {})
         return cls(
             span_id=data["span_id"],
             name=data["name"],
@@ -48,6 +51,8 @@ class TraceSpan(BaseModel):
             call_type=data.get("call_type"),
             graph_runner_id=data.get("graph_runner_id"),
             tag_name=data.get("tag_name"),
+            conversation_id=attributes.get("conversation_id"),
+            trace_id=data.get("trace_id"),
         )
 
 
@@ -69,6 +74,7 @@ class RootTraceSpan(BaseModel):
     call_type: CallType | None
     graph_runner_id: UUID | None
     tag_name: str | None = None
+    conversation_id: str | None = None
 
 
 class TokenUsage(BaseModel):

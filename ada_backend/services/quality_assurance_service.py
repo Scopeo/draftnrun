@@ -473,19 +473,20 @@ def delete_datasets_service(
 
 def save_conversation_to_groundtruth_service(
     session: Session,
-    conversation_id: UUID,
+    identifier: str,
     dataset_id: UUID,
     message_index: int,
 ) -> List[InputGroundtruthResponse]:
 
-    input_payload, output_payload = query_conversation_messages(conversation_id)
+    input_payload, output_payload = query_conversation_messages(identifier)
     input_payload.pop("conversation_id", None)
-
     messages = input_payload.get("messages", [])
 
     if message_index < 0 or message_index >= len(messages):
         LOGGER.error(
-            f"Message index {message_index} is out of range for conversation {conversation_id} in dataset {dataset_id}"
+            f"Message index {message_index} is out of range for "
+            f"identifier {identifier} in dataset {dataset_id}. "
+            f"Messages count: {len(messages)}, requested index: {message_index}"
         )
         raise QAError(
             "At the moment, you cannot save the conversation to QA table. Please try again in a few seconds."

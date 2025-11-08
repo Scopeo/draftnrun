@@ -178,11 +178,17 @@ async def run_agent(
     # db_service = SQLLocalService(engine_url="sqlite:///ada_backend/database/monitor.db", dialect="sqlite")
     # asyncio.create_task(monitor_questions(db_service, project_id, input_data))
     uuid_for_temp_folder = str(uuid.uuid4())
+
+    # Generate conversation_id if not provided
+    conversation_id = input_data.get("conversation_id")
+    if not conversation_id:
+        conversation_id = uuid.uuid4()
+
     set_tracing_span(
         project_id=str(project_id),
         organization_id=str(project_details.organization_id),
         organization_llm_providers=get_organization_llm_providers(session, project_details.organization_id),
-        conversation_id=input_data.get("conversation_id"),
+        conversation_id=conversation_id,
         uuid_for_temp_folder=uuid_for_temp_folder,
         environment=environment,
         call_type=call_type,
