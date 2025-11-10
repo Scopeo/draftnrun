@@ -105,7 +105,7 @@ def get_agent_by_id_service(session: Session, agent_id: UUID, graph_runner_id: U
     for component_instance in graph_data.component_instances:
         is_ai_agent_component = (
             component_instance.is_start_node
-            and component_instance.component_id == COMPONENT_VERSION_UUIDS["base_ai_agent"]
+            and component_instance.component_version_id == COMPONENT_VERSION_UUIDS["base_ai_agent"]
         )
 
         if is_ai_agent_component:
