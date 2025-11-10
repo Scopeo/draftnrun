@@ -8,7 +8,7 @@ from opentelemetry.trace import get_current_span
 from engine.agent.agent import Agent
 from engine.agent.types import ChatMessage, ToolDescription, ComponentAttributes
 from engine.agent.utils import parse_openai_message_format
-from engine.agent.utils_prompt import fill_prompt_template_with_priority
+from engine.agent.utils_prompt import fill_prompt_template
 from engine.llm_services.llm_service import CompletionService
 from engine.trace.trace_manager import TraceManager
 from engine.trace.serializer import serialize_to_json
@@ -125,10 +125,10 @@ class LLMCallAgent(Agent):
         self._file_url_key = file_url_key
         self.output_format = output_format
 
-    def _extract_file_content(self, inputs: LLMCallInputs, ctx: Optional[dict], files_content: list) -> None:
-        """Extract file content from inputs or ctx and add to files_content list."""
+    def _extract_file_content(self, inputs: LLMCallInputs, ctx: Optional[dict]) -> list:
+        """Extract file content from inputs or ctx and return as a list."""
         if not self._file_content_key:
-            return
+            return []
 
         input_dict = inputs.model_dump(exclude_none=True)
         file_data = None
@@ -138,12 +138,13 @@ class LLMCallAgent(Agent):
             file_data = ctx[self._file_content_key]
 
         if isinstance(file_data, dict) and "filename" in file_data and "file_data" in file_data:
-            files_content.append({"type": "file", "file": file_data})
+            return [{"type": "file", "file": file_data}]
+        return []
 
-    def _extract_file_url(self, inputs: LLMCallInputs, ctx: Optional[dict], files_content: list) -> None:
-        """Extract file URL from inputs or ctx and add to files_content list."""
+    def _extract_file_url(self, inputs: LLMCallInputs, ctx: Optional[dict]) -> list:
+        """Extract file URL from inputs or ctx and return as a list."""
         if not self._file_url_key:
-            return
+            return []
 
         input_dict = inputs.model_dump(exclude_none=True)
         file_url = None
@@ -153,7 +154,8 @@ class LLMCallAgent(Agent):
             file_url = ctx[self._file_url_key]
 
         if isinstance(file_url, str) and file_url:
-            files_content.append({"type": "file", "file_url": file_url})
+            return [{"type": "file", "file_url": file_url}]
+        return []
 
     async def _run_without_io_trace(self, inputs: LLMCallInputs, ctx: Optional[dict] = None) -> LLMCallOutputs:
         LOGGER.info(f"Running LLM call agent with inputs: {inputs} and ctx: {ctx}")
@@ -163,7 +165,6 @@ class LLMCallAgent(Agent):
         files_content = []
         images_content = []
 
-        # Extract input from messages (special handling for llm_call)
         input_from_messages = ""
         if inputs.messages:
             last_message = inputs.messages[-1]
@@ -175,23 +176,20 @@ class LLMCallAgent(Agent):
                 files_content.extend(payload_files_content)
                 images_content.extend(payload_images_content)
 
-        # Build inputs_dict with all fields including "input" from messages
         input_dict = inputs.model_dump(exclude_none=True)
         input_dict["input"] = input_from_messages
 
-        # Use unified function to fill template variables with priority: inputs_dict -> ctx
-        text_content = fill_prompt_template_with_priority(
+        merged_dict = {**(ctx or {}), **input_dict}
+
+        text_content = fill_prompt_template(
             prompt_template=prompt_template,
             component_name=self.component_attributes.component_instance_name,
-            inputs_dict=input_dict,
-            ctx=ctx,
+            variables=merged_dict,
         )
 
-        # Handle file content and URLs
-        self._extract_file_content(inputs, ctx, files_content)
-        self._extract_file_url(inputs, ctx, files_content)
+        files_content.extend(self._extract_file_content(inputs, ctx))
+        files_content.extend(self._extract_file_url(inputs, ctx))
 
-        # Check for file support
         file_supported_references = [
             model_reference["reference"] for model_reference in get_models_by_capability(ModelCapability.FILE)
         ]
@@ -202,7 +200,6 @@ class LLMCallAgent(Agent):
         ):
             raise ValueError(f"File content is not supported for provider '{self._completion_service._provider}'.")
 
-        # Check for image support
         image_supported_references = [
             model_reference["reference"] for model_reference in get_models_by_capability(ModelCapability.IMAGE)
         ]
@@ -213,7 +210,6 @@ class LLMCallAgent(Agent):
         ):
             raise ValueError(f"Image content is not supported for provider '{self._completion_service._provider}'.")
 
-        # Build content based on what's present
         if len(files_content) > 0 or len(images_content) > 0:
             content = [
                 {

@@ -22,7 +22,7 @@ from engine.agent.history_message_handling import HistoryMessageHandler
 from engine.agent.utils import load_str_to_json
 from engine.trace.trace_manager import TraceManager
 from engine.llm_services.llm_service import CompletionService
-from engine.agent.utils_prompt import fill_prompt_template_with_priority
+from engine.agent.utils_prompt import fill_prompt_template
 from engine.agent.tools.python_code_runner import PYTHON_CODE_RUNNER_TOOL_DESCRIPTION
 from engine.agent.tools.terminal_command_runner import TERMINAL_COMMAND_RUNNER_TOOL_DESCRIPTION
 from settings import settings
@@ -316,18 +316,16 @@ class ReActAgent(Agent):
             current_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             system_prompt_content = f"Current date and time: {current_date}\n\n{initial_prompt}"
 
-        # Merge inputs_dict and kwargs for template variable filling
-        # inputs_dict should come from the original ReActAgentInputs (not AgentPayload)
         inputs_dict = inputs_dict or {}
         if kwargs:
             inputs_dict = {**inputs_dict, **kwargs}
 
-        # Fill template with priority: inputs_dict -> ctx
-        filled_system_prompt = fill_prompt_template_with_priority(
+        merged_dict = {**(ctx or {}), **inputs_dict}
+
+        filled_system_prompt = fill_prompt_template(
             prompt_template=system_prompt_content,
             component_name=self.component_attributes.component_instance_name,
-            inputs_dict=inputs_dict,
-            ctx=ctx,
+            variables=merged_dict,
         )
 
         if system_message is None:
