@@ -75,3 +75,15 @@ class EnvironmentNotFound(Exception):
 
 class QAError(Exception):
     pass
+
+
+class InvalidAgentTemplate(Exception):
+    def __init__(self, template_project_id: UUID, template_graph_runner_id: UUID):
+        self.template_project_id = template_project_id
+        self.template_graph_runner_id = template_graph_runner_id
+        super().__init__(
+            (
+                f"Template {template_project_id} with graph runner {template_graph_runner_id} "
+                "does not contain an AI agent component"
+            )
+        )

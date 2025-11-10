@@ -30,6 +30,7 @@ from ada_backend.schemas.project_schema import (
     ProjectWithGraphRunnersSchema,
     ProjectCreateSchema,
 )
+from ada_backend.schemas.template_schema import InputTemplate
 from ada_backend.services.graph.delete_graph_service import delete_graph_runner_service
 from ada_backend.services.errors import ProjectNotFound
 from ada_backend.services.tag_service import compose_tag_name
@@ -96,38 +97,51 @@ def delete_project_service(session: Session, project_id: UUID) -> ProjectDeleteR
     )
 
 
-# TODO: move to workflow_service
-def create_workflow(
+def create_project_with_graph_runner(
     session: Session,
-    user_id: UUID,
     organization_id: UUID,
-    project_schema: ProjectCreateSchema,
-) -> ProjectWithGraphRunnersSchema:
-    graph_runner_id = None
-    if project_schema.template is not None:
+    project_id: UUID,
+    project_name: str,
+    description: Optional[str],
+    project_type: ProjectType,
+    template: Optional[InputTemplate],
+    graph_id: UUID,
+    add_input: bool,
+) -> tuple:
+    """
+    Shared helper function to create a project with a graph runner.
+    Handles both template-based and new graph runner creation.
+
+    Returns:
+        tuple: (project, graph_runner_id)
+    """
+    log_context = project_type.value
+    if template is not None:
         LOGGER.info(
-            f"Creating project from template {project_schema.template.template_project_id}"
-            f"with graph runner {project_schema.template.template_graph_runner_id}"
+            f"Creating {log_context} from template {template.template_project_id} "
+            f"with graph runner {template.template_graph_runner_id}"
         )
         graph_runner_id = clone_graph_runner(
             session,
-            project_schema.template.template_graph_runner_id,
-            project_schema.template.template_project_id,
+            template.template_graph_runner_id,
+            template.template_project_id,
         )
     else:
-        LOGGER.info("Creating a new graph runner for the project")
+        LOGGER.info(f"Creating a new graph runner for the {log_context}")
         graph_runner = insert_graph_runner(
             session=session,
-            graph_id=uuid.uuid4(),
-            add_input=True,
+            graph_id=graph_id,
+            add_input=add_input,
         )
         graph_runner_id = graph_runner.id
+
     project = insert_project(
         session=session,
-        project_id=project_schema.project_id,
+        project_id=project_id,
         organization_id=organization_id,
-        project_name=project_schema.project_name,
-        description=project_schema.description,
+        project_name=project_name,
+        description=description,
+        project_type=project_type,
     )
 
     bind_graph_runner_to_project(
@@ -136,7 +150,29 @@ def create_workflow(
         project_id=project.id,
         env=EnvType.DRAFT,
     )
-    LOGGER.info(f"Created draft graph runner with ID {graph_runner_id} for project {project.id}")
+    LOGGER.info(f"Created draft graph runner with ID {graph_runner_id} for {log_context} {project.id}")
+
+    return project, graph_runner_id
+
+
+# TODO: move to workflow_service
+def create_workflow(
+    session: Session,
+    user_id: UUID,
+    organization_id: UUID,
+    project_schema: ProjectCreateSchema,
+) -> ProjectWithGraphRunnersSchema:
+    project, graph_runner_id = create_project_with_graph_runner(
+        session=session,
+        organization_id=organization_id,
+        project_id=project_schema.project_id,
+        project_name=project_schema.project_name,
+        description=project_schema.description,
+        project_type=ProjectType.WORKFLOW,
+        template=project_schema.template,
+        graph_id=uuid.uuid4(),
+        add_input=True,
+    )
 
     track_project_created(user_id, organization_id, project.id, project.name)
     return ProjectWithGraphRunnersSchema(

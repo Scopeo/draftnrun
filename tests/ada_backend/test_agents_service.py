@@ -32,9 +32,10 @@ class DummyGraphResponse:
 
 
 class DummyComponentInstance:
-    def __init__(self, id, component_id, parameters=None, is_start_node=False):
+    def __init__(self, id, component_id, parameters=None, is_start_node=False, component_version_id=None):
         self.id = id
         self.component_id = component_id
+        self.component_version_id = component_version_id
         self.parameters = parameters or []
         self.is_start_node = is_start_node
 
@@ -120,7 +121,8 @@ def test_get_agent_by_id_service_with_components(monkeypatch):
         return proj
 
     # Create a component instance that matches base_ai_agent
-    base_ai_component_id = agents_service.COMPONENT_VERSION_UUIDS["base_ai_agent"]
+    base_ai_component_id = agents_service.COMPONENT_UUIDS["base_ai_agent"]
+    base_ai_component_version_id = agents_service.COMPONENT_VERSION_UUIDS["base_ai_agent"]
     # parameter with SYSTEM_PROMPT_PARAMETER_DEF_ID
     pp = PipelineParameterReadSchema(
         id=agents_service.SYSTEM_PROMPT_PARAMETER_DEF_ID,
@@ -130,7 +132,13 @@ def test_get_agent_by_id_service_with_components(monkeypatch):
         nullable=False,
         is_advanced=False,
     )
-    comp_instance = DummyComponentInstance(uuid.uuid4(), base_ai_component_id, parameters=[pp], is_start_node=True)
+    comp_instance = DummyComponentInstance(
+        uuid.uuid4(),
+        base_ai_component_id,
+        parameters=[pp],
+        is_start_node=True,
+        component_version_id=base_ai_component_version_id,
+    )
 
     def fake_get_graph_service(session_arg, project_id, graph_runner_id):
         assert project_id == agent_id

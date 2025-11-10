@@ -26,7 +26,7 @@ from ada_backend.services.agents_service import (
     get_all_agents_service,
     update_agent_service,
 )
-from ada_backend.services.errors import GraphNotFound, ProjectNotFound
+from ada_backend.services.errors import GraphNotFound, ProjectNotFound, InvalidAgentTemplate
 
 router = APIRouter(tags=["Agents"])
 
@@ -88,6 +88,8 @@ def create_agent(
         raise HTTPException(status_code=400, detail="User ID not found")
     try:
         return create_new_agent_service(session, user.id, organization_id, agent_data)
+    except InvalidAgentTemplate as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
         LOGGER.error(f"Failed to create agent for organization {organization_id}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error") from e

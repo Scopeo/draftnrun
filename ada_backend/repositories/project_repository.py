@@ -3,6 +3,7 @@ from uuid import UUID
 import logging
 
 from sqlalchemy.orm import Session, joinedload
+from sqlalchemy import or_, and_, exists
 
 from ada_backend.database import models as db
 from ada_backend.schemas.project_schema import (
@@ -104,7 +105,6 @@ def get_projects_by_organization_with_details(
     """
     Get projects (both workflow and agent) by organization with graph runners and templates.
     """
-    from sqlalchemy import or_, and_, exists
 
     query = session.query(db.Project).options(
         joinedload(db.Project.envs).joinedload(db.ProjectEnvironmentBinding.graph_runner)
