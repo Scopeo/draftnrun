@@ -15,12 +15,12 @@ LOGGER = logging.getLogger(__name__)
 
 PROJECT_UUIDS: dict[str, UUID] = {
     "project_1": uuid4(),
-    "graph_test_project": UUID("214fe9fe-0ef1-4144-a93a-feb9b23d9cf7"),
+    "graph_test_project": UUID("f7ddbfcb-6843-4ae9-a15b-40aa565b955b"),
     "react_sql_agent_chatbot": UUID("c76400a2-ab48-4cbc-bcb1-a703c1b62f47"),
 }
 
 GRAPH_RUNNER_UUIDS: dict[str, UUID] = {
-    "graph_runner_prod": UUID("214fe9fe-0ef1-4144-a93a-feb9b23d9cf7"),
+    "graph_runner_prod": UUID("f7ddbfcb-6843-4ae9-a15b-40aa565b955b"),
     "graph_runner_draft": UUID("767bb69b-171e-4844-a373-06f8ee3a6843"),
     "react_sql_agent_prod": UUID("8c3d124d-0049-49ac-ab5b-2fc0e695ec22"),
     "react_sql_agent_draft": UUID("becd7d4f-d691-479a-8746-d123dc035599"),

@@ -5,7 +5,6 @@ from ada_backend.main import app
 from ada_backend.schemas.project_schema import ChatResponse
 from ada_backend.schemas.trace_schema import RootTraceSpan, PaginatedRootTracesResponse
 from ada_backend.scripts.get_supabase_token import get_user_jwt
-from ada_backend.database.seed_project_db import PROJECT_UUIDS
 from engine.trace.trace_context import set_trace_manager
 from engine.trace.trace_manager import TraceManager
 from settings import settings
@@ -16,7 +15,7 @@ client = TestClient(app)
 def test_monitor_endpoint():
     trace_manager = TraceManager(project_name="ada-backend-test")
     set_trace_manager(trace_manager)
-    project_id = PROJECT_UUIDS["graph_test_project"]
+    project_id = "f7ddbfcb-6843-4ae9-a15b-40aa565b955b"  # graph test project
 
     token = get_user_jwt(settings.TEST_USER_EMAIL, settings.TEST_USER_PASSWORD)
     endpoint = f"/projects/{project_id}/draft/chat"
