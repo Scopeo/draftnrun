@@ -251,13 +251,13 @@ jobs:
             fi
 
             # Derive PROD_TRACES_DB_URL from PROD_DB_URL by replacing database name
-            PROD_TRACES_DB_URL="${PROD_DB_URL/\/ada_backend/\/ada_traces}"
+            # PROD_TRACES_DB_URL="${PROD_DB_URL/\/ada_backend/\/ada_traces}"
 
             # TTL cache for prod dumps
             CACHE_DIR="/home/ec2-user/ci-cache/db-dumps"
             mkdir -p "$CACHE_DIR"
             DUMP_PATH="$CACHE_DIR/prod.latest.dump"
-            TRACES_DUMP_PATH="$CACHE_DIR/prod.traces.latest.dump"
+            # TRACES_DUMP_PATH="$CACHE_DIR/prod.traces.latest.dump"
             TTL_MINUTES=1440  # 24 hours
 
             # Helper function to check dump age and TTL
@@ -295,20 +295,20 @@ jobs:
             fi
 
             # Dump/refresh traces DB
-            echo "===> Checking traces DB dump cache at $TRACES_DUMP_PATH (TTL 24h)"
-            if ! check_dump_ttl "$TRACES_DUMP_PATH" "Traces DB"; then
-              echo "===> Refreshing prod traces dump"
-              pg_dump -Fc "$PROD_TRACES_DB_URL" -f "$TRACES_DUMP_PATH"
-              echo "===> Traces DB dump refreshed successfully"
-            else
-              echo "===> Using cached prod traces dump"
-            fi
+            # echo "===> Checking traces DB dump cache at $TRACES_DUMP_PATH (TTL 24h)"
+            # if ! check_dump_ttl "$TRACES_DUMP_PATH" "Traces DB"; then
+            #   echo "===> Refreshing prod traces dump"
+            #   pg_dump -Fc "$PROD_TRACES_DB_URL" -f "$TRACES_DUMP_PATH"
+            #   echo "===> Traces DB dump refreshed successfully"
+            # else
+            #   echo "===> Using cached prod traces dump"
+            # fi
 
             echo "===> Copying dumps into postgres container"
             cd services
             CONTAINER_ID=$(docker compose ps -q postgres)
             docker cp "$DUMP_PATH" "$CONTAINER_ID:/tmp/prod.dump"
-            docker cp "$TRACES_DUMP_PATH" "$CONTAINER_ID:/tmp/prod.traces.dump"
+            # docker cp "$TRACES_DUMP_PATH" "$CONTAINER_ID:/tmp/prod.traces.dump"
 
             # Restore main DB
             echo "===> Dropping and creating target database (ada_backend)"
@@ -319,12 +319,12 @@ jobs:
               --clean --if-exists --no-owner --no-privileges -Fc /tmp/prod.dump
 
             # Restore traces DB
-            echo "===> Dropping and creating target database (ada_traces)"
-            docker compose exec -T postgres bash -lc 'dropdb -U postgres ada_traces || true && createdb -U postgres ada_traces'
+            # echo "===> Dropping and creating target database (ada_traces)"
+            # docker compose exec -T postgres bash -lc 'dropdb -U postgres ada_traces || true && createdb -U postgres ada_traces'
 
-            echo "===> Restoring traces dump"
-            docker compose exec -T postgres pg_restore -U postgres -d ada_traces \
-              --clean --if-exists --no-owner --no-privileges -Fc /tmp/prod.traces.dump
+            # echo "===> Restoring traces dump"
+            # docker compose exec -T postgres pg_restore -U postgres -d ada_traces \
+            #   --clean --if-exists --no-owner --no-privileges -Fc /tmp/prod.traces.dump
 
             echo "===> Running database migrations"
             cd ${{ env.EC2_PATH_BASE }}/${{env.EC2_FOLDER_NAME}}${{ env.RUN_ID }}
