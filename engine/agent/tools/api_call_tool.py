@@ -129,6 +129,7 @@ class APICallTool(Agent):
     async def _run_without_io_trace(
         self,
         *inputs: AgentPayload,
+        ctx: Optional[dict] = None,
         **kwargs: Any,
     ) -> AgentPayload:
         # Make the API call
