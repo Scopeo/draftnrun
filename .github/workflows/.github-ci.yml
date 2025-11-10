@@ -268,7 +268,10 @@ jobs:
                 echo "===> $dump_name: No cached dump found, will create new one"
                 return 1
               fi
-              local age_minutes=$(($(date +%s) - $(stat -c %Y "$dump_file")) / 60)
+              local current_time=$(date +%s)
+              local file_time=$(stat -c %Y "$dump_file")
+              local age_seconds=$((current_time - file_time))
+              local age_minutes=$((age_seconds / 60))
               local remaining_minutes=$((TTL_MINUTES - age_minutes))
               local age_hours=$((age_minutes / 60))
               local remaining_hours=$((remaining_minutes / 60))
