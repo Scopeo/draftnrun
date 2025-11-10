@@ -166,7 +166,10 @@ def upgrade() -> None:
 
                     if dest_count > 0:
                         LOGGER.warning(
-                            f"Destination table traces.{table_name} already has {dest_count} rows. Skipping to avoid duplicates."
+                            (
+                                f"Destination table traces.{table_name} already has {dest_count} rows. "
+                                "Skipping to avoid duplicates."
+                            )
                         )
                         continue
 
@@ -178,14 +181,14 @@ def upgrade() -> None:
                         # For spans, handle enum conversions
                         query = text(
                             """
-                            SELECT 
+                            SELECT
                                 id, trace_rowid, span_id, parent_id, graph_runner_id, name,
-                                span_kind::text as span_kind, start_time, end_time, 
+                                span_kind::text as span_kind, start_time, end_time,
                                 attributes::text as attributes, events,
                                 status_code::text as status_code, status_message, cumulative_error_count,
                                 cumulative_llm_token_count_prompt, cumulative_llm_token_count_completion,
                                 llm_token_count_prompt, llm_token_count_completion,
-                                environment::text as environment, call_type::text as call_type, 
+                                environment::text as environment, call_type::text as call_type,
                                 project_id, tag_name
                             FROM spans
                             ORDER BY id

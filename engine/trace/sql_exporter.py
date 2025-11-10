@@ -15,7 +15,6 @@ from sqlalchemy.orm import sessionmaker
 from engine.trace.nested_utils import split_nested_keys
 from ada_backend.database.models import Span, SpanMessage, OrganizationUsage
 from ada_backend.database.setup_db import get_db_url
-from settings import settings
 
 LOGGER = logging.getLogger(__name__)
 
