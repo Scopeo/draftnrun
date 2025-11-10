@@ -1,4 +1,3 @@
-import asyncio
 import logging
 from typing import Optional, Dict, Any
 from uuid import UUID
@@ -9,33 +8,29 @@ from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
 from apscheduler.executors.asyncio import AsyncIOExecutor
 from apscheduler.events import EVENT_JOB_EXECUTED, EVENT_JOB_ERROR, JobExecutionEvent
 from apscheduler.job import Job
-from apscheduler.triggers.interval import IntervalTrigger
-
 from ada_backend.database.setup_db import get_db_session, get_db_url
 from ada_backend.database.models import CronStatus, CronEntrypoint
 from ada_backend.repositories.cron_repository import (
     insert_cron_run,
     update_cron_run,
-    get_all_enabled_cron_jobs,
     get_cron_runs_by_cron_id,
 )
 from ada_backend.services.cron.registry import CRON_REGISTRY
 from engine.trace.trace_context import get_trace_manager, set_trace_manager
 from engine.trace.trace_manager import TraceManager
+from ada_backend.scheduler.sync_cron_jobs_with_scheduler import (
+    log_sync_job_status,
+    schedule_sync_job,
+)
 
 LOGGER = logging.getLogger(__name__)
 
 
 SCHEDULER_POLL_INTERVAL_SECONDS = 3
-SYNC_CRON_JOBS_WITH_APSCHEDULER_INTERVAL_SECONDS = 30
-ID_RECONCILE_CRON_JOBS = "00000000-0000-0000-0000-000000000007"
 
 
 # Global scheduler instance
 _scheduler: Optional[AsyncIOScheduler] = None
-
-# Lock to prevent concurrent reconciliation runs
-_reconciliation_lock: Optional[asyncio.Lock] = None
 
 
 def get_scheduler() -> AsyncIOScheduler:
@@ -62,20 +57,12 @@ def _job_listener(event: JobExecutionEvent):
     """Log run completion in our database."""
     job_id = event.job_id
 
+    log_sync_job_status(job_id, event)
+
     try:
         cron_id = UUID(job_id)
     except ValueError:
         LOGGER.warning(f"Skipping job with non-UUID id: {job_id}")
-        return
-
-    # We track failures in logs for reconciliation job but don't create database entries due to foreign key constraint
-    # on cron_runs table.
-    if job_id == ID_RECONCILE_CRON_JOBS:
-        if event.exception:
-            error_msg = str(event.exception)
-            LOGGER.error(f"Reconciliation job {cron_id} failed: {error_msg}", exc_info=event.exception)
-        else:
-            LOGGER.debug(f"Reconciliation job {cron_id} completed successfully")
         return
 
     with get_db_session() as session:
@@ -157,7 +144,7 @@ async def _execute_cron_job(cron_id: UUID, entrypoint: CronEntrypoint, payload: 
         raise
 
 
-def start_scheduler(sync_and_execute_jobs: bool = False):
+def start_scheduler():
     """Initialize and start the APScheduler."""
     global _scheduler
 
@@ -189,17 +176,10 @@ def start_scheduler(sync_and_execute_jobs: bool = False):
             jobstore_poll_interval=SCHEDULER_POLL_INTERVAL_SECONDS,
         )
 
-        if sync_and_execute_jobs:
-            _scheduler.start()
-            _scheduler.add_listener(_job_listener, EVENT_JOB_EXECUTED | EVENT_JOB_ERROR)
-            LOGGER.info("APScheduler started with job execution enabled")
-            _schedule_reconciliation_job()
-        else:
-            # TODO: Remove the raise exception when scheduler is not even implemented
-            # Right now we keep it to have a short working PR but the logic is now that
-            # the process launching with execute_jobs=True will handle both
-            # the execution and the reconciliation of the jobs
-            LOGGER.info("APScheduler initialized to avoid error in code execution")
+        _scheduler.start()
+        _scheduler.add_listener(_job_listener, EVENT_JOB_EXECUTED | EVENT_JOB_ERROR)
+        schedule_sync_job()
+        LOGGER.info("APScheduler started with job execution enabled")
 
     except Exception as e:
         LOGGER.error(f"Failed to start scheduler: {e}")
@@ -220,114 +200,6 @@ def stop_scheduler():
         LOGGER.info("APScheduler stopped successfully")
     except Exception as e:
         LOGGER.error(f"Error stopping scheduler: {e}")
-
-
-def _schedule_reconciliation_job(interval_seconds: int = SYNC_CRON_JOBS_WITH_APSCHEDULER_INTERVAL_SECONDS):
-    """
-    Schedule or update the periodic reconciliation job.
-
-    Args:
-        interval_seconds: Interval in seconds between reconciliation runs
-    """
-    scheduler = get_scheduler()
-
-    if not scheduler.running:
-        LOGGER.warning("Cannot schedule reconciliation job - scheduler is not running")
-        return
-
-    try:
-        existing_job = scheduler.get_job(ID_RECONCILE_CRON_JOBS)
-        if existing_job:
-            scheduler.reschedule_job(job_id=ID_RECONCILE_CRON_JOBS, trigger=IntervalTrigger(seconds=interval_seconds))
-            LOGGER.info(f"Updated reconciliation job interval to {interval_seconds} seconds")
-            return
-
-        scheduler.add_job(
-            func=_reconcile_and_load_jobs_async,
-            trigger="interval",
-            seconds=interval_seconds,
-            id=ID_RECONCILE_CRON_JOBS,
-            name="Reconcile cron jobs from database",
-            replace_existing=True,
-        )
-        LOGGER.info(f"Scheduled periodic reconciliation every {interval_seconds} seconds")
-    except Exception as e:
-        LOGGER.error(f"Failed to schedule reconciliation job: {e}")
-        raise
-
-
-def _reconcile_and_load_jobs():
-    """
-    Reconciles jobs between the database and APScheduler, ensuring the database
-    is the source of truth. It adds/updates jobs from the DB to the scheduler
-    and removes jobs from the scheduler that are no longer active or present in the DB.
-    """
-    scheduler = get_scheduler()
-    if not scheduler:
-        LOGGER.warning("Attempted to reconcile jobs, but scheduler is not running.")
-        return
-
-    LOGGER.info("Reconciling cron jobs between database and scheduler...")
-
-    try:
-        with get_db_session() as session:
-            # 1. Get all active jobs from our DB (the source of truth)
-            active_db_crons = get_all_enabled_cron_jobs(session)
-            active_db_cron_ids = {str(cron.id) for cron in active_db_crons}
-            LOGGER.info(f"Found {len(active_db_crons)} active cron jobs in the database.")
-
-            # 2. Get all jobs currently in the scheduler's job store
-            scheduler_jobs = scheduler.get_jobs()
-            scheduler_job_ids = {job.id for job in scheduler_jobs}
-            LOGGER.info(f"Found {len(scheduler_jobs)} jobs in the scheduler job store.")
-
-            # 3. Remove stale jobs from the scheduler
-            # Exclude the reconciliation job itself from removal (it's not in cron_jobs table)
-            jobs_to_remove = scheduler_job_ids - active_db_cron_ids - {ID_RECONCILE_CRON_JOBS}
-            if jobs_to_remove:
-                LOGGER.info(f"Found {len(jobs_to_remove)} stale jobs to remove from scheduler.")
-                for job_id in jobs_to_remove:
-                    try:
-                        remove_job_from_scheduler(UUID(job_id))
-                    except Exception as e:
-                        LOGGER.error(f"Failed to remove stale job {job_id} from scheduler: {e}")
-
-            # 4. Add or update jobs from our DB to the scheduler
-            LOGGER.info("Adding/updating jobs from database to scheduler...")
-            for cron_job in active_db_crons:
-                try:
-                    add_job_to_scheduler(
-                        cron_id=cron_job.id,
-                        cron_expr=cron_job.cron_expr,
-                        tz=cron_job.tz,
-                        entrypoint=cron_job.entrypoint,
-                        payload=cron_job.payload,
-                    )
-                except Exception as e:
-                    LOGGER.error(f"Failed to load cron job {cron_job.id}: {e}")
-
-        LOGGER.info("Cron job reconciliation complete.")
-
-    except Exception as e:
-        LOGGER.error(f"An error occurred during cron job reconciliation: {e}")
-
-
-async def _reconcile_and_load_jobs_async():
-    """
-    Async wrapper for reconciliation that runs the sync function in a thread pool executor.
-    This prevents blocking the event loop, allowing other jobs to run concurrently.
-
-    Uses a lock to ensure only one reconciliation runs at a time, preventing thread buildup
-    if reconciliation takes longer than the interval.
-    """
-    global _reconciliation_lock
-
-    if _reconciliation_lock is None:
-        _reconciliation_lock = asyncio.Lock()
-
-    async with _reconciliation_lock:
-        loop = asyncio.get_event_loop()
-        await loop.run_in_executor(None, _reconcile_and_load_jobs)
 
 
 def add_job_to_scheduler(

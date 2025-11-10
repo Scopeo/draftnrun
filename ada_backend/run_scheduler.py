@@ -59,7 +59,7 @@ async def run_scheduler():
     signal.signal(signal.SIGINT, signal_handler)
 
     try:
-        start_scheduler(sync_and_execute_jobs=True)
+        start_scheduler()
         LOGGER.info("APScheduler started successfully. Waiting for shutdown signal...")
         await SHUTDOWN_EVENT.wait()
         LOGGER.info("Shutdown signal received")
