@@ -1,7 +1,7 @@
 """add json builder to ui component
 
 Revision ID: 88dcf82ab86
-Revises: 5154754574cb
+Revises: 26682b086df6
 Create Date: 2025-10-31 16:15:19.000000
 
 """
@@ -13,7 +13,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "88dcf82ab86"
-down_revision: Union[str, None] = "5154754574cb"
+down_revision: Union[str, None] = "26682b086df6"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
