@@ -27,7 +27,7 @@ from ada_backend.schemas.pipeline.base import ComponentInstanceSchema, Component
 from ada_backend.schemas.pipeline.graph_schema import GraphUpdateResponse, GraphUpdateSchema
 from ada_backend.schemas.project_schema import GraphRunnerEnvDTO, ProjectWithGraphRunnersSchema
 from ada_backend.segment_analytics import track_agent_created
-from ada_backend.services.errors import ProjectNotFound
+from ada_backend.services.errors import ProjectNotFound, InvalidAgentTemplate
 from ada_backend.database import models as db
 from ada_backend.services.graph.get_graph_service import get_graph_service
 from ada_backend.services.graph.update_graph_service import update_graph_service
@@ -123,6 +123,17 @@ def get_agent_by_id_service(session: Session, agent_id: UUID, graph_runner_id: U
     )
 
 
+def _template_has_ai_agent(session: Session, template_project_id: UUID, template_graph_runner_id: UUID) -> bool:
+    template_graph_data = get_graph_service(
+        session, project_id=template_project_id, graph_runner_id=template_graph_runner_id
+    )
+    return any(
+        component_instance.is_start_node
+        and component_instance.component_version_id == COMPONENT_VERSION_UUIDS["base_ai_agent"]
+        for component_instance in template_graph_data.component_instances
+    )
+
+
 def add_ai_agent_component_to_graph(session: Session, graph_runner_id: UUID) -> db.ComponentInstance:
     """
     Adds an AI agent component as a start node to the graph runner.
@@ -163,12 +174,17 @@ def create_new_agent_service(
         template=agent_data.template,
         graph_id=agent_data.id,
         add_input=False,
-        log_context="agent",
     )
 
-    # Only add AI agent component if not using a template (template should already have it)
     if agent_data.template is None:
         add_ai_agent_component_to_graph(session, graph_runner_id)
+    else:
+        if not _template_has_ai_agent(
+            session, agent_data.template.template_project_id, agent_data.template.template_graph_runner_id
+        ):
+            raise InvalidAgentTemplate(
+                agent_data.template.template_project_id, agent_data.template.template_graph_runner_id
+            )
 
     track_agent_created(user_id, organization_id, project.id, project.name)
     return ProjectWithGraphRunnersSchema(

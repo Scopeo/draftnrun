@@ -107,7 +107,6 @@ def create_project_with_graph_runner(
     template: Optional[InputTemplate],
     graph_id: UUID,
     add_input: bool,
-    log_context: str = "project",
 ) -> tuple:
     """
     Shared helper function to create a project with a graph runner.
@@ -116,6 +115,7 @@ def create_project_with_graph_runner(
     Returns:
         tuple: (project, graph_runner_id)
     """
+    log_context = project_type.value
     if template is not None:
         LOGGER.info(
             f"Creating {log_context} from template {template.template_project_id} "
@@ -172,7 +172,6 @@ def create_workflow(
         template=project_schema.template,
         graph_id=uuid.uuid4(),
         add_input=True,
-        log_context="project",
     )
 
     track_project_created(user_id, organization_id, project.id, project.name)
