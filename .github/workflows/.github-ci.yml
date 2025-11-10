@@ -250,30 +250,78 @@ jobs:
               exit 1
             fi
 
-            # TTL cache for prod dump
+            # Derive PROD_TRACES_DB_URL from PROD_DB_URL by replacing database name
+            PROD_TRACES_DB_URL="${PROD_DB_URL/\/ada_backend/\/ada_traces}"
+
+            # TTL cache for prod dumps
             CACHE_DIR="/home/ec2-user/ci-cache/db-dumps"
             mkdir -p "$CACHE_DIR"
             DUMP_PATH="$CACHE_DIR/prod.latest.dump"
+            TRACES_DUMP_PATH="$CACHE_DIR/prod.traces.latest.dump"
+            TTL_MINUTES=1440  # 24 hours
 
-            echo "===> Using dump cache at $DUMP_PATH (TTL 24h)"
-            if [ ! -f "$DUMP_PATH" ] || find "$DUMP_PATH" -mmin +1440 | grep -q .; then
+            # Helper function to check dump age and TTL
+            check_dump_ttl() {
+              local dump_file="$1"
+              local dump_name="$2"
+              if [ ! -f "$dump_file" ]; then
+                echo "===> $dump_name: No cached dump found, will create new one"
+                return 1
+              fi
+              local age_minutes=$(($(date +%s) - $(stat -c %Y "$dump_file")) / 60)
+              local remaining_minutes=$((TTL_MINUTES - age_minutes))
+              local age_hours=$((age_minutes / 60))
+              local remaining_hours=$((remaining_minutes / 60))
+              if [ $remaining_minutes -le 0 ]; then
+                echo "===> $dump_name: Cache expired (age: ${age_hours}h), will refresh"
+                return 1
+              else
+                echo "===> $dump_name: Cache age: ${age_hours}h, TTL remaining: ${remaining_hours}h (${remaining_minutes}m)"
+                return 0
+              fi
+            }
+
+            # Dump/refresh main DB
+            echo "===> Checking main DB dump cache at $DUMP_PATH (TTL 24h)"
+            if ! check_dump_ttl "$DUMP_PATH" "Main DB"; then
               echo "===> Refreshing prod dump"
               pg_dump -Fc "$PROD_DB_URL" -f "$DUMP_PATH"
+              echo "===> Main DB dump refreshed successfully"
             else
               echo "===> Using cached prod dump"
             fi
 
-            echo "===> Copying dump into postgres container"
+            # Dump/refresh traces DB
+            echo "===> Checking traces DB dump cache at $TRACES_DUMP_PATH (TTL 24h)"
+            if ! check_dump_ttl "$TRACES_DUMP_PATH" "Traces DB"; then
+              echo "===> Refreshing prod traces dump"
+              pg_dump -Fc "$PROD_TRACES_DB_URL" -f "$TRACES_DUMP_PATH"
+              echo "===> Traces DB dump refreshed successfully"
+            else
+              echo "===> Using cached prod traces dump"
+            fi
+
+            echo "===> Copying dumps into postgres container"
             cd services
             CONTAINER_ID=$(docker compose ps -q postgres)
             docker cp "$DUMP_PATH" "$CONTAINER_ID:/tmp/prod.dump"
+            docker cp "$TRACES_DUMP_PATH" "$CONTAINER_ID:/tmp/prod.traces.dump"
 
-            echo "===> Dropping and creating target database"
+            # Restore main DB
+            echo "===> Dropping and creating target database (ada_backend)"
             docker compose exec -T postgres bash -lc 'dropdb -U postgres ada_backend || true && createdb -U postgres ada_backend'
 
-            echo "===> Restoring dump"
+            echo "===> Restoring main dump"
             docker compose exec -T postgres pg_restore -U postgres -d ada_backend \
               --clean --if-exists --no-owner --no-privileges -Fc /tmp/prod.dump
+
+            # Restore traces DB
+            echo "===> Dropping and creating target database (ada_traces)"
+            docker compose exec -T postgres bash -lc 'dropdb -U postgres ada_traces || true && createdb -U postgres ada_traces'
+
+            echo "===> Restoring traces dump"
+            docker compose exec -T postgres pg_restore -U postgres -d ada_traces \
+              --clean --if-exists --no-owner --no-privileges -Fc /tmp/prod.traces.dump
 
             echo "===> Running database migrations"
             cd ${{ env.EC2_PATH_BASE }}/${{env.EC2_FOLDER_NAME}}${{ env.RUN_ID }}
