@@ -24,14 +24,14 @@ def query_trace_duration(project_id: UUID, duration_days: int, call_type: CallTy
     query = f"""
     WITH root_spans AS (
         SELECT trace_rowid
-        FROM spans
+        FROM traces.spans
         WHERE parent_id IS NULL
         AND project_id = '{project_id}'
         AND start_time > '{start_time_offset_days}'
         {call_type_filter}
     )
     SELECT s.*
-    FROM spans s
+    FROM traces.spans s
     WHERE s.trace_rowid IN (SELECT trace_rowid FROM root_spans)
     ORDER BY MAX(s.start_time) OVER (PARTITION BY s.trace_rowid) DESC,
              s.trace_rowid, s.start_time ASC
@@ -50,8 +50,8 @@ def query_root_trace_duration(project_id: UUID, duration_days: int) -> pd.DataFr
 
     query = f"""
     SELECT s.*, m.input_content, m.output_content
-    FROM spans s
-    LEFT JOIN span_messages m ON m.span_id = s.span_id
+    FROM traces.spans s
+    LEFT JOIN traces.span_messages m ON m.span_id = s.span_id
     WHERE s.parent_id IS NULL
     AND s.project_id = '{project_id}'
     AND s.start_time > '{start_time_offset_days}'
@@ -69,8 +69,8 @@ def query_root_trace_duration(project_id: UUID, duration_days: int) -> pd.DataFr
 
 def query_trace_by_trace_id(trace_id: UUID) -> pd.DataFrame:
     query = (
-        "SELECT s.*, m.input_content,m.output_content FROM spans s "
-        f"LEFT JOIN span_messages m ON m.span_id = s.span_id WHERE s.trace_rowid = '{trace_id}' "
+        "SELECT s.*, m.input_content,m.output_content FROM traces.spans s "
+        f"LEFT JOIN traces.span_messages m ON m.span_id = s.span_id WHERE s.trace_rowid = '{trace_id}' "
         "ORDER BY s.start_time ASC;"
     )
     session = get_session_trace()
@@ -172,16 +172,18 @@ def query_conversation_messages(identifier: str) -> tuple[dict, dict]:
     Returns:
         Tuple of (input_messages, output_messages)
     """
-    query = text("""
+    query = text(
+        """
     SELECT
         (m.input_content::jsonb->0) as input_payload,
         (m.output_content::jsonb->0) as output_payload
-    FROM spans s
-    LEFT JOIN span_messages m ON m.span_id = s.span_id
+    FROM traces.spans s
+    LEFT JOIN traces.span_messages m ON m.span_id = s.span_id
     WHERE (s.attributes->>'conversation_id' = :identifier OR s.trace_rowid = :identifier)
     AND s.name = 'Workflow'
     ORDER BY s.start_time DESC
-    """)
+    """
+    )
 
     session = get_session_trace()
     result = session.execute(query, {"identifier": identifier}).fetchone()

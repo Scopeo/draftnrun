@@ -33,7 +33,7 @@ def get_trace_metrics(project_id: UUID, duration_days: int, call_type: CallType 
         COUNT(*) as request_count,
         COALESCE(SUM(cumulative_llm_token_count_prompt + cumulative_llm_token_count_completion), 0) as total_tokens,
         AVG(EXTRACT(EPOCH FROM (end_time - start_time))) as avg_latency_seconds
-    FROM spans
+    FROM traces.spans
     WHERE start_time >= %(previous_start)s
     AND parent_id IS NULL
     AND project_id = %(project_id)s
