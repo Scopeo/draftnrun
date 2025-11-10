@@ -20,6 +20,7 @@ from ada_backend.repositories.component_repository import (
     get_tool_parameter_by_component_version,
     get_component_sub_components,
     get_component_parameter_definition_by_component_version,
+    get_global_parameters_by_component_version_id,
 )
 from ada_backend.database.models import ParameterType
 from ada_backend.schemas.pipeline.base import ComponentRelationshipSchema
@@ -44,6 +45,7 @@ def get_component_instance(
         session,
         component_instance_id,
     )
+    global_params = get_global_parameters_by_component_version_id(session, component_instance.component_version_id)
     component_parameters = get_component_parameter_definition_by_component_version(
         session,
         component_instance.component_version_id,
@@ -52,6 +54,8 @@ def get_component_instance(
         if parameter.type not in [ParameterType.COMPONENT, ParameterType.TOOL] and parameter.name not in [
             p.name for p in parameters
         ]:
+            if parameter.name in [p.parameter_definition.name for p in global_params]:
+                continue
             parameters.append(
                 PipelineParameterReadSchema(
                     id=parameter.id,
