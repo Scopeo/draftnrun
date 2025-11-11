@@ -182,7 +182,7 @@ async def run_agent(
     # Generate conversation_id if not provided
     conversation_id = input_data.get("conversation_id")
     if not conversation_id:
-        conversation_id = uuid.uuid4()
+        conversation_id = str(uuid.uuid4())
 
     set_tracing_span(
         project_id=str(project_id),
