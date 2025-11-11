@@ -65,6 +65,7 @@ def build_span_trees(df: pd.DataFrame) -> List[TraceSpan]:
         parent_id = row["parent_id"]
         span_kind = row["span_kind"]
         input, output, documents, tool_info, model_name = get_attributes_with_messages(span_kind, row)
+        attributes = row.get("attributes", {})
 
         traces[trace_id][span_id] = TraceSpan(
             span_id=span_id,
@@ -87,6 +88,8 @@ def build_span_trees(df: pd.DataFrame) -> List[TraceSpan]:
             call_type=row.get("call_type", None),
             graph_runner_id=row.get("graph_runner_id", None),
             tag_name=row.get("tag_name", None),
+            conversation_id=attributes.get("conversation_id"),
+            trace_id=row.get("trace_rowid"),
         )
 
     trace_trees = []
@@ -112,6 +115,7 @@ def build_root_spans(df: pd.DataFrame) -> List[RootTraceSpan]:
         LOGGER.debug(f"Processing row: {row}")
         span_kind = row["span_kind"]
         input, output, _, _, _ = get_attributes_with_messages(span_kind, row)
+        attributes = row.get("attributes", {})
         root_spans.append(
             RootTraceSpan(
                 trace_id=row["trace_rowid"],
@@ -131,6 +135,7 @@ def build_root_spans(df: pd.DataFrame) -> List[RootTraceSpan]:
                 call_type=row.get("call_type", None),
                 graph_runner_id=row.get("graph_runner_id", None),
                 tag_name=row.get("tag_name", None),
+                conversation_id=attributes.get("conversation_id"),
             )
         )
 

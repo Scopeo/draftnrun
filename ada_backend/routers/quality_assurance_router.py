@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from ada_backend.schemas.auth_schema import SupabaseUser
 from ada_backend.schemas.input_groundtruth_schema import (
     InputGroundtruthCreateList,
+    InputGroundtruthFromHistoryCreate,
     InputGroundtruthUpdateList,
     InputGroundtruthDeleteList,
     InputGroundtruthResponseList,
@@ -421,31 +422,38 @@ async def run_qa_endpoint(
 
 
 @router.post(
-    "/projects/{project_id}/qa/datasets/{dataset_id}/conversations/{conversation_id}/save",
+    "/projects/{project_id}/qa/datasets/{dataset_id}/entries/from-history",
     response_model=List[InputGroundtruthResponse],
-    summary="Save Conversation to Groundtruth",
+    summary="Create Entry from History",
     tags=["Quality Assurance"],
 )
-async def save_conversation_to_groundtruth(
+async def create_entry_from_history(
     project_id: UUID,
-    conversation_id: UUID,
     dataset_id: UUID,
-    message_index: int,
+    data: InputGroundtruthFromHistoryCreate,
     session: Session = Depends(get_db),
 ) -> List[InputGroundtruthResponse]:
+    # Determine identifier based on source
+    if data.source == "conversation":
+        identifier = str(data.conversation_id)
+        source_label = f"conversation {data.conversation_id}"
+    else:  # trace
+        identifier = data.trace_id
+        source_label = f"trace {data.trace_id}"
+
     try:
         return save_conversation_to_groundtruth_service(
             session=session,
-            conversation_id=conversation_id,
+            identifier=identifier,
             dataset_id=dataset_id,
-            message_index=message_index,
+            message_index=data.message_index,
         )
     except QAError as e:
-        LOGGER.error(f"Failed to save conversation {conversation_id}: {str(e)}", exc_info=True)
+        LOGGER.error(f"Failed to save {source_label}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=400, detail=str(e)) from e
     except ValueError as e:
-        LOGGER.error(f"Failed to save conversation {conversation_id}: {str(e)}", exc_info=True)
+        LOGGER.error(f"Failed to save {source_label}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
-        LOGGER.error(f"Failed to save conversation {conversation_id}: {str(e)}", exc_info=True)
+        LOGGER.error(f"Failed to save {source_label}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error") from e
