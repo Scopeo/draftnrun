@@ -113,6 +113,12 @@ class DBService(ABC):
                 new_df[col] = new_df[col].astype(object).where(new_df[col].notna(), None)
             self.insert_df_to_table(df=new_df, table_name=table_name, schema_name=schema_name)
         else:
+            # For checking existing IDs and preventing duplicates, get all IDs from the table
+            query_all_ids = f"SELECT {id_column_name} FROM {target_table_name};"
+            all_existing_df = self._fetch_sql_query_as_dataframe(query_all_ids)
+            all_existing_df = convert_to_correct_pandas_type(all_existing_df, id_column_name, table_definition)
+
+            # For UPDATE operations, use the filtered query if provided
             query = (
                 f"SELECT {id_column_name}, {timestamp_column_name} FROM {target_table_name}"
                 if timestamp_column_name
@@ -145,7 +151,8 @@ class DBService(ABC):
                 schema_name=schema_name,
             )
 
-            new_df["exists"] = new_df[id_column_name].isin(old_df[id_column_name].values)
+            # Use ALL existing IDs (not filtered) to prevent duplicates
+            new_df["exists"] = new_df[id_column_name].isin(all_existing_df[id_column_name].values)
             LOGGER.info(f"Found {new_df['exists'][new_df['exists']].sum()} existing rows in the table")
             new_data = new_df[~new_df["exists"]].copy()
             new_data.drop(columns=["exists"], inplace=True)
