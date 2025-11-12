@@ -10,6 +10,8 @@ from dataclasses import is_dataclass
 from pydantic import BaseModel
 
 from engine.agent.types import ToolDescription
+from engine.agent.rag.retriever import Retriever
+from engine.agent.synthesizer import Synthesizer
 from engine.trace.trace_context import get_trace_manager
 from engine.llm_services.llm_service import EmbeddingService, CompletionService, WebSearchService, OCRService
 from engine.qdrant_service import QdrantService, QdrantCollectionSchema
@@ -563,7 +565,6 @@ def build_retriever_processor(target_name: str = "retriever") -> ParameterProces
     Returns:
         ParameterProcessor: A processor function that handles Retriever creation
     """
-    from engine.agent.rag.retriever import Retriever
 
     def processor(params: dict, constructor_params: dict[str, Any]) -> dict:
         data_source = params.pop("data_source", None)
@@ -668,7 +669,6 @@ def build_synthesizer_processor(target_name: str = "synthesizer") -> ParameterPr
     Returns:
         ParameterProcessor: A processor function that handles Synthesizer creation
     """
-    from engine.agent.synthesizer import Synthesizer
 
     def processor(params: dict, constructor_params: dict[str, Any]) -> dict:
         completion_model = params.pop("completion_model")
