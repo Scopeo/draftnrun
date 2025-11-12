@@ -475,7 +475,6 @@ def save_conversation_to_groundtruth_service(
     session: Session,
     trace_id: str,
     dataset_id: UUID,
-    message_index: int,
 ) -> List[InputGroundtruthResponse]:
 
     input_payload, output_payload = query_conversation_messages(trace_id)
@@ -492,15 +491,17 @@ def save_conversation_to_groundtruth_service(
     input_payload.pop("conversation_id", None)
     messages = input_payload.get("messages", [])
 
-    payload = {**input_payload, "messages": messages[: message_index + 1]}
+    payload = {**input_payload, "messages": messages}
 
-    # Find groundtruth from next assistant message
+    # Determine groundtruth from assistant responses
     groundtruth_text = None
-    next_idx = message_index + 1
-    if next_idx < len(messages) and messages[next_idx].get("role") == "assistant":
-        groundtruth_text = messages[next_idx].get("content")
-    elif output_payload:
+    if output_payload:
         for msg in output_payload.get("messages", []):
+            if msg.get("role") == "assistant":
+                groundtruth_text = msg.get("content")
+                break
+    if groundtruth_text is None:
+        for msg in reversed(messages):
             if msg.get("role") == "assistant":
                 groundtruth_text = msg.get("content")
                 break

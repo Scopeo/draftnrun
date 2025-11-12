@@ -20,13 +20,6 @@ class InputGroundtruthCreate(BaseModel):
     groundtruth: Optional[str] = None
 
 
-class InputGroundtruthFromHistoryCreate(BaseModel):
-    """Schema for creating input-groundtruth entry from trace history."""
-
-    trace_id: str
-    message_index: int
-
-
 class InputGroundtruthWithVersionResponse(BaseModel):
     """Schema for input-groundtruth response with version output data."""
 
