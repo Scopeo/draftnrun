@@ -330,7 +330,6 @@ jobs:
             cd ${{ env.EC2_PATH_BASE }}/${{env.EC2_FOLDER_NAME}}${{ env.RUN_ID }}
             make db-upgrade
             make db-seed
-            uv run python -m ada_backend.database.seed_project_db
             make trace-db-upgrade
 
       - name: Start ada_backend server
