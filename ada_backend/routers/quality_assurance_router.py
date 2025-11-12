@@ -436,7 +436,7 @@ async def create_entry_from_history(
     try:
         return save_conversation_to_groundtruth_service(
             session=session,
-            identifier=data.trace_id,
+            trace_id=data.trace_id,
             dataset_id=dataset_id,
             message_index=data.message_index,
         )
