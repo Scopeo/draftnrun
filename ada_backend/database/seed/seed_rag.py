@@ -38,6 +38,12 @@ from engine.agent.synthesizer_prompts import (
     get_hybrid_synthetizer_prompt_template,
 )
 
+# Parameter Group UUIDs for RAG v2
+RAG_V2_PARAMETER_GROUP_UUIDS = {
+    "knowledge_parameters": UUID("1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d"),
+    "llm_parameters": UUID("2b3c4d5e-6f7a-4b8c-9d0e-1f2a3b4c5d6e"),
+}
+
 
 def seed_rag_components(session: Session):
     synthesizer = db.Component(
@@ -340,7 +346,7 @@ def seed_rag_components(session: Session):
         default="10",
         ui_component=UIComponent.TEXTFIELD,
         ui_component_properties=UIComponentProperties(
-            label="Max Retrieved Chunks",
+            label="Maximum number of chunks in the synthesizer",
             description=(
                 "The maximum number of chunks to retrieve before applying any filtering or penalties. "
                 "This sets the upper limit for how many chunks will be returned by the retrieval process."
@@ -1173,3 +1179,120 @@ def seed_rag_components(session: Session):
         release_stage=rag_agent_v2_version.release_stage,
         component_version_id=rag_agent_v2_version.id,
     )
+
+
+def seed_rag_v2_parameter_groups(session: Session):
+    """Seed parameter groups for RAG v2 component."""
+    parameter_groups = [
+        db.ParameterGroup(
+            id=RAG_V2_PARAMETER_GROUP_UUIDS["knowledge_parameters"],
+            name="Knowledge Parameters",
+        ),
+        db.ParameterGroup(
+            id=RAG_V2_PARAMETER_GROUP_UUIDS["llm_parameters"],
+            name="LLM Parameters",
+        ),
+    ]
+
+    for group in parameter_groups:
+        existing_group = session.query(db.ParameterGroup).filter_by(id=group.id).first()
+        if existing_group:
+            existing_group.name = group.name
+        else:
+            session.add(group)
+
+    session.flush()
+
+    component_parameter_groups = [
+        db.ComponentParameterGroup(
+            component_version_id=COMPONENT_VERSION_UUIDS["rag_agent_v2"],
+            parameter_group_id=RAG_V2_PARAMETER_GROUP_UUIDS["knowledge_parameters"],
+            group_order_within_component=1,
+        ),
+        db.ComponentParameterGroup(
+            component_version_id=COMPONENT_VERSION_UUIDS["rag_agent_v2"],
+            parameter_group_id=RAG_V2_PARAMETER_GROUP_UUIDS["llm_parameters"],
+            group_order_within_component=2,
+        ),
+    ]
+
+    for component_parameter_group in component_parameter_groups:
+        existing_cpg = (
+            session.query(db.ComponentParameterGroup)
+            .filter_by(
+                component_version_id=component_parameter_group.component_version_id,
+                parameter_group_id=component_parameter_group.parameter_group_id,
+            )
+            .first()
+        )
+        if existing_cpg:
+            existing_cpg.group_order_within_component = component_parameter_group.group_order_within_component
+        else:
+            session.add(component_parameter_group)
+
+    session.flush()  # Ensure relationships are saved before updating parameters
+
+    parameter_group_assignments = {
+        # Knowledge Parameters Group
+        UUID("f1a2b3c4-d5e6-4f7a-8b9c-0d1e2f3a4b5c"): {  # data_source
+            "parameter_group_id": RAG_V2_PARAMETER_GROUP_UUIDS["knowledge_parameters"],
+            "parameter_order_within_group": 1,
+        },
+        UUID("c3d4e5f6-a7b8-4c9d-0e1f-2a3b4c5d6e7f"): {  # max_retrieved_chunks
+            "parameter_group_id": RAG_V2_PARAMETER_GROUP_UUIDS["knowledge_parameters"],
+            "parameter_order_within_group": 2,
+        },
+        UUID("d4e5f6a7-b8c9-4d0e-1f2a-3b4c5d6e7f8a"): {  # enable_date_penalty_for_chunks
+            "parameter_group_id": RAG_V2_PARAMETER_GROUP_UUIDS["knowledge_parameters"],
+            "parameter_order_within_group": 3,
+        },
+        UUID("e5f6a7b8-c9d0-4e1f-2a3b-4c5d6e7f8a9b"): {  # chunk_age_penalty_rate
+            "parameter_group_id": RAG_V2_PARAMETER_GROUP_UUIDS["knowledge_parameters"],
+            "parameter_order_within_group": 4,
+        },
+        UUID("f6a7b8c9-d0e1-4f2a-3b4c-5d6e7f8a9b0c"): {  # default_penalty_rate
+            "parameter_group_id": RAG_V2_PARAMETER_GROUP_UUIDS["knowledge_parameters"],
+            "parameter_order_within_group": 5,
+        },
+        UUID("a7b8c9d0-e1f2-4a3b-4c5d-6e7f8a9b0c1d"): {  # metadata_date_key
+            "parameter_group_id": RAG_V2_PARAMETER_GROUP_UUIDS["knowledge_parameters"],
+            "parameter_order_within_group": 6,
+        },
+        UUID("b8c9d0e1-f2a3-4b4c-5d6e-7f8a9b0c1d2e"): {  # max_retrieved_chunks_after_penalty
+            "parameter_group_id": RAG_V2_PARAMETER_GROUP_UUIDS["knowledge_parameters"],
+            "parameter_order_within_group": 7,
+        },
+        # LLM Parameters Group (Synthesizer)
+        UUID("a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d"): {  # completion_model
+            "parameter_group_id": RAG_V2_PARAMETER_GROUP_UUIDS["llm_parameters"],
+            "parameter_order_within_group": 1,
+        },
+        UUID("b2c3d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e"): {  # prompt_template
+            "parameter_group_id": RAG_V2_PARAMETER_GROUP_UUIDS["llm_parameters"],
+            "parameter_order_within_group": 2,
+        },
+        UUID("c9d0e1f2-a3b4-4c5d-6e7f-8a9b0c1d2e3f"): {  # temperature
+            "parameter_group_id": RAG_V2_PARAMETER_GROUP_UUIDS["llm_parameters"],
+            "parameter_order_within_group": 3,
+        },
+        UUID("d0e1f2a3-b4c5-4d6e-7f8a-9b0c1d2e3f4a"): {  # verbosity
+            "parameter_group_id": RAG_V2_PARAMETER_GROUP_UUIDS["llm_parameters"],
+            "parameter_order_within_group": 4,
+        },
+        UUID("e1f2a3b4-c5d6-4e7f-8a9b-0c1d2e3f4a5b"): {  # reasoning
+            "parameter_group_id": RAG_V2_PARAMETER_GROUP_UUIDS["llm_parameters"],
+            "parameter_order_within_group": 5,
+        },
+        UUID("f2a3b4c5-d6e7-4f8a-9b0c-1d2e3f4a5b6c"): {  # llm_api_key
+            "parameter_group_id": RAG_V2_PARAMETER_GROUP_UUIDS["llm_parameters"],
+            "parameter_order_within_group": 6,
+        },
+    }
+
+    for param_id, group_info in parameter_group_assignments.items():
+        param_def = session.query(db.ComponentParameterDefinition).filter_by(id=param_id).first()
+        if param_def:
+            param_def.parameter_group_id = group_info["parameter_group_id"]
+            param_def.parameter_order_within_group = group_info["parameter_order_within_group"]
+
+    session.commit()
