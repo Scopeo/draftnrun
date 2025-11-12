@@ -162,12 +162,12 @@ def count_conversations_per_day(df: pd.DataFrame, all_dates_df: pd.DataFrame) ->
     return conversation_id_usage
 
 
-def query_conversation_messages(identifier: str) -> tuple[dict, dict]:
+def query_conversation_messages(trace_id: str) -> tuple[dict, dict]:
     """
-    Query the most recent span with a specific conversation_id or trace_id and return messages.
+    Query the most recent span with a specific trace_id and return messages.
 
     Args:
-        identifier: The conversation ID or trace ID to filter spans by
+        trace_id: The trace ID to filter spans by
 
     Returns:
         Tuple of (input_messages, output_messages)
@@ -177,16 +177,18 @@ def query_conversation_messages(identifier: str) -> tuple[dict, dict]:
     SELECT
         (m.input_content::jsonb->0) as input_payload,
         (m.output_content::jsonb->0) as output_payload
+
     FROM traces.spans s
     LEFT JOIN traces.span_messages m ON m.span_id = s.span_id
-    WHERE (s.attributes->>'conversation_id' = :identifier OR s.trace_rowid = :identifier)
+    WHERE s.trace_rowid = :trace_id
+
     AND s.name = 'Workflow'
     ORDER BY s.start_time DESC
     """
     )
 
     session = get_session_trace()
-    result = session.execute(query, {"identifier": identifier}).fetchone()
+    result = session.execute(query, {"trace_id": trace_id}).fetchone()
     session.close()
 
     if not result:

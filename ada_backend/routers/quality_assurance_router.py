@@ -433,27 +433,19 @@ async def create_entry_from_history(
     data: InputGroundtruthFromHistoryCreate,
     session: Session = Depends(get_db),
 ) -> List[InputGroundtruthResponse]:
-    # Determine identifier based on source
-    if data.source == "conversation":
-        identifier = str(data.conversation_id)
-        source_label = f"conversation {data.conversation_id}"
-    else:  # trace
-        identifier = data.trace_id
-        source_label = f"trace {data.trace_id}"
-
     try:
         return save_conversation_to_groundtruth_service(
             session=session,
-            identifier=identifier,
+            identifier=data.trace_id,
             dataset_id=dataset_id,
             message_index=data.message_index,
         )
     except QAError as e:
-        LOGGER.error(f"Failed to save {source_label}: {str(e)}", exc_info=True)
+        LOGGER.error(f"Failed to save trace {data.trace_id}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=400, detail=str(e)) from e
     except ValueError as e:
-        LOGGER.error(f"Failed to save {source_label}: {str(e)}", exc_info=True)
+        LOGGER.error(f"Failed to save trace {data.trace_id}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
-        LOGGER.error(f"Failed to save {source_label}: {str(e)}", exc_info=True)
+        LOGGER.error(f"Failed to save trace {data.trace_id}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error") from e

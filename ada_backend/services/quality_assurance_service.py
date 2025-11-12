@@ -482,7 +482,7 @@ def save_conversation_to_groundtruth_service(
     input_payload.pop("conversation_id", None)
     messages = input_payload.get("messages", [])
 
-    if message_index < 0 or message_index >= len(messages):
+    if message_index < 0 or message_index > len(messages):
         LOGGER.error(
             f"Message index {message_index} is out of range for "
             f"identifier {identifier} in dataset {dataset_id}. "
