@@ -8,6 +8,7 @@ Create Date: 2025-11-10 15:54:03.957667
 
 from typing import Sequence, Union
 import logging
+import json
 
 from alembic import op
 import sqlalchemy as sa
@@ -253,12 +254,10 @@ def upgrade() -> None:
                             # Handle JSONB attributes - convert string to dict if needed
                             if "attributes" in row_dict:
                                 if isinstance(row_dict["attributes"], str):
-                                    import json
 
                                     row_dict["attributes"] = json.loads(row_dict["attributes"])
                                 # Convert dict back to JSON string for SQL parameter
                                 if isinstance(row_dict["attributes"], dict):
-                                    import json
 
                                     row_dict["attributes"] = json.dumps(row_dict["attributes"])
                             # Handle NULL values for optional enum fields
@@ -339,12 +338,11 @@ def downgrade() -> None:
     op.drop_index(op.f("ix_traces_spans_trace_rowid"), table_name="spans", schema="traces")
     op.drop_table("spans", schema="traces")
 
-    # Drop enum types (only the ones specific to traces)
-    # Note: env_type and call_type are in public schema and used by other tables, don't drop them
+    # Drop enum types
+    # Note: env_type is in public schema and used by other tables, don't drop it
     op.execute("DROP TYPE IF EXISTS traces.statuscode")
     op.execute("DROP TYPE IF EXISTS traces.open_inference_span_kind_values")
 
     op.execute("DROP TYPE IF EXISTS public.call_type")
 
-    # Drop schema
     op.execute("DROP SCHEMA IF EXISTS traces CASCADE")

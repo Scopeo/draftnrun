@@ -86,9 +86,6 @@ Here are the env variables with the default values that work for Docker Compose:
   # For Ingestion, set INGESTION_DB_URL (required):
   INGESTION_DB_URL=postgresql://postgres:ada_password@localhost:5432/ada_ingestion
 
-  # For Traces, set TRACES_DB_URL (required):
-  TRACES_DB_URL=postgresql://postgres:ada_password@localhost:5432/ada_traces
-
   # FOR INGESTION QUEUE
   REDIS_HOST=localhost
   REDIS_PORT=6379

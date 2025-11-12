@@ -13,7 +13,7 @@ from sqlalchemy import func, select, create_engine, update
 from sqlalchemy.orm import sessionmaker
 
 from engine.trace.nested_utils import split_nested_keys
-from ada_backend.database.models import Span, SpanMessage, OrganizationUsage
+from ada_backend.database.trace_models import Span, SpanMessage, OrganizationUsage
 from ada_backend.database.setup_db import get_db_url
 
 LOGGER = logging.getLogger(__name__)

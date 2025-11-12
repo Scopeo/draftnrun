@@ -1,7 +1,7 @@
 from typing import Optional
 from uuid import UUID
 
-from ada_backend.database.models import OrganizationUsage
+from ada_backend.database.trace_models import OrganizationUsage
 from engine.trace.sql_exporter import get_session_trace
 
 
