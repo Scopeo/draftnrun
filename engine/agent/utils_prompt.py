@@ -8,7 +8,7 @@ LOGGER = logging.getLogger(__name__)
 def fill_prompt_template(
     prompt_template: str,
     component_name: str = "",
-    variables: Optional[dict] = None,
+    variables: Optional[dict[str, str]] = None,
 ) -> str:
     """
     Fills the prompt template with variables from the provided dictionary.
