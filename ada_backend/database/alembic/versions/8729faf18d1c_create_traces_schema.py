@@ -148,12 +148,15 @@ def upgrade() -> None:
             source_tables = source_inspector.get_table_names()
             tables_to_migrate = ["spans", "span_messages", "organization_usage"]
 
+            # Validate all required tables exist before starting migration
+            missing_tables = [table for table in tables_to_migrate if table not in source_tables]
+            if missing_tables:
+                error_msg = f"Required tables not found in source database: {', '.join(missing_tables)}"
+                LOGGER.error(error_msg)
+                raise ValueError(error_msg)
+
             with source_engine.connect() as source_conn:
                 for table_name in tables_to_migrate:
-                    if table_name not in source_tables:
-                        LOGGER.info(f"Table {table_name} not found in source database. Skipping.")
-                        continue
-
                     # Get row count from source
                     source_count = source_conn.execute(text(f"SELECT COUNT(*) FROM {table_name}")).scalar()
                     LOGGER.info(f"Migrating {table_name}: {source_count} rows from source")
@@ -169,12 +172,11 @@ def upgrade() -> None:
                         LOGGER.warning(
                             (
                                 f"Destination table traces.{table_name} already has {dest_count} rows. "
-                                "Skipping to avoid duplicates."
+                                "Will upsert to avoid duplicates and handle conflicts."
                             )
                         )
-                        continue
 
-                    # Use batch inserts for efficient data migration
+                    # Use batch upserts for efficient data migration (INSERT ... ON CONFLICT DO UPDATE)
                     BATCH_SIZE = 1000
                     LOGGER.info(f"  Migrating {table_name} in batches of {BATCH_SIZE}...")
 
@@ -216,6 +218,28 @@ def upgrade() -> None:
                                 CASE WHEN :call_type IS NULL THEN NULL ELSE CAST(:call_type AS call_type) END,
                                 :project_id, :tag_name
                             )
+                            ON CONFLICT (id) DO UPDATE SET
+                                trace_rowid = EXCLUDED.trace_rowid,
+                                span_id = EXCLUDED.span_id,
+                                parent_id = EXCLUDED.parent_id,
+                                graph_runner_id = EXCLUDED.graph_runner_id,
+                                name = EXCLUDED.name,
+                                span_kind = EXCLUDED.span_kind,
+                                start_time = EXCLUDED.start_time,
+                                end_time = EXCLUDED.end_time,
+                                attributes = EXCLUDED.attributes,
+                                events = EXCLUDED.events,
+                                status_code = EXCLUDED.status_code,
+                                status_message = EXCLUDED.status_message,
+                                cumulative_error_count = EXCLUDED.cumulative_error_count,
+                                cumulative_llm_token_count_prompt = EXCLUDED.cumulative_llm_token_count_prompt,
+                                cumulative_llm_token_count_completion = EXCLUDED.cumulative_llm_token_count_completion,
+                                llm_token_count_prompt = EXCLUDED.llm_token_count_prompt,
+                                llm_token_count_completion = EXCLUDED.llm_token_count_completion,
+                                environment = EXCLUDED.environment,
+                                call_type = EXCLUDED.call_type,
+                                project_id = EXCLUDED.project_id,
+                                tag_name = EXCLUDED.tag_name
                             """
                         )
                     elif table_name == "span_messages":
@@ -226,6 +250,10 @@ def upgrade() -> None:
                             """
                             INSERT INTO traces.span_messages (id, span_id, input_content, output_content)
                             VALUES (:id, :span_id, :input_content, :output_content)
+                            ON CONFLICT (id) DO UPDATE SET
+                                span_id = EXCLUDED.span_id,
+                                input_content = EXCLUDED.input_content,
+                                output_content = EXCLUDED.output_content
                             """
                         )
                     elif table_name == "organization_usage":
@@ -234,12 +262,15 @@ def upgrade() -> None:
                             """
                             INSERT INTO traces.organization_usage (id, organization_id, total_tokens)
                             VALUES (:id, :organization_id, :total_tokens)
+                            ON CONFLICT (id) DO UPDATE SET
+                                organization_id = EXCLUDED.organization_id,
+                                total_tokens = EXCLUDED.total_tokens
                             """
                         )
 
-                    # Read and insert in batches
+                    # Read and upsert in batches
                     offset = 0
-                    total_inserted = 0
+                    total_processed = 0
                     while True:
                         batch_query = text(f"{str(query)} LIMIT {BATCH_SIZE} OFFSET {offset}")
                         rows = source_conn.execute(batch_query).fetchall()
@@ -247,7 +278,7 @@ def upgrade() -> None:
                         if not rows:
                             break
 
-                        # Convert rows to dicts and prepare for batch insert
+                        # Convert rows to dicts and prepare for batch upsert
                         batch_data = []
                         for row in rows:
                             row_dict = dict(row._mapping)
@@ -268,20 +299,20 @@ def upgrade() -> None:
                                     row_dict["call_type"] = None
                             batch_data.append(row_dict)
 
-                        # Batch insert using executemany for efficiency
+                        # Batch upsert using executemany for efficiency (INSERT ... ON CONFLICT DO UPDATE)
                         connection.execute(insert_query, batch_data)
-                        total_inserted += len(batch_data)
+                        total_processed += len(batch_data)
                         offset += BATCH_SIZE
-                        LOGGER.info(f"  Inserted {total_inserted}/{source_count} rows...")
+                        LOGGER.info(f"  Processed {total_processed}/{source_count} rows (inserted or updated)...")
 
-                    LOGGER.info(f"  Completed migration of {table_name}: {total_inserted} rows")
+                    LOGGER.info(f"Completed migration of {table_name}: {total_processed} rows processed")
 
                     # Verify migration
                     final_count = connection.execute(text(f'SELECT COUNT(*) FROM traces."{table_name}"')).scalar()
                     LOGGER.info(f"Successfully migrated {table_name}: {final_count} rows")
 
                     # Reset the sequence for tables with auto-incrementing IDs
-                    if table_name in ["spans", "span_messages", "organization_usage"] and total_inserted > 0:
+                    if table_name in ["spans", "span_messages", "organization_usage"] and total_processed > 0:
                         # Get the maximum ID value
                         max_id_result = connection.execute(
                             text(f'SELECT COALESCE(MAX(id), 0) FROM traces."{table_name}"')
@@ -303,9 +334,6 @@ def upgrade() -> None:
 
         except Exception as e:
             LOGGER.error(f"Error during data migration: {e}")
-            import traceback
-
-            traceback.print_exc()
             LOGGER.warning("Migration can be retried by running: alembic upgrade head")
             raise  # Re-raise to mark migration as failed
         finally:
