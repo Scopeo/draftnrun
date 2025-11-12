@@ -40,7 +40,6 @@ from ada_backend.services.quality_assurance_service import (
     save_conversation_to_groundtruth_service,
 )
 from ada_backend.database.setup_db import get_db
-from ada_backend.services.errors import QAError
 
 router = APIRouter(tags=["Quality Assurance"])
 LOGGER = logging.getLogger(__name__)
@@ -438,9 +437,6 @@ async def create_entry_from_history(
             trace_id=trace_id,
             dataset_id=dataset_id,
         )
-    except QAError as e:
-        LOGGER.error(f"Failed to save trace {trace_id}: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=400, detail=str(e)) from e
     except ValueError as e:
         LOGGER.error(f"Failed to save trace {trace_id}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=400, detail=str(e)) from e
