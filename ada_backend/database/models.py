@@ -1,7 +1,7 @@
 import uuid
 import json
 from typing import List, Optional, Union, Type
-from enum import StrEnum, Enum
+from enum import StrEnum
 import logging
 
 from sqlalchemy import (
@@ -1453,17 +1453,3 @@ class VersionOutput(Base):
 
     def __str__(self):
         return f"VersionOutput(id={self.id}, input_id={self.input_id}, graph_runner_id={self.graph_runner_id})"
-
-
-# --- Trace Models (traces schema) ---
-
-
-def make_pg_string_enum_for_traces(enum_cls: Type[Enum], schema: str = "traces") -> SQLAlchemyEnum:
-    """Create PostgreSQL-compatible enum for string-based enums in traces schema."""
-    return SQLAlchemyEnum(
-        enum_cls,
-        name=camel_to_snake(enum_cls.__name__),
-        values_callable=lambda x: [e.value for e in x],
-        native_enum=True,
-        schema=schema,
-    )
