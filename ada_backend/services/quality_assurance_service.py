@@ -493,19 +493,6 @@ def save_conversation_to_groundtruth_service(
 
     payload = {**input_payload, "messages": messages}
 
-    # Determine groundtruth from assistant responses
-    groundtruth_text = None
-    if output_payload:
-        for msg in output_payload.get("messages", []):
-            if msg.get("role") == "assistant":
-                groundtruth_text = msg.get("content")
-                break
-    if groundtruth_text is None:
-        for msg in reversed(messages):
-            if msg.get("role") == "assistant":
-                groundtruth_text = msg.get("content")
-                break
-
-    input_entry = InputGroundtruthCreate(input=payload, groundtruth=groundtruth_text)
+    input_entry = InputGroundtruthCreate(input=payload, groundtruth=output_payload["messages"][-1]["content"])
     input_entries = create_inputs_groundtruths(session, dataset_id, [input_entry])
     return [InputGroundtruthResponse.model_validate(entry) for entry in input_entries]
