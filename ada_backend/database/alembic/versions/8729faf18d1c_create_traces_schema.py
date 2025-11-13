@@ -354,17 +354,20 @@ def downgrade() -> None:
         pass
 
     # Drop tables
-    op.drop_table("span_messages", schema="traces")
+    op.drop_table("span_messages", schema="traces", if_exists=True)
     op.drop_index(
-        op.f("ix_traces_organization_usage_organization_id"), table_name="organization_usage", schema="traces"
+        op.f("ix_traces_organization_usage_organization_id"),
+        table_name="organization_usage",
+        schema="traces",
+        if_exists=True,
     )
-    op.drop_table("organization_usage", schema="traces")
-    op.drop_index(op.f("ix_traces_spans_project_id"), table_name="spans", schema="traces")
-    op.drop_index(op.f("ix_traces_spans_start_time"), table_name="spans", schema="traces")
-    op.drop_index(op.f("ix_traces_spans_graph_runner_id"), table_name="spans", schema="traces")
-    op.drop_index(op.f("ix_traces_spans_parent_id"), table_name="spans", schema="traces")
-    op.drop_index(op.f("ix_traces_spans_trace_rowid"), table_name="spans", schema="traces")
-    op.drop_table("spans", schema="traces")
+    op.drop_table("organization_usage", schema="traces", if_exists=True)
+    op.drop_index(op.f("ix_traces_spans_project_id"), table_name="spans", schema="traces", if_exists=True)
+    op.drop_index(op.f("ix_traces_spans_start_time"), table_name="spans", schema="traces", if_exists=True)
+    op.drop_index(op.f("ix_traces_spans_graph_runner_id"), table_name="spans", schema="traces", if_exists=True)
+    op.drop_index(op.f("ix_traces_spans_parent_id"), table_name="spans", schema="traces", if_exists=True)
+    op.drop_index(op.f("ix_traces_spans_trace_rowid"), table_name="spans", schema="traces", if_exists=True)
+    op.drop_table("spans", schema="traces", if_exists=True)
 
     # Drop enum types
     # Note: env_type is in public schema and used by other tables, don't drop it
