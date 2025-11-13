@@ -172,8 +172,7 @@ def query_conversation_messages(trace_id: str) -> tuple[dict, dict]:
     Returns:
         Tuple of (input_messages, output_messages)
     """
-    query = text(
-        """
+    query = text("""
     SELECT
         (m.input_content::jsonb->0) as input_payload,
         (m.output_content::jsonb->0) as output_payload
@@ -184,8 +183,7 @@ def query_conversation_messages(trace_id: str) -> tuple[dict, dict]:
 
     AND s.name = 'Workflow'
     ORDER BY s.start_time DESC
-    """
-    )
+    """)
 
     session = get_session_trace()
     result = session.execute(query, {"trace_id": trace_id}).fetchone()
