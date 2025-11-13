@@ -153,6 +153,7 @@ def seed_llm_call_components(session: Session):
                 is_advanced=True,
             ),
             *build_completion_service_config_definitions(
+                session=session,
                 component_version_id=llm_call_version.id,
                 params_to_seed=[
                     ParameterLLMConfig(

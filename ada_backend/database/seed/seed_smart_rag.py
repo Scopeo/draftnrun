@@ -174,6 +174,7 @@ def seed_smart_rag_components(session: Session):
                 is_advanced=False,
             ),
             *build_function_calling_service_config_definitions(
+                session=session,
                 component_version_id=document_react_loader_agent_version.id,
                 params_to_seed=[
                     ParameterLLMConfig(
