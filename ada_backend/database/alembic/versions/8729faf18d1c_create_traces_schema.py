@@ -343,16 +343,6 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    # Clear data from traces tables first (in reverse order due to foreign keys if any)
-    connection = op.get_bind()
-    try:
-        connection.execute(text("TRUNCATE TABLE traces.span_messages CASCADE"))
-        connection.execute(text("TRUNCATE TABLE traces.spans CASCADE"))
-        connection.execute(text("TRUNCATE TABLE traces.organization_usage CASCADE"))
-    except Exception:
-        # Tables might not exist, continue with drop
-        pass
-
     # Drop tables
     op.drop_table("span_messages", schema="traces", if_exists=True)
     op.drop_index(
