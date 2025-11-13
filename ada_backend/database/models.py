@@ -1487,3 +1487,19 @@ class LLMJudge(Base):
 
     def __str__(self):
         return f"LLMJudge(id={self.id}, name={self.name}, evaluation_type={self.evaluation_type})"
+
+
+class LLMModels(Base):
+    __tablename__ = "llm_model"
+
+    id = mapped_column(UUID(as_uuid=True), primary_key=True, index=True, server_default=func.gen_random_uuid())
+    name = mapped_column(String, nullable=False)
+    description = mapped_column(Text, nullable=True)
+    provider = mapped_column(String, nullable=False)
+    reference = mapped_column(String, nullable=True)
+    model_capacity = mapped_column(JSONB, nullable=True)
+    created_at = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    def __str__(self) -> str:
+        return f"LLMModels(id={self.id}, name={self.name}, provider={self.provider})"

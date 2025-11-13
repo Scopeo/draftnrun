@@ -74,6 +74,7 @@ def seed_tavily_components(session: Session):
         component_parameter_definitions=[
             # Tavily Agent
             *build_completion_service_config_definitions(
+                session=session,
                 component_version_id=tavily_agent_version.id,
                 params_to_seed=[
                     ParameterLLMConfig(

@@ -21,6 +21,7 @@ from ada_backend.repositories.source_repository import get_data_source_by_id
 from ada_backend.repositories.project_repository import get_project
 from ada_backend.context import get_request_context
 from ada_backend.services.user_roles_service import get_user_access_to_organization
+from ada_backend.services.llm_models_service import get_llm_models_by_capability_select_options_service
 from engine.storage_service.local_service import SQLLocalService
 
 LOGGER = logging.getLogger(__name__)
@@ -342,6 +343,28 @@ def build_completion_service_processor(
         )
 
         params[target_name] = completion_service
+        return params
+
+    return processor
+
+
+def build_llm_capability_resolver_processor(
+    target_name: str = "capability_resolver",
+) -> ParameterProcessor:
+    """
+    Returns a processor that injects a callable for resolving LLM capabilities.
+
+    The injected callable accepts a list of capability strings and returns the set
+    of LLM model references supporting all of them, sourced from the database.
+    """
+
+    def processor(params: dict, constructor_params: dict[str, Any]) -> dict:
+        def resolve_capabilities(capabilities: list[str]) -> set[str]:
+            with get_db_session() as session:
+                options = get_llm_models_by_capability_select_options_service(session, capabilities)
+            return {option.value for option in options}
+
+        params[target_name] = resolve_capabilities
         return params
 
     return processor

@@ -989,6 +989,7 @@ def seed_rag_components(session: Session):
                 is_advanced=False,
             ),
             *build_completion_service_config_definitions(
+                session=session,
                 component_version_id=synthesizer_version.id,
                 params_to_seed=[
                     ParameterLLMConfig(
@@ -1032,6 +1033,7 @@ def seed_rag_components(session: Session):
                 is_advanced=False,
             ),
             *build_completion_service_config_definitions(
+                session=session,
                 component_version_id=hybrid_synthesizer_version.id,
                 params_to_seed=[
                     ParameterLLMConfig(
@@ -1071,6 +1073,7 @@ def seed_rag_components(session: Session):
                 is_advanced=False,
             ),
             *build_completion_service_config_definitions(
+                session=session,
                 component_version_id=chunk_selector_version.id,
                 params_to_seed=[
                     ParameterLLMConfig(
