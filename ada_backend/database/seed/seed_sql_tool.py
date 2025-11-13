@@ -122,6 +122,7 @@ def seed_sql_tool_components(session: Session):
                 default="False",
             ),
             *build_completion_service_config_definitions(
+                session=session,
                 component_version_id=sql_tool_version.id,
                 params_to_seed=[
                     ParameterLLMConfig(

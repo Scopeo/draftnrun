@@ -22,6 +22,7 @@ class AdminCategory(StrEnum):
     COMPONENTS = "Components"
     SOURCES = "Data Sources"
     SCHEDULER = "Scheduler"
+    LLM_MODELS = "LLM Models"
 
 
 class EnhancedModelView(ModelView):
@@ -560,6 +561,17 @@ class PortMappingAdmin(EnhancedModelView, model=db.PortMapping):
     ]
 
 
+class LLMModelsAdmin(EnhancedModelView, model=db.LLMModels):
+    category = AdminCategory.LLM_MODELS
+    name = "LLM Model"
+    icon = "fas fa-cogs"
+    column_list = ["id", "name", "description", "provider", "reference", "model_capacity", "created_at", "updated_at"]
+    form_columns = ["name", "provider", "reference", "model_capacity"]
+
+    column_searchable_list = ["name", "provider", "reference"]
+    column_filters = ["provider", "reference"]
+
+
 class AdminAuth(AuthenticationBackend):
     """Basic username/password authentication for admin interface."""
 
@@ -631,5 +643,6 @@ def setup_admin(app: FastAPI):
     admin.add_view(CronJobAdmin)
     admin.add_view(CronRunAdmin)
     admin.add_view(EndpointPollingHistoryAdmin)
+    admin.add_view(LLMModelsAdmin)
 
     return admin

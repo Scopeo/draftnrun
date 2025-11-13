@@ -1,14 +1,32 @@
 """Test template variable injection through NodeData context."""
 
-import pytest
 import asyncio
-from unittest.mock import MagicMock, patch
 from types import SimpleNamespace
+from typing import Optional, Set
+from unittest.mock import MagicMock, patch
+
+import pytest
 from engine.agent.inputs_outputs.start import Start
 from engine.agent.llm_call_agent import LLMCallAgent
 from engine.agent.react_function_calling import ReActAgent
 from engine.agent.types import NodeData, ComponentAttributes, ToolDescription, AgentPayload, ChatMessage
 from engine.trace.trace_manager import TraceManager
+
+
+def make_capability_resolver(
+    service,
+    allowed_refs: Optional[Set[str]] = None,
+):
+    def resolver(capabilities: list[str]) -> set[str]:
+        refs = set(allowed_refs or [])
+        provider = getattr(service, "_provider", None)
+        model = getattr(service, "_model_name", None)
+        if provider and model:
+            refs.add(f"{provider}:{model}")
+        return refs
+
+    return resolver
+
 
 # Mock services are available as fixtures from conftest.py
 
@@ -45,6 +63,7 @@ def llm_agent(mock_trace_manager, mock_llm_service):
         ),
         component_attributes=ComponentAttributes(component_instance_name="Test LLM"),
         prompt_template="Say {yes} to {name}. User said: {input}",
+        capability_resolver=make_capability_resolver(mock_llm_service),
     )
 
 
@@ -127,6 +146,7 @@ def test_llm_call_missing_template_var(get_span_mock, agent_calls_mock, mock_llm
         ),
         component_attributes=ComponentAttributes(component_instance_name="Test LLM"),
         prompt_template="Say {missing_var}",
+        capability_resolver=make_capability_resolver(mock_llm_service),
     )
 
     input_node_data = NodeData(
@@ -158,6 +178,7 @@ def test_llm_call_with_input_var(get_span_mock, agent_calls_mock, llm_agent):
         ),
         component_attributes=ComponentAttributes(component_instance_name="Test LLM"),
         prompt_template="User said: {input}",
+        capability_resolver=make_capability_resolver(llm_agent._completion_service),
     )
 
     input_node_data = NodeData(data={"messages": [{"role": "user", "content": "Hello world!"}]}, ctx={})
@@ -206,6 +227,7 @@ def test_template_vars_priority(get_span_mock, agent_calls_mock, mock_llm_servic
         ),
         component_attributes=ComponentAttributes(component_instance_name="Test LLM"),
         prompt_template="Message: {input}, Template var: {yes}",
+        capability_resolver=make_capability_resolver(mock_llm_service),
     )
 
     input_node_data = NodeData(
@@ -220,17 +242,13 @@ def test_template_vars_priority(get_span_mock, agent_calls_mock, mock_llm_servic
     assert result.data["output"] == "Test response"
 
 
-@patch("engine.agent.llm_call_agent.get_models_by_capability")
 @patch("engine.prometheus_metric.agent_calls")
 @patch("engine.prometheus_metric.get_tracing_span")
-def test_llm_call_with_file_handling(get_span_mock, agent_calls_mock, get_models_mock, mock_llm_service):  # noqa: F811
+def test_llm_call_with_file_handling(get_span_mock, agent_calls_mock, mock_llm_service):  # noqa: F811
     """Test LLMCallAgent handles file content and URLs from context."""
     get_span_mock.return_value = MagicMock(project_id="test_project")
     counter_mock = MagicMock()
     agent_calls_mock.labels.return_value = counter_mock
-
-    # Mock file capability check to allow files
-    get_models_mock.return_value = [{"reference": "openai:gpt-4o"}]
 
     tm = MagicMock(spec=TraceManager)
     agent = LLMCallAgent(
@@ -243,6 +261,7 @@ def test_llm_call_with_file_handling(get_span_mock, agent_calls_mock, get_models
         prompt_template="Process this file: {input}",
         file_content_key="my_file_content",
         file_url_key="my_file_url",
+        capability_resolver=make_capability_resolver(mock_llm_service, {"openai:gpt-4o"}),
     )
 
     input_node_data = NodeData(
@@ -291,19 +310,13 @@ def test_input_block_with_flat_template_vars(mock_trace_manager):
     assert result.ctx.get("cs_book_url") == "https://example.com/book.pdf"
 
 
-@patch("engine.agent.llm_call_agent.get_models_by_capability")
 @patch("engine.prometheus_metric.agent_calls")
 @patch("engine.prometheus_metric.get_tracing_span")
-def test_llm_call_with_flat_template_vars(
-    get_span_mock, agent_calls_mock, get_models_mock, mock_llm_service
-):  # noqa: F811
+def test_llm_call_with_flat_template_vars(get_span_mock, agent_calls_mock, mock_llm_service):  # noqa: F811
     """Test LLMCallAgent works with flat template vars from frontend payload."""
     get_span_mock.return_value = MagicMock(project_id="test_project")
     counter_mock = MagicMock()
     agent_calls_mock.labels.return_value = counter_mock
-
-    # Mock file capability check to allow files
-    get_models_mock.return_value = [{"reference": "openai:gpt-4o"}]
 
     tm = MagicMock(spec=TraceManager)
     agent = LLMCallAgent(
@@ -315,6 +328,7 @@ def test_llm_call_with_flat_template_vars(
         component_attributes=ComponentAttributes(component_instance_name="LLM Call"),
         prompt_template="The user's name it's {username}. Greet it.\nAnswer this question: {input}",
         file_url_key="cs_book",
+        capability_resolver=make_capability_resolver(mock_llm_service, {"openai:gpt-4o"}),
     )
 
     input_node_data = NodeData(
@@ -329,19 +343,15 @@ def test_llm_call_with_flat_template_vars(
     agent._completion_service.complete_async.assert_called_once()
 
 
-@patch("engine.agent.llm_call_agent.get_models_by_capability")
 @patch("engine.prometheus_metric.agent_calls")
 @patch("engine.prometheus_metric.get_tracing_span")
-def test_llm_call_template_vars_from_tool_args(
-    get_span_mock, agent_calls_mock, get_models_mock, mock_llm_service
-):  # noqa: F811
+def test_llm_call_template_vars_from_tool_args(get_span_mock, agent_calls_mock, mock_llm_service):  # noqa: F811
     """Ensure template vars provided via function-calling tool args are honored (inputs-first path)."""
     get_span_mock.return_value = MagicMock(project_id="test_project")
     counter_mock = MagicMock()
     agent_calls_mock.labels.return_value = counter_mock
 
-    # Allow files and configure provider/model
-    get_models_mock.return_value = [{"reference": "openai:gpt-4o"}]
+    # Configure provider/model
     mock_llm_service._provider = "openai"
     mock_llm_service._model_name = "gpt-4o"
 
@@ -355,6 +365,7 @@ def test_llm_call_template_vars_from_tool_args(
         component_attributes=ComponentAttributes(component_instance_name="LLM Call"),
         prompt_template="Respond to {query}. Speak like a {speak}",
         file_url_key="doc_url",
+        capability_resolver=make_capability_resolver(mock_llm_service, {"openai:gpt-4o"}),
     )
 
     react = ReActAgent(
@@ -397,18 +408,16 @@ def test_llm_call_template_vars_from_tool_args(
     assert speak in text_content  # Template variable should be filled
 
 
-@patch("engine.agent.llm_call_agent.get_models_by_capability")
 @patch("engine.prometheus_metric.agent_calls")
 @patch("engine.prometheus_metric.get_tracing_span")
 def test_react_agent_two_tool_calls_different_urls(
-    get_span_mock, agent_calls_mock, get_models_mock, mock_llm_service, mock_trace_manager
+    get_span_mock, agent_calls_mock, mock_llm_service, mock_trace_manager
 ):
     """Two tool calls with different file_url should not affect each other."""
     get_span_mock.return_value = MagicMock(project_id="test_project")
     counter_mock = MagicMock()
     agent_calls_mock.labels.return_value = counter_mock
-    # Allow files
-    get_models_mock.return_value = [{"reference": "openai:gpt-4o"}]
+    # Configure provider/model
     mock_llm_service._provider = "openai"
     mock_llm_service._model_name = "gpt-4o"
 
@@ -422,6 +431,7 @@ def test_react_agent_two_tool_calls_different_urls(
         component_attributes=ComponentAttributes(component_instance_name="Get content"),
         prompt_template="Describe: {input}",
         file_url_key="file_url",
+        capability_resolver=make_capability_resolver(mock_llm_service, {"openai:gpt-4o"}),
     )
 
     # React agent with this single tool
