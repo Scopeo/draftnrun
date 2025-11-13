@@ -27,19 +27,26 @@ URL_COLUMN_NAME = "url"
 SOURCE_ID_COLUMN_NAME = "source_id"
 METADATA_COLUMN_NAME = "source_metadata"  # JSONB column for source-specific metadata
 
+DEFAULT_EMBEDDING_MODEL = "openai:text-embedding-3-large"
+
 
 def get_sanitize_names(
     organization_id: str,
+    embedding_model_reference: Optional[str] = DEFAULT_EMBEDDING_MODEL,
 ) -> tuple[str, str, str]:
     """
     Generate sanitized schema, table, and collection names.
 
     All sources use org-level table and collection in the public schema.
+    Collection name includes embedding model to avoid mixing vectors from different models.
     """
+
     sanitize_organization_id = sanitize_filename(organization_id)
     schema_name = "public"
     table_name = f"org_{sanitize_organization_id}_chunks"
-    qdrant_collection_name = f"org_{sanitize_organization_id}_collection"
+
+    sanitized_model = sanitize_filename(embedding_model_reference.replace(":", "_").replace("-", "_"))
+    qdrant_collection_name = f"org_{sanitize_organization_id}_{sanitized_model}_collection"
 
     return (
         schema_name,
@@ -193,9 +200,11 @@ async def upload_source(
     else:
         result_source_id = uuid.uuid4()
         update_task = False
+    # Get embedding model reference for collection naming
+    embedding_model_ref = f"{embedding_service._provider}:{embedding_service._model_name}"
     schema_name, table_name, qdrant_collection_name = get_sanitize_names(
         organization_id=organization_id,
-        source_id=str(result_source_id),
+        embedding_model_reference=embedding_model_ref,
     )
 
     ingestion_task = IngestionTaskUpdate(
@@ -262,7 +271,7 @@ async def upload_source(
         database_table_name=table_name,
         qdrant_collection_name=qdrant_collection_name,
         qdrant_schema=qdrant_schema.to_dict(),
-        embedding_model_reference=f"{embedding_service._provider}:{embedding_service._model_name}",
+        embedding_model_reference=embedding_model_ref,
         attributes=attributes,
     )
     if not update_task:

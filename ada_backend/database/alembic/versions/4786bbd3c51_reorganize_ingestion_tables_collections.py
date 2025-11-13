@@ -6,7 +6,7 @@ Create Date: 2025-01-20 12:00:00.000000
 
 """
 
-from typing import Sequence, Union
+from typing import Sequence, Union, Optional
 import logging
 import asyncio
 import re
@@ -16,9 +16,17 @@ from alembic import op
 
 from data_ingestion.utils import sanitize_filename
 from engine.qdrant_service import QdrantService
-from settings import settings
-from ingestion_script.utils import SOURCE_ID_COLUMN_NAME, METADATA_COLUMN_NAME
-from ada_backend.database import models as db
+from ingestion_script.utils import (
+    SOURCE_ID_COLUMN_NAME,
+    METADATA_COLUMN_NAME,
+    CHUNK_ID_COLUMN_NAME,
+    CHUNK_COLUMN_NAME,
+    FILE_ID_COLUMN_NAME,
+    URL_COLUMN_NAME,
+    get_sanitize_names,
+    DEFAULT_EMBEDDING_MODEL,
+)
+from ingestion_script.ingest_folder_source import TIMESTAMP_COLUMN_NAME
 
 # revision identifiers, used by Alembic.
 revision: str = "4786bbd3c51"
@@ -37,26 +45,39 @@ def _extract_source_id_from_table_name(table_name: str) -> str:
     return None
 
 
-def _migrate_table_with_python(
+def _build_json_metadata_sql(metadata_cols):
+    """Build PostgreSQL jsonb_build_object expression for JSON metadata."""
+    if not metadata_cols:
+        return "'{}'::jsonb"
+
+    # PostgreSQL: jsonb_build_object(key1, value1, key2, value2, ...)
+    obj_parts = []
+    for col in metadata_cols:
+        obj_parts.append(f"'{col}', \"{col}\"")
+    return f"jsonb_build_object({', '.join(obj_parts)})"
+
+
+def _migrate_table_with_sql_alternative(
     connection, source_schema, source_table, target_schema, target_table, source_id, source_type
 ):
-    """Fallback Python-based migration for complex transformations."""
-    import pandas as pd
-    from ingestion_script.utils import CHUNK_ID_COLUMN_NAME, CHUNK_COLUMN_NAME, FILE_ID_COLUMN_NAME, URL_COLUMN_NAME
-    from ingestion_script.ingest_folder_source import TIMESTAMP_COLUMN_NAME
+    """Alternative SQL-based migration using different approach."""
+    # Get column info from source table
+    source_table_info = connection.execute(
+        text(
+            """
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_schema = :schema_name
+            AND table_name = :table_name
+        """
+        ),
+        {"schema_name": source_schema, "table_name": source_table},
+    ).fetchall()
 
-    # Read all data from source table
-    df = pd.read_sql(f'SELECT * FROM "{source_schema}"."{source_table}"', connection)
+    source_columns = [col[0] for col in source_table_info]
 
-    if df.empty:
-        LOGGER.warning(f"Source table {source_schema}.{source_table} is empty")
-        return
-
-    # Transform to unified structure
-    unified_df = pd.DataFrame()
-
-    # Map common columns
-    column_mapping = {
+    # Define common columns that map directly
+    common_columns = {
         "chunk_id": CHUNK_ID_COLUMN_NAME,
         "content": CHUNK_COLUMN_NAME,
         "file_id": FILE_ID_COLUMN_NAME,
@@ -65,32 +86,74 @@ def _migrate_table_with_python(
         "last_edited_ts": TIMESTAMP_COLUMN_NAME,
     }
 
-    for old_col, new_col in column_mapping.items():
-        if old_col in df.columns:
-            unified_df[new_col] = df[old_col]
-        elif new_col not in unified_df.columns:
-            unified_df[new_col] = None
+    # Identify which columns to map directly
+    mapped_cols = {}
+    metadata_cols = []
 
-    # Build metadata JSONB
-    metadata_cols = [
-        col
-        for col in df.columns
-        if col.lower() not in column_mapping
-        and col not in [SOURCE_ID_COLUMN_NAME, METADATA_COLUMN_NAME, "processed_datetime"]
+    for col in source_columns:
+        col_lower = col.lower()
+        if col_lower in common_columns:
+            mapped_cols[col] = common_columns[col_lower]
+        elif col not in [SOURCE_ID_COLUMN_NAME, METADATA_COLUMN_NAME, "processed_datetime"]:
+            metadata_cols.append(col)
+
+    # Build SELECT parts for mapped columns
+    select_parts = []
+    for orig_col, unified_col in mapped_cols.items():
+        if orig_col != unified_col:
+            select_parts.append(f'"{orig_col}" AS "{unified_col}"')
+        else:
+            select_parts.append(f'"{orig_col}"')
+
+    # Handle NULL values for missing columns
+    # Check which unified columns are already in select_parts
+    existing_unified_cols = set()
+    for part in select_parts:
+        if " AS " in part:
+            # Extract the alias (unified column name)
+            existing_unified_cols.add(part.split(" AS ")[1].strip('"'))
+        else:
+            # Column without alias - check if it matches a unified column name
+            col_name = part.strip('"')
+            if col_name in [
+                CHUNK_ID_COLUMN_NAME,
+                FILE_ID_COLUMN_NAME,
+                CHUNK_COLUMN_NAME,
+                URL_COLUMN_NAME,
+                TIMESTAMP_COLUMN_NAME,
+            ]:
+                existing_unified_cols.add(col_name)
+
+    required_cols = [
+        CHUNK_ID_COLUMN_NAME,
+        FILE_ID_COLUMN_NAME,
+        CHUNK_COLUMN_NAME,
+        URL_COLUMN_NAME,
+        TIMESTAMP_COLUMN_NAME,
     ]
 
-    if metadata_cols:
-        unified_df[METADATA_COLUMN_NAME] = df[metadata_cols].apply(lambda row: json.dumps(row.to_dict()), axis=1)
-    else:
-        unified_df[METADATA_COLUMN_NAME] = "{}"
+    for unified_col in required_cols:
+        if unified_col not in existing_unified_cols:
+            # Column doesn't exist in select, add NULL
+            select_parts.append(f'NULL AS "{unified_col}"')
+
+    # Build JSON metadata expression (PostgreSQL)
+    metadata_expr = _build_json_metadata_sql(metadata_cols)
+    select_parts.append(f"{metadata_expr} AS {METADATA_COLUMN_NAME}")
 
     # Add source_id
-    unified_df[SOURCE_ID_COLUMN_NAME] = source_id
+    select_parts.append(f"'{source_id}' AS {SOURCE_ID_COLUMN_NAME}")
 
-    # Insert into target table
-    unified_df.to_sql(target_table, connection, schema=target_schema, if_exists="append", index=False, method="multi")
+    # Build and execute INSERT statement
+    insert_sql = f"""
+        INSERT INTO "{target_schema}"."{target_table}"
+        ({CHUNK_ID_COLUMN_NAME}, {SOURCE_ID_COLUMN_NAME}, {FILE_ID_COLUMN_NAME}, {CHUNK_COLUMN_NAME}, {URL_COLUMN_NAME}, {TIMESTAMP_COLUMN_NAME}, {METADATA_COLUMN_NAME})
+        SELECT {', '.join(select_parts)}
+        FROM "{source_schema}"."{source_table}"
+    """
 
-    LOGGER.info(f"Migrated {len(unified_df)} rows from {source_schema}.{source_table} using Python")
+    connection.execute(text(insert_sql))
+    LOGGER.info(f"Migrated {source_schema}.{source_table} using alternative SQL approach")
 
 
 async def _merge_collections(
@@ -99,9 +162,12 @@ async def _merge_collections(
     organization_id: str,
     source_collections: list[tuple[str, str]],  # [(source_id, collection_name), ...]
 ):
-    """Merge multiple source collections into one organization-level collection."""
-    sanitized_org_id = sanitize_filename(organization_id)
-    new_collection_name = f"org_{sanitized_org_id}_collection"
+    """Merge multiple source collections into one organization-level collection with embedding model."""
+    # Use get_sanitize_names to get the correct collection name
+    _, _, new_collection_name = get_sanitize_names(
+        organization_id=organization_id,
+        embedding_model_reference=DEFAULT_EMBEDDING_MODEL,
+    )
 
     if not source_collections:
         return
@@ -310,15 +376,9 @@ def _merge_tables(
             else:
                 select_parts.append(f'"{orig_col}"')
 
-        # Build OBJECT_CONSTRUCT for metadata (Snowflake syntax)
-        # For other DBs, this might need adjustment
-        if metadata_cols:
-            obj_parts = []
-            for col in metadata_cols:
-                obj_parts.append(f"'{col}', \"{col}\"")
-            select_parts.append(f"OBJECT_CONSTRUCT({', '.join(obj_parts)}) AS {METADATA_COLUMN_NAME}")
-        else:
-            select_parts.append(f"OBJECT_CONSTRUCT() AS {METADATA_COLUMN_NAME}")
+        # Build JSON metadata expression (PostgreSQL)
+        metadata_expr = _build_json_metadata_sql(metadata_cols)
+        select_parts.append(f"{metadata_expr} AS {METADATA_COLUMN_NAME}")
 
         # Add source_id
         select_parts.append(f"'{source_id}' AS {SOURCE_ID_COLUMN_NAME}")
@@ -333,22 +393,27 @@ def _merge_tables(
 
         try:
             connection.execute(text(insert_sql))
-            LOGGER.info(f"Copied data from {schema}.{table_name} to {schema_name}.{new_table_name}")
+            LOGGER.info(f"Successfully copied data from {schema}.{table_name} to {schema_name}.{new_table_name}")
         except Exception as e:
-            LOGGER.error(f"Error copying data from {schema}.{table_name}: {str(e)}")
-            # Try alternative approach with Python-based transformation if SQL fails
-            LOGGER.info(f"Attempting Python-based transformation for {schema}.{table_name}")
+            LOGGER.warning(f"Error copying data from {schema}.{table_name}: {str(e)}")
+            # Try alternative SQL approach with different JSON construction
+            LOGGER.info(f"Attempting alternative SQL-based transformation for {schema}.{table_name}")
             try:
-                _migrate_table_with_python(
+                _migrate_table_with_sql_alternative(
                     connection, schema, table_name, schema_name, new_table_name, source_id, source_type
                 )
+                LOGGER.info(f"Successfully migrated {schema}.{table_name} using alternative SQL approach")
             except Exception as e2:
-                LOGGER.error(f"Python-based migration also failed: {str(e2)}")
+                LOGGER.warning(
+                    f"FAILED to migrate table {schema}.{table_name} for source {source_id}. "
+                    f"Both SQL approaches failed. "
+                    f"Primary SQL error: {str(e)}, Alternative SQL error: {str(e2)}. "
+                    f"Old table {schema}.{table_name} will remain unchanged."
+                )
                 continue
 
-        # Drop old table
-        connection.execute(text(f'DROP TABLE IF EXISTS "{schema}"."{table_name}"'))
-        LOGGER.info(f"Dropped old table {schema}.{table_name}")
+        # Note: We do NOT drop old tables - they are kept for safety
+        LOGGER.info(f"Migration completed for {schema}.{table_name} (old table preserved)")
 
 
 def upgrade() -> None:
@@ -361,14 +426,14 @@ def upgrade() -> None:
     """
     connection = op.get_bind()
 
-    # Get ALL sources
+    # Get ALL sources with embedding model reference
     result = connection.execute(
         text(
             """
-            SELECT id, organization_id, database_schema, database_table_name, name, qdrant_collection_name, type
+            SELECT id, organization_id, database_schema, database_table_name, name, qdrant_collection_name, type, embedding_model_reference
             FROM data_sources
             WHERE database_table_name IS NOT NULL
-            ORDER BY organization_id
+            ORDER BY organization_id, embedding_model_reference
         """
         )
     )
@@ -379,44 +444,55 @@ def upgrade() -> None:
         LOGGER.info("No sources found to migrate")
         return
 
-    # Group sources by organization
-    org_sources = {}
-    for source_id, org_id, db_schema, db_table, name, qdrant_collection, source_type in all_sources:
-        if org_id not in org_sources:
-            org_sources[org_id] = []
-        org_sources[org_id].append((source_id, db_schema, db_table, qdrant_collection, name, source_type))
+    # Group sources by organization and embedding model
+    # Each org+model combination gets its own collection
+    org_model_sources = {}
+    for source_id, org_id, db_schema, db_table, name, qdrant_collection, source_type, embedding_model in all_sources:
+        # Use default embedding model if not provided
+        model_ref = embedding_model or DEFAULT_EMBEDDING_MODEL
+        key = (org_id, model_ref)
+        if key not in org_model_sources:
+            org_model_sources[key] = []
+        org_model_sources[key].append(
+            (source_id, db_schema, db_table, qdrant_collection, name, source_type, model_ref)
+        )
 
     qdrant_service = QdrantService.from_defaults()
 
-    # Process each organization
-    for org_id, sources in org_sources.items():
-        LOGGER.info(f"Processing organization {org_id} with {len(sources)} sources")
+    # Process each organization+embedding_model combination
+    for (org_id, embedding_model), sources in org_model_sources.items():
+        LOGGER.info(
+            f"Processing organization {org_id} with embedding model {embedding_model} - {len(sources)} sources"
+        )
 
         # Prepare data for merging
         source_tables = []
         source_collections = []
 
-        for source_id, db_schema, db_table, qdrant_collection, name, source_type in sources:
+        for source_id, db_schema, db_table, qdrant_collection, name, source_type, emb_model in sources:
             if db_table:
                 source_tables.append((str(source_id), db_schema, db_table, source_type))
             if qdrant_collection:
                 source_collections.append((str(source_id), qdrant_collection))
 
-        # Merge tables
+        # Merge tables (tables are shared across all models in an org)
         if source_tables:
             _merge_tables(connection, str(org_id), source_tables)
 
-        # Merge collections
+        # Merge collections (collections are per org+model)
         if source_collections:
-            asyncio.run(_merge_collections(connection, qdrant_service, str(org_id), source_collections))
+            asyncio.run(
+                _merge_collections(connection, qdrant_service, str(org_id), source_collections, embedding_model)
+            )
 
         # Update data_sources table with new table/collection names and public schema
-        sanitized_org_id = sanitize_filename(str(org_id))
-        new_table_name = f"org_{sanitized_org_id}_chunks"
-        new_collection_name = f"org_{sanitized_org_id}_collection"
-        new_schema_name = "public"
+        # Use get_sanitize_names to get the correct names based on org and embedding model
+        new_schema_name, new_table_name, new_collection_name = get_sanitize_names(
+            organization_id=str(org_id),
+            embedding_model_reference=embedding_model,
+        )
 
-        for source_id, db_schema, db_table, qdrant_collection, name, source_type in sources:
+        for source_id, db_schema, db_table, qdrant_collection, name, source_type, emb_model in sources:
             connection.execute(
                 text(
                     """

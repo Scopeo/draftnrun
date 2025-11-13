@@ -258,10 +258,10 @@ async def _ingest_folder_source(
             ingestion_task=ingestion_task,
         )
         return
+    embedding_model_ref = f"{embedding_service._provider}:{embedding_service._model_name}"
     db_table_schema, db_table_name, qdrant_collection_name = get_sanitize_names(
-        source_id=str(source_id),
         organization_id=organization_id,
-        source_type=source_type,
+        embedding_model_reference=embedding_model_ref,
     )
 
     LOGGER.info(f"Table schema in ingestion : {db_table_schema}")
@@ -274,7 +274,7 @@ async def _ingest_folder_source(
         database_table_name=db_table_name,
         qdrant_collection_name=qdrant_collection_name,
         qdrant_schema=UNIFIED_QDRANT_SCHEMA.to_dict(),
-        embedding_model_reference=f"{embedding_service._provider}:{embedding_service._model_name}",
+        embedding_model_reference=embedding_model_ref,
     )
     if settings.INGESTION_DB_URL is None:
         raise ValueError("INGESTION_DB_URL is not set")

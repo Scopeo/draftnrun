@@ -1,5 +1,7 @@
 from uuid import UUID
 
+from sqlalchemy.orm import Session
+
 from engine.storage_service.local_service import SQLLocalService
 from ada_backend.schemas.ingestion_database_schema import (
     PaginatedChunkDataResponse,
@@ -9,6 +11,9 @@ from ada_backend.schemas.ingestion_database_schema import (
 from ingestion_script.utils import get_sanitize_names, SOURCE_ID_COLUMN_NAME
 from engine.storage_service.db_utils import DBDefinition
 from settings import settings
+from ada_backend.database import get_db_session
+from ada_backend.repositories.source_repository import get_data_source_by_id
+from ada_backend.services.errors import SourceNotFound
 
 
 def get_sql_local_service_for_ingestion() -> SQLLocalService:
@@ -22,8 +27,8 @@ def create_table_in_ingestion_db(
 ) -> tuple[str, DBDefinition]:
     sql_local_service = get_sql_local_service_for_ingestion()
     schema_name, table_name, qdrant_collection_name = get_sanitize_names(
-        source_id=str(source_id),
         organization_id=str(organization_id),
+        embedding_model_reference=None,
     )
     sql_local_service.create_table(
         table_name=table_name,
@@ -34,16 +39,18 @@ def create_table_in_ingestion_db(
 
 
 def get_paginated_chunks_from_ingestion_db(
-    organization_id: UUID,
+    session: Session,
     source_id: UUID,
     page: int,
     page_size: int,
 ) -> PaginatedChunkDataResponse:
     sql_local_service = get_sql_local_service_for_ingestion()
-    schema_name, table_name, qdrant_collection_name = get_sanitize_names(
-        source_id=str(source_id),
-        organization_id=str(organization_id),
-    )
+
+    source = get_data_source_by_id(session, source_id)
+    if not source:
+        raise SourceNotFound(source_id)
+    schema_name = source.database_schema
+    table_name = source.database_table_name
     # All sources share tables, so always filter by source_id
     source_id_filter = f"{SOURCE_ID_COLUMN_NAME} = '{source_id}'"
 
@@ -60,16 +67,20 @@ def get_paginated_chunks_from_ingestion_db(
 
 
 def update_chunk_info_in_ingestion_db(
+    session: Session,
     organization_id: UUID,
     source_id: UUID,
     chunk_id: str,
     update_request: UpdateChunk,
 ) -> ChunkData:
     sql_local_service = get_sql_local_service_for_ingestion()
-    schema_name, table_name, qdrant_collection_name = get_sanitize_names(
-        source_id=str(source_id),
-        organization_id=str(organization_id),
-    )
+    source = get_data_source_by_id(session, source_id)
+    if not source:
+        raise SourceNotFound(source_id)
+
+    # Use information from database for updates (not get_sanitize_names)
+    schema_name = source.database_schema
+    table_name = source.database_table_name
 
     source_id_filter = f"{SOURCE_ID_COLUMN_NAME} = '{source_id}'"
     sql_local_service.update_row(
@@ -91,18 +102,20 @@ def update_chunk_info_in_ingestion_db(
 
 
 def delete_chunks_from_ingestion_db(
-    organization_id: UUID,
+    session: Session,
     source_id: UUID,
     chunk_ids: list[str],
 ):
     sql_local_service = get_sql_local_service_for_ingestion()
-    schema_name, table_name, qdrant_collection_name = get_sanitize_names(
-        source_id=str(source_id),
-        organization_id=str(organization_id),
-    )
-    # All sources share tables, so always filter by source_id
-    source_id_filter = f"{SOURCE_ID_COLUMN_NAME} = '{source_id}'"
+    source = get_data_source_by_id(session, source_id)
+    if not source:
+        raise SourceNotFound(source_id)
 
+    # Use information from database for updates (not get_sanitize_names)
+    schema_name = source.database_schema
+    table_name = source.database_table_name
+
+    source_id_filter = f"{SOURCE_ID_COLUMN_NAME} = '{source_id}'"
     sql_local_service.delete_rows_from_table(
         table_name=table_name,
         schema_name=schema_name,

@@ -73,6 +73,16 @@ class EnvironmentNotFound(Exception):
         super().__init__(f"Environment '{environment}' not found for project: {project_id}")
 
 
+class QAError(Exception):
+    pass
+
+
+class SourceNotFound(Exception):
+    def __init__(self, source_id: UUID):
+        self.source_id = source_id
+        super().__init__(f"Source not found: {source_id}")
+
+
 class InvalidAgentTemplate(Exception):
     def __init__(self, template_project_id: UUID, template_graph_runner_id: UUID):
         self.template_project_id = template_project_id
