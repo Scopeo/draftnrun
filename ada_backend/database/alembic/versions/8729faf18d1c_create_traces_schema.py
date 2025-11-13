@@ -148,12 +148,15 @@ def upgrade() -> None:
             source_tables = source_inspector.get_table_names()
             tables_to_migrate = ["spans", "span_messages", "organization_usage"]
 
-            # Validate all required tables exist before starting migration
+            # Check if tables exist in source database
+            # If not, we're starting from scratch - nothing to migrate
             missing_tables = [table for table in tables_to_migrate if table not in source_tables]
             if missing_tables:
-                error_msg = f"Required tables not found in source database: {', '.join(missing_tables)}"
-                LOGGER.error(error_msg)
-                raise ValueError(error_msg)
+                LOGGER.info(
+                    f"Tables not found in source database: {', '.join(missing_tables)}. "
+                    "Starting from scratch - no data to migrate."
+                )
+                return
 
             with source_engine.connect() as source_conn:
                 for table_name in tables_to_migrate:
