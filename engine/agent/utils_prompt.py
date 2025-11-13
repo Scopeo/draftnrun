@@ -1,6 +1,8 @@
 import string
 import logging
 
+from engine.agent.errors import MissingKeyFromPromptTemplateError
+
 LOGGER = logging.getLogger(__name__)
 
 
@@ -8,7 +10,7 @@ def fill_prompt_template_with_dictionary(input_dict: dict, prompt_template: str,
     """
     Fills the system prompt with only the keys required from input_dict.
     Ensures all values used can be converted to string.
-    Raises ValueError for missing keys or uncastable values.
+    Raises MissingKeyFromPromptTemplateError for missing keys or ValueError for uncastable values.
     """
     if not input_dict:
         return prompt_template
@@ -24,7 +26,7 @@ def fill_prompt_template_with_dictionary(input_dict: dict, prompt_template: str,
             f"{input_dict}. \n Missing keys are : {missing_keys}"
         )
         LOGGER.error(error_message)
-        raise ValueError(error_message)
+        raise MissingKeyFromPromptTemplateError(error_message)
 
     filtered_input = {}
     for key in prompt_keys:
