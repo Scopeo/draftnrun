@@ -8,6 +8,7 @@ from sqlalchemy.dialects import postgresql
 
 from settings import settings
 from ada_backend.database.models import Base
+from ada_backend.database import trace_models  # noqa: F401  # Import to register trace models with Base.metadata
 from ada_backend.database.setup_db import get_db_url
 
 # this is the Alembic Config object, which provides

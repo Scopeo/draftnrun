@@ -3,6 +3,7 @@ from contextlib import contextmanager
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 from ada_backend.database.models import Base
+from ada_backend.database import trace_models  # noqa: F401  # Import to register trace models with Base.metadata
 from settings import settings
 
 

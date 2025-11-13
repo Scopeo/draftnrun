@@ -13,16 +13,16 @@ from sqlalchemy import func, select, create_engine, update
 from sqlalchemy.orm import sessionmaker
 
 from engine.trace.nested_utils import split_nested_keys
-from engine.trace import models
-from settings import settings
+from ada_backend.database.trace_models import Span, SpanMessage, OrganizationUsage
+from ada_backend.database.setup_db import get_db_url
 
 LOGGER = logging.getLogger(__name__)
 
 
 def get_session_trace():
-    if not settings.TRACES_DB_URL:
-        raise ValueError("TRACES_DB_URL is not set")
-    engine = create_engine(settings.TRACES_DB_URL, echo=False)
+    """Get a database session for traces using the ada_backend database."""
+    db_url = get_db_url()
+    engine = create_engine(db_url, echo=False)
     Session = sessionmaker(bind=engine)
     session = Session()
     return session
@@ -107,14 +107,15 @@ class SQLSpanExporter(SpanExporter):
         """Get org_id and org_llm_providers from ancestors of the span."""
         while parent_id:
             span = self.session.execute(
-                select(models.Span.attributes, models.Span.parent_id).where(models.Span.span_id == parent_id)
+                select(Span.attributes, Span.parent_id).where(Span.span_id == parent_id)
             ).first()
             if not span:
                 break
             attributes, parent_id = span
             if attributes:
                 try:
-                    attrs = json.loads(attributes)
+                    # attributes is already a dict (JSONB), no need to parse
+                    attrs = attributes if isinstance(attributes, dict) else json.loads(attributes)
                 except Exception:
                     continue
                 org_id = attrs.get("organization_id")
@@ -137,10 +138,10 @@ class SQLSpanExporter(SpanExporter):
             if accumulation := (
                 self.session.execute(
                     select(
-                        func.sum(models.Span.cumulative_error_count),
-                        func.sum(models.Span.cumulative_llm_token_count_prompt),
-                        func.sum(models.Span.cumulative_llm_token_count_completion),
-                    ).where(models.Span.parent_id == json_span["context"]["span_id"])
+                        func.sum(Span.cumulative_error_count),
+                        func.sum(Span.cumulative_llm_token_count_prompt),
+                        func.sum(Span.cumulative_llm_token_count_completion),
+                    ).where(Span.parent_id == json_span["context"]["span_id"])
                 )
             ).first():
                 cumulative_error_count += cast(int, accumulation[0] or 0)
@@ -159,7 +160,7 @@ class SQLSpanExporter(SpanExporter):
             input, output, formatted_attributes = extract_messages_from_attributes(formatted_attributes)
 
             openinference_span_kind = json_span["attributes"].get(SpanAttributes.OPENINFERENCE_SPAN_KIND, "UNKNOWN")
-            span_row = models.Span(
+            span_row = Span(
                 span_id=json_span["context"]["span_id"],
                 trace_rowid=json_span["context"]["trace_id"],
                 parent_id=json_span["parent_id"],
@@ -182,30 +183,26 @@ class SQLSpanExporter(SpanExporter):
                 graph_runner_id=graph_runner_id,
                 tag_name=tag_name,
             )
-            ancestors = (
-                select(models.Span.id, models.Span.parent_id)
-                .where(models.Span.span_id == span_row.parent_id)
-                .cte(recursive=True)
-            )
+            ancestors = select(Span.id, Span.parent_id).where(Span.span_id == span_row.parent_id).cte(recursive=True)
             child = ancestors.alias()
             ancestors = ancestors.union_all(
-                select(models.Span.id, models.Span.parent_id).join(child, models.Span.span_id == child.c.parent_id)
+                select(Span.id, Span.parent_id).join(child, Span.span_id == child.c.parent_id)
             )
             self.session.execute(
-                update(models.Span)
-                .where(models.Span.id.in_(select(ancestors.c.id)))
+                update(Span)
+                .where(Span.id.in_(select(ancestors.c.id)))
                 .values(
-                    cumulative_error_count=models.Span.cumulative_error_count + cumulative_error_count,
-                    cumulative_llm_token_count_prompt=models.Span.cumulative_llm_token_count_prompt
+                    cumulative_error_count=Span.cumulative_error_count + cumulative_error_count,
+                    cumulative_llm_token_count_prompt=Span.cumulative_llm_token_count_prompt
                     + cumulative_llm_token_count_prompt,
-                    cumulative_llm_token_count_completion=models.Span.cumulative_llm_token_count_completion
+                    cumulative_llm_token_count_completion=Span.cumulative_llm_token_count_completion
                     + cumulative_llm_token_count_completion,
                 )
             )
             self.session.add(span_row)
 
             self.session.add(
-                models.SpanMessage(
+                SpanMessage(
                     span_id=span_row.span_id,
                     input_content=json.dumps(input) if input is not None else None,
                     output_content=json.dumps(output) if output is not None else None,
@@ -233,17 +230,17 @@ class SQLSpanExporter(SpanExporter):
 
         for org_id, tokens in org_token_counts.items():
             result = self.session.execute(
-                select(models.OrganizationUsage).where(models.OrganizationUsage.organization_id == org_id)
+                select(OrganizationUsage).where(OrganizationUsage.organization_id == org_id)
             ).first()
 
             if result:
                 self.session.execute(
-                    update(models.OrganizationUsage)
-                    .where(models.OrganizationUsage.organization_id == org_id)
-                    .values(total_tokens=models.OrganizationUsage.total_tokens + tokens)
+                    update(OrganizationUsage)
+                    .where(OrganizationUsage.organization_id == org_id)
+                    .values(total_tokens=OrganizationUsage.total_tokens + tokens)
                 )
             else:
-                self.session.add(models.OrganizationUsage(organization_id=org_id, total_tokens=tokens))
+                self.session.add(OrganizationUsage(organization_id=org_id, total_tokens=tokens))
         self.session.commit()
         return SpanExportResult.SUCCESS
 
