@@ -69,7 +69,9 @@ def schedule_sync_job(interval_seconds: int = SYNC_CRON_JOBS_WITH_APSCHEDULER_IN
 
 
 def log_sync_job_status(job_id: str, event: JobExecutionEvent):
-    # We track failures in logs for cron jobs but not for the system jobs.
+    """Log the status of the sync job execution.
+    We track failures in logs for cron jobs but not for the system jobs.
+    """
     if job_id == ID_SYSTEM_SYNC_CRON_JOBS:
         if event.exception:
             error_msg = str(event.exception)

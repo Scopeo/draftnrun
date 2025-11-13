@@ -500,6 +500,13 @@ Run the worker:
 uv run python -m ada_ingestion_system.worker.main
 ```
 
+### Set up and run the Cron system (Apscheduler)
+Run this command in a terminal:
+
+```bash
+uv run python -m ada_backend.run_scheduler
+```
+
 # Backend Observability Stack
 
 Draft'n run includes a comprehensive observability stack for monitoring, tracing, and performance analysis. The stack uses industry-standard open-source tools that provide production-ready monitoring capabilities.
