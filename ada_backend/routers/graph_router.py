@@ -119,7 +119,7 @@ async def update_project_pipeline(
         # Check if this is a draft mode validation error
         if "only draft versions" in error_msg.lower():
             raise HTTPException(status_code=403, detail="Only the draft version can be modified") from e
-        raise HTTPException(status_code=400, detail="Bad request") from e
+        raise HTTPException(status_code=400, detail=f"Internal server error: {error_msg}") from e
 
 
 @router.post(

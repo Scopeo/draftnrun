@@ -209,7 +209,7 @@ async def run_env_agent_endpoint(
         raise HTTPException(status_code=503, detail=f"Database connection error: {str(e)}") from e
     except ValueError as e:
         LOGGER.error(f"Failed to run agent for project {project_id} in environment {env}: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=400, detail="Bad request") from e
+        raise HTTPException(status_code=400, detail=f"Internal server error: {str(e)}") from e
     except Exception as e:
         LOGGER.error(f"Failed to run agent for project {project_id} in environment {env}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error") from e
@@ -317,7 +317,7 @@ async def chat(
             f"Failed to run agent chat for project {project_id}, graph_runner {graph_runner_id}: {str(e)}",
             exc_info=True,
         )
-        raise HTTPException(status_code=400, detail="Bad request") from e
+        raise HTTPException(status_code=400, detail=f"Internal server error: {str(e)}") from e
     except Exception as e:
         LOGGER.error(
             f"Failed to run agent chat for project {project_id}, graph_runner {graph_runner_id}: {str(e)}",
@@ -373,7 +373,7 @@ async def chat_env(
         LOGGER.error(
             f"Failed to run agent chat for project {project_id} in environment {env}: {str(e)}", exc_info=True
         )
-        raise HTTPException(status_code=400, detail="Bad request") from e
+        raise HTTPException(status_code=400, detail=f"Internal server error: {str(e)}") from e
     except Exception as e:
         LOGGER.error(
             f"Failed to run agent chat for project {project_id} in environment {env}: {str(e)}", exc_info=True
