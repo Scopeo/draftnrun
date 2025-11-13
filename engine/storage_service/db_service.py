@@ -81,6 +81,18 @@ class DBService(ABC):
     ) -> None:
         pass
 
+    @abstractmethod
+    def _fetch_column_as_set(
+        self,
+        table_name: str,
+        column_name: str,
+        schema_name: Optional[str] = None,
+    ) -> set:
+        """
+        Fetch all values from a specific column as a set.
+        """
+        pass
+
     def update_table(
         self,
         new_df: pd.DataFrame,
@@ -113,6 +125,14 @@ class DBService(ABC):
                 new_df[col] = new_df[col].astype(object).where(new_df[col].notna(), None)
             self.insert_df_to_table(df=new_df, table_name=table_name, schema_name=schema_name)
         else:
+            # For checking existing IDs and preventing duplicates, get all IDs as a set
+            all_existing_ids = self._fetch_column_as_set(
+                table_name=table_name,
+                column_name=id_column_name,
+                schema_name=schema_name,
+            )
+
+            # For UPDATE operations, use the filtered query if provided
             query = (
                 f"SELECT {id_column_name}, {timestamp_column_name} FROM {target_table_name}"
                 if timestamp_column_name
@@ -145,7 +165,7 @@ class DBService(ABC):
                 schema_name=schema_name,
             )
 
-            new_df["exists"] = new_df[id_column_name].isin(old_df[id_column_name].values)
+            new_df["exists"] = new_df[id_column_name].isin(all_existing_ids)
             LOGGER.info(f"Found {new_df['exists'][new_df['exists']].sum()} existing rows in the table")
             new_data = new_df[~new_df["exists"]].copy()
             new_data.drop(columns=["exists"], inplace=True)
