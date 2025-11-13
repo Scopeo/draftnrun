@@ -25,6 +25,9 @@ from ada_backend.database.seed.utils import (
     COMPONENT_VERSION_UUIDS,
     ParameterLLMConfig,
     build_completion_service_config_definitions,
+    build_parameters_group,
+    build_components_parameters_assignments_to_parameter_groups,
+    build_parameters_group_definitions,
 )
 from ada_backend.database.seed.constants import (
     COMPLETION_MODEL_IN_DB,
@@ -38,7 +41,6 @@ from engine.agent.synthesizer_prompts import (
     get_hybrid_synthetizer_prompt_template,
 )
 
-# Parameter Group UUIDs for RAG v2
 RAG_V2_PARAMETER_GROUP_UUIDS = {
     "knowledge_parameters": UUID("1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d"),
     "llm_parameters": UUID("2b3c4d5e-6f7a-4b8c-9d0e-1f2a3b4c5d6e"),
@@ -1193,15 +1195,7 @@ def seed_rag_v2_parameter_groups(session: Session):
             name="LLM Parameters",
         ),
     ]
-
-    for group in parameter_groups:
-        existing_group = session.query(db.ParameterGroup).filter_by(id=group.id).first()
-        if existing_group:
-            existing_group.name = group.name
-        else:
-            session.add(group)
-
-    session.flush()
+    build_parameters_group(session, parameter_groups)
 
     component_parameter_groups = [
         db.ComponentParameterGroup(
@@ -1216,21 +1210,9 @@ def seed_rag_v2_parameter_groups(session: Session):
         ),
     ]
 
-    for component_parameter_group in component_parameter_groups:
-        existing_cpg = (
-            session.query(db.ComponentParameterGroup)
-            .filter_by(
-                component_version_id=component_parameter_group.component_version_id,
-                parameter_group_id=component_parameter_group.parameter_group_id,
-            )
-            .first()
-        )
-        if existing_cpg:
-            existing_cpg.group_order_within_component = component_parameter_group.group_order_within_component
-        else:
-            session.add(component_parameter_group)
+    build_parameters_group_definitions(session, component_parameter_groups)
 
-    session.flush()  # Ensure relationships are saved before updating parameters
+    build_parameters_group_definitions(session, component_parameter_groups)
 
     parameter_group_assignments = {
         # Knowledge Parameters Group
@@ -1289,10 +1271,6 @@ def seed_rag_v2_parameter_groups(session: Session):
         },
     }
 
-    for param_id, group_info in parameter_group_assignments.items():
-        param_def = session.query(db.ComponentParameterDefinition).filter_by(id=param_id).first()
-        if param_def:
-            param_def.parameter_group_id = group_info["parameter_group_id"]
-            param_def.parameter_order_within_group = group_info["parameter_order_within_group"]
+    build_components_parameters_assignments_to_parameter_groups(session, parameter_group_assignments)
 
     session.commit()
