@@ -16,15 +16,14 @@ from typing import Optional
 from uuid import UUID
 
 from apscheduler.triggers.interval import IntervalTrigger
-from apscheduler.events import JobExecutionEvent
 
 from ada_backend.database.setup_db import get_db_session
 from ada_backend.repositories.cron_repository import get_all_enabled_cron_jobs
+from ada_backend.scheduler.utils import ID_SYSTEM_SYNC_CRON_JOBS
 
 LOGGER = logging.getLogger(__name__)
 
 SYNC_CRON_JOBS_WITH_APSCHEDULER_INTERVAL_SECONDS = 30
-ID_SYSTEM_SYNC_CRON_JOBS = "00000000-0000-0000-0000-000000000007"
 
 # Lock to prevent concurrent sync runs
 _sync_lock: Optional[asyncio.Lock] = None
@@ -66,19 +65,6 @@ def schedule_sync_job(interval_seconds: int = SYNC_CRON_JOBS_WITH_APSCHEDULER_IN
     except Exception as e:
         LOGGER.error(f"Failed to schedule sync job: {e}")
         raise
-
-
-def log_sync_job_status(job_id: str, event: JobExecutionEvent):
-    """Log the status of the sync job execution.
-    We track failures in logs for cron jobs but not for the system jobs.
-    """
-    if job_id == ID_SYSTEM_SYNC_CRON_JOBS:
-        if event.exception:
-            error_msg = str(event.exception)
-            LOGGER.error(f"Reconciliation job {job_id} failed: {error_msg}", exc_info=event.exception)
-        else:
-            LOGGER.debug(f"Reconciliation job {job_id} completed successfully")
-    return
 
 
 def _sync_and_load_jobs():

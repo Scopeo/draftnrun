@@ -18,10 +18,8 @@ from ada_backend.repositories.cron_repository import (
 from ada_backend.services.cron.registry import CRON_REGISTRY
 from engine.trace.trace_context import set_trace_manager
 from engine.trace.trace_manager import TraceManager
-from ada_backend.scheduler.sync_cron_jobs_with_scheduler import (
-    log_sync_job_status,
-    schedule_sync_job,
-)
+from ada_backend.scheduler.utils import log_sync_job_status
+from ada_backend.scheduler.sync_cron_jobs_with_scheduler import schedule_sync_job
 
 LOGGER = logging.getLogger(__name__)
 
