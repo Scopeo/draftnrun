@@ -49,7 +49,6 @@ DATETIME_FORMATS = [
 
 
 def parse_datetime(date_string: str) -> Optional[datetime]:
-
     if not date_string:
         return None
 
@@ -552,7 +551,6 @@ class QdrantService:
             return
 
         if current_type == field_schema_type.value:
-
             LOGGER.debug(
                 "Payload index '%s' already exists with type '%s' in collection '%s'.",
                 field_name,
@@ -574,6 +572,35 @@ class QdrantService:
         create_endpoint = f"/collections/{collection_name}/index"
         payload = {"field_name": field_name, "field_schema": field_schema_type.value}
         await self._send_request_async(method="PUT", endpoint=create_endpoint, payload=payload)
+
+    async def _create_indexes_from_schema(
+        self,
+        collection_name: str,
+        schema: QdrantCollectionSchema,
+    ) -> None:
+        await self.create_index_if_needed_async(
+            collection_name=collection_name,
+            field_name=schema.chunk_id_field,
+            field_schema_type=FieldSchema.KEYWORD,
+        )
+        if schema.metadata_fields_to_keep:
+            for metadata_field in schema.metadata_fields_to_keep:
+                field_type = FieldSchema.KEYWORD  # Default type
+                if schema.metadata_field_types and metadata_field in schema.metadata_field_types:
+                    internal_type = schema.metadata_field_types[metadata_field]
+                    field_type = map_internal_type_to_qdrant_field_schema(internal_type)
+
+                await self.create_index_if_needed_async(
+                    collection_name=collection_name,
+                    field_name=metadata_field,
+                    field_schema_type=field_type,
+                )
+        if schema.last_edited_ts_field:
+            await self.create_index_if_needed_async(
+                collection_name=collection_name,
+                field_name=schema.last_edited_ts_field,
+                field_schema_type=FieldSchema.DATETIME,
+            )
 
     def add_chunks(
         self,
@@ -603,29 +630,9 @@ class QdrantService:
         Add chunks to the Qdrant collection asynchronously.
         """
         schema = self._get_schema(collection_name)
-        await self.create_index_if_needed_async(
-            collection_name=collection_name,
-            field_name=schema.chunk_id_field,
-            field_schema_type=FieldSchema.KEYWORD,
-        )
-        if schema.metadata_fields_to_keep:
-            for metadata_field in schema.metadata_fields_to_keep:
-                field_type = FieldSchema.KEYWORD  # Default type
-                if schema.metadata_field_types and metadata_field in schema.metadata_field_types:
-                    internal_type = schema.metadata_field_types[metadata_field]
-                    field_type = map_internal_type_to_qdrant_field_schema(internal_type)
 
-            await self.create_index_if_needed_async(
-                collection_name=collection_name,
-                field_name=metadata_field,
-                field_schema_type=field_type,
-            )
-        if schema.last_edited_ts_field:
-            await self.create_index_if_needed_async(
-                collection_name=collection_name,
-                field_name=schema.last_edited_ts_field,
-                field_schema_type=FieldSchema.DATETIME,
-            )
+        await self._create_indexes_from_schema(collection_name=collection_name, schema=schema)
+
         for i in range(0, len(list_chunks), self._max_chunks_to_add):
             current_chunk_batch = list_chunks[i : i + self._max_chunks_to_add]
             list_embeddings = await self._build_vectors_async(
@@ -1103,30 +1110,8 @@ class QdrantService:
 
         schema = self._get_schema(collection_name)
 
-        await self.create_index_if_needed_async(
-            collection_name=collection_name,
-            field_name=schema.chunk_id_field,
-            field_schema_type=FieldSchema.KEYWORD,
-        )
-        if schema.metadata_fields_to_keep:
-            for metadata_field in schema.metadata_fields_to_keep:
-                field_type = FieldSchema.KEYWORD  # Default type
-                if schema.metadata_field_types and metadata_field in schema.metadata_field_types:
-                    internal_type = schema.metadata_field_types[metadata_field]
-                    field_type = map_internal_type_to_qdrant_field_schema(internal_type)
-                LOGGER.debug(f"Creating index for {metadata_field} with type {field_type}")
-                await self.create_index_if_needed_async(
-                    collection_name=collection_name,
-                    field_name=metadata_field,
-                    field_schema_type=field_type,
-                )
-        if schema.last_edited_ts_field:
-            LOGGER.debug(f"Creating index datetime for {schema.last_edited_ts_field} with type DATETIME")
-            await self.create_index_if_needed_async(
-                collection_name=collection_name,
-                field_name=schema.last_edited_ts_field,
-                field_schema_type=FieldSchema.DATETIME,
-            )
+        # TODO: Remove when production qdrant collections have proper indexes
+        await self._create_indexes_from_schema(collection_name=collection_name, schema=schema)
 
         all_points = await self.get_points_async(
             collection_name=collection_name,
