@@ -280,6 +280,21 @@ class SQLLocalService(DBService):
     def _fetch_sql_query_as_dataframe(self, query: str) -> pd.DataFrame:
         return pd.read_sql(query, self.engine)
 
+    def _fetch_column_as_set(
+        self,
+        table_name: str,
+        column_name: str,
+        schema_name: Optional[str] = None,
+    ) -> set:
+        """
+        Fetch all values from a specific column as a set.
+        """
+        table = self.get_table(table_name, schema_name)
+        with self.Session() as session:
+            stmt = sqlalchemy.select(table.c[column_name])
+            result = session.execute(stmt)
+            return set(result.scalars().all())
+
     def _refresh_table_from_df(
         self,
         df: pd.DataFrame,

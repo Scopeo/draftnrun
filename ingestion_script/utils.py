@@ -2,7 +2,7 @@ import logging
 import inspect
 from typing import Optional
 from uuid import UUID
-from datetime import datetime
+from datetime import datetime, timezone
 import uuid
 import requests
 
@@ -331,7 +331,7 @@ def resolve_sql_timestamp_filter(timestamp_filter: Optional[str]) -> Optional[st
         return timestamp_filter
 
     filter_with_resolved_functions = timestamp_filter.strip()
-    current_date_string = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    current_date_string = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
     for func in [
         "NOW()",
         "now()",

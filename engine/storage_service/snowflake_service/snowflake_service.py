@@ -246,6 +246,14 @@ class SnowflakeService(DBService):
         df.columns = df.columns.str.lower()
         return df
 
+    def _fetch_column_as_set(
+        self,
+        table_name: str,
+        column_name: str,
+        schema_name: Optional[str] = None,
+    ) -> set:
+        pass
+
     @staticmethod
     def convert_list_to_sql_array(items: list) -> str:
         """
