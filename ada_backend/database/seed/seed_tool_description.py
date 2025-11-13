@@ -33,7 +33,7 @@ TOOL_DESCRIPTION_UUIDS = {
     "default_rag_tool_description": UUID("e0f7719c-cc5c-4c71-9db0-b161875d1144"),
     "default_run_sql_query_tool_description": UUID("949c27b4-5403-42b0-bad6-1c71a7a4e5d1"),
     "default_tool_description": UUID("15e1198f-850a-4f66-91d7-34286de52795"),
-    "default_web_search_openai_tool_description": UUID("b6d6d281-6c75-4d1b-a750-40b53deea3f6"),
+    "default_web_search_openai_tool_description": UUID("b6d6d281-6c75-4d1b-a750-40b53deea3f5"),
     "default_document_enhanced_llm_agent": UUID("d01978d9-c785-4492-9e71-7af0aa8c05f7"),
     "default_input_tool_description": UUID("5be22376-7d08-486b-a004-b495bae58f77"),
     "default_filter_tool_description": UUID("6cf33487-8e19-597c-b115-c5a6cbf69a88"),

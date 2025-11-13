@@ -906,21 +906,25 @@ class WebSearchService(LLMService):
         super().__init__(trace_manager, provider, model_name, api_key, base_url)
 
     @with_usage_check
-    def web_search(self, query: str) -> str:
-        return asyncio.run(self.web_search_async(query))
+    def web_search(self, query: str, allowed_domains: Optional[list[str]] = None) -> str:
+        return asyncio.run(self.web_search_async(query, allowed_domains))
 
     @with_async_usage_check
-    async def web_search_async(self, query: str) -> str:
+    async def web_search_async(self, query: str, allowed_domains: Optional[list[str]] = None) -> str:
         span = get_current_span()
         match self._provider:
             case "openai":
                 import openai
 
                 client = openai.AsyncOpenAI(api_key=self._api_key)
+                if allowed_domains:
+                    tools = [{"type": "web_search", "filters": {"allowed_domains": allowed_domains}}]
+                else:
+                    tools = [{"type": "web_search_preview"}]
                 response = await client.responses.create(
                     model=self._model_name,
                     input=query,
-                    tools=[{"type": "web_search_preview"}],
+                    tools=tools,
                 )
                 span.set_attributes(
                     {

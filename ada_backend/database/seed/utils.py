@@ -99,6 +99,7 @@ COMPONENT_VERSION_UUIDS: dict[str, UUID] = {
     "api_call_tool": UUID("674b8c1d-0cc6-4887-be92-e3a2906830ed"),
     "tavily_agent": UUID("449f8f59-7aff-4b2d-b244-d2fcc09f6651"),
     "web_search_openai_agent": UUID("d6020df0-a7e0-4d82-b731-0a653beef2e6"),
+    "web_search_openai_agent_v2": UUID("d6020df0-a7e0-4d82-b731-0a653beef2e5"),
     "sql_tool": UUID("f7ddbfcb-6843-4ae9-a15b-40aa565b955b"),
     "sql_db_service": UUID("4014e6bd-9d2d-4142-8bdc-6dd7d9068011"),
     "llm_call": UUID("7a039611-49b3-4bfd-b09b-c0f93edf3b79"),
