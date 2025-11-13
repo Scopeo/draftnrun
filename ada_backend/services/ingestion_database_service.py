@@ -11,7 +11,6 @@ from ada_backend.schemas.ingestion_database_schema import (
 from ingestion_script.utils import get_sanitize_names, SOURCE_ID_COLUMN_NAME
 from engine.storage_service.db_utils import DBDefinition
 from settings import settings
-from ada_backend.database import get_db_session
 from ada_backend.repositories.source_repository import get_data_source_by_id
 from ada_backend.services.errors import SourceNotFound
 

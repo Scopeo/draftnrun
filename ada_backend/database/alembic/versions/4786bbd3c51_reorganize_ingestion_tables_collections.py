@@ -15,7 +15,10 @@ from sqlalchemy import text
 from alembic import op
 
 from data_ingestion.utils import sanitize_filename
-from engine.qdrant_service import QdrantService
+from engine.qdrant_service import QdrantService, QdrantCollectionSchema
+from engine.llm_services.llm_service import EmbeddingService
+from engine.trace.trace_manager import TraceManager
+from ada_backend.services.entity_factory import get_llm_provider_and_model
 from ingestion_script.utils import (
     SOURCE_ID_COLUMN_NAME,
     METADATA_COLUMN_NAME,
@@ -26,7 +29,7 @@ from ingestion_script.utils import (
     get_sanitize_names,
     DEFAULT_EMBEDDING_MODEL,
 )
-from ingestion_script.ingest_folder_source import TIMESTAMP_COLUMN_NAME
+from ingestion_script.ingest_folder_source import TIMESTAMP_COLUMN_NAME, UNIFIED_QDRANT_SCHEMA
 
 # revision identifiers, used by Alembic.
 revision: str = "4786bbd3c51"
@@ -282,7 +285,7 @@ def _merge_tables(
         return
 
     sanitized_org_id = sanitize_filename(organization_id)
-    new_table_name = f"org_{sanitized_org_id}_chunks"
+    new_table_name = f"org_{sanitized_org_id}"
     schema_name = "public"  # Use public schema for all tables
 
     LOGGER.info(f"Merging {len(source_tables)} tables into {schema_name}.{new_table_name}")
@@ -306,10 +309,6 @@ def _merge_tables(
         return
 
     # Create unified table structure
-    # Common columns for all sources
-    from ingestion_script.utils import CHUNK_ID_COLUMN_NAME, CHUNK_COLUMN_NAME, FILE_ID_COLUMN_NAME, URL_COLUMN_NAME
-    from ingestion_script.ingest_folder_source import TIMESTAMP_COLUMN_NAME
-
     # Ensure public schema exists (it should by default, but we'll verify)
     # No need to create public schema as it exists by default
 
@@ -329,10 +328,6 @@ def _merge_tables(
     connection.execute(text(create_table_sql))
 
     # Copy data from source tables to new table, transforming to unified structure
-    import json
-    from ingestion_script.utils import CHUNK_ID_COLUMN_NAME, CHUNK_COLUMN_NAME, FILE_ID_COLUMN_NAME, URL_COLUMN_NAME
-    from ingestion_script.ingest_folder_source import TIMESTAMP_COLUMN_NAME
-
     for source_id, schema, table_name, source_type in source_tables:
         # Get column info from source table
         source_table_info = connection.execute(
@@ -468,7 +463,33 @@ def upgrade() -> None:
             (source_id, db_schema, db_table, qdrant_collection, name, source_type, model_ref)
         )
 
-    qdrant_service = QdrantService.from_defaults()
+    # Create a single TraceManager for the entire migration
+    trace_manager = TraceManager(project_name="migration")
+
+    # Create QdrantService for each unique embedding model
+    # Each embedding model needs its own QdrantService instance
+    qdrant_services = {}
+    unique_embedding_models = set()
+    for (org_id, embedding_model), sources in org_model_sources.items():
+        unique_embedding_models.add(embedding_model)
+
+    for embedding_model in unique_embedding_models:
+        try:
+            provider, model_name = get_llm_provider_and_model(embedding_model)
+            embedding_service = EmbeddingService(
+                provider=provider,
+                model_name=model_name,
+                trace_manager=trace_manager,
+            )
+            qdrant_service = QdrantService.from_defaults(
+                embedding_service=embedding_service,
+                default_collection_schema=UNIFIED_QDRANT_SCHEMA,
+            )
+            qdrant_services[embedding_model] = qdrant_service
+            LOGGER.info(f"Created QdrantService for embedding model: {embedding_model}")
+        except Exception as e:
+            LOGGER.error(f"Failed to create QdrantService for embedding model {embedding_model}: {str(e)}")
+            raise
 
     # Process each organization+embedding_model combination
     for (org_id, embedding_model), sources in org_model_sources.items():
@@ -492,7 +513,9 @@ def upgrade() -> None:
 
         # Merge collections (collections are per org+model)
         # NOTE: Old collections are NOT deleted here - will be done in a subsequent PR
+        # Use the QdrantService for this specific embedding model
         if source_collections:
+            qdrant_service = qdrant_services[embedding_model]
             asyncio.run(
                 _merge_collections(connection, qdrant_service, str(org_id), source_collections, embedding_model)
             )
