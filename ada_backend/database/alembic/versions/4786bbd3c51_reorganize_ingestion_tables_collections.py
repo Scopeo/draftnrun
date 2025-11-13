@@ -161,12 +161,17 @@ async def _merge_collections(
     qdrant_service,
     organization_id: str,
     source_collections: list[tuple[str, str]],  # [(source_id, collection_name), ...]
+    embedding_model: str,
 ):
-    """Merge multiple source collections into one organization-level collection with embedding model."""
+    """Merge multiple source collections into one organization-level collection with embedding model.
+
+    NOTE: This function migrates data but does NOT delete old collections.
+    Old collections will be deleted in a subsequent migration/PR.
+    """
     # Use get_sanitize_names to get the correct collection name
     _, _, new_collection_name = get_sanitize_names(
         organization_id=organization_id,
-        embedding_model_reference=DEFAULT_EMBEDDING_MODEL,
+        embedding_model_reference=embedding_model,
     )
 
     if not source_collections:
@@ -259,11 +264,12 @@ async def _merge_collections(
             )
         LOGGER.info(f"Inserted {len(all_points)} points into {new_collection_name}")
 
-    # Delete old collections
-    for source_id, collection_name in source_collections:
-        if await qdrant_service.collection_exists_async(collection_name):
-            await qdrant_service.delete_collection_async(collection_name)
-            LOGGER.info(f"Deleted old collection {collection_name}")
+    # NOTE: Old collections are NOT deleted here to allow for rollback.
+    # They will be deleted in a subsequent migration/PR after verifying the migration was successful.
+    LOGGER.info(
+        f"Migration completed for {new_collection_name}. "
+        f"Old collections ({len(source_collections)} collections) are preserved for now and will be deleted in a subsequent PR."
+    )
 
 
 def _merge_tables(
@@ -418,11 +424,16 @@ def _merge_tables(
 
 def upgrade() -> None:
     """
-    Reorganize ingestion tables and collections:
-    - Merge ALL sources into org-level tables and collections
+    Reorganize ingestion tables and collections (Step 1/2):
+    - Create new unified org-level tables and collections
+    - Migrate data from old per-source tables/collections to new unified ones
     - Add source_id and source_metadata columns
     - Move source-specific fields to metadata JSONB
-    - Update data_sources table with new names
+    - Update data_sources table to point to new unified structures
+
+    NOTE: This migration does NOT delete old tables/collections.
+    Old structures will be deleted in a subsequent migration/PR to allow for rollback.
+    After this migration, all new ingestions will use the new unified structures.
     """
     connection = op.get_bind()
 
@@ -480,6 +491,7 @@ def upgrade() -> None:
             _merge_tables(connection, str(org_id), source_tables)
 
         # Merge collections (collections are per org+model)
+        # NOTE: Old collections are NOT deleted here - will be done in a subsequent PR
         if source_collections:
             asyncio.run(
                 _merge_collections(connection, qdrant_service, str(org_id), source_collections, embedding_model)
@@ -511,7 +523,21 @@ def upgrade() -> None:
                 },
             )
 
-        LOGGER.info(f"Updated data_sources for organization {org_id}")
+        LOGGER.info(f"Updated data_sources for organization {org_id} to point to new unified structures")
+
+    # NOTE: Old tables and collections are NOT deleted in this migration.
+    # They are preserved to allow for rollback and will be deleted in a subsequent PR.
+    # After this migration, all new ingestions will use the new unified structures
+    # (via the updated data_sources table), so no new data will be written to old structures.
+    #
+    # TODO (Next PR): Create a migration to delete old tables and collections:
+    # - Old tables: tables in org_* schemas (not public) or tables named source_* in public schema
+    # - Old collections: collections that don't match the new naming pattern org_{org_id}_{model}_collection
+    # - Only delete after verifying migration was successful and no rollback is needed
+    LOGGER.info(
+        "Migration Step 1/2 completed: New unified structures created and data migrated. "
+        "Old structures preserved for rollback. They will be deleted in a subsequent PR."
+    )
 
 
 def downgrade() -> None:
