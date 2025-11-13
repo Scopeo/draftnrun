@@ -115,6 +115,7 @@ class QdrantCollectionSchema:
     file_id_field: str
     url_id_field: Optional[str] = None
     last_edited_ts_field: Optional[str] = None  # To keep compatibility with Juno data
+    source_id_field: Optional[str] = None  # Field to track which source a chunk belongs to
     metadata_fields_to_keep: Optional[set[str]] = None  # To keep compatibility with Juno data
     metadata_field_types: Optional[dict[str, str]] = None
 
@@ -601,6 +602,12 @@ class QdrantService:
                 field_name=schema.last_edited_ts_field,
                 field_schema_type=FieldSchema.DATETIME,
             )
+        if schema.source_id_field:
+            await self.create_index_if_needed_async(
+                collection_name=collection_name,
+                field_name=schema.source_id_field,
+                field_schema_type=FieldSchema.KEYWORD,
+            )
 
     def add_chunks(
         self,
@@ -649,6 +656,8 @@ class QdrantService:
             }
             if schema.last_edited_ts_field:
                 payload_fields.add(schema.last_edited_ts_field)
+            if schema.source_id_field:
+                payload_fields.add(schema.source_id_field)
             list_payloads = [
                 {
                     "id": self.get_uuid(chunk[schema.chunk_id_field]),
@@ -1132,6 +1141,8 @@ class QdrantService:
                 row[schema.file_id_field] = payload.get(schema.file_id_field)
             if schema.last_edited_ts_field:
                 row[schema.last_edited_ts_field] = payload.get(schema.last_edited_ts_field)
+            if schema.source_id_field:
+                row[schema.source_id_field] = payload.get(schema.source_id_field)
 
             # Add custom metadata fields if any
             metadata_fields = schema.metadata_fields_to_keep or payload.keys()

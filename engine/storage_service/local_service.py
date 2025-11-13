@@ -357,10 +357,26 @@ class SQLLocalService(DBService):
         ids: list[str | int],
         schema_name: Optional[str] = None,
         id_column_name: str = CHUNK_ID_COLUMN,
+        sql_query_filter: Optional[str] = None,
     ):
         table = self.get_table(table_name, schema_name)
         with self.Session() as session:
             delete_stmt = sqlalchemy.delete(table).where(table.c[id_column_name].in_(ids))
+            if sql_query_filter:
+                delete_stmt = delete_stmt.where(text(sql_query_filter))
+            session.execute(delete_stmt)
+            session.commit()
+
+    def delete_rows_from_table_by_filter(
+        self,
+        table_name: str,
+        filter_condition: str,
+        schema_name: Optional[str] = None,
+    ):
+        """Delete rows from a table based on a filter condition."""
+        table = self.get_table(table_name, schema_name)
+        with self.Session() as session:
+            delete_stmt = sqlalchemy.delete(table).where(text(filter_condition))
             session.execute(delete_stmt)
             session.commit()
 
@@ -419,6 +435,7 @@ class SQLLocalService(DBService):
         chunk_id: str,
         update_data: dict,
         schema_name: Optional[str] = None,
+        sql_query_filter: Optional[str] = None,
     ) -> None:
         """
         Update a specific row in the table by its chunk_id.
@@ -427,9 +444,10 @@ class SQLLocalService(DBService):
 
         with self.Session() as session:
             # Check if the row exists
-            existing_record = session.execute(
-                sqlalchemy.select(table).where(table.c[CHUNK_ID_COLUMN] == chunk_id)
-            ).scalar_one_or_none()
+            where_clause = table.c[CHUNK_ID_COLUMN] == chunk_id
+            if sql_query_filter:
+                where_clause = where_clause & text(sql_query_filter)
+            existing_record = session.execute(sqlalchemy.select(table).where(where_clause)).scalar_one_or_none()
 
             if not existing_record:
                 raise ValueError(f"Row with chunk_id='{chunk_id}' not found in table {table_name}")
@@ -438,7 +456,10 @@ class SQLLocalService(DBService):
             update_values = update_data.copy()
             update_values = self.add_processed_datetime_if_exists(table, update_values)
 
-            stmt = sqlalchemy.update(table).where(table.c.chunk_id == chunk_id).values(**update_values)
+            where_clause = table.c[CHUNK_ID_COLUMN] == chunk_id
+            if sql_query_filter:
+                where_clause = where_clause & text(sql_query_filter)
+            stmt = sqlalchemy.update(table).where(where_clause).values(**update_values)
             result = session.execute(stmt)
 
             if result.rowcount == 0:
@@ -459,7 +480,12 @@ class SQLLocalService(DBService):
         return pd.read_sql(query, self.engine)
 
     def get_rows_paginated(
-        self, table_name: str, schema_name: Optional[str] = None, page: int = 1, page_size: int = 10
+        self,
+        table_name: str,
+        schema_name: Optional[str] = None,
+        page: int = 1,
+        page_size: int = 10,
+        sql_query_filter: Optional[str] = None,
     ) -> tuple[list[dict], int]:
         """
         Get paginated rows from a table as a list of dictionaries.
@@ -470,11 +496,15 @@ class SQLLocalService(DBService):
         with self.Session() as session:
             # Get total count
             count_stmt = sqlalchemy.select(sqlalchemy.func.count()).select_from(table)
+            if sql_query_filter:
+                count_stmt = count_stmt.where(text(sql_query_filter))
             total_count = session.execute(count_stmt).scalar()
 
             # Get paginated rows
             offset = (page - 1) * page_size
             stmt = sqlalchemy.select(table).offset(offset).limit(page_size)
+            if sql_query_filter:
+                stmt = stmt.where(text(sql_query_filter))
             rows = session.execute(stmt).fetchall()
 
             result = []

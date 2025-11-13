@@ -24,14 +24,23 @@ CHUNK_ID_COLUMN_NAME = "chunk_id"
 CHUNK_COLUMN_NAME = "content"
 FILE_ID_COLUMN_NAME = "source_identifier"
 URL_COLUMN_NAME = "url"
+SOURCE_ID_COLUMN_NAME = "source_id"
+METADATA_COLUMN_NAME = "source_metadata"  # JSONB column for source-specific metadata
 
 
-def get_sanitize_names(organization_id: str, source_id: str) -> tuple[str, str, str]:
+def get_sanitize_names(
+    organization_id: str,
+) -> tuple[str, str, str]:
+    """
+    Generate sanitized schema, table, and collection names.
+
+    All sources use org-level table and collection in the public schema.
+    """
     sanitize_organization_id = sanitize_filename(organization_id)
-    sanitize_source_id = sanitize_filename(source_id)
-    schema_name = f"org_{sanitize_organization_id}"
-    table_name = f"source_{sanitize_source_id}"
-    qdrant_collection_name = f"{sanitize_source_id}_collection"
+    schema_name = "public"
+    table_name = f"org_{sanitize_organization_id}_chunks"
+    qdrant_collection_name = f"org_{sanitize_organization_id}_collection"
+
     return (
         schema_name,
         table_name,

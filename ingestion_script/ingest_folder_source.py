@@ -26,6 +26,12 @@ from ingestion_script.utils import (
     update_ingestion_task,
     get_first_available_embeddings_custom_llm,
     get_first_available_multimodal_custom_llm,
+    SOURCE_ID_COLUMN_NAME,
+    METADATA_COLUMN_NAME,
+    CHUNK_ID_COLUMN_NAME,
+    CHUNK_COLUMN_NAME,
+    FILE_ID_COLUMN_NAME,
+    URL_COLUMN_NAME,
 )
 from settings import settings
 
@@ -38,27 +44,29 @@ META_DATA_TO_KEEP = [
     "page_number",
 ]
 
-FILE_TABLE_DEFINITION = DBDefinition(
+# Unified table definition for all source types
+UNIFIED_TABLE_DEFINITION = DBDefinition(
     columns=[
         DBColumn(name=PROCESSED_DATETIME_FIELD, type="DATETIME", default="CURRENT_TIMESTAMP"),
-        DBColumn(name=ID_COLUMN_NAME, type="VARCHAR", is_primary_key=True),
-        DBColumn(name="file_id", type="VARCHAR"),
-        DBColumn(name="content", type="VARCHAR"),
-        DBColumn(name="document_title", type="VARCHAR"),
-        DBColumn(name="url", type="VARCHAR"),
-        DBColumn(name="bounding_boxes", type="VARCHAR"),
+        DBColumn(name=CHUNK_ID_COLUMN_NAME, type="VARCHAR", is_primary_key=True),
+        DBColumn(name=SOURCE_ID_COLUMN_NAME, type="VARCHAR"),
+        DBColumn(name=FILE_ID_COLUMN_NAME, type="VARCHAR"),
+        DBColumn(name=CHUNK_COLUMN_NAME, type="VARCHAR"),
+        DBColumn(name=URL_COLUMN_NAME, type="VARCHAR"),
         DBColumn(name=TIMESTAMP_COLUMN_NAME, type="VARCHAR"),
-        DBColumn(name="metadata", type="VARIANT"),
+        DBColumn(name=METADATA_COLUMN_NAME, type="VARIANT"),  # JSONB for source-specific metadata
     ]
 )
 
-QDRANT_SCHEMA = QdrantCollectionSchema(
-    chunk_id_field=ID_COLUMN_NAME,
-    content_field="content",
-    url_id_field="url",
-    file_id_field="file_id",
+# Unified Qdrant schema for all source types
+UNIFIED_QDRANT_SCHEMA = QdrantCollectionSchema(
+    chunk_id_field=CHUNK_ID_COLUMN_NAME,
+    content_field=CHUNK_COLUMN_NAME,
+    url_id_field=URL_COLUMN_NAME,
+    file_id_field=FILE_ID_COLUMN_NAME,
     last_edited_ts_field=TIMESTAMP_COLUMN_NAME,
-    metadata_fields_to_keep=["metadata"],
+    metadata_fields_to_keep=[METADATA_COLUMN_NAME],
+    source_id_field=SOURCE_ID_COLUMN_NAME,
 )
 
 
@@ -105,11 +113,20 @@ async def sync_chunks_to_qdrant(
     qdrant_service: QdrantService,
     sql_query_filter: Optional[str] = None,
     query_filter_qdrant: Optional[dict] = None,
+    source_id: Optional[str] = None,
 ) -> None:
+    # For file sources, filter by source_id if provided
+    if source_id and sql_query_filter:
+        combined_filter = f"({sql_query_filter}) AND {SOURCE_ID_COLUMN_NAME} = '{source_id}'"
+    elif source_id:
+        combined_filter = f"{SOURCE_ID_COLUMN_NAME} = '{source_id}'"
+    else:
+        combined_filter = sql_query_filter
+
     chunks_df = db_service.get_table_df(
         table_name,
         schema_name=table_schema,
-        sql_query_filter=sql_query_filter,
+        sql_query_filter=combined_filter,
     )
     LOGGER.info(f"Syncing chunks to Qdrant collection {collection_name} with {len(chunks_df)} rows")
     if not await qdrant_service.collection_exists_async(collection_name):
@@ -244,6 +261,7 @@ async def _ingest_folder_source(
     db_table_schema, db_table_name, qdrant_collection_name = get_sanitize_names(
         source_id=str(source_id),
         organization_id=organization_id,
+        source_type=source_type,
     )
 
     LOGGER.info(f"Table schema in ingestion : {db_table_schema}")
@@ -255,7 +273,7 @@ async def _ingest_folder_source(
         database_schema=db_table_schema,
         database_table_name=db_table_name,
         qdrant_collection_name=qdrant_collection_name,
-        qdrant_schema=QDRANT_SCHEMA.to_dict(),
+        qdrant_schema=UNIFIED_QDRANT_SCHEMA.to_dict(),
         embedding_model_reference=f"{embedding_service._provider}:{embedding_service._model_name}",
     )
     if settings.INGESTION_DB_URL is None:
@@ -264,27 +282,11 @@ async def _ingest_folder_source(
     db_service = SQLLocalService(engine_url=settings.INGESTION_DB_URL)
     qdrant_service = QdrantService.from_defaults(
         embedding_service=embedding_service,
-        default_collection_schema=QDRANT_SCHEMA,
+        default_collection_schema=UNIFIED_QDRANT_SCHEMA,
     )
 
-    # Check if source already exists in either database or Qdrant
-    if db_service.schema_exists(schema_name=db_table_schema) and db_service.table_exists(
-        table_name=db_table_name, schema_name=db_table_schema
-    ):
-        LOGGER.error(f"Source {source_id} already exists in Database")
-        update_ingestion_task(
-            organization_id=organization_id,
-            ingestion_task=ingestion_task,
-        )
-        raise ValueError(f"Source '{source_id}' already exists in database table '{db_table_schema}.{db_table_name}'")
-
-    if await qdrant_service.collection_exists_async(qdrant_collection_name):
-        LOGGER.error(f"Source {source_id} already exists in Qdrant")
-        update_ingestion_task(
-            organization_id=organization_id,
-            ingestion_task=ingestion_task,
-        )
-        raise ValueError(f"Source '{source_id}' already exists in Qdrant collection '{qdrant_collection_name}'")
+    # For file sources, tables/collections are shared, so we don't check for existence
+    # The table/collection will be created if it doesn't exist, or chunks will be appended if it does
 
     LOGGER.info("Starting ingestion process")
     files_info = folder_manager.list_all_files_info()
@@ -360,18 +362,68 @@ async def _ingest_folder_source(
                 add_summary_in_chunks_func=add_summary_in_chunks_func,
                 default_chunk_size=chunk_size,
             )
+            # Transform to unified structure
+            # Move file-specific fields to metadata JSONB
+            import json
+
+            unified_chunks_df = chunks_df.copy()
+
+            # Create metadata JSONB column with file-specific fields
+            unified_chunks_df[METADATA_COLUMN_NAME] = unified_chunks_df.apply(
+                lambda row: json.dumps(
+                    {
+                        "document_title": row.get("document_title"),
+                        "bounding_boxes": row.get("bounding_boxes"),
+                        "metadata": row.get("metadata", {}),
+                    }
+                ),
+                axis=1,
+            )
+
+            # Rename columns to match unified structure
+            unified_chunks_df = unified_chunks_df.rename(
+                columns={
+                    "chunk_id": CHUNK_ID_COLUMN_NAME,
+                    "file_id": FILE_ID_COLUMN_NAME,
+                    "content": CHUNK_COLUMN_NAME,
+                    "url": URL_COLUMN_NAME,
+                    "last_edited_ts": TIMESTAMP_COLUMN_NAME,
+                }
+            )
+
+            # Add source_id
+            unified_chunks_df[SOURCE_ID_COLUMN_NAME] = str(source_id)
+
+            # Select only the columns we need for unified table
+            unified_chunks_df = unified_chunks_df[
+                [
+                    CHUNK_ID_COLUMN_NAME,
+                    SOURCE_ID_COLUMN_NAME,
+                    FILE_ID_COLUMN_NAME,
+                    CHUNK_COLUMN_NAME,
+                    URL_COLUMN_NAME,
+                    TIMESTAMP_COLUMN_NAME,
+                    METADATA_COLUMN_NAME,
+                ]
+            ]
+
             LOGGER.info(f"Sync chunks to db table {db_table_name}")
             db_service.update_table(
-                new_df=chunks_df,
+                new_df=unified_chunks_df,
                 table_name=db_table_name,
-                table_definition=FILE_TABLE_DEFINITION,
-                id_column_name=ID_COLUMN_NAME,
+                table_definition=UNIFIED_TABLE_DEFINITION,
+                id_column_name=CHUNK_ID_COLUMN_NAME,
                 timestamp_column_name=TIMESTAMP_COLUMN_NAME,
                 append_mode=True,
                 schema_name=db_table_schema,
             )
             await sync_chunks_to_qdrant(
-                db_table_schema, db_table_name, qdrant_collection_name, db_service, qdrant_service
+                db_table_schema,
+                db_table_name,
+                qdrant_collection_name,
+                db_service,
+                qdrant_service,
+                source_id=str(source_id),
             )
     except Exception as e:
         LOGGER.error(f"Failed to ingest folder source: {str(e)}")

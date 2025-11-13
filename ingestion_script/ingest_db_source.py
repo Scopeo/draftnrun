@@ -23,6 +23,8 @@ from ingestion_script.utils import (
     CHUNK_COLUMN_NAME,
     FILE_ID_COLUMN_NAME,
     URL_COLUMN_NAME,
+    SOURCE_ID_COLUMN_NAME,
+    METADATA_COLUMN_NAME,
     resolve_sql_timestamp_filter,
 )
 from ada_backend.schemas.ingestion_task_schema import SourceAttributes
@@ -65,59 +67,11 @@ def _get_source_column_type_map(
     return {row["name"].lower(): _map_sqlalchemy_type_to_internal(str(row["type"])) for row in description}
 
 
-def get_db_source_definition(
-    timestamp_column_name: Optional[str] = None,
-    url_pattern: Optional[str] = None,
-    metadata_column_names: Optional[list] = None,
-    source_db_url: Optional[str] = None,
-    source_table_name: Optional[str] = None,
-    source_schema_name: Optional[str] = None,
-) -> tuple[DBDefinition, dict[str, str]]:
-    columns = [
-        DBColumn(name=PROCESSED_DATETIME_FIELD, type="DATETIME", default="CURRENT_TIMESTAMP"),
-        DBColumn(name=CHUNK_ID_COLUMN_NAME, type="VARCHAR", is_primary_key=True),
-        DBColumn(name=FILE_ID_COLUMN_NAME, type="VARCHAR"),
-        DBColumn(name=CHUNK_COLUMN_NAME, type="VARCHAR"),
-    ]
-    source_type_map: dict[str, str] = {}
-    if source_db_url and source_table_name:
-        try:
-            source_type_map = _get_source_column_type_map(
-                db_url=source_db_url,
-                table_name=source_table_name,
-                schema_name=source_schema_name,
-            )
-        except Exception:
-            LOGGER.warning("Failed to introspect source table types; falling back to defaults")
-            source_type_map = {}
+def get_unified_table_definition() -> DBDefinition:
+    """Get the unified table definition for all source types."""
+    from ingestion_script.ingest_folder_source import UNIFIED_TABLE_DEFINITION
 
-    if timestamp_column_name:
-        columns.append(
-            DBColumn(
-                name=timestamp_column_name,
-                type=source_type_map.get(timestamp_column_name.lower()) if source_type_map else "DATETIME",
-            )
-        )
-
-    if metadata_column_names:
-        existing_names = {c.name for c in columns}
-        columns.extend(
-            DBColumn(
-                name=col,
-                type=(source_type_map.get(col.lower(), "VARCHAR") if source_type_map else "VARCHAR"),
-            )
-            for col in metadata_column_names
-            if col not in existing_names
-        )
-    if url_pattern:
-        columns.append(DBColumn(name=URL_COLUMN_NAME, type="VARCHAR"))
-
-    return (
-        DBDefinition(
-            columns=columns,
-        ),
-        source_type_map,
-    )
+    return UNIFIED_TABLE_DEFINITION
 
 
 def get_db_source(
@@ -163,22 +117,45 @@ def get_db_source(
     )
     df_chunks[FILE_ID_COLUMN_NAME] = table_name + "_" + df_chunks[id_column_name].astype(str)
 
-    columns = [CHUNK_ID_COLUMN_NAME, CHUNK_COLUMN_NAME, FILE_ID_COLUMN_NAME]
-    LOGGER.debug(f"Columns to keep: {columns}")
-    if timestamp_column_name:
-        columns.append(timestamp_column_name)
-    if metadata_column_names:
-        metadata_column_names = [col for col in metadata_column_names if col not in columns]
-        if metadata_column_names:
-            LOGGER.debug(f"Metadata columns to keep: {metadata_column_names}")
-            columns.extend(metadata_column_names)
+    # Build unified structure with metadata JSONB
+    import json
+    from ingestion_script.ingest_folder_source import TIMESTAMP_COLUMN_NAME
+
+    unified_df = pd.DataFrame()
+    unified_df[CHUNK_ID_COLUMN_NAME] = df_chunks[CHUNK_ID_COLUMN_NAME]
+    unified_df[CHUNK_COLUMN_NAME] = df_chunks[CHUNK_COLUMN_NAME]
+    unified_df[FILE_ID_COLUMN_NAME] = df_chunks[FILE_ID_COLUMN_NAME]
+
+    # Handle URL
     if url_pattern:
-        columns.append(URL_COLUMN_NAME)
-        df_chunks[URL_COLUMN_NAME] = df_chunks.apply(
+        unified_df[URL_COLUMN_NAME] = df_chunks.apply(
             lambda row: url_pattern.format_map({k: ("" if pd.isna(v) else v) for k, v in row.items()}), axis=1
         )
+    else:
+        unified_df[URL_COLUMN_NAME] = None
 
-    return df_chunks[columns].copy()
+    # Handle timestamp - use unified column name
+    if timestamp_column_name and timestamp_column_name in df_chunks.columns:
+        unified_df[TIMESTAMP_COLUMN_NAME] = df_chunks[timestamp_column_name]
+    else:
+        unified_df[TIMESTAMP_COLUMN_NAME] = None
+
+    # Build metadata JSONB with DB-specific fields
+    def build_metadata(row):
+        metadata = {}
+        if timestamp_column_name and timestamp_column_name in df_chunks.columns:
+            metadata["timestamp_value"] = (
+                row[timestamp_column_name] if not pd.isna(row.get(timestamp_column_name)) else None
+            )
+        if metadata_column_names:
+            for col in metadata_column_names:
+                if col in df_chunks.columns and not pd.isna(row.get(col)):
+                    metadata[col] = row[col]
+        return json.dumps(metadata) if metadata else json.dumps({})
+
+    unified_df[METADATA_COLUMN_NAME] = df_chunks.apply(build_metadata, axis=1)
+
+    return unified_df
 
 
 async def upload_db_source(
@@ -201,6 +178,7 @@ async def upload_db_source(
     update_existing: bool = False,
     query_filter: Optional[str] = None,
     timestamp_filter: Optional[str] = None,
+    source_id: Optional[str] = None,
 ):
     # Resolve CURRENT_TIMESTAMP once and use for both SQL and Qdrant
     resolved_timestamp_filter = resolve_sql_timestamp_filter(timestamp_filter)
@@ -233,12 +211,19 @@ async def upload_db_source(
         sql_query_filter=combined_filter_sql,
     )
 
+    # Add source_id to all chunks
+    if source_id:
+        df[SOURCE_ID_COLUMN_NAME] = str(source_id)
+
+    # Use unified timestamp column name
+    from ingestion_script.ingest_folder_source import TIMESTAMP_COLUMN_NAME
+
     db_service.update_table(
         new_df=df,
         table_name=storage_table_name,
         table_definition=db_definition,
         id_column_name=CHUNK_ID_COLUMN_NAME,
-        timestamp_column_name=timestamp_column_name,
+        timestamp_column_name=TIMESTAMP_COLUMN_NAME,
         append_mode=update_existing,
         schema_name=storage_schema_name,
         sql_query_filter=combined_filter_sql,
@@ -252,6 +237,7 @@ async def upload_db_source(
         qdrant_service=qdrant_service,
         sql_query_filter=combined_filter_sql,
         query_filter_qdrant=combined_filter_qdrant,
+        source_id=source_id,
     )
 
 
@@ -276,28 +262,12 @@ async def ingestion_database(
     source_id: Optional[UUID] = None,
 ) -> None:
 
-    db_definition, source_type_map = get_db_source_definition(
-        timestamp_column_name=timestamp_column_name,
-        url_pattern=url_pattern,
-        metadata_column_names=metadata_column_names,
-        source_db_url=source_db_url,
-        source_table_name=source_table_name,
-        source_schema_name=source_schema_name,
-    )
-    metadata_field_types = None
-    if metadata_column_names and source_type_map:
-        metadata_field_types = {
-            field: source_type_map.get(field.lower(), "VARCHAR") for field in metadata_column_names
-        }
-    qdrant_schema = QdrantCollectionSchema(
-        chunk_id_field=CHUNK_ID_COLUMN_NAME,
-        content_field=CHUNK_COLUMN_NAME,
-        file_id_field=FILE_ID_COLUMN_NAME,
-        url_id_field=URL_COLUMN_NAME if url_pattern else None,
-        last_edited_ts_field=timestamp_column_name,
-        metadata_fields_to_keep=(set(metadata_column_names) if metadata_column_names else None),
-        metadata_field_types=metadata_field_types,
-    )
+    # Use unified table definition and Qdrant schema
+    db_definition = get_unified_table_definition()
+    from ingestion_script.ingest_folder_source import UNIFIED_QDRANT_SCHEMA, TIMESTAMP_COLUMN_NAME
+
+    qdrant_schema = UNIFIED_QDRANT_SCHEMA
+
     source_type = db.SourceType.DATABASE
     LOGGER.info("Start ingestion data from the database source...")
     await upload_source(
@@ -322,6 +292,7 @@ async def ingestion_database(
             chunk_overlap=chunk_overlap,
             query_filter=query_filter,
             timestamp_filter=timestamp_filter,
+            source_id=str(source_id) if source_id else None,
         ),
         attributes=source_attributes,
         source_id=source_id,

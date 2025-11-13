@@ -4,7 +4,10 @@ from typing import Annotated
 from fastapi import Depends, HTTPException, Query, Response, status
 from uuid import UUID
 
+from sqlalchemy.orm import Session
+
 from engine.storage_service.db_utils import DBDefinition
+from ada_backend.database.setup_db import get_db
 from ada_backend.routers.auth_router import (
     verify_ingestion_api_key_dependency,
     user_has_access_to_organization_dependency,
@@ -22,6 +25,7 @@ from ada_backend.services.ingestion_database_service import (
     update_chunk_info_in_ingestion_db,
     delete_chunks_from_ingestion_db,
 )
+from ada_backend.repositories.source_repository import get_sources
 
 
 router = APIRouter(tags=["Ingestion Database"])
@@ -32,17 +36,19 @@ LOGGER = logging.getLogger(__name__)
 def create_table_in_database(
     verified_ingestion_api_key: Annotated[None, Depends(verify_ingestion_api_key_dependency)],
     organization_id: UUID,
-    source_name: str,
+    source_id: UUID,
     table_definition: DBDefinition,
 ) -> tuple[str, DBDefinition]:
     try:
         table_name, table_definition = create_table_in_ingestion_db(organization_id, source_name, table_definition)
         return table_name, table_definition
+    except HTTPException:
+        raise
     except Exception as e:
         LOGGER.exception(
             "Failed to create table in database for organization %s, source %s",
             organization_id,
-            source_name,
+            source_id,
         )
         raise HTTPException(status_code=500, detail=str(e)) from e
 
@@ -65,7 +71,7 @@ def get_chunks_in_database(
         LOGGER.exception(
             "Failed to get chunks in database for organization %s, source %s",
             organization_id,
-            source_name,
+            source_id,
         )
         raise HTTPException(status_code=500, detail=str(e)) from e
 
@@ -73,7 +79,7 @@ def get_chunks_in_database(
 @router.put("/organizations/{organization_id}/ingestion_database/sources/{source_name}/chunks/{chunk_id}")
 def update_chunk_info_in_database(
     organization_id: UUID,
-    source_name: str,
+    source_id: UUID,
     chunk_id: str,
     update_request: UpdateChunk,
     user: Annotated[
@@ -83,23 +89,23 @@ def update_chunk_info_in_database(
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
     try:
-        return update_chunk_info_in_ingestion_db(organization_id, source_name, chunk_id, update_request)
+        return update_chunk_info_in_ingestion_db(organization_id, source_id, chunk_id, update_request)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
     except Exception as e:
         LOGGER.exception(
             "Failed to update chunk info in database for organization %s, source %s, chunk %s",
             organization_id,
-            source_name,
+            source_id,
             chunk_id,
         )
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
-@router.delete("/organizations/{organization_id}/ingestion_database/sources/{source_name}/chunks")
+@router.delete("/organizations/{organization_id}/ingestion_database/sources/{source_id}/chunks")
 def delete_chunks_in_database(
     organization_id: UUID,
-    source_name: str,
+    source_id: UUID,
     chunk_ids: list[str],
     user: Annotated[
         SupabaseUser, Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.WRITER.value))
@@ -108,12 +114,12 @@ def delete_chunks_in_database(
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
     try:
-        delete_chunks_from_ingestion_db(organization_id, source_name, chunk_ids)
+        delete_chunks_from_ingestion_db(organization_id, source_id, chunk_ids)
     except Exception as e:
         LOGGER.error(
             "Failed to delete chunks in database for organization %s, source %s, chunk %s: %s",
             organization_id,
-            source_name,
+            source_id,
             chunk_ids,
             str(e),
         )
