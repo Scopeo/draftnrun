@@ -6,8 +6,11 @@ from typing import Optional
 
 from logger import setup_logging
 from engine.trace.trace_context import set_trace_manager
-from engine.trace.trace_manager import TraceManager
-from ada_backend.scheduler.service import start_scheduler, stop_scheduler
+from ada_backend.scheduler.service import (
+    start_scheduler,
+    stop_scheduler,
+    initialize_scheduler_trace_manager,
+)
 
 LOGGER = logging.getLogger(__name__)
 
@@ -49,7 +52,10 @@ async def run_scheduler():
 
     setup_logging(process_name="apscheduler")
 
-    set_trace_manager(tm=TraceManager(project_name="ada-backend-scheduler"))
+    # Initialize the shared TraceManager singleton early
+    # This ensures we only create one TraceManager instance for all scheduler jobs
+    trace_manager = initialize_scheduler_trace_manager()
+    set_trace_manager(tm=trace_manager)
 
     SHUTDOWN_EVENT = asyncio.Event()
 

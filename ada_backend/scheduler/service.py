@@ -16,7 +16,7 @@ from ada_backend.repositories.cron_repository import (
     get_cron_runs_by_cron_id,
 )
 from ada_backend.services.cron.registry import CRON_REGISTRY
-from engine.trace.trace_context import get_trace_manager, set_trace_manager
+from engine.trace.trace_context import set_trace_manager
 from engine.trace.trace_manager import TraceManager
 from ada_backend.scheduler.sync_cron_jobs_with_scheduler import (
     log_sync_job_status,
@@ -31,6 +31,39 @@ SCHEDULER_POLL_INTERVAL_SECONDS = 3
 
 # Global scheduler instance
 _scheduler: Optional[AsyncIOScheduler] = None
+
+# Shared TraceManager instance for all scheduler jobs
+# Since APScheduler doesn't propagate context variables, we create a singleton
+# that gets set in each job's context to avoid creating multiple TraceManagers
+_scheduler_trace_manager: Optional[TraceManager] = None
+
+
+def initialize_scheduler_trace_manager() -> TraceManager:
+    """Initialize the shared TraceManager singleton for scheduler jobs.
+
+    This should be called once during scheduler startup (in run_scheduler()).
+
+    Returns:
+        The initialized TraceManager instance.
+    """
+    global _scheduler_trace_manager
+    if _scheduler_trace_manager is None:
+        _scheduler_trace_manager = TraceManager(project_name="ada-backend-scheduler")
+    return _scheduler_trace_manager
+
+
+def _get_scheduler_trace_manager() -> TraceManager:
+    """Get the shared TraceManager for scheduler jobs.
+
+    Raises:
+        RuntimeError: If the TraceManager singleton has not been initialized.
+    """
+    if _scheduler_trace_manager is None:
+        raise RuntimeError(
+            "Scheduler TraceManager not initialized. "
+            "Ensure initialize_scheduler_trace_manager() is called in run_scheduler() before jobs execute."
+        )
+    return _scheduler_trace_manager
 
 
 def get_scheduler() -> AsyncIOScheduler:
@@ -84,10 +117,8 @@ async def _execute_cron_job(cron_id: UUID, entrypoint: CronEntrypoint, payload: 
     Also updates the cron run status in the database.
 
     """
-    # Ensure trace_manager is available in this job's execution context
-    # APScheduler doesn't propagate context variables, so we need to set it here
-    if get_trace_manager() is None:
-        set_trace_manager(TraceManager(project_name="ada-backend-scheduler"))
+    trace_manager = _get_scheduler_trace_manager()
+    set_trace_manager(trace_manager)
 
     scheduled_time = datetime.now(timezone.utc)
 
