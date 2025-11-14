@@ -8,7 +8,6 @@ from sqlalchemy.orm import Session
 from ada_backend.schemas.auth_schema import SupabaseUser
 from ada_backend.schemas.input_groundtruth_schema import (
     InputGroundtruthCreateList,
-    InputGroundtruthFromHistoryCreate,
     InputGroundtruthUpdateList,
     InputGroundtruthDeleteList,
     InputGroundtruthResponseList,
@@ -41,7 +40,6 @@ from ada_backend.services.quality_assurance_service import (
     save_conversation_to_groundtruth_service,
 )
 from ada_backend.database.setup_db import get_db
-from ada_backend.services.errors import QAError
 
 router = APIRouter(tags=["Quality Assurance"])
 LOGGER = logging.getLogger(__name__)
@@ -430,30 +428,18 @@ async def run_qa_endpoint(
 async def create_entry_from_history(
     project_id: UUID,
     dataset_id: UUID,
-    data: InputGroundtruthFromHistoryCreate,
+    trace_id: str,
     session: Session = Depends(get_db),
 ) -> List[InputGroundtruthResponse]:
-    # Determine identifier based on source
-    if data.source == "conversation":
-        identifier = str(data.conversation_id)
-        source_label = f"conversation {data.conversation_id}"
-    else:  # trace
-        identifier = data.trace_id
-        source_label = f"trace {data.trace_id}"
-
     try:
         return save_conversation_to_groundtruth_service(
             session=session,
-            identifier=identifier,
+            trace_id=trace_id,
             dataset_id=dataset_id,
-            message_index=data.message_index,
         )
-    except QAError as e:
-        LOGGER.error(f"Failed to save {source_label}: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=400, detail=str(e)) from e
     except ValueError as e:
-        LOGGER.error(f"Failed to save {source_label}: {str(e)}", exc_info=True)
+        LOGGER.error(f"Failed to save trace {trace_id}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
-        LOGGER.error(f"Failed to save {source_label}: {str(e)}", exc_info=True)
+        LOGGER.error(f"Failed to save trace {trace_id}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error") from e

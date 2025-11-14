@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Optional, List, Literal
+from typing import Optional, List
 from uuid import UUID
 from pydantic import BaseModel, field_validator
 
@@ -18,37 +18,6 @@ class InputGroundtruthCreate(BaseModel):
 
     input: dict
     groundtruth: Optional[str] = None
-
-
-class InputGroundtruthFromHistoryCreate(BaseModel):
-    """Schema for creating input-groundtruth entry from conversation or trace history."""
-
-    source: Literal["conversation", "trace"]
-    conversation_id: Optional[UUID] = None
-    trace_id: Optional[str] = None
-    message_index: int
-
-    @field_validator("conversation_id")
-    @classmethod
-    def validate_conversation_id(cls, v, info):
-        """Validate that conversation_id is provided when source is conversation."""
-        source = info.data.get("source")
-        if source == "conversation" and not v:
-            raise ValueError("conversation_id is required when source is 'conversation'")
-        if source == "trace" and v:
-            raise ValueError("conversation_id should not be provided when source is 'trace'")
-        return v
-
-    @field_validator("trace_id")
-    @classmethod
-    def validate_trace_id(cls, v, info):
-        """Validate that trace_id is provided when source is trace."""
-        source = info.data.get("source")
-        if source == "trace" and not v:
-            raise ValueError("trace_id is required when source is 'trace'")
-        if source == "conversation" and v:
-            raise ValueError("trace_id should not be provided when source is 'conversation'")
-        return v
 
 
 class InputGroundtruthWithVersionResponse(BaseModel):

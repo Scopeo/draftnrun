@@ -43,7 +43,6 @@ from ada_backend.services.agent_runner_service import run_agent
 from ada_backend.database.models import CallType
 from ada_backend.repositories.env_repository import get_env_relationship_by_graph_runner_id
 from ada_backend.services.metrics.utils import query_conversation_messages
-from ada_backend.services.errors import QAError
 
 LOGGER = logging.getLogger(__name__)
 
@@ -473,38 +472,18 @@ def delete_datasets_service(
 
 def save_conversation_to_groundtruth_service(
     session: Session,
-    identifier: str,
+    trace_id: str,
     dataset_id: UUID,
-    message_index: int,
 ) -> List[InputGroundtruthResponse]:
 
-    input_payload, output_payload = query_conversation_messages(identifier)
-    input_payload.pop("conversation_id", None)
-    messages = input_payload.get("messages", [])
-
-    if message_index < 0 or message_index >= len(messages):
+    input_payload, output_payload = query_conversation_messages(trace_id)
+    if not input_payload and not output_payload:
         LOGGER.error(
-            f"Message index {message_index} is out of range for "
-            f"identifier {identifier} in dataset {dataset_id}. "
-            f"Messages count: {len(messages)}, requested index: {message_index}"
+            "Trace %s not found or contains no messages while saving to dataset %s.",
+            trace_id,
+            dataset_id,
         )
-        raise QAError(
-            "At the moment, you cannot save the conversation to QA table. Please try again in a few seconds."
-        )
-
-    payload = {**input_payload, "messages": messages[: message_index + 1]}
-
-    # Find groundtruth from next assistant message
-    groundtruth_text = None
-    next_idx = message_index + 1
-    if next_idx < len(messages) and messages[next_idx].get("role") == "assistant":
-        groundtruth_text = messages[next_idx].get("content")
-    elif output_payload:
-        for msg in output_payload.get("messages", []):
-            if msg.get("role") == "assistant":
-                groundtruth_text = msg.get("content")
-                break
-
-    input_entry = InputGroundtruthCreate(input=payload, groundtruth=groundtruth_text)
+    input_payload.pop("conversation_id", None)
+    input_entry = InputGroundtruthCreate(input=input_payload, groundtruth=output_payload["messages"][-1]["content"])
     input_entries = create_inputs_groundtruths(session, dataset_id, [input_entry])
     return [InputGroundtruthResponse.model_validate(entry) for entry in input_entries]
