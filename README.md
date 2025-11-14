@@ -2,7 +2,6 @@
   <a href="https://draftnrun.com" target="_blank">Draft'n run</a>
 </h1>
 
-
 We provide here a guide on how to set up **locally** your Draft'n run backend application.
 
 # Prerequisites
@@ -20,14 +19,12 @@ You will need to install the following packages:
 
 [Install UV](https://docs.astral.sh/uv/getting-started/installation/#standalone-installer)
 
-
 # Set up the credentials files
 
 You will need to create two env files :
 
 - `.env` file in the `ada_ingestion_system` folder (you can copy the `.env.example` file)
 - `credentials.env` at the root of the repository (you can copy the `credentials.env.example` file)
-
 
 In the `credentials.env` file (copied from `credentials.env.example`).
 
@@ -44,7 +41,6 @@ uv run python -c "import secrets; print(secrets.token_hex(32))+"
 ```bash
 uv run python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
 ```
-
 
 ## Set up credentials for the services
 
@@ -175,7 +171,6 @@ ADA_DB_URL=postgresql://postgres:ada_password@localhost:5432/ada_backend
 ADA_URL=http://localhost:8000
 ```
 
-
 ### Set up and run Supabase service locally
 
 **This paragraph is only for those who want to run Supabase locally**
@@ -192,9 +187,8 @@ OFFLINE_DEFAULT_ROLE="admin"
 ```
 
 This will enable the offline mode in the backend, very useful if you have trouble with the
-supabase edge runtime functions (they are served with the command `supabase functions serve`) 
+supabase edge runtime functions (they are served with the command `supabase functions serve`)
 Those edge runtime functions allow the front end to check the authentifications on your different organizations.
-
 
 Once Supabase-Cli is installed, go to the root of the repository and run:
 
@@ -325,8 +319,8 @@ SUPABASE_BUCKET_NAME=ada-backend
 
 **This paragraph is for those who already have a shared Supabase service that they want to use**
 
-
 Find these informations on your shared supabase service :
+
 ```env
 SUPABASE_PROJECT_URL=http://localhost:54321
 SUPABASE_PROJECT_KEY=*anon-key*
@@ -346,7 +340,6 @@ uv run python -c "from ada_backend.services.api_key_service import _generate_api
 INGESTION_API_KEY=xxxx
 INGESTION_API_KEY_HASHED=xxxx
 ```
-
 
 ## Optional configurations
 
@@ -407,8 +400,8 @@ If you set these variables, your custom model will appear as an option in the mo
 Be careful. For now, when you have a local config, the first vision model and embedding model in your configuration will be used by default
 for the ingestion
 
-
 ### Google OAuth Setup
+
 To enable Google login, set these in your credentials.env:
 
 ```env
@@ -425,6 +418,37 @@ How to get them:
 
 Make sure the redirect URI matches what you configure in Google and your app. Do not commit these secrets to version control.
 
+### RGPD compliance (trace data retention)
+
+To comply with RGPD requirements, you need to set up automatic deletion of trace data older than 90 days.
+
+1. Install the `pg_cron` extension in your PostgreSQL database:
+
+```sql
+\c postgres
+CREATE EXTENSION IF NOT EXISTS pg_cron;
+```
+
+2. Create the scheduled cleanup job:
+
+```sql
+\c postgres
+SELECT cron.schedule_in_database(
+    'cleanup-old-spans',
+    '0 2 * * *',
+    $q$
+    DELETE FROM traces.span_messages
+    WHERE span_id IN (
+        SELECT s.span_id FROM traces.spans s
+        WHERE s.start_time < NOW() - INTERVAL '90 days'
+    );
+    $q$,
+    'ada_backend'
+)
+WHERE NOT EXISTS (SELECT 1 FROM cron.job WHERE jobname = 'cleanup-old-spans');
+```
+
+This will automatically delete trace data older than 90 days every day at 2 AM.
 
 ## Set up the database for backend and ingestion
 
@@ -673,7 +697,5 @@ Tools are available for the AI Agent. Note that the AI Agent can also have other
 - **Internet Search with OpenAI**: Answer a question using web search.
 - **SQL tool**: Builds SQL queries from natural language
 - **RunSQLquery tool**: Builds and executes SQL queries
-
-
 
 This project uses the 'python-docx-template' library, licensed under the GNU Lesser General Public License v2.1. See https://github.com/elapouya/python-docx-template for details.
