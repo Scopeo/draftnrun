@@ -27,7 +27,7 @@ def upgrade() -> None:
         sa.Column("name", sa.String(), nullable=False),
         sa.Column("description", sa.Text(), nullable=True),
         sa.Column("provider", sa.String(), nullable=False),
-        sa.Column("reference", sa.String(), nullable=True),
+        sa.Column("reference", sa.String(), nullable=False),
         sa.Column("model_capacity", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=True),
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=True),
