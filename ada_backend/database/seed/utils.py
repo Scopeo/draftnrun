@@ -18,7 +18,7 @@ from ada_backend.services.llm_models_service import (
     get_llm_models_by_capability_select_options_service,
     create_llm_model_service,
 )
-from ada_backend.schemas.llm_models_schema import LLMModelsCreate
+from ada_backend.schemas.llm_models_schema import LLMModelCreate
 from settings import settings
 
 LOGGER = logging.getLogger(__name__)
@@ -491,7 +491,7 @@ def seed_custom_llm_models(session: Session):
         for model in models:
             create_llm_model_service(
                 session,
-                LLMModelsCreate(
+                LLMModelCreate(
                     name=model.get("name"),
                     description=model.get("description"),
                     provider=provider,
