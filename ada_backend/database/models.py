@@ -1479,7 +1479,7 @@ class LLMJudge(Base):
     evaluation_type = mapped_column(make_pg_enum(EvaluationType), nullable=False)
     llm_model_reference = mapped_column(String, nullable=False, default="openai:gpt-5-mini")
     prompt_template = mapped_column(Text, nullable=False)
-    temperature = mapped_column(Float, nullable=True, default=0.0)
+    temperature = mapped_column(Float, nullable=True, default=1.0)
     created_at = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 

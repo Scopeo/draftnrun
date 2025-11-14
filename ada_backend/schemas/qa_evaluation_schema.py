@@ -13,7 +13,7 @@ class LLMJudgeCreate(BaseModel):
     evaluation_type: EvaluationType
     llm_model_reference: str
     prompt_template: str
-    temperature: Optional[float] = 0.0
+    temperature: Optional[float] = 1.0
 
 
 class LLMJudgeResponse(BaseModel):
@@ -26,7 +26,7 @@ class LLMJudgeResponse(BaseModel):
     evaluation_type: EvaluationType
     llm_model_reference: str
     prompt_template: str
-    temperature: Optional[float] = 0.0
+    temperature: Optional[float] = 1.0
     created_at: datetime
     updated_at: datetime
 

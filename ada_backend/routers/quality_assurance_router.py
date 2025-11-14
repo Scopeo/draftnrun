@@ -22,11 +22,6 @@ from ada_backend.schemas.dataset_schema import (
     DatasetDeleteList,
     DatasetListResponse,
 )
-from ada_backend.schemas.llm_judge_schema import (
-    LLMJudgeCreate,
-    LLMJudgeResponse,
-    LLMJudgeListResponse,
-)
 from ada_backend.routers.auth_router import (
     user_has_access_to_project_dependency,
     UserRights,
@@ -43,8 +38,6 @@ from ada_backend.services.quality_assurance_service import (
     delete_datasets_service,
     get_datasets_by_project_service,
     save_conversation_to_groundtruth_service,
-    create_llm_judge_service,
-    get_llm_judges_by_project_service,
 )
 from ada_backend.database.setup_db import get_db
 
@@ -449,59 +442,4 @@ async def create_entry_from_history(
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
         LOGGER.error(f"Failed to save trace {trace_id}: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Internal server error") from e
-
-
-@router.get(
-    "/projects/{project_id}/qa/llm-judges",
-    response_model=LLMJudgeListResponse,
-    summary="Get LLM Judges by Project",
-    tags=["Quality Assurance"],
-)
-def get_llm_judges_by_project_endpoint(
-    project_id: UUID,
-    user: Annotated[
-        SupabaseUser,
-        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.USER.value)),
-    ],
-    session: Session = Depends(get_db),
-) -> LLMJudgeListResponse:
-    if not user.id:
-        raise HTTPException(status_code=400, detail="User ID not found")
-
-    try:
-        return get_llm_judges_by_project_service(session=session, project_id=project_id)
-    except ValueError as e:
-        LOGGER.error(f"Failed to get LLM judges for project {project_id}: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=400, detail="Bad request") from e
-    except Exception as e:
-        LOGGER.error(f"Failed to get LLM judges for project {project_id}: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Internal server error") from e
-
-
-@router.post(
-    "/projects/{project_id}/qa/llm-judges",
-    response_model=LLMJudgeResponse,
-    summary="Create LLM Judge",
-    tags=["Quality Assurance"],
-)
-def create_llm_judge_endpoint(
-    project_id: UUID,
-    judge_data: LLMJudgeCreate,
-    user: Annotated[
-        SupabaseUser,
-        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.USER.value)),
-    ],
-    session: Session = Depends(get_db),
-) -> LLMJudgeResponse:
-    if not user.id:
-        raise HTTPException(status_code=400, detail="User ID not found")
-
-    try:
-        return create_llm_judge_service(session=session, project_id=project_id, judge_data=judge_data)
-    except ValueError as e:
-        LOGGER.error(f"Failed to create LLM judge for project {project_id}: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=400, detail="Bad request") from e
-    except Exception as e:
-        LOGGER.error(f"Failed to create LLM judge for project {project_id}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error") from e
