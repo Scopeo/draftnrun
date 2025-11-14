@@ -1,5 +1,22 @@
+import os
 import pytest
 from unittest.mock import patch
+from pytest_alembic.config import Config
+from pytest_mock_resources import create_postgres_fixture
+
+
+# Pin PMR Postgres image version for the ephemeral DB
+os.environ.setdefault("PMR_POSTGRES_IMAGE", "postgres:16")
+
+# Use pytest-mock-resources ephemeral Postgres
+alembic_engine = create_postgres_fixture()
+
+
+@pytest.fixture
+def alembic_config():
+    cfg = Config(config_options={"file": "ada_backend/database/alembic.ini"})
+    return cfg
+
 
 # Import LLM service mocks
 from tests.mocks.llm_service import (

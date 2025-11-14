@@ -9,6 +9,7 @@ from ada_backend.database.demo.demo_graph_test import build_graph_test_chatbot, 
 from ada_backend.database.demo.demo_react_sql_tool import build_react_sql_agent_chatbot
 from ada_backend.services.graph.update_graph_service import update_graph_service
 from ada_backend.database.seed.utils import COMPONENT_VERSION_UUIDS
+from ada_backend.database.utils import update_model_fields, models_are_equal
 
 LOGGER = logging.getLogger(__name__)
 
@@ -30,6 +31,130 @@ SOURCE_UUIDS: dict[str, UUID] = {
     "graph_test_source": UUID("ff39489a-ac21-4a5a-8ea6-e21f510b3538"),
 }
 DEFAULT_ORGANIZATION_ID = UUID("37b7d67f-8f29-4fce-8085-19dea582f605")
+
+
+def upsert_projects(session: Session, projects: list[db.Project]) -> None:
+    """
+    Upserts a list of projects into the database.
+    If a project with the same ID exists and has different attributes, it will be updated.
+    If it exists and has the same attributes, it will be skipped.
+    If a project with the same ID does not exist, it will be inserted.
+    """
+    for project in projects:
+        existing_project = (
+            session.query(db.Project)
+            .filter(
+                db.Project.id == project.id,
+            )
+            .first()
+        )
+
+        if existing_project:
+            if models_are_equal(existing_project, project):
+                LOGGER.info(f"Project {project.name} did not change, skipping.")
+            else:
+                update_model_fields(existing_project, project)
+                LOGGER.info(f"Project {project.name} updated.")
+        else:
+            session.add(project)
+            LOGGER.info(f"Project {project.name} inserted.")
+    session.commit()
+
+
+def upsert_graph_runners(session: Session, graph_runners: list[db.GraphRunner]) -> None:
+    """
+    Upserts a list of graph runners into the database.
+    If a graph runner with the same ID exists and has different attributes, it will be updated.
+    If it exists and has the same attributes, it will be skipped.
+    If a graph runner with the same ID does not exist, it will be inserted.
+    """
+    for graph_runner in graph_runners:
+        existing_graph_runner = (
+            session.query(db.GraphRunner)
+            .filter(
+                db.GraphRunner.id == graph_runner.id,
+            )
+            .first()
+        )
+
+        if existing_graph_runner:
+            if models_are_equal(existing_graph_runner, graph_runner):
+                LOGGER.info(f"Graph runner {graph_runner.id} did not change, skipping.")
+            else:
+                update_model_fields(existing_graph_runner, graph_runner)
+                LOGGER.info(f"Graph runner {graph_runner.id} updated.")
+        else:
+            session.add(graph_runner)
+            LOGGER.info(f"Graph runner {graph_runner.id} inserted.")
+    session.commit()
+
+
+def upsert_project_environment_bindings(session: Session, bindings: list[db.ProjectEnvironmentBinding]) -> None:
+    """
+    Upserts a list of project environment bindings into the database.
+    Looks up bindings by (project_id, environment) since there's a unique constraint on these fields.
+    If a binding with the same project_id and environment exists and has different attributes, it will be updated.
+    If it exists and has the same attributes, it will be skipped.
+    If a binding with the same project_id and environment does not exist, it will be inserted.
+    """
+    for binding in bindings:
+        existing_binding = (
+            session.query(db.ProjectEnvironmentBinding)
+            .filter(
+                db.ProjectEnvironmentBinding.project_id == binding.project_id,
+                db.ProjectEnvironmentBinding.environment == binding.environment,
+            )
+            .first()
+        )
+
+        if existing_binding:
+            # Copy the ID from existing binding to the new one for comparison
+            binding.id = existing_binding.id
+            if models_are_equal(existing_binding, binding):
+                LOGGER.info(
+                    f"Project environment binding (project={binding.project_id}, "
+                    f"env={binding.environment}) did not change, skipping."
+                )
+            else:
+                update_model_fields(existing_binding, binding)
+                LOGGER.info(
+                    f"Project environment binding (project={binding.project_id}, "
+                    f"env={binding.environment}) updated."
+                )
+        else:
+            session.add(binding)
+            LOGGER.info(
+                f"Project environment binding (project={binding.project_id}, " f"env={binding.environment}) inserted."
+            )
+    session.commit()
+
+
+def upsert_data_sources(session: Session, data_sources: list[db.DataSource]) -> None:
+    """
+    Upserts a list of data sources into the database.
+    If a data source with the same ID exists and has different attributes, it will be updated.
+    If it exists and has the same attributes, it will be skipped.
+    If a data source with the same ID does not exist, it will be inserted.
+    """
+    for data_source in data_sources:
+        existing_data_source = (
+            session.query(db.DataSource)
+            .filter(
+                db.DataSource.id == data_source.id,
+            )
+            .first()
+        )
+
+        if existing_data_source:
+            if models_are_equal(existing_data_source, data_source):
+                LOGGER.info(f"Data source {data_source.name} did not change, skipping.")
+            else:
+                update_model_fields(existing_data_source, data_source)
+                LOGGER.info(f"Data source {data_source.name} updated.")
+        else:
+            session.add(data_source)
+            LOGGER.info(f"Data source {data_source.name} inserted.")
+    session.commit()
 
 
 def seed_projects(session: Session):
@@ -60,14 +185,14 @@ def seed_projects(session: Session):
         type=db.ProjectType.WORKFLOW,
     )
 
-    session.add_all(
+    upsert_projects(
+        session,
         [
             project_1,
             graph_test_project,
             react_sql_agent_project,
-        ]
+        ],
     )
-    session.commit()
 
 
 def seed_graph_runner(session: Session):
@@ -109,25 +234,25 @@ def seed_graph_runner(session: Session):
         environment=db.EnvType.DRAFT,
     )
 
-    session.add_all(
+    upsert_graph_runners(
+        session,
         [
             graph_runner_prod,
             graph_runner_draft,
             react_sql_graph_runner_prod,
             react_sql_graph_runner_draft,
-        ]
+        ],
     )
-    session.commit()
 
-    session.add_all(
+    upsert_project_environment_bindings(
+        session,
         [
             test_gr_relationship_prod,
             test_gr_relationship_draft,
             react_gr_relationship_prod,
             react_gr_relationship_draft,
-        ]
+        ],
     )
-    session.commit()
 
 
 def seed_sources(session: Session):
@@ -139,8 +264,7 @@ def seed_sources(session: Session):
         source_id=SOURCE_UUIDS["graph_test_source"],
         organization_id=DEFAULT_ORGANIZATION_ID,
     )
-    session.add(graph_test_source)
-    session.commit()
+    upsert_data_sources(session, [graph_test_source])
 
 
 def seed_projects_db(session: Session):
