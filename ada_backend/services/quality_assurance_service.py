@@ -18,8 +18,6 @@ from ada_backend.repositories.quality_assurance_repository import (
     get_datasets_by_project,
     clear_version_outputs_for_input_ids,
     get_outputs_by_graph_runner,
-    create_llm_judge,
-    get_llm_judges_by_project,
 )
 from ada_backend.schemas.input_groundtruth_schema import (
     InputGroundtruthResponse,
@@ -40,11 +38,6 @@ from ada_backend.schemas.dataset_schema import (
     DatasetResponse,
     DatasetDeleteList,
     DatasetListResponse,
-)
-from ada_backend.schemas.llm_judge_schema import (
-    LLMJudgeCreate,
-    LLMJudgeResponse,
-    LLMJudgeListResponse,
 )
 from ada_backend.services.agent_runner_service import run_agent
 from ada_backend.database.models import CallType
@@ -494,29 +487,3 @@ def save_conversation_to_groundtruth_service(
     input_entry = InputGroundtruthCreate(input=input_payload, groundtruth=output_payload["messages"][-1]["content"])
     input_entries = create_inputs_groundtruths(session, dataset_id, [input_entry])
     return [InputGroundtruthResponse.model_validate(entry) for entry in input_entries]
-
-
-def create_llm_judge_service(
-    session: Session,
-    project_id: UUID,
-    judge_data: LLMJudgeCreate,
-) -> LLMJudgeResponse:
-    try:
-        llm_judge = create_llm_judge(session=session, project_id=project_id, judge_data=judge_data)
-        LOGGER.info(f"Created LLM judge {llm_judge.id} for project {project_id}")
-        return LLMJudgeResponse.model_validate(llm_judge)
-    except Exception as e:
-        LOGGER.error(f"Error in create_llm_judge_service for project {project_id}: {str(e)}")
-        raise ValueError(f"Failed to create LLM judge: {str(e)}") from e
-
-
-def get_llm_judges_by_project_service(
-    session: Session,
-    project_id: UUID,
-) -> LLMJudgeListResponse:
-    try:
-        judges = get_llm_judges_by_project(session=session, project_id=project_id)
-        return LLMJudgeListResponse(judges=[LLMJudgeResponse.model_validate(judge) for judge in judges])
-    except Exception as e:
-        LOGGER.error(f"Error in get_llm_judges_by_project_service for project {project_id}: {str(e)}")
-        raise ValueError(f"Failed to list LLM judges: {str(e)}") from e
