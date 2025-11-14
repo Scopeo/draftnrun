@@ -49,6 +49,7 @@ from ada_backend.services.entity_factory import (
     build_ocr_service_processor,
     build_project_reference_processor,
     build_db_service_processor,
+    build_llm_capability_resolver_processor,
 )
 from ada_backend.database.seed.constants import (
     COMPLETION_MODEL_IN_DB,
@@ -184,6 +185,7 @@ def create_factory_registry() -> FactoryRegistry:
         build_ocr_service_processor(),
     )
     db_service_processor = build_db_service_processor()
+    llm_capability_resolver_processor = build_llm_capability_resolver_processor()
 
     # Register components
     registry.register(
@@ -285,6 +287,7 @@ def create_factory_registry() -> FactoryRegistry:
             entity_class=LLMCallAgent,
             parameter_processors=[
                 completion_service_processor,
+                llm_capability_resolver_processor,
             ],
         ),
     )
