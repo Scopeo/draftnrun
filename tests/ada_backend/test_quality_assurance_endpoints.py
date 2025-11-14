@@ -254,13 +254,13 @@ def _create_dummy_agent_workflow_config():
                 "ref": "Start",
                 "is_start_node": True,
                 "component_id": "01357c0b-bc99-44ce-a435-995acc5e2544",  # input component UUID
-                "component_version_id": "01357c0b-bc99-44ce-a435-995acc5e2544",
+                "component_version_id": "7a6e2c9b-5b1b-4a9b-9f2f-9b7f0540d4b0",
                 "parameters": [
                     {
                         "value": DEFAULT_PAYLOAD_SCHEMA,
                         "name": "payload_schema",
                         "order": None,
-                        "id": "48332255-4a0e-4432-8fb4-46267e8ffd4d",
+                        "id": "1e50db7d-87cb-4c90-9082-451c4cbf93f9",
                         "type": "string",
                         "nullable": False,
                         "default": DEFAULT_PAYLOAD_SCHEMA,

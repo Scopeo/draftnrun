@@ -113,6 +113,7 @@ class UIComponent(StrEnum):
     TEXTAREA = "Textarea"
     TEXTFIELD = "Textfield"
     FILE_UPLOAD = "FileUpload"
+    JSON_BUILDER = "JSON Builder"
 
 
 class SourceType(StrEnum):
