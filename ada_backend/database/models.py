@@ -154,6 +154,11 @@ class CronStatus(StrEnum):
     RUNNING = "running"
 
 
+class EvaluationType(StrEnum):
+    BOOLEAN = "boolean"
+    SCORE = "score"
+
+
 class PortType(StrEnum):
     INPUT = "INPUT"
     OUTPUT = "OUTPUT"
@@ -1451,6 +1456,68 @@ class VersionOutput(Base):
     # Relationships
     input_groundtruth = relationship("InputGroundtruth", back_populates="version_outputs")
     graph_runner = relationship("GraphRunner")
+    judge_evaluations = relationship("JudgeEvaluation", back_populates="version_output", cascade="all, delete-orphan")
 
     def __str__(self):
         return f"VersionOutput(id={self.id}, input_id={self.input_id}, graph_runner_id={self.graph_runner_id})"
+
+
+class LLMJudge(Base):
+    __tablename__ = "llm_judges"
+    __table_args__ = {"schema": "quality_assurance"}
+
+    id = mapped_column(UUID(as_uuid=True), primary_key=True, index=True, server_default=func.gen_random_uuid())
+    project_id = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("projects.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    name = mapped_column(String, nullable=False)
+    description = mapped_column(Text, nullable=True)
+    evaluation_type = mapped_column(make_pg_enum(EvaluationType), nullable=False)
+    llm_model_reference = mapped_column(String, nullable=False, default="openai:gpt-5-mini")
+    prompt_template = mapped_column(Text, nullable=False)
+    temperature = mapped_column(Float, nullable=True, default=0.0)
+    created_at = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    # Relationships
+    project = relationship("Project")
+    evaluations = relationship("JudgeEvaluation", back_populates="judge", cascade="all, delete-orphan")
+
+    def __str__(self):
+        return f"LLMJudge(id={self.id}, name={self.name}, evaluation_type={self.evaluation_type})"
+
+
+class JudgeEvaluation(Base):
+    __tablename__ = "judge_evaluations"
+    __table_args__ = (
+        sa.UniqueConstraint("judge_id", "version_output_id", name="uq_judge_version_output"),
+        {"schema": "quality_assurance"},
+    )
+
+    id = mapped_column(UUID(as_uuid=True), primary_key=True, index=True, server_default=func.gen_random_uuid())
+    judge_id = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("quality_assurance.llm_judges.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    version_output_id = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("quality_assurance.version_output.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    evaluation_result = mapped_column(JSONB, nullable=False)
+    raw_llm_response = mapped_column(Text, nullable=True)
+    created_at = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    # Relationships
+    judge = relationship("LLMJudge", back_populates="evaluations")
+    version_output = relationship("VersionOutput", back_populates="judge_evaluations")
+
+    def __str__(self):
+        return f"JudgeEvaluation(judge_id={self.judge_id}, version_output_id={self.version_output_id})"
