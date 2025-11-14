@@ -38,6 +38,7 @@ def get_all_llm_models_endpoint(
 
 @router.post("/organizations/{organization_id}/llm-models/llm-model", response_model=LLMModelResponse)
 def create_llm_model_endpoint(
+    display_name: str,
     model_name: str,
     model_description: str,
     model_capacity: list[str],
@@ -51,11 +52,12 @@ def create_llm_model_endpoint(
         raise HTTPException(status_code=400, detail="User ID not found")
     try:
         return create_llm_model_service(
-            session,
-            model_name,
-            model_description,
-            model_capacity,
-            model_provider,
+            session=session,
+            display_name=display_name,
+            model_description=model_description,
+            model_capacity=model_capacity,
+            model_provider=model_provider,
+            model_name=model_name,
         )
     except Exception as e:
         LOGGER.error(f"Failed to create LLM model: {str(e)}", exc_info=True)

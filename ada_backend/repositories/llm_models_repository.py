@@ -10,7 +10,7 @@ def get_all_llm_models(session: Session) -> list[db.LLMModels]:
 
 def get_llm_models_by_capability(session: Session, capabilities: list[str]) -> list[db.LLMModels]:
 
-    query = session.query(db.LLMModels).order_by(db.LLMModels.name)
+    query = session.query(db.LLMModels).order_by(db.LLMModels.id)
 
     for capability in capabilities:
         query = query.filter(db.LLMModels.model_capacity.contains([capability]))
@@ -19,14 +19,14 @@ def get_llm_models_by_capability(session: Session, capabilities: list[str]) -> l
 
 
 def create_llm_model(
-    session: Session, model_name: str, model_description: str, model_capacity: list[str], model_provider: str
+    session: Session, display_name: str, model_description: str, model_capacity: list[str], model_provider: str, model_name: str
 ) -> db.LLMModels:
     llm_model = db.LLMModels(
-        name=model_name,
+        display_name=display_name,
         description=model_description,
         model_capacity=model_capacity,
         provider=model_provider,
-        reference=model_provider + ":" + model_name,
+        model_name=model_name,
     )
     session.add(llm_model)
     session.commit()
@@ -42,7 +42,7 @@ def update_llm_model(session: Session, llm_model: db.LLMModels) -> db.LLMModels:
     existing_llm_model = session.query(db.LLMModels).filter(db.LLMModels.id == llm_model.id).first()
     if not existing_llm_model:
         return None
-    if llm_model.name is not None:
+    if llm_model.display_name is not None:
         existing_llm_model.name = llm_model.name
     if llm_model.description is not None:
         existing_llm_model.description = llm_model.description
@@ -50,7 +50,6 @@ def update_llm_model(session: Session, llm_model: db.LLMModels) -> db.LLMModels:
         existing_llm_model.model_capacity = llm_model.model_capacity
     if llm_model.provider is not None:
         existing_llm_model.provider = llm_model.provider
-    existing_llm_model.reference = llm_model.provider + ":" + llm_model.name
     session.commit()
     session.refresh(existing_llm_model)
     return existing_llm_model
