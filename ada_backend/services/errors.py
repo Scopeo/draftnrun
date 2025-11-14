@@ -73,10 +73,6 @@ class EnvironmentNotFound(Exception):
         super().__init__(f"Environment '{environment}' not found for project: {project_id}")
 
 
-class QAError(Exception):
-    pass
-
-
 class InvalidAgentTemplate(Exception):
     def __init__(self, template_project_id: UUID, template_graph_runner_id: UUID):
         self.template_project_id = template_project_id
