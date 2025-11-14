@@ -5,8 +5,9 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 
-from ada_backend.database.models import InputGroundtruth, DatasetProject, VersionOutput
+from ada_backend.database.models import InputGroundtruth, DatasetProject, VersionOutput, LLMJudge
 from ada_backend.schemas.input_groundtruth_schema import InputGroundtruthCreate
+from ada_backend.schemas.llm_judge_schema import LLMJudgeCreate
 
 LOGGER = logging.getLogger(__name__)
 
@@ -294,3 +295,40 @@ def delete_datasets(
 
     LOGGER.info(f"Deleted {deleted_count} datasets for project {project_id}")
     return deleted_count
+
+
+def create_llm_judge(
+    session: Session,
+    project_id: UUID,
+    judge_data: LLMJudgeCreate,
+) -> LLMJudge:
+    llm_judge = LLMJudge(
+        project_id=project_id,
+        name=judge_data.name,
+        description=judge_data.description,
+        evaluation_type=judge_data.evaluation_type,
+        llm_model_reference=judge_data.llm_model_reference,
+        prompt_template=judge_data.prompt_template,
+        temperature=judge_data.temperature,
+    )
+
+    session.add(llm_judge)
+    session.commit()
+    session.refresh(llm_judge)
+
+    LOGGER.info(f"Created LLM judge {llm_judge.id} for project {project_id}")
+    return llm_judge
+
+
+def get_llm_judges_by_project(
+    session: Session,
+    project_id: UUID,
+) -> List[LLMJudge]:
+    return session.query(LLMJudge).filter(LLMJudge.project_id == project_id).order_by(LLMJudge.created_at.desc()).all()
+
+
+def get_llm_judge_by_id(
+    session: Session,
+    judge_id: UUID,
+) -> Optional[LLMJudge]:
+    return session.query(LLMJudge).filter(LLMJudge.id == judge_id).first()
