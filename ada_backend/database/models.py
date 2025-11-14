@@ -5,6 +5,7 @@ from enum import StrEnum
 import logging
 
 from sqlalchemy import (
+    Float,
     ForeignKeyConstraint,
     Index,
     String,
@@ -1482,7 +1483,6 @@ class LLMJudge(Base):
     created_at = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
-    # Relationships
     project = relationship("Project")
     evaluations = relationship("JudgeEvaluation", back_populates="judge", cascade="all, delete-orphan")
 
@@ -1515,7 +1515,6 @@ class JudgeEvaluation(Base):
     created_at = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
-    # Relationships
     judge = relationship("LLMJudge", back_populates="evaluations")
     version_output = relationship("VersionOutput", back_populates="judge_evaluations")
 
