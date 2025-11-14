@@ -19,7 +19,12 @@ def get_llm_models_by_capability(session: Session, capabilities: list[str]) -> l
 
 
 def create_llm_model(
-    session: Session, display_name: str, model_description: str, model_capacity: list[str], model_provider: str, model_name: str
+    session: Session,
+    display_name: str,
+    model_description: str,
+    model_capacity: list[str],
+    model_provider: str,
+    model_name: str,
 ) -> db.LLMModels:
     llm_model = db.LLMModels(
         display_name=display_name,
