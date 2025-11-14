@@ -55,13 +55,25 @@ def _serialize_object(obj: Any, visited: Optional[set] = None, shorten_string: b
         if obj_id in visited:
             return f"<Circular reference to {type(obj).__name__}>"
         visited.add(obj_id)
-        return {k: _serialize_object(v, visited, shorten_string) for k, v in obj.items()}
+        try:
+            return {k: _serialize_object(v, visited, shorten_string) for k, v in obj.items()}
+        finally:
+            visited.remove(obj_id)
     elif hasattr(obj, "model_dump"):
         # Handle Pydantic BaseModel objects
+        # Track the Pydantic object itself to avoid reprocessing the same model instance
+        obj_id = id(obj)
+        if obj_id in visited:
+            return f"<Circular reference to {type(obj).__name__}>"
+        visited.add(obj_id)
         try:
-            return _serialize_object(obj.model_dump(), visited, shorten_string)
+            dumped = obj.model_dump()
+            result = _serialize_object(dumped, visited, shorten_string)
+            return result
         except Exception:
             return f"<{type(obj).__name__} object>"
+        finally:
+            visited.remove(obj_id)
     else:
         # For any other type, try to convert to string
         try:
