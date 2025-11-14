@@ -1,8 +1,8 @@
 from enum import Enum, StrEnum
 from typing import Type
 
-from sqlalchemy import Text, Column, Integer, String, TIMESTAMP, Enum as SQLAlchemyEnum
-from sqlalchemy.orm import declarative_base, mapped_column
+from sqlalchemy import Text, Column, Integer, String, TIMESTAMP, Enum as SQLAlchemyEnum, ForeignKey
+from sqlalchemy.orm import declarative_base, mapped_column, relationship
 from opentelemetry.trace.status import StatusCode
 from openinference.semconv.trace import OpenInferenceSpanKindValues
 from sqlalchemy.dialects.postgresql import JSONB, UUID
@@ -75,6 +75,8 @@ class Span(Base):
     project_id = Column(String, nullable=True, index=True)
     tag_name = Column(String, nullable=True)
 
+    messages = relationship("SpanMessage", back_populates="span")
+
 
 class OrganizationUsage(Base):
     __tablename__ = "organization_usage"
@@ -88,6 +90,8 @@ class SpanMessage(Base):
     __tablename__ = "span_messages"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    span_id = Column(String, nullable=False)
+    span_id = Column(String, ForeignKey("spans.span_id", ondelete="CASCADE"), nullable=False)
     input_content = Column(Text, nullable=False)
     output_content = Column(Text, nullable=False)
+
+    span = relationship("Span", back_populates="messages")
