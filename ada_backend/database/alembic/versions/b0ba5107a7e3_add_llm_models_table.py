@@ -1,7 +1,7 @@
 """add llm models table
 
 Revision ID: b0ba5107a7e3
-Revises: 8729faf18d1c
+Revises: 88dcf82ab86
 Create Date: 2025-11-13 10:51:54.913356
 
 """
@@ -14,7 +14,7 @@ from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
 revision: str = "b0ba5107a7e3"
-down_revision: Union[str, None] = "8729faf18d1c"
+down_revision: Union[str, None] = "88dcf82ab86"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

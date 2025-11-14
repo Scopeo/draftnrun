@@ -2,7 +2,8 @@
     "custom_models": {
         "provider_name": [
             {
-                "name": "my-llm-1-model-name",
+                "display_name": "my-llm-1-model-display-name",
+                "model_name": "my-llm-1-model-name",
                 "description": "my-llm-1-model-description",
                 "model_capacity": [
                     "completion",
@@ -13,7 +14,8 @@
                 "image_format": "jpeg"
             },
             {
-                "name": "my-llm-2-model-name",
+                "display_name": "my-llm-2-model-display-name",
+                "model_name": "my-llm-2-model-name",
                 "description": "my-llm-2-model-description",
                 "model_capacity": [
                     "completion",
@@ -24,7 +26,8 @@
                 "image_format": "png"
             },
             {
-                "name": "my-llm-3-model-name",
+                "display_name": "my-llm-3-model-display-name",
+                "model_name": "my-llm-3-model-name",
                 "description": "my-llm-3-model-description",
                 "model_capacity": [
                     "embedding"
