@@ -591,11 +591,20 @@ class LLMModelsAdmin(EnhancedModelView, model=db.LLMModels):
     category = AdminCategory.LLM_MODELS
     name = "LLM Model"
     icon = "fas fa-cogs"
-    column_list = ["id", "name", "description", "provider", "reference", "model_capacity", "created_at", "updated_at"]
-    form_columns = ["name", "provider", "reference", "model_capacity"]
+    column_list = [
+        "id",
+        "display_name",
+        "description",
+        "provider",
+        "model_name",
+        "model_capacity",
+        "created_at",
+        "updated_at",
+    ]
+    form_columns = ["display_name", "provider", "model_name", "model_capacity"]
 
-    column_searchable_list = ["name", "provider", "reference"]
-    column_filters = ["provider", "reference"]
+    column_searchable_list = ["display_name", "provider", "model_name"]
+    column_filters = ["provider", "model_name"]
 
 
 class AdminAuth(AuthenticationBackend):

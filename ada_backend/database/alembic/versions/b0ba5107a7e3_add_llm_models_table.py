@@ -24,10 +24,10 @@ def upgrade() -> None:
     op.create_table(
         "llm_model",
         sa.Column("id", sa.UUID(), server_default=sa.text("gen_random_uuid()"), nullable=False),
-        sa.Column("name", sa.String(), nullable=False),
+        sa.Column("display_name", sa.String(), nullable=False),
         sa.Column("description", sa.Text(), nullable=True),
         sa.Column("provider", sa.String(), nullable=False),
-        sa.Column("reference", sa.String(), nullable=False),
+        sa.Column("model_name", sa.String(), nullable=False),
         sa.Column("model_capacity", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=True),
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=True),
@@ -36,20 +36,20 @@ def upgrade() -> None:
     op.create_index(op.f("ix_llm_model_id"), "llm_model", ["id"], unique=False)
     llm_models_table = sa.table(
         "llm_model",
-        sa.column("name", sa.String()),
+        sa.column("display_name", sa.String()),
         sa.column("description", sa.Text()),
         sa.column("provider", sa.String()),
-        sa.column("reference", sa.String()),
+        sa.column("model_name", sa.String()),
         sa.column("model_capacity", postgresql.JSONB(astext_type=sa.Text())),
     )
     op.bulk_insert(
         llm_models_table,
         [
             {
-                "name": "GPT-5",
+                "display_name": "GPT-5",
                 "description": None,
                 "provider": "openai",
-                "reference": "openai:gpt-5",
+                "model_name": "gpt-5",
                 "model_capacity": [
                     "completion",
                     "file",
@@ -61,10 +61,10 @@ def upgrade() -> None:
                 ],
             },
             {
-                "name": "GPT-5 Nano",
+                "display_name": "GPT-5 Nano",
                 "description": None,
                 "provider": "openai",
-                "reference": "openai:gpt-5-nano",
+                "model_name": "gpt-5-nano",
                 "model_capacity": [
                     "completion",
                     "file",
@@ -76,10 +76,10 @@ def upgrade() -> None:
                 ],
             },
             {
-                "name": "GPT-5 Mini",
+                "display_name": "GPT-5 Mini",
                 "description": None,
                 "provider": "openai",
-                "reference": "openai:gpt-5-mini",
+                "model_name": "gpt-5-mini",
                 "model_capacity": [
                     "completion",
                     "file",
@@ -91,10 +91,10 @@ def upgrade() -> None:
                 ],
             },
             {
-                "name": "GPT-4.1",
+                "display_name": "GPT-4.1",
                 "description": None,
                 "provider": "openai",
-                "reference": "openai:gpt-4.1",
+                "model_name": "gpt-4.1",
                 "model_capacity": [
                     "completion",
                     "file",
@@ -105,10 +105,10 @@ def upgrade() -> None:
                 ],
             },
             {
-                "name": "GPT-4.1 Mini",
+                "display_name": "GPT-4.1 Mini",
                 "description": None,
                 "provider": "openai",
-                "reference": "openai:gpt-4.1-mini",
+                "model_name": "gpt-4.1-mini",
                 "model_capacity": [
                     "completion",
                     "file",
@@ -119,10 +119,10 @@ def upgrade() -> None:
                 ],
             },
             {
-                "name": "GPT-4.1 Nano",
+                "display_name": "GPT-4.1 Nano",
                 "description": None,
                 "provider": "openai",
-                "reference": "openai:gpt-4.1-nano",
+                "model_name": "gpt-4.1-nano",
                 "model_capacity": [
                     "completion",
                     "image",
@@ -132,24 +132,10 @@ def upgrade() -> None:
                 ],
             },
             {
-                "name": "GPT-4o",
+                "display_name": "GPT-4o",
                 "description": None,
                 "provider": "openai",
-                "reference": "openai:gpt-4o",
-                "model_capacity": [
-                    "completion",
-                    "image",
-                    "file",
-                    "constrained_output",
-                    "function_calling",
-                    "web_search",
-                ],
-            },
-            {
-                "name": "GPT-4o Mini",
-                "description": None,
-                "provider": "openai",
-                "reference": "openai:gpt-4o-mini",
+                "model_name": "gpt-4o",
                 "model_capacity": [
                     "completion",
                     "image",
@@ -160,10 +146,24 @@ def upgrade() -> None:
                 ],
             },
             {
-                "name": "Gemini 2.5 Pro",
+                "display_name": "GPT-4o Mini",
+                "description": None,
+                "provider": "openai",
+                "model_name": "gpt-4o-mini",
+                "model_capacity": [
+                    "completion",
+                    "image",
+                    "file",
+                    "constrained_output",
+                    "function_calling",
+                    "web_search",
+                ],
+            },
+            {
+                "display_name": "Gemini 2.5 Pro",
                 "description": None,
                 "provider": "google",
-                "reference": "google:gemini-2.5-pro-preview-06-05",
+                "model_name": "gemini-2.5-pro-preview-06-05",
                 "model_capacity": [
                     "completion",
                     "image",
@@ -172,10 +172,10 @@ def upgrade() -> None:
                 ],
             },
             {
-                "name": "Gemini 2.5 Flash",
+                "display_name": "Gemini 2.5 Flash",
                 "description": None,
                 "provider": "google",
-                "reference": "google:gemini-2.5-flash-preview-05-20",
+                "model_name": "gemini-2.5-flash-preview-05-20",
                 "model_capacity": [
                     "completion",
                     "image",
@@ -184,10 +184,10 @@ def upgrade() -> None:
                 ],
             },
             {
-                "name": "Gemini 2.0 Flash",
+                "display_name": "Gemini 2.0 Flash",
                 "description": None,
                 "provider": "google",
-                "reference": "google:gemini-2.0-flash",
+                "model_name": "gemini-2.0-flash",
                 "model_capacity": [
                     "completion",
                     "image",
@@ -196,10 +196,10 @@ def upgrade() -> None:
                 ],
             },
             {
-                "name": "Gemini 2.0 Flash lite",
+                "display_name": "Gemini 2.0 Flash lite",
                 "description": None,
                 "provider": "google",
-                "reference": "google:gemini-2.0-flash-lite",
+                "model_name": "gemini-2.0-flash-lite",
                 "model_capacity": [
                     "completion",
                     "image",
@@ -208,10 +208,10 @@ def upgrade() -> None:
                 ],
             },
             {
-                "name": "Llama 3.3 70B (Cerebras)",
+                "display_name": "Llama 3.3 70B (Cerebras)",
                 "description": None,
                 "provider": "cerebras",
-                "reference": "cerebras:llama-3.3-70b",
+                "model_name": "llama-3.3-70b",
                 "model_capacity": [
                     "completion",
                     "constrained_output",
@@ -219,10 +219,10 @@ def upgrade() -> None:
                 ],
             },
             {
-                "name": "Qwen 3 235B Instruct (Cerebras)",
+                "display_name": "Qwen 3 235B Instruct (Cerebras)",
                 "description": None,
                 "provider": "cerebras",
-                "reference": "cerebras:qwen-3-235b-a22b-instruct-2507",
+                "model_name": "qwen-3-235b-a22b-instruct-2507",
                 "model_capacity": [
                     "completion",
                     "constrained_output",
@@ -230,10 +230,10 @@ def upgrade() -> None:
                 ],
             },
             {
-                "name": "Qwen 3 32B (Cerebras)",
+                "display_name": "Qwen 3 32B (Cerebras)",
                 "description": None,
                 "provider": "cerebras",
-                "reference": "cerebras:qwen-3-32b",
+                "model_name": "qwen-3-32b",
                 "model_capacity": [
                     "completion",
                     "constrained_output",
@@ -242,10 +242,10 @@ def upgrade() -> None:
                 ],
             },
             {
-                "name": "OpenAI GPT OSS (Cerebras)",
+                "display_name": "OpenAI GPT OSS (Cerebras)",
                 "description": None,
                 "provider": "cerebras",
-                "reference": "cerebras:gpt-oss-120b",
+                "model_name": "gpt-oss-120b",
                 "model_capacity": [
                     "completion",
                     "constrained_output",
@@ -253,10 +253,10 @@ def upgrade() -> None:
                 ],
             },
             {
-                "name": "Mistral Large 2411",
+                "display_name": "Mistral Large 2411",
                 "description": None,
                 "provider": "mistral",
-                "reference": "mistral:mistral-large-latest",
+                "model_name": "mistral-large-latest",
                 "model_capacity": [
                     "completion",
                     "constrained_output",
@@ -264,10 +264,10 @@ def upgrade() -> None:
                 ],
             },
             {
-                "name": "Mistral Medium 2505",
+                "display_name": "Mistral Medium 2505",
                 "description": None,
                 "provider": "mistral",
-                "reference": "mistral:mistral-medium-latest",
+                "model_name": "mistral-medium-latest",
                 "model_capacity": [
                     "completion",
                     "constrained_output",
@@ -275,19 +275,19 @@ def upgrade() -> None:
                 ],
             },
             {
-                "name": "Mistral OCR 2505",
+                "display_name": "Mistral OCR 2505",
                 "description": None,
                 "provider": "mistral",
-                "reference": "mistral:mistral-ocr-latest",
+                "model_name": "mistral-ocr-latest",
                 "model_capacity": [
                     "ocr",
                 ],
             },
             {
-                "name": "Text Embedding 3 Large",
+                "display_name": "Text Embedding 3 Large",
                 "description": None,
                 "provider": "openai",
-                "reference": "openai:text-embedding-3-large",
+                "model_name": "text-embedding-3-large",
                 "model_capacity": [
                     "embedding",
                 ],
