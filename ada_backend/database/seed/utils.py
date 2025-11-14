@@ -115,6 +115,7 @@ COMPONENT_VERSION_UUIDS: dict[str, UUID] = {
     "document_react_loader_agent": UUID("1c2fdf5b-4a8d-4788-acb6-86b00124c7ce"),
     "ocr_call": UUID("a3b4c5d6-e7f8-9012-3456-789abcdef012"),
     "start": UUID("01357c0b-bc99-44ce-a435-995acc5e2544"),
+    "start_v2": UUID("7a6e2c9b-5b1b-4a9b-9f2f-9b7f0540d4b0"),
     "filter": UUID("02468c0b-bc99-44ce-a435-995acc5e2545"),
     "gmail_sender": UUID("af96bb40-c9ea-4851-a663-f0e64363fcb2"),
     "python_code_runner": UUID("e2b00000-0000-1111-2222-333333333333"),
