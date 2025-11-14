@@ -1,0 +1,21 @@
+[Unit]
+Description=APScheduler instance for Ada cron jobs
+After=network.target
+
+[Service]
+User=${SERVICE_USER}
+Group=${SERVICE_USER}
+WorkingDirectory=${APP_DIR}
+ExecStart=${APP_DIR}/.venv/bin/python -m ada_backend.run_scheduler
+Restart=always
+Type=simple
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+StandardOutput=append:${LOGFOLDER}/apscheduler_stdout.log
+StandardError=append:${LOGFOLDER}/apscheduler_stderr.log
+
+[Install]
+WantedBy=multi-user.target
+

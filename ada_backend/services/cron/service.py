@@ -28,18 +28,11 @@ from ada_backend.schemas.cron_schema import (
     CronJobPauseResponse,
     CronEntrypoint,
 )
-from ada_backend.scheduler.service import (
-    add_job_to_scheduler,
-    remove_job_from_scheduler,
-    pause_job_in_scheduler,
-    resume_job_in_scheduler,
-)
 from ada_backend.services.cron.registry import CRON_REGISTRY
 from ada_backend.services.cron.errors import (
     CronValidationError,
     CronJobNotFound,
     CronJobAccessDenied,
-    CronSchedulerError,
 )
 from ada_backend.services.cron.constants import CRON_MIN_INTERVAL_MINUTES
 
@@ -171,7 +164,7 @@ def create_cron_job(
     cron_data: CronJobCreate,
     **kwargs,  # For user_id, etc.
 ) -> CronJobResponse:
-    """Create a cron job and schedule it."""
+    """Create a cron job in the database."""
     _validate_cron_expression(cron_data.cron_expr)
     _validate_timezone(cron_data.tz)
     _validate_maximum_frequency(cron_data.cron_expr)
@@ -200,19 +193,7 @@ def create_cron_job(
         is_enabled=True,
     )
 
-    try:
-        add_job_to_scheduler(
-            cron_id=cron_id,
-            cron_expr=cron_data.cron_expr,
-            tz=cron_data.tz,
-            entrypoint=cron_data.entrypoint,
-            payload=execution_payload,
-        )
-        LOGGER.info(f"Created and scheduled cron job {cron_id}")
-    except Exception as e:
-        LOGGER.error(f"Failed to schedule cron job {cron_id}: {e}")
-        update_cron_job(session, cron_id, is_enabled=False)
-        raise CronSchedulerError(f"Failed to schedule cron job: {e}") from e
+    LOGGER.info(f"Created cron job {cron_id}.")
 
     return CronJobResponse.model_validate(cron_job)
 
@@ -224,7 +205,7 @@ def update_cron_job_service(
     organization_id: UUID,
     **kwargs,  # For user_id, etc.
 ) -> Optional[CronJobResponse]:
-    """Update cron fields and reconcile scheduler if needed."""
+    """Update cron job fields in the database."""
     existing_cron = _assert_cron_in_org(session, cron_id, organization_id)
 
     if cron_data.cron_expr is not None:
@@ -259,36 +240,7 @@ def update_cron_job_service(
     if not updated_cron:
         raise CronJobNotFound(f"Cron job {cron_id} not found")
 
-    # Update scheduler if job parameters changed
-    if any(
-        [
-            cron_data.cron_expr is not None,
-            cron_data.tz is not None,
-            cron_data.entrypoint is not None,
-            cron_data.payload is not None,
-        ]
-    ):
-        try:
-            remove_job_from_scheduler(cron_id)
-            if updated_cron.is_enabled:
-                add_job_to_scheduler(
-                    cron_id=cron_id,
-                    cron_expr=updated_cron.cron_expr,
-                    tz=updated_cron.tz,
-                    entrypoint=updated_cron.entrypoint,
-                    payload=updated_cron.payload,
-                )
-            LOGGER.info(f"Updated cron job {cron_id} in scheduler")
-        except Exception as e:
-            LOGGER.error(f"Failed to update cron job {cron_id} in scheduler: {e}")
-            # Don't fail the whole operation, just log the error
-
-    # Handle pause/resume
-    elif cron_data.is_enabled is not None:
-        if cron_data.is_enabled and not existing_cron.is_enabled:
-            resume_job_in_scheduler(cron_id)
-        elif not cron_data.is_enabled and existing_cron.is_enabled:
-            pause_job_in_scheduler(cron_id)
+    LOGGER.info(f"Updated cron job {cron_id}.")
 
     return CronJobResponse.model_validate(updated_cron)
 
@@ -299,50 +251,44 @@ def delete_cron_job_service(
     organization_id: UUID,
 ) -> Optional[CronJobDeleteResponse]:
     """
-    Delete a cron job after asserting org ownership.
-    First removes the job from the scheduler, then deletes the job from the database.
+    Delete a cron job from the database after asserting org ownership.
     """
     _assert_cron_in_org(session, cron_id, organization_id)
 
-    remove_job_from_scheduler(cron_id)
     success = delete_cron_job(session, cron_id)
 
     if success:
-        LOGGER.info(f"Deleted cron job {cron_id}")
+        LOGGER.info(f"Deleted cron job {cron_id}.")
         return CronJobDeleteResponse(id=cron_id)
 
     return None
 
 
 def pause_cron_job(session: Session, cron_id: UUID, organization_id: UUID) -> Optional[CronJobPauseResponse]:
-    """Set cron job to inactive and pause scheduler job."""
+    """Set cron job to inactive in the database."""
     _assert_cron_in_org(session, cron_id, organization_id)
     updated_cron = update_cron_job(session, cron_id, is_enabled=False)
     if not updated_cron:
         return None
 
-    pause_job_in_scheduler(cron_id)
-
     return CronJobPauseResponse(
         id=cron_id,
         is_enabled=False,
-        message="Cron job paused successfully",
+        message="Cron job paused successfully.",
     )
 
 
 def resume_cron_job(session: Session, cron_id: UUID, organization_id: UUID) -> Optional[CronJobPauseResponse]:
-    """Set cron job to active and resume scheduler job."""
+    """Set cron job to active in the database."""
     _assert_cron_in_org(session, cron_id, organization_id)
     updated_cron = update_cron_job(session, cron_id, is_enabled=True)
     if not updated_cron:
         return None
 
-    resume_job_in_scheduler(cron_id)
-
     return CronJobPauseResponse(
         id=cron_id,
         is_enabled=True,
-        message="Cron job resumed successfully",
+        message="Cron job resumed successfully.",
     )
 
 

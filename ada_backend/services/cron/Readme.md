@@ -13,13 +13,16 @@ The CRON system automates scheduled tasks using APScheduler with our database as
 **API Layer**
 
 - Simple CRUD endpoints for registering/managing cron jobs
-- Service layer handles validation and coordinates between our tables and scheduler service
 
 **Scheduler Service**
 
-- Runs outside the service layer with APScheduler logic
-- Added to backend via FastAPI lifespan
-- Syncs with cron_jobs table as ground truth on startup and changes
+- Runs as a systemd service via `run_scheduler` (separate from the API backend)
+with the command:
+  ```bash
+  uv run python -m ada_backend.run_scheduler
+  ```
+- Handles sync between apscheduler_jobs table and cron_jobs table
+- Executes scheduled jobs when they trigger
 
 ## System Flow
 

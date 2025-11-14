@@ -30,7 +30,6 @@ from engine.trace.trace_context import set_trace_manager
 from engine.trace.trace_manager import TraceManager
 from settings import settings
 from logger import setup_logging
-from ada_backend.scheduler_boot import scheduler_lifespan
 from ada_backend.routers.ingestion_database_router import router as ingestion_database_router
 
 setup_logging()
@@ -41,7 +40,6 @@ app = FastAPI(
     title="Ada Backend",
     description="API for managing and running LLM agents",
     version="0.1.0",
-    lifespan=scheduler_lifespan,
     openapi_tags=[
         {
             "name": "Auth",

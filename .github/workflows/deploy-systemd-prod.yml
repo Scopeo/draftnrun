@@ -66,3 +66,49 @@ jobs:
           echo "❌ Healthcheck failed. Gunicorn may not be running correctly."
           exit 1
         }
+
+
+    - name: Fill in apscheduler.service template
+      run: |
+        envsubst < infra/systemd/apscheduler.service > filled-apscheduler.service
+        cat filled-apscheduler.service
+
+    - name: Upload APScheduler service to EC2
+      uses: appleboy/scp-action@master
+      with:
+        host: ${{ secrets.EC2_HOST_SCOPEO_STAGING }}
+        username: ec2-user
+        key: ${{ secrets.SSH_PRIVATE_KEY }}
+        source: "filled-apscheduler.service"
+        target: "/tmp/"
+
+    - name: Deploy APScheduler systemd service
+      uses: appleboy/ssh-action@master
+      with:
+        host: ${{ secrets.EC2_HOST_SCOPEO_STAGING }}
+        username: ec2-user
+        key: ${{ secrets.SSH_PRIVATE_KEY }}
+        port: 22
+        script: |
+          sudo mv /tmp/filled-apscheduler.service /etc/systemd/system/apscheduler.service
+          sudo chmod 644 /etc/systemd/system/apscheduler.service
+          sudo systemctl daemon-reload
+          sudo systemctl restart apscheduler.service
+
+    - name: Healthcheck - Verify APScheduler is running
+      uses: appleboy/ssh-action@master
+      with:
+        host: ${{ secrets.EC2_HOST_SCOPEO_STAGING }}
+        username: ec2-user
+        key: ${{ secrets.SSH_PRIVATE_KEY }}
+        port: 22
+        script: |
+          echo "Waiting 5s before checking APScheduler..."
+          sleep 5
+          if sudo systemctl is-active --quiet apscheduler.service; then
+            echo "✅ APScheduler service is running"
+          else
+            echo "❌ APScheduler service is not running"
+            sudo systemctl status apscheduler.service
+            exit 1
+          fi
