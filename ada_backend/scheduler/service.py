@@ -8,28 +8,60 @@ from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
 from apscheduler.executors.asyncio import AsyncIOExecutor
 from apscheduler.events import EVENT_JOB_EXECUTED, EVENT_JOB_ERROR, JobExecutionEvent
 from apscheduler.job import Job
-
 from ada_backend.database.setup_db import get_db_session, get_db_url
 from ada_backend.database.models import CronStatus, CronEntrypoint
 from ada_backend.repositories.cron_repository import (
     insert_cron_run,
     update_cron_run,
-    get_all_enabled_cron_jobs,
     get_cron_runs_by_cron_id,
 )
 from ada_backend.services.cron.registry import CRON_REGISTRY
+from engine.trace.trace_context import set_trace_manager
+from engine.trace.trace_manager import TraceManager
+from ada_backend.scheduler.utils import log_sync_job_status
+from ada_backend.scheduler.sync_cron_jobs_with_scheduler import schedule_sync_job
 
 LOGGER = logging.getLogger(__name__)
 
 
 SCHEDULER_POLL_INTERVAL_SECONDS = 3
-"""
-How often the scheduler checks the job store for changes (in seconds).
-A lower value means faster updates but more database queries.
-"""
+
 
 # Global scheduler instance
 _scheduler: Optional[AsyncIOScheduler] = None
+
+# Shared TraceManager instance for all scheduler jobs
+# Since APScheduler doesn't propagate context variables, we create a singleton
+# that gets set in each job's context to avoid creating multiple TraceManagers
+_scheduler_trace_manager: Optional[TraceManager] = None
+
+
+def initialize_scheduler_trace_manager() -> TraceManager:
+    """Initialize the shared TraceManager singleton for scheduler jobs.
+
+    This should be called once during scheduler startup (in run_scheduler()).
+
+    Returns:
+        The initialized TraceManager instance.
+    """
+    global _scheduler_trace_manager
+    if _scheduler_trace_manager is None:
+        _scheduler_trace_manager = TraceManager(project_name="ada-backend-scheduler")
+    return _scheduler_trace_manager
+
+
+def _get_scheduler_trace_manager() -> TraceManager:
+    """Get the shared TraceManager for scheduler jobs.
+
+    Raises:
+        RuntimeError: If the TraceManager singleton has not been initialized.
+    """
+    if _scheduler_trace_manager is None:
+        raise RuntimeError(
+            "Scheduler TraceManager not initialized. "
+            "Ensure initialize_scheduler_trace_manager() is called in run_scheduler() before jobs execute."
+        )
+    return _scheduler_trace_manager
 
 
 def get_scheduler() -> AsyncIOScheduler:
@@ -56,13 +88,14 @@ def _job_listener(event: JobExecutionEvent):
     """Log run completion in our database."""
     job_id = event.job_id
 
+    log_sync_job_status(job_id, event)
+
     try:
         cron_id = UUID(job_id)
     except ValueError:
         LOGGER.warning(f"Skipping job with non-UUID id: {job_id}")
         return
 
-    # Log run completion in our database
     with get_db_session() as session:
         try:
             if event.exception:
@@ -80,7 +113,11 @@ def _job_listener(event: JobExecutionEvent):
 async def _execute_cron_job(cron_id: UUID, entrypoint: CronEntrypoint, payload: Dict[str, Any]):
     """Execute a cron job by calling the appropriate entrypoint function.
     Also updates the cron run status in the database.
+
     """
+    trace_manager = _get_scheduler_trace_manager()
+    set_trace_manager(trace_manager)
+
     scheduled_time = datetime.now(timezone.utc)
 
     with get_db_session() as session:
@@ -168,12 +205,10 @@ def start_scheduler():
             jobstore_poll_interval=SCHEDULER_POLL_INTERVAL_SECONDS,
         )
 
-        _scheduler.add_listener(_job_listener, EVENT_JOB_EXECUTED | EVENT_JOB_ERROR)
-
         _scheduler.start()
-        LOGGER.info("APScheduler started successfully")
-
-        _reconcile_and_load_jobs()
+        _scheduler.add_listener(_job_listener, EVENT_JOB_EXECUTED | EVENT_JOB_ERROR)
+        schedule_sync_job()
+        LOGGER.info("APScheduler started with job execution enabled")
 
     except Exception as e:
         LOGGER.error(f"Failed to start scheduler: {e}")
@@ -194,61 +229,6 @@ def stop_scheduler():
         LOGGER.info("APScheduler stopped successfully")
     except Exception as e:
         LOGGER.error(f"Error stopping scheduler: {e}")
-
-
-def _reconcile_and_load_jobs():
-    """
-    Reconciles jobs between the database and APScheduler, ensuring the database
-    is the source of truth. It adds/updates jobs from the DB to the scheduler
-    and removes jobs from the scheduler that are no longer active or present in the DB.
-    """
-    scheduler = get_scheduler()
-    if not scheduler:
-        LOGGER.warning("Attempted to reconcile jobs, but scheduler is not running.")
-        return
-
-    LOGGER.info("Reconciling cron jobs between database and scheduler...")
-
-    try:
-        with get_db_session() as session:
-            # 1. Get all active jobs from our DB (the source of truth)
-            active_db_crons = get_all_enabled_cron_jobs(session)
-            active_db_cron_ids = {str(cron.id) for cron in active_db_crons}
-            LOGGER.info(f"Found {len(active_db_crons)} active cron jobs in the database.")
-
-            # 2. Get all jobs currently in the scheduler's job store
-            scheduler_jobs = scheduler.get_jobs()
-            scheduler_job_ids = {job.id for job in scheduler_jobs}
-            LOGGER.info(f"Found {len(scheduler_jobs)} jobs in the scheduler job store.")
-
-            # 3. Remove stale jobs from the scheduler
-            jobs_to_remove = scheduler_job_ids - active_db_cron_ids
-            if jobs_to_remove:
-                LOGGER.info(f"Found {len(jobs_to_remove)} stale jobs to remove from scheduler.")
-                for job_id in jobs_to_remove:
-                    try:
-                        remove_job_from_scheduler(UUID(job_id))
-                    except Exception as e:
-                        LOGGER.error(f"Failed to remove stale job {job_id} from scheduler: {e}")
-
-            # 4. Add or update jobs from our DB to the scheduler
-            LOGGER.info("Adding/updating jobs from database to scheduler...")
-            for cron_job in active_db_crons:
-                try:
-                    add_job_to_scheduler(
-                        cron_id=cron_job.id,
-                        cron_expr=cron_job.cron_expr,
-                        tz=cron_job.tz,
-                        entrypoint=cron_job.entrypoint,
-                        payload=cron_job.payload,
-                    )
-                except Exception as e:
-                    LOGGER.error(f"Failed to load cron job {cron_job.id}: {e}")
-
-        LOGGER.info("Cron job reconciliation complete.")
-
-    except Exception as e:
-        LOGGER.error(f"An error occurred during cron job reconciliation: {e}")
 
 
 def add_job_to_scheduler(
@@ -278,7 +258,14 @@ def add_job_to_scheduler(
         replace_existing=True,
     )
 
-    LOGGER.info(f"Added cron job {cron_id} to scheduler with expression '{cron_expr}' in timezone '{tz}'")
+    if not scheduler.running:
+        LOGGER.info(
+            f"Added cron job {cron_id} to scheduler but scheduler not running "
+            "job is not persisted to database. Check that your separate scheduler process is running."
+        )
+    else:
+        LOGGER.info(f"Added cron job {cron_id} to scheduler with expression '{cron_expr}' in timezone '{tz}'")
+
     return job
 
 
@@ -288,6 +275,13 @@ def remove_job_from_scheduler(cron_id: UUID) -> bool:
     Returns True if job was removed, False if not found
     """
     scheduler = get_scheduler()
+
+    if not scheduler.running:
+        LOGGER.info(
+            f"Removed cron job {cron_id} from scheduler but scheduler not running "
+            "The job will be removed from database with your next reconciliation."
+        )
+        return False
 
     try:
         scheduler.remove_job(str(cron_id))
@@ -305,6 +299,13 @@ def pause_job_in_scheduler(cron_id: UUID) -> bool:
     """
     scheduler = get_scheduler()
 
+    if not scheduler.running:
+        LOGGER.info(
+            f"Paused cron job {cron_id} in scheduler but scheduler not running "
+            "The job will be paused in database with your next reconciliation."
+        )
+        return False
+
     try:
         scheduler.pause_job(str(cron_id))
         LOGGER.info(f"Paused cron job {cron_id} in scheduler")
@@ -320,6 +321,13 @@ def resume_job_in_scheduler(cron_id: UUID) -> bool:
     Returns True if job was resumed, False if not found
     """
     scheduler = get_scheduler()
+
+    if not scheduler.running:
+        LOGGER.info(
+            f"Resumed cron job {cron_id} in scheduler but scheduler not running "
+            "The job will be resumed in database with your next reconciliation."
+        )
+        return False
 
     try:
         scheduler.resume_job(str(cron_id))

@@ -12,7 +12,3 @@ class CronJobNotFound(CronServiceError):
 
 class CronJobAccessDenied(CronServiceError):
     """Raised when accessing a cron job from a different organization."""
-
-
-class CronSchedulerError(CronServiceError):
-    """Raised when scheduling or updating the scheduler fails."""

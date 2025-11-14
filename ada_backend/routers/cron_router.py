@@ -35,7 +35,6 @@ from ada_backend.services.cron.errors import (
     CronValidationError,
     CronJobNotFound,
     CronJobAccessDenied,
-    CronSchedulerError,
 )
 
 LOGGER = logging.getLogger(__name__)
@@ -115,8 +114,6 @@ def create_organization_cron_job(
         return create_cron_job(session, organization_id, cron_data, user_id=user.id)
     except CronValidationError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
-    except CronSchedulerError as e:
-        raise HTTPException(status_code=502, detail=str(e)) from e
     except Exception as e:
         LOGGER.error(f"Failed to create cron job for organization {organization_id}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error") from e
