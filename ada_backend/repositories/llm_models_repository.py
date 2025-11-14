@@ -18,7 +18,16 @@ def get_llm_models_by_capability(session: Session, capabilities: list[str]) -> l
     return query.all()
 
 
-def create_llm_model(session: Session, llm_model: db.LLMModels) -> db.LLMModels:
+def create_llm_model(
+    session: Session, model_name: str, model_description: str, model_capacity: list[str], model_provider: str
+) -> db.LLMModels:
+    llm_model = db.LLMModels(
+        name=model_name,
+        description=model_description,
+        model_capacity=model_capacity,
+        provider=model_provider,
+        reference=model_provider + ":" + model_name,
+    )
     session.add(llm_model)
     session.commit()
     return llm_model
@@ -41,6 +50,7 @@ def update_llm_model(session: Session, llm_model: db.LLMModels) -> db.LLMModels:
         existing_llm_model.model_capacity = llm_model.model_capacity
     if llm_model.provider is not None:
         existing_llm_model.provider = llm_model.provider
+    existing_llm_model.reference = llm_model.provider + ":" + llm_model.name
     session.commit()
     session.refresh(existing_llm_model)
     return existing_llm_model
