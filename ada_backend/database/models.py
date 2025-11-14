@@ -1493,10 +1493,10 @@ class LLMModels(Base):
     __tablename__ = "llm_model"
 
     id = mapped_column(UUID(as_uuid=True), primary_key=True, index=True, server_default=func.gen_random_uuid())
-    name = mapped_column(String, nullable=False)
+    display_name = mapped_column(String, nullable=False)
     description = mapped_column(Text, nullable=True)
     provider = mapped_column(String, nullable=False)
-    reference = mapped_column(String, nullable=False)
+    model_name = mapped_column(String, nullable=False)
     model_capacity = mapped_column(JSONB, nullable=True)
     created_at = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
