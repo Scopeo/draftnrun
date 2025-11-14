@@ -1,7 +1,17 @@
 services:
   postgres:
-    image: postgres:16
+    build:
+      context: ../config/postgres
+      dockerfile: Dockerfile
     container_name: ada_postgres
+    command:
+      [
+        "postgres",
+        "-c",
+        "shared_preload_libraries=pg_cron",
+        "-c",
+        "cron.database_name=postgres",
+      ]
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: ada_password
