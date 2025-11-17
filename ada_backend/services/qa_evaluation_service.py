@@ -15,7 +15,6 @@ from ada_backend.schemas.qa_evaluation_schema import (
     LLMJudgeListResponse,
     LLMJudgeUpdate,
     LLMJudgeDeleteList,
-    LLMJudgeDeleteResponse,
 )
 
 LOGGER = logging.getLogger(__name__)
