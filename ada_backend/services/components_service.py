@@ -35,6 +35,7 @@ def get_all_components_endpoint(
     for port in ports:
         comp_id_to_ports.setdefault(str(port.component_version_id), []).append(
             PortDefinitionSchema(
+                id=port.id,
                 name=port.name,
                 port_type=port.port_type.value,
                 is_canonical=port.is_canonical,

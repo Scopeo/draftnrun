@@ -37,6 +37,7 @@ class ComponentVersionUseInfoSchema(BaseModel):
 
 
 class PortDefinitionSchema(BaseModel):
+    id: UUID
     name: str
     port_type: str
     is_canonical: bool

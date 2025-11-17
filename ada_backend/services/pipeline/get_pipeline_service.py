@@ -95,6 +95,7 @@ def get_component_instance(
     )
     port_definitions = [
         PortDefinitionSchema(
+            id=port.id,
             name=port.name,
             port_type=port.port_type.value,
             is_canonical=port.is_canonical,
