@@ -634,7 +634,7 @@ class TestExecute:
 
     @pytest.mark.asyncio
     async def test_execute_with_previous_run_state(
-        self, mock_db_session, mock_source, mock_httpx_client, sample_agent_inference_execution_payload
+        self, mock_db_session, mock_source, sample_agent_inference_execution_payload
     ):
         """Test execution with previous run state to detect changes."""
 
@@ -647,11 +647,36 @@ class TestExecute:
         mock_workflow_result.message = "Workflow completed"
         mock_workflow_result.trace_id = uuid4()
 
+        # Create a custom response with a new item that matches filters but isn't in history
+        custom_response = {
+            "data": [
+                {"id": "1", "status": "pending", "priority": "low"},
+                {"id": "2", "status": "processing", "priority": "high"},
+                {"id": "3", "status": "processing", "priority": "high"},
+                {"id": "4", "status": "completed", "priority": "medium"},
+                {"id": "5", "status": "processing", "priority": "high"},  # New item matching filters
+            ]
+        }
+
         with (
+            patch("ada_backend.services.cron.entries.endpoint_polling.httpx") as mock_httpx,
             patch("ada_backend.services.cron.entries.endpoint_polling.get_tracked_values_history") as mock_get_history,
             patch("ada_backend.services.cron.entries.endpoint_polling.create_tracked_values_bulk") as mock_create_bulk,
             patch("ada_backend.services.cron.entries.endpoint_polling.run_env_agent") as mock_run_agent,
         ):
+            mock_response = Mock()
+            mock_response.json.return_value = custom_response
+            mock_response.raise_for_status = Mock()
+
+            async def mock_get(*args, **kwargs):
+                return mock_response
+
+            mock_client = AsyncMock()
+            mock_client.get = mock_get
+            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client.__aexit__ = AsyncMock(return_value=None)
+            mock_httpx.AsyncClient.return_value = mock_client
+
             mock_get_history.return_value = mock_history
             mock_run_agent.return_value = mock_workflow_result
 
@@ -667,6 +692,8 @@ class TestExecute:
             result = await execute(payload, db=mock_db_session, cron_id=uuid4())
 
             assert "new_values" in result
+            # Should have found "5" as a new value matching the filters
+            assert "5" in result["new_values"]
             # Verify that create_tracked_values_bulk was called with successful values
             assert mock_create_bulk.called
 
