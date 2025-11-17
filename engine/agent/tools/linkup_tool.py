@@ -1,5 +1,6 @@
 from datetime import date
-from typing import Optional
+from typing import Optional, Type, Any
+from pydantic import BaseModel, Field
 from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttributes
 from opentelemetry.trace import get_current_span
 
@@ -53,8 +54,62 @@ LINKUP_TOOL_DESCRIPTION = ToolDescription(
 )
 
 
+class LinkupSearchToolInputs(BaseModel):
+    query: Optional[str] = Field(
+        default=None,
+        description="The standalone question to be answered using web search.",
+    )
+    messages: Optional[list[ChatMessage]] = Field(
+        default=None,
+        description="Optional legacy message context for backward compatibility.",
+    )
+    depth: str = Field(description="The depth format: 'standard' or 'deep'")
+    from_date: Optional[str] = Field(
+        default=None,
+        description="The date from which the search results should be considered, in ISO 8601 format (YYYY-MM-DD).",
+    )
+    to_date: Optional[str] = Field(
+        default=None,
+        description="The date until which the search results should be considered, in ISO 8601 format (YYYY-MM-DD).",
+    )
+    include_domains: Optional[list[str]] = Field(
+        default=None,
+        description="The domains you want to search on.",
+    )
+    exclude_domains: Optional[list[str]] = Field(
+        default=None,
+        description="The domains you want to exclude from the search.",
+    )
+    model_config = {"extra": "allow"}  # For backward compatibility
+
+
+class LinkupSearchToolOutputs(BaseModel):
+    output: str = Field(description="The answer from the Linkup web search.")
+    artifacts: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Artifacts produced by the search, including sources.",
+    )
+    is_final: Optional[bool] = Field(
+        default=True,
+        description="Indicates if the response is final and successful.",
+    )
+
+
 class LinkupSearchTool(Agent):
     TRACE_SPAN_KIND = OpenInferenceSpanKindValues.TOOL.value
+    migrated = True
+
+    @classmethod
+    def get_inputs_schema(cls) -> Type[BaseModel]:
+        return LinkupSearchToolInputs
+
+    @classmethod
+    def get_outputs_schema(cls) -> Type[BaseModel]:
+        return LinkupSearchToolOutputs
+
+    @classmethod
+    def get_canonical_ports(cls) -> dict[str, str | None]:
+        return {"input": "query", "output": "output"}
 
     def __init__(
         self,
