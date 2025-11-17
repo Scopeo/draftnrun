@@ -122,7 +122,7 @@ class LinkupSearchTool(Agent):
     def search_results(
         self,
         query: str,
-        depth: str,
+        depth: Literal["standard", "deep"],
         output_type: str,
         exclude_domains: Optional[list[str]] = None,
         include_domains: Optional[list[str]] = None,
