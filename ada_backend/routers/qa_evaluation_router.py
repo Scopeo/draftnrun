@@ -12,7 +12,6 @@ from ada_backend.schemas.qa_evaluation_schema import (
     LLMJudgeListResponse,
     LLMJudgeUpdate,
     LLMJudgeDeleteList,
-    LLMJudgeDeleteResponse,
 )
 from ada_backend.routers.auth_router import (
     user_has_access_to_project_dependency,
@@ -118,7 +117,7 @@ def update_llm_judge_endpoint(
 
 @router.delete(
     "/projects/{project_id}/qa/llm-judges",
-    response_model=LLMJudgeDeleteResponse,
+    status_code=204,
     summary="Delete LLM Judges",
 )
 def delete_llm_judges_endpoint(
@@ -129,12 +128,13 @@ def delete_llm_judges_endpoint(
         Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.USER.value)),
     ],
     session: Session = Depends(get_db),
-) -> LLMJudgeDeleteResponse:
+):
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
 
     try:
-        return delete_llm_judges_service(session=session, project_id=project_id, delete_data=delete_data)
+        delete_llm_judges_service(session=session, project_id=project_id, delete_data=delete_data)
+        return None
     except ValueError as e:
         LOGGER.error(f"Failed to delete LLM judges for project {project_id}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=400, detail="Bad request") from e

@@ -27,7 +27,16 @@ def create_llm_judge_service(
     judge_data: LLMJudgeCreate,
 ) -> LLMJudgeResponse:
     try:
-        llm_judge = create_llm_judge(session=session, project_id=project_id, judge_data=judge_data)
+        llm_judge = create_llm_judge(
+            session=session,
+            project_id=project_id,
+            name=judge_data.name,
+            description=judge_data.description,
+            evaluation_type=judge_data.evaluation_type,
+            llm_model_reference=judge_data.llm_model_reference,
+            prompt_template=judge_data.prompt_template,
+            temperature=judge_data.temperature,
+        )
         LOGGER.info(f"Created LLM judge {llm_judge.id} for project {project_id}")
         return LLMJudgeResponse.model_validate(llm_judge)
     except Exception as e:
@@ -57,8 +66,13 @@ def update_llm_judge_service(
         updated_judge = update_llm_judge(
             session=session,
             judge_id=judge_id,
-            judge_data=judge_data,
             project_id=project_id,
+            name=judge_data.name,
+            description=judge_data.description,
+            evaluation_type=judge_data.evaluation_type,
+            llm_model_reference=judge_data.llm_model_reference,
+            prompt_template=judge_data.prompt_template,
+            temperature=judge_data.temperature,
         )
         LOGGER.info(f"Updated LLM judge {judge_id} for project {project_id}")
         return LLMJudgeResponse.model_validate(updated_judge)
@@ -71,7 +85,7 @@ def delete_llm_judges_service(
     session: Session,
     project_id: UUID,
     delete_data: LLMJudgeDeleteList,
-) -> LLMJudgeDeleteResponse:
+) -> None:
     try:
         deleted_count = delete_llm_judges(
             session=session,
@@ -79,10 +93,6 @@ def delete_llm_judges_service(
             project_id=project_id,
         )
         LOGGER.info(f"Deleted {deleted_count} LLM judges for project {project_id}")
-        return LLMJudgeDeleteResponse(
-            deleted_count=deleted_count,
-            judge_ids=delete_data.judge_ids,
-        )
     except Exception as e:
         LOGGER.error(f"Error in delete_llm_judges_service for project {project_id}: {str(e)}")
         raise ValueError(f"Failed to delete LLM judges: {str(e)}") from e
