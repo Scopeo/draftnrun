@@ -89,7 +89,6 @@ def get_component_instance(
 
     component = get_component_by_id(session, component_version.component_id)
 
-    # Fetch port definitions for this component version
     port_definitions_list = get_port_definitions_for_component_version_ids(
         session, [component_instance.component_version_id]
     )
