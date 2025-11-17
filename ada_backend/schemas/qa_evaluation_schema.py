@@ -33,3 +33,21 @@ class LLMJudgeResponse(BaseModel):
 
 class LLMJudgeListResponse(BaseModel):
     judges: List[LLMJudgeResponse]
+
+
+class LLMJudgeUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    evaluation_type: Optional[EvaluationType] = None
+    llm_model_reference: Optional[str] = None
+    prompt_template: Optional[str] = None
+    temperature: Optional[float] = None
+
+
+class LLMJudgeDeleteList(BaseModel):
+    judge_ids: List[UUID]
+
+
+class LLMJudgeDeleteResponse(LLMJudgeDeleteList):
+    deleted_count: int
+    message: str = "LLM judges deleted successfully"

@@ -6,11 +6,16 @@ from sqlalchemy.orm import Session
 from ada_backend.repositories.qa_evaluation_repository import (
     create_llm_judge,
     get_llm_judges_by_project,
+    update_llm_judge,
+    delete_llm_judges,
 )
 from ada_backend.schemas.qa_evaluation_schema import (
     LLMJudgeCreate,
     LLMJudgeResponse,
     LLMJudgeListResponse,
+    LLMJudgeUpdate,
+    LLMJudgeDeleteList,
+    LLMJudgeDeleteResponse,
 )
 
 LOGGER = logging.getLogger(__name__)
@@ -21,7 +26,6 @@ def create_llm_judge_service(
     project_id: UUID,
     judge_data: LLMJudgeCreate,
 ) -> LLMJudgeResponse:
-    """Create an LLM judge for a project."""
     try:
         llm_judge = create_llm_judge(session=session, project_id=project_id, judge_data=judge_data)
         LOGGER.info(f"Created LLM judge {llm_judge.id} for project {project_id}")
@@ -35,10 +39,50 @@ def get_llm_judges_by_project_service(
     session: Session,
     project_id: UUID,
 ) -> LLMJudgeListResponse:
-    """Return the list of LLM judges configured for a project."""
     try:
         judges = get_llm_judges_by_project(session=session, project_id=project_id)
         return LLMJudgeListResponse(judges=[LLMJudgeResponse.model_validate(judge) for judge in judges])
     except Exception as e:
         LOGGER.error(f"Error in get_llm_judges_by_project_service for project {project_id}: {str(e)}")
         raise ValueError(f"Failed to list LLM judges: {str(e)}") from e
+
+
+def update_llm_judge_service(
+    session: Session,
+    project_id: UUID,
+    judge_id: UUID,
+    judge_data: LLMJudgeUpdate,
+) -> LLMJudgeResponse:
+    try:
+        updated_judge = update_llm_judge(
+            session=session,
+            judge_id=judge_id,
+            judge_data=judge_data,
+            project_id=project_id,
+        )
+        LOGGER.info(f"Updated LLM judge {judge_id} for project {project_id}")
+        return LLMJudgeResponse.model_validate(updated_judge)
+    except Exception as e:
+        LOGGER.error(f"Error in update_llm_judge_service for judge {judge_id}: {str(e)}")
+        raise ValueError(f"Failed to update LLM judge: {str(e)}") from e
+
+
+def delete_llm_judges_service(
+    session: Session,
+    project_id: UUID,
+    delete_data: LLMJudgeDeleteList,
+) -> LLMJudgeDeleteResponse:
+    try:
+        deleted_count = delete_llm_judges(
+            session=session,
+            judge_ids=delete_data.judge_ids,
+            project_id=project_id,
+        )
+        LOGGER.info(f"Deleted {deleted_count} LLM judges for project {project_id}")
+        return LLMJudgeDeleteResponse(
+            deleted_count=deleted_count,
+            judge_ids=delete_data.judge_ids,
+        )
+    except Exception as e:
+        LOGGER.error(f"Error in delete_llm_judges_service for project {project_id}: {str(e)}")
+        raise ValueError(f"Failed to delete LLM judges: {str(e)}") from e

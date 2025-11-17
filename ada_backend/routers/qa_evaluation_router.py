@@ -10,6 +10,9 @@ from ada_backend.schemas.qa_evaluation_schema import (
     LLMJudgeCreate,
     LLMJudgeResponse,
     LLMJudgeListResponse,
+    LLMJudgeUpdate,
+    LLMJudgeDeleteList,
+    LLMJudgeDeleteResponse,
 )
 from ada_backend.routers.auth_router import (
     user_has_access_to_project_dependency,
@@ -19,9 +22,11 @@ from ada_backend.database.setup_db import get_db
 from ada_backend.services.qa_evaluation_service import (
     create_llm_judge_service,
     get_llm_judges_by_project_service,
+    update_llm_judge_service,
+    delete_llm_judges_service,
 )
 
-router = APIRouter(tags=["Quality Assurance"])
+router = APIRouter(tags=["QA Evaluation"])
 LOGGER = logging.getLogger(__name__)
 
 
@@ -75,4 +80,64 @@ def create_llm_judge_endpoint(
         raise HTTPException(status_code=400, detail="Bad request") from e
     except Exception as e:
         LOGGER.error(f"Failed to create LLM judge for project {project_id}: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error") from e
+
+
+@router.patch(
+    "/projects/{project_id}/qa/llm-judges/{judge_id}",
+    response_model=LLMJudgeResponse,
+    summary="Update LLM Judge",
+)
+def update_llm_judge_endpoint(
+    project_id: UUID,
+    judge_id: UUID,
+    judge_data: LLMJudgeUpdate,
+    user: Annotated[
+        SupabaseUser,
+        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.USER.value)),
+    ],
+    session: Session = Depends(get_db),
+) -> LLMJudgeResponse:
+    if not user.id:
+        raise HTTPException(status_code=400, detail="User ID not found")
+
+    try:
+        return update_llm_judge_service(
+            session=session,
+            project_id=project_id,
+            judge_id=judge_id,
+            judge_data=judge_data,
+        )
+    except ValueError as e:
+        LOGGER.error(f"Failed to update LLM judge {judge_id} for project {project_id}: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=400, detail="Bad request") from e
+    except Exception as e:
+        LOGGER.error(f"Failed to update LLM judge {judge_id} for project {project_id}: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error") from e
+
+
+@router.delete(
+    "/projects/{project_id}/qa/llm-judges",
+    response_model=LLMJudgeDeleteResponse,
+    summary="Delete LLM Judges",
+)
+def delete_llm_judges_endpoint(
+    project_id: UUID,
+    delete_data: LLMJudgeDeleteList,
+    user: Annotated[
+        SupabaseUser,
+        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.USER.value)),
+    ],
+    session: Session = Depends(get_db),
+) -> LLMJudgeDeleteResponse:
+    if not user.id:
+        raise HTTPException(status_code=400, detail="User ID not found")
+
+    try:
+        return delete_llm_judges_service(session=session, project_id=project_id, delete_data=delete_data)
+    except ValueError as e:
+        LOGGER.error(f"Failed to delete LLM judges for project {project_id}: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=400, detail="Bad request") from e
+    except Exception as e:
+        LOGGER.error(f"Failed to delete LLM judges for project {project_id}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error") from e
