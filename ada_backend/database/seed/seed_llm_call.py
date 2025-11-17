@@ -76,6 +76,8 @@ def seed_llm_call_components(session: Session):
                         "-  the {} braces with a keyword are mandatory."
                     ),
                 ).model_dump(exclude_unset=True, exclude_none=True),
+                deprecated=True,
+                deprecation_message="This parameter is deprecated. Please use the 'prompt_template' input field instead. Inputs support field expressions with '@' tags to reference outputs from other components, and you can copy your prompt into the input field - it will keep working and you'll also be able to use '@' to tag outputs from other components.",
             ),
             db.ComponentParameterDefinition(
                 id=UUID("a12eb38c-a10e-46f8-bc31-01d3551d954c"),
@@ -151,6 +153,8 @@ def seed_llm_call_components(session: Session):
                     ),
                 ).model_dump(exclude_unset=True, exclude_none=True),
                 is_advanced=True,
+                deprecated=True,
+                deprecation_message="This parameter is deprecated. Please use the 'output_format' input field instead. Inputs support field expressions with '@' tags to reference outputs from other components.",
             ),
             *build_completion_service_config_definitions(
                 component_version_id=llm_call_version.id,

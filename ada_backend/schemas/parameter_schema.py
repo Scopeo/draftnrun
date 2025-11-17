@@ -18,6 +18,8 @@ class ParameterDefinition(ParameterBase):
     ui_component: Optional[UIComponent] = None
     ui_component_properties: Optional[dict] = None
     is_advanced: bool = False
+    deprecated: bool = False
+    deprecation_message: Optional[str] = None
 
 
 class WithValue(BaseModel):

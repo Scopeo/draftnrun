@@ -657,6 +657,8 @@ def get_all_components_with_parameters(
                             parameter_group_id=param.parameter_group_id,
                             parameter_order_within_group=param.parameter_order_within_group,
                             parameter_group_name=parameter_group_name,
+                            deprecated=param.deprecated,
+                            deprecation_message=param.deprecation_message,
                         )
                     )
 

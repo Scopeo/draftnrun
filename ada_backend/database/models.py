@@ -529,6 +529,8 @@ class ComponentParameterDefinition(Base):
     ui_component = mapped_column(make_pg_enum(UIComponent), nullable=True)
     ui_component_properties = mapped_column(JSON, nullable=True)
     is_advanced = mapped_column(Boolean, nullable=False, default=False)
+    deprecated = mapped_column(Boolean, nullable=False, default=False)
+    deprecation_message = mapped_column(String, nullable=True)
 
     component_version = relationship("ComponentVersion", back_populates="definitions")
     parameter_group_id = mapped_column(

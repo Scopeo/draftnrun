@@ -114,6 +114,17 @@ def upgrade() -> None:
         )
     )
 
+    # Delete any orphaned field_expressions that couldn't be matched
+    # These are invalid records that reference non-existent ports
+    connection.execute(
+        sa.text(
+            """
+        DELETE FROM field_expressions
+        WHERE port_definition_id IS NULL
+    """
+        )
+    )
+
     op.alter_column("field_expressions", "port_definition_id", nullable=False)
     op.create_index(
         op.f("ix_field_expressions_port_definition_id"),
@@ -128,6 +139,15 @@ def upgrade() -> None:
         "uq_field_expression_instance_port", "field_expressions", ["component_instance_id", "port_definition_id"]
     )
     op.drop_column("field_expressions", "field_name")
+
+    op.add_column(
+        "component_parameter_definitions",
+        sa.Column("deprecated", sa.Boolean(), nullable=False, server_default=sa.false()),
+    )
+    op.add_column(
+        "component_parameter_definitions",
+        sa.Column("deprecation_message", sa.String(), nullable=True),
+    )
 
 
 def downgrade() -> None:
@@ -147,3 +167,6 @@ def downgrade() -> None:
     op.drop_column("port_definitions", "is_optional")
     op.drop_column("port_definitions", "ui_component_properties")
     op.drop_column("port_definitions", "ui_component")
+
+    op.drop_column("component_parameter_definitions", "deprecation_message")
+    op.drop_column("component_parameter_definitions", "deprecated")
