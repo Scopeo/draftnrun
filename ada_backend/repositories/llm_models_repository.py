@@ -48,7 +48,9 @@ def update_llm_model(session: Session, llm_model: db.LLMModels) -> db.LLMModels:
     if not existing_llm_model:
         return None
     if llm_model.display_name is not None:
-        existing_llm_model.name = llm_model.name
+        existing_llm_model.name = llm_model.display_name
+    if llm_model.model_name is not None:
+        existing_llm_model.model_name = llm_model.model_name
     if llm_model.description is not None:
         existing_llm_model.description = llm_model.description
     if llm_model.model_capacity is not None:
