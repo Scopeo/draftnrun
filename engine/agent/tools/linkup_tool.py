@@ -64,13 +64,13 @@ class LinkupSearchToolInputs(BaseModel):
         description="Alternatively, if query is not provided, the last user message content can be used.",
     )
     depth: Literal["standard", "deep"] = Field(description="The depth format: 'standard' or 'deep'")
-    from_date: Optional[str] = Field(
+    from_date: Optional[date] = Field(
         default=None,
-        description="The date from which the search results should be considered, in ISO 8601 format (YYYY-MM-DD).",
+        description="The date from which the search results should be considered.",
     )
-    to_date: Optional[str] = Field(
+    to_date: Optional[date] = Field(
         default=None,
-        description="The date until which the search results should be considered, in ISO 8601 format (YYYY-MM-DD).",
+        description="The date until which the search results should be considered.",
     )
     include_domains: Optional[list[str]] = Field(
         default=None,
@@ -165,18 +165,11 @@ class LinkupSearchTool(Agent):
         if not query_str:
             raise ValueError("No content provided for the Linkup search tool.")
 
-        from_date_obj = None
-        to_date_obj = None
-        if inputs.from_date:
-            from_date_obj = date.fromisoformat(inputs.from_date)
-        if inputs.to_date:
-            to_date_obj = date.fromisoformat(inputs.to_date)
-
         span = get_current_span()
         trace_input = (
             f"query: {query_str}\n"
-            f"from date: {inputs.from_date}\n"
-            f"to date: {inputs.to_date}\n"
+            f"from date: {inputs.from_date.isoformat() if inputs.from_date else None}\n"
+            f"to date: {inputs.to_date.isoformat() if inputs.to_date else None}\n"
             f"include domains: {inputs.include_domains}\n"
             f"exclude domains: {inputs.exclude_domains}\n"
             f"depth: {inputs.depth}"
@@ -194,8 +187,8 @@ class LinkupSearchTool(Agent):
             output_type="sourcedAnswer",
             exclude_domains=inputs.exclude_domains,
             include_domains=inputs.include_domains,
-            from_date=from_date_obj,
-            to_date=to_date_obj,
+            from_date=inputs.from_date,
+            to_date=inputs.to_date,
         )
 
         for i, source in enumerate(response.sources):
