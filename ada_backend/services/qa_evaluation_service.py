@@ -16,6 +16,7 @@ from ada_backend.schemas.qa_evaluation_schema import (
     LLMJudgeUpdate,
     LLMJudgeDeleteList,
 )
+from ada_backend.services.errors import LLMJudgeNotFound
 
 LOGGER = logging.getLogger(__name__)
 
@@ -73,6 +74,8 @@ def update_llm_judge_service(
             prompt_template=judge_data.prompt_template,
             temperature=judge_data.temperature,
         )
+        if not updated_judge:
+            raise LLMJudgeNotFound(judge_id=judge_id, project_id=project_id)
         LOGGER.info(f"Updated LLM judge {judge_id} for project {project_id}")
         return LLMJudgeResponse.model_validate(updated_judge)
     except Exception as e:

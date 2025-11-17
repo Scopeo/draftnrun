@@ -73,6 +73,13 @@ class EnvironmentNotFound(Exception):
         super().__init__(f"Environment '{environment}' not found for project: {project_id}")
 
 
+class LLMJudgeNotFound(Exception):
+    def __init__(self, judge_id: UUID, project_id: UUID):
+        self.judge_id = judge_id
+        self.project_id = project_id
+        super().__init__(f"LLM judge {judge_id} not found in project {project_id}")
+
+
 class InvalidAgentTemplate(Exception):
     def __init__(self, template_project_id: UUID, template_graph_runner_id: UUID):
         self.template_project_id = template_project_id

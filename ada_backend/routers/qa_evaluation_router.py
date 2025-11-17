@@ -13,6 +13,7 @@ from ada_backend.schemas.qa_evaluation_schema import (
     LLMJudgeUpdate,
     LLMJudgeDeleteList,
 )
+from ada_backend.services.errors import LLMJudgeNotFound
 from ada_backend.routers.auth_router import (
     user_has_access_to_project_dependency,
     UserRights,
@@ -65,7 +66,7 @@ def create_llm_judge_endpoint(
     judge_data: LLMJudgeCreate,
     user: Annotated[
         SupabaseUser,
-        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.USER.value)),
+        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.WRITER.value)),
     ],
     session: Session = Depends(get_db),
 ) -> LLMJudgeResponse:
@@ -93,7 +94,7 @@ def update_llm_judge_endpoint(
     judge_data: LLMJudgeUpdate,
     user: Annotated[
         SupabaseUser,
-        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.USER.value)),
+        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.WRITER.value)),
     ],
     session: Session = Depends(get_db),
 ) -> LLMJudgeResponse:
@@ -107,6 +108,8 @@ def update_llm_judge_endpoint(
             judge_id=judge_id,
             judge_data=judge_data,
         )
+    except LLMJudgeNotFound as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
     except ValueError as e:
         LOGGER.error(f"Failed to update LLM judge {judge_id} for project {project_id}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=400, detail="Bad request") from e
@@ -125,7 +128,7 @@ def delete_llm_judges_endpoint(
     delete_data: LLMJudgeDeleteList,
     user: Annotated[
         SupabaseUser,
-        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.USER.value)),
+        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.WRITER.value)),
     ],
     session: Session = Depends(get_db),
 ):

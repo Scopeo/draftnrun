@@ -56,11 +56,11 @@ def update_llm_judge(
     llm_model_reference: Optional[str] = None,
     prompt_template: Optional[str] = None,
     temperature: Optional[float] = None,
-) -> LLMJudge:
+) -> Optional[LLMJudge]:
     judge = session.query(LLMJudge).filter(LLMJudge.id == judge_id, LLMJudge.project_id == project_id).first()
 
     if not judge:
-        raise ValueError(f"LLM judge {judge_id} not found in project {project_id}")
+        return None
 
     if name is not None:
         judge.name = name
