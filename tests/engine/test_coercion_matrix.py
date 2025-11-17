@@ -5,6 +5,9 @@ This test suite covers all coercion combinations to ensure the coercion logic
 is stable and handles all the critical type mismatches found during QA.
 """
 
+from datetime import date
+from typing import Optional
+
 import pytest
 
 from engine.coercion_matrix import CoercionMatrix, CoercionError, get_coercion_matrix, coerce_value
@@ -71,6 +74,22 @@ def test_coercion_error_handling():
     # Note: bool() conversion always succeeds in Python, so we test a different impossible coercion
     with pytest.raises(CoercionError):
         coercion_matrix.coerce(ChatMessage(role="user", content="test"), int)
+
+
+def test_non_infrastructure_types_pass_through():
+    """Domain-specific targets (e.g., date) should bypass CoercionMatrix."""
+    coercion_matrix = CoercionMatrix()
+    value = "2024-01-01"
+
+    assert coercion_matrix.coerce(value, date, str) == value
+    assert coercion_matrix.coerce(value, Optional[date], str) == value
+
+
+def test_can_coerce_deems_domain_types_valid():
+    """can_coerce should not block mappings for domain-specific targets."""
+    coercion_matrix = CoercionMatrix()
+
+    assert coercion_matrix.can_coerce(str, date) is True
 
 
 def test_chat_message_to_string():
