@@ -2,6 +2,8 @@ from uuid import UUID, uuid4
 
 from sqlalchemy.orm import Session
 
+from ada_backend.database import models as db
+from ada_backend.repositories.port_mapping_repository import get_port_definition_by_id
 from ada_backend.schemas.pipeline.base import ComponentRelationshipSchema
 from ada_backend.schemas.pipeline.graph_schema import EdgeSchema, GraphLoadResponse
 from ada_backend.schemas.pipeline.get_pipeline_schema import ComponentInstanceReadSchema
@@ -59,14 +61,19 @@ def load_copy_graph_service(
         )
         for source_instance_id, target_instance in component_instance_map.items():
             if source_instance_id in remapped_expressions_by_source_id:
-                target_instance.field_expressions = [
-                    FieldExpressionReadSchema(
-                        field_name=expr.field_name,
-                        expression_json=expr_to_json(parse_expression(expr.expression_text)),
-                        expression_text=expr.expression_text,
+                field_expressions = []
+                for expr in remapped_expressions_by_source_id[source_instance_id]:
+                    port_def = get_port_definition_by_id(session, expr.port_definition_id)
+                    field_name = port_def.name if port_def else ""
+                    field_expressions.append(
+                        FieldExpressionReadSchema(
+                            port_definition_id=expr.port_definition_id,
+                            field_name=field_name,
+                            expression_json=expr_to_json(parse_expression(expr.expression_text)),
+                            expression_text=expr.expression_text,
+                        )
                     )
-                    for expr in remapped_expressions_by_source_id[source_instance_id]
-                ]
+                target_instance.field_expressions = field_expressions
 
     load_copy_relationships: list[ComponentRelationshipSchema] = []
     for old_relation in graph_get_response.relationships:

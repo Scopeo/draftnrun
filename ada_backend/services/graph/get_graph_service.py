@@ -93,9 +93,13 @@ def get_graph_service(
     component_instance_ids = [node.id for node in component_nodes]
     field_expression_records = get_field_expressions_for_instances(session, component_instance_ids)
     for expression in field_expression_records:
+        if not expression.port_definition:
+            LOGGER.warning(f"Field expression {expression.id} has no port_definition, skipping")
+            continue
         field_expressions_by_instance[expression.component_instance_id].append(
             FieldExpressionReadSchema(
-                field_name=expression.field_name,
+                port_definition_id=expression.port_definition_id,
+                field_name=expression.port_definition.name,
                 expression_json=expression.expression_json,
                 expression_text=(
                     unparse_expression(expr_from_json(expression.expression_json))

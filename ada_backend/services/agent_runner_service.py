@@ -79,13 +79,15 @@ async def build_graph_runner(
     field_expressions = get_field_expressions_for_instances(session, component_instance_ids)
     expressions = []
     for expression in field_expressions:
+        if not expression.port_definition:
+            continue
         expression_ast = None
         if expression.expression_json:
             expression_ast = expression_from_json(expression.expression_json)
         expressions.append(
             {
                 "target_instance_id": str(expression.component_instance_id),
-                "field_name": expression.field_name,
+                "field_name": expression.port_definition.name,
                 "expression_ast": expression_ast,
             }
         )

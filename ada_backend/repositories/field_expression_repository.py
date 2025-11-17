@@ -1,7 +1,7 @@
 from typing import Optional
 from uuid import UUID
 
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from ada_backend.database import models as db
 
@@ -9,14 +9,14 @@ from ada_backend.database import models as db
 def upsert_field_expression(
     session: Session,
     component_instance_id: UUID,
-    field_name: str,
+    port_definition_id: UUID,
     expression_json: dict,
 ) -> db.FieldExpression:
     existing: Optional[db.FieldExpression] = (
         session.query(db.FieldExpression)
         .filter(
             db.FieldExpression.component_instance_id == component_instance_id,
-            db.FieldExpression.field_name == field_name,
+            db.FieldExpression.port_definition_id == port_definition_id,
         )
         .first()
     )
@@ -30,7 +30,7 @@ def upsert_field_expression(
 
     expr = db.FieldExpression(
         component_instance_id=component_instance_id,
-        field_name=field_name,
+        port_definition_id=port_definition_id,
         expression_json=expression_json,
     )
     session.add(expr)
@@ -45,6 +45,7 @@ def get_field_expressions_for_instances(
 ) -> list[db.FieldExpression]:
     return (
         session.query(db.FieldExpression)
+        .options(joinedload(db.FieldExpression.port_definition))
         .filter(db.FieldExpression.component_instance_id.in_(component_instance_ids))
         .all()
     )

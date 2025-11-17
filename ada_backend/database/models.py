@@ -995,7 +995,7 @@ class ToolDescription(Base):
 class FieldExpression(Base):
     """Stores field expressions for component instances.
 
-    One row per (component_instance, field_name).
+    One row per (component_instance, port_definition_id).
     """
 
     __tablename__ = "field_expressions"
@@ -1004,15 +1004,19 @@ class FieldExpression(Base):
     component_instance_id = mapped_column(
         UUID(as_uuid=True), ForeignKey("component_instances.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    field_name = mapped_column(String, nullable=False)
+    port_definition_id = mapped_column(
+        UUID(as_uuid=True), ForeignKey("port_definitions.id", ondelete="CASCADE"), nullable=False, index=True
+    )
     expression_json = mapped_column(JSONB, nullable=False)
     updated_at = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    port_definition = relationship("PortDefinition")
 
     __table_args__ = (
         UniqueConstraint(
             "component_instance_id",
-            "field_name",
-            name="uq_field_expression_instance_field",
+            "port_definition_id",
+            name="uq_field_expression_instance_port",
         ),
     )
 

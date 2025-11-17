@@ -222,10 +222,25 @@ async def update_graph_service(
 
             _validate_expression_references(session, ast)
 
+            component_version_id = resolve_component_version_id_from_instance_id(session, instance.id)
+            port_def = get_port_definition_by_id(session, expression.port_definition_id)
+            if not port_def:
+                raise FieldExpressionError(
+                    f"Port definition '{expression.port_definition_id}' not found"
+                )
+            if port_def.component_version_id != component_version_id:
+                raise FieldExpressionError(
+                    f"Port definition '{expression.port_definition_id}' does not belong to component version '{component_version_id}'"
+                )
+            if port_def.port_type != db.PortType.INPUT:
+                raise FieldExpressionError(
+                    f"Port definition '{expression.port_definition_id}' is not an INPUT port"
+                )
+
             upsert_field_expression(
                 session=session,
                 component_instance_id=instance.id,
-                field_name=expression.field_name,
+                port_definition_id=expression.port_definition_id,
                 expression_json=expr_to_json(ast),
             )
 
@@ -236,7 +251,7 @@ async def update_graph_service(
                     session=session,
                     graph_runner_id=graph_runner_id,
                     component_instance_id=instance.id,
-                    field_name=expression.field_name,
+                    target_port_definition_id=expression.port_definition_id,
                     ref_node=ref_node,
                 )
 
@@ -389,16 +404,10 @@ def _create_port_mappings_for_pure_ref_expressions(
     session: Session,
     graph_runner_id: UUID,
     component_instance_id: UUID,
-    field_name: str,
+    target_port_definition_id: UUID,
     ref_node: RefNode,
 ) -> None:
-    """
-    Create a port mapping when the expression is a pure reference.
-    Skip mapping creation for non-ref (literal/concat/multi-ref) expressions.
-    This will be harmonized with port mappings later.
-    """
     source_component_version_id = resolve_component_version_id_from_instance_id(session, UUID(ref_node.instance))
-    target_component_version_id = resolve_component_version_id_from_instance_id(session, component_instance_id)
 
     source_port_def_id = get_output_port_definition_id(session, source_component_version_id, ref_node.port)
     if not source_port_def_id:
@@ -408,22 +417,14 @@ def _create_port_mappings_for_pure_ref_expressions(
         )
         return
 
-    target_port_def_id = get_input_port_definition_id(session, target_component_version_id, field_name)
-    if not target_port_def_id:
-        LOGGER.warning(
-            msg=f"Input port '{field_name}' not found for component "
-            f"{target_component_version_id}, skipping port mapping"
-        )
-        return
-
-    validate_port_definition_types(session, source_port_def_id, target_port_def_id)
+    validate_port_definition_types(session, source_port_def_id, target_port_definition_id)
 
     # Ensure only one mapping exists for this target input
     delete_port_mapping_for_target_input(
         session=session,
         graph_runner_id=graph_runner_id,
         target_instance_id=component_instance_id,
-        target_port_definition_id=target_port_def_id,
+        target_port_definition_id=target_port_definition_id,
     )
 
     insert_port_mapping(
@@ -432,11 +433,13 @@ def _create_port_mappings_for_pure_ref_expressions(
         source_instance_id=UUID(ref_node.instance),
         source_port_definition_id=source_port_def_id,
         target_instance_id=component_instance_id,
-        target_port_definition_id=target_port_def_id,
+        target_port_definition_id=target_port_definition_id,
         dispatch_strategy="direct",
     )
+    target_port_def = get_port_definition_by_id(session, target_port_definition_id)
+    target_port_name = target_port_def.name if target_port_def else "unknown"
     LOGGER.info(
-        f"Created port mapping for {ref_node.instance}.{ref_node.port} -> {component_instance_id}.{field_name}"
+        f"Created port mapping for {ref_node.instance}.{ref_node.port} -> {component_instance_id}.{target_port_name}"
     )
 
 

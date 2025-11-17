@@ -3,19 +3,43 @@ E2E test for field expressions functionality.
 Tests the complete flow from field expression parsing to GraphRunner execution.
 """
 
-from uuid import uuid4
+from uuid import uuid4, UUID
 
 from fastapi.testclient import TestClient
 
 from ada_backend.main import app
-from ada_backend.database.seed.utils import COMPONENT_UUIDS
+from ada_backend.database import models as db
+from ada_backend.database.seed.utils import COMPONENT_UUIDS, COMPONENT_VERSION_UUIDS
+from ada_backend.database.setup_db import SessionLocal
 from ada_backend.scripts.get_supabase_token import get_user_jwt
 from settings import settings
 
 # Test constants
 ORGANIZATION_ID = "37b7d67f-8f29-4fce-8085-19dea582f605"  # umbrella organization
 COMPONENT_ID = str(COMPONENT_UUIDS["llm_call"])
-COMPONENT_VERSION_ID = str(COMPONENT_UUIDS["llm_call"])
+COMPONENT_VERSION_ID = str(COMPONENT_VERSION_UUIDS["llm_call"])
+
+
+def _get_port_definition_id(port_name: str, component_version_id: str = COMPONENT_VERSION_ID) -> str:
+    """Helper to get port_definition_id for a given port name."""
+
+    session = SessionLocal()
+    try:
+        port_def = (
+            session.query(db.PortDefinition)
+            .filter(
+                db.PortDefinition.component_version_id == UUID(component_version_id),
+                db.PortDefinition.name == port_name,
+                db.PortDefinition.port_type == db.PortType.INPUT,
+            )
+            .first()
+        )
+        if not port_def:
+            raise ValueError(f"Port '{port_name}' not found for component version {component_version_id}")
+        return str(port_def.id)
+    finally:
+        session.close()
+
 
 client = TestClient(app)
 JWT_TOKEN = get_user_jwt(settings.TEST_USER_EMAIL, settings.TEST_USER_PASSWORD)
@@ -72,6 +96,7 @@ def _create_graph_payload_with_field_expressions(
     edge_id: str,
     expression_text: str,
 ) -> dict:
+    prompt_template_port_id = _get_port_definition_id("prompt_template")
     return {
         "component_instances": [
             _create_component_instance(
@@ -85,7 +110,9 @@ def _create_graph_payload_with_field_expressions(
                 name="Target Agent",
                 is_start_node=False,
                 prompt_template_value="Process: {input}",
-                field_expressions=[{"field_name": "prompt_template", "expression_text": expression_text}],
+                field_expressions=[
+                    {"port_definition_id": prompt_template_port_id, "expression_text": expression_text}
+                ],
             ),
         ],
         "relationships": [],
@@ -277,7 +304,7 @@ def test_field_expressions_e2e():
                 "component_description": "Templated LLM Call",
                 "field_expressions": [
                     {
-                        "field_name": "prompt_template",
+                        "port_definition_id": _get_port_definition_id("prompt_template"),
                         "expression_text": expression_text,
                     }
                 ],
@@ -321,6 +348,7 @@ def test_field_expressions_e2e():
     assert len(dst["field_expressions"]) == 1
     stored_expression = dst["field_expressions"][0]
     assert stored_expression["field_name"] == "prompt_template"
+    assert "port_definition_id" in stored_expression
     assert "expression_json" in stored_expression
 
     # Verify the expression JSON structure
@@ -425,7 +453,7 @@ def test_invalid_reference_uuid_returns_400():
                 "component_description": "Templated LLM Call",
                 "field_expressions": [
                     {
-                        "field_name": "prompt_template",
+                        "port_definition_id": _get_port_definition_id("prompt_template"),
                         "expression_text": expression_text,
                     }
                 ],
@@ -659,7 +687,7 @@ def test_invalid_reference_unknown_port_returns_400():
                 "component_description": "Templated LLM Call",
                 "field_expressions": [
                     {
-                        "field_name": "prompt_template",
+                        "port_definition_id": _get_port_definition_id("prompt_template"),
                         "expression_text": expression_text,
                     }
                 ],

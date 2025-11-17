@@ -16,9 +16,13 @@ from ada_backend.repositories.env_repository import (
     get_env_relationship_by_graph_runner_id,
     update_graph_runner_env,
 )
-from ada_backend.repositories.port_mapping_repository import list_port_mappings_for_graph, insert_port_mapping
+from ada_backend.repositories.port_mapping_repository import (
+    insert_port_mapping,
+    list_port_mappings_for_graph,
+)
 from ada_backend.repositories.field_expression_repository import upsert_field_expression
 from ada_backend.services.field_expression_remap_service import remap_field_expressions_for_cloning
+from ada_backend.services.graph.update_graph_service import resolve_component_version_id_from_instance_id
 from engine.field_expressions.parser import parse_expression
 from engine.field_expressions.serializer import to_json as expr_to_json
 from ada_backend.services.tag_service import compute_next_tag_version
@@ -194,7 +198,7 @@ def clone_graph_runner(
                 upsert_field_expression(
                     session=session,
                     component_instance_id=target_instance_id,
-                    field_name=remapped_expr.field_name,
+                    port_definition_id=remapped_expr.port_definition_id,
                     expression_json=expr_to_json(remapped_ast),
                 )
         total_expressions = sum(len(exprs) for exprs in remapped_expressions_by_source_id.values())

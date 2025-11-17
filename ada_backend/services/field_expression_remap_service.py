@@ -61,10 +61,12 @@ def remap_field_expressions_for_cloning(
         for field_expr_record in field_expr_records:
             original_ast = expr_from_json(field_expr_record.expression_json)
             remapped_ast = remap_instance_ids_in_expression(original_ast, id_mapping_str)
+            if not field_expr_record.port_definition:
+                continue
             expr_text = unparse_expression(remapped_ast)
             remapped_expressions.append(
                 FieldExpressionUpdateSchema(
-                    field_name=field_expr_record.field_name,
+                    port_definition_id=field_expr_record.port_definition_id,
                     expression_text=expr_text,
                 )
             )
