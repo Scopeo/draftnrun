@@ -16,7 +16,7 @@ def seed_linkup_tool_components(session: Session):
     linkup_tool = db.Component(
         id=COMPONENT_UUIDS["linkup_search_tool"],
         name="Internet Search (Linkup)",
-        is_agent=False,
+        is_agent=True,
         function_callable=True,
         icon="tabler-world-search",
     )
