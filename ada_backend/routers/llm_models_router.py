@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 import logging
 from uuid import UUID
@@ -7,7 +7,14 @@ from typing import Annotated
 from ada_backend.schemas.auth_schema import SupabaseUser
 from ada_backend.routers.auth_router import UserRights, user_has_access_to_organization_dependency
 from ada_backend.database.setup_db import get_db
-from ada_backend.schemas.llm_models_schema import LLMModelResponse
+from ada_backend.schemas.llm_models_schema import (
+    LLMModelResponse,
+    LLMModelCreate,
+    LLMModelUpdate,
+    ModelCapabilityEnum,
+    ModelCapabilitiesResponse,
+    ModelCapabilityOption,
+)
 from ada_backend.services.llm_models_service import (
     get_all_llm_models_service,
     create_llm_model_service,
@@ -18,6 +25,41 @@ from ada_backend.services.llm_models_service import (
 
 router = APIRouter(tags=["LLM Models"])
 LOGGER = logging.getLogger(__name__)
+
+
+@router.get("/organizations/{organization_id}/llm-models/capabilities", response_model=ModelCapabilitiesResponse)
+def get_model_capabilities_endpoint(
+    organization_id: UUID,
+    user: Annotated[
+        SupabaseUser, Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.ADMIN.value))
+    ],
+) -> ModelCapabilitiesResponse:
+    """
+    Get all available model capabilities that can be selected.
+    Returns a list of capability options with value and human-readable label.
+    """
+    if not user.id:
+        raise HTTPException(status_code=400, detail="User ID not found")
+
+    # Map enum values to human-readable labels
+    capability_labels = {
+        ModelCapabilityEnum.FILE: "File Processing",
+        ModelCapabilityEnum.IMAGE: "Image Processing",
+        ModelCapabilityEnum.CONSTRAINED_OUTPUT: "Constrained Output",
+        ModelCapabilityEnum.FUNCTION_CALLING: "Function Calling",
+        ModelCapabilityEnum.WEB_SEARCH: "Web Search",
+        ModelCapabilityEnum.OCR: "OCR (Optical Character Recognition)",
+        ModelCapabilityEnum.EMBEDDING: "Embedding",
+        ModelCapabilityEnum.COMPLETION: "Text Completion",
+        ModelCapabilityEnum.REASONING: "Reasoning",
+    }
+
+    capabilities = [
+        ModelCapabilityOption(value=cap.value, label=capability_labels.get(cap, cap.value.replace("_", " ").title()))
+        for cap in ModelCapabilityEnum
+    ]
+
+    return ModelCapabilitiesResponse(capabilities=capabilities)
 
 
 @router.get("/organizations/{organization_id}/llm-models", response_model=list[LLMModelResponse])
@@ -38,11 +80,8 @@ def get_all_llm_models_endpoint(
 
 @router.post("/organizations/{organization_id}/llm-models/llm-model", response_model=LLMModelResponse)
 def create_llm_model_endpoint(
-    display_name: str,
-    model_name: str,
-    model_description: str,
-    model_capacity: list[str],
-    model_provider: str,
+    organization_id: UUID,
+    llm_model_data: LLMModelCreate,
     user: Annotated[
         SupabaseUser, Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.ADMIN.value))
     ],
@@ -53,29 +92,27 @@ def create_llm_model_endpoint(
     try:
         return create_llm_model_service(
             session=session,
-            display_name=display_name,
-            model_description=model_description,
-            model_capacity=model_capacity,
-            model_provider=model_provider,
-            model_name=model_name,
+            llm_model_data=llm_model_data,
         )
     except Exception as e:
         LOGGER.error(f"Failed to create LLM model: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
-@router.delete("/organizations/{organization_id}/llm-models/llm-model/{llm_model_id}", response_model=LLMModelResponse)
+@router.delete(
+    "/organizations/{organization_id}/llm-models/llm-model/{llm_model_id}", status_code=status.HTTP_204_NO_CONTENT
+)
 def delete_llm_model_endpoint(
     llm_model_id: UUID,
     user: Annotated[
         SupabaseUser, Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.ADMIN.value))
     ],
     session: Session = Depends(get_db),
-) -> LLMModelResponse:
+) -> None:
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
     try:
-        return delete_llm_model_service(session, llm_model_id)
+        delete_llm_model_service(session, llm_model_id)
     except Exception as e:
         LOGGER.error(f"Failed to delete LLM model: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error") from e
@@ -83,11 +120,9 @@ def delete_llm_model_endpoint(
 
 @router.patch("/organizations/{organization_id}/llm-models/llm-model/{llm_model_id}", response_model=LLMModelResponse)
 def update_llm_model_endpoint(
+    organization_id: UUID,
     llm_model_id: UUID,
-    llm_model_name: str,
-    llm_model_description: str,
-    llm_model_capacity: list[str],
-    llm_model_provider: str,
+    llm_model_data: LLMModelUpdate,
     user: Annotated[
         SupabaseUser, Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.ADMIN.value))
     ],
@@ -99,10 +134,7 @@ def update_llm_model_endpoint(
         return update_llm_model_service(
             session,
             llm_model_id,
-            llm_model_name,
-            llm_model_description,
-            llm_model_capacity,
-            llm_model_provider,
+            llm_model_data,
         )
     except Exception as e:
         LOGGER.error(f"Failed to update LLM model: {str(e)}", exc_info=True)

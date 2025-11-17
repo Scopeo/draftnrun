@@ -20,6 +20,7 @@ from sqlalchemy import (
     func,
     CheckConstraint,
     UUID,
+    TypeDecorator,
 )
 import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import JSONB
@@ -28,10 +29,35 @@ from cryptography.fernet import Fernet
 from pydantic import BaseModel, ConfigDict, Field
 
 from ada_backend.database.utils import camel_to_snake
+from ada_backend.schemas.llm_models_schema import ModelCapabilityEnum
 from settings import settings
 
 Base = declarative_base()
 LOGGER = logging.getLogger(__name__)
+
+
+class ModelCapabilityList(TypeDecorator):
+    """Custom type that converts between list[ModelCapabilityEnum] and JSONB"""
+
+    impl = JSONB
+    cache_ok = True
+
+    def process_bind_param(self, value, dialect):
+        """Convert enum list to JSON array of strings for storage"""
+        if value is None:
+            return None
+        if isinstance(value, list):
+            return [cap.value if isinstance(cap, ModelCapabilityEnum) else str(cap) for cap in value]
+        return value
+
+    def process_result_value(self, value, dialect):
+        """Convert JSON array of strings to enum list when reading"""
+        if value is None:
+            return None
+        if isinstance(value, list):
+            return [ModelCapabilityEnum(cap) if isinstance(cap, str) else cap for cap in value]
+        return value
+
 
 if not settings.FERNET_KEY:
     raise ValueError(
@@ -1497,7 +1523,7 @@ class LLMModels(Base):
     description = mapped_column(Text, nullable=True)
     provider = mapped_column(String, nullable=False)
     model_name = mapped_column(String, nullable=False)
-    model_capacity = mapped_column(JSONB, nullable=True)
+    model_capacity = mapped_column(ModelCapabilityList, nullable=True)
     created_at = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
