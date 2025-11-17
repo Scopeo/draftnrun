@@ -327,7 +327,7 @@ class GraphRunner:
                 )
                 LOGGER.debug(f"Evaluating non-ref expression for {node_id}.{field_name}")
                 target_type = get_target_field_type(target_component, field_name)
-                if target_type is not str:
+                if target_type is not str and self.coercion_matrix.should_attempt_coercion(target_type):
                     LOGGER.warning(f"Coercing expression result to {target_type} for field {field_name}")
                     evaluated_value = self.coercion_matrix.coerce(evaluated_value, target_type, str)
                 input_data[field_name] = evaluated_value

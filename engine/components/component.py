@@ -6,10 +6,11 @@ from typing import Any, Dict, Optional, Type
 from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttributes
 from opentelemetry import trace as trace_api
 from opentelemetry.util.types import Attributes
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 from tenacity import RetryError
 
 from engine import legacy_compatibility
+from engine.coercion_matrix import CoercionError
 from engine.components.types import (
     AgentPayload,
     ChatMessage,
@@ -223,7 +224,16 @@ class Component(ABC):
                         elif isinstance(last_message, dict):
                             data[input_port_name] = last_message.get("content", "")
 
-                    validated_inputs = InputModel(**data)
+                    try:
+                        validated_inputs = InputModel(**data)
+                    except ValidationError as e:
+                        component_name = self.component_attributes.component_instance_name or self.__class__.__name__
+                        raise CoercionError(
+                            source_type=type(data),
+                            target_type=InputModel,
+                            value=data,
+                            reason=f"Failed to validate inputs for component '{component_name}': {e}",
+                        ) from e
                     # Pass ctx that was explicitly provided by caller (e.g., ReActAgent)
                     output_model_instance = await self._run_without_io_trace(inputs=validated_inputs, ctx=ctx)
                     OutputModel = self.get_outputs_schema()

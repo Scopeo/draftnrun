@@ -5,6 +5,9 @@ This test suite covers all coercion combinations to ensure the coercion logic
 is stable and handles all the critical type mismatches found during QA.
 """
 
+from datetime import date
+from typing import Optional
+
 import pytest
 
 from engine.coercion_matrix import CoercionError, CoercionMatrix, coerce_value, get_coercion_matrix
@@ -71,6 +74,22 @@ def test_coercion_error_handling():
     # Note: bool() conversion always succeeds in Python, so we test a different impossible coercion
     with pytest.raises(CoercionError):
         coercion_matrix.coerce(ChatMessage(role="user", content="test"), int)
+
+
+def test_non_infrastructure_types_pass_through():
+    """Domain-specific targets (e.g., date) should bypass CoercionMatrix."""
+    coercion_matrix = CoercionMatrix()
+    value = "2024-01-01"
+
+    assert coercion_matrix.coerce(value, date, str) == value
+    assert coercion_matrix.coerce(value, Optional[date], str) == value
+
+
+def test_can_coerce_deems_domain_types_valid():
+    """can_coerce should not block mappings for domain-specific targets."""
+    coercion_matrix = CoercionMatrix()
+
+    assert coercion_matrix.can_coerce(str, date) is True
 
 
 def test_chat_message_to_string():
@@ -400,20 +419,25 @@ def test_cross_type_coercions():
 
 
 def test_error_handling_fail_fast():
-    """Test fail-fast error handling for type mismatches."""
+    """Test error handling for type mismatches.
+
+    With Fail-Open strategy, coercers with explicit rules can still fail,
+    but unknown type combinations pass through for downstream validation.
+    """
     coercion_matrix = get_coercion_matrix()
 
     # list[dict] should work with the specific coercer
     result = coercion_matrix.coerce([{"not": "a ChatMessage"}], str)
     assert result == ""  # extract_string_from_dict_list returns empty string for invalid content
 
-    # list[dict] with unexpected content types should fail
+    # list[dict] with unexpected content types should fail (coercer has explicit error handling)
     with pytest.raises(CoercionError):
         coercion_matrix.coerce([{"content": 123}], str)
 
-    # list[ChatMessage] -> AgentPayload with non-ChatMessage objects should fail
-    with pytest.raises(CoercionError):
-        coercion_matrix.coerce([{"not": "a ChatMessage"}], AgentPayload)
+    # list[dict] -> AgentPayload: With Fail-Open, unknown combinations pass through
+    # The value is returned as-is for downstream validation (Pydantic will handle it)
+    result = coercion_matrix.coerce([{"not": "a ChatMessage"}], AgentPayload)
+    assert result == [{"not": "a ChatMessage"}]  # Pass-through with Fail-Open strategy
 
 
 def test_input_block_to_rag_scenario():
