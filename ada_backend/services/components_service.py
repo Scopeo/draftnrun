@@ -38,7 +38,10 @@ def get_all_components_endpoint(
                 name=port.name,
                 port_type=port.port_type.value,
                 is_canonical=port.is_canonical,
+                is_optional=port.is_optional,
                 description=port.description,
+                ui_component=port.ui_component.value if port.ui_component else None,
+                ui_component_properties=port.ui_component_properties,
             )
         )
     for component in components:

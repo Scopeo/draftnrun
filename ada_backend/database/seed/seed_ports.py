@@ -59,9 +59,29 @@ def seed_port_definitions(session: Session):
                 .first()
             )
             is_canonical = canonical_ports.get("input") == field_name
+            is_optional = not field_info.is_required()
+
+            # Extract UI component metadata from json_schema_extra
+            ui_component = None
+            ui_component_properties = None
+            if field_info.json_schema_extra:
+                if isinstance(field_info.json_schema_extra, dict):
+                    ui_component_str = field_info.json_schema_extra.get("ui_component")
+                    if ui_component_str:
+                        try:
+                            ui_component = db.UIComponent(ui_component_str)
+                        except ValueError:
+                            LOGGER.warning(
+                                f"Invalid UI component '{ui_component_str}' for port {field_name}, skipping"
+                            )
+                    ui_component_properties = field_info.json_schema_extra.get("ui_component_properties")
+
             if port:
                 port.is_canonical = is_canonical
+                port.is_optional = is_optional
                 port.description = field_info.description
+                port.ui_component = ui_component
+                port.ui_component_properties = ui_component_properties
                 LOGGER.info(f"  - Updating INPUT port: {field_name}")
             else:
                 port = db.PortDefinition(
@@ -69,7 +89,10 @@ def seed_port_definitions(session: Session):
                     name=field_name,
                     port_type=db.PortType.INPUT,
                     is_canonical=is_canonical,
+                    is_optional=is_optional,
                     description=field_info.description,
+                    ui_component=ui_component,
+                    ui_component_properties=ui_component_properties,
                 )
                 session.add(port)
                 LOGGER.info(f"  - Creating INPUT port: {field_name}")

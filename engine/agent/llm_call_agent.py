@@ -73,10 +73,26 @@ class LLMCallInputs(BaseModel):
     prompt_template: Optional[str] = Field(
         default=None,
         description="Prompt template to use for the LLM call.",
+        json_schema_extra={
+            "ui_component": "Textarea",
+            "ui_component_properties": {
+                "label": "Prompt Template",
+                "placeholder": "Enter the prompt here. Use {input} (or similar) to insert dynamic content - the {} braces with a keyword are mandatory.",
+                "rows": 8,
+            },
+        },
     )
     output_format: Optional[dict[str, Any]] = Field(
         default=None,
         description="Structured output format.",
+        json_schema_extra={
+            "ui_component": "Textarea",
+            "ui_component_properties": {
+                "label": "Output Format",
+                "description": "Enter the output format here using this documentation from OpenAI: https://platform.openai.com/docs/guides/structured-outputs#supported-schemas",
+                "rows": 10,
+            },
+        },
     )
     # Allow extra fields for backward compatibility
     model_config = {"extra": "allow"}

@@ -21,7 +21,9 @@ from ada_backend.repositories.component_repository import (
     get_component_sub_components,
     get_component_parameter_definition_by_component_version,
     get_global_parameters_by_component_version_id,
+    get_port_definitions_for_component_version_ids,
 )
+from ada_backend.schemas.components_schema import PortDefinitionSchema
 from ada_backend.database.models import ParameterType
 from ada_backend.schemas.pipeline.base import ComponentRelationshipSchema
 from ada_backend.schemas.pipeline.get_pipeline_schema import ComponentInstanceReadSchema
@@ -87,6 +89,23 @@ def get_component_instance(
 
     component = get_component_by_id(session, component_version.component_id)
 
+    # Fetch port definitions for this component version
+    port_definitions_list = get_port_definitions_for_component_version_ids(
+        session, [component_instance.component_version_id]
+    )
+    port_definitions = [
+        PortDefinitionSchema(
+            name=port.name,
+            port_type=port.port_type.value,
+            is_canonical=port.is_canonical,
+            is_optional=port.is_optional,
+            description=port.description,
+            ui_component=port.ui_component.value if port.ui_component else None,
+            ui_component_properties=port.ui_component_properties,
+        )
+        for port in port_definitions_list
+    ]
+
     return ComponentInstanceReadSchema(
         id=component_instance_id,
         name=component_instance.name,
@@ -140,6 +159,7 @@ def get_component_instance(
             else None
         ),
         categories=fetch_associated_category_names(session, component.id) if component else [],
+        port_definitions=port_definitions,
     )
 
 

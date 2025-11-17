@@ -40,7 +40,10 @@ class PortDefinitionSchema(BaseModel):
     name: str
     port_type: str
     is_canonical: bool
+    is_optional: bool = False
     description: Optional[str] = None
+    ui_component: Optional[str] = None
+    ui_component_properties: Optional[dict] = None
 
 
 class ComponentWithParametersDTO(ComponentVersionUseInfoSchema, ComponentSchema):

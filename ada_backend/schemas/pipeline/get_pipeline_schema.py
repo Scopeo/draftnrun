@@ -1,5 +1,5 @@
 from typing import Optional
-from ada_backend.schemas.components_schema import ComponentVersionUseInfoSchema
+from ada_backend.schemas.components_schema import ComponentVersionUseInfoSchema, PortDefinitionSchema
 from ada_backend.schemas.parameter_schema import PipelineParameterReadSchema
 from ada_backend.schemas.pipeline.field_expression_schema import FieldExpressionReadSchema
 from ada_backend.schemas.pipeline.base import ComponentInstanceSchema
@@ -14,3 +14,4 @@ class ComponentInstanceReadSchema(ComponentInstanceSchema, ComponentVersionUseIn
 
     parameters: list[PipelineParameterReadSchema]
     field_expressions: list[FieldExpressionReadSchema] = []
+    port_definitions: list[PortDefinitionSchema] = []

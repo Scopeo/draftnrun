@@ -910,7 +910,10 @@ class PortDefinition(Base):
     name = mapped_column(String, nullable=False)
     port_type = mapped_column(make_pg_enum(PortType), nullable=False)
     is_canonical = mapped_column(Boolean, nullable=False, default=False)
+    is_optional = mapped_column(Boolean, nullable=False, default=False)
     description = mapped_column(Text, nullable=True)
+    ui_component = mapped_column(make_pg_enum(UIComponent), nullable=True)
+    ui_component_properties = mapped_column(JSON, nullable=True)
     component_version = relationship("ComponentVersion", back_populates="port_definitions")
 
     __table_args__ = (
