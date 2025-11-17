@@ -230,7 +230,8 @@ async def update_graph_service(
                 )
             if port_def.component_version_id != component_version_id:
                 raise FieldExpressionError(
-                    f"Port definition '{expression.port_definition_id}' does not belong to component version '{component_version_id}'"
+                    f"Port definition '{expression.port_definition_id}' does not belong to "
+                    f"component version '{component_version_id}'"
                 )
             if port_def.port_type != db.PortType.INPUT:
                 raise FieldExpressionError(

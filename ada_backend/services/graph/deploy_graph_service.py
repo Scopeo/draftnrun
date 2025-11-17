@@ -22,7 +22,6 @@ from ada_backend.repositories.port_mapping_repository import (
 )
 from ada_backend.repositories.field_expression_repository import upsert_field_expression
 from ada_backend.services.field_expression_remap_service import remap_field_expressions_for_cloning
-from ada_backend.services.graph.update_graph_service import resolve_component_version_id_from_instance_id
 from engine.field_expressions.parser import parse_expression
 from engine.field_expressions.serializer import to_json as expr_to_json
 from ada_backend.services.tag_service import compute_next_tag_version

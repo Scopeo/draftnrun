@@ -2,7 +2,6 @@ from uuid import UUID, uuid4
 
 from sqlalchemy.orm import Session
 
-from ada_backend.database import models as db
 from ada_backend.repositories.port_mapping_repository import get_port_definition_by_id
 from ada_backend.schemas.pipeline.base import ComponentRelationshipSchema
 from ada_backend.schemas.pipeline.graph_schema import EdgeSchema, GraphLoadResponse

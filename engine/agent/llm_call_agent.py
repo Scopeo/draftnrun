@@ -77,7 +77,10 @@ class LLMCallInputs(BaseModel):
             "ui_component": "Textarea",
             "ui_component_properties": {
                 "label": "Prompt Template",
-                "placeholder": "Enter the prompt here. Use {input} (or similar) to insert dynamic content - the {} braces with a keyword are mandatory.",
+                "placeholder": (
+                    "Enter the prompt here. Use {input} (or similar) to insert dynamic content - "
+                    "the {} braces with a keyword are mandatory."
+                ),
                 "rows": 8,
             },
         },
@@ -89,7 +92,10 @@ class LLMCallInputs(BaseModel):
             "ui_component": "Textarea",
             "ui_component_properties": {
                 "label": "Output Format",
-                "description": "Enter the output format here using this documentation from OpenAI: https://platform.openai.com/docs/guides/structured-outputs#supported-schemas",
+                "description": (
+                    "Enter the output format here using this documentation from OpenAI: "
+                    "https://platform.openai.com/docs/guides/structured-outputs#supported-schemas"
+                ),
                 "rows": 10,
             },
         },
