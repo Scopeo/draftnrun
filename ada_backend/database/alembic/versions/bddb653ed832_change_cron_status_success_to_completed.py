@@ -22,13 +22,18 @@ depends_on: Union[str, Sequence[str], None] = None
 def upgrade() -> None:
     # Add 'completed' to the enum type
     # PostgreSQL requires enum value additions to be committed before they can be used
-    # We need to commit this separately from the transaction managed by Alembic
+    # We need to use the raw psycopg2 connection to commit separately from Alembic's transaction
     bind = op.get_bind()
-    with bind.begin() as trans:
-        bind.execute(text("ALTER TYPE scheduler.cron_status ADD VALUE IF NOT EXISTS 'completed'"))
-        trans.commit()
+    # Get the raw psycopg2 connection
+    raw_conn = bind.connection.dbapi_connection
+    # Execute the ALTER TYPE command directly on the raw connection
+    with raw_conn.cursor() as cursor:
+        cursor.execute("ALTER TYPE scheduler.cron_status ADD VALUE IF NOT EXISTS 'completed'")
+    # Commit on the raw connection (this commits outside of Alembic's transaction)
+    raw_conn.commit()
 
     # Update all existing 'success' values to 'completed'
+    # This can now use the new enum value since it was committed above
     op.execute(
         """
         UPDATE scheduler.cron_runs
