@@ -328,7 +328,7 @@ def upgrade() -> None:
         if not column_exists:
             with op.get_context().autocommit_block():
                 connection.execute(
-                    sa.text("ALTER TABLE component_parameter_definitions ADD COLUMN model_capabilities JSON")
+                    sa.text("ALTER TABLE component_parameter_definitions ADD COLUMN model_capabilities JSONB")
                 )
 
     # Check if enum type exists before trying to add value

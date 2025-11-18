@@ -43,20 +43,28 @@ def delete_llm_model(session: Session, llm_model_id: UUID) -> None:
     session.commit()
 
 
-def update_llm_model(session: Session, llm_model: db.LLMModels) -> db.LLMModels:
-    existing_llm_model = session.query(db.LLMModels).filter(db.LLMModels.id == llm_model.id).first()
+def update_llm_model(
+    session: Session,
+    llm_model_id: UUID,
+    display_name: str,
+    model_name: str,
+    description: str,
+    model_capacity: list[str],
+    provider: str,
+) -> db.LLMModels:
+    existing_llm_model = session.query(db.LLMModels).filter(db.LLMModels.id == llm_model_id).first()
     if not existing_llm_model:
         return None
-    if llm_model.display_name is not None:
-        existing_llm_model.display_name = llm_model.display_name
-    if llm_model.model_name is not None:
-        existing_llm_model.model_name = llm_model.model_name
-    if llm_model.description is not None:
-        existing_llm_model.description = llm_model.description
-    if llm_model.model_capacity is not None:
-        existing_llm_model.model_capacity = llm_model.model_capacity
-    if llm_model.provider is not None:
-        existing_llm_model.provider = llm_model.provider
+    if display_name is not None:
+        existing_llm_model.display_name = display_name
+    if model_name is not None:
+        existing_llm_model.model_name = model_name
+    if description is not None:
+        existing_llm_model.description = description
+    if model_capacity is not None:
+        existing_llm_model.model_capacity = model_capacity
+    if provider is not None:
+        existing_llm_model.provider = provider
     session.commit()
     session.refresh(existing_llm_model)
     return existing_llm_model

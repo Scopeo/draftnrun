@@ -8,11 +8,11 @@ from engine.agent.agent import ComponentAttributes
 from engine.agent.llm_call_agent import LLMCallAgent, LLMCallInputs
 
 
-def make_capability_resolver(service):
+def make_capability_resolver(service, default_capabilities=None):
     def resolver(capabilities):
         provider = getattr(service, "_provider", None)
         model = getattr(service, "_model_name", None)
-        refs = set()
+        refs = set(default_capabilities) if default_capabilities else set()
         if provider and model:
             refs.add(f"{provider}:{model}")
         return refs

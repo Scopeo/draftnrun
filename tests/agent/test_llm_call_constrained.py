@@ -7,18 +7,7 @@ from engine.agent.llm_call_agent import LLMCallAgent, LLMCallInputs
 from engine.agent.utils import load_str_to_json
 from engine.agent.types import ComponentAttributes
 from engine.llm_services.utils import chat_completion_to_response
-
-
-def make_capability_resolver(service):
-    def resolver(capabilities):
-        provider = getattr(service, "_provider", None)
-        model = getattr(service, "_model_name", None)
-        refs = set()
-        if provider and model:
-            refs.add(f"{provider}:{model}")
-        return refs
-
-    return resolver
+from tests.agent.test_llm_call_agent import make_capability_resolver
 
 
 base64_string = base64.b64encode(b"dummy pdf content").decode("utf-8")
