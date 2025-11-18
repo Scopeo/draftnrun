@@ -11,9 +11,6 @@ from ada_backend.schemas.llm_models_schema import (
     LLMModelResponse,
     LLMModelCreate,
     LLMModelUpdate,
-    ModelCapabilityEnum,
-    ModelCapabilitiesResponse,
-    ModelCapabilityOption,
 )
 from ada_backend.services.llm_models_service import (
     get_all_llm_models_service,
@@ -25,41 +22,6 @@ from ada_backend.services.llm_models_service import (
 
 router = APIRouter(tags=["LLM Models"])
 LOGGER = logging.getLogger(__name__)
-
-
-@router.get("/organizations/{organization_id}/llm-models/capabilities", response_model=ModelCapabilitiesResponse)
-def get_model_capabilities_endpoint(
-    organization_id: UUID,
-    user: Annotated[
-        SupabaseUser, Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.ADMIN.value))
-    ],
-) -> ModelCapabilitiesResponse:
-    """
-    Get all available model capabilities that can be selected.
-    Returns a list of capability options with value and human-readable label.
-    """
-    if not user.id:
-        raise HTTPException(status_code=400, detail="User ID not found")
-
-    # Map enum values to human-readable labels
-    capability_labels = {
-        ModelCapabilityEnum.FILE: "File Processing",
-        ModelCapabilityEnum.IMAGE: "Image Processing",
-        ModelCapabilityEnum.CONSTRAINED_OUTPUT: "Constrained Output",
-        ModelCapabilityEnum.FUNCTION_CALLING: "Function Calling",
-        ModelCapabilityEnum.WEB_SEARCH: "Web Search",
-        ModelCapabilityEnum.OCR: "OCR (Optical Character Recognition)",
-        ModelCapabilityEnum.EMBEDDING: "Embedding",
-        ModelCapabilityEnum.COMPLETION: "Text Completion",
-        ModelCapabilityEnum.REASONING: "Reasoning",
-    }
-
-    capabilities = [
-        ModelCapabilityOption(value=cap.value, label=capability_labels.get(cap, cap.value.replace("_", " ").title()))
-        for cap in ModelCapabilityEnum
-    ]
-
-    return ModelCapabilitiesResponse(capabilities=capabilities)
 
 
 @router.get("/organizations/{organization_id}/llm-models", response_model=list[LLMModelResponse])
