@@ -46,8 +46,3 @@ class LLMJudgeUpdate(BaseModel):
 
 class LLMJudgeDeleteList(BaseModel):
     judge_ids: List[UUID]
-
-
-class LLMJudgeDeleteResponse(LLMJudgeDeleteList):
-    deleted_count: int
-    message: str = "LLM judges deleted successfully"

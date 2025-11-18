@@ -158,7 +158,7 @@ class CronStatus(StrEnum):
 class EvaluationType(StrEnum):
     BOOLEAN = "boolean"
     SCORE = "score"
-    FREE = "free"
+    FREE_TEXT = "free_text"
 
 
 class PortType(StrEnum):

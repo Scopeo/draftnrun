@@ -39,11 +39,12 @@ def get_llm_judges_by_project(
     return session.query(LLMJudge).filter(LLMJudge.project_id == project_id).order_by(LLMJudge.created_at.desc()).all()
 
 
-def get_llm_judge_by_id(
+def get_llm_judge_by_id_in_project(
     session: Session,
     judge_id: UUID,
+    project_id: UUID,
 ) -> Optional[LLMJudge]:
-    return session.query(LLMJudge).filter(LLMJudge.id == judge_id).first()
+    return session.query(LLMJudge).filter(LLMJudge.id == judge_id, LLMJudge.project_id == project_id).first()
 
 
 def update_llm_judge(
@@ -57,7 +58,7 @@ def update_llm_judge(
     prompt_template: Optional[str] = None,
     temperature: Optional[float] = None,
 ) -> Optional[LLMJudge]:
-    judge = session.query(LLMJudge).filter(LLMJudge.id == judge_id, LLMJudge.project_id == project_id).first()
+    judge = get_llm_judge_by_id_in_project(session=session, judge_id=judge_id, project_id=project_id)
 
     if not judge:
         return None
