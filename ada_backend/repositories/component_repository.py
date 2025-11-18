@@ -26,7 +26,7 @@ from ada_backend.database.component_definition_seeding import (
     upsert_release_stage_to_current_version_mapping,
 )
 from ada_backend.schemas.pipeline.base import ToolDescriptionSchema
-from ada_backend.services.llm_models_service import get_llm_models_by_capability_select_options_service
+from ada_backend.utils.component_utils import get_ui_component_properties_with_llm_options
 
 LOGGER = logging.getLogger(__name__)
 
@@ -654,16 +654,11 @@ def get_all_components_with_parameters(
                             nullable=param.nullable,
                             default=param.get_default(),
                             ui_component=param.ui_component,
-                            ui_component_properties=(
-                                {
-                                    **(param.ui_component_properties or {}),
-                                    "options": get_llm_models_by_capability_select_options_service(
-                                        session,
-                                        param.model_capabilities,
-                                    ),
-                                }
-                                if param.type == ParameterType.LLM_MODEL and param.model_capabilities
-                                else param.ui_component_properties
+                            ui_component_properties=get_ui_component_properties_with_llm_options(
+                                session,
+                                param.type,
+                                param.model_capabilities,
+                                param.ui_component_properties,
                             ),
                             is_advanced=param.is_advanced,
                             order=param.order,

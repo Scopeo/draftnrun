@@ -18,6 +18,19 @@ class ModelCapabilityEnum(str, Enum):
     REASONING = "reasoning"
 
 
+class ModelCapabilityOption(BaseModel):
+    """Model capability option for selection"""
+
+    value: str
+    label: str
+
+
+class ModelCapabilitiesResponse(BaseModel):
+    """Response containing all available model capabilities"""
+
+    capabilities: list[ModelCapabilityOption]
+
+
 class LLMModelResponse(BaseModel):
     id: UUID
     display_name: str

@@ -2,7 +2,6 @@
 
 import asyncio
 from types import SimpleNamespace
-from typing import Optional, Set
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -11,21 +10,7 @@ from engine.agent.llm_call_agent import LLMCallAgent
 from engine.agent.react_function_calling import ReActAgent
 from engine.agent.types import NodeData, ComponentAttributes, ToolDescription, AgentPayload, ChatMessage
 from engine.trace.trace_manager import TraceManager
-
-
-def make_capability_resolver(
-    service,
-    allowed_refs: Optional[Set[str]] = None,
-):
-    def resolver(capabilities: list[str]) -> set[str]:
-        refs = set(allowed_refs or [])
-        provider = getattr(service, "_provider", None)
-        model = getattr(service, "_model_name", None)
-        if provider and model:
-            refs.add(f"{provider}:{model}")
-        return refs
-
-    return resolver
+from tests.agent.test_llm_call_agent import make_capability_resolver
 
 
 # Mock services are available as fixtures from conftest.py

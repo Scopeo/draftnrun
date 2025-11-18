@@ -8,9 +8,41 @@ from ada_backend.repositories.llm_models_repository import (
     update_llm_model,
     get_all_llm_models,
 )
-from ada_backend.schemas.llm_models_schema import LLMModelResponse, LLMModelUpdate, LLMModelCreate, ModelCapabilityEnum
+from ada_backend.schemas.llm_models_schema import (
+    LLMModelResponse,
+    LLMModelUpdate,
+    LLMModelCreate,
+    ModelCapabilityEnum,
+    ModelCapabilitiesResponse,
+    ModelCapabilityOption,
+)
 from ada_backend.database.models import SelectOption
-from ada_backend.database import models as db
+
+
+def get_model_capabilities_service() -> ModelCapabilitiesResponse:
+    """
+    Get all available model capabilities that can be selected.
+    Returns a list of capability options with value and human-readable label.
+    """
+    # Map enum values to human-readable labels
+    capability_labels = {
+        ModelCapabilityEnum.FILE: "File Processing",
+        ModelCapabilityEnum.IMAGE: "Image Processing",
+        ModelCapabilityEnum.CONSTRAINED_OUTPUT: "Constrained Output",
+        ModelCapabilityEnum.FUNCTION_CALLING: "Function Calling",
+        ModelCapabilityEnum.WEB_SEARCH: "Web Search",
+        ModelCapabilityEnum.OCR: "OCR (Optical Character Recognition)",
+        ModelCapabilityEnum.EMBEDDING: "Embedding",
+        ModelCapabilityEnum.COMPLETION: "Text Completion",
+        ModelCapabilityEnum.REASONING: "Reasoning",
+    }
+
+    capabilities = [
+        ModelCapabilityOption(value=cap.value, label=capability_labels.get(cap, cap.value.replace("_", " ").title()))
+        for cap in ModelCapabilityEnum
+    ]
+
+    return ModelCapabilitiesResponse(capabilities=capabilities)
 
 
 def get_all_llm_models_service(session: Session) -> list[LLMModelResponse]:
@@ -92,13 +124,13 @@ def update_llm_model_service(
     llm_model_data: LLMModelUpdate,
 ) -> LLMModelResponse:
 
-    llm_model = db.LLMModels(
-        id=llm_model_id,
+    updated_llm_model = update_llm_model(
+        session,
+        llm_model_id=llm_model_id,
         display_name=llm_model_data.display_name,
         model_name=llm_model_data.model_name,
         description=llm_model_data.description,
         model_capacity=llm_model_data.model_capacity,
         provider=llm_model_data.provider,
     )
-    updated_llm_model = update_llm_model(session, llm_model)
     return LLMModelResponse.model_validate(updated_llm_model)
