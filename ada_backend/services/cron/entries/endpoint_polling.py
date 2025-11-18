@@ -645,16 +645,10 @@ async def execute(execution_payload: EndpointPollingExecutionPayload, **kwargs) 
     LOGGER.info(f"Found {len(stored_ids)} already processed values")
 
     new_values = polled_values - stored_ids
-    if new_values:
-        create_tracked_values_bulk(
-            session=db,
-            cron_id=cron_id,
-            tracked_values=list(new_values),
-        )
-
     LOGGER.info(f"Identified {len(new_values)} new values")
 
     workflow_results = []
+    successful_values = []
     agent_inference_execution_payload = execution_payload.workflow_input
     if agent_inference_execution_payload.project_id and new_values:
         LOGGER.info(
@@ -693,6 +687,7 @@ async def execute(execution_payload: EndpointPollingExecutionPayload, **kwargs) 
                         "trace_id": workflow_result.trace_id,
                     }
                 )
+                successful_values.append(new_value)
                 LOGGER.info(f"Successfully triggered workflow for value {new_value}")
             except Exception as e:
                 LOGGER.error(f"Failed to trigger workflow for value {new_value}: {e}")
@@ -703,6 +698,14 @@ async def execute(execution_payload: EndpointPollingExecutionPayload, **kwargs) 
                         "error": str(e),
                     }
                 )
+
+    if successful_values:
+        create_tracked_values_bulk(
+            session=db,
+            cron_id=cron_id,
+            tracked_values=successful_values,
+        )
+        LOGGER.info(f"Added {len(successful_values)} successfully processed values to history")
 
     return {
         "endpoint_url": execution_payload.endpoint_url,
