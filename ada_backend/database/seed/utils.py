@@ -16,7 +16,7 @@ from ada_backend.database.seed.constants import (
 )
 from ada_backend.services.llm_models_service import create_llm_model_service
 
-from ada_backend.schemas.llm_models_schema import LLMModelCreate
+from ada_backend.schemas.llm_models_schema import LLMModelCreate, ModelCapabilityEnum
 from settings import settings
 
 LOGGER = logging.getLogger(__name__)
@@ -141,6 +141,7 @@ def build_completion_service_config_definitions(
                     ui_component_properties=UIComponentProperties(
                         label="Model Name",
                     ).model_dump(exclude_unset=True, exclude_none=True),
+                    model_capabilities=[ModelCapabilityEnum.COMPLETION.value],
                 )
             )
         if param.param_name == TEMPERATURE_IN_DB:
@@ -252,6 +253,7 @@ def build_function_calling_service_config_definitions(
                     ui_component_properties=UIComponentProperties(
                         label="Model Name",
                     ).model_dump(exclude_unset=True, exclude_none=True),
+                    model_capabilities=[ModelCapabilityEnum.FUNCTION_CALLING.value],
                 )
             )
         if param.param_name == TEMPERATURE_IN_DB:
@@ -315,6 +317,7 @@ def build_embedding_service_config_definitions(
                     ui_component_properties=UIComponentProperties(
                         label="Embedding Model Name",
                     ).model_dump(exclude_unset=True, exclude_none=True),
+                    model_capabilities=[ModelCapabilityEnum.EMBEDDING.value],
                 )
             )
         if param.param_name == "api_key":
@@ -358,6 +361,7 @@ def build_web_service_config_definitions(
                     ui_component_properties=UIComponentProperties(
                         label="Model Name",
                     ).model_dump(exclude_unset=True, exclude_none=True),
+                    model_capabilities=[ModelCapabilityEnum.WEB_SEARCH.value],
                 )
             )
         if param.param_name == "api_key":
@@ -400,6 +404,7 @@ def build_ocr_service_config_definitions(
                     ui_component_properties=UIComponentProperties(
                         label="Model Name",
                     ).model_dump(exclude_unset=True, exclude_none=True),
+                    model_capabilities=[ModelCapabilityEnum.OCR.value],
                 )
             )
         if param.param_name == "api_key":
