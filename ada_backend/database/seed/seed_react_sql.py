@@ -99,7 +99,6 @@ def seed_react_sql_components(session: Session):
                 default=DEFAULT_REACT_SQL_TOOL_PROMPT,
             ),
             *build_function_calling_service_config_definitions(
-                session=session,
                 component_version_id=react_sql_agent_version.id,
                 params_to_seed=[
                     ParameterLLMConfig(

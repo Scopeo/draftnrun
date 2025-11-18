@@ -12,10 +12,8 @@ from ada_backend.database.seed.constants import (
     VERBOSITY_IN_DB,
     REASONING_IN_DB,
 )
-from ada_backend.services.llm_models_service import (
-    get_llm_models_by_capability_select_options_service,
-    create_llm_model_service,
-)
+from ada_backend.services.llm_models_service import create_llm_model_service
+
 from ada_backend.schemas.llm_models_schema import LLMModelCreate
 from settings import settings
 
@@ -103,6 +101,8 @@ COMPONENT_VERSION_UUIDS: dict[str, UUID] = {
 }
 
 DEFAULT_MODEL = "openai:gpt-5-mini"
+DEFAULT_EMBEDDING_MODEL = "openai:text-embedding-3-large"
+DEFAULT_OCR_MODEL = "mistral:mistral-ocr-latest"
 
 
 class ParameterLLMConfig(BaseModel):
@@ -111,7 +111,6 @@ class ParameterLLMConfig(BaseModel):
 
 
 def build_completion_service_config_definitions(
-    session: Session,
     component_version_id: UUID,
     params_to_seed: list[ParameterLLMConfig],
     definitions: list[db.ComponentParameterDefinition] = [],
@@ -125,10 +124,6 @@ def build_completion_service_config_definitions(
         "api_key",
     ]
     """
-    completion_models = get_llm_models_by_capability_select_options_service(
-        session,
-        ["completion"],
-    )
     for param in params_to_seed:
         if param.param_name == COMPLETION_MODEL_IN_DB:
             definitions.append(
@@ -136,12 +131,11 @@ def build_completion_service_config_definitions(
                     id=param.param_id,
                     component_version_id=component_version_id,
                     name=COMPLETION_MODEL_IN_DB,
-                    type=ParameterType.STRING,
+                    type=ParameterType.LLM_MODEL,
                     nullable=False,
                     default=DEFAULT_MODEL,
                     ui_component=UIComponent.SELECT,
                     ui_component_properties=UIComponentProperties(
-                        options=completion_models,
                         label="Model Name",
                     ).model_dump(exclude_unset=True, exclude_none=True),
                 )
@@ -230,7 +224,6 @@ def build_completion_service_config_definitions(
 def build_function_calling_service_config_definitions(
     component_version_id: UUID,
     params_to_seed: list[ParameterLLMConfig],
-    session: Session,
 ) -> list[db.ComponentParameterDefinition]:
     """
     Simple helper function to avoid code duplication.
@@ -242,10 +235,6 @@ def build_function_calling_service_config_definitions(
     ]
     """
     definitions: list[db.ComponentParameterDefinition] = []
-    function_calling_models = get_llm_models_by_capability_select_options_service(
-        session,
-        ["function_calling"],
-    )
     for param in params_to_seed:
         if param.param_name == COMPLETION_MODEL_IN_DB:
             definitions.append(
@@ -253,12 +242,11 @@ def build_function_calling_service_config_definitions(
                     id=param.param_id,
                     component_version_id=component_version_id,
                     name=COMPLETION_MODEL_IN_DB,
-                    type=ParameterType.STRING,
+                    type=ParameterType.LLM_MODEL,
                     nullable=False,
                     default=DEFAULT_MODEL,
                     ui_component=UIComponent.SELECT,
                     ui_component_properties=UIComponentProperties(
-                        options=function_calling_models,
                         label="Model Name",
                     ).model_dump(exclude_unset=True, exclude_none=True),
                 )
@@ -300,7 +288,6 @@ def build_function_calling_service_config_definitions(
 def build_embedding_service_config_definitions(
     component_version_id: UUID,
     params_to_seed: list[ParameterLLMConfig],
-    session: Session,
 ) -> list[db.ComponentParameterDefinition]:
     """
     Simple helper function to avoid code duplication.
@@ -311,10 +298,6 @@ def build_embedding_service_config_definitions(
     ]
     """
     definitions: list[db.ComponentParameterDefinition] = []
-    embedding_models = get_llm_models_by_capability_select_options_service(
-        session,
-        ["embedding"],
-    )
     for param in params_to_seed:
         if param.param_name == EMBEDDING_MODEL_IN_DB:
             definitions.append(
@@ -322,12 +305,11 @@ def build_embedding_service_config_definitions(
                     id=param.param_id,
                     component_version_id=component_version_id,
                     name=EMBEDDING_MODEL_IN_DB,
-                    type=ParameterType.STRING,
+                    type=ParameterType.LLM_MODEL,
                     nullable=False,
-                    default=embedding_models[0].value,
+                    default=DEFAULT_EMBEDDING_MODEL,
                     ui_component=UIComponent.SELECT,
                     ui_component_properties=UIComponentProperties(
-                        options=embedding_models,
                         label="Embedding Model Name",
                     ).model_dump(exclude_unset=True, exclude_none=True),
                 )
@@ -347,7 +329,6 @@ def build_embedding_service_config_definitions(
 
 
 def build_web_service_config_definitions(
-    session: Session,
     component_version_id: UUID,
     params_to_seed: list[ParameterLLMConfig],
 ) -> list[db.ComponentParameterDefinition]:
@@ -360,10 +341,6 @@ def build_web_service_config_definitions(
     ]
     """
     definitions: list[db.ComponentParameterDefinition] = []
-    web_search_models = get_llm_models_by_capability_select_options_service(
-        session,
-        ["web_search"],
-    )
     for param in params_to_seed:
         if param.param_name == COMPLETION_MODEL_IN_DB:
             definitions.append(
@@ -371,12 +348,11 @@ def build_web_service_config_definitions(
                     id=param.param_id,
                     component_version_id=component_version_id,
                     name=COMPLETION_MODEL_IN_DB,
-                    type=ParameterType.STRING,
+                    type=ParameterType.LLM_MODEL,
                     nullable=False,
                     default=DEFAULT_MODEL,
                     ui_component=UIComponent.SELECT,
                     ui_component_properties=UIComponentProperties(
-                        options=web_search_models,
                         label="Model Name",
                     ).model_dump(exclude_unset=True, exclude_none=True),
                 )
@@ -397,7 +373,6 @@ def build_web_service_config_definitions(
 def build_ocr_service_config_definitions(
     component_version_id: UUID,
     params_to_seed: list[ParameterLLMConfig],
-    session: Session,
 ) -> list[db.ComponentParameterDefinition]:
     """
     Simple helper function to avoid code duplication.
@@ -408,10 +383,6 @@ def build_ocr_service_config_definitions(
     ]
     """
     definitions: list[db.ComponentParameterDefinition] = []
-    ocr_models = get_llm_models_by_capability_select_options_service(
-        session,
-        ["ocr"],
-    )
     for param in params_to_seed:
         if param.param_name == COMPLETION_MODEL_IN_DB:
             definitions.append(
@@ -419,12 +390,11 @@ def build_ocr_service_config_definitions(
                     id=param.param_id,
                     component_version_id=component_version_id,
                     name=COMPLETION_MODEL_IN_DB,
-                    type=ParameterType.STRING,
+                    type=ParameterType.LLM_MODEL,
                     nullable=False,
-                    default=ocr_models[0].value,
+                    default=DEFAULT_OCR_MODEL,
                     ui_component=UIComponent.SELECT,
                     ui_component_properties=UIComponentProperties(
-                        options=ocr_models,
                         label="Model Name",
                     ).model_dump(exclude_unset=True, exclude_none=True),
                 )

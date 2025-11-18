@@ -55,7 +55,6 @@ def seed_web_search_components(session: Session):
         component_parameter_definitions=[
             # Web Search OpenAI Agent
             *build_web_service_config_definitions(
-                session=session,
                 component_version_id=web_search_openai_agent_version.id,
                 params_to_seed=[
                     ParameterLLMConfig(

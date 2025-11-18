@@ -81,7 +81,6 @@ def seed_docx_template_components(session: Session):
                 ).model_dump(exclude_unset=True, exclude_none=True),
             ),
             *build_function_calling_service_config_definitions(
-                session=session,
                 component_version_id=docx_template_component_version.id,
                 params_to_seed=[
                     ParameterLLMConfig(
