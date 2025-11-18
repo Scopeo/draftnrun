@@ -145,7 +145,11 @@ async def test_custom_provider_constrained_output():
         patch("engine.llm_services.llm_service.check_usage", return_value=None),
     ):
         mock_settings.custom_models = {
-            "dummy-provider": {"api_key": "dummy-api-key", "base_url": "https://dummy-api.com/v1"}
+            "dummy-provider": {
+                "custom_models": [{"model_name": "dummy-model"}],
+                "api_key": "dummy-api-key",
+                "base_url": "https://dummy-api.com/v1",
+            }
         }
 
         completion_service = CompletionService(
