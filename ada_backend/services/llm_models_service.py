@@ -103,12 +103,12 @@ def create_llm_model_service(
     session: Session,
     llm_model_data: LLMModelCreate,
 ) -> LLMModelResponse:
-    # The ModelCapabilityList TypeDecorator handles enum-to-string conversion automatically
+
     created_llm_model = create_llm_model(
         session,
         llm_model_data.display_name,
         llm_model_data.description or "",
-        llm_model_data.model_capacity,  # Pass enum list directly, TypeDecorator handles conversion
+        llm_model_data.model_capacity,
         llm_model_data.provider,
         llm_model_data.model_name,
     )
