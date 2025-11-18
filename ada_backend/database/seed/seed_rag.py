@@ -274,7 +274,6 @@ def seed_rag_components(session: Session):
 
     upsert_component_categories(session=session, component_id=rag_agent.id, category_ids=[CATEGORY_UUIDS["query"]])
 
-    # RAG v2 Agent - Synthesizer and Retriever parameters put in the same component version
     rag_agent_v2_version = db.ComponentVersion(
         id=COMPONENT_VERSION_UUIDS["rag_agent_v2"],
         component_id=COMPONENT_UUIDS["rag_agent"],
