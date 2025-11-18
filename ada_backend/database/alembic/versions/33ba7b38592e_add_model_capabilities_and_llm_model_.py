@@ -29,11 +29,48 @@ def upgrade() -> None:
 
     cursor = raw_connection.cursor()
 
-    # Add model_capabilities column
-    cursor.execute("ALTER TABLE component_parameter_definitions ADD COLUMN model_capabilities JSON")
+    # Check if table exists before adding column
+    cursor.execute(
+        """
+        SELECT EXISTS (
+            SELECT FROM information_schema.tables
+            WHERE table_name = 'component_parameter_definitions'
+        )
+    """
+    )
+    table_exists = cursor.fetchone()[0]
 
-    # Add llm_model parameter type to the enum
-    cursor.execute("ALTER TYPE parameter_type ADD VALUE IF NOT EXISTS 'llm_model'")
+    if table_exists:
+        # Check if column already exists
+        cursor.execute(
+            """
+            SELECT EXISTS (
+                SELECT FROM information_schema.columns
+                WHERE table_name = 'component_parameter_definitions'
+                AND column_name = 'model_capabilities'
+            )
+        """
+        )
+        column_exists = cursor.fetchone()[0]
+
+        # Add model_capabilities column if it doesn't exist
+        if not column_exists:
+            cursor.execute("ALTER TABLE component_parameter_definitions ADD COLUMN model_capabilities JSON")
+
+    # Check if enum type exists before trying to add value
+    cursor.execute(
+        """
+        SELECT EXISTS (
+            SELECT FROM pg_type
+            WHERE typname = 'parameter_type'
+        )
+    """
+    )
+    enum_exists = cursor.fetchone()[0]
+
+    # Add llm_model parameter type to the enum if enum exists
+    if enum_exists:
+        cursor.execute("ALTER TYPE parameter_type ADD VALUE IF NOT EXISTS 'llm_model'")
 
     cursor.close()
 
@@ -41,6 +78,9 @@ def upgrade() -> None:
     raw_connection.set_isolation_level(old_isolation)
 
     # Update existing parameters to use new type and set model_capabilities
+    # Only run if table exists (skip for fresh databases)
+    if not table_exists:
+        return
 
     # For completion-based components
     connection.execute(
@@ -132,6 +172,28 @@ def upgrade() -> None:
 def downgrade() -> None:
     connection = op.get_bind()
 
+    # Check if table exists before attempting downgrade
+    raw_connection = connection.connection
+    old_isolation = raw_connection.isolation_level
+    raw_connection.set_isolation_level(0)
+
+    cursor = raw_connection.cursor()
+    cursor.execute(
+        """
+        SELECT EXISTS (
+            SELECT FROM information_schema.tables
+            WHERE table_name = 'component_parameter_definitions'
+        )
+    """
+    )
+    table_exists = cursor.fetchone()[0]
+    cursor.close()
+
+    raw_connection.set_isolation_level(old_isolation)
+
+    if not table_exists:
+        return
+
     # Revert all LLM model parameter types back to STRING
     connection.execute(
         sa.text(
@@ -155,7 +217,10 @@ def downgrade() -> None:
         ondelete="CASCADE",
     )
 
-    # Drop the model_capabilities column
-    op.drop_column("component_parameter_definitions", "model_capabilities")
-
-    # Note: Cannot remove enum values in PostgreSQL, but this is acceptable
+    # Drop the model_capabilities column using raw SQL with error handling
+    try:
+        connection.execute(
+            sa.text("ALTER TABLE component_parameter_definitions DROP COLUMN IF EXISTS model_capabilities")
+        )
+    except Exception:
+        pass
