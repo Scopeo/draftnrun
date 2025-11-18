@@ -209,6 +209,59 @@ def clear_version_outputs_for_input_ids(
     return updated_count
 
 
+def get_qa_data_for_csv_export(
+    session: Session,
+    dataset_id: UUID,
+    graph_runner_id: UUID,
+) -> List[Tuple[dict, Optional[str], Optional[str]]]:
+    """Get QA data for CSV export.
+
+    Args:
+        session: SQLAlchemy session
+        dataset_id: ID of the dataset
+        graph_runner_id: Graph runner ID to filter outputs.
+
+    Returns:
+        List of tuples: (input, groundtruth, output)
+        - input: JSONB data from InputGroundtruth.input (as dict)
+        - groundtruth: String from InputGroundtruth.groundtruth (or None)
+        - output: String from VersionOutput.output (or None if no output exists)
+    """
+    # Query all InputGroundtruth entries for the dataset
+    input_entries = (
+        session.query(InputGroundtruth)
+        .filter(InputGroundtruth.dataset_id == dataset_id)
+        .order_by(InputGroundtruth.created_at.asc())
+        .all()
+    )
+
+    if not input_entries:
+        return []
+
+    # Get all input IDs
+    input_ids = [entry.id for entry in input_entries]
+
+    # Query VersionOutput entries for the specified graph_runner_id
+    version_outputs_query = session.query(VersionOutput.input_id, VersionOutput.output).filter(
+        VersionOutput.input_id.in_(input_ids),
+        VersionOutput.graph_runner_id == graph_runner_id,
+    )
+
+    version_outputs = {input_id: output for input_id, output in version_outputs_query.all()}
+
+    # Combine data
+    results = []
+    for entry in input_entries:
+        output = version_outputs.get(entry.id)
+        results.append((entry.input, entry.groundtruth, output))
+
+    LOGGER.info(
+        f"Retrieved {len(results)} QA data entries for CSV export (dataset_id={dataset_id}, "
+        f"graph_runner_id={graph_runner_id})"
+    )
+    return results
+
+
 # Dataset functions
 def get_datasets_by_project(
     session: Session,

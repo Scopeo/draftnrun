@@ -1,8 +1,10 @@
 from typing import Annotated, Dict, List
 from uuid import UUID
 import logging
+from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 from ada_backend.schemas.auth_schema import SupabaseUser
@@ -38,6 +40,7 @@ from ada_backend.services.quality_assurance_service import (
     delete_datasets_service,
     get_datasets_by_project_service,
     save_conversation_to_groundtruth_service,
+    export_qa_data_to_csv_service,
 )
 from ada_backend.database.setup_db import get_db
 
@@ -442,4 +445,54 @@ async def create_entry_from_history(
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
         LOGGER.error(f"Failed to save trace {trace_id}: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error") from e
+
+
+@router.get(
+    "/projects/{project_id}/qa/datasets/{dataset_id}/export",
+    summary="Export QA Data to CSV",
+    tags=["Quality Assurance"],
+)
+def export_qa_data_to_csv_endpoint(
+    project_id: UUID,
+    dataset_id: UUID,
+    user: Annotated[
+        SupabaseUser,
+        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.USER.value)),
+    ],
+    session: Session = Depends(get_db),
+    graph_runner_id: UUID = Query(..., description="Graph runner ID to filter outputs"),
+) -> Response:
+    """
+    Export QA data to CSV format.
+
+    This endpoint exports QA data (input, expected output, actual output) for a dataset to CSV format.
+    The CSV file can be downloaded directly.
+
+    Parameters:
+    - graph_runner_id: UUID to filter outputs by a specific graph runner version (required).
+
+    Returns:
+    - CSV file download with columns: input, expected_output, actual_output
+    """
+    if not user.id:
+        raise HTTPException(status_code=400, detail="User ID not found")
+
+    try:
+        csv_content = export_qa_data_to_csv_service(session, dataset_id, graph_runner_id)
+
+        # Generate filename with timestamp
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"qa_export_{dataset_id}_{timestamp}.csv"
+
+        return Response(
+            content=csv_content,
+            media_type="text/csv",
+            headers={"Content-Disposition": f"attachment; filename={filename}"},
+        )
+    except ValueError as e:
+        LOGGER.error(f"Failed to export QA data for dataset {dataset_id}: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=400, detail="Bad request") from e
+    except Exception as e:
+        LOGGER.error(f"Failed to export QA data for dataset {dataset_id}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error") from e

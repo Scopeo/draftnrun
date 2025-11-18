@@ -1,4 +1,7 @@
 import logging
+import json
+import csv
+import io
 from typing import Dict, List
 from uuid import UUID
 
@@ -18,6 +21,7 @@ from ada_backend.repositories.quality_assurance_repository import (
     get_datasets_by_project,
     clear_version_outputs_for_input_ids,
     get_outputs_by_graph_runner,
+    get_qa_data_for_csv_export,
 )
 from ada_backend.schemas.input_groundtruth_schema import (
     InputGroundtruthResponse,
@@ -487,3 +491,62 @@ def save_conversation_to_groundtruth_service(
     input_entry = InputGroundtruthCreate(input=input_payload, groundtruth=output_payload["messages"][-1]["content"])
     input_entries = create_inputs_groundtruths(session, dataset_id, [input_entry])
     return [InputGroundtruthResponse.model_validate(entry) for entry in input_entries]
+
+
+def export_qa_data_to_csv_service(
+    session: Session,
+    dataset_id: UUID,
+    graph_runner_id: UUID,
+) -> str:
+    """Export QA data to CSV format.
+
+    Args:
+        session: SQLAlchemy session
+        dataset_id: ID of the dataset
+        graph_runner_id: Graph runner ID to filter outputs
+
+    Returns:
+        CSV content as string (UTF-8 encoded)
+    """
+    try:
+        # Get data from repository
+        qa_data = get_qa_data_for_csv_export(session, dataset_id, graph_runner_id)
+
+        if not qa_data:
+            LOGGER.warning(f"No QA data found for dataset {dataset_id}")
+            # Return CSV with headers only
+            output = io.StringIO()
+            writer = csv.writer(output)
+            writer.writerow(["input", "expected_output", "actual_output"])
+            return output.getvalue()
+
+        # Create CSV in memory
+        output = io.StringIO()
+        writer = csv.writer(output)
+
+        # Write header
+        writer.writerow(["input", "expected_output", "actual_output"])
+
+        # Write data rows
+        for input_data, groundtruth, output_data in qa_data:
+            # Serialize input (JSONB) to JSON string
+            input_str = json.dumps(input_data) if input_data else ""
+            # Handle groundtruth (can be None)
+            groundtruth_str = groundtruth if groundtruth is not None else ""
+            # Handle output (can be None)
+            output_str = output_data if output_data is not None else ""
+
+            writer.writerow([input_str, groundtruth_str, output_str])
+
+        csv_content = output.getvalue()
+        output.close()
+
+        LOGGER.info(
+            f"Exported {len(qa_data)} QA data entries to CSV for dataset {dataset_id} "
+            f"(graph_runner_id={graph_runner_id})"
+        )
+        return csv_content
+
+    except Exception as e:
+        LOGGER.error(f"Error in export_qa_data_to_csv_service: {str(e)}")
+        raise ValueError(f"Failed to export QA data to CSV: {str(e)}") from e
