@@ -41,6 +41,8 @@ class InstanceParameterWithDefinition:
     ui_component: Optional[UIComponent] = None
     ui_component_properties: Optional[dict] = None
     is_advanced: bool = False
+    deprecated: bool = False
+    deprecation_message: Optional[str] = None
 
 
 @dataclass
@@ -345,6 +347,8 @@ def get_instance_parameters_with_definition(
             ui_component=param_def.ui_component,
             ui_component_properties=param_def.ui_component_properties,
             is_advanced=param_def.is_advanced,
+            deprecated=param_def.deprecated,
+            deprecation_message=param_def.deprecation_message,
         )
         for param, param_def in results
         if param_def.type not in [db.ParameterType.LLM_API_KEY]  # Hide sensitive parameter types

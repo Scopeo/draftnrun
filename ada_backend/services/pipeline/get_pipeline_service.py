@@ -68,6 +68,8 @@ def get_component_instance(
                     ui_component=parameter.ui_component,
                     ui_component_properties=parameter.ui_component_properties,
                     is_advanced=parameter.is_advanced,
+                    deprecated=parameter.deprecated,
+                    deprecation_message=parameter.deprecation_message,
                 )
             )
 
@@ -143,6 +145,8 @@ def get_component_instance(
                 ui_component=param.ui_component,
                 ui_component_properties=param.ui_component_properties,
                 is_advanced=param.is_advanced,
+                deprecated=param.deprecated,
+                deprecation_message=param.deprecation_message,
             )
             for param in parameters
         ],
