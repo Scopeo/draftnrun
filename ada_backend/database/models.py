@@ -88,6 +88,7 @@ class ParameterType(StrEnum):
     DATA_SOURCE = "data_source"
     SECRETS = "secrets"
     LLM_API_KEY = "llm_api_key"
+    LLM_MODEL = "llm_model"
 
 
 class OrgSecretType(StrEnum):
@@ -250,6 +251,8 @@ def cast_value(
         return unresolved_value
     elif parameter_type == ParameterType.COMPONENT or parameter_type == ParameterType.TOOL:
         raise ValueError("Parameter type COMPONENT or TOOL is not supported for BasicParameters")
+    elif parameter_type == ParameterType.LLM_MODEL:
+        return unresolved_value
     else:
         raise ValueError(f"Unsupported value type: {parameter_type}")
 
@@ -562,6 +565,7 @@ class ComponentParameterDefinition(Base):
     ui_component = mapped_column(make_pg_enum(UIComponent), nullable=True)
     ui_component_properties = mapped_column(JSON, nullable=True)
     is_advanced = mapped_column(Boolean, nullable=False, default=False)
+    model_capabilities = mapped_column(JSON, nullable=True)
 
     component_version = relationship("ComponentVersion", back_populates="definitions")
     parameter_group_id = mapped_column(

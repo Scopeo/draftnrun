@@ -255,7 +255,6 @@ def seed_ai_agent_components(session: Session):
                 is_advanced=True,
             ),
             *build_function_calling_service_config_definitions(
-                session=session,
                 component_version_id=base_ai_agent_version.id,
                 params_to_seed=[
                     ParameterLLMConfig(
