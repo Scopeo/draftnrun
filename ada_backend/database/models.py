@@ -149,7 +149,7 @@ class CronEntrypoint(StrEnum):
 
 
 class CronStatus(StrEnum):
-    SUCCESS = "success"
+    COMPLETED = "completed"
     ERROR = "error"
     RUNNING = "running"
 

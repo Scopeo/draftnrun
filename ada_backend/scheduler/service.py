@@ -104,7 +104,7 @@ def _job_listener(event: JobExecutionEvent):
                 _update_recent_run_status(session, cron_id, CronStatus.ERROR, error_msg)
             else:
                 LOGGER.info(f"Cron job {cron_id} completed successfully")
-                _update_recent_run_status(session, cron_id, CronStatus.SUCCESS)
+                _update_recent_run_status(session, cron_id, CronStatus.COMPLETED)
         except Exception as e:
             LOGGER.error(f"Error updating cron run for job {cron_id}: {e}")
             _update_recent_run_status(session, cron_id, CronStatus.ERROR, str(e))
@@ -152,7 +152,7 @@ async def _execute_cron_job(cron_id: UUID, entrypoint: CronEntrypoint, payload: 
             update_cron_run(
                 session=session,
                 run_id=run_id,
-                status=CronStatus.SUCCESS,
+                status=CronStatus.COMPLETED,
                 finished_at=datetime.now(timezone.utc),
                 result=result,
             )
