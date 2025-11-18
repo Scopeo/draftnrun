@@ -1,7 +1,7 @@
 """add_llm_judge_and_evaluation_type
 
 Revision ID: e2789dbf6d68
-Revises: a4576629806f
+Revises: bddb653ed832
 Create Date: 2025-11-18 17:03:12.657355
 
 """
@@ -17,7 +17,7 @@ from ada_backend.database.utils import create_enum_if_not_exists, drop_enum_if_e
 
 # revision identifiers, used by Alembic.
 revision: str = "e2789dbf6d68"
-down_revision: Union[str, None] = "a4576629806f"
+down_revision: Union[str, None] = "bddb653ed832"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
