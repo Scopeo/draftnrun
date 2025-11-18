@@ -66,7 +66,7 @@ def create_llm_judge_endpoint(
     judge_data: LLMJudgeCreate,
     user: Annotated[
         SupabaseUser,
-        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.WRITER.value)),
+        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.READER.value)),
     ],
     session: Session = Depends(get_db),
 ) -> LLMJudgeResponse:
@@ -94,7 +94,7 @@ def update_llm_judge_endpoint(
     judge_data: LLMJudgeUpdate,
     user: Annotated[
         SupabaseUser,
-        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.WRITER.value)),
+        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.READER.value)),
     ],
     session: Session = Depends(get_db),
 ) -> LLMJudgeResponse:
@@ -128,7 +128,7 @@ def delete_llm_judges_endpoint(
     delete_data: LLMJudgeDeleteList,
     user: Annotated[
         SupabaseUser,
-        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.WRITER.value)),
+        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.READER.value)),
     ],
     session: Session = Depends(get_db),
 ):
