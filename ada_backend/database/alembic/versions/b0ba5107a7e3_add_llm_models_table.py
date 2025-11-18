@@ -298,60 +298,56 @@ def upgrade() -> None:
     # Add model_capabilities column and llm_model parameter type
     connection = op.get_bind()
 
-    # Use a raw connection with autocommit for both column addition and enum operations
-    raw_connection = connection.connection
-    old_isolation = raw_connection.isolation_level
-    raw_connection.set_isolation_level(0)  # AUTOCOMMIT
-
-    cursor = raw_connection.cursor()
-
     # Check if table exists before adding column
-    cursor.execute(
-        """
-        SELECT EXISTS (
-            SELECT FROM information_schema.tables
-            WHERE table_name = 'component_parameter_definitions'
-        )
-    """
-    )
-    table_exists = cursor.fetchone()[0]
-
-    if table_exists:
-        # Check if column already exists
-        cursor.execute(
+    table_exists = connection.execute(
+        sa.text(
             """
             SELECT EXISTS (
-                SELECT FROM information_schema.columns
+                SELECT FROM information_schema.tables
                 WHERE table_name = 'component_parameter_definitions'
-                AND column_name = 'model_capabilities'
             )
         """
         )
-        column_exists = cursor.fetchone()[0]
+    ).scalar()
+
+    if table_exists:
+        # Check if column already exists
+        column_exists = connection.execute(
+            sa.text(
+                """
+                SELECT EXISTS (
+                    SELECT FROM information_schema.columns
+                    WHERE table_name = 'component_parameter_definitions'
+                    AND column_name = 'model_capabilities'
+                )
+            """
+            )
+        ).scalar()
 
         # Add model_capabilities column if it doesn't exist
         if not column_exists:
-            cursor.execute("ALTER TABLE component_parameter_definitions ADD COLUMN model_capabilities JSON")
+            with op.get_context().autocommit_block():
+                connection.execute(
+                    sa.text("ALTER TABLE component_parameter_definitions ADD COLUMN model_capabilities JSON")
+                )
 
     # Check if enum type exists before trying to add value
-    cursor.execute(
+    enum_exists = connection.execute(
+        sa.text(
+            """
+            SELECT EXISTS (
+                SELECT FROM pg_type
+                WHERE typname = 'parameter_type'
+            )
         """
-        SELECT EXISTS (
-            SELECT FROM pg_type
-            WHERE typname = 'parameter_type'
         )
-    """
-    )
-    enum_exists = cursor.fetchone()[0]
+    ).scalar()
 
     # Add llm_model parameter type to the enum if enum exists
     if enum_exists:
-        cursor.execute("ALTER TYPE parameter_type ADD VALUE IF NOT EXISTS 'llm_model'")
-
-    cursor.close()
-
-    # Restore the original isolation level
-    raw_connection.set_isolation_level(old_isolation)
+        # ALTER TYPE ... ADD VALUE must run outside a transaction block on Postgres
+        with op.get_context().autocommit_block():
+            connection.execute(sa.text("ALTER TYPE parameter_type ADD VALUE IF NOT EXISTS 'llm_model'"))
 
     # Update existing parameters to use new type and set model_capabilities
     # Only run if table exists (skip for fresh databases)
@@ -363,7 +359,6 @@ def upgrade() -> None:
                 UPDATE component_parameter_definitions cpd
                 SET type = 'llm_model', model_capabilities = '["completion"]'
                 WHERE cpd.name = 'completion_model'
-                AND cpd.type = 'string'
                 AND cpd.component_version_id IN (
                     '7a039611-49b3-4bfd-b09b-c0f93edf3b79',  -- llm_call
                     '6f790dd1-06f6-4489-a655-1a618763a114',  -- synthesizer
@@ -384,7 +379,6 @@ def upgrade() -> None:
                 UPDATE component_parameter_definitions cpd
                 SET type = 'llm_model', model_capabilities = '["function_calling"]'
                 WHERE cpd.name = 'completion_model'
-                AND cpd.type = 'string'
                 AND cpd.component_version_id IN (
                     '22292e7f-a3ba-4c63-a4c7-dd5c0c75cdaa',  -- base_ai_agent
                     'fe26eac8-61c6-4158-a571-61fd680676c8',  -- rag_agent
@@ -405,7 +399,6 @@ def upgrade() -> None:
                 UPDATE component_parameter_definitions cpd
                 SET type = 'llm_model', model_capabilities = '["web_search"]'
                 WHERE cpd.name = 'completion_model'
-                AND cpd.type = 'string'
                 AND cpd.component_version_id IN (
                     'd6020df0-a7e0-4d82-b731-0a653beef2e6',  -- web_search_openai_agent
                     'd6020df0-a7e0-4d82-b731-0a653beef2e5'   -- web_search_openai_agent_v2
@@ -421,7 +414,6 @@ def upgrade() -> None:
                 UPDATE component_parameter_definitions cpd
                 SET type = 'llm_model', model_capabilities = '["ocr"]'
                 WHERE cpd.name = 'completion_model'
-                AND cpd.type = 'string'
                 AND cpd.component_version_id = 'a3b4c5d6-e7f8-9012-3456-789abcdef012'  -- ocr_call
             """
             )
@@ -434,7 +426,6 @@ def upgrade() -> None:
                 UPDATE component_parameter_definitions cpd
                 SET type = 'llm_model', model_capabilities = '["embedding"]'
                 WHERE cpd.name = 'embedding_model'
-                AND cpd.type = 'string'
             """
             )
         )
@@ -444,23 +435,16 @@ def downgrade() -> None:
     connection = op.get_bind()
 
     # Check if table exists before attempting downgrade
-    raw_connection = connection.connection
-    old_isolation = raw_connection.isolation_level
-    raw_connection.set_isolation_level(0)
-
-    cursor = raw_connection.cursor()
-    cursor.execute(
+    table_exists = connection.execute(
+        sa.text(
+            """
+            SELECT EXISTS (
+                SELECT FROM information_schema.tables
+                WHERE table_name = 'component_parameter_definitions'
+            )
         """
-        SELECT EXISTS (
-            SELECT FROM information_schema.tables
-            WHERE table_name = 'component_parameter_definitions'
         )
-    """
-    )
-    table_exists = cursor.fetchone()[0]
-    cursor.close()
-
-    raw_connection.set_isolation_level(old_isolation)
+    ).scalar()
 
     if table_exists:
         # Revert all LLM model parameter types back to STRING

@@ -197,6 +197,7 @@ class ComponentParameterDefinitionAdmin(EnhancedModelView, model=db.ComponentPar
         "is_advanced",
         "parameter_group",
         "parameter_order_within_group",
+        "model_capabilities",
     ]
     form_columns = [
         "component_version",
