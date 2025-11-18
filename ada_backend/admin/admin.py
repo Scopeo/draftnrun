@@ -588,7 +588,7 @@ class LLMJudgeAdmin(EnhancedModelView, model=db.LLMJudge):
         "temperature",
     ]
 
-class LLMModelsAdmin(EnhancedModelView, model=db.LLMModels):
+class LLMModelsAdmin(EnhancedModelView, model=db.LLMModel):
     category = AdminCategory.LLM_MODELS
     name = "LLM Model"
     icon = "fas fa-cogs"

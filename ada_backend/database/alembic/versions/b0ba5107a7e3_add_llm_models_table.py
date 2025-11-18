@@ -20,9 +20,9 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    # Create llm_model table
+    # Create llm_models table
     op.create_table(
-        "llm_model",
+        "llm_models",
         sa.Column("id", sa.UUID(), server_default=sa.text("gen_random_uuid()"), nullable=False),
         sa.Column("display_name", sa.String(), nullable=False),
         sa.Column("description", sa.Text(), nullable=True),
@@ -33,9 +33,9 @@ def upgrade() -> None:
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=True),
         sa.PrimaryKeyConstraint("id"),
     )
-    op.create_index(op.f("ix_llm_model_id"), "llm_model", ["id"], unique=False)
+    op.create_index(op.f("ix_llm_models_id"), "llm_models", ["id"], unique=False)
     llm_models_table = sa.table(
-        "llm_model",
+        "llm_models",
         sa.column("display_name", sa.String()),
         sa.column("description", sa.Text()),
         sa.column("provider", sa.String()),
@@ -466,6 +466,6 @@ def downgrade() -> None:
         except Exception:
             pass
 
-    # Drop llm_model table
-    op.drop_index(op.f("ix_llm_model_id"), table_name="llm_model")
-    op.drop_table("llm_model")
+    # Drop llm_models table
+    op.drop_index(op.f("ix_llm_models_id"), table_name="llm_models")
+    op.drop_table("llm_models")

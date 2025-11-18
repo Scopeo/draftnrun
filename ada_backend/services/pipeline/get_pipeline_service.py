@@ -65,11 +65,14 @@ def get_component_instance(
                     nullable=parameter.nullable,
                     default=parameter.default,
                     ui_component=parameter.ui_component,
-                    ui_component_properties=get_ui_component_properties_with_llm_options(
-                        session,
-                        parameter.type,
-                        parameter.model_capabilities,
-                        parameter.ui_component_properties,
+                    ui_component_properties=(
+                        get_ui_component_properties_with_llm_options(
+                            session,
+                            parameter.model_capabilities,
+                            parameter.ui_component_properties,
+                        )
+                        if parameter.type == ParameterType.LLM_MODEL
+                        else parameter.ui_component_properties
                     ),
                     is_advanced=parameter.is_advanced,
                 )
@@ -128,11 +131,14 @@ def get_component_instance(
                 nullable=param.nullable,
                 default=param.default,
                 ui_component=param.ui_component,
-                ui_component_properties=get_ui_component_properties_with_llm_options(
-                    session,
-                    param.type,
-                    getattr(param, "model_capabilities", None),
-                    param.ui_component_properties,
+                ui_component_properties=(
+                    get_ui_component_properties_with_llm_options(
+                        session,
+                        getattr(param, "model_capabilities", None),
+                        param.ui_component_properties,
+                    )
+                    if param.type == ParameterType.LLM_MODEL
+                    else param.ui_component_properties
                 ),
                 is_advanced=param.is_advanced,
             )
