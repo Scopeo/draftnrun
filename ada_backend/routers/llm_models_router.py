@@ -20,6 +20,7 @@ from ada_backend.services.llm_models_service import (
     update_llm_model_service,
     get_model_capabilities_service,
 )
+from ada_backend.services.errors import LLMModelNotFound
 
 
 router = APIRouter(tags=["LLM Models"])
@@ -115,6 +116,9 @@ def update_llm_model_endpoint(
             llm_model_id,
             llm_model_data,
         )
+    except LLMModelNotFound as e:
+        LOGGER.error(f"Failed to update LLM model: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=404, detail=f"LLM model {e.llm_model_id} not found") from e
     except Exception as e:
         LOGGER.error(f"Failed to update LLM model: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error") from e

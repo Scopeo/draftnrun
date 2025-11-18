@@ -654,11 +654,14 @@ def get_all_components_with_parameters(
                             nullable=param.nullable,
                             default=param.get_default(),
                             ui_component=param.ui_component,
-                            ui_component_properties=get_ui_component_properties_with_llm_options(
-                                session,
-                                param.type,
-                                param.model_capabilities,
-                                param.ui_component_properties,
+                            ui_component_properties=(
+                                get_ui_component_properties_with_llm_options(
+                                    session,
+                                    param.model_capabilities,
+                                    param.ui_component_properties,
+                                )
+                                if param.type == ParameterType.LLM_MODEL
+                                else param.ui_component_properties
                             ),
                             is_advanced=param.is_advanced,
                             order=param.order,

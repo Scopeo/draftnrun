@@ -17,6 +17,7 @@ from ada_backend.schemas.llm_models_schema import (
     ModelCapabilityOption,
 )
 from ada_backend.database.models import SelectOption
+from ada_backend.services.errors import LLMModelNotFound
 
 
 def get_model_capabilities_service() -> ModelCapabilitiesResponse:
@@ -123,14 +124,16 @@ def update_llm_model_service(
     llm_model_id: UUID,
     llm_model_data: LLMModelUpdate,
 ) -> LLMModelResponse:
-
-    updated_llm_model = update_llm_model(
-        session,
-        llm_model_id=llm_model_id,
-        display_name=llm_model_data.display_name,
-        model_name=llm_model_data.model_name,
-        description=llm_model_data.description,
-        model_capacity=llm_model_data.model_capacity,
-        provider=llm_model_data.provider,
-    )
-    return LLMModelResponse.model_validate(updated_llm_model)
+    try:
+        updated_llm_model = update_llm_model(
+            session,
+            llm_model_id=llm_model_id,
+            display_name=llm_model_data.display_name,
+            model_name=llm_model_data.model_name,
+            description=llm_model_data.description,
+            model_capacity=llm_model_data.model_capacity,
+            provider=llm_model_data.provider,
+        )
+        return LLMModelResponse.model_validate(updated_llm_model)
+    except LLMModelNotFound as e:
+        raise LLMModelNotFound(e.llm_model_id) from e

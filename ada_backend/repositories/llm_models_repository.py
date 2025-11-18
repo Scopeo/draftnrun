@@ -4,16 +4,16 @@ from uuid import UUID
 from ada_backend.database import models as db
 
 
-def get_all_llm_models(session: Session) -> list[db.LLMModels]:
-    return session.query(db.LLMModels).all()
+def get_all_llm_models(session: Session) -> list[db.LLMModel]:
+    return session.query(db.LLMModel).all()
 
 
-def get_llm_models_by_capability(session: Session, capabilities: list[str]) -> list[db.LLMModels]:
+def get_llm_models_by_capability(session: Session, capabilities: list[str]) -> list[db.LLMModel]:
 
-    query = session.query(db.LLMModels).order_by(db.LLMModels.id)
+    query = session.query(db.LLMModel).order_by(db.LLMModel.id)
 
     for capability in capabilities:
-        query = query.filter(db.LLMModels.model_capacity.contains([capability]))
+        query = query.filter(db.LLMModel.model_capacity.contains([capability]))
 
     return query.all()
 
@@ -25,8 +25,8 @@ def create_llm_model(
     model_capacity: list[str],
     model_provider: str,
     model_name: str,
-) -> db.LLMModels:
-    llm_model = db.LLMModels(
+) -> db.LLMModel:
+    llm_model = db.LLMModel(
         display_name=display_name,
         description=model_description,
         model_capacity=model_capacity,
@@ -39,7 +39,7 @@ def create_llm_model(
 
 
 def delete_llm_model(session: Session, llm_model_id: UUID) -> None:
-    session.query(db.LLMModels).filter(db.LLMModels.id == llm_model_id).delete()
+    session.query(db.LLMModel).filter(db.LLMModel.id == llm_model_id).delete()
     session.commit()
 
 
@@ -51,8 +51,8 @@ def update_llm_model(
     description: str,
     model_capacity: list[str],
     provider: str,
-) -> db.LLMModels:
-    existing_llm_model = session.query(db.LLMModels).filter(db.LLMModels.id == llm_model_id).first()
+) -> db.LLMModel:
+    existing_llm_model = session.query(db.LLMModel).filter(db.LLMModel.id == llm_model_id).first()
     if not existing_llm_model:
         return None
     if display_name is not None:

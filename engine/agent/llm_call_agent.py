@@ -122,8 +122,6 @@ class LLMCallAgent(Agent):
         self._file_content_key = file_content_key
         self._file_url_key = file_url_key
         self.output_format = output_format
-        if capability_resolver is None:
-            raise ValueError("capability_resolver must be provided for LLMCallAgent.")
         self._capability_resolver = capability_resolver
 
     def _extract_file_content(self, inputs: LLMCallInputs, ctx: Optional[dict]) -> list:

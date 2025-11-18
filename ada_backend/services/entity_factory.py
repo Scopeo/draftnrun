@@ -357,6 +357,9 @@ def build_llm_capability_resolver_processor(
     """
 
     def processor(params: dict, constructor_params: dict[str, Any]) -> dict:
+        if target_name not in constructor_params:
+            return params
+
         def resolve_capabilities(capabilities: list[str]) -> set[str]:
             with get_db_session() as session:
                 options = get_llm_models_by_capability_select_options_service(session, capabilities)
