@@ -9,11 +9,23 @@ from ada_backend.repositories.qa_evaluation_repository import (
     get_llm_judges_by_project,
     update_llm_judge,
     delete_llm_judges,
+    create_judge_evaluation,
+    get_judge_evaluations_by_judge,
+    get_judge_evaluations_by_version_output,
+    delete_judge_evaluations,
+    get_version_outputs_by_input_ids_and_graph_runner,
 )
 from ada_backend.schemas.qa_evaluation_schema import (
     LLMJudgeCreate,
     LLMJudgeResponse,
     LLMJudgeUpdate,
+    JudgeEvaluationCreate,
+    JudgeEvaluationResponse,
+    JudgeEvaluationListResponse,
+    JudgeEvaluationRunRequest,
+    JudgeEvaluationRunResponse,
+    JudgeEvaluationRunSummary,
+    JudgeEvaluationDeleteList,
 )
 from ada_backend.services.errors import LLMJudgeNotFound
 
@@ -99,3 +111,99 @@ def delete_llm_judges_service(
     except Exception as e:
         LOGGER.error(f"Error in delete_llm_judges_service for project {project_id}: {str(e)}")
         raise ValueError(f"Failed to delete LLM judges: {str(e)}") from e
+
+
+def create_judge_evaluation_service(
+    session: Session,
+    project_id: UUID,
+    judge_id: UUID,
+    evaluation_data: JudgeEvaluationCreate,
+) -> JudgeEvaluationResponse:
+    try:
+        evaluation = create_judge_evaluation(
+            session=session,
+            judge_id=judge_id,
+            version_output_id=evaluation_data.version_output_id,
+            evaluation_result=evaluation_data.evaluation_result,
+            project_id=project_id,
+            raw_llm_response=evaluation_data.raw_llm_response,
+        )
+
+        if not evaluation:
+            raise ValueError("Version output not found or evaluation already exists")
+
+        LOGGER.info(f"Created judge evaluation {evaluation.id}")
+        return JudgeEvaluationResponse.model_validate(evaluation)
+    except LLMJudgeNotFound:
+        raise
+    except Exception as e:
+        LOGGER.error(f"Error in create_judge_evaluation_service: {str(e)}")
+        raise ValueError(f"Failed to create judge evaluation: {str(e)}") from e
+
+
+def get_judge_evaluations_by_judge_service(
+    session: Session,
+    judge_id: UUID,
+) -> JudgeEvaluationListResponse:
+    try:
+        evaluations = get_judge_evaluations_by_judge(session=session, judge_id=judge_id)
+        return JudgeEvaluationListResponse(
+            evaluations=[JudgeEvaluationResponse.model_validate(eval) for eval in evaluations]
+        )
+    except Exception as e:
+        LOGGER.error(f"Error in get_judge_evaluations_by_judge_service: {str(e)}")
+        raise ValueError(f"Failed to get judge evaluations: {str(e)}") from e
+
+
+def get_judge_evaluations_by_version_output_service(
+    session: Session,
+    input_id: UUID,
+    graph_runner_id: UUID,
+) -> JudgeEvaluationListResponse:
+    try:
+        version_outputs = get_version_outputs_by_input_ids_and_graph_runner(
+            session=session, input_ids=[input_id], graph_runner_id=graph_runner_id
+        )
+
+        if not version_outputs:
+            raise ValueError("Version output not found for given input_id and graph_runner_id")
+
+        version_output_id, _ = version_outputs[0]
+
+        evaluations = get_judge_evaluations_by_version_output(session=session, version_output_id=version_output_id)
+        return JudgeEvaluationListResponse(
+            evaluations=[JudgeEvaluationResponse.model_validate(eval) for eval in evaluations]
+        )
+    except Exception as e:
+        LOGGER.error(f"Error in get_judge_evaluations_by_version_output_service: {str(e)}")
+        raise ValueError(f"Failed to get judge evaluations: {str(e)}") from e
+
+
+def delete_judge_evaluations_service(
+    session: Session,
+    project_id: UUID,
+    delete_data: JudgeEvaluationDeleteList,
+) -> None:
+    try:
+        deleted_count = delete_judge_evaluations(
+            session=session,
+            evaluation_ids=delete_data.evaluation_ids,
+            project_id=project_id,
+        )
+        LOGGER.info(f"Deleted {deleted_count} judge evaluations for project {project_id}")
+    except Exception as e:
+        LOGGER.error(f"Error in delete_judge_evaluations_service: {str(e)}")
+        raise ValueError(f"Failed to delete judge evaluations: {str(e)}") from e
+
+
+async def run_judge_evaluation_service(
+    session: Session,
+    project_id: UUID,
+    judge_id: UUID,
+    run_request: JudgeEvaluationRunRequest,
+) -> JudgeEvaluationRunResponse:
+    # TODO: A implémenter
+    # Retourne une réponse vide mais valide
+    return JudgeEvaluationRunResponse(
+        results=[], summary=JudgeEvaluationRunSummary(total=0, passed=0, failed=0, success_rate=0.0)
+    )
