@@ -659,7 +659,6 @@ class QdrantService:
             if schema.source_id_field:
                 payload_fields.add(schema.source_id_field)
 
-            # Include all fields from chunk (for flattened metadata fields)
             list_payloads = [
                 {
                     "id": self.get_uuid(chunk[schema.chunk_id_field]),
@@ -1017,17 +1016,6 @@ class QdrantService:
         point_ids: Optional[list[str]] = None,
         filter: Optional[dict] = None,
     ) -> bool:
-        """
-        Delete points from the Qdrant collection.
-
-        Args:
-            collection_name (str): The name of the collection to delete points from.
-            point_ids (list[str], optional): A list of point IDs to delete from the collection.
-            filter (dict, optional): Qdrant filter dictionary to match points for deletion.
-
-        Returns:
-            bool: True if deletion was successful, False otherwise.
-        """
         return asyncio.run(self.delete_points_async(collection_name, point_ids, filter))
 
     async def delete_points_async(
@@ -1185,7 +1173,6 @@ class QdrantService:
         collection_name: str,
         query_filter_qdrant: Optional[dict] = None,
     ) -> bool:
-        # Check if collection is empty first to avoid filter issues on empty collections
         collection_count = await self.count_points_async(
             collection_name=collection_name,
             filter=query_filter_qdrant,

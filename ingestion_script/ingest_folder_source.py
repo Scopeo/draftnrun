@@ -165,7 +165,6 @@ async def sync_chunks_to_qdrant(
     query_filter_qdrant: Optional[dict] = None,
     source_id: Optional[str] = None,
 ) -> None:
-    # For file sources, filter by source_id if provided
     if source_id and sql_query_filter:
         combined_filter = f"({sql_query_filter}) AND {SOURCE_ID_COLUMN_NAME} = '{source_id}'"
     elif source_id:
@@ -338,9 +337,6 @@ async def _ingest_folder_source(
         embedding_service=embedding_service,
         default_collection_schema=UNIFIED_QDRANT_SCHEMA,
     )
-
-    # For file sources, tables/collections are shared, so we don't check for existence
-    # The table/collection will be created if it doesn't exist, or chunks will be appended if it does
 
     LOGGER.info("Starting ingestion process")
     files_info = folder_manager.list_all_files_info()
