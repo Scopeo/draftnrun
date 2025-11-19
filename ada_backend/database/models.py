@@ -5,6 +5,7 @@ from enum import StrEnum
 import logging
 
 from sqlalchemy import (
+    Float,
     ForeignKeyConstraint,
     Index,
     String,
@@ -152,6 +153,12 @@ class CronStatus(StrEnum):
     COMPLETED = "completed"
     ERROR = "error"
     RUNNING = "running"
+
+
+class EvaluationType(StrEnum):
+    BOOLEAN = "boolean"
+    SCORE = "score"
+    FREE_TEXT = "free_text"
 
 
 class PortType(StrEnum):
@@ -1454,3 +1461,29 @@ class VersionOutput(Base):
 
     def __str__(self):
         return f"VersionOutput(id={self.id}, input_id={self.input_id}, graph_runner_id={self.graph_runner_id})"
+
+
+class LLMJudge(Base):
+    __tablename__ = "llm_judges"
+    __table_args__ = {"schema": "quality_assurance"}
+
+    id = mapped_column(UUID(as_uuid=True), primary_key=True, index=True, server_default=func.gen_random_uuid())
+    project_id = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("projects.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    name = mapped_column(String, nullable=False)
+    description = mapped_column(Text, nullable=True)
+    evaluation_type = mapped_column(make_pg_enum(EvaluationType), nullable=False)
+    llm_model_reference = mapped_column(String, nullable=False, default="openai:gpt-5-mini")
+    prompt_template = mapped_column(Text, nullable=False)
+    temperature = mapped_column(Float, nullable=True, default=1.0)
+    created_at = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    project = relationship("Project")
+
+    def __str__(self):
+        return f"LLMJudge(id={self.id}, name={self.name}, evaluation_type={self.evaluation_type})"

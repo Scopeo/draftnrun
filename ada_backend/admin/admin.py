@@ -22,6 +22,7 @@ class AdminCategory(StrEnum):
     COMPONENTS = "Components"
     SOURCES = "Data Sources"
     SCHEDULER = "Scheduler"
+    QUALITY_ASSURANCE = "Quality Assurance"
 
 
 class EnhancedModelView(ModelView):
@@ -560,6 +561,33 @@ class PortMappingAdmin(EnhancedModelView, model=db.PortMapping):
     ]
 
 
+class LLMJudgeAdmin(EnhancedModelView, model=db.LLMJudge):
+    category = AdminCategory.QUALITY_ASSURANCE
+    icon = "fas fa-balance-scale"
+    column_list = [
+        "id",
+        "project_id",
+        "name",
+        "description",
+        "evaluation_type",
+        "llm_model_reference",
+        "prompt_template",
+        "temperature",
+        "created_at",
+        "updated_at",
+    ]
+    column_searchable_list = ["name", "description", "llm_model_reference"]
+    form_columns = [
+        "project_id",
+        "name",
+        "description",
+        "evaluation_type",
+        "llm_model_reference",
+        "prompt_template",
+        "temperature",
+    ]
+
+
 class AdminAuth(AuthenticationBackend):
     """Basic username/password authentication for admin interface."""
 
@@ -631,5 +659,6 @@ def setup_admin(app: FastAPI):
     admin.add_view(CronJobAdmin)
     admin.add_view(CronRunAdmin)
     admin.add_view(EndpointPollingHistoryAdmin)
+    admin.add_view(LLMJudgeAdmin)
 
     return admin
