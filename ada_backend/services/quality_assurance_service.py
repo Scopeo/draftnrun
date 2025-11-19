@@ -46,17 +46,16 @@ from ada_backend.services.agent_runner_service import run_agent
 from ada_backend.database.models import CallType
 from ada_backend.repositories.env_repository import get_env_relationship_by_graph_runner_id
 from ada_backend.services.metrics.utils import query_conversation_messages
-from ada_backend.services.errors import (
+from ada_backend.services.qa.qa_error import (
     CSVMissingColumnError,
     CSVInvalidJSONError,
     CSVEmptyFileError,
     CSVExportError,
 )
-from ada_backend.utils.qa_utils import process_csv
+from ada_backend.utils.csv_processing import process_csv
 
 LOGGER = logging.getLogger(__name__)
 
-MAX_CSV_EXPORT_ENTRIES = 10000
 MAX_CSV_EXPORT_SIZE_MB = 10
 MAX_CSV_EXPORT_SIZE_BYTES = MAX_CSV_EXPORT_SIZE_MB * 1024 * 1024
 

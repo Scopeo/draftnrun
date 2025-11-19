@@ -3,7 +3,7 @@ import io
 import json
 from typing import BinaryIO
 
-from ada_backend.services.errors import CSVEmptyFileError, CSVMissingColumnError, CSVInvalidJSONError
+from ada_backend.services.qa.qa_error import CSVEmptyFileError, CSVMissingColumnError, CSVInvalidJSONError
 
 
 def process_csv(csv_file: BinaryIO):

@@ -43,7 +43,7 @@ from ada_backend.services.quality_assurance_service import (
     export_qa_data_to_csv_service,
     import_qa_data_from_csv_service,
 )
-from ada_backend.services.errors import (
+from ada_backend.services.qa.qa_error import (
     CSVEmptyFileError,
     CSVInvalidJSONError,
     CSVMissingColumnError,
