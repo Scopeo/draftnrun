@@ -22,6 +22,7 @@ from ada_backend.repositories.quality_assurance_repository import (
     clear_version_outputs_for_input_ids,
     get_outputs_by_graph_runner,
     get_qa_data_for_csv_export,
+    import_qa_data_from_csv,
 )
 from ada_backend.schemas.input_groundtruth_schema import (
     InputGroundtruthResponse,
@@ -47,6 +48,13 @@ from ada_backend.services.agent_runner_service import run_agent
 from ada_backend.database.models import CallType
 from ada_backend.repositories.env_repository import get_env_relationship_by_graph_runner_id
 from ada_backend.services.metrics.utils import query_conversation_messages
+from ada_backend.services.errors import (
+    CSVMissingColumnError,
+    CSVInvalidJSONError,
+    CSVEmptyFileError,
+    CSVNotEnoughColumnsError,
+    CSVEmptyInputError,
+)
 
 LOGGER = logging.getLogger(__name__)
 
@@ -498,42 +506,25 @@ def export_qa_data_to_csv_service(
     dataset_id: UUID,
     graph_runner_id: UUID,
 ) -> str:
-    """Export QA data to CSV format.
 
-    Args:
-        session: SQLAlchemy session
-        dataset_id: ID of the dataset
-        graph_runner_id: Graph runner ID to filter outputs
-
-    Returns:
-        CSV content as string (UTF-8 encoded)
-    """
     try:
-        # Get data from repository
         qa_data = get_qa_data_for_csv_export(session, dataset_id, graph_runner_id)
 
         if not qa_data:
             LOGGER.warning(f"No QA data found for dataset {dataset_id}")
-            # Return CSV with headers only
             output = io.StringIO()
             writer = csv.writer(output)
             writer.writerow(["input", "expected_output", "actual_output"])
             return output.getvalue()
 
-        # Create CSV in memory
         output = io.StringIO()
         writer = csv.writer(output)
 
-        # Write header
         writer.writerow(["input", "expected_output", "actual_output"])
 
-        # Write data rows
         for input_data, groundtruth, output_data in qa_data:
-            # Serialize input (JSONB) to JSON string
             input_str = json.dumps(input_data) if input_data else ""
-            # Handle groundtruth (can be None)
             groundtruth_str = groundtruth if groundtruth is not None else ""
-            # Handle output (can be None)
             output_str = output_data if output_data is not None else ""
 
             writer.writerow([input_str, groundtruth_str, output_str])
@@ -550,3 +541,81 @@ def export_qa_data_to_csv_service(
     except Exception as e:
         LOGGER.error(f"Error in export_qa_data_to_csv_service: {str(e)}")
         raise ValueError(f"Failed to export QA data to CSV: {str(e)}") from e
+
+
+def import_qa_data_from_csv_service(
+    session: Session,
+    dataset_id: UUID,
+    csv_content: str,
+) -> InputGroundtruthResponseList:
+    try:
+        csv_reader = csv.reader(io.StringIO(csv_content))
+        rows = list(csv_reader)
+
+        if not rows:
+            raise CSVEmptyFileError()
+
+        header = rows[0]
+        required_columns = ["input", "expected_output"]
+
+        column_indices = {}
+        for col in required_columns:
+            try:
+                column_indices[col] = header.index(col)
+            except ValueError:
+                raise CSVMissingColumnError(col, header, required_columns)
+
+        input_col_idx = column_indices["input"]
+        expected_output_col_idx = column_indices["expected_output"]
+
+        csv_rows = []
+        for row_num, row in enumerate(rows[1:], start=2):
+            max_required_idx = max(input_col_idx, expected_output_col_idx)
+            if len(row) <= max_required_idx:
+                raise CSVNotEnoughColumnsError(
+                    row_num,
+                    len(row),
+                    max_required_idx + 1,
+                )
+
+            input_str = row[input_col_idx] if input_col_idx < len(row) else ""
+            groundtruth_str = row[expected_output_col_idx] if expected_output_col_idx < len(row) else ""
+
+            if not input_str or not input_str.strip():
+                raise CSVEmptyInputError(row_num)
+
+            try:
+                input_data = json.loads(input_str.strip())
+            except json.JSONDecodeError as e:
+                raise CSVInvalidJSONError(row_num, str(e)) from e
+
+            if not isinstance(input_data, dict):
+                raise CSVInvalidJSONError(row_num, f"Expected JSON object, got {type(input_data).__name__}")
+
+            groundtruth = groundtruth_str.strip() if groundtruth_str and groundtruth_str.strip() else None
+
+            csv_rows.append((input_data, groundtruth))
+
+        created_inputs_groundtruths = import_qa_data_from_csv(
+            session=session,
+            dataset_id=dataset_id,
+            csv_rows=csv_rows,
+        )
+
+        LOGGER.info(
+            f"Imported {len(created_inputs_groundtruths)} input-groundtruth entries from CSV for dataset {dataset_id}"
+        )
+
+        return InputGroundtruthResponseList(
+            inputs_groundtruths=[InputGroundtruthResponse.model_validate(ig) for ig in created_inputs_groundtruths]
+        )
+
+    except (
+        CSVEmptyFileError,
+        CSVMissingColumnError,
+        CSVNotEnoughColumnsError,
+        CSVEmptyInputError,
+        CSVInvalidJSONError,
+    ) as e:
+        LOGGER.error(f"Error in import_qa_data_from_csv_service: {str(e)}")
+        raise e

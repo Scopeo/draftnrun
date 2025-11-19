@@ -227,7 +227,6 @@ def get_qa_data_for_csv_export(
         - groundtruth: String from InputGroundtruth.groundtruth (or None)
         - output: String from VersionOutput.output (or None if no output exists)
     """
-    # Query all InputGroundtruth entries for the dataset
     input_entries = (
         session.query(InputGroundtruth)
         .filter(InputGroundtruth.dataset_id == dataset_id)
@@ -238,10 +237,8 @@ def get_qa_data_for_csv_export(
     if not input_entries:
         return []
 
-    # Get all input IDs
     input_ids = [entry.id for entry in input_entries]
 
-    # Query VersionOutput entries for the specified graph_runner_id
     version_outputs_query = session.query(VersionOutput.input_id, VersionOutput.output).filter(
         VersionOutput.input_id.in_(input_ids),
         VersionOutput.graph_runner_id == graph_runner_id,
@@ -249,7 +246,6 @@ def get_qa_data_for_csv_export(
 
     version_outputs = {input_id: output for input_id, output in version_outputs_query.all()}
 
-    # Combine data
     results = []
     for entry in input_entries:
         output = version_outputs.get(entry.id)
@@ -260,6 +256,31 @@ def get_qa_data_for_csv_export(
         f"graph_runner_id={graph_runner_id})"
     )
     return results
+
+
+def import_qa_data_from_csv(
+    session: Session,
+    dataset_id: UUID,
+    csv_rows: List[Tuple[dict, Optional[str]]],
+) -> List[InputGroundtruth]:
+
+    inputs_groundtruths = []
+
+    for input_data, groundtruth in csv_rows:
+        input_groundtruth = InputGroundtruth(
+            dataset_id=dataset_id,
+            input=input_data,
+            groundtruth=groundtruth,
+        )
+        inputs_groundtruths.append(input_groundtruth)
+    session.add_all(inputs_groundtruths)
+    session.commit()
+
+    for input_groundtruth in inputs_groundtruths:
+        session.refresh(input_groundtruth)
+
+    LOGGER.info(f"Imported {len(inputs_groundtruths)} input-groundtruth entries for dataset {dataset_id}")
+    return inputs_groundtruths
 
 
 # Dataset functions

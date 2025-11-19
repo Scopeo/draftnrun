@@ -3,7 +3,7 @@ from uuid import UUID
 import logging
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
@@ -41,6 +41,14 @@ from ada_backend.services.quality_assurance_service import (
     get_datasets_by_project_service,
     save_conversation_to_groundtruth_service,
     export_qa_data_to_csv_service,
+    import_qa_data_from_csv_service,
+)
+from ada_backend.services.errors import (
+    CSVEmptyFileError,
+    CSVInvalidJSONError,
+    CSVNotEnoughColumnsError,
+    CSVEmptyInputError,
+    CSVMissingColumnError,
 )
 from ada_backend.database.setup_db import get_db
 
@@ -463,25 +471,11 @@ def export_qa_data_to_csv_endpoint(
     session: Session = Depends(get_db),
     graph_runner_id: UUID = Query(..., description="Graph runner ID to filter outputs"),
 ) -> Response:
-    """
-    Export QA data to CSV format.
 
-    This endpoint exports QA data (input, expected output, actual output) for a dataset to CSV format.
-    The CSV file can be downloaded directly.
-
-    Parameters:
-    - graph_runner_id: UUID to filter outputs by a specific graph runner version (required).
-
-    Returns:
-    - CSV file download with columns: input, expected_output, actual_output
-    """
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
-
     try:
         csv_content = export_qa_data_to_csv_service(session, dataset_id, graph_runner_id)
-
-        # Generate filename with timestamp
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         filename = f"qa_export_{dataset_id}_{timestamp}.csv"
 
@@ -495,4 +489,51 @@ def export_qa_data_to_csv_endpoint(
         raise HTTPException(status_code=400, detail="Bad request") from e
     except Exception as e:
         LOGGER.error(f"Failed to export QA data for dataset {dataset_id}: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error") from e
+
+
+@router.post(
+    "/projects/{project_id}/qa/datasets/{dataset_id}/import",
+    response_model=InputGroundtruthResponseList,
+    summary="Import QA Data from CSV",
+    tags=["Quality Assurance"],
+)
+async def import_qa_data_from_csv_endpoint(
+    project_id: UUID,
+    dataset_id: UUID,
+    file: Annotated[UploadFile, File(..., description="CSV file to import")],
+    user: Annotated[
+        SupabaseUser,
+        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.USER.value)),
+    ],
+    session: Session = Depends(get_db),
+) -> InputGroundtruthResponseList:
+    if not user.id:
+        raise HTTPException(status_code=400, detail="User ID not found")
+
+    if not file.filename or not file.filename.lower().endswith(".csv"):
+        raise HTTPException(status_code=400, detail="File must be a CSV file")
+    try:
+        csv_content = await file.read()
+        csv_content_str = csv_content.decode("utf-8")
+
+        result = import_qa_data_from_csv_service(
+            session=session,
+            dataset_id=dataset_id,
+            csv_content=csv_content_str,
+        )
+        return result
+
+    except CSVEmptyFileError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except CSVInvalidJSONError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except CSVNotEnoughColumnsError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except CSVEmptyInputError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except CSVMissingColumnError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except Exception as e:
+        LOGGER.error(f"Failed to import QA data for dataset {dataset_id}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error") from e
