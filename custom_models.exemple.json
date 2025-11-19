@@ -11,7 +11,9 @@
                     "image",
                     "file"
                 ],
-                "image_format": "jpeg"
+                "image_format": "jpeg",
+                "base_url": "https://llm1.example.com/v1/",
+                "api_key": "my_api_key"
             },
             {
                 "display_name": "my-llm-2-model-display-name",
@@ -23,7 +25,9 @@
                     "image",
                     "file"
                 ],
-                "image_format": "png"
+                "image_format": "png",
+                "base_url": "https://llm1.example.com/v1/",
+                "api_key": "my_api_key"
             },
             {
                 "display_name": "my-llm-3-model-display-name",
@@ -32,10 +36,10 @@
                 "model_capacity": [
                     "embedding"
                 ],
-                "embedding_size": 3072
+                "embedding_size": 3072,
+                "base_url": "https://llm1.example.com/v1/",
+                "api_key": "my_api_key"
             }
         ]
-    },
-    "base_url": "https://llm1.example.com/v1/",
-    "api_key": "my_api_key"
+    }
 }
