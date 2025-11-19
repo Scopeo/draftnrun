@@ -19,7 +19,6 @@ from ingestion_script.utils import (
     build_combined_sql_filter,
     CHUNK_ID_COLUMN_NAME,
     CHUNK_COLUMN_NAME,
-    FILE_ID_COLUMN_NAME,
     URL_COLUMN_NAME,
     SOURCE_ID_COLUMN_NAME,
     METADATA_COLUMN_NAME,
@@ -99,10 +98,8 @@ def get_db_source(
     df_chunks[CHUNK_ID_COLUMN_NAME] = (
         df_chunks[id_column_name].astype(str) + "_" + df_chunks["chunk_index"].astype(str)
     )
+    df_chunks[SOURCE_IDENTIFIER_COLUMN_NAME] = table_name + "_" + df_chunks[id_column_name].astype(str)
 
-    df_chunks[FILE_ID_COLUMN_NAME] = table_name + "_" + df_chunks[id_column_name].astype(str)
-
-    # Handle URL - calculate and add to df_chunks first so it can be included in metadata
     if url_pattern:
         df_chunks[URL_COLUMN_NAME] = df_chunks.apply(
             lambda row: url_pattern.format_map({k: ("" if pd.isna(v) else v) for k, v in row.items()}), axis=1
@@ -115,7 +112,6 @@ def get_db_source(
     unified_df[CHUNK_COLUMN_NAME] = df_chunks[CHUNK_COLUMN_NAME]
     unified_df[SOURCE_IDENTIFIER_COLUMN_NAME] = df_chunks[SOURCE_IDENTIFIER_COLUMN_NAME]
 
-    # Handle timestamp - use unified column name
     if timestamp_column_name and timestamp_column_name in df_chunks.columns:
         unified_df[TIMESTAMP_COLUMN_NAME] = df_chunks[timestamp_column_name]
     else:

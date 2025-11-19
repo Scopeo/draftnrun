@@ -169,7 +169,6 @@ async def sync_chunks_to_qdrant(
     query_filter_qdrant: Optional[dict] = None,
     source_id: Optional[str] = None,
 ) -> None:
-    # For file sources, filter by source_id if provided
     if source_id and sql_query_filter:
         combined_filter = f"({sql_query_filter}) AND {SOURCE_ID_COLUMN_NAME} = '{source_id}'"
     elif source_id:
