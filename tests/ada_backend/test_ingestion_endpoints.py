@@ -60,7 +60,6 @@ def test_ingest_local_folder_source():
     test_source_id = str(uuid.uuid4())
     database_schema, database_table_name, qdrant_collection_name = get_sanitize_names(
         organization_id=ORGANIZATION_ID,
-        source_id=test_source_id,
     )
 
     endpoint_upload_file = f"{BASE_URL}/files/{ORGANIZATION_ID}/upload"

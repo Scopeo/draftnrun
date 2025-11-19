@@ -22,16 +22,32 @@ LOGGER = logging.getLogger(__name__)
 # Default column names used across database ingestion
 CHUNK_ID_COLUMN_NAME = "chunk_id"
 CHUNK_COLUMN_NAME = "content"
-FILE_ID_COLUMN_NAME = "source_identifier"
+SOURCE_IDENTIFIER_COLUMN_NAME = "source_identifier"
 URL_COLUMN_NAME = "url"
+SOURCE_ID_COLUMN_NAME = "source_id"
+METADATA_COLUMN_NAME = "metadata"  # JSONB column for source-specific metadata
+
+DEFAULT_EMBEDDING_MODEL = "openai:text-embedding-3-large"
 
 
-def get_sanitize_names(organization_id: str, source_id: str) -> tuple[str, str, str]:
+def get_sanitize_names(
+    organization_id: str,
+    embedding_model_reference: Optional[str] = DEFAULT_EMBEDDING_MODEL,
+) -> tuple[str, str, str]:
+    """
+    Generate sanitized schema, table, and collection names.
+
+    All sources use org-level table and collection in the public schema.
+    Collection name includes embedding model to avoid mixing vectors from different models.
+    """
+
     sanitize_organization_id = sanitize_filename(organization_id)
-    sanitize_source_id = sanitize_filename(source_id)
-    schema_name = f"org_{sanitize_organization_id}"
-    table_name = f"source_{sanitize_source_id}"
-    qdrant_collection_name = f"{sanitize_source_id}_collection"
+    schema_name = "public"
+    table_name = f"org_{sanitize_organization_id}_chunks"
+
+    sanitized_model = sanitize_filename(embedding_model_reference.replace(":", "_").replace("-", "_"))
+    qdrant_collection_name = f"org_{sanitize_organization_id}_{sanitized_model}_collection"
+
     return (
         schema_name,
         table_name,
@@ -184,9 +200,16 @@ async def upload_source(
     else:
         result_source_id = uuid.uuid4()
         update_task = False
+
+    embedding_service = EmbeddingService(
+        provider="openai",
+        model_name="text-embedding-3-large",
+        trace_manager=TraceManager(project_name="ingestion"),
+    )
+    embedding_model_ref = f"{embedding_service._provider}:{embedding_service._model_name}"
     schema_name, table_name, qdrant_collection_name = get_sanitize_names(
         organization_id=organization_id,
-        source_id=str(result_source_id),
+        embedding_model_reference=embedding_model_ref,
     )
 
     ingestion_task = IngestionTaskUpdate(
@@ -195,11 +218,6 @@ async def upload_source(
         source_type=source_type,
         status=db.TaskStatus.FAILED,
         source_id=result_source_id,
-    )
-    embedding_service = EmbeddingService(
-        provider="openai",
-        model_name="text-embedding-3-large",
-        trace_manager=TraceManager(project_name="ingestion"),
     )
     qdrant_service = QdrantService.from_defaults(
         embedding_service=embedding_service,
@@ -253,7 +271,7 @@ async def upload_source(
         database_table_name=table_name,
         qdrant_collection_name=qdrant_collection_name,
         qdrant_schema=qdrant_schema.to_dict(),
-        embedding_model_reference=f"{embedding_service._provider}:{embedding_service._model_name}",
+        embedding_model_reference=embedding_model_ref,
         attributes=attributes,
     )
     if not update_task:
