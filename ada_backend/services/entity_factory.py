@@ -10,6 +10,8 @@ from dataclasses import is_dataclass
 from pydantic import BaseModel
 
 from engine.agent.types import ToolDescription
+from engine.agent.rag.retriever import Retriever
+from engine.agent.synthesizer import Synthesizer
 from engine.trace.trace_context import get_trace_manager
 from engine.llm_services.llm_service import EmbeddingService, CompletionService, WebSearchService, OCRService
 from engine.qdrant_service import QdrantService, QdrantCollectionSchema
@@ -547,6 +549,165 @@ def build_db_service_processor(target_name: str = "db_service") -> ParameterProc
             raise ValueError(f"Failed to create DB service: {e}") from e
 
         params[target_name] = db_service_instance
+        return params
+
+    return processor
+
+
+def build_retriever_processor(target_name: str = "retriever") -> ParameterProcessor:
+    """
+    Creates a processor that builds a Retriever from data_source (collection_name + embedding model)
+    and retriever-specific parameters.
+
+    Args:
+        target_name (str): Parameter name for the created Retriever.
+
+    Returns:
+        ParameterProcessor: A processor function that handles Retriever creation
+    """
+
+    def processor(params: dict, constructor_params: dict[str, Any]) -> dict:
+        data_source = params.pop("data_source", None)
+        if data_source is None:
+            raise ValueError("data_source is required for Retriever")
+
+        if isinstance(data_source, str):
+            import json
+
+            data_source = json.loads(data_source)
+
+        source_id_str = data_source.get("id") if isinstance(data_source, dict) else None
+        if not source_id_str:
+            raise ValueError("data_source must contain an 'id' field")
+        source_id = UUID(source_id_str)
+
+        with get_db_session() as session:
+            source = get_data_source_by_id(session, source_id)
+            if source is None:
+                raise ValueError(f"Source with id {source_id} not found")
+
+            provider, model_name = get_llm_provider_and_model(llm_model=source.embedding_model_reference)
+            collection_name = source.qdrant_collection_name
+            qdrant_schema = QdrantCollectionSchema(**source.qdrant_schema)
+
+        embedding_service = EmbeddingService(
+            trace_manager=get_trace_manager(),
+            api_key=params.pop("llm_api_key", None),
+            provider=provider,
+            model_name=model_name,
+        )
+        qdrant_service = QdrantService.from_defaults(
+            embedding_service=embedding_service,
+            default_collection_schema=qdrant_schema,
+        )
+
+        max_retrieved_chunks = params.pop("max_retrieved_chunks", None)
+        if max_retrieved_chunks is not None:
+            try:
+                max_retrieved_chunks = int(max_retrieved_chunks)
+            except ValueError as e:
+                raise ValueError(f"max_retrieved_chunks must be an integer, got {max_retrieved_chunks}: {e}")
+
+        enable_date_penalty = params.pop("enable_date_penalty_for_chunks", None)
+        if enable_date_penalty is not None:
+            try:
+                enable_date_penalty = bool(enable_date_penalty)
+            except (AttributeError, ValueError) as e:
+                raise ValueError(f"enable_date_penalty_for_chunks must be a boolean, got {enable_date_penalty}: {e}")
+
+        chunk_age_penalty_rate = params.pop("chunk_age_penalty_rate", None)
+        if chunk_age_penalty_rate is not None:
+            try:
+                chunk_age_penalty_rate = float(chunk_age_penalty_rate)
+            except ValueError as e:
+                raise ValueError(f"chunk_age_penalty_rate must be a float, got {chunk_age_penalty_rate}: {e}")
+
+        default_penalty_rate = params.pop("default_penalty_rate", None)
+        if default_penalty_rate is not None:
+            try:
+                default_penalty_rate = float(default_penalty_rate)
+            except ValueError as e:
+                raise ValueError(f"default_penalty_rate must be a float, got {default_penalty_rate}: {e}")
+
+        metadata_date_key = params.pop("metadata_date_key", None)
+
+        max_retrieved_chunks_after_penalty = params.pop("max_retrieved_chunks_after_penalty", None)
+        if max_retrieved_chunks_after_penalty is not None:
+            try:
+                max_retrieved_chunks_after_penalty = int(max_retrieved_chunks_after_penalty)
+            except ValueError as e:
+                raise ValueError(
+                    "max_retrieved_chunks_after_penalty must be an integer, "
+                    f"got {max_retrieved_chunks_after_penalty}: {e}"
+                )
+        retriever = Retriever(
+            trace_manager=get_trace_manager(),
+            qdrant_service=qdrant_service,
+            collection_name=collection_name,
+            max_retrieved_chunks=max_retrieved_chunks,
+            enable_date_penalty_for_chunks=enable_date_penalty,
+            chunk_age_penalty_rate=chunk_age_penalty_rate,
+            default_penalty_rate=default_penalty_rate,
+            metadata_date_key=metadata_date_key,
+            max_retrieved_chunks_after_penalty=max_retrieved_chunks_after_penalty,
+            component_attributes=params.pop("component_attributes", None),
+        )
+
+        params[target_name] = retriever
+        return params
+
+    return processor
+
+
+def build_synthesizer_processor(target_name: str = "synthesizer") -> ParameterProcessor:
+    """
+    Creates a processor that builds a Synthesizer from completion_model, temperature, prompt_template.
+
+    Args:
+        target_name (str): Parameter name for the created Synthesizer.
+
+    Returns:
+        ParameterProcessor: A processor function that handles Synthesizer creation
+    """
+
+    def processor(params: dict, constructor_params: dict[str, Any]) -> dict:
+        completion_model = params.pop("completion_model")
+        provider, model_name = get_llm_provider_and_model(llm_model=completion_model)
+
+        temperature = params.pop("temperature", 1.0)
+        if temperature is not None:
+            try:
+                temperature = float(temperature)
+            except ValueError as e:
+                raise ValueError(f"temperature must be a float, got {temperature}: {e}")
+
+        completion_service = CompletionService(
+            provider=provider,
+            model_name=model_name,
+            trace_manager=get_trace_manager(),
+            temperature=temperature,
+            api_key=params.pop("llm_api_key", None),
+            verbosity=params.pop("verbosity", None),
+            reasoning=params.pop("reasoning", None),
+        )
+
+        prompt_template = params.pop("prompt_template", None)
+        if prompt_template is None:
+            try:
+                prompt_template = str(prompt_template)
+            except ValueError as e:
+                raise ValueError(f"prompt_template must be a string, got {prompt_template}: {e}")
+            if len(prompt_template) == 0:
+                raise ValueError("prompt_template must be a non-empty string")
+
+        synthesizer = Synthesizer(
+            completion_service=completion_service,
+            trace_manager=get_trace_manager(),
+            prompt_template=prompt_template,
+            component_attributes=params.pop("component_attributes", None),
+        )
+
+        params[target_name] = synthesizer
         return params
 
     return processor

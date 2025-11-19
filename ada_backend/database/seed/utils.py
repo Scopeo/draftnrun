@@ -2,6 +2,7 @@ from uuid import UUID
 from typing import Optional
 
 from pydantic import BaseModel
+from sqlalchemy.orm import Session
 
 from ada_backend.database.models import ParameterType, SelectOption, UIComponent, UIComponentProperties
 from ada_backend.database import models as db
@@ -95,6 +96,7 @@ COMPONENT_VERSION_UUIDS: dict[str, UUID] = {
     "formatter": UUID("079512c6-28e2-455f-af2c-f196015534bd"),
     "vocabulary_search": UUID("323cfc43-76d9-4ae1-b950-2791faf798c2"),
     "rag_agent": UUID("fe26eac8-61c6-4158-a571-61fd680676c8"),
+    "rag_agent_v2": UUID("e0f94ab3-fed2-4e43-a458-1d52464f4fc9"),
     "base_ai_agent": UUID("22292e7f-a3ba-4c63-a4c7-dd5c0c75cdaa"),
     "api_call_tool": UUID("674b8c1d-0cc6-4887-be92-e3a2906830ed"),
     "tavily_agent": UUID("449f8f59-7aff-4b2d-b244-d2fcc09f6651"),
@@ -473,3 +475,42 @@ def build_ocr_service_config_definitions(
                 )
             )
     return definitions
+
+
+def build_parameters_group(session: Session, parameter_groups: list[db.ParameterGroup]):
+    for group in parameter_groups:
+        existing_group = session.query(db.ParameterGroup).filter_by(id=group.id).first()
+        if existing_group:
+            existing_group.name = group.name
+        else:
+            session.add(group)
+
+    session.flush()
+
+
+def build_parameters_group_definitions(session: Session, component_parameter_groups: list[db.ComponentParameterGroup]):
+    for component_parameter_group in component_parameter_groups:
+        existing_cpg = (
+            session.query(db.ComponentParameterGroup)
+            .filter_by(
+                component_version_id=component_parameter_group.component_version_id,
+                parameter_group_id=component_parameter_group.parameter_group_id,
+            )
+            .first()
+        )
+        if existing_cpg:
+            existing_cpg.group_order_within_component = component_parameter_group.group_order_within_component
+        else:
+            session.add(component_parameter_group)
+
+    session.flush()  # Ensure relationships are saved before updating parameters
+
+
+def build_components_parameters_assignments_to_parameter_groups(
+    session: Session, parameter_group_assignments: dict[UUID, dict[str, int]]
+):
+    for param_id, group_info in parameter_group_assignments.items():
+        param_def = session.query(db.ComponentParameterDefinition).filter_by(id=param_id).first()
+        if param_def:
+            param_def.parameter_group_id = group_info["parameter_group_id"]
+            param_def.parameter_order_within_group = group_info["parameter_order_within_group"]
