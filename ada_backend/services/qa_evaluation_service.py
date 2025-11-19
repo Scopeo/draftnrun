@@ -1,4 +1,5 @@
 import logging
+from typing import List
 from uuid import UUID
 
 from sqlalchemy.orm import Session
@@ -12,9 +13,7 @@ from ada_backend.repositories.qa_evaluation_repository import (
 from ada_backend.schemas.qa_evaluation_schema import (
     LLMJudgeCreate,
     LLMJudgeResponse,
-    LLMJudgeListResponse,
     LLMJudgeUpdate,
-    LLMJudgeDeleteList,
 )
 from ada_backend.services.errors import LLMJudgeNotFound
 
@@ -47,10 +46,10 @@ def create_llm_judge_service(
 def get_llm_judges_by_project_service(
     session: Session,
     project_id: UUID,
-) -> LLMJudgeListResponse:
+) -> List[LLMJudgeResponse]:
     try:
         judges = get_llm_judges_by_project(session=session, project_id=project_id)
-        return LLMJudgeListResponse(judges=[LLMJudgeResponse.model_validate(judge) for judge in judges])
+        return [LLMJudgeResponse.model_validate(judge) for judge in judges]
     except Exception as e:
         LOGGER.error(f"Error in get_llm_judges_by_project_service for project {project_id}: {str(e)}")
         raise ValueError(f"Failed to list LLM judges: {str(e)}") from e
@@ -78,6 +77,8 @@ def update_llm_judge_service(
             raise LLMJudgeNotFound(judge_id=judge_id, project_id=project_id)
         LOGGER.info(f"Updated LLM judge {judge_id} for project {project_id}")
         return LLMJudgeResponse.model_validate(updated_judge)
+    except LLMJudgeNotFound:
+        raise
     except Exception as e:
         LOGGER.error(f"Error in update_llm_judge_service for judge {judge_id}: {str(e)}")
         raise ValueError(f"Failed to update LLM judge: {str(e)}") from e
@@ -86,12 +87,12 @@ def update_llm_judge_service(
 def delete_llm_judges_service(
     session: Session,
     project_id: UUID,
-    delete_data: LLMJudgeDeleteList,
+    judge_ids: List[UUID],
 ) -> None:
     try:
         deleted_count = delete_llm_judges(
             session=session,
-            judge_ids=delete_data.judge_ids,
+            judge_ids=judge_ids,
             project_id=project_id,
         )
         LOGGER.info(f"Deleted {deleted_count} LLM judges for project {project_id}")

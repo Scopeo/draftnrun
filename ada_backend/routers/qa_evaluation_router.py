@@ -1,17 +1,15 @@
 import logging
 from uuid import UUID
-from typing import Annotated
+from typing import Annotated, List
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Body, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from ada_backend.schemas.auth_schema import SupabaseUser
 from ada_backend.schemas.qa_evaluation_schema import (
     LLMJudgeCreate,
     LLMJudgeResponse,
-    LLMJudgeListResponse,
     LLMJudgeUpdate,
-    LLMJudgeDeleteList,
 )
 from ada_backend.services.errors import LLMJudgeNotFound
 from ada_backend.routers.auth_router import (
@@ -32,7 +30,7 @@ LOGGER = logging.getLogger(__name__)
 
 @router.get(
     "/projects/{project_id}/qa/llm-judges",
-    response_model=LLMJudgeListResponse,
+    response_model=List[LLMJudgeResponse],
     summary="Get LLM Judges by Project",
 )
 def get_llm_judges_by_project_endpoint(
@@ -42,7 +40,7 @@ def get_llm_judges_by_project_endpoint(
         Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.USER.value)),
     ],
     session: Session = Depends(get_db),
-) -> LLMJudgeListResponse:
+) -> List[LLMJudgeResponse]:
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
 
@@ -125,18 +123,18 @@ def update_llm_judge_endpoint(
 )
 def delete_llm_judges_endpoint(
     project_id: UUID,
-    delete_data: LLMJudgeDeleteList,
     user: Annotated[
         SupabaseUser,
         Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.READER.value)),
     ],
     session: Session = Depends(get_db),
+    judge_ids: List[UUID] = Body(...),
 ):
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
 
     try:
-        delete_llm_judges_service(session=session, project_id=project_id, delete_data=delete_data)
+        delete_llm_judges_service(session=session, project_id=project_id, judge_ids=judge_ids)
         return None
     except ValueError as e:
         LOGGER.error(f"Failed to delete LLM judges for project {project_id}: {str(e)}", exc_info=True)
