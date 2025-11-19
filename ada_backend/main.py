@@ -111,6 +111,10 @@ app = FastAPI(
             "description": "Endpoints for managing quality assurance datasets, versions and inputs per project",
         },
         {
+            "name": "QA Evaluation",
+            "description": "Endpoints for managing LLM judges and evaluations for quality assurance",
+        },
+        {
             "name": "Ingestion Database",
             "description": "Endpoints for managing ingestion database for organization sources",
         },
