@@ -22,7 +22,6 @@ from ada_backend.schemas.qa_evaluation_schema import (
     JudgeEvaluationCreate,
     JudgeEvaluationResponse,
     JudgeEvaluationRunResponse,
-    JudgeEvaluationRunSummary,
 )
 from ada_backend.services.errors import LLMJudgeNotFound
 
@@ -185,28 +184,12 @@ async def run_judge_evaluation_service(
     judge_id: UUID,
     version_output_ids: List[UUID],
 ) -> JudgeEvaluationRunResponse:
-    """Run judge evaluation on multiple version outputs.
-
-    Args:
-        session: SQLAlchemy session
-        project_id: ID of the project
-        judge_id: ID of the LLM judge
-        version_output_ids: List of version output IDs to evaluate
-
-    Returns:
-        JudgeEvaluationRunResponse with results and summary
-    """
     # TODO: A implémenter
-    # Pour l'instant, récupère les données nécessaires depuis la DB
-    # Plus tard, on utilisera ces données pour appeler le LLM
     try:
         version_outputs_data = get_version_outputs_by_ids(session=session, version_output_ids=version_output_ids)
 
         # TODO: Pour chaque version_output, appeler le LLM et créer l'évaluation
-        # Pour l'instant, retourne une réponse vide mais valide
-        return JudgeEvaluationRunResponse(
-            results=[], summary=JudgeEvaluationRunSummary(total=0, passed=0, failed=0, success_rate=0.0)
-        )
+        return JudgeEvaluationRunResponse(results=[], sucess_rate=0.0)
     except Exception as e:
         LOGGER.error(f"Error in run_judge_evaluation_service: {str(e)}")
         raise ValueError(f"Failed to run judge evaluation: {str(e)}") from e

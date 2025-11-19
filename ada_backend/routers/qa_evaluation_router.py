@@ -223,18 +223,18 @@ def get_judge_evaluations_by_judge_endpoint(
 
 
 @router.get(
-    "/projects/{project_id}/qa/version-outputs/evaluations",
+    "/projects/{project_id}/qa/version-outputs/{version_output_id}/evaluations",
     response_model=List[JudgeEvaluationResponse],
     summary="Get Judge Evaluations by Version Output",
 )
 def get_judge_evaluations_by_version_output_endpoint(
     project_id: UUID,
+    version_output_id: UUID,
     user: Annotated[
         SupabaseUser,
         Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.USER.value)),
     ],
     session: Session = Depends(get_db),
-    version_output_id: UUID = Query(..., description="Version output ID to get evaluations for"),
 ) -> List[JudgeEvaluationResponse]:
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
