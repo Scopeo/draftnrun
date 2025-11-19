@@ -86,10 +86,18 @@ class LLMService(ABC):
                 case "mistral":
                     self._api_key = settings.MISTRAL_API_KEY
                 case _:
-                    config_provider = settings.custom_models.get(self._provider)
-                    if config_provider.get("custom_models") is None:
+                    custom_models_dict = settings.custom_models.get("custom_models")
+                    if custom_models_dict is None:
+                        raise ValueError(f"Custom models configuration not found in settings")
+                    config_provider = custom_models_dict.get(self._provider)
+                    if config_provider is None:
                         raise ValueError(f"Provider {self._provider} not found in settings")
-                    self._api_key = config_provider.get("api_key")
+                    model_config = next(
+                        (model for model in config_provider if model.get("model_name") == self._model_name), None
+                    )
+                    if model_config is None:
+                        raise ValueError(f"Model {self._model_name} not found for provider {self._provider}")
+                    self._api_key = model_config.get("api_key")
                     LOGGER.debug(f"Using custom api key for provider: {self._provider}")
                     if self._api_key is None:
                         raise ValueError(f"API key must be provided for custom provider: {self._provider}")
@@ -105,10 +113,18 @@ class LLMService(ABC):
                 case "mistral":
                     self._base_url = settings.MISTRAL_BASE_URL
                 case _:
-                    config_provider = settings.custom_models.get(self._provider)
-                    if config_provider.get("custom_models") is None:
+                    custom_models_dict = settings.custom_models.get("custom_models")
+                    if custom_models_dict is None:
+                        raise ValueError(f"Custom models configuration not found in settings")
+                    config_provider = custom_models_dict.get(self._provider)
+                    if config_provider is None:
                         raise ValueError(f"Provider {self._provider} not found in settings")
-                    self._base_url = config_provider.get("base_url")
+                    model_config = next(
+                        (model for model in config_provider if model.get("model_name") == self._model_name), None
+                    )
+                    if model_config is None:
+                        raise ValueError(f"Model {self._model_name} not found for provider {self._provider}")
+                    self._base_url = model_config.get("base_url")
                     LOGGER.debug(f"Using custom base url for provider: {self._provider}")
                     if self._base_url is None:
                         raise ValueError(f"Base URL must be provided for custom provider: {self._provider}")
