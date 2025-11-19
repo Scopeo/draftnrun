@@ -4,7 +4,6 @@ import csv
 import io
 from typing import Dict, List
 from uuid import UUID
-import pandas as pd
 
 from sqlalchemy.orm import Session
 
@@ -53,6 +52,7 @@ from ada_backend.services.errors import (
     CSVEmptyFileError,
     CSVExportError,
 )
+from ada_backend.utils.qa_utils import process_csv
 
 LOGGER = logging.getLogger(__name__)
 
@@ -551,36 +551,18 @@ def import_qa_data_from_csv_service(
     csv_content: str,
 ) -> InputGroundtruthResponseList:
     try:
-        df = pd.read_csv(io.StringIO(csv_content))
 
-        if df.empty:
-            raise CSVEmptyFileError()
-
-        required_columns = ["input", "expected_output"]
-
-        for col in required_columns:
-            if col not in df.columns:
-                raise CSVMissingColumnError(col, list(df.columns), required_columns)
-
-        input_series = df["input"].astype(str).str.strip()
-
-        def is_valid_json(x):
-            try:
-                json.loads(x)
-                return True
-            except (json.JSONDecodeError, ValueError):
-                return False
-
-        if not input_series.map(is_valid_json).all():
-            raise CSVInvalidJSONError()
-
-        inputs_groundtruths_data_to_create = [
-            InputGroundtruthCreate(
-                input=json.loads(input_data),
-                groundtruth=None if pd.isna(df["expected_output"].iloc[idx]) else str(df["expected_output"].iloc[idx]),
+        inputs_groundtruths_data_to_create = []
+        for row_data in process_csv(csv_content):
+            inputs_groundtruths_data_to_create.append(
+                InputGroundtruthCreate(
+                    input=row_data["input"],
+                    groundtruth=row_data["expected_output"] if row_data["expected_output"] else None,
+                )
             )
-            for idx, input_data in enumerate(input_series)
-        ]
+
+        if not inputs_groundtruths_data_to_create:
+            raise CSVEmptyFileError()
 
         created_inputs_groundtruths = create_inputs_groundtruths(
             session=session,
