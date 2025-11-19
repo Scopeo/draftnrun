@@ -57,6 +57,8 @@ from ada_backend.services.errors import (
 
 LOGGER = logging.getLogger(__name__)
 
+MAX_CSV_EXPORT_ENTRIES = 10000
+
 
 def get_inputs_groundtruths_with_version_outputs_service(
     session: Session,
@@ -510,6 +512,12 @@ def export_qa_data_to_csv_service(
         total_count = get_inputs_groundtruths_count_by_dataset(session, dataset_id)
         if total_count == 0:
             raise CSVExportError(dataset_id, "No data to export. Dataset is empty.")
+        if total_count > MAX_CSV_EXPORT_ENTRIES:
+            raise CSVExportError(
+                dataset_id,
+                f"Dataset too large to export. Maximum {MAX_CSV_EXPORT_ENTRIES} entries allowed, "
+                f"but dataset contains {total_count} entries.",
+            )
 
         input_entries = get_inputs_groundtruths_by_dataset(session, dataset_id, skip=0, limit=total_count)
         outputs_dict = dict(get_outputs_by_graph_runner(session, dataset_id, graph_runner_id))
