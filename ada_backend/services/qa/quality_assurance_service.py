@@ -52,7 +52,7 @@ from ada_backend.services.qa.qa_error import (
     CSVEmptyFileError,
     CSVExportError,
 )
-from ada_backend.utils.csv_processing import process_csv
+from ada_backend.services.qa.csv_processing import process_csv
 
 LOGGER = logging.getLogger(__name__)
 

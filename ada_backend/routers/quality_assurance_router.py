@@ -28,7 +28,7 @@ from ada_backend.routers.auth_router import (
     user_has_access_to_project_dependency,
     UserRights,
 )
-from ada_backend.services.quality_assurance_service import (
+from ada_backend.services.qa.quality_assurance_service import (
     create_inputs_groundtruths_service,
     update_inputs_groundtruths_service,
     delete_inputs_groundtruths_service,
