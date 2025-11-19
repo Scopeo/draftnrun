@@ -46,8 +46,6 @@ from ada_backend.services.quality_assurance_service import (
 from ada_backend.services.errors import (
     CSVEmptyFileError,
     CSVInvalidJSONError,
-    CSVNotEnoughColumnsError,
-    CSVEmptyInputError,
     CSVMissingColumnError,
     CSVExportError,
 )
@@ -524,15 +522,11 @@ async def import_qa_data_from_csv_endpoint(
         )
         return result
 
-    except CSVEmptyFileError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
-    except CSVInvalidJSONError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
-    except CSVNotEnoughColumnsError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
-    except CSVEmptyInputError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
-    except CSVMissingColumnError as e:
+    except (
+        CSVEmptyFileError,
+        CSVInvalidJSONError,
+        CSVMissingColumnError,
+    ) as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
         LOGGER.error(f"Failed to import QA data for dataset {dataset_id}: {str(e)}", exc_info=True)

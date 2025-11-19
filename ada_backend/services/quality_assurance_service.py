@@ -4,6 +4,7 @@ import csv
 import io
 from typing import Dict, List
 from uuid import UUID
+import pandas as pd
 
 from sqlalchemy.orm import Session
 
@@ -50,8 +51,6 @@ from ada_backend.services.errors import (
     CSVMissingColumnError,
     CSVInvalidJSONError,
     CSVEmptyFileError,
-    CSVNotEnoughColumnsError,
-    CSVEmptyInputError,
     CSVExportError,
 )
 
@@ -541,8 +540,8 @@ def export_qa_data_to_csv_service(
             f"(graph_runner_id={graph_runner_id})"
         )
         return csv_content
-
-    except CSVExportError as e:
+    except Exception as e:
+        LOGGER.error(f"Error in export_qa_data_to_csv_service: {str(e)}")
         raise e
 
 
@@ -552,55 +551,35 @@ def import_qa_data_from_csv_service(
     csv_content: str,
 ) -> InputGroundtruthResponseList:
     try:
-        csv_reader = csv.reader(io.StringIO(csv_content))
-        rows = list(csv_reader)
+        df = pd.read_csv(io.StringIO(csv_content))
 
-        if not rows:
+        if df.empty:
             raise CSVEmptyFileError()
 
-        header = rows[0]
         required_columns = ["input", "expected_output"]
 
-        column_indices = {}
         for col in required_columns:
+            if col not in df.columns:
+                raise CSVMissingColumnError(col, list(df.columns), required_columns)
+
+        input_series = df["input"].astype(str).str.strip()
+
+        def is_valid_json(x):
             try:
-                column_indices[col] = header.index(col)
-            except ValueError:
-                raise CSVMissingColumnError(col, header, required_columns)
+                json.loads(x)
+                return True
+            except (json.JSONDecodeError, ValueError):
+                return False
 
-        input_col_idx = column_indices["input"]
-        expected_output_col_idx = column_indices["expected_output"]
-
-        csv_rows = []
-        for row_num, row in enumerate(rows[1:], start=2):
-            max_required_idx = max(input_col_idx, expected_output_col_idx)
-            if len(row) <= max_required_idx:
-                raise CSVNotEnoughColumnsError(
-                    row_num,
-                    len(row),
-                    max_required_idx + 1,
-                )
-
-            input_str = row[input_col_idx] if input_col_idx < len(row) else ""
-            groundtruth_str = row[expected_output_col_idx] if expected_output_col_idx < len(row) else ""
-
-            if not input_str or not input_str.strip():
-                raise CSVEmptyInputError(row_num)
-
-            try:
-                input_data = json.loads(input_str.strip())
-            except json.JSONDecodeError as e:
-                raise CSVInvalidJSONError(row_num, str(e)) from e
-
-            if not isinstance(input_data, dict):
-                raise CSVInvalidJSONError(row_num, f"Expected JSON object, got {type(input_data).__name__}")
-
-            groundtruth = groundtruth_str.strip() if groundtruth_str and groundtruth_str.strip() else None
-
-            csv_rows.append((input_data, groundtruth))
+        if not input_series.map(is_valid_json).all():
+            raise CSVInvalidJSONError()
 
         inputs_groundtruths_data_to_create = [
-            InputGroundtruthCreate(input=input_data, groundtruth=groundtruth) for input_data, groundtruth in csv_rows
+            InputGroundtruthCreate(
+                input=json.loads(input_data),
+                groundtruth=None if pd.isna(df["expected_output"].iloc[idx]) else str(df["expected_output"].iloc[idx]),
+            )
+            for idx, input_data in enumerate(input_series)
         ]
 
         created_inputs_groundtruths = create_inputs_groundtruths(
@@ -620,8 +599,6 @@ def import_qa_data_from_csv_service(
     except (
         CSVEmptyFileError,
         CSVMissingColumnError,
-        CSVNotEnoughColumnsError,
-        CSVEmptyInputError,
         CSVInvalidJSONError,
     ) as e:
         LOGGER.error(f"Error in import_qa_data_from_csv_service: {str(e)}")
