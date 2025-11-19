@@ -4,6 +4,8 @@ from typing import Optional
 import uuid
 import json
 
+import pandas as pd
+
 from ada_backend.database import models as db
 from ada_backend.schemas.ingestion_task_schema import IngestionTaskUpdate
 from ada_backend.schemas.source_schema import DataSourceSchema
@@ -115,42 +117,50 @@ def load_embedding_service():
         )
 
 
+def flatten_metadata_json(metadata_value):
+    """Parse and flatten metadata JSON to a dictionary.
+
+    Args:
+        metadata_value: Can be a JSON string, dict, or None
+
+    Returns:
+        dict: Flattened metadata dictionary
+    """
+    if pd.isna(metadata_value) or metadata_value is None:
+        return {}
+
+    if isinstance(metadata_value, str):
+        try:
+            parsed = json.loads(metadata_value)
+            if isinstance(parsed, dict):
+                return parsed
+        except (json.JSONDecodeError, TypeError):
+            pass
+    elif isinstance(metadata_value, dict):
+        return metadata_value
+
+    return {}
+
+
 def prepare_df_for_qdrant(df):
-    """Prepare DataFrame for Qdrant by flattening metadata if needed."""
-    import pandas as pd
+    """Prepare DataFrame for Qdrant by flattening metadata JSON column.
 
+    Reads metadata from JSONB column and flattens it into separate columns for Qdrant.
+    """
     df = df.copy()
-
-    # If metadata column exists and separate columns don't, flatten it
     if METADATA_COLUMN_NAME in df.columns:
-        # Check if we already have separate columns (from initial ingestion)
-        has_separate_columns = any(col in df.columns for col in ["document_title", "url", "metadata"])
 
-        if not has_separate_columns:
-            # Need to flatten metadata from JSON (when reading from DB)
-            def parse_and_flatten_metadata(row):
-                """Parse metadata JSON string and return flattened dict."""
-                metadata_value = row.get(METADATA_COLUMN_NAME)
-                if pd.isna(metadata_value) or metadata_value is None:
-                    return {}
-                if isinstance(metadata_value, str):
-                    try:
-                        parsed = json.loads(metadata_value)
-                        if isinstance(parsed, dict):
-                            return parsed
-                    except (json.JSONDecodeError, TypeError):
-                        pass
-                return {}
+        def parse_and_flatten_metadata(row):
+            """Parse metadata JSON and return flattened dict."""
+            return flatten_metadata_json(row.get(METADATA_COLUMN_NAME))
 
-            # Create a DataFrame with flattened metadata
-            metadata_df = df.apply(parse_and_flatten_metadata, axis=1, result_type="expand")
-            if not metadata_df.empty and len(metadata_df.columns) > 0:
-                # Add flattened metadata columns to the main DataFrame
-                for col in metadata_df.columns:
+        metadata_df = df.apply(parse_and_flatten_metadata, axis=1, result_type="expand")
+        if not metadata_df.empty and len(metadata_df.columns) > 0:
+            for col in metadata_df.columns:
+                if col not in df.columns:
                     df[col] = metadata_df[col]
 
-        # Remove the metadata column as Qdrant uses separate columns
-        df = df.drop(columns=[METADATA_COLUMN_NAME])
+        df = df.drop(columns=[METADATA_COLUMN_NAME], errors="ignore")
 
     return df
 
@@ -178,7 +188,6 @@ async def sync_chunks_to_qdrant(
         sql_query_filter=combined_filter,
     )
 
-    # Prepare DataFrame for Qdrant (flatten metadata if needed, drop metadata column)
     chunks_df = prepare_df_for_qdrant(chunks_df)
 
     LOGGER.info(f"Syncing chunks to Qdrant collection {collection_name} with {len(chunks_df)} rows")
@@ -434,8 +443,6 @@ async def _ingest_folder_source(
                         return str(value).encode("utf-8", errors="replace").decode("utf-8")
                 return value
 
-            # Keep metadata fields as separate columns for Qdrant
-            # Sanitize the metadata fields
             if "document_title" in unified_chunks_df.columns:
                 unified_chunks_df["document_title"] = unified_chunks_df["document_title"].apply(sanitize_for_json)
             if "metadata" in unified_chunks_df.columns:
@@ -443,7 +450,6 @@ async def _ingest_folder_source(
             if "url" in unified_chunks_df.columns:
                 unified_chunks_df["url"] = unified_chunks_df["url"].apply(sanitize_for_json)
 
-            # Create JSON metadata column only for database storage (flattened)
             def build_flattened_metadata(row):
                 """Build flattened metadata by merging metadata dict into top level."""
                 metadata_dict = {
@@ -460,7 +466,6 @@ async def _ingest_folder_source(
                         metadata_value = {}
 
                 if isinstance(metadata_value, dict):
-                    # Merge metadata dict keys into top level
                     metadata_dict.update(metadata_value)
 
                 return json.dumps(metadata_dict, ensure_ascii=False)
@@ -479,8 +484,6 @@ async def _ingest_folder_source(
                 }
             )
             unified_chunks_df[SOURCE_ID_COLUMN_NAME] = str(source_id)
-
-            unified_chunks_df_with_metadata_cols = unified_chunks_df.copy()
 
             unified_chunks_df_for_db = unified_chunks_df[
                 [
@@ -504,21 +507,13 @@ async def _ingest_folder_source(
                 schema_name=db_table_schema,
             )
 
-            # For Qdrant: use DataFrame with separate metadata columns (drop metadata JSON column)
-            unified_chunks_df_for_qdrant = unified_chunks_df_with_metadata_cols.drop(
-                columns=[METADATA_COLUMN_NAME], errors="ignore"
-            )
-
-            # Sync directly with DataFrame (no need to read from DB and flatten)
-            LOGGER.info(
-                f"Syncing chunks to Qdrant collection {qdrant_collection_name} "
-                f"with {len(unified_chunks_df_for_qdrant)} rows and source {source_id}"
-            )
-            if not await qdrant_service.collection_exists_async(qdrant_collection_name):
-                await qdrant_service.create_collection_async(qdrant_collection_name)
-            await qdrant_service.sync_df_with_collection_async(
-                df=unified_chunks_df_for_qdrant,
+            await sync_chunks_to_qdrant(
+                table_schema=db_table_schema,
+                table_name=db_table_name,
                 collection_name=qdrant_collection_name,
+                db_service=db_service,
+                qdrant_service=qdrant_service,
+                source_id=str(source_id),
             )
     except Exception as e:
         LOGGER.error(f"Failed to ingest folder source: {str(e)}")
