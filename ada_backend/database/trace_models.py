@@ -6,6 +6,7 @@ from sqlalchemy import (
     Enum as SQLAlchemyEnum,
     UUID,
     TIMESTAMP,
+    ForeignKey,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from opentelemetry.trace.status import StatusCode
@@ -78,7 +79,7 @@ class SpanMessage(Base):
     __table_args__ = {"schema": "traces"}
 
     id = mapped_column(Integer, primary_key=True, autoincrement=True)
-    span_id = mapped_column(String, nullable=False)
+    span_id = mapped_column(String, ForeignKey("traces.spans.span_id", ondelete="CASCADE"), nullable=False)
     input_content = mapped_column(Text, nullable=False)
     output_content = mapped_column(Text, nullable=False)
 
