@@ -1,10 +1,11 @@
 from datetime import date
-from typing import Optional
+from typing import Literal, Optional, Type
+from pydantic import BaseModel, Field
 from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttributes
 from opentelemetry.trace import get_current_span
 
 from engine.agent.agent import Agent
-from engine.agent.types import AgentPayload, ComponentAttributes, ToolDescription
+from engine.agent.types import ComponentAttributes, ToolDescription
 from engine.agent.types import ChatMessage, SourceChunk, SourcedResponse
 from engine.trace.trace_manager import TraceManager
 
@@ -53,8 +54,55 @@ LINKUP_TOOL_DESCRIPTION = ToolDescription(
 )
 
 
+class LinkupSearchToolInputs(BaseModel):
+    query: Optional[str] = Field(
+        default=None,
+        description="The standalone question to be answered using web search.",
+    )
+    messages: Optional[list[ChatMessage]] = Field(
+        default=None,
+        description="Alternatively, if query is not provided, the last user message content can be used.",
+    )
+    depth: Literal["standard", "deep"] = Field(description="The depth format: 'standard' or 'deep'")
+    from_date: Optional[date] = Field(
+        default=None,
+        description="The date from which the search results should be considered.",
+    )
+    to_date: Optional[date] = Field(
+        default=None,
+        description="The date until which the search results should be considered.",
+    )
+    include_domains: Optional[list[str]] = Field(
+        default=None,
+        description="The domains you want to search on.",
+    )
+    exclude_domains: Optional[list[str]] = Field(
+        default=None,
+        description="The domains you want to exclude from the search.",
+    )
+    model_config = {"extra": "allow"}  # For backward compatibility
+
+
+class LinkupSearchToolOutputs(BaseModel):
+    output: str = Field(description="The answer from the Linkup web search.")
+    sources: list[SourceChunk] = Field(description="The sources from the Linkup web search.")
+
+
 class LinkupSearchTool(Agent):
     TRACE_SPAN_KIND = OpenInferenceSpanKindValues.TOOL.value
+    migrated = True
+
+    @classmethod
+    def get_inputs_schema(cls) -> Type[BaseModel]:
+        return LinkupSearchToolInputs
+
+    @classmethod
+    def get_outputs_schema(cls) -> Type[BaseModel]:
+        return LinkupSearchToolOutputs
+
+    @classmethod
+    def get_canonical_ports(cls) -> dict[str, str | None]:
+        return {"input": "query", "output": "output"}
 
     def __init__(
         self,
@@ -74,7 +122,7 @@ class LinkupSearchTool(Agent):
     def search_results(
         self,
         query: str,
-        depth: str,
+        depth: Literal["standard", "deep"],
         output_type: str,
         exclude_domains: Optional[list[str]] = None,
         include_domains: Optional[list[str]] = None,
@@ -87,8 +135,8 @@ class LinkupSearchTool(Agent):
             output_type=output_type,
             exclude_domains=exclude_domains,
             include_domains=include_domains,
-            from_date=date.fromisoformat(from_date) if from_date else None,
-            to_date=date.fromisoformat(to_date) if to_date else None,
+            from_date=from_date,
+            to_date=to_date,
         )
         answer = response.answer
         sources = response.sources
@@ -108,28 +156,23 @@ class LinkupSearchTool(Agent):
 
     async def _run_without_io_trace(
         self,
-        *inputs: AgentPayload,
-        query: str,
-        depth: str,
-        output_type: str = "sourcedAnswer",
-        exclude_domains: Optional[list[str]] = None,
-        include_domains: Optional[list[str]] = None,
-        from_date: Optional[date] = None,
-        to_date: Optional[date] = None,
-        ctx: Optional[dict] = None,
-    ) -> AgentPayload:
-        agent_input = inputs[0]
-        content = query or agent_input.last_message.content
-        if content is None:
+        inputs: LinkupSearchToolInputs,
+        ctx: dict,
+    ) -> LinkupSearchToolOutputs:
+        query_str = inputs.query
+        if not query_str and inputs.messages:
+            query_str = inputs.messages[-1].to_string()
+        if not query_str:
             raise ValueError("No content provided for the Linkup search tool.")
+
         span = get_current_span()
         trace_input = (
-            f"query: {query}\n"
-            f"from date: {from_date}\n"
-            f"to date: {to_date}\n"
-            f"include domains: {include_domains}\n"
-            f"exclude domains: {exclude_domains}\n"
-            f"depth: {depth}"
+            f"query: {query_str}\n"
+            f"from date: {inputs.from_date.isoformat() if inputs.from_date else None}\n"
+            f"to date: {inputs.to_date.isoformat() if inputs.to_date else None}\n"
+            f"include domains: {inputs.include_domains}\n"
+            f"exclude domains: {inputs.exclude_domains}\n"
+            f"depth: {inputs.depth}"
         )
         span.set_attributes(
             {
@@ -137,14 +180,15 @@ class LinkupSearchTool(Agent):
                 SpanAttributes.INPUT_VALUE: trace_input,
             }
         )
+
         response = self.search_results(
-            query=content,
-            depth=depth,
-            output_type=output_type,
-            exclude_domains=exclude_domains,
-            include_domains=include_domains,
-            from_date=from_date,
-            to_date=to_date,
+            query=query_str,
+            depth=inputs.depth,
+            output_type="sourcedAnswer",
+            exclude_domains=inputs.exclude_domains,
+            include_domains=inputs.include_domains,
+            from_date=inputs.from_date,
+            to_date=inputs.to_date,
         )
 
         for i, source in enumerate(response.sources):
@@ -157,8 +201,7 @@ class LinkupSearchTool(Agent):
                 }
             )
 
-        return AgentPayload(
-            messages=[ChatMessage(role="assistant", content=response.response)],
-            artifacts={"sources": response.sources},
-            is_final=response.is_successful,
+        return LinkupSearchToolOutputs(
+            output=response.response,
+            sources=response.sources,
         )
