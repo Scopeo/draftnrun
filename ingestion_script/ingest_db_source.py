@@ -160,7 +160,6 @@ async def upload_db_source(
     timestamp_filter: Optional[str] = None,
     source_id: Optional[str] = None,
 ):
-    # Resolve CURRENT_TIMESTAMP once and use for both SQL and Qdrant
     resolved_timestamp_filter = resolve_sql_timestamp_filter(timestamp_filter)
 
     if timestamp_filter and resolved_timestamp_filter:
@@ -191,7 +190,6 @@ async def upload_db_source(
         sql_query_filter=combined_filter_sql,
     )
 
-    # Add source_id to all chunks
     if source_id:
         df[SOURCE_ID_COLUMN_NAME] = str(source_id)
 
