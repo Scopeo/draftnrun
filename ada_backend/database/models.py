@@ -1519,7 +1519,6 @@ class LLMJudge(Base):
         return f"LLMJudge(id={self.id}, name={self.name}, evaluation_type={self.evaluation_type})"
 
 
-
 class LLMModel(Base):
     __tablename__ = "llm_models"
 

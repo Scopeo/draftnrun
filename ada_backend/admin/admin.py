@@ -562,6 +562,7 @@ class PortMappingAdmin(EnhancedModelView, model=db.PortMapping):
         "dispatch_strategy",
     ]
 
+
 class LLMJudgeAdmin(EnhancedModelView, model=db.LLMJudge):
     category = AdminCategory.QUALITY_ASSURANCE
     icon = "fas fa-balance-scale"
@@ -587,6 +588,7 @@ class LLMJudgeAdmin(EnhancedModelView, model=db.LLMJudge):
         "prompt_template",
         "temperature",
     ]
+
 
 class LLMModelsAdmin(EnhancedModelView, model=db.LLMModel):
     category = AdminCategory.LLM_MODELS
