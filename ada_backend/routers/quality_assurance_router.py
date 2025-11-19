@@ -90,7 +90,7 @@ def create_dataset_endpoint(
     dataset_data: DatasetCreateList,
     user: Annotated[
         SupabaseUser,
-        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.USER.value)),
+        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.READER.value)),
     ],
     session: Session = Depends(get_db),
 ) -> DatasetListResponse:
@@ -125,7 +125,7 @@ def update_dataset_endpoint(
     dataset_name: str,
     user: Annotated[
         SupabaseUser,
-        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.USER.value)),
+        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.READER.value)),
     ],
     session: Session = Depends(get_db),
 ) -> DatasetResponse:
@@ -158,7 +158,7 @@ def delete_dataset_endpoint(
     delete_data: DatasetDeleteList,
     user: Annotated[
         SupabaseUser,
-        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.USER.value)),
+        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.READER.value)),
     ],
     session: Session = Depends(get_db),
 ) -> dict:
@@ -271,7 +271,7 @@ def create_input_groundtruth_endpoint(
     input_groundtruth_data: InputGroundtruthCreateList,
     user: Annotated[
         SupabaseUser,
-        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.USER.value)),
+        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.READER.value)),
     ],
     session: Session = Depends(get_db),
 ) -> InputGroundtruthResponseList:
@@ -306,7 +306,7 @@ def update_input_groundtruth_endpoint(
     input_groundtruth_data: InputGroundtruthUpdateList,
     user: Annotated[
         SupabaseUser,
-        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.USER.value)),
+        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.READER.value)),
     ],
     session: Session = Depends(get_db),
 ) -> InputGroundtruthResponseList:
@@ -340,7 +340,7 @@ def delete_input_groundtruth_endpoint(
     delete_data: InputGroundtruthDeleteList,
     user: Annotated[
         SupabaseUser,
-        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.USER.value)),
+        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.READER.value)),
     ],
     session: Session = Depends(get_db),
 ) -> dict:
