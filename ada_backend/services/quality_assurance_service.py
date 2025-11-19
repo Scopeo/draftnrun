@@ -21,8 +21,6 @@ from ada_backend.repositories.quality_assurance_repository import (
     get_datasets_by_project,
     clear_version_outputs_for_input_ids,
     get_outputs_by_graph_runner,
-    get_qa_data_for_csv_export,
-    import_qa_data_from_csv,
 )
 from ada_backend.schemas.input_groundtruth_schema import (
     InputGroundtruthResponse,
@@ -54,6 +52,7 @@ from ada_backend.services.errors import (
     CSVEmptyFileError,
     CSVNotEnoughColumnsError,
     CSVEmptyInputError,
+    CSVExportError,
 )
 
 LOGGER = logging.getLogger(__name__)
@@ -508,24 +507,21 @@ def export_qa_data_to_csv_service(
 ) -> str:
 
     try:
-        qa_data = get_qa_data_for_csv_export(session, dataset_id, graph_runner_id)
+        total_count = get_inputs_groundtruths_count_by_dataset(session, dataset_id)
+        if total_count == 0:
+            raise CSVExportError(dataset_id, "No data to export. Dataset is empty.")
 
-        if not qa_data:
-            LOGGER.warning(f"No QA data found for dataset {dataset_id}")
-            output = io.StringIO()
-            writer = csv.writer(output)
-            writer.writerow(["input", "expected_output", "actual_output"])
-            return output.getvalue()
+        input_entries = get_inputs_groundtruths_by_dataset(session, dataset_id, skip=0, limit=total_count)
+        outputs_dict = dict(get_outputs_by_graph_runner(session, dataset_id, graph_runner_id))
 
         output = io.StringIO()
         writer = csv.writer(output)
-
         writer.writerow(["input", "expected_output", "actual_output"])
 
-        for input_data, groundtruth, output_data in qa_data:
-            input_str = json.dumps(input_data) if input_data else ""
-            groundtruth_str = groundtruth if groundtruth is not None else ""
-            output_str = output_data if output_data is not None else ""
+        for entry in input_entries:
+            input_str = json.dumps(entry.input) if entry.input else ""
+            groundtruth_str = entry.groundtruth if entry.groundtruth is not None else ""
+            output_str = outputs_dict.get(entry.id, "") if entry.id in outputs_dict else ""
 
             writer.writerow([input_str, groundtruth_str, output_str])
 
@@ -533,14 +529,13 @@ def export_qa_data_to_csv_service(
         output.close()
 
         LOGGER.info(
-            f"Exported {len(qa_data)} QA data entries to CSV for dataset {dataset_id} "
+            f"Exported {len(input_entries)} QA data entries to CSV for dataset {dataset_id} "
             f"(graph_runner_id={graph_runner_id})"
         )
         return csv_content
 
-    except Exception as e:
-        LOGGER.error(f"Error in export_qa_data_to_csv_service: {str(e)}")
-        raise ValueError(f"Failed to export QA data to CSV: {str(e)}") from e
+    except CSVExportError as e:
+        raise e
 
 
 def import_qa_data_from_csv_service(
@@ -596,10 +591,14 @@ def import_qa_data_from_csv_service(
 
             csv_rows.append((input_data, groundtruth))
 
-        created_inputs_groundtruths = import_qa_data_from_csv(
+        inputs_groundtruths_data_to_create = [
+            InputGroundtruthCreate(input=input_data, groundtruth=groundtruth) for input_data, groundtruth in csv_rows
+        ]
+
+        created_inputs_groundtruths = create_inputs_groundtruths(
             session=session,
             dataset_id=dataset_id,
-            csv_rows=csv_rows,
+            inputs_groundtruths_data=inputs_groundtruths_data_to_create,
         )
 
         LOGGER.info(

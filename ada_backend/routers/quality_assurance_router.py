@@ -49,6 +49,7 @@ from ada_backend.services.errors import (
     CSVNotEnoughColumnsError,
     CSVEmptyInputError,
     CSVMissingColumnError,
+    CSVExportError,
 )
 from ada_backend.database.setup_db import get_db
 
@@ -484,11 +485,10 @@ def export_qa_data_to_csv_endpoint(
             media_type="text/csv",
             headers={"Content-Disposition": f"attachment; filename={filename}"},
         )
-    except ValueError as e:
-        LOGGER.error(f"Failed to export QA data for dataset {dataset_id}: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=400, detail="Bad request") from e
+    except CSVExportError as e:
+        LOGGER.warning(f"CSV export failed for dataset {dataset_id}: {str(e)}")
+        raise HTTPException(status_code=404, detail=str(e)) from e
     except Exception as e:
-        LOGGER.error(f"Failed to export QA data for dataset {dataset_id}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
