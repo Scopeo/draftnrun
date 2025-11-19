@@ -34,15 +34,6 @@ class LLMJudgeUpdate(BaseModel):
     temperature: Optional[float] = None
 
 
-class BooleanEvaluationResult(BaseModel):
-    result: bool
-
-
-class ScoreEvaluationResult(BaseModel):
-    score: int
-    max_score: Optional[int] = None
-
-
 class JudgeEvaluationCreate(BaseModel):
     version_output_id: UUID
     evaluation_result: dict
@@ -61,35 +52,13 @@ class JudgeEvaluationResponse(BaseModel):
     updated_at: datetime
 
 
-class JudgeEvaluationListResponse(BaseModel):
-    evaluations: List[JudgeEvaluationResponse]
-
-
-class JudgeEvaluationDeleteList(BaseModel):
-    evaluation_ids: List[UUID]
-
-
-class JudgeEvaluationRunRequest(BaseModel):
-    graph_runner_id: UUID
-    input_ids: List[UUID]
-
-
 class JudgeEvaluationRunResult(BaseModel):
     version_output_id: UUID
     evaluation_id: Optional[UUID] = None
-    success: bool
-    error: Optional[str] = None
     evaluation_result: Optional[dict] = None
     raw_llm_response: Optional[str] = None
 
 
-class JudgeEvaluationRunSummary(BaseModel):
-    total: int
-    passed: int
-    failed: int
-    success_rate: float
-
-
 class JudgeEvaluationRunResponse(BaseModel):
     results: List[JudgeEvaluationRunResult]
-    summary: JudgeEvaluationRunSummary
+    success_rate: float

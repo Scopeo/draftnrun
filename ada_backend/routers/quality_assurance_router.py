@@ -1,4 +1,4 @@
-from typing import Annotated, Dict, List
+from typing import Annotated, List
 from uuid import UUID
 import logging
 
@@ -15,6 +15,7 @@ from ada_backend.schemas.input_groundtruth_schema import (
     QARunRequest,
     QARunResponse,
     InputGroundtruthResponse,
+    InputGroundtruthWithVersionResponse,
 )
 from ada_backend.schemas.dataset_schema import (
     DatasetCreateList,
@@ -221,7 +222,7 @@ def get_inputs_groundtruths_by_dataset_endpoint(
 
 @router.get(
     "/projects/{project_id}/qa/datasets/{dataset_id}/outputs",
-    response_model=Dict[UUID, str],
+    response_model=List[InputGroundtruthWithVersionResponse],
     summary="Get Outputs for a Graph Runner",
     tags=["Quality Assurance"],
 )
@@ -234,11 +235,11 @@ def get_outputs_endpoint(
     ],
     session: Session = Depends(get_db),
     graph_runner_id: UUID = Query(..., description="Graph runner ID to get outputs for"),
-) -> Dict[UUID, str]:
+) -> List[InputGroundtruthWithVersionResponse]:
     """
     Get outputs for a specific graph_runner.
 
-    Returns a dictionary mapping input_id (UUID) to output (string) for the specified graph_runner.
+    Returns a list of InputGroundtruthWithVersionResponse with input_id, input, groundtruth, output, and version_output_id.
     """
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")

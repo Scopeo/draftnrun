@@ -2,7 +2,7 @@ import logging
 from uuid import UUID
 from typing import Annotated, List
 
-from fastapi import APIRouter, Body, Depends, HTTPException
+from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from ada_backend.schemas.auth_schema import SupabaseUser
@@ -12,10 +12,7 @@ from ada_backend.schemas.qa_evaluation_schema import (
     LLMJudgeUpdate,
     JudgeEvaluationCreate,
     JudgeEvaluationResponse,
-    JudgeEvaluationListResponse,
-    JudgeEvaluationRunRequest,
     JudgeEvaluationRunResponse,
-    JudgeEvaluationDeleteList,
 )
 from ada_backend.services.errors import LLMJudgeNotFound
 from ada_backend.routers.auth_router import (
@@ -196,7 +193,7 @@ def create_judge_evaluation_endpoint(
 
 @router.get(
     "/projects/{project_id}/qa/llm-judges/{judge_id}/evaluations",
-    response_model=JudgeEvaluationListResponse,
+    response_model=List[JudgeEvaluationResponse],
     summary="Get Judge Evaluations by Judge",
 )
 def get_judge_evaluations_by_judge_endpoint(
@@ -207,7 +204,7 @@ def get_judge_evaluations_by_judge_endpoint(
         Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.USER.value)),
     ],
     session: Session = Depends(get_db),
-) -> JudgeEvaluationListResponse:
+) -> List[JudgeEvaluationResponse]:
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
 
@@ -227,35 +224,32 @@ def get_judge_evaluations_by_judge_endpoint(
 
 @router.get(
     "/projects/{project_id}/qa/version-outputs/evaluations",
-    response_model=JudgeEvaluationListResponse,
+    response_model=List[JudgeEvaluationResponse],
     summary="Get Judge Evaluations by Version Output",
 )
 def get_judge_evaluations_by_version_output_endpoint(
     project_id: UUID,
-    input_id: UUID,
-    graph_runner_id: UUID,
     user: Annotated[
         SupabaseUser,
         Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.USER.value)),
     ],
     session: Session = Depends(get_db),
-) -> JudgeEvaluationListResponse:
+    version_output_id: UUID = Query(..., description="Version output ID to get evaluations for"),
+) -> List[JudgeEvaluationResponse]:
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
 
     try:
-        return get_judge_evaluations_by_version_output_service(
-            session=session, input_id=input_id, graph_runner_id=graph_runner_id
-        )
+        return get_judge_evaluations_by_version_output_service(session=session, version_output_id=version_output_id)
     except ValueError as e:
         LOGGER.error(
-            f"Failed to get judge evaluations for input {input_id} and graph_runner {graph_runner_id} in project {project_id}: {str(e)}",
+            f"Failed to get judge evaluations for version_output {version_output_id} in project {project_id}: {str(e)}",
             exc_info=True,
         )
         raise HTTPException(status_code=400, detail="Bad request") from e
     except Exception as e:
         LOGGER.error(
-            f"Failed to get judge evaluations for input {input_id} and graph_runner {graph_runner_id} in project {project_id}: {str(e)}",
+            f"Failed to get judge evaluations for version_output {version_output_id} in project {project_id}: {str(e)}",
             exc_info=True,
         )
         raise HTTPException(status_code=500, detail="Internal server error") from e
@@ -264,17 +258,17 @@ def get_judge_evaluations_by_version_output_endpoint(
 @router.post(
     "/projects/{project_id}/qa/llm-judges/{judge_id}/evaluations/run",
     response_model=JudgeEvaluationRunResponse,
-    summary="Run Judge Evaluation on Inputs",
+    summary="Run Judge Evaluation on Version Outputs",
 )
 async def run_judge_evaluation_endpoint(
     project_id: UUID,
     judge_id: UUID,
-    run_request: JudgeEvaluationRunRequest,
     user: Annotated[
         SupabaseUser,
         Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.USER.value)),
     ],
     session: Session = Depends(get_db),
+    version_output_ids: List[UUID] = Body(..., description="List of version output IDs to evaluate"),
 ) -> JudgeEvaluationRunResponse:
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
@@ -284,9 +278,13 @@ async def run_judge_evaluation_endpoint(
             session=session,
             project_id=project_id,
             judge_id=judge_id,
-            run_request=run_request,
+            version_output_ids=version_output_ids,
         )
-    ## Only exception for now :
+    except ValueError as e:
+        LOGGER.error(
+            f"Failed to run judge evaluation for judge {judge_id} in project {project_id}: {str(e)}", exc_info=True
+        )
+        raise HTTPException(status_code=400, detail="Bad request") from e
     except Exception as e:
         LOGGER.error(
             f"Failed to run judge evaluation for judge {judge_id} in project {project_id}: {str(e)}", exc_info=True
@@ -301,18 +299,18 @@ async def run_judge_evaluation_endpoint(
 )
 def delete_judge_evaluations_endpoint(
     project_id: UUID,
-    delete_data: JudgeEvaluationDeleteList,
     user: Annotated[
         SupabaseUser,
         Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.READER.value)),
     ],
     session: Session = Depends(get_db),
+    evaluation_ids: List[UUID] = Body(...),
 ):
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
 
     try:
-        delete_judge_evaluations_service(session=session, project_id=project_id, delete_data=delete_data)
+        delete_judge_evaluations_service(session=session, project_id=project_id, evaluation_ids=evaluation_ids)
         return None
     except ValueError as e:
         LOGGER.error(f"Failed to delete judge evaluations for project {project_id}: {str(e)}", exc_info=True)

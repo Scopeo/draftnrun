@@ -13,7 +13,7 @@ from ada_backend.repositories.qa_evaluation_repository import (
     get_judge_evaluations_by_judge,
     get_judge_evaluations_by_version_output,
     delete_judge_evaluations,
-    get_version_outputs_by_input_ids_and_graph_runner,
+    get_version_outputs_by_ids,
 )
 from ada_backend.schemas.qa_evaluation_schema import (
     LLMJudgeCreate,
@@ -21,11 +21,8 @@ from ada_backend.schemas.qa_evaluation_schema import (
     LLMJudgeUpdate,
     JudgeEvaluationCreate,
     JudgeEvaluationResponse,
-    JudgeEvaluationListResponse,
-    JudgeEvaluationRunRequest,
     JudgeEvaluationRunResponse,
     JudgeEvaluationRunSummary,
-    JudgeEvaluationDeleteList,
 )
 from ada_backend.services.errors import LLMJudgeNotFound
 
@@ -144,12 +141,10 @@ def create_judge_evaluation_service(
 def get_judge_evaluations_by_judge_service(
     session: Session,
     judge_id: UUID,
-) -> JudgeEvaluationListResponse:
+) -> List[JudgeEvaluationResponse]:
     try:
         evaluations = get_judge_evaluations_by_judge(session=session, judge_id=judge_id)
-        return JudgeEvaluationListResponse(
-            evaluations=[JudgeEvaluationResponse.model_validate(eval) for eval in evaluations]
-        )
+        return [JudgeEvaluationResponse.model_validate(eval) for eval in evaluations]
     except Exception as e:
         LOGGER.error(f"Error in get_judge_evaluations_by_judge_service: {str(e)}")
         raise ValueError(f"Failed to get judge evaluations: {str(e)}") from e
@@ -157,23 +152,11 @@ def get_judge_evaluations_by_judge_service(
 
 def get_judge_evaluations_by_version_output_service(
     session: Session,
-    input_id: UUID,
-    graph_runner_id: UUID,
-) -> JudgeEvaluationListResponse:
+    version_output_id: UUID,
+) -> List[JudgeEvaluationResponse]:
     try:
-        version_outputs = get_version_outputs_by_input_ids_and_graph_runner(
-            session=session, input_ids=[input_id], graph_runner_id=graph_runner_id
-        )
-
-        if not version_outputs:
-            raise ValueError("Version output not found for given input_id and graph_runner_id")
-
-        version_output_id, _ = version_outputs[0]
-
         evaluations = get_judge_evaluations_by_version_output(session=session, version_output_id=version_output_id)
-        return JudgeEvaluationListResponse(
-            evaluations=[JudgeEvaluationResponse.model_validate(eval) for eval in evaluations]
-        )
+        return [JudgeEvaluationResponse.model_validate(eval) for eval in evaluations]
     except Exception as e:
         LOGGER.error(f"Error in get_judge_evaluations_by_version_output_service: {str(e)}")
         raise ValueError(f"Failed to get judge evaluations: {str(e)}") from e
@@ -182,12 +165,12 @@ def get_judge_evaluations_by_version_output_service(
 def delete_judge_evaluations_service(
     session: Session,
     project_id: UUID,
-    delete_data: JudgeEvaluationDeleteList,
+    evaluation_ids: List[UUID],
 ) -> None:
     try:
         deleted_count = delete_judge_evaluations(
             session=session,
-            evaluation_ids=delete_data.evaluation_ids,
+            evaluation_ids=evaluation_ids,
             project_id=project_id,
         )
         LOGGER.info(f"Deleted {deleted_count} judge evaluations for project {project_id}")
@@ -200,10 +183,30 @@ async def run_judge_evaluation_service(
     session: Session,
     project_id: UUID,
     judge_id: UUID,
-    run_request: JudgeEvaluationRunRequest,
+    version_output_ids: List[UUID],
 ) -> JudgeEvaluationRunResponse:
+    """Run judge evaluation on multiple version outputs.
+
+    Args:
+        session: SQLAlchemy session
+        project_id: ID of the project
+        judge_id: ID of the LLM judge
+        version_output_ids: List of version output IDs to evaluate
+
+    Returns:
+        JudgeEvaluationRunResponse with results and summary
+    """
     # TODO: A implémenter
-    # Retourne une réponse vide mais valide
-    return JudgeEvaluationRunResponse(
-        results=[], summary=JudgeEvaluationRunSummary(total=0, passed=0, failed=0, success_rate=0.0)
-    )
+    # Pour l'instant, récupère les données nécessaires depuis la DB
+    # Plus tard, on utilisera ces données pour appeler le LLM
+    try:
+        version_outputs_data = get_version_outputs_by_ids(session=session, version_output_ids=version_output_ids)
+
+        # TODO: Pour chaque version_output, appeler le LLM et créer l'évaluation
+        # Pour l'instant, retourne une réponse vide mais valide
+        return JudgeEvaluationRunResponse(
+            results=[], summary=JudgeEvaluationRunSummary(total=0, passed=0, failed=0, success_rate=0.0)
+        )
+    except Exception as e:
+        LOGGER.error(f"Error in run_judge_evaluation_service: {str(e)}")
+        raise ValueError(f"Failed to run judge evaluation: {str(e)}") from e

@@ -217,17 +217,29 @@ def upsert_judge_evaluation(
     return evaluation
 
 
-def get_version_outputs_by_input_ids_and_graph_runner(
+def get_version_outputs_by_ids(
     session: Session,
-    input_ids: List[UUID],
-    graph_runner_id: UUID,
-) -> List[Tuple[UUID, str]]:
-    return (
-        session.query(VersionOutput.id, VersionOutput.output)
-        .filter(
-            VersionOutput.graph_runner_id == graph_runner_id,
-            VersionOutput.input_id.in_(input_ids),
+    version_output_ids: List[UUID],
+) -> List[Tuple[UUID, dict, Optional[str], str]]:
+    """Get version outputs with input and groundtruth data by their IDs.
+
+    Args:
+        session: SQLAlchemy session
+        version_output_ids: List of version output IDs
+
+    Returns:
+        List of tuples (version_output_id, input, groundtruth, output)
+    """
+    results = (
+        session.query(
+            VersionOutput.id,
+            InputGroundtruth.input,
+            InputGroundtruth.groundtruth,
+            VersionOutput.output,
         )
-        .order_by(VersionOutput.created_at.desc())
+        .join(InputGroundtruth, InputGroundtruth.id == VersionOutput.input_id)
+        .filter(VersionOutput.id.in_(version_output_ids))
         .all()
     )
+
+    return results

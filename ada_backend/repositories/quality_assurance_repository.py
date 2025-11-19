@@ -5,7 +5,11 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 
-from ada_backend.database.models import InputGroundtruth, DatasetProject, VersionOutput
+from ada_backend.database.models import (
+    InputGroundtruth,
+    DatasetProject,
+    VersionOutput,
+)
 from ada_backend.schemas.input_groundtruth_schema import InputGroundtruthCreate
 
 LOGGER = logging.getLogger(__name__)
@@ -161,8 +165,8 @@ def get_outputs_by_graph_runner(
     session: Session,
     dataset_id: UUID,
     graph_runner_id: UUID,
-) -> List[Tuple[UUID, str]]:
-    """Get outputs for a specific graph_runner.
+) -> List[Tuple[UUID, dict, Optional[str], str, UUID]]:
+    """Get outputs for a specific graph_runner with input and groundtruth data.
 
     Args:
         session: SQLAlchemy session
@@ -170,10 +174,16 @@ def get_outputs_by_graph_runner(
         graph_runner_id: ID of the graph runner
 
     Returns:
-        List of tuples (input_id, output)
+        List of tuples (input_id, input, groundtruth, output, version_output_id)
     """
     results = (
-        session.query(VersionOutput.input_id, VersionOutput.output)
+        session.query(
+            VersionOutput.input_id,
+            InputGroundtruth.input,
+            InputGroundtruth.groundtruth,
+            VersionOutput.output,
+            VersionOutput.id,
+        )
         .join(InputGroundtruth, InputGroundtruth.id == VersionOutput.input_id)
         .filter(InputGroundtruth.dataset_id == dataset_id, VersionOutput.graph_runner_id == graph_runner_id)
         .all()

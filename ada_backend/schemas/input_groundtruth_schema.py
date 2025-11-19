@@ -3,8 +3,6 @@ from typing import Optional, List
 from uuid import UUID
 from pydantic import BaseModel, field_validator
 
-from ada_backend.database.models import EnvType
-
 
 class Pagination(BaseModel):
     page: int
@@ -27,7 +25,7 @@ class InputGroundtruthWithVersionResponse(BaseModel):
     input: dict
     groundtruth: Optional[str] = None
     output: Optional[str] = None
-    version: Optional[EnvType] = None
+    version_output_id: UUID
 
     class Config:
         from_attributes = True
