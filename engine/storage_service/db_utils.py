@@ -99,7 +99,6 @@ def convert_to_correct_pandas_type(df: pd.DataFrame, column_name: str, db_defini
 
 
 def check_columns_matching_between_data_and_database_table(columns_data, table_description):
-    # Columns that are auto-managed and should be excluded from matching check
     AUTO_MANAGED_COLUMNS = {PROCESSED_DATETIME_FIELD, CREATED_AT_COLUMN, UPDATED_AT_COLUMN}
 
     column_table = [column["name"].lower() for column in table_description]
