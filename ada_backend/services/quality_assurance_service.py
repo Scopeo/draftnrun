@@ -2,7 +2,7 @@ import logging
 import json
 import csv
 import io
-from typing import Dict, List
+from typing import BinaryIO, Dict, List
 from uuid import UUID
 
 from sqlalchemy.orm import Session
@@ -57,6 +57,8 @@ from ada_backend.utils.qa_utils import process_csv
 LOGGER = logging.getLogger(__name__)
 
 MAX_CSV_EXPORT_ENTRIES = 10000
+MAX_CSV_EXPORT_SIZE_MB = 10
+MAX_CSV_EXPORT_SIZE_BYTES = MAX_CSV_EXPORT_SIZE_MB * 1024 * 1024
 
 
 def get_inputs_groundtruths_with_version_outputs_service(
@@ -511,12 +513,6 @@ def export_qa_data_to_csv_service(
         total_count = get_inputs_groundtruths_count_by_dataset(session, dataset_id)
         if total_count == 0:
             raise CSVExportError(dataset_id, "No data to export. Dataset is empty.")
-        if total_count > MAX_CSV_EXPORT_ENTRIES:
-            raise CSVExportError(
-                dataset_id,
-                f"Dataset too large to export. Maximum {MAX_CSV_EXPORT_ENTRIES} entries allowed, "
-                f"but dataset contains {total_count} entries.",
-            )
 
         input_entries = get_inputs_groundtruths_by_dataset(session, dataset_id, skip=0, limit=total_count)
         outputs_dict = dict(get_outputs_by_graph_runner(session, dataset_id, graph_runner_id))
@@ -535,6 +531,12 @@ def export_qa_data_to_csv_service(
         csv_content = output.getvalue()
         output.close()
 
+        csv_size_bytes = len(csv_content.encode("utf-8"))
+        if csv_size_bytes > MAX_CSV_EXPORT_SIZE_BYTES:
+            raise CSVExportError(
+                dataset_id, f"CSV file too large to export. Maximum {MAX_CSV_EXPORT_SIZE_MB} MB allowed."
+            )
+
         LOGGER.info(
             f"Exported {len(input_entries)} QA data entries to CSV for dataset {dataset_id} "
             f"(graph_runner_id={graph_runner_id})"
@@ -548,12 +550,12 @@ def export_qa_data_to_csv_service(
 def import_qa_data_from_csv_service(
     session: Session,
     dataset_id: UUID,
-    csv_content: str,
+    csv_file: BinaryIO,
 ) -> InputGroundtruthResponseList:
-    try:
 
+    try:
         inputs_groundtruths_data_to_create = []
-        for row_data in process_csv(csv_content):
+        for row_data in process_csv(csv_file):
             inputs_groundtruths_data_to_create.append(
                 InputGroundtruthCreate(
                     input=row_data["input"],

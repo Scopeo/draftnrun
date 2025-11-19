@@ -512,13 +512,12 @@ async def import_qa_data_from_csv_endpoint(
     if not file.filename or not file.filename.lower().endswith(".csv"):
         raise HTTPException(status_code=400, detail="File must be a CSV file")
     try:
-        csv_content = await file.read()
-        csv_content_str = csv_content.decode("utf-8")
+        await file.seek(0)
 
         result = import_qa_data_from_csv_service(
             session=session,
             dataset_id=dataset_id,
-            csv_content=csv_content_str,
+            csv_file=file.file,
         )
         return result
 
