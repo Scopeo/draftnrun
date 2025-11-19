@@ -1,5 +1,7 @@
 from sqlalchemy.orm import Session
+from sqlalchemy import and_
 from uuid import UUID
+from typing import Optional
 
 from ada_backend.database import models as db
 
@@ -9,11 +11,12 @@ def get_all_llm_models(session: Session) -> list[db.LLMModel]:
 
 
 def get_llm_models_by_capability(session: Session, capabilities: list[str]) -> list[db.LLMModel]:
+    if not capabilities:
+        return session.query(db.LLMModel).order_by(db.LLMModel.id).all()
 
     query = session.query(db.LLMModel).order_by(db.LLMModel.id)
-
-    for capability in capabilities:
-        query = query.filter(db.LLMModel.model_capacity.contains([capability]))
+    filters = [db.LLMModel.model_capacity.contains([capability]) for capability in capabilities]
+    query = query.filter(and_(*filters))
 
     return query.all()
 
@@ -51,7 +54,7 @@ def update_llm_model(
     description: str,
     model_capacity: list[str],
     provider: str,
-) -> db.LLMModel:
+) -> Optional[db.LLMModel]:
     existing_llm_model = session.query(db.LLMModel).filter(db.LLMModel.id == llm_model_id).first()
     if not existing_llm_model:
         return None
@@ -68,3 +71,16 @@ def update_llm_model(
     session.commit()
     session.refresh(existing_llm_model)
     return existing_llm_model
+
+
+def llm_model_exists(session: Session, model_name: str, provider: str, model_capacity: list[str]) -> bool:
+    return (
+        session.query(db.LLMModel)
+        .filter(
+            db.LLMModel.model_name == model_name,
+            db.LLMModel.provider == provider,
+            db.LLMModel.model_capacity == model_capacity,
+        )
+        .first()
+        is not None
+    )

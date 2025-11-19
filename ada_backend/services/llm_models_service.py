@@ -7,6 +7,7 @@ from ada_backend.repositories.llm_models_repository import (
     delete_llm_model,
     update_llm_model,
     get_all_llm_models,
+    llm_model_exists,
 )
 from ada_backend.schemas.llm_models_schema import (
     LLMModelResponse,
@@ -39,8 +40,7 @@ def get_model_capabilities_service() -> ModelCapabilitiesResponse:
     }
 
     capabilities = [
-        ModelCapabilityOption(value=cap.value, label=capability_labels.get(cap, cap.value.replace("_", " ").title()))
-        for cap in ModelCapabilityEnum
+        ModelCapabilityOption(value=cap.value, label=capability_labels[cap]) for cap in ModelCapabilityEnum
     ]
 
     return ModelCapabilitiesResponse(capabilities=capabilities)
@@ -124,16 +124,29 @@ def update_llm_model_service(
     llm_model_id: UUID,
     llm_model_data: LLMModelUpdate,
 ) -> LLMModelResponse:
-    try:
-        updated_llm_model = update_llm_model(
-            session,
-            llm_model_id=llm_model_id,
-            display_name=llm_model_data.display_name,
-            model_name=llm_model_data.model_name,
-            description=llm_model_data.description,
-            model_capacity=llm_model_data.model_capacity,
-            provider=llm_model_data.provider,
-        )
-        return LLMModelResponse.model_validate(updated_llm_model)
-    except LLMModelNotFound as e:
-        raise LLMModelNotFound(e.llm_model_id) from e
+    updated_llm_model = update_llm_model(
+        session,
+        llm_model_id=llm_model_id,
+        display_name=llm_model_data.display_name,
+        model_name=llm_model_data.model_name,
+        description=llm_model_data.description,
+        model_capacity=llm_model_data.model_capacity,
+        provider=llm_model_data.provider,
+    )
+    if updated_llm_model is None:
+        raise LLMModelNotFound(llm_model_id)
+    return LLMModelResponse.model_validate(updated_llm_model)
+
+
+def llm_model_exists_service(
+    session: Session,
+    model_name: str,
+    provider: str,
+    model_capacity: list[str],
+) -> bool:
+    return llm_model_exists(
+        session,
+        model_name,
+        provider,
+        model_capacity,
+    )

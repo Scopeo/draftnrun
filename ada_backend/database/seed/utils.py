@@ -12,7 +12,7 @@ from ada_backend.database.seed.constants import (
     VERBOSITY_IN_DB,
     REASONING_IN_DB,
 )
-from ada_backend.services.llm_models_service import create_llm_model_service
+from ada_backend.services.llm_models_service import create_llm_model_service, llm_model_exists_service
 
 from ada_backend.schemas.llm_models_schema import LLMModelCreate, ModelCapabilityEnum
 from settings import settings
@@ -423,6 +423,10 @@ def seed_custom_llm_models(session: Session):
         return
     for provider, models in settings.custom_models["custom_models"].items():
         for model in models:
+            if llm_model_exists_service(session, model.get("model_name"), provider, model.get("model_capacity", [])):
+                LOGGER.warning(f"Model {model.get('model_name')} already exists")
+                continue
+
             create_llm_model_service(
                 session=session,
                 llm_model_data=LLMModelCreate(
