@@ -1,28 +1,45 @@
 {
-    "provider_name": {
-        "completion_models": [
+    "custom_models": {
+        "provider_name": [
             {
+                "display_name": "my-llm-1-model-display-name",
                 "model_name": "my-llm-1-model-name",
-                "function_calling": true,
-                "multimodal": true,
-                "image_format" : "png",
-                "constrained_output" : true
+                "description": "my-llm-1-model-description",
+                "model_capacity": [
+                    "completion",
+                    "function_calling",
+                    "image",
+                    "file"
+                ],
+                "image_format": "jpeg",
+                "base_url": "https://llm1.example.com/v1/",
+                "api_key": "my_api_key"
             },
             {
+                "display_name": "my-llm-2-model-display-name",
                 "model_name": "my-llm-2-model-name",
-                "function_calling": false,
-                "multimodal": false,
-                "image_format" : "jpeg",
-                "constrained_output" : true
-            }
-        ],
-        "embedding_models": [
+                "description": "my-llm-2-model-description",
+                "model_capacity": [
+                    "completion",
+                    "function_calling",
+                    "image",
+                    "file"
+                ],
+                "image_format": "png",
+                "base_url": "https://llm1.example.com/v1/",
+                "api_key": "my_api_key"
+            },
             {
-                "model_name": "my-embed-1-model-name",
-                "embedding_size": 3072
+                "display_name": "my-llm-3-model-display-name",
+                "model_name": "my-llm-3-model-name",
+                "description": "my-llm-3-model-description",
+                "model_capacity": [
+                    "embedding"
+                ],
+                "embedding_size": 3072,
+                "base_url": "https://llm1.example.com/v1/",
+                "api_key": "my_api_key"
             }
-        ],
-        "base_url": "https://llm1.example.com/v1/",
-        "api_key": "my_api_key"
+        ]
     }
 }

@@ -25,6 +25,7 @@ from ada_backend.repositories.component_repository import (
 from ada_backend.database.models import ParameterType
 from ada_backend.schemas.pipeline.base import ComponentRelationshipSchema
 from ada_backend.schemas.pipeline.get_pipeline_schema import ComponentInstanceReadSchema
+from ada_backend.utils.component_utils import get_ui_component_properties_with_llm_options
 
 LOGGER = getLogger(__name__)
 
@@ -64,7 +65,15 @@ def get_component_instance(
                     nullable=parameter.nullable,
                     default=parameter.default,
                     ui_component=parameter.ui_component,
-                    ui_component_properties=parameter.ui_component_properties,
+                    ui_component_properties=(
+                        get_ui_component_properties_with_llm_options(
+                            session,
+                            parameter.model_capabilities,
+                            parameter.ui_component_properties,
+                        )
+                        if parameter.type == ParameterType.LLM_MODEL
+                        else parameter.ui_component_properties
+                    ),
                     is_advanced=parameter.is_advanced,
                 )
             )
@@ -122,7 +131,15 @@ def get_component_instance(
                 nullable=param.nullable,
                 default=param.default,
                 ui_component=param.ui_component,
-                ui_component_properties=param.ui_component_properties,
+                ui_component_properties=(
+                    get_ui_component_properties_with_llm_options(
+                        session,
+                        getattr(param, "model_capabilities", None),
+                        param.ui_component_properties,
+                    )
+                    if param.type == ParameterType.LLM_MODEL
+                    else param.ui_component_properties
+                ),
                 is_advanced=param.is_advanced,
             )
             for param in parameters

@@ -1,8 +1,8 @@
 from uuid import UUID
-from typing import Optional
-
-from pydantic import BaseModel
 from sqlalchemy.orm import Session
+from pydantic import BaseModel
+import logging
+
 
 from ada_backend.database.models import ParameterType, SelectOption, UIComponent, UIComponentProperties
 from ada_backend.database import models as db
@@ -13,41 +13,12 @@ from ada_backend.database.seed.constants import (
     VERBOSITY_IN_DB,
     REASONING_IN_DB,
 )
-from ada_backend.database.seed.supported_models import (
-    get_models_by_capability,
-    ModelCapability,
-)
+from ada_backend.services.llm_models_service import create_llm_model_service, llm_model_exists_service
+
+from ada_backend.schemas.llm_models_schema import LLMModelCreate, ModelCapabilityEnum
 from settings import settings
 
-
-def convert_models_to_select_options(models: list[dict[str, str]]) -> list[SelectOption]:
-    """Convert model dictionaries to SelectOption objects"""
-    select_options = []
-    for model_dict in models:
-        for label, value in model_dict.items():
-            select_options.append(SelectOption(value=value, label=label))
-    return select_options
-
-
-def add_custom_llm_model(
-    custom_models: dict[str, dict[str, str]],
-    model_type: str,
-    model_capacity: Optional[str] = None,
-) -> list[SelectOption]:
-    list_model_options = []
-    for provider, provider_info in custom_models.items():
-        models = provider_info.get(model_type)
-        for model in models:
-            if model_capacity is None or model.get(model_capacity):
-                model_name = model.get("model_name")
-                custom_llm_reference = f"{provider}:{model_name}"
-                list_model_options.append(
-                    SelectOption(
-                        value=custom_llm_reference,
-                        label=model_name,
-                    )
-                )
-    return list_model_options
+LOGGER = logging.getLogger(__name__)
 
 
 # TODO: Move to constants.py
@@ -132,37 +103,8 @@ COMPONENT_VERSION_UUIDS: dict[str, UUID] = {
 }
 
 DEFAULT_MODEL = "openai:gpt-5-mini"
-
-# Get models by capability and convert to select options
-COMPLETION_MODELS = [
-    SelectOption(value=model["reference"], label=model["name"])
-    for model in get_models_by_capability(ModelCapability.COMPLETION)
-]
-
-FUNCTION_CALLING_MODELS = [
-    SelectOption(value=model["reference"], label=model["name"])
-    for model in get_models_by_capability(ModelCapability.FUNCTION_CALLING)
-]
-
-EMBEDDING_MODELS = [
-    SelectOption(value=model["reference"], label=model["name"])
-    for model in get_models_by_capability(ModelCapability.EMBEDDING)
-]
-
-WEB_SEARCH_MODELS = [
-    SelectOption(value=model["reference"], label=model["name"])
-    for model in get_models_by_capability(ModelCapability.WEB_SEARCH)
-]
-
-OCR_MODELS = [
-    SelectOption(value=model["reference"], label=model["name"])
-    for model in get_models_by_capability(ModelCapability.OCR)
-]
-
-COMPLETION_MODELS.extend(add_custom_llm_model(settings.custom_models, "completion_models", "constrained_output"))
-FUNCTION_CALLING_MODELS.extend(add_custom_llm_model(settings.custom_models, "completion_models", "function_calling"))
-
-EMBEDDING_MODELS.extend(add_custom_llm_model(settings.custom_models, "embedding_models"))
+DEFAULT_EMBEDDING_MODEL = "openai:text-embedding-3-large"
+DEFAULT_OCR_MODEL = "mistral:mistral-ocr-latest"
 
 
 class ParameterLLMConfig(BaseModel):
@@ -191,14 +133,14 @@ def build_completion_service_config_definitions(
                     id=param.param_id,
                     component_version_id=component_version_id,
                     name=COMPLETION_MODEL_IN_DB,
-                    type=ParameterType.STRING,
+                    type=ParameterType.LLM_MODEL,
                     nullable=False,
                     default=DEFAULT_MODEL,
                     ui_component=UIComponent.SELECT,
                     ui_component_properties=UIComponentProperties(
-                        options=COMPLETION_MODELS,
                         label="Model Name",
                     ).model_dump(exclude_unset=True, exclude_none=True),
+                    model_capabilities=[ModelCapabilityEnum.COMPLETION.value],
                 )
             )
         if param.param_name == TEMPERATURE_IN_DB:
@@ -303,14 +245,14 @@ def build_function_calling_service_config_definitions(
                     id=param.param_id,
                     component_version_id=component_version_id,
                     name=COMPLETION_MODEL_IN_DB,
-                    type=ParameterType.STRING,
+                    type=ParameterType.LLM_MODEL,
                     nullable=False,
                     default=DEFAULT_MODEL,
                     ui_component=UIComponent.SELECT,
                     ui_component_properties=UIComponentProperties(
-                        options=FUNCTION_CALLING_MODELS,
                         label="Model Name",
                     ).model_dump(exclude_unset=True, exclude_none=True),
+                    model_capabilities=[ModelCapabilityEnum.FUNCTION_CALLING.value],
                 )
             )
         if param.param_name == TEMPERATURE_IN_DB:
@@ -367,14 +309,14 @@ def build_embedding_service_config_definitions(
                     id=param.param_id,
                     component_version_id=component_version_id,
                     name=EMBEDDING_MODEL_IN_DB,
-                    type=ParameterType.STRING,
+                    type=ParameterType.LLM_MODEL,
                     nullable=False,
-                    default=EMBEDDING_MODELS[0].value,
+                    default=DEFAULT_EMBEDDING_MODEL,
                     ui_component=UIComponent.SELECT,
                     ui_component_properties=UIComponentProperties(
-                        options=EMBEDDING_MODELS,
                         label="Embedding Model Name",
                     ).model_dump(exclude_unset=True, exclude_none=True),
+                    model_capabilities=[ModelCapabilityEnum.EMBEDDING.value],
                 )
             )
         if param.param_name == "api_key":
@@ -411,14 +353,14 @@ def build_web_service_config_definitions(
                     id=param.param_id,
                     component_version_id=component_version_id,
                     name=COMPLETION_MODEL_IN_DB,
-                    type=ParameterType.STRING,
+                    type=ParameterType.LLM_MODEL,
                     nullable=False,
                     default=DEFAULT_MODEL,
                     ui_component=UIComponent.SELECT,
                     ui_component_properties=UIComponentProperties(
-                        options=WEB_SEARCH_MODELS,
                         label="Model Name",
                     ).model_dump(exclude_unset=True, exclude_none=True),
+                    model_capabilities=[ModelCapabilityEnum.WEB_SEARCH.value],
                 )
             )
         if param.param_name == "api_key":
@@ -454,14 +396,14 @@ def build_ocr_service_config_definitions(
                     id=param.param_id,
                     component_version_id=component_version_id,
                     name=COMPLETION_MODEL_IN_DB,
-                    type=ParameterType.STRING,
+                    type=ParameterType.LLM_MODEL,
                     nullable=False,
-                    default=OCR_MODELS[0].value,
+                    default=DEFAULT_OCR_MODEL,
                     ui_component=UIComponent.SELECT,
                     ui_component_properties=UIComponentProperties(
-                        options=OCR_MODELS,
                         label="Model Name",
                     ).model_dump(exclude_unset=True, exclude_none=True),
+                    model_capabilities=[ModelCapabilityEnum.OCR.value],
                 )
             )
         if param.param_name == "api_key":
@@ -514,3 +456,25 @@ def build_components_parameters_assignments_to_parameter_groups(
         if param_def:
             param_def.parameter_group_id = group_info["parameter_group_id"]
             param_def.parameter_order_within_group = group_info["parameter_order_within_group"]
+
+
+def seed_custom_llm_models(session: Session):
+    if not settings.custom_models:
+        LOGGER.warning("No custom models found in settings")
+        return
+    for provider, models in settings.custom_models["custom_models"].items():
+        for model in models:
+            if llm_model_exists_service(session, model.get("model_name"), provider, model.get("model_capacity", [])):
+                LOGGER.warning(f"Model {model.get('model_name')} already exists")
+                continue
+
+            create_llm_model_service(
+                session=session,
+                llm_model_data=LLMModelCreate(
+                    display_name=model.get("display_name"),
+                    model_name=model.get("model_name"),
+                    description=model.get("description"),
+                    provider=provider,
+                    model_capacity=model.get("model_capacity", []),
+                ),
+            )

@@ -1,10 +1,24 @@
-import pytest
-import base64
 import asyncio
-from unittest.mock import MagicMock, AsyncMock
+import base64
+from unittest.mock import AsyncMock, MagicMock
+
+import pytest
 
 from engine.agent.agent import ComponentAttributes
 from engine.agent.llm_call_agent import LLMCallAgent, LLMCallInputs
+
+
+def make_capability_resolver(service, default_capabilities=None):
+    def resolver(capabilities):
+        provider = getattr(service, "_provider", None)
+        model = getattr(service, "_model_name", None)
+        refs = set(default_capabilities) if default_capabilities else set()
+        if provider and model:
+            refs.add(f"{provider}:{model}")
+        return refs
+
+    return resolver
+
 
 FILE_PATH_1 = "file_1.pdf"
 FILE_PATH_2 = "file_2.pdf"
@@ -127,6 +141,7 @@ def llm_call_with_file_content():
         component_attributes,
         prompt_template,
         file_content_key=file_content,
+        capability_resolver=make_capability_resolver(llm_service),
     )
 
 
@@ -144,7 +159,14 @@ def llm_call_without_file_content():
     tool_description = MagicMock()
     component_attributes = ComponentAttributes(component_instance_name="test_component")
     prompt_template = "{input}"
-    return LLMCallAgent(trace_manager, llm_service, tool_description, component_attributes, prompt_template)
+    return LLMCallAgent(
+        trace_manager,
+        llm_service,
+        tool_description,
+        component_attributes,
+        prompt_template,
+        capability_resolver=make_capability_resolver(llm_service),
+    )
 
 
 @pytest.mark.parametrize(
