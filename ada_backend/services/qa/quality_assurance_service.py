@@ -1,5 +1,8 @@
 import logging
-from typing import Dict, List
+import json
+import csv
+import io
+from typing import BinaryIO, Dict, List
 from uuid import UUID
 
 from sqlalchemy.orm import Session
@@ -43,8 +46,18 @@ from ada_backend.services.agent_runner_service import run_agent
 from ada_backend.database.models import CallType
 from ada_backend.repositories.env_repository import get_env_relationship_by_graph_runner_id
 from ada_backend.services.metrics.utils import query_conversation_messages
+from ada_backend.services.qa.qa_error import (
+    CSVMissingColumnError,
+    CSVInvalidJSONError,
+    CSVEmptyFileError,
+    CSVExportError,
+)
+from ada_backend.services.qa.csv_processing import process_csv
 
 LOGGER = logging.getLogger(__name__)
+
+MAX_CSV_EXPORT_SIZE_MB = 10
+MAX_CSV_EXPORT_SIZE_BYTES = MAX_CSV_EXPORT_SIZE_MB * 1024 * 1024
 
 
 def get_inputs_groundtruths_with_version_outputs_service(
@@ -487,3 +500,89 @@ def save_conversation_to_groundtruth_service(
     input_entry = InputGroundtruthCreate(input=input_payload, groundtruth=output_payload["messages"][-1]["content"])
     input_entries = create_inputs_groundtruths(session, dataset_id, [input_entry])
     return [InputGroundtruthResponse.model_validate(entry) for entry in input_entries]
+
+
+def export_qa_data_to_csv_service(
+    session: Session,
+    dataset_id: UUID,
+    graph_runner_id: UUID,
+) -> str:
+
+    try:
+        total_count = get_inputs_groundtruths_count_by_dataset(session, dataset_id)
+        if total_count == 0:
+            raise CSVExportError(dataset_id, "No data to export. Dataset is empty.")
+
+        input_entries = get_inputs_groundtruths_by_dataset(session, dataset_id, skip=0, limit=total_count)
+        outputs_dict = dict(get_outputs_by_graph_runner(session, dataset_id, graph_runner_id))
+
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(["input", "expected_output", "actual_output"])
+
+        for entry in input_entries:
+            input_str = json.dumps(entry.input) if entry.input else ""
+            groundtruth_str = entry.groundtruth if entry.groundtruth is not None else ""
+            output_str = outputs_dict.get(entry.id, "") if entry.id in outputs_dict else ""
+
+            writer.writerow([input_str, groundtruth_str, output_str])
+
+        csv_content = output.getvalue()
+        output.close()
+
+        csv_size_bytes = len(csv_content.encode("utf-8"))
+        if csv_size_bytes > MAX_CSV_EXPORT_SIZE_BYTES:
+            raise CSVExportError(
+                dataset_id, f"CSV file too large to export. Maximum {MAX_CSV_EXPORT_SIZE_MB} MB allowed."
+            )
+
+        LOGGER.info(
+            f"Exported {len(input_entries)} QA data entries to CSV for dataset {dataset_id} "
+            f"(graph_runner_id={graph_runner_id})"
+        )
+        return csv_content
+    except Exception as e:
+        LOGGER.error(f"Error in export_qa_data_to_csv_service: {str(e)}")
+        raise e
+
+
+def import_qa_data_from_csv_service(
+    session: Session,
+    dataset_id: UUID,
+    csv_file: BinaryIO,
+) -> InputGroundtruthResponseList:
+
+    try:
+        inputs_groundtruths_data_to_create = []
+        for row_data in process_csv(csv_file):
+            inputs_groundtruths_data_to_create.append(
+                InputGroundtruthCreate(
+                    input=row_data["input"],
+                    groundtruth=row_data["expected_output"] if row_data["expected_output"] else None,
+                )
+            )
+
+        if not inputs_groundtruths_data_to_create:
+            raise CSVEmptyFileError()
+
+        created_inputs_groundtruths = create_inputs_groundtruths(
+            session=session,
+            dataset_id=dataset_id,
+            inputs_groundtruths_data=inputs_groundtruths_data_to_create,
+        )
+
+        LOGGER.info(
+            f"Imported {len(created_inputs_groundtruths)} input-groundtruth entries from CSV for dataset {dataset_id}"
+        )
+
+        return InputGroundtruthResponseList(
+            inputs_groundtruths=[InputGroundtruthResponse.model_validate(ig) for ig in created_inputs_groundtruths]
+        )
+
+    except (
+        CSVEmptyFileError,
+        CSVMissingColumnError,
+        CSVInvalidJSONError,
+    ) as e:
+        LOGGER.error(f"Error in import_qa_data_from_csv_service: {str(e)}")
+        raise e

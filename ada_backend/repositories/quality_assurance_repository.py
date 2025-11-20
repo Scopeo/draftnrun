@@ -50,7 +50,10 @@ def create_inputs_groundtruths(
     dataset_id: UUID,
     inputs_groundtruths_data: List[InputGroundtruthCreate],
 ) -> List[InputGroundtruth]:
-    """Create multiple input-groundtruth entries."""
+    """Create multiple input-groundtruth entries.
+
+    Creates records one by one to ensure distinct timestamps and preserve CSV order.
+    """
     inputs_groundtruths = []
 
     for input_groundtruth_data in inputs_groundtruths_data:
@@ -59,12 +62,12 @@ def create_inputs_groundtruths(
             input=input_groundtruth_data.input,
             groundtruth=input_groundtruth_data.groundtruth,
         )
+        session.add(input_groundtruth)
+        session.flush()
         inputs_groundtruths.append(input_groundtruth)
 
-    session.add_all(inputs_groundtruths)
     session.commit()
 
-    # Refresh all objects to get their IDs
     for input_groundtruth in inputs_groundtruths:
         session.refresh(input_groundtruth)
 
