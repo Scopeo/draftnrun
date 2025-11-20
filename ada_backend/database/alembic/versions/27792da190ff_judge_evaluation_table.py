@@ -1,7 +1,7 @@
 """judge_evaluation_table
 
 Revision ID: 27792da190ff
-Revises: e2789dbf6d68
+Revises: b0ba5107a7e3
 Create Date: 2025-11-19 17:44:09.555897
 
 """
@@ -14,7 +14,7 @@ from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
 revision: str = "27792da190ff"
-down_revision: Union[str, None] = "e2789dbf6d68"
+down_revision: Union[str, None] = "b0ba5107a7e3"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
