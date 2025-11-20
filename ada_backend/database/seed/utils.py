@@ -1,7 +1,6 @@
 from uuid import UUID
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
-from sqlalchemy.orm import Session
 import logging
 
 
@@ -457,6 +456,7 @@ def build_components_parameters_assignments_to_parameter_groups(
         if param_def:
             param_def.parameter_group_id = group_info["parameter_group_id"]
             param_def.parameter_order_within_group = group_info["parameter_order_within_group"]
+
 
 def seed_custom_llm_models(session: Session):
     if not settings.custom_models:
