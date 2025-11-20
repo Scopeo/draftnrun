@@ -124,6 +124,8 @@ app = FastAPI(
         {
             "name": "LLM Models",
             "description": "Endpoints for managing LLM models",
+        },
+        {
             "name": "Knowledge",
             "description": "Endpoints for exploring knowledge files and chunks",
         },
