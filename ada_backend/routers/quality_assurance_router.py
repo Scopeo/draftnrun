@@ -509,8 +509,6 @@ async def import_qa_data_from_csv_endpoint(
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
 
-    if not file.filename or not file.filename.lower().endswith(".csv"):
-        raise HTTPException(status_code=400, detail="File must be a CSV file")
     try:
         await file.seek(0)
 
