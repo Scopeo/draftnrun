@@ -1,7 +1,7 @@
 from typing import Annotated, Dict, List
 from uuid import UUID
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
 from fastapi.responses import Response
@@ -475,7 +475,7 @@ def export_qa_data_to_csv_endpoint(
         raise HTTPException(status_code=400, detail="User ID not found")
     try:
         csv_content = export_qa_data_to_csv_service(session, dataset_id, graph_runner_id)
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
         filename = f"qa_export_{dataset_id}_{timestamp}.csv"
 
         return Response(
