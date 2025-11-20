@@ -90,3 +90,9 @@ class InvalidAgentTemplate(Exception):
                 "does not contain an AI agent component"
             )
         )
+
+
+class LLMModelNotFound(Exception):
+    def __init__(self, llm_model_id: UUID):
+        self.llm_model_id = llm_model_id
+        super().__init__(f"LLM model not found: {llm_model_id}")

@@ -26,6 +26,7 @@ from ada_backend.database.component_definition_seeding import (
     upsert_release_stage_to_current_version_mapping,
 )
 from ada_backend.schemas.pipeline.base import ToolDescriptionSchema
+from ada_backend.utils.component_utils import get_ui_component_properties_with_llm_options
 
 LOGGER = logging.getLogger(__name__)
 
@@ -41,6 +42,7 @@ class InstanceParameterWithDefinition:
     ui_component: Optional[UIComponent] = None
     ui_component_properties: Optional[dict] = None
     is_advanced: bool = False
+    model_capabilities: Optional[list[str]] = None
 
 
 @dataclass
@@ -345,6 +347,7 @@ def get_instance_parameters_with_definition(
             ui_component=param_def.ui_component,
             ui_component_properties=param_def.ui_component_properties,
             is_advanced=param_def.is_advanced,
+            model_capabilities=param_def.model_capabilities,
         )
         for param, param_def in results
         if param_def.type not in [db.ParameterType.LLM_API_KEY]  # Hide sensitive parameter types
@@ -651,7 +654,15 @@ def get_all_components_with_parameters(
                             nullable=param.nullable,
                             default=param.get_default(),
                             ui_component=param.ui_component,
-                            ui_component_properties=param.ui_component_properties,
+                            ui_component_properties=(
+                                get_ui_component_properties_with_llm_options(
+                                    session,
+                                    param.model_capabilities,
+                                    param.ui_component_properties,
+                                )
+                                if param.type == ParameterType.LLM_MODEL
+                                else param.ui_component_properties
+                            ),
                             is_advanced=param.is_advanced,
                             order=param.order,
                             parameter_group_id=param.parameter_group_id,

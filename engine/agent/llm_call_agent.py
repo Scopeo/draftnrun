@@ -1,3 +1,4 @@
+from collections.abc import Callable
 from typing import Optional, Any, Type
 from pydantic import BaseModel, Field
 import logging
@@ -12,10 +13,6 @@ from engine.agent.utils_prompt import fill_prompt_template
 from engine.llm_services.llm_service import CompletionService
 from engine.trace.trace_manager import TraceManager
 from engine.trace.serializer import serialize_to_json
-from ada_backend.database.seed.supported_models import (
-    get_models_by_capability,
-    ModelCapability,
-)
 
 LOGGER = logging.getLogger(__name__)
 
@@ -110,6 +107,7 @@ class LLMCallAgent(Agent):
         tool_description: ToolDescription,
         component_attributes: ComponentAttributes,
         prompt_template: str,
+        capability_resolver: Callable[[list[str]], set[str]],
         file_content_key: Optional[str] = None,
         file_url_key: Optional[str] = None,
         output_format: Optional[dict[str] | None] = None,
@@ -124,6 +122,7 @@ class LLMCallAgent(Agent):
         self._file_content_key = file_content_key
         self._file_url_key = file_url_key
         self.output_format = output_format
+        self._capability_resolver = capability_resolver
 
     def _extract_file_content(self, inputs: LLMCallInputs, ctx: Optional[dict]) -> list:
         """Extract file content from inputs or ctx and return as a list."""
@@ -190,9 +189,8 @@ class LLMCallAgent(Agent):
         files_content.extend(self._extract_file_content(inputs, ctx))
         files_content.extend(self._extract_file_url(inputs, ctx))
 
-        file_supported_references = [
-            model_reference["reference"] for model_reference in get_models_by_capability(ModelCapability.FILE)
-        ]
+        file_supported_references = self._resolve_capabilities(["file"])
+
         if (
             len(files_content) > 0
             and f"{self._completion_service._provider}:{self._completion_service._model_name}"
@@ -200,9 +198,8 @@ class LLMCallAgent(Agent):
         ):
             raise ValueError(f"File content is not supported for provider '{self._completion_service._provider}'.")
 
-        image_supported_references = [
-            model_reference["reference"] for model_reference in get_models_by_capability(ModelCapability.IMAGE)
-        ]
+        image_supported_references = self._resolve_capabilities(["image"])
+
         if (
             len(images_content) > 0
             and f"{self._completion_service._provider}:{self._completion_service._model_name}"
@@ -241,3 +238,6 @@ class LLMCallAgent(Agent):
                 messages=[{"role": "user", "content": content}],
             )
         return LLMCallOutputs(output=response, artifacts={})
+
+    def _resolve_capabilities(self, capabilities: list[str]) -> set[str]:
+        return self._capability_resolver(capabilities)
