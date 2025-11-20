@@ -88,7 +88,7 @@ class LLMService(ABC):
                 case _:
                     custom_models_dict = settings.custom_models.get("custom_models")
                     if custom_models_dict is None:
-                        raise ValueError(f"Custom models configuration not found in settings")
+                        raise ValueError("Custom models configuration not found in settings")
                     config_provider = custom_models_dict.get(self._provider)
                     if config_provider is None:
                         raise ValueError(f"Provider {self._provider} not found in settings")
@@ -115,7 +115,7 @@ class LLMService(ABC):
                 case _:
                     custom_models_dict = settings.custom_models.get("custom_models")
                     if custom_models_dict is None:
-                        raise ValueError(f"Custom models configuration not found in settings")
+                        raise ValueError("Custom models configuration not found in settings")
                     config_provider = custom_models_dict.get(self._provider)
                     if config_provider is None:
                         raise ValueError(f"Provider {self._provider} not found in settings")
