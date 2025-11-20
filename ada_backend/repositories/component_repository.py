@@ -502,9 +502,6 @@ def _build_component_with_version_dto(
     comp: db.Component,
     ver: db.ComponentVersion,
 ) -> ComponentWithVersionDTO:
-    """
-    Helper function to build ComponentWithVersionDTO from Component and ComponentVersion.
-    """
     return ComponentWithVersionDTO(
         component_id=comp.id,
         name=comp.name,
@@ -605,11 +602,6 @@ def process_components_with_versions(
     session: Session,
     components_with_version: list[ComponentWithVersionDTO],
 ) -> List[ComponentWithParametersDTO]:
-    """
-    Shared processing function that converts component versions to ComponentWithParametersDTO.
-    This function handles the common logic for processing components regardless of whether
-    they are current versions or all versions.
-    """
     result = []
     for component_with_version in components_with_version:
         try:

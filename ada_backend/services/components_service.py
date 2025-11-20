@@ -24,11 +24,6 @@ def _process_components_with_ports(
     session: Session,
     components: list,
 ) -> ComponentsResponse:
-    """
-    Shared processing function that adds port definitions to components and returns ComponentsResponse.
-    This function handles the common logic for processing components regardless of whether
-    they are current versions or all versions.
-    """
     component_version_ids = [component.component_version_id for component in components]
     ports = get_port_definitions_for_component_version_ids(session, component_version_ids)
     comp_id_to_ports: dict[str, list[PortDefinitionSchema]] = {}
@@ -48,9 +43,6 @@ def _process_components_with_ports(
 
 
 def _get_allowed_stages(release_stage: Optional[ReleaseStage]) -> list[ReleaseStage]:
-    """
-    Helper function to determine allowed stages based on release_stage parameter.
-    """
     if release_stage:
         return STAGE_HIERARCHY.get(release_stage, [release_stage])
     else:
