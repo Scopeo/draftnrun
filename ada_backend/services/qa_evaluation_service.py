@@ -185,8 +185,49 @@ async def run_judge_evaluation_service(
 ) -> JudgeEvaluationRunResponse:
     # TODO: A implémenter
     try:
-        # TODO: Pour chaque version_output, appeler le LLM et créer l'évaluation
-        return JudgeEvaluationRunResponse(results=[], sucess_rate=0.0)
+        from ada_backend.schemas.qa_evaluation_schema import JudgeEvaluationRunResult, JudgeEvaluationCreate
+
+        results = []
+        for version_output_id in version_output_ids:
+            try:
+                # Créer l'évaluation en DB
+                evaluation_data = JudgeEvaluationCreate(
+                    version_output_id=version_output_id,
+                    evaluation_result={"score": 1, "comment": "Excellent"},
+                    raw_llm_response="test",
+                )
+                evaluation_response = create_judge_evaluation_service(
+                    session=session,
+                    project_id=project_id,
+                    judge_id=judge_id,
+                    evaluation_data=evaluation_data,
+                )
+
+                # Créer le résultat de run avec l'ID réel de l'évaluation
+                result = JudgeEvaluationRunResult(
+                    version_output_id=version_output_id,
+                    evaluation_id=evaluation_response.id,
+                    evaluation_result=evaluation_response.evaluation_result,
+                    raw_llm_response=evaluation_response.raw_llm_response,
+                )
+                results.append(result)
+            except Exception as e:
+                # Si une évaluation échoue, on continue avec les autres
+                LOGGER.warning(f"Failed to create evaluation for version_output {version_output_id}: {str(e)}")
+                result = JudgeEvaluationRunResult(
+                    version_output_id=version_output_id,
+                    evaluation_id=None,
+                    evaluation_result=None,
+                    raw_llm_response="This evaluation did not work",
+                )
+                results.append(result)
+
+        # Calculer le success_rate basé sur les évaluations créées avec succès
+        total = len(results)
+        successful = len([r for r in results if r.evaluation_id is not None])
+        success_rate = (successful / total) if total > 0 else 0.0
+
+        return JudgeEvaluationRunResponse(results=results, success_rate=success_rate)
     except Exception as e:
         LOGGER.error(f"Error in run_judge_evaluation_service: {str(e)}")
         raise ValueError(f"Failed to run judge evaluation: {str(e)}") from e
