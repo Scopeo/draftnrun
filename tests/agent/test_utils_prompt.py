@@ -49,7 +49,7 @@ class TestFillPromptTemplate:
         template = "Hello {name}, from {city}, in {country}!"
         variables = {"name": "Alice"}
         with pytest.raises(ValueError) as exc_info:
-            fill_prompt_template_with_dictionary(variables, template, component_name="test")
+            fill_prompt_template(template, component_name="test", variables=variables)
         error_msg = str(exc_info.value)
         assert "Missing template variable(s)" in error_msg
         assert "city" in error_msg or "country" in error_msg
@@ -144,7 +144,7 @@ class TestFillPromptTemplate:
         template = "Hello {missing}!"
         variables = {"available1": "value1", "available2": "value2"}
         with pytest.raises(ValueError) as exc_info:
-            fill_prompt_template_with_dictionary(variables, template, component_name="test")
+            fill_prompt_template(template, component_name="test", variables=variables)
         error_msg = str(exc_info.value)
         assert "available1" in error_msg or "available2" in error_msg
 
