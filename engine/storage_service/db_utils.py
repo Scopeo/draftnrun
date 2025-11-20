@@ -1,5 +1,6 @@
 import logging
-from typing import Optional
+from datetime import datetime
+from typing import Any, Optional
 
 from pydantic import BaseModel, field_validator
 import pandas as pd
@@ -100,3 +101,26 @@ def check_columns_matching_between_data_and_database_table(columns_data, table_d
     if set(columns_data) != set(column_table):
         LOGGER.error(f"Columns in data and table do not match : data {columns_data}, table {column_table}")
         raise ValueError("Columns in data and table do not match")
+
+
+def get_default_value_for_column_type(column_type: str) -> Any:
+    """
+    Get a default value based on SQL column type.
+
+    Args:
+        column_type: SQL column type string (e.g., "VARCHAR", "INTEGER", "VARIANT")
+
+    Returns:
+        Default value appropriate for the column type:
+        - VARIANT/JSON types → {}
+        - TIMESTAMP/DATETIME/DATE types → current datetime ISO string
+        - Everything else → ""
+    """
+    type_upper = str(column_type).upper()
+
+    if "VARIANT" in type_upper or "JSON" in type_upper:
+        return {}
+    elif any(x in type_upper for x in ["TIMESTAMP", "DATETIME", "DATE"]):
+        return datetime.utcnow().isoformat()
+    else:
+        return ""

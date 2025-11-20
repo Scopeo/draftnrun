@@ -191,50 +191,42 @@ def delete_file_for_data_source(
     )
 
 
-def _get_default_value_for_column_type(column_type: str) -> Any:
-    """
-    Get a default value based on SQL column type.
-
-    Args:
-        column_type: SQL column type string (e.g., "VARCHAR", "INTEGER", "VARIANT")
-
-    Returns:
-        Default value appropriate for the column type:
-        - VARIANT/JSON types → {}
-        - TIMESTAMP/DATETIME/DATE types → current datetime ISO string
-        - Everything else → ""
-    """
-    type_upper = str(column_type).upper()
-
-    if "VARIANT" in type_upper or "JSON" in type_upper:
-        return {}
-    elif any(x in type_upper for x in ["TIMESTAMP", "DATETIME", "DATE"]):
-        return datetime.utcnow().isoformat()
-    else:
-        return ""
-
-
-def _enrich_chunk_dict_with_schema_fields(
-    chunk_dict: Dict[str, Any],
+def _build_enriched_chunk(
+    chunk_id: str,
+    file_id: str,
+    content: str,
+    last_edited_ts: str,
     qdrant_schema: QdrantCollectionSchema,
     sql_local_service: SQLLocalService,
     schema_name: str,
     table_name: str,
-) -> Dict[str, Any]:
+) -> KnowledgeChunk:
     """
-    Enrich chunk dictionary with all required fields from qdrant schema.
+    Build enriched KnowledgeChunk with all required fields from qdrant schema.
     Missing fields are populated with default values based on table column types.
 
     Args:
-        chunk_dict: Base chunk dictionary with required fields
+        chunk_id: Chunk ID
+        file_id: File ID
+        content: Chunk content
+        last_edited_ts: Last edited timestamp
         qdrant_schema: Qdrant collection schema defining required fields
         sql_local_service: SQL service to query table schema
         schema_name: Database schema name
         table_name: Table name
 
     Returns:
-        Enriched chunk dictionary with all required fields
+        Enriched KnowledgeChunk with all required fields
     """
+    # Start with required fields
+    chunk_data = {
+        "chunk_id": chunk_id,
+        "file_id": file_id,
+        "content": content,
+        "last_edited_ts": last_edited_ts,
+    }
+
+    # Get required fields from qdrant schema
     required_fields = {
         qdrant_schema.chunk_id_field,
         qdrant_schema.content_field,
@@ -245,9 +237,23 @@ def _enrich_chunk_dict_with_schema_fields(
         required_fields.add(qdrant_schema.url_id_field)
     if qdrant_schema.last_edited_ts_field:
         required_fields.add(qdrant_schema.last_edited_ts_field)
-    if qdrant_schema.metadata_fields_to_keep:
-        required_fields.update(qdrant_schema.metadata_fields_to_keep)
 
+    # Add metadata_fields_to_keep as top-level fields on KnowledgeChunk
+    if qdrant_schema.metadata_fields_to_keep:
+        for field_name in qdrant_schema.metadata_fields_to_keep:
+            if field_name not in chunk_data:
+                # Get default value based on metadata field type if available
+                from engine.storage_service.db_utils import get_default_value_for_column_type
+
+                if qdrant_schema.metadata_field_types and field_name in qdrant_schema.metadata_field_types:
+                    field_type = qdrant_schema.metadata_field_types[field_name]
+                    default_value = get_default_value_for_column_type(field_type)
+                else:
+                    # Default to empty string if no type info
+                    default_value = ""
+                chunk_data[field_name] = default_value
+
+    # Get table description to determine default values
     try:
         table_description = sql_local_service.describe_table(table_name=table_name, schema_name=schema_name)
         column_info_map = {col["name"].lower(): col for col in table_description}
@@ -255,38 +261,43 @@ def _enrich_chunk_dict_with_schema_fields(
         LOGGER.warning(f"Could not get table description for {schema_name}.{table_name}: {str(e)}")
         column_info_map = {}
 
-    enriched_dict = chunk_dict.copy()
-
+    # Add missing required fields with defaults
     for field in required_fields:
-        if field not in enriched_dict:
+        if field not in chunk_data:
             column_info = column_info_map.get(field.lower())
 
             if column_info:
-                default_value = _get_default_value_for_column_type(column_info.get("type", ""))
-                enriched_dict[field] = default_value
+                from engine.storage_service.db_utils import get_default_value_for_column_type
+
+                default_value = get_default_value_for_column_type(column_info.get("type", ""))
+                chunk_data[field] = default_value
                 LOGGER.debug(f"Added missing field '{field}' with default value {default_value} based on column type")
             else:
-                enriched_dict[field] = ""
+                chunk_data[field] = ""
                 LOGGER.debug(f"Added missing field '{field}' with default empty string (column not found in table)")
 
-    return enriched_dict
+    return KnowledgeChunk(**chunk_data)
 
 
 def _upsert_chunk_in_qdrant(
     qdrant_service: QdrantService,
     qdrant_collection_name: str,
-    chunk_id: str,
-    chunk_dict: Dict[str, Any],
+    chunk: KnowledgeChunk,
     type_of_operation: str,
 ):
     try:
+        # Convert KnowledgeChunk to dict for Qdrant (exclude processed_datetime)
+        chunk_dict = chunk.model_dump(exclude_none=True)
+        chunk_dict.pop("processed_datetime", None)
+        chunk_dict.pop("_processed_datetime", None)
+
         asyncio.run(
             qdrant_service.add_chunks_async(
                 list_chunks=[chunk_dict],
                 collection_name=qdrant_collection_name,
             )
         )
-        LOGGER.info(f"{type_of_operation} chunk {chunk_id} in Qdrant collection {qdrant_collection_name}")
+        LOGGER.info(f"{type_of_operation} chunk {chunk.chunk_id} in Qdrant collection {qdrant_collection_name}")
     except Exception as e:
         LOGGER.error(f"Failed to add chunk to Qdrant: {str(e)}", exc_info=True)
         raise
@@ -318,16 +329,12 @@ def create_chunk_for_data_source(
     chunk_id = request.chunk_id or str(uuid4())
     last_edited_ts = request.last_edited_ts or datetime.utcnow().isoformat()
 
-    chunk_dict = {
-        "chunk_id": chunk_id,
-        "file_id": file_id,
-        "content": content,
-        "last_edited_ts": last_edited_ts,
-    }
-
     qdrant_collection_schema = QdrantCollectionSchema(**source.qdrant_schema)
-    chunk_dict = _enrich_chunk_dict_with_schema_fields(
-        chunk_dict=chunk_dict,
+    chunk = _build_enriched_chunk(
+        chunk_id=chunk_id,
+        file_id=file_id,
+        content=content,
+        last_edited_ts=last_edited_ts,
         qdrant_schema=qdrant_collection_schema,
         sql_local_service=sql_local_service,
         schema_name=source.database_schema,
@@ -337,22 +344,18 @@ def create_chunk_for_data_source(
     _upsert_chunk_in_qdrant(
         qdrant_service=qdrant_service,
         qdrant_collection_name=source.qdrant_collection_name,
-        chunk_id=chunk_id,
-        chunk_dict=chunk_dict,
+        chunk=chunk,
         type_of_operation="Created",
     )
 
-    chunk_dict = create_chunk(
+    chunk = create_chunk(
         sql_local_service=sql_local_service,
         schema_name=source.database_schema,
         table_name=source.database_table_name,
-        chunk_id=chunk_id,
-        file_id=file_id,
-        content=content,
-        last_edited_ts=last_edited_ts,
+        chunk=chunk,
     )
 
-    return KnowledgeChunk(**chunk_dict)
+    return chunk
 
 
 def update_chunk_for_data_source(
@@ -366,16 +369,23 @@ def update_chunk_for_data_source(
     qdrant_service = _validate_and_get_qdrant_service(source)
     sql_local_service = get_sql_local_service_for_ingestion()
 
-    chunk = get_chunk_by_id(
+    existing_chunk_dict = get_chunk_by_id(
         sql_local_service=sql_local_service,
         schema_name=source.database_schema,
         table_name=source.database_table_name,
         chunk_id=chunk_id,
     )
 
-    content = request.content if request.content is not None else chunk.get("content", "")
+    # Convert existing chunk to KnowledgeChunk
+    existing_chunk = KnowledgeChunk(**existing_chunk_dict)
 
-    token_count = _count_tokens(content)
+    # Apply modifications
+    updated_content = request.content if request.content is not None else existing_chunk.content
+    updated_last_edited_ts = (
+        request.last_edited_ts if request.last_edited_ts is not None else datetime.utcnow().isoformat()
+    )
+
+    token_count = _count_tokens(updated_content)
     if token_count == 0:
         raise ValueError(
             "Chunk content cannot be empty (zero tokens). Vector database requires non-empty content for embeddings."
@@ -383,41 +393,16 @@ def update_chunk_for_data_source(
     if token_count > MAX_CHUNK_TOKENS:
         raise ValueError("Chunk exceeds maximum allowed token count of 8000")
 
-    update_payload: Dict[str, Any] = {}
-
-    if request.content is not None:
-        update_payload["content"] = request.content
-    if request.last_edited_ts is not None:
-        update_payload["last_edited_ts"] = request.last_edited_ts
-    else:
-        update_payload["last_edited_ts"] = datetime.utcnow().isoformat()
-
-    updated_chunk_dict = chunk.copy()
-
-    updated_chunk_dict["chunk_id"] = chunk_id
-    if "file_id" in chunk:
-        updated_chunk_dict["file_id"] = chunk.get("file_id", "")
-    if request.content is not None:
-        updated_chunk_dict["content"] = request.content
-    if request.last_edited_ts is not None:
-        updated_chunk_dict["last_edited_ts"] = request.last_edited_ts
-    else:
-        updated_chunk_dict["last_edited_ts"] = datetime.utcnow().isoformat()
-
-    qdrant_collection_schema = QdrantCollectionSchema(**source.qdrant_schema)
-    updated_chunk_dict = _enrich_chunk_dict_with_schema_fields(
-        chunk_dict=updated_chunk_dict,
-        qdrant_schema=qdrant_collection_schema,
-        sql_local_service=sql_local_service,
-        schema_name=source.database_schema,
-        table_name=source.database_table_name,
-    )
+    # Create updated chunk by modifying the existing one
+    updated_chunk_dict = existing_chunk.model_dump()
+    updated_chunk_dict["content"] = updated_content
+    updated_chunk_dict["last_edited_ts"] = updated_last_edited_ts
+    updated_chunk = KnowledgeChunk(**updated_chunk_dict)
 
     _upsert_chunk_in_qdrant(
         qdrant_service=qdrant_service,
         qdrant_collection_name=source.qdrant_collection_name,
-        chunk_id=chunk_id,
-        chunk_dict=updated_chunk_dict,
+        chunk=updated_chunk,
         type_of_operation="Updated",
     )
 
@@ -425,11 +410,10 @@ def update_chunk_for_data_source(
         sql_local_service=sql_local_service,
         schema_name=source.database_schema,
         table_name=source.database_table_name,
-        chunk_id=chunk_id,
-        update_data=update_payload,
+        chunk=updated_chunk,
     )
 
-    return KnowledgeChunk(**updated_chunk)
+    return updated_chunk
 
 
 def delete_chunk_for_data_source(

@@ -1,43 +1,29 @@
 {
     "custom_models": {
-        "provider_name": [
+        "ollama-example": [
             {
-                "display_name": "my-llm-1-model-display-name",
-                "model_name": "my-llm-1-model-name",
-                "description": "my-llm-1-model-description",
+                "display_name": "completion-AI-model",
+                "model_name": "real-model-name",
+                "description": "Real Model Name",
                 "model_capacity": [
                     "completion",
                     "function_calling",
-                    "image",
-                    "file"
+                    "constrained_output",
+                    "image"
                 ],
                 "image_format": "jpeg",
                 "base_url": "https://llm1.example.com/v1/",
                 "api_key": "my_api_key"
             },
             {
-                "display_name": "my-llm-2-model-display-name",
-                "model_name": "my-llm-2-model-name",
-                "description": "my-llm-2-model-description",
-                "model_capacity": [
-                    "completion",
-                    "function_calling",
-                    "image",
-                    "file"
-                ],
-                "image_format": "png",
-                "base_url": "https://llm1.example.com/v1/",
-                "api_key": "my_api_key"
-            },
-            {
-                "display_name": "my-llm-3-model-display-name",
-                "model_name": "my-llm-3-model-name",
-                "description": "my-llm-3-model-description",
+                "display_name": "embedding-model",
+                "model_name": "real-embedding-model-name",
+                "description": "embedding-model-name",
                 "model_capacity": [
                     "embedding"
                 ],
                 "embedding_size": 3072,
-                "base_url": "https://llm1.example.com/v1/",
+                "base_url": "https://llm2.example.com/v1/",
                 "api_key": "my_api_key"
             }
         ]
