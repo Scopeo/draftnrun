@@ -193,6 +193,13 @@ class PortType(StrEnum):
     OUTPUT = "OUTPUT"
 
 
+class EntityType(StrEnum):
+    BASE = "base"
+    LLM = "llm"
+    COMPONENT = "component"
+    PARAMETER_VALUE = "parameter_value"
+
+
 class SelectOption(BaseModel):
     """Option for Select and similar UI components"""
 
@@ -1076,6 +1083,9 @@ class Project(Base):
     # Quality Assurance relationships
     datasets = relationship("DatasetProject", back_populates="project", cascade="all, delete-orphan")
 
+    # Usage tracking
+    usage = relationship("Usage", back_populates="project")
+
     __mapper_args__ = {"polymorphic_on": type, "polymorphic_identity": "base"}
 
     def __str__(self):
@@ -1533,3 +1543,63 @@ class LLMModel(Base):
 
     def __str__(self) -> str:
         return f"LLMModel(id={self.id}, name={self.name}, provider={self.provider})"
+
+
+class Cost(Base):
+    __tablename__ = "costs"
+
+    id = mapped_column(UUID(as_uuid=True), primary_key=True, index=True, default=uuid.uuid4)
+    entity_type = mapped_column(make_pg_enum(EntityType), nullable=False, default=EntityType.BASE)
+    credits_per_second = mapped_column(Float, nullable=True)
+    credits_per_call = mapped_column(Float, nullable=True)
+    credits_per_input_token = mapped_column(Float, nullable=True)
+    credits_per_output_token = mapped_column(Float, nullable=True)
+
+    __mapper_args__ = {
+        "polymorphic_on": entity_type,
+        "polymorphic_identity": EntityType.BASE.value,
+    }
+
+
+class LLMCost(Cost):
+    __tablename__ = "llm_costs"
+
+    id = mapped_column(UUID(as_uuid=True), ForeignKey("costs.id"), primary_key=True)
+    llm_model_id = mapped_column(UUID(as_uuid=True), ForeignKey("llm_models.id"), unique=True)
+
+    __mapper_args__ = {"polymorphic_identity": EntityType.LLM.value}
+
+
+class ComponentCost(Cost):
+    __tablename__ = "component_costs"
+
+    id = mapped_column(UUID(as_uuid=True), ForeignKey("costs.id"), primary_key=True)
+    component_version_id = mapped_column(UUID(as_uuid=True), ForeignKey("component_versions.id"), unique=True)
+
+    __mapper_args__ = {"polymorphic_identity": EntityType.COMPONENT.value}
+
+
+class ParameterValueCost(Cost):
+    __tablename__ = "parameter_value_costs"
+
+    id = mapped_column(UUID(as_uuid=True), ForeignKey("costs.id"), primary_key=True)
+    component_parameter_definition_id = mapped_column(
+        UUID(as_uuid=True), ForeignKey("component_parameter_definitions.id")
+    )
+    parameter_value = mapped_column(String)
+
+    __mapper_args__ = {"polymorphic_identity": EntityType.PARAMETER_VALUE.value}
+
+
+class Usage(Base):
+    __tablename__ = "usages"
+
+    id = mapped_column(UUID(as_uuid=True), primary_key=True, index=True, default=uuid.uuid4)
+    project_id = mapped_column(UUID(as_uuid=True), ForeignKey("projects.id"), nullable=False, index=True)
+    year = mapped_column(Integer, nullable=False)
+    month = mapped_column(Integer, nullable=False)
+    credits_used = mapped_column(Float, nullable=False, default=0.0)
+    created_at = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    project = relationship("Project", back_populates="usage")
