@@ -13,7 +13,6 @@ from ada_backend.repositories.qa_evaluation_repository import (
     get_judge_evaluations_by_judge,
     get_judge_evaluations_by_version_output,
     delete_judge_evaluations,
-    get_version_outputs_by_ids,
 )
 from ada_backend.schemas.qa_evaluation_schema import (
     LLMJudgeCreate,
@@ -186,8 +185,6 @@ async def run_judge_evaluation_service(
 ) -> JudgeEvaluationRunResponse:
     # TODO: A implémenter
     try:
-        version_outputs_data = get_version_outputs_by_ids(session=session, version_output_ids=version_output_ids)
-
         # TODO: Pour chaque version_output, appeler le LLM et créer l'évaluation
         return JudgeEvaluationRunResponse(results=[], sucess_rate=0.0)
     except Exception as e:

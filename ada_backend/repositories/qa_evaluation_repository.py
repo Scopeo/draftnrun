@@ -221,15 +221,6 @@ def get_version_outputs_by_ids(
     session: Session,
     version_output_ids: List[UUID],
 ) -> List[Tuple[UUID, dict, Optional[str], str]]:
-    """Get version outputs with input and groundtruth data by their IDs.
-
-    Args:
-        session: SQLAlchemy session
-        version_output_ids: List of version output IDs
-
-    Returns:
-        List of tuples (version_output_id, input, groundtruth, output)
-    """
     results = (
         session.query(
             VersionOutput.id,

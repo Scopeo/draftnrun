@@ -2,7 +2,7 @@ import logging
 from uuid import UUID
 from typing import Annotated, List
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Query
+from fastapi import APIRouter, Body, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from ada_backend.schemas.auth_schema import SupabaseUser
@@ -243,13 +243,15 @@ def get_judge_evaluations_by_version_output_endpoint(
         return get_judge_evaluations_by_version_output_service(session=session, version_output_id=version_output_id)
     except ValueError as e:
         LOGGER.error(
-            f"Failed to get judge evaluations for version_output {version_output_id} in project {project_id}: {str(e)}",
+            f"Failed to get judge evaluations for "
+            f"version_output {version_output_id} in project {project_id}: {str(e)}",
             exc_info=True,
         )
         raise HTTPException(status_code=400, detail="Bad request") from e
     except Exception as e:
         LOGGER.error(
-            f"Failed to get judge evaluations for version_output {version_output_id} in project {project_id}: {str(e)}",
+            f"Failed to get judge evaluations for "
+            f"version_output {version_output_id} in project {project_id}: {str(e)}",
             exc_info=True,
         )
         raise HTTPException(status_code=500, detail="Internal server error") from e

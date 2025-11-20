@@ -236,11 +236,6 @@ def get_outputs_endpoint(
     session: Session = Depends(get_db),
     graph_runner_id: UUID = Query(..., description="Graph runner ID to get outputs for"),
 ) -> List[InputGroundtruthWithVersionResponse]:
-    """
-    Get outputs for a specific graph_runner.
-
-    Returns a list of InputGroundtruthWithVersionResponse with input_id, input, groundtruth, output, and version_output_id.
-    """
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
 
