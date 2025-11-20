@@ -52,26 +52,12 @@ class KnowledgeFileListResponse(BaseModel):
     items: List[KnowledgeFileSummary]
 
 
-class UpdateKnowledgeFileRequest(BaseModel):
-    document_title: Optional[str] = None
-    url: Optional[str] = None
-    metadata: Optional[Dict[str, Any]] = None
-
-
 class CreateKnowledgeChunkRequest(BaseModel):
     content: str
-    document_title: Optional[str] = None
-    url: Optional[str] = None
-    metadata: Optional[Dict[str, Any]] = None
-    bounding_boxes: Optional[List[Dict[str, Any]]] = None
     chunk_id: Optional[str] = None
     last_edited_ts: Optional[str] = None
 
 
 class UpdateKnowledgeChunkRequest(BaseModel):
     content: Optional[str] = None
-    document_title: Optional[str] = None
-    url: Optional[str] = None
-    metadata: Optional[Dict[str, Any]] = None
-    bounding_boxes: Optional[List[Dict[str, Any]]] = None
     last_edited_ts: Optional[str] = None

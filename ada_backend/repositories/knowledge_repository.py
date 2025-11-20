@@ -138,36 +138,6 @@ def file_exists(
     return bool(count)
 
 
-def update_file_metadata(
-    sql_local_service: SQLLocalService,
-    schema_name: str,
-    table_name: str,
-    file_id: str,
-    document_title: Optional[str] = None,
-    url: Optional[str] = None,
-    metadata: Optional[Dict[str, Any]] = None,
-) -> None:
-    table = sql_local_service.get_table(table_name=table_name, schema_name=schema_name)
-
-    update_values: Dict[str, Any] = {}
-    if document_title is not None:
-        update_values["document_title"] = document_title
-    if url is not None:
-        update_values["url"] = url
-    if metadata is not None:
-        update_values["metadata"] = metadata
-
-    if not update_values:
-        raise ValueError("No update values provided for file metadata update")
-
-    with sql_local_service.Session() as session:
-        stmt = update(table).where(table.c.file_id == file_id).values(**update_values)
-        result = session.execute(stmt)
-        if result.rowcount == 0:
-            raise ValueError(f"No rows updated for file_id='{file_id}' in table '{table_name}'")
-        session.commit()
-
-
 def delete_file(
     sql_local_service: SQLLocalService,
     schema_name: str,
@@ -191,10 +161,6 @@ def create_chunk(
     chunk_id: str,
     file_id: str,
     content: str,
-    document_title: Optional[str],
-    url: Optional[str],
-    metadata: Optional[Dict[str, Any]],
-    bounding_boxes: Optional[List[Dict[str, Any]]],
     last_edited_ts: Optional[str],
 ) -> Dict[str, Any]:
     table = sql_local_service.get_table(table_name=table_name, schema_name=schema_name)
@@ -205,16 +171,33 @@ def create_chunk(
         if existing:
             raise ValueError(f"Chunk with id='{chunk_id}' already exists in table '{table_name}'")
 
+    # Build payload with only the fields we set
     payload: Dict[str, Any] = {
         "chunk_id": chunk_id,
         "file_id": file_id,
         "content": content,
-        "document_title": document_title,
-        "url": url,
-        "metadata": metadata or {},
-        "bounding_boxes": json.dumps(bounding_boxes) if bounding_boxes else None,
         "last_edited_ts": last_edited_ts or datetime.utcnow().isoformat(),
     }
+
+    # Get table description to find missing nullable columns
+    from engine.storage_service.db_utils import PROCESSED_DATETIME_FIELD
+
+    table_description = sql_local_service.describe_table(table_name=table_name, schema_name=schema_name)
+
+    # Add missing nullable columns with None values
+    for column in table_description:
+        column_name = column["name"]
+        # Skip if already in payload, or if it's the processed_datetime field (handled automatically)
+        if column_name in payload or column_name == PROCESSED_DATETIME_FIELD:
+            continue
+        # Add nullable columns with None (or {} for metadata/VARIANT types)
+        if column["nullable"]:
+            # For VARIANT/JSON types, use empty dict instead of None
+            column_type = str(column.get("type", "")).upper()
+            if "VARIANT" in column_type or "JSON" in column_type:
+                payload[column_name] = {}
+            else:
+                payload[column_name] = None
 
     sql_local_service.insert_data(table_name=table_name, data=payload, schema_name=schema_name)
 
@@ -230,15 +213,11 @@ def update_chunk(
 ) -> Dict[str, Any]:
     table = sql_local_service.get_table(table_name=table_name, schema_name=schema_name)
 
-    normalized_update = update_data.copy()
-
-    if "bounding_boxes" in normalized_update and normalized_update["bounding_boxes"] is not None:
-        normalized_update["bounding_boxes"] = json.dumps(normalized_update["bounding_boxes"])
-
-    normalized_update = SQLLocalService.add_processed_datetime_if_exists(table, normalized_update)
+    update_values = update_data.copy()
+    update_values = SQLLocalService.add_processed_datetime_if_exists(table, update_values)
 
     with sql_local_service.Session() as session:
-        stmt = update(table).where(table.c.chunk_id == chunk_id).values(**normalized_update)
+        stmt = update(table).where(table.c.chunk_id == chunk_id).values(**update_values)
         result = session.execute(stmt)
         if result.rowcount == 0:
             raise ValueError(f"Chunk with id='{chunk_id}' not found in table '{table_name}'")

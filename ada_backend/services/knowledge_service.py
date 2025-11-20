@@ -16,7 +16,6 @@ from ada_backend.repositories.knowledge_repository import (
     list_files_for_source,
     file_exists,
     create_chunk,
-    update_file_metadata,
     update_chunk,
 )
 from ada_backend.repositories.source_repository import get_data_source_by_org_id
@@ -28,13 +27,13 @@ from ada_backend.schemas.knowledge_schema import (
     KnowledgeFileMetadata,
     KnowledgeFileSummary,
     UpdateKnowledgeChunkRequest,
-    UpdateKnowledgeFileRequest,
 )
 from ada_backend.services.ingestion_database_service import get_sql_local_service_for_ingestion
 from engine.llm_services.llm_service import EmbeddingService
 from engine.qdrant_service import QdrantService, QdrantCollectionSchema
 from engine.trace.trace_context import get_trace_manager
 from ada_backend.services.entity_factory import get_llm_provider_and_model
+from engine.storage_service.local_service import SQLLocalService
 
 LOGGER = logging.getLogger(__name__)
 
@@ -176,27 +175,6 @@ def get_file_detail_for_data_source(
     return KnowledgeFileDetail(file=file_metadata, chunks=chunks)
 
 
-def update_file_for_data_source(
-    session: Session,
-    organization_id: UUID,
-    source_id: UUID,
-    file_id: str,
-    update_request: UpdateKnowledgeFileRequest,
-) -> KnowledgeFileDetail:
-    source = _get_source_for_organization(session, organization_id, source_id)
-    sql_local_service = get_sql_local_service_for_ingestion()
-    update_file_metadata(
-        sql_local_service=sql_local_service,
-        schema_name=source.database_schema,
-        table_name=source.database_table_name,
-        file_id=file_id,
-        document_title=update_request.document_title,
-        url=update_request.url,
-        metadata=update_request.metadata,
-    )
-    return get_file_detail_for_data_source(session, organization_id, source_id, file_id)
-
-
 def delete_file_for_data_source(
     session: Session,
     organization_id: UUID,
@@ -211,6 +189,87 @@ def delete_file_for_data_source(
         table_name=source.database_table_name,
         file_id=file_id,
     )
+
+
+def _get_default_value_for_column_type(column_type: str) -> Any:
+    """
+    Get a default value based on SQL column type.
+
+    Args:
+        column_type: SQL column type string (e.g., "VARCHAR", "INTEGER", "VARIANT")
+
+    Returns:
+        Default value appropriate for the column type:
+        - VARIANT/JSON types → {}
+        - TIMESTAMP/DATETIME/DATE types → current datetime ISO string
+        - Everything else → ""
+    """
+    type_upper = str(column_type).upper()
+
+    if "VARIANT" in type_upper or "JSON" in type_upper:
+        return {}
+    elif any(x in type_upper for x in ["TIMESTAMP", "DATETIME", "DATE"]):
+        return datetime.utcnow().isoformat()
+    else:
+        return ""
+
+
+def _enrich_chunk_dict_with_schema_fields(
+    chunk_dict: Dict[str, Any],
+    qdrant_schema: QdrantCollectionSchema,
+    sql_local_service: SQLLocalService,
+    schema_name: str,
+    table_name: str,
+) -> Dict[str, Any]:
+    """
+    Enrich chunk dictionary with all required fields from qdrant schema.
+    Missing fields are populated with default values based on table column types.
+
+    Args:
+        chunk_dict: Base chunk dictionary with required fields
+        qdrant_schema: Qdrant collection schema defining required fields
+        sql_local_service: SQL service to query table schema
+        schema_name: Database schema name
+        table_name: Table name
+
+    Returns:
+        Enriched chunk dictionary with all required fields
+    """
+    required_fields = {
+        qdrant_schema.chunk_id_field,
+        qdrant_schema.content_field,
+        qdrant_schema.file_id_field,
+    }
+
+    if qdrant_schema.url_id_field:
+        required_fields.add(qdrant_schema.url_id_field)
+    if qdrant_schema.last_edited_ts_field:
+        required_fields.add(qdrant_schema.last_edited_ts_field)
+    if qdrant_schema.metadata_fields_to_keep:
+        required_fields.update(qdrant_schema.metadata_fields_to_keep)
+
+    try:
+        table_description = sql_local_service.describe_table(table_name=table_name, schema_name=schema_name)
+        column_info_map = {col["name"].lower(): col for col in table_description}
+    except Exception as e:
+        LOGGER.warning(f"Could not get table description for {schema_name}.{table_name}: {str(e)}")
+        column_info_map = {}
+
+    enriched_dict = chunk_dict.copy()
+
+    for field in required_fields:
+        if field not in enriched_dict:
+            column_info = column_info_map.get(field.lower())
+
+            if column_info:
+                default_value = _get_default_value_for_column_type(column_info.get("type", ""))
+                enriched_dict[field] = default_value
+                LOGGER.debug(f"Added missing field '{field}' with default value {default_value} based on column type")
+            else:
+                enriched_dict[field] = ""
+                LOGGER.debug(f"Added missing field '{field}' with default empty string (column not found in table)")
+
+    return enriched_dict
 
 
 def _upsert_chunk_in_qdrant(
@@ -257,20 +316,23 @@ def create_chunk_for_data_source(
         raise ValueError("Chunk exceeds maximum allowed token count of 8000")
 
     chunk_id = request.chunk_id or str(uuid4())
-    metadata = request.metadata or {}
-    bounding_boxes = request.bounding_boxes
     last_edited_ts = request.last_edited_ts or datetime.utcnow().isoformat()
 
     chunk_dict = {
         "chunk_id": chunk_id,
         "file_id": file_id,
         "content": content,
-        "document_title": request.document_title,
-        "url": request.url,
-        "metadata": metadata,
-        "bounding_boxes": bounding_boxes,
         "last_edited_ts": last_edited_ts,
     }
+
+    qdrant_collection_schema = QdrantCollectionSchema(**source.qdrant_schema)
+    chunk_dict = _enrich_chunk_dict_with_schema_fields(
+        chunk_dict=chunk_dict,
+        qdrant_schema=qdrant_collection_schema,
+        sql_local_service=sql_local_service,
+        schema_name=source.database_schema,
+        table_name=source.database_table_name,
+    )
 
     _upsert_chunk_in_qdrant(
         qdrant_service=qdrant_service,
@@ -287,10 +349,6 @@ def create_chunk_for_data_source(
         chunk_id=chunk_id,
         file_id=file_id,
         content=content,
-        document_title=request.document_title,
-        url=request.url,
-        metadata=metadata,
-        bounding_boxes=bounding_boxes,
         last_edited_ts=last_edited_ts,
     )
 
@@ -329,29 +387,31 @@ def update_chunk_for_data_source(
 
     if request.content is not None:
         update_payload["content"] = request.content
-    if request.document_title is not None:
-        update_payload["document_title"] = request.document_title
-    if request.url is not None:
-        update_payload["url"] = request.url
-    if request.metadata is not None:
-        update_payload["metadata"] = request.metadata
-    if request.bounding_boxes is not None:
-        update_payload["bounding_boxes"] = request.bounding_boxes
     if request.last_edited_ts is not None:
         update_payload["last_edited_ts"] = request.last_edited_ts
     else:
         update_payload["last_edited_ts"] = datetime.utcnow().isoformat()
 
-    updated_chunk_dict = {
-        "chunk_id": chunk_id,
-        "file_id": chunk.get("file_id", ""),
-        "content": update_payload.get("content", chunk.get("content", "")),
-        "document_title": update_payload.get("document_title", chunk.get("document_title")),
-        "url": update_payload.get("url", chunk.get("url")),
-        "metadata": update_payload.get("metadata", chunk.get("metadata", {})),
-        "bounding_boxes": update_payload.get("bounding_boxes", chunk.get("bounding_boxes")),
-        "last_edited_ts": update_payload.get("last_edited_ts", chunk.get("last_edited_ts")),
-    }
+    updated_chunk_dict = chunk.copy()
+
+    updated_chunk_dict["chunk_id"] = chunk_id
+    if "file_id" in chunk:
+        updated_chunk_dict["file_id"] = chunk.get("file_id", "")
+    if request.content is not None:
+        updated_chunk_dict["content"] = request.content
+    if request.last_edited_ts is not None:
+        updated_chunk_dict["last_edited_ts"] = request.last_edited_ts
+    else:
+        updated_chunk_dict["last_edited_ts"] = datetime.utcnow().isoformat()
+
+    qdrant_collection_schema = QdrantCollectionSchema(**source.qdrant_schema)
+    updated_chunk_dict = _enrich_chunk_dict_with_schema_fields(
+        chunk_dict=updated_chunk_dict,
+        qdrant_schema=qdrant_collection_schema,
+        sql_local_service=sql_local_service,
+        schema_name=source.database_schema,
+        table_name=source.database_table_name,
+    )
 
     _upsert_chunk_in_qdrant(
         qdrant_service=qdrant_service,

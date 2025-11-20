@@ -1,11 +1,9 @@
 """
 Integration tests for knowledge service with real SQL and Qdrant connections.
 Only the embedding service (LLM calls) is mocked.
-Uses real PostgreSQL ingestion database (ada_ingestion).
 """
 
 import asyncio
-import os
 from typing import Iterator
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, Mock
@@ -28,10 +26,8 @@ from engine.storage_service.db_utils import DBColumn, DBDefinition, PROCESSED_DA
 from settings import settings
 from tests.mocks.trace_manager import MockTraceManager
 
-
-# Test constants
 TEST_COLLECTION_NAME_PREFIX = "test_knowledge_v2"
-EMBEDDING_SIZE = 3072  # text-embedding-3-large embedding size
+EMBEDDING_SIZE = 3072
 
 
 @pytest.fixture
@@ -44,11 +40,6 @@ def sql_local_service() -> Iterator[SQLLocalService]:
         service = SQLLocalService(engine_url=settings.INGESTION_DB_URL)
         yield service
     except Exception as e:
-        if not os.getenv("CI"):
-            pytest.skip(
-                "PostgreSQL ingestion database not available. "
-                "Ensure INGESTION_DB_URL is set and the database is running.",
-            )
         raise e
 
 
@@ -75,6 +66,7 @@ def qdrant_service(mock_embedding_service: MagicMock) -> Iterator[QdrantService]
         file_id_field="file_id",
         url_id_field="url",
         last_edited_ts_field="last_edited_ts",
+        metadata_fields_to_keep={"metadata"},
     )
     qdrant_service = QdrantService.from_defaults(
         embedding_service=mock_embedding_service,
@@ -146,10 +138,6 @@ def _setup_test_table_and_collection_with_dummy_chunk(
         chunk_id=dummy_chunk_id,
         file_id=file_id,
         content="Dummy chunk content",
-        document_title=None,
-        url="https://dummy.com",
-        metadata={"dummy": "metadata"},
-        bounding_boxes=None,
         last_edited_ts="2024-01-01T00:00:00",
     )
 
@@ -158,10 +146,9 @@ def _setup_test_table_and_collection_with_dummy_chunk(
         "chunk_id": dummy_chunk_id,
         "file_id": file_id,
         "content": "Dummy chunk content",
-        "url": "https://dummy.com",
-        "metadata": {"dummy": "metadata"},
-        "bounding_boxes": None,
         "last_edited_ts": "2024-01-01T00:00:00",
+        "url": "",
+        "metadata": {},
     }
     asyncio.run(qdrant_service.add_chunks_async(list_chunks=[chunk_dict], collection_name=test_collection_name))
 
@@ -176,6 +163,7 @@ def _setup_test_table_and_collection_with_dummy_chunk(
             "file_id_field": "file_id",
             "url_id_field": "url",
             "last_edited_ts_field": "last_edited_ts",
+            "metadata_fields_to_keep": ["metadata"],
         },
         embedding_model_reference="openai:text-embedding-3-large",
     )
@@ -183,41 +171,16 @@ def _setup_test_table_and_collection_with_dummy_chunk(
     return source, file_id, dummy_chunk_id
 
 
-@pytest.fixture
-def test_file_id() -> str:
-    """Generate a test file ID."""
-    return f"test_file_{uuid4()}"
-
-
-def _create_test_file(
-    sql_local_service: SQLLocalService,
-    schema_name: str,
-    table_name: str,
-    file_id: str,
-) -> None:
-    """Create a test file by inserting a chunk."""
-    create_chunk(
-        sql_local_service=sql_local_service,
-        schema_name=schema_name,
-        table_name=table_name,
-        chunk_id=f"{file_id}_chunk1",
-        file_id=file_id,
-        content="Initial file content",
-        document_title=None,
-        url="https://test.com",
-        metadata={"test": "data"},
-        bounding_boxes=None,
-        last_edited_ts="2024-01-01T00:00:00",
-    )
-
-
-def test_chunk_operations_integration(
+def _setup_test_environment(
     monkeypatch: pytest.MonkeyPatch,
     sql_local_service: SQLLocalService,
     qdrant_service: QdrantService,
     test_collection_name: str,
-) -> None:
-    """Test create, update, and delete chunk operations with real SQL and Qdrant operations."""
+) -> tuple[SimpleNamespace, str, str]:
+    """
+    Setup test environment with monkeypatch and test source.
+    Returns: (test_source, file_id, dummy_chunk_id)
+    """
     mock_trace_manager = MockTraceManager(project_name="test")
     monkeypatch.setattr(knowledge_service, "get_trace_manager", lambda: mock_trace_manager)
 
@@ -228,15 +191,77 @@ def test_chunk_operations_integration(
     monkeypatch.setattr(knowledge_service, "get_data_source_by_org_id", lambda **kwargs: test_source)
     monkeypatch.setattr(knowledge_service, "get_sql_local_service_for_ingestion", lambda: sql_local_service)
 
+    return test_source, file_id, dummy_chunk_id
+
+
+def _verify_dummy_chunk_unchanged(
+    sql_local_service: SQLLocalService,
+    qdrant_service: QdrantService,
+    test_source: SimpleNamespace,
+    dummy_chunk_id: str,
+) -> None:
+    """
+    Verify that the dummy chunk still exists in both SQL and Qdrant with unchanged content.
+
+    Args:
+        sql_local_service: SQL service instance
+        qdrant_service: Qdrant service instance
+        test_source: Test source configuration
+        dummy_chunk_id: ID of the dummy chunk to verify
+    """
+    collection_data = asyncio.run(qdrant_service.get_collection_data_async(test_source.qdrant_collection_name))
+    chunk_ids = collection_data["chunk_id"].tolist()
+    assert len(chunk_ids) == 1
+    assert dummy_chunk_id in chunk_ids
+
+    qdrant_chunk = collection_data[collection_data["chunk_id"] == dummy_chunk_id].iloc[0]
+    assert qdrant_chunk["content"] == "Dummy chunk content"
+
+    sql_chunk = get_chunk_by_id(
+        sql_local_service=sql_local_service,
+        schema_name=test_source.database_schema,
+        table_name=test_source.database_table_name,
+        chunk_id=dummy_chunk_id,
+    )
+    assert sql_chunk["chunk_id"] == dummy_chunk_id
+    assert sql_chunk["content"] == "Dummy chunk content"
+
+
+def _cleanup_test_environment(
+    sql_local_service: SQLLocalService,
+    qdrant_service: QdrantService,
+    test_source: SimpleNamespace,
+) -> None:
+    """Clean up test environment (drop table, schema, and Qdrant collection)."""
+    try:
+        if sql_local_service.table_exists(test_source.database_table_name, test_source.database_schema):
+            sql_local_service.drop_table(test_source.database_table_name, test_source.database_schema)
+        with sql_local_service.engine.connect() as conn:
+            conn.execute(text(f"DROP SCHEMA IF EXISTS {test_source.database_schema} CASCADE"))
+            conn.commit()
+    except Exception as e:
+        print(f"Warning: Failed to cleanup schema {test_source.database_schema}: {e}")
+
+    if asyncio.run(qdrant_service.collection_exists_async(test_source.qdrant_collection_name)):
+        asyncio.run(qdrant_service.delete_collection_async(test_source.qdrant_collection_name))
+
+
+def test_chunk_operations_integration(
+    monkeypatch: pytest.MonkeyPatch,
+    sql_local_service: SQLLocalService,
+    qdrant_service: QdrantService,
+    test_collection_name: str,
+) -> None:
+    """Test create, update, and delete chunk operations with real SQL and Qdrant operations."""
+    test_source, file_id, dummy_chunk_id = _setup_test_environment(
+        monkeypatch, sql_local_service, qdrant_service, test_collection_name
+    )
+
     # ========== TEST CREATE CHUNK ==========
     new_chunk_content = "This is test chunk content for integration testing."
-    new_chunk_url = "https://test.com/chunk"
-    new_chunk_metadata = {"key": "value"}
 
     create_request = CreateKnowledgeChunkRequest(
         content=new_chunk_content,
-        url=new_chunk_url,
-        metadata=new_chunk_metadata,
     )
 
     mock_session = Mock()
@@ -250,8 +275,6 @@ def test_chunk_operations_integration(
 
     assert isinstance(create_result, KnowledgeChunk)
     assert create_result.content == new_chunk_content
-    assert create_result.url == new_chunk_url
-    assert create_result.metadata == new_chunk_metadata
 
     sql_chunk = get_chunk_by_id(
         sql_local_service=sql_local_service,
@@ -261,28 +284,23 @@ def test_chunk_operations_integration(
     )
     assert sql_chunk["chunk_id"] == create_result.chunk_id
     assert sql_chunk["content"] == new_chunk_content
-    assert sql_chunk["url"] == new_chunk_url
 
-    # Verify Qdrant collection - check chunk_id presence
     collection_data = asyncio.run(qdrant_service.get_collection_data_async(test_source.qdrant_collection_name))
     chunk_ids = collection_data["chunk_id"].tolist()
     assert create_result.chunk_id in chunk_ids
 
-    # Verify the chunk data in Qdrant
     qdrant_chunk = collection_data[collection_data["chunk_id"] == create_result.chunk_id].iloc[0]
     assert qdrant_chunk["content"] == new_chunk_content
-    assert qdrant_chunk["url"] == new_chunk_url
+    assert qdrant_chunk["url"] == ""
+    assert qdrant_chunk["metadata"] == {}
 
-    # Verify dummy chunk still exists
     assert dummy_chunk_id in chunk_ids
 
     # ========== TEST UPDATE CHUNK ==========
     updated_content = "Updated chunk content"
-    updated_metadata = {"updated": "true"}
 
     update_request = UpdateKnowledgeChunkRequest(
         content=updated_content,
-        metadata=updated_metadata,
     )
 
     update_result = knowledge_service.update_chunk_for_data_source(
@@ -293,10 +311,8 @@ def test_chunk_operations_integration(
         request=update_request,
     )
 
-    # Verify SQL database - check updated chunk
     assert isinstance(update_result, KnowledgeChunk)
     assert update_result.content == updated_content
-    assert update_result.metadata == updated_metadata
 
     sql_chunk = get_chunk_by_id(
         sql_local_service=sql_local_service,
@@ -306,19 +322,15 @@ def test_chunk_operations_integration(
     )
     assert sql_chunk["chunk_id"] == create_result.chunk_id
     assert sql_chunk["content"] == updated_content
-    assert sql_chunk["metadata"] == updated_metadata
 
-    # Verify Qdrant collection - check chunk_id presence and updated content
     collection_data = asyncio.run(qdrant_service.get_collection_data_async(test_source.qdrant_collection_name))
     chunk_ids = collection_data["chunk_id"].tolist()
     assert create_result.chunk_id in chunk_ids
 
-    # Verify the updated chunk data in Qdrant
     qdrant_chunk = collection_data[collection_data["chunk_id"] == create_result.chunk_id].iloc[0]
     assert qdrant_chunk["content"] == updated_content
 
     # ========== TEST DELETE CHUNK ==========
-    # Verify chunk exists before deletion
     initial_collection_data = asyncio.run(qdrant_service.get_collection_data_async(test_source.qdrant_collection_name))
     initial_chunk_ids = initial_collection_data["chunk_id"].tolist()
     assert create_result.chunk_id in initial_chunk_ids
@@ -341,31 +353,15 @@ def test_chunk_operations_integration(
             chunk_id=create_result.chunk_id,
         )
 
-    # Verify Qdrant collection - chunk_id should not be present
     final_collection_data = asyncio.run(qdrant_service.get_collection_data_async(test_source.qdrant_collection_name))
     final_chunk_ids = final_collection_data["chunk_id"].tolist()
     assert create_result.chunk_id not in final_chunk_ids
     final_count = len(final_chunk_ids)
     assert final_count == initial_count - 1
 
-    # Verify dummy chunk still exists
     assert dummy_chunk_id in final_chunk_ids
 
-    # Cleanup
-    try:
-        if sql_local_service.table_exists(test_source.database_table_name, test_source.database_schema):
-            sql_local_service.drop_table(test_source.database_table_name, test_source.database_schema)
-        with sql_local_service.engine.connect() as conn:
-            conn.execute(text(f"DROP SCHEMA IF EXISTS {test_source.database_schema} CASCADE"))
-            conn.commit()
-    except Exception as e:
-        print(f"Warning: Failed to cleanup schema {test_source.database_schema}: {e}")
-
-    if asyncio.run(qdrant_service.collection_exists_async(test_source.qdrant_collection_name)):
-        asyncio.run(qdrant_service.delete_collection_async(test_source.qdrant_collection_name))
-
-
-# Error Case Tests
+    _cleanup_test_environment(sql_local_service, qdrant_service, test_source)
 
 
 def test_create_chunk_raises_when_zero_tokens(
@@ -375,16 +371,9 @@ def test_create_chunk_raises_when_zero_tokens(
     test_collection_name: str,
 ) -> None:
     """Test that creating a chunk with zero tokens raises ValueError."""
-    mock_trace_manager = MockTraceManager(project_name="test")
-    monkeypatch.setattr(knowledge_service, "get_trace_manager", lambda: mock_trace_manager)
-
-    # Setup table and collection with dummy chunk
-    test_source, file_id, dummy_chunk_id = _setup_test_table_and_collection_with_dummy_chunk(
-        sql_local_service, qdrant_service, test_collection_name
+    test_source, file_id, dummy_chunk_id = _setup_test_environment(
+        monkeypatch, sql_local_service, qdrant_service, test_collection_name
     )
-
-    monkeypatch.setattr(knowledge_service, "get_data_source_by_org_id", lambda **kwargs: test_source)
-    monkeypatch.setattr(knowledge_service, "get_sql_local_service_for_ingestion", lambda: sql_local_service)
     monkeypatch.setattr(knowledge_service, "_count_tokens", lambda _text: 0)
 
     request = CreateKnowledgeChunkRequest(content="")
@@ -399,34 +388,8 @@ def test_create_chunk_raises_when_zero_tokens(
             request=request,
         )
 
-    # Verify Qdrant collection - dummy chunk should still exist and no new chunks added
-    collection_data = asyncio.run(qdrant_service.get_collection_data_async(test_source.qdrant_collection_name))
-    chunk_ids = collection_data["chunk_id"].tolist()
-    assert len(chunk_ids) == 1  # Only the dummy chunk should exist
-    assert dummy_chunk_id in chunk_ids
-
-    # Verify SQL table - dummy chunk should still exist and no new chunks added
-    sql_chunk = get_chunk_by_id(
-        sql_local_service=sql_local_service,
-        schema_name=test_source.database_schema,
-        table_name=test_source.database_table_name,
-        chunk_id=dummy_chunk_id,
-    )
-    assert sql_chunk["chunk_id"] == dummy_chunk_id
-    assert sql_chunk["content"] == "Dummy chunk content"  # Verify it wasn't modified
-
-    # Cleanup
-    try:
-        if sql_local_service.table_exists(test_source.database_table_name, test_source.database_schema):
-            sql_local_service.drop_table(test_source.database_table_name, test_source.database_schema)
-        with sql_local_service.engine.connect() as conn:
-            conn.execute(text(f"DROP SCHEMA IF EXISTS {test_source.database_schema} CASCADE"))
-            conn.commit()
-    except Exception as e:
-        print(f"Warning: Failed to cleanup schema {test_source.database_schema}: {e}")
-
-    if asyncio.run(qdrant_service.collection_exists_async(test_source.qdrant_collection_name)):
-        asyncio.run(qdrant_service.delete_collection_async(test_source.qdrant_collection_name))
+    _verify_dummy_chunk_unchanged(sql_local_service, qdrant_service, test_source, dummy_chunk_id)
+    _cleanup_test_environment(sql_local_service, qdrant_service, test_source)
 
 
 def test_create_chunk_raises_when_exceeds_max_tokens(
@@ -436,16 +399,9 @@ def test_create_chunk_raises_when_exceeds_max_tokens(
     test_collection_name: str,
 ) -> None:
     """Test that creating a chunk exceeding max tokens raises ValueError."""
-    mock_trace_manager = MockTraceManager(project_name="test")
-    monkeypatch.setattr(knowledge_service, "get_trace_manager", lambda: mock_trace_manager)
-
-    # Setup table and collection with dummy chunk
-    test_source, file_id, dummy_chunk_id = _setup_test_table_and_collection_with_dummy_chunk(
-        sql_local_service, qdrant_service, test_collection_name
+    test_source, file_id, dummy_chunk_id = _setup_test_environment(
+        monkeypatch, sql_local_service, qdrant_service, test_collection_name
     )
-
-    monkeypatch.setattr(knowledge_service, "get_data_source_by_org_id", lambda **kwargs: test_source)
-    monkeypatch.setattr(knowledge_service, "get_sql_local_service_for_ingestion", lambda: sql_local_service)
     monkeypatch.setattr(knowledge_service, "_count_tokens", lambda _text: 9000)
 
     request = CreateKnowledgeChunkRequest(content="Very long content...")
@@ -460,34 +416,8 @@ def test_create_chunk_raises_when_exceeds_max_tokens(
             request=request,
         )
 
-    # Verify Qdrant collection - dummy chunk should still exist and no new chunks added
-    collection_data = asyncio.run(qdrant_service.get_collection_data_async(test_source.qdrant_collection_name))
-    chunk_ids = collection_data["chunk_id"].tolist()
-    assert len(chunk_ids) == 1  # Only the dummy chunk should exist
-    assert dummy_chunk_id in chunk_ids
-
-    # Verify SQL table - dummy chunk should still exist and no new chunks added
-    sql_chunk = get_chunk_by_id(
-        sql_local_service=sql_local_service,
-        schema_name=test_source.database_schema,
-        table_name=test_source.database_table_name,
-        chunk_id=dummy_chunk_id,
-    )
-    assert sql_chunk["chunk_id"] == dummy_chunk_id
-    assert sql_chunk["content"] == "Dummy chunk content"  # Verify it wasn't modified
-
-    # Cleanup
-    try:
-        if sql_local_service.table_exists(test_source.database_table_name, test_source.database_schema):
-            sql_local_service.drop_table(test_source.database_table_name, test_source.database_schema)
-        with sql_local_service.engine.connect() as conn:
-            conn.execute(text(f"DROP SCHEMA IF EXISTS {test_source.database_schema} CASCADE"))
-            conn.commit()
-    except Exception as e:
-        print(f"Warning: Failed to cleanup schema {test_source.database_schema}: {e}")
-
-    if asyncio.run(qdrant_service.collection_exists_async(test_source.qdrant_collection_name)):
-        asyncio.run(qdrant_service.delete_collection_async(test_source.qdrant_collection_name))
+    _verify_dummy_chunk_unchanged(sql_local_service, qdrant_service, test_source, dummy_chunk_id)
+    _cleanup_test_environment(sql_local_service, qdrant_service, test_source)
 
 
 def test_update_chunk_raises_when_zero_tokens(
@@ -497,16 +427,9 @@ def test_update_chunk_raises_when_zero_tokens(
     test_collection_name: str,
 ) -> None:
     """Test that updating a chunk to zero tokens raises ValueError."""
-    mock_trace_manager = MockTraceManager(project_name="test")
-    monkeypatch.setattr(knowledge_service, "get_trace_manager", lambda: mock_trace_manager)
-
-    # Setup table and collection with dummy chunk
-    test_source, file_id, dummy_chunk_id = _setup_test_table_and_collection_with_dummy_chunk(
-        sql_local_service, qdrant_service, test_collection_name
+    test_source, file_id, dummy_chunk_id = _setup_test_environment(
+        monkeypatch, sql_local_service, qdrant_service, test_collection_name
     )
-
-    monkeypatch.setattr(knowledge_service, "get_data_source_by_org_id", lambda **kwargs: test_source)
-    monkeypatch.setattr(knowledge_service, "get_sql_local_service_for_ingestion", lambda: sql_local_service)
     monkeypatch.setattr(knowledge_service, "_count_tokens", lambda _text: 0)
 
     request = UpdateKnowledgeChunkRequest(content="")
@@ -521,37 +444,8 @@ def test_update_chunk_raises_when_zero_tokens(
             request=request,
         )
 
-    # Verify Qdrant collection - dummy chunk should still exist and not be modified
-    collection_data = asyncio.run(qdrant_service.get_collection_data_async(test_source.qdrant_collection_name))
-    chunk_ids = collection_data["chunk_id"].tolist()
-    assert dummy_chunk_id in chunk_ids
-
-    # Verify the dummy chunk data in Qdrant wasn't modified
-    qdrant_chunk = collection_data[collection_data["chunk_id"] == dummy_chunk_id].iloc[0]
-    assert qdrant_chunk["content"] == "Dummy chunk content"
-
-    # Verify SQL table - dummy chunk should still exist and not be modified
-    sql_chunk = get_chunk_by_id(
-        sql_local_service=sql_local_service,
-        schema_name=test_source.database_schema,
-        table_name=test_source.database_table_name,
-        chunk_id=dummy_chunk_id,
-    )
-    assert sql_chunk["chunk_id"] == dummy_chunk_id
-    assert sql_chunk["content"] == "Dummy chunk content"  # Verify it wasn't modified
-
-    # Cleanup
-    try:
-        if sql_local_service.table_exists(test_source.database_table_name, test_source.database_schema):
-            sql_local_service.drop_table(test_source.database_table_name, test_source.database_schema)
-        with sql_local_service.engine.connect() as conn:
-            conn.execute(text(f"DROP SCHEMA IF EXISTS {test_source.database_schema} CASCADE"))
-            conn.commit()
-    except Exception as e:
-        print(f"Warning: Failed to cleanup schema {test_source.database_schema}: {e}")
-
-    if asyncio.run(qdrant_service.collection_exists_async(test_source.qdrant_collection_name)):
-        asyncio.run(qdrant_service.delete_collection_async(test_source.qdrant_collection_name))
+    _verify_dummy_chunk_unchanged(sql_local_service, qdrant_service, test_source, dummy_chunk_id)
+    _cleanup_test_environment(sql_local_service, qdrant_service, test_source)
 
 
 def test_update_chunk_raises_when_exceeds_max_tokens(
@@ -561,16 +455,9 @@ def test_update_chunk_raises_when_exceeds_max_tokens(
     test_collection_name: str,
 ) -> None:
     """Test that updating a chunk exceeding max tokens raises ValueError."""
-    mock_trace_manager = MockTraceManager(project_name="test")
-    monkeypatch.setattr(knowledge_service, "get_trace_manager", lambda: mock_trace_manager)
-
-    # Setup table and collection with dummy chunk
-    test_source, file_id, dummy_chunk_id = _setup_test_table_and_collection_with_dummy_chunk(
-        sql_local_service, qdrant_service, test_collection_name
+    test_source, file_id, dummy_chunk_id = _setup_test_environment(
+        monkeypatch, sql_local_service, qdrant_service, test_collection_name
     )
-
-    monkeypatch.setattr(knowledge_service, "get_data_source_by_org_id", lambda **kwargs: test_source)
-    monkeypatch.setattr(knowledge_service, "get_sql_local_service_for_ingestion", lambda: sql_local_service)
     monkeypatch.setattr(knowledge_service, "_count_tokens", lambda _text: 9000)
 
     request = UpdateKnowledgeChunkRequest(content="Very long content...")
@@ -585,37 +472,8 @@ def test_update_chunk_raises_when_exceeds_max_tokens(
             request=request,
         )
 
-    # Verify Qdrant collection - dummy chunk should still exist and not be modified
-    collection_data = asyncio.run(qdrant_service.get_collection_data_async(test_source.qdrant_collection_name))
-    chunk_ids = collection_data["chunk_id"].tolist()
-    assert dummy_chunk_id in chunk_ids
-
-    # Verify the dummy chunk data in Qdrant wasn't modified
-    qdrant_chunk = collection_data[collection_data["chunk_id"] == dummy_chunk_id].iloc[0]
-    assert qdrant_chunk["content"] == "Dummy chunk content"
-
-    # Verify SQL table - dummy chunk should still exist and not be modified
-    sql_chunk = get_chunk_by_id(
-        sql_local_service=sql_local_service,
-        schema_name=test_source.database_schema,
-        table_name=test_source.database_table_name,
-        chunk_id=dummy_chunk_id,
-    )
-    assert sql_chunk["chunk_id"] == dummy_chunk_id
-    assert sql_chunk["content"] == "Dummy chunk content"  # Verify it wasn't modified
-
-    # Cleanup
-    try:
-        if sql_local_service.table_exists(test_source.database_table_name, test_source.database_schema):
-            sql_local_service.drop_table(test_source.database_table_name, test_source.database_schema)
-        with sql_local_service.engine.connect() as conn:
-            conn.execute(text(f"DROP SCHEMA IF EXISTS {test_source.database_schema} CASCADE"))
-            conn.commit()
-    except Exception as e:
-        print(f"Warning: Failed to cleanup schema {test_source.database_schema}: {e}")
-
-    if asyncio.run(qdrant_service.collection_exists_async(test_source.qdrant_collection_name)):
-        asyncio.run(qdrant_service.delete_collection_async(test_source.qdrant_collection_name))
+    _verify_dummy_chunk_unchanged(sql_local_service, qdrant_service, test_source, dummy_chunk_id)
+    _cleanup_test_environment(sql_local_service, qdrant_service, test_source)
 
 
 def test_create_chunk_raises_when_file_not_exists(
@@ -625,16 +483,9 @@ def test_create_chunk_raises_when_file_not_exists(
     test_collection_name: str,
 ) -> None:
     """Test that creating a chunk for non-existent file raises ValueError."""
-    mock_trace_manager = MockTraceManager(project_name="test")
-    monkeypatch.setattr(knowledge_service, "get_trace_manager", lambda: mock_trace_manager)
-
-    # Setup table and collection with dummy chunk
-    test_source, file_id, dummy_chunk_id = _setup_test_table_and_collection_with_dummy_chunk(
-        sql_local_service, qdrant_service, test_collection_name
+    test_source, file_id, dummy_chunk_id = _setup_test_environment(
+        monkeypatch, sql_local_service, qdrant_service, test_collection_name
     )
-
-    monkeypatch.setattr(knowledge_service, "get_data_source_by_org_id", lambda **kwargs: test_source)
-    monkeypatch.setattr(knowledge_service, "get_sql_local_service_for_ingestion", lambda: sql_local_service)
 
     request = CreateKnowledgeChunkRequest(content="Test content")
     mock_session = Mock()
@@ -648,34 +499,8 @@ def test_create_chunk_raises_when_file_not_exists(
             request=request,
         )
 
-    # Verify Qdrant collection - dummy chunk should still exist and no new chunks added
-    collection_data = asyncio.run(qdrant_service.get_collection_data_async(test_source.qdrant_collection_name))
-    chunk_ids = collection_data["chunk_id"].tolist()
-    assert len(chunk_ids) == 1  # Only the dummy chunk should exist
-    assert dummy_chunk_id in chunk_ids
-
-    # Verify SQL table - dummy chunk should still exist and no new chunks added
-    sql_chunk = get_chunk_by_id(
-        sql_local_service=sql_local_service,
-        schema_name=test_source.database_schema,
-        table_name=test_source.database_table_name,
-        chunk_id=dummy_chunk_id,
-    )
-    assert sql_chunk["chunk_id"] == dummy_chunk_id
-    assert sql_chunk["content"] == "Dummy chunk content"  # Verify it wasn't modified
-
-    # Cleanup
-    try:
-        if sql_local_service.table_exists(test_source.database_table_name, test_source.database_schema):
-            sql_local_service.drop_table(test_source.database_table_name, test_source.database_schema)
-        with sql_local_service.engine.connect() as conn:
-            conn.execute(text(f"DROP SCHEMA IF EXISTS {test_source.database_schema} CASCADE"))
-            conn.commit()
-    except Exception as e:
-        print(f"Warning: Failed to cleanup schema {test_source.database_schema}: {e}")
-
-    if asyncio.run(qdrant_service.collection_exists_async(test_source.qdrant_collection_name)):
-        asyncio.run(qdrant_service.delete_collection_async(test_source.qdrant_collection_name))
+    _verify_dummy_chunk_unchanged(sql_local_service, qdrant_service, test_source, dummy_chunk_id)
+    _cleanup_test_environment(sql_local_service, qdrant_service, test_source)
 
 
 def test_validate_qdrant_service_raises_when_missing_collection_name(
