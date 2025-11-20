@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict
@@ -32,3 +32,33 @@ class LLMJudgeUpdate(BaseModel):
     llm_model_reference: Optional[str] = None
     prompt_template: Optional[str] = None
     temperature: Optional[float] = None
+
+
+class JudgeEvaluationCreate(BaseModel):
+    version_output_id: UUID
+    evaluation_result: dict
+    raw_llm_response: Optional[str] = None
+
+
+class JudgeEvaluationResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    judge_id: UUID
+    version_output_id: UUID
+    evaluation_result: dict
+    raw_llm_response: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class JudgeEvaluationRunResult(BaseModel):
+    version_output_id: UUID
+    evaluation_id: Optional[UUID] = None
+    evaluation_result: Optional[dict] = None
+    raw_llm_response: Optional[str] = None
+
+
+class JudgeEvaluationRunResponse(BaseModel):
+    results: List[JudgeEvaluationRunResult]
+    success_rate: float

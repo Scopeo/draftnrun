@@ -1,5 +1,5 @@
 import logging
-from typing import Dict, List
+from typing import List
 from uuid import UUID
 
 from sqlalchemy.orm import Session
@@ -32,6 +32,7 @@ from ada_backend.schemas.input_groundtruth_schema import (
     QARunResponse,
     QARunSummary,
     InputGroundtruthCreate,
+    InputGroundtruthWithVersionResponse,
 )
 from ada_backend.schemas.dataset_schema import (
     DatasetCreateList,
@@ -92,8 +93,8 @@ def get_outputs_by_graph_runner_service(
     session: Session,
     dataset_id: UUID,
     graph_runner_id: UUID,
-) -> Dict[UUID, str]:
-    """Get outputs for a specific graph_runner.
+) -> List[InputGroundtruthWithVersionResponse]:
+    """Get outputs for a specific graph_runner with input and groundtruth data.
 
     Args:
         session: SQLAlchemy session
@@ -101,11 +102,20 @@ def get_outputs_by_graph_runner_service(
         graph_runner_id: ID of the graph runner
 
     Returns:
-        Dictionary mapping input_id (as UUID) to output (as string)
+        List of InputGroundtruthWithVersionResponse
     """
     try:
-        outputs = get_outputs_by_graph_runner(session, dataset_id, graph_runner_id)
-        return {input_id: output for input_id, output in outputs}
+        results = get_outputs_by_graph_runner(session, dataset_id, graph_runner_id)
+        return [
+            InputGroundtruthWithVersionResponse(
+                input_id=input_id,
+                input=input_data,
+                groundtruth=groundtruth,
+                output=output,
+                version_output_id=version_output_id,
+            )
+            for input_id, input_data, groundtruth, output, version_output_id in results
+        ]
     except Exception as e:
         LOGGER.error(f"Error in get_outputs_by_graph_runner_service: {str(e)}")
         raise ValueError(f"Failed to get outputs for graph runner: {str(e)}") from e

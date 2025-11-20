@@ -1,9 +1,13 @@
-from typing import List, Optional
+import logging
+from typing import List, Optional, Tuple
 from uuid import UUID
 
 from sqlalchemy.orm import Session
 
-from ada_backend.database.models import LLMJudge, EvaluationType
+from ada_backend.database.models import LLMJudge, JudgeEvaluation, VersionOutput, InputGroundtruth, EvaluationType
+from ada_backend.services.errors import LLMJudgeNotFound
+
+LOGGER = logging.getLogger(__name__)
 
 
 def create_llm_judge(
@@ -86,3 +90,147 @@ def delete_llm_judges(
 
     session.commit()
     return deleted_count
+
+
+def create_judge_evaluation(
+    session: Session,
+    judge_id: UUID,
+    version_output_id: UUID,
+    evaluation_result: dict,
+    project_id: UUID,
+    raw_llm_response: Optional[str] = None,
+) -> Optional[JudgeEvaluation]:
+    judge = session.query(LLMJudge).filter(LLMJudge.id == judge_id, LLMJudge.project_id == project_id).first()
+    if not judge:
+        raise LLMJudgeNotFound(judge_id, project_id)
+
+    version_output = session.query(VersionOutput).filter(VersionOutput.id == version_output_id).first()
+    if not version_output:
+        return None
+
+    existing = get_judge_evaluation_by_judge_and_version_output(session, judge_id, version_output_id)
+    if existing:
+        return None
+
+    evaluation = JudgeEvaluation(
+        judge_id=judge_id,
+        version_output_id=version_output_id,
+        evaluation_result=evaluation_result,
+        raw_llm_response=raw_llm_response,
+    )
+
+    session.add(evaluation)
+    session.commit()
+    session.refresh(evaluation)
+    LOGGER.info(f"Created judge evaluation for judge {judge_id} and version_output {version_output_id}")
+    return evaluation
+
+
+def get_judge_evaluations_by_judge(
+    session: Session,
+    judge_id: UUID,
+) -> List[JudgeEvaluation]:
+    return (
+        session.query(JudgeEvaluation)
+        .filter(JudgeEvaluation.judge_id == judge_id)
+        .order_by(JudgeEvaluation.created_at.desc())
+        .all()
+    )
+
+
+def get_judge_evaluations_by_version_output(
+    session: Session,
+    version_output_id: UUID,
+) -> List[JudgeEvaluation]:
+    return (
+        session.query(JudgeEvaluation)
+        .filter(JudgeEvaluation.version_output_id == version_output_id)
+        .order_by(JudgeEvaluation.created_at.desc())
+        .all()
+    )
+
+
+def get_judge_evaluation_by_id(
+    session: Session,
+    evaluation_id: UUID,
+) -> Optional[JudgeEvaluation]:
+    return session.query(JudgeEvaluation).filter(JudgeEvaluation.id == evaluation_id).first()
+
+
+def delete_judge_evaluations(
+    session: Session,
+    evaluation_ids: List[UUID],
+    project_id: UUID,
+) -> int:
+    deleted_count = (
+        session.query(JudgeEvaluation)
+        .join(LLMJudge, JudgeEvaluation.judge_id == LLMJudge.id)
+        .filter(
+            JudgeEvaluation.id.in_(evaluation_ids),
+            LLMJudge.project_id == project_id,
+        )
+        .delete(synchronize_session=False)
+    )
+
+    session.commit()
+    return deleted_count
+
+
+def get_judge_evaluation_by_judge_and_version_output(
+    session: Session,
+    judge_id: UUID,
+    version_output_id: UUID,
+) -> Optional[JudgeEvaluation]:
+    return (
+        session.query(JudgeEvaluation)
+        .filter(JudgeEvaluation.judge_id == judge_id, JudgeEvaluation.version_output_id == version_output_id)
+        .first()
+    )
+
+
+def upsert_judge_evaluation(
+    session: Session,
+    judge_id: UUID,
+    version_output_id: UUID,
+    evaluation_result: dict,
+    raw_llm_response: Optional[str] = None,
+) -> JudgeEvaluation:
+    existing = get_judge_evaluation_by_judge_and_version_output(session, judge_id, version_output_id)
+    if existing:
+        existing.evaluation_result = evaluation_result
+        existing.raw_llm_response = raw_llm_response
+        session.commit()
+        session.refresh(existing)
+        LOGGER.info(f"Updated judge evaluation for judge {judge_id} and version_output {version_output_id}")
+        return existing
+
+    evaluation = JudgeEvaluation(
+        judge_id=judge_id,
+        version_output_id=version_output_id,
+        evaluation_result=evaluation_result,
+        raw_llm_response=raw_llm_response,
+    )
+    session.add(evaluation)
+    session.commit()
+    session.refresh(evaluation)
+    LOGGER.info(f"Created judge evaluation for judge {judge_id} and version_output {version_output_id}")
+    return evaluation
+
+
+def get_version_outputs_by_ids(
+    session: Session,
+    version_output_ids: List[UUID],
+) -> List[Tuple[UUID, dict, Optional[str], str]]:
+    results = (
+        session.query(
+            VersionOutput.id,
+            InputGroundtruth.input,
+            InputGroundtruth.groundtruth,
+            VersionOutput.output,
+        )
+        .join(InputGroundtruth, InputGroundtruth.id == VersionOutput.input_id)
+        .filter(VersionOutput.id.in_(version_output_ids))
+        .all()
+    )
+
+    return results

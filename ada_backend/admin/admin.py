@@ -590,6 +590,27 @@ class LLMJudgeAdmin(EnhancedModelView, model=db.LLMJudge):
     ]
 
 
+class JudgeEvaluationAdmin(EnhancedModelView, model=db.JudgeEvaluation):
+    category = AdminCategory.QUALITY_ASSURANCE
+    icon = "fas fa-clipboard-check"
+    column_list = [
+        "id",
+        "judge",
+        "version_output",
+        "evaluation_result",
+        "raw_llm_response",
+        "created_at",
+        "updated_at",
+    ]
+    column_searchable_list = ["judge.name", "judge.id", "version_output.id"]
+    form_columns = [
+        "judge",
+        "version_output",
+        "evaluation_result",
+        "raw_llm_response",
+    ]
+
+
 class LLMModelsAdmin(EnhancedModelView, model=db.LLMModel):
     category = AdminCategory.LLM_MODELS
     name = "LLM Model"
@@ -682,6 +703,7 @@ def setup_admin(app: FastAPI):
     admin.add_view(CronRunAdmin)
     admin.add_view(EndpointPollingHistoryAdmin)
     admin.add_view(LLMJudgeAdmin)
+    admin.add_view(JudgeEvaluationAdmin)
     admin.add_view(LLMModelsAdmin)
 
     return admin
