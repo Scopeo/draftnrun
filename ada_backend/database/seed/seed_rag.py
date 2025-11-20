@@ -35,7 +35,7 @@ from ada_backend.database.seed.constants import (
     VERBOSITY_IN_DB,
     REASONING_IN_DB,
 )
-from ada_backend.database.seed.utils import DEFAULT_MODEL, COMPLETION_MODELS
+from ada_backend.database.seed.utils import DEFAULT_MODEL
 from engine.agent.synthesizer_prompts import (
     get_base_synthetizer_prompt_template,
     get_hybrid_synthetizer_prompt_template,
@@ -309,12 +309,11 @@ def seed_rag_components(session: Session):
         id=UUID("a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d"),
         component_version_id=rag_agent_v2_version.id,
         name="completion_model",
-        type=ParameterType.STRING,
+        type=ParameterType.LLM_MODEL,
         nullable=False,
         default=DEFAULT_MODEL,
         ui_component=UIComponent.SELECT,
         ui_component_properties=UIComponentProperties(
-            options=COMPLETION_MODELS,
             label="Model Name",
         ).model_dump(exclude_unset=True, exclude_none=True),
         is_advanced=False,
