@@ -16,7 +16,6 @@ from ada_backend.schemas.knowledge_schema import (
     KnowledgeFileDetail,
     KnowledgeFileListResponse,
     UpdateKnowledgeChunkRequest,
-    UpdateKnowledgeFileRequest,
 )
 from ada_backend.services.knowledge_service import (
     delete_file_for_data_source,
@@ -25,7 +24,6 @@ from ada_backend.services.knowledge_service import (
     update_chunk_for_data_source,
     get_file_detail_for_data_source,
     list_files_for_data_source,
-    update_file_for_data_source,
 )
 
 
@@ -66,28 +64,6 @@ def get_file_detail(
         raise HTTPException(status_code=400, detail="User ID not found")
     try:
         return get_file_detail_for_data_source(session, organization_id, source_id, file_id)
-    except ValueError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
-
-
-@router.put(
-    "/organizations/{organization_id}/sources/{source_id}/files/{file_id}",
-    response_model=KnowledgeFileDetail,
-)
-def update_file(
-    organization_id: UUID,
-    source_id: UUID,
-    file_id: str,
-    update_request: UpdateKnowledgeFileRequest,
-    user: Annotated[
-        SupabaseUser, Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.WRITER.value))
-    ],
-    session: Session = Depends(get_db),
-) -> KnowledgeFileDetail:
-    if not user.id:
-        raise HTTPException(status_code=400, detail="User ID not found")
-    try:
-        return update_file_for_data_source(session, organization_id, source_id, file_id, update_request)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 

@@ -14,7 +14,6 @@ from ada_backend.repositories.knowledge_repository import (
     get_file_with_chunks,
     list_files_for_source,
     update_chunk,
-    update_file_metadata,
 )
 
 
@@ -122,49 +121,6 @@ def test_get_file_with_chunks_returns_deserialized_metadata(sql_local_service: S
     assert payload["file"]["folder_name"] == "Folder"
     assert payload["chunks"][0]["metadata"] == {"folder_name": "Folder"}
     assert payload["chunks"][0]["bounding_boxes"] == [{"page": 1}]
-
-
-def test_update_file_metadata_updates_all_rows(sql_local_service: SQLLocalService) -> None:
-    _insert_rows(
-        sql_local_service,
-        [
-            {
-                "chunk_id": "c1",
-                "file_id": "file-a",
-                "content": "alpha",
-                "document_title": "Old",
-                "url": "http://old",
-                "last_edited_ts": "2024-01-01",
-                "metadata": {"folder_name": "Folder"},
-            },
-            {
-                "chunk_id": "c2",
-                "file_id": "file-a",
-                "content": "beta",
-                "document_title": "Old",
-                "url": "http://old",
-                "last_edited_ts": "2024-01-02",
-                "metadata": {"folder_name": "Folder"},
-            },
-        ],
-    )
-
-    update_file_metadata(
-        sql_local_service=sql_local_service,
-        schema_name=None,
-        table_name="knowledge_chunks",
-        file_id="file-a",
-        document_title="Updated",
-        url="http://new",
-        metadata={"folder_name": "New"},
-    )
-
-    table = sql_local_service.get_table(table_name="knowledge_chunks", schema_name=None)
-    with sql_local_service.engine.connect() as conn:
-        rows = conn.execute(sqlalchemy.select(table)).fetchall()
-    assert {row.document_title for row in rows} == {"Updated"}
-    assert {row.url for row in rows} == {"http://new"}
-    assert {row.metadata["folder_name"] for row in rows} == {"New"}
 
 
 def test_delete_file_removes_chunks(sql_local_service: SQLLocalService) -> None:
