@@ -1,7 +1,6 @@
-from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field
 
 
 class KnowledgeFileSummary(BaseModel):
@@ -21,25 +20,18 @@ class KnowledgeFileMetadata(BaseModel):
 
 
 class KnowledgeChunk(BaseModel):
+    """
+    Chunk model with required fields and support for additional fields.
+    Used for building chunks with qdrant schema fields before persisting to SQL/Qdrant.
+    """
+
     chunk_id: str
     file_id: str
     content: str
-    document_title: Optional[str] = None
-    url: Optional[str] = None
-    last_edited_ts: Optional[str] = None
-    metadata: Dict[str, Any] = Field(default_factory=dict)
-    bounding_boxes: Optional[List[Dict[str, Any]]] = None
-    processed_datetime: Optional[str] = Field(default=None, alias="_processed_datetime")
+    last_edited_ts: str
 
     class Config:
-        allow_population_by_field_name = True
-
-    @field_validator("processed_datetime", mode="before")
-    @classmethod
-    def _coerce_processed_datetime(cls, value: Any) -> Optional[str]:
-        if isinstance(value, datetime):
-            return value.isoformat()
-        return value
+        extra = "allow"
 
 
 class KnowledgeFileDetail(BaseModel):

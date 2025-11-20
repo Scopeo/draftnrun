@@ -15,6 +15,7 @@ from ada_backend.repositories.knowledge_repository import (
     list_files_for_source,
     update_chunk,
 )
+from ada_backend.schemas.knowledge_schema import KnowledgeChunk
 
 
 @pytest.fixture
@@ -163,103 +164,122 @@ def test_delete_file_raises_for_missing_file(sql_local_service: SQLLocalService)
 
 
 def test_create_chunk_persists_row(sql_local_service: SQLLocalService) -> None:
-    result = create_chunk(
-        sql_local_service=sql_local_service,
-        schema_name=None,
-        table_name="knowledge_chunks",
+    chunk = KnowledgeChunk(
         chunk_id="c1",
         file_id="file-a",
         content="some content",
-        document_title="Doc",
-        url="http://example.com",
-        metadata={"folder_name": "Folder"},
-        bounding_boxes=[{"page": 1}],
         last_edited_ts="2024-01-01",
     )
-
-    assert result["chunk_id"] == "c1"
-    assert result["metadata"] == {"folder_name": "Folder"}
-    assert result["bounding_boxes"] == [{"page": 1}]
-
-
-def test_create_chunk_raises_for_duplicate_id(sql_local_service: SQLLocalService) -> None:
     create_chunk(
         sql_local_service=sql_local_service,
         schema_name=None,
         table_name="knowledge_chunks",
+        chunk=chunk,
+    )
+
+    persisted_chunk = get_chunk_by_id(
+        sql_local_service=sql_local_service,
+        schema_name=None,
+        table_name="knowledge_chunks",
+        chunk_id="c1",
+    )
+
+    assert persisted_chunk["chunk_id"] == "c1"
+    assert persisted_chunk["content"] == "some content"
+    assert persisted_chunk["file_id"] == "file-a"
+    assert persisted_chunk["last_edited_ts"] == "2024-01-01"
+
+
+def test_create_chunk_raises_for_duplicate_id(sql_local_service: SQLLocalService) -> None:
+    chunk1 = KnowledgeChunk(
         chunk_id="c1",
         file_id="file-a",
         content="some content",
-        document_title=None,
-        url=None,
-        metadata=None,
-        bounding_boxes=None,
         last_edited_ts="2024-01-01",
     )
+    create_chunk(
+        sql_local_service=sql_local_service,
+        schema_name=None,
+        table_name="knowledge_chunks",
+        chunk=chunk1,
+    )
 
+    chunk2 = KnowledgeChunk(
+        chunk_id="c1",
+        file_id="file-a",
+        content="other",
+        last_edited_ts="2024-01-02",
+    )
     with pytest.raises(ValueError):
         create_chunk(
             sql_local_service=sql_local_service,
             schema_name=None,
             table_name="knowledge_chunks",
-            chunk_id="c1",
-            file_id="file-a",
-            content="other",
-            document_title=None,
-            url=None,
-            metadata=None,
-            bounding_boxes=None,
-            last_edited_ts="2024-01-02",
+            chunk=chunk2,
         )
 
 
 def test_update_chunk_applies_changes(sql_local_service: SQLLocalService) -> None:
-    create_chunk(
-        sql_local_service=sql_local_service,
-        schema_name=None,
-        table_name="knowledge_chunks",
+    chunk = KnowledgeChunk(
         chunk_id="c1",
         file_id="file-a",
         content="original",
-        document_title="Original",
-        url=None,
-        metadata={"folder_name": "Folder"},
-        bounding_boxes=[{"page": 1}],
         last_edited_ts="2024-01-01",
     )
-
-    updated = update_chunk(
-        sql_local_service=sql_local_service,
-        schema_name=None,
-        table_name="knowledge_chunks",
-        chunk_id="c1",
-        update_data={
-            "content": "updated",
-            "document_title": "Updated",
-            "metadata": {"folder_name": "New"},
-            "bounding_boxes": [{"page": 2}],
-        },
-    )
-
-    assert updated["content"] == "updated"
-    assert updated["document_title"] == "Updated"
-    assert updated["metadata"] == {"folder_name": "New"}
-    assert updated["bounding_boxes"] == [{"page": 2}]
-
-
-def test_delete_chunk_removes_row(sql_local_service: SQLLocalService) -> None:
     create_chunk(
         sql_local_service=sql_local_service,
         schema_name=None,
         table_name="knowledge_chunks",
+        chunk=chunk,
+    )
+
+    initial_chunk = get_chunk_by_id(
+        sql_local_service=sql_local_service,
+        schema_name=None,
+        table_name="knowledge_chunks",
+        chunk_id="c1",
+    )
+    assert initial_chunk["content"] == "original"
+    assert initial_chunk["last_edited_ts"] == "2024-01-01"
+
+    updated_chunk = KnowledgeChunk(
+        chunk_id="c1",
+        file_id="file-a",
+        content="updated",
+        last_edited_ts="2024-01-02",
+    )
+    update_chunk(
+        sql_local_service=sql_local_service,
+        schema_name=None,
+        table_name="knowledge_chunks",
+        chunk=updated_chunk,
+    )
+
+    persisted_chunk = get_chunk_by_id(
+        sql_local_service=sql_local_service,
+        schema_name=None,
+        table_name="knowledge_chunks",
+        chunk_id="c1",
+    )
+
+    assert persisted_chunk["content"] == "updated"
+    assert persisted_chunk["last_edited_ts"] == "2024-01-02"
+    assert persisted_chunk["chunk_id"] == "c1"
+    assert persisted_chunk["file_id"] == "file-a"
+
+
+def test_delete_chunk_removes_row(sql_local_service: SQLLocalService) -> None:
+    chunk = KnowledgeChunk(
         chunk_id="c1",
         file_id="file-a",
         content="content",
-        document_title=None,
-        url=None,
-        metadata=None,
-        bounding_boxes=None,
         last_edited_ts="2024-01-01",
+    )
+    create_chunk(
+        sql_local_service=sql_local_service,
+        schema_name=None,
+        table_name="knowledge_chunks",
+        chunk=chunk,
     )
 
     delete_chunk(

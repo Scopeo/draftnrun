@@ -18,7 +18,7 @@ from ada_backend.schemas.knowledge_schema import (
     KnowledgeChunk,
     UpdateKnowledgeChunkRequest,
 )
-from ada_backend.repositories.knowledge_repository import create_chunk, get_chunk_by_id
+from ada_backend.repositories.knowledge_repository import get_chunk_by_id
 from engine.llm_services.llm_service import EmbeddingService
 from engine.qdrant_service import QdrantCollectionSchema, QdrantService
 from engine.storage_service.local_service import SQLLocalService
@@ -66,7 +66,7 @@ def qdrant_service(mock_embedding_service: MagicMock) -> Iterator[QdrantService]
         file_id_field="file_id",
         url_id_field="url",
         last_edited_ts_field="last_edited_ts",
-        metadata_fields_to_keep={"metadata"},
+        metadata_fields_to_keep={"metadata_to_keep_by_qdrant_field"},
     )
     qdrant_service = QdrantService.from_defaults(
         embedding_service=mock_embedding_service,
@@ -95,7 +95,6 @@ def _setup_test_table_and_collection_with_dummy_chunk(
     schema_name = f"test_knowledge_v2_{source_id.hex[:8]}"
     table_name = "knowledge_chunks"
 
-    # Create schema and table
     if not sql_local_service.schema_exists(schema_name):
         sql_local_service.create_schema(schema_name)
 
@@ -108,8 +107,8 @@ def _setup_test_table_and_collection_with_dummy_chunk(
             DBColumn(name="document_title", type="VARCHAR", is_nullable=True),
             DBColumn(name="url", type="VARCHAR", is_nullable=True),
             DBColumn(name="last_edited_ts", type="VARCHAR", is_nullable=True),
-            DBColumn(name="metadata", type="VARIANT", is_nullable=True),
-            DBColumn(name="bounding_boxes", type="VARCHAR", is_nullable=True),
+            DBColumn(name="metadata_to_keep_by_qdrant_field", type="VARCHAR", is_nullable=True),
+            DBColumn(name="not_kept_by_qdrant_chunk_field", type="VARIANT", is_nullable=True),
         ]
     )
 
@@ -121,34 +120,36 @@ def _setup_test_table_and_collection_with_dummy_chunk(
         schema_name=schema_name,
     )
 
-    # Create Qdrant collection
     if asyncio.run(qdrant_service.collection_exists_async(test_collection_name)):
         asyncio.run(qdrant_service.delete_collection_async(test_collection_name))
     asyncio.run(qdrant_service.create_collection_async(collection_name=test_collection_name))
 
-    # Create dummy chunk with UUID
     file_id = f"test_file_{uuid4()}"
     dummy_chunk_id = str(uuid4())
 
-    # Create chunk in SQL
-    create_chunk(
-        sql_local_service=sql_local_service,
-        schema_name=schema_name,
-        table_name=table_name,
-        chunk_id=dummy_chunk_id,
-        file_id=file_id,
-        content="Dummy chunk content",
-        last_edited_ts="2024-01-01T00:00:00",
-    )
+    # Insert directly into SQL table with explicit non-default values
+    table = sql_local_service.get_table(table_name=table_name, schema_name=schema_name)
+    with sql_local_service.Session() as session:
+        insert_data = {
+            "chunk_id": dummy_chunk_id,
+            "file_id": file_id,
+            "content": "Dummy chunk content",
+            "last_edited_ts": "2024-01-01T00:00:00",
+            "url": "http://example.com/dummy",
+            "document_title": "Dummy Document",
+            "metadata_to_keep_by_qdrant_field": "dummy_metadata_value",
+            "not_kept_by_qdrant_chunk_field": {"key": "value"},
+        }
+        session.execute(table.insert(), insert_data)
+        session.commit()
 
-    # Create chunk in Qdrant
     chunk_dict = {
         "chunk_id": dummy_chunk_id,
         "file_id": file_id,
         "content": "Dummy chunk content",
         "last_edited_ts": "2024-01-01T00:00:00",
-        "url": "",
-        "metadata": {},
+        "url": "http://example.com/dummy",
+        "metadata_to_keep_by_qdrant_field": "dummy_metadata_value",
     }
     asyncio.run(qdrant_service.add_chunks_async(list_chunks=[chunk_dict], collection_name=test_collection_name))
 
@@ -163,7 +164,8 @@ def _setup_test_table_and_collection_with_dummy_chunk(
             "file_id_field": "file_id",
             "url_id_field": "url",
             "last_edited_ts_field": "last_edited_ts",
-            "metadata_fields_to_keep": ["metadata"],
+            "metadata_fields_to_keep": ["metadata_to_keep_by_qdrant_field"],
+            "metadata_field_types": {"metadata_to_keep_by_qdrant_field": "VARCHAR"},
         },
         embedding_model_reference="openai:text-embedding-3-large",
     )
@@ -284,6 +286,12 @@ def test_chunk_operations_integration(
     )
     assert sql_chunk["chunk_id"] == create_result.chunk_id
     assert sql_chunk["content"] == new_chunk_content
+    # Check that metadata_to_keep_by_qdrant_field is in the DB with default value
+    assert "metadata_to_keep_by_qdrant_field" in sql_chunk
+    assert sql_chunk["metadata_to_keep_by_qdrant_field"] == ""
+    # Check that not_kept_by_qdrant_chunk_field is in the DB with default value (VARIANT type should be {})
+    assert "not_kept_by_qdrant_chunk_field" in sql_chunk
+    assert sql_chunk["not_kept_by_qdrant_chunk_field"] == {}
 
     collection_data = asyncio.run(qdrant_service.get_collection_data_async(test_source.qdrant_collection_name))
     chunk_ids = collection_data["chunk_id"].tolist()
@@ -292,11 +300,23 @@ def test_chunk_operations_integration(
     qdrant_chunk = collection_data[collection_data["chunk_id"] == create_result.chunk_id].iloc[0]
     assert qdrant_chunk["content"] == new_chunk_content
     assert qdrant_chunk["url"] == ""
-    assert qdrant_chunk["metadata"] == {}
+    # Check that metadata_to_keep_by_qdrant_field was added with default value (empty string for VARCHAR)
+    assert "metadata_to_keep_by_qdrant_field" in qdrant_chunk
+    assert qdrant_chunk["metadata_to_keep_by_qdrant_field"] == ""
 
     assert dummy_chunk_id in chunk_ids
 
     # ========== TEST UPDATE CHUNK ==========
+    # Capture state before update
+    sql_chunk_before = get_chunk_by_id(
+        sql_local_service=sql_local_service,
+        schema_name=test_source.database_schema,
+        table_name=test_source.database_table_name,
+        chunk_id=create_result.chunk_id,
+    )
+    collection_data_before = asyncio.run(qdrant_service.get_collection_data_async(test_source.qdrant_collection_name))
+    qdrant_chunk_before = collection_data_before[collection_data_before["chunk_id"] == create_result.chunk_id].iloc[0]
+
     updated_content = "Updated chunk content"
 
     update_request = UpdateKnowledgeChunkRequest(
@@ -314,21 +334,46 @@ def test_chunk_operations_integration(
     assert isinstance(update_result, KnowledgeChunk)
     assert update_result.content == updated_content
 
-    sql_chunk = get_chunk_by_id(
+    # Verify SQL chunk after update
+    sql_chunk_after = get_chunk_by_id(
         sql_local_service=sql_local_service,
         schema_name=test_source.database_schema,
         table_name=test_source.database_table_name,
         chunk_id=create_result.chunk_id,
     )
-    assert sql_chunk["chunk_id"] == create_result.chunk_id
-    assert sql_chunk["content"] == updated_content
+    assert sql_chunk_after["chunk_id"] == create_result.chunk_id
+    assert sql_chunk_after["content"] == updated_content
 
-    collection_data = asyncio.run(qdrant_service.get_collection_data_async(test_source.qdrant_collection_name))
-    chunk_ids = collection_data["chunk_id"].tolist()
+    # Verify Qdrant chunk after update
+    collection_data_after = asyncio.run(qdrant_service.get_collection_data_async(test_source.qdrant_collection_name))
+    chunk_ids = collection_data_after["chunk_id"].tolist()
     assert create_result.chunk_id in chunk_ids
 
-    qdrant_chunk = collection_data[collection_data["chunk_id"] == create_result.chunk_id].iloc[0]
-    assert qdrant_chunk["content"] == updated_content
+    qdrant_chunk_after = collection_data_after[collection_data_after["chunk_id"] == create_result.chunk_id].iloc[0]
+    assert qdrant_chunk_after["content"] == updated_content
+
+    # Verify that only updated fields changed, all other fields remain the same
+    # Fields that should have changed: content, last_edited_ts
+    assert sql_chunk_after["content"] != sql_chunk_before["content"]
+    assert sql_chunk_after["last_edited_ts"] != sql_chunk_before["last_edited_ts"]
+    assert qdrant_chunk_after["content"] != qdrant_chunk_before["content"]
+    assert qdrant_chunk_after["last_edited_ts"] != qdrant_chunk_before["last_edited_ts"]
+
+    # Fields that should remain the same in SQL
+    assert sql_chunk_after["chunk_id"] == sql_chunk_before["chunk_id"]
+    assert sql_chunk_after["file_id"] == sql_chunk_before["file_id"]
+    assert sql_chunk_after["url"] == sql_chunk_before["url"]
+    assert sql_chunk_after["metadata_to_keep_by_qdrant_field"] == sql_chunk_before["metadata_to_keep_by_qdrant_field"]
+    assert sql_chunk_after["not_kept_by_qdrant_chunk_field"] == sql_chunk_before["not_kept_by_qdrant_chunk_field"]
+
+    # Fields that should remain the same in Qdrant
+    assert qdrant_chunk_after["chunk_id"] == qdrant_chunk_before["chunk_id"]
+    assert qdrant_chunk_after["file_id"] == qdrant_chunk_before["file_id"]
+    assert qdrant_chunk_after["url"] == qdrant_chunk_before["url"]
+    assert (
+        qdrant_chunk_after["metadata_to_keep_by_qdrant_field"]
+        == qdrant_chunk_before["metadata_to_keep_by_qdrant_field"]
+    )
 
     # ========== TEST DELETE CHUNK ==========
     initial_collection_data = asyncio.run(qdrant_service.get_collection_data_async(test_source.qdrant_collection_name))

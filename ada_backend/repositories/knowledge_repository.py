@@ -1,10 +1,10 @@
 import json
 import logging
-from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from sqlalchemy import func, select, update, delete
 
+from ada_backend.schemas.knowledge_schema import KnowledgeChunk
 from engine.storage_service.local_service import SQLLocalService
 
 
@@ -158,12 +158,47 @@ def create_chunk(
     sql_local_service: SQLLocalService,
     schema_name: str,
     table_name: str,
-    chunk_id: str,
-    file_id: str,
-    content: str,
-    last_edited_ts: Optional[str],
-) -> Dict[str, Any]:
+    chunk: KnowledgeChunk,
+) -> KnowledgeChunk:
+    """
+    Create a chunk in the database.
+
+    Args:
+        sql_local_service: SQL service instance
+        schema_name: Schema name
+        table_name: Table name
+        chunk: KnowledgeChunk object with all required fields
+
+    Returns:
+        KnowledgeChunk object
+    """
+    from engine.storage_service.db_utils import PROCESSED_DATETIME_FIELD, get_default_value_for_column_type
+
     table = sql_local_service.get_table(table_name=table_name, schema_name=schema_name)
+    table_description = sql_local_service.describe_table(table_name=table_name, schema_name=schema_name)
+    table_column_names = {col["name"] for col in table_description}
+
+    chunk_id = chunk.chunk_id
+    chunk_dict = chunk.model_dump(exclude_none=True)
+
+    # Prepare payload: match chunk fields with table columns
+    payload = {}
+
+    # Add matching fields from chunk to table
+    for field_name, field_value in chunk_dict.items():
+        if field_name in table_column_names:
+            payload[field_name] = field_value
+        # Exclude fields not in table (no error, just ignore them)
+
+    # Add default values for missing table columns (excluding processed_datetime)
+    for column in table_description:
+        column_name = column["name"]
+        if column_name == PROCESSED_DATETIME_FIELD or column_name == "_processed_datetime":
+            continue
+        if column_name not in payload:
+            column_type = column.get("type", "")
+            default_value = get_default_value_for_column_type(column_type)
+            payload[column_name] = default_value
 
     with sql_local_service.Session() as session:
         exists_stmt = select(table.c.chunk_id).where(table.c.chunk_id == chunk_id)
@@ -171,59 +206,66 @@ def create_chunk(
         if existing:
             raise ValueError(f"Chunk with id='{chunk_id}' already exists in table '{table_name}'")
 
-    # Build payload with only the fields we set
-    payload: Dict[str, Any] = {
-        "chunk_id": chunk_id,
-        "file_id": file_id,
-        "content": content,
-        "last_edited_ts": last_edited_ts or datetime.utcnow().isoformat(),
-    }
-
-    # Get table description to find missing nullable columns
-    from engine.storage_service.db_utils import PROCESSED_DATETIME_FIELD
-
-    table_description = sql_local_service.describe_table(table_name=table_name, schema_name=schema_name)
-
-    # Add missing nullable columns with None values
-    for column in table_description:
-        column_name = column["name"]
-        # Skip if already in payload, or if it's the processed_datetime field (handled automatically)
-        if column_name in payload or column_name == PROCESSED_DATETIME_FIELD:
-            continue
-        # Add nullable columns with None (or {} for metadata/VARIANT types)
-        if column["nullable"]:
-            # For VARIANT/JSON types, use empty dict instead of None
-            column_type = str(column.get("type", "")).upper()
-            if "VARIANT" in column_type or "JSON" in column_type:
-                payload[column_name] = {}
-            else:
-                payload[column_name] = None
-
     sql_local_service.insert_data(table_name=table_name, data=payload, schema_name=schema_name)
 
-    return get_chunk_by_id(sql_local_service, schema_name, table_name, chunk_id)
+    return chunk
 
 
 def update_chunk(
     sql_local_service: SQLLocalService,
     schema_name: str,
     table_name: str,
-    chunk_id: str,
-    update_data: Dict[str, Any],
-) -> Dict[str, Any]:
-    table = sql_local_service.get_table(table_name=table_name, schema_name=schema_name)
+    chunk: KnowledgeChunk,
+) -> KnowledgeChunk:
+    """
+    Update a chunk in the database.
 
-    update_values = update_data.copy()
+    Args:
+        sql_local_service: SQL service instance
+        schema_name: Schema name
+        table_name: Table name
+        chunk: KnowledgeChunk object with updated fields
+
+    Returns:
+        KnowledgeChunk object
+    """
+    from engine.storage_service.db_utils import PROCESSED_DATETIME_FIELD, get_default_value_for_column_type
+
+    table = sql_local_service.get_table(table_name=table_name, schema_name=schema_name)
+    table_description = sql_local_service.describe_table(table_name=table_name, schema_name=schema_name)
+    table_column_names = {col["name"] for col in table_description}
+
+    chunk_dict = chunk.model_dump(exclude_none=True)
+
+    # Prepare update values: match chunk fields with table columns
+    update_values = {}
+
+    # Add matching fields from chunk to table
+    for field_name, field_value in chunk_dict.items():
+        if field_name in table_column_names:
+            update_values[field_name] = field_value
+        # Exclude fields not in table (no error, just ignore them)
+
+    # Add default values for missing table columns (excluding processed_datetime)
+    for column in table_description:
+        column_name = column["name"]
+        if column_name == PROCESSED_DATETIME_FIELD or column_name == "_processed_datetime":
+            continue
+        if column_name not in update_values:
+            column_type = column.get("type", "")
+            default_value = get_default_value_for_column_type(column_type)
+            update_values[column_name] = default_value
+
     update_values = SQLLocalService.add_processed_datetime_if_exists(table, update_values)
 
     with sql_local_service.Session() as session:
-        stmt = update(table).where(table.c.chunk_id == chunk_id).values(**update_values)
+        stmt = update(table).where(table.c.chunk_id == chunk.chunk_id).values(**update_values)
         result = session.execute(stmt)
         if result.rowcount == 0:
-            raise ValueError(f"Chunk with id='{chunk_id}' not found in table '{table_name}'")
+            raise ValueError(f"Chunk with id='{chunk.chunk_id}' not found in table '{table_name}'")
         session.commit()
 
-    return get_chunk_by_id(sql_local_service, schema_name, table_name, chunk_id)
+    return chunk
 
 
 def delete_chunk(
