@@ -1,4 +1,5 @@
 from uuid import UUID
+from typing import Optional
 
 
 class CSVMissingColumnError(Exception):
@@ -17,8 +18,8 @@ class CSVMissingColumnError(Exception):
 class CSVInvalidJSONError(Exception):
     """Raised when input column contains invalid JSON."""
 
-    def __init__(self):
-        super().__init__("Invalid JSON in 'input' column. Expected a JSON object")
+    def __init__(self, row_number: Optional[int] = None):
+        super().__init__(f"Invalid JSON in 'input' column. Expected a JSON object at row {row_number}")
 
 
 class CSVEmptyFileError(Exception):

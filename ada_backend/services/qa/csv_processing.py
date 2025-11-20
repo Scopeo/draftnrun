@@ -31,7 +31,7 @@ def process_csv(csv_file: BinaryIO):
             try:
                 parsed_json = json.loads(raw_json)
             except json.JSONDecodeError:
-                raise CSVInvalidJSONError()
+                raise CSVInvalidJSONError(row_number=row_number)
 
             yield {
                 "input": parsed_json,
