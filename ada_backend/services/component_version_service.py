@@ -9,9 +9,11 @@ from ada_backend.repositories.component_repository import (
     count_component_versions_by_component_id,
     delete_component_by_id,
     delete_component_version_by_id,
+    get_component_version_by_id,
+)
+from ada_backend.repositories.release_stage_repository import (
     delete_release_stage_mapping,
     find_next_best_version_for_stage,
-    get_component_version_by_id,
     get_release_stage_mapping,
     upsert_release_stage_mapping_core,
 )

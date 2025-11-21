@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from ada_backend.database import models as db
 from ada_backend.database.utils import update_model_fields, models_are_equal
-from ada_backend.repositories.component_repository import upsert_release_stage_mapping_core
+from ada_backend.repositories.release_stage_repository import upsert_release_stage_mapping_core
 
 
 LOGGER = logging.getLogger(__name__)
@@ -39,6 +39,63 @@ def upsert_components(
         else:
             session.add(component)
             LOGGER.info(f"Component {component.name} inserted.")
+    session.commit()
+
+
+def upsert_components_parameter_definitions(
+    session: Session,
+    component_parameter_definitions: list[db.ComponentParameterDefinition],
+):
+    """
+    Upserts component parameter definitions in the database.
+    If a component parameter definition already exists and has same attributes, it will be skipped.
+    If it exists but has different attributes, it will be updated.
+    If it does not exist, it will be inserted.
+    """
+    for component_parameter_definition in component_parameter_definitions:
+        existing_parameter_definition = (
+            session.query(db.ComponentParameterDefinition)
+            .filter(
+                db.ComponentParameterDefinition.id == component_parameter_definition.id,
+            )
+            .first()
+        )
+        if existing_parameter_definition:
+            if models_are_equal(existing_parameter_definition, component_parameter_definition):
+                LOGGER.info(
+                    f"Component parameter definition {component_parameter_definition.name} did not change, skipping."
+                )
+            else:
+                update_model_fields(existing_parameter_definition, component_parameter_definition)
+                LOGGER.info(f"Component parameter definition {component_parameter_definition.name} updated.")
+
+        else:
+            session.add(component_parameter_definition)
+            LOGGER.info(f"Component parameter definition {component_parameter_definition.name} inserted.")
+    session.commit()
+
+
+def upsert_release_stage_to_current_version_mapping(
+    session: Session,
+    component_id: UUID,
+    release_stage: db.ReleaseStage,
+    component_version_id: UUID,
+) -> None:
+    """
+    Upserts a single release stage to current version mapping in the database.
+    This allows manual control over which component version is considered "current"
+    for a specific release stage. This is required for get_current_component_versions to work properly.
+
+    This function is used for seeding and does NOT handle finding replacements for old stages.
+    For service updates that need replacement logic, use update_component_version_release_stage_service.
+
+    Args:
+        session: SQLAlchemy session
+        component_id: ID of the component
+        release_stage: The release stage (PUBLIC, BETA, EARLY_ACCESS, INTERNAL)
+        component_version_id: ID of the component version to set as current for this stage
+    """
+    upsert_release_stage_mapping_core(session, component_id, release_stage, component_version_id)
     session.commit()
 
 
@@ -79,39 +136,6 @@ def upsert_component_versions(
         else:
             session.add(component_version)
             LOGGER.info(f"Component version {component_version.id} inserted.")
-    session.commit()
-
-
-def upsert_components_parameter_definitions(
-    session: Session,
-    component_parameter_definitions: list[db.ComponentParameterDefinition],
-):
-    """
-    Upserts component parameter definitions in the database.
-    If a component parameter definition already exists and has same attributes, it will be skipped.
-    If it exists but has different attributes, it will be updated.
-    If it does not exist, it will be inserted.
-    """
-    for component_parameter_definition in component_parameter_definitions:
-        existing_parameter_definition = (
-            session.query(db.ComponentParameterDefinition)
-            .filter(
-                db.ComponentParameterDefinition.id == component_parameter_definition.id,
-            )
-            .first()
-        )
-        if existing_parameter_definition:
-            if models_are_equal(existing_parameter_definition, component_parameter_definition):
-                LOGGER.info(
-                    f"Component parameter definition {component_parameter_definition.name} did not change, skipping."
-                )
-            else:
-                update_model_fields(existing_parameter_definition, component_parameter_definition)
-                LOGGER.info(f"Component parameter definition {component_parameter_definition.name} updated.")
-
-        else:
-            session.add(component_parameter_definition)
-            LOGGER.info(f"Component parameter definition {component_parameter_definition.name} inserted.")
     session.commit()
 
 
@@ -238,30 +262,6 @@ def upsert_categories(
         else:
             session.add(category)
             LOGGER.info(f"Category {category.name} inserted.")
-    session.commit()
-
-
-def upsert_release_stage_to_current_version_mapping(
-    session: Session,
-    component_id: UUID,
-    release_stage: db.ReleaseStage,
-    component_version_id: UUID,
-) -> None:
-    """
-    Upserts a single release stage to current version mapping in the database.
-    This allows manual control over which component version is considered "current"
-    for a specific release stage. This is required for get_current_component_versions to work properly.
-
-    This function is used for seeding and does NOT handle finding replacements for old stages.
-    For service updates that need replacement logic, use update_component_version_release_stage_service.
-
-    Args:
-        session: SQLAlchemy session
-        component_id: ID of the component
-        release_stage: The release stage (PUBLIC, BETA, EARLY_ACCESS, INTERNAL)
-        component_version_id: ID of the component version to set as current for this stage
-    """
-    upsert_release_stage_mapping_core(session, component_id, release_stage, component_version_id)
     session.commit()
 
 
