@@ -14,6 +14,7 @@ from ada_backend.repositories.component_repository import (
     get_port_definitions_for_component_version_ids,
     process_components_with_versions,
 )
+from ada_backend.repositories.release_stage_repository import _STAGE_ORDER
 from ada_backend.schemas.components_schema import ComponentsResponse, PortDefinitionSchema
 from ada_backend.services.errors import EntityInUseDeletionError
 
@@ -56,10 +57,32 @@ def get_all_components_endpoint(
 ) -> ComponentsResponse:
     """
     Retrieves all components (current versions only) with their parameters and ports.
+    When a release_stage is specified, returns components with the lowest available stage
+    from the allowed hierarchy. For example, if INTERNAL is specified:
+    - Returns INTERNAL version if it exists
+    - Falls back to BETA, EARLY_ACCESS, or PUBLIC if INTERNAL doesn't exist
+    - Each component appears only once with the lowest available stage
     """
     allowed_stages = _get_allowed_stages(release_stage)
     components_with_version = get_current_component_versions(session, allowed_stages)
-    components = process_components_with_versions(session, components_with_version)
+
+    component_dict = {}
+    for comp in components_with_version:
+        comp_id = comp.component_id
+        if comp_id not in component_dict:
+            component_dict[comp_id] = comp
+        else:
+            current_stage_index = _STAGE_ORDER.index(comp.release_stage) if comp.release_stage in _STAGE_ORDER else 999
+            existing_stage_index = (
+                _STAGE_ORDER.index(component_dict[comp_id].release_stage)
+                if component_dict[comp_id].release_stage in _STAGE_ORDER
+                else 999
+            )
+            if current_stage_index < existing_stage_index:
+                component_dict[comp_id] = comp
+
+    unique_components = list(component_dict.values())
+    components = process_components_with_versions(session, unique_components)
     return _process_components_with_ports(session, components)
 
 
