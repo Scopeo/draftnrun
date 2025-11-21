@@ -14,6 +14,7 @@ from ada_backend.routers.auth_router import (
 )
 from ada_backend.services.components_service import (
     get_all_components_endpoint,
+    get_all_components_global_endpoint,
     delete_component_service,
 )
 from ada_backend.services.errors import EntityInUseDeletionError
@@ -29,9 +30,14 @@ def _ensure_user_has_id(user: SupabaseUser) -> None:
         raise HTTPException(status_code=400, detail="User ID not found")
 
 
-def _get_all_components_with_error_handling(session: Session, release_stage: Optional[ReleaseStage], log_context: str):
+def _get_all_components_with_error_handling(
+    session: Session, release_stage: Optional[ReleaseStage], log_context: str, use_global: bool = False
+):
     try:
-        return get_all_components_endpoint(session, release_stage)
+        if use_global:
+            return get_all_components_global_endpoint(session, release_stage)
+        else:
+            return get_all_components_endpoint(session, release_stage)
     except Exception as e:
         LOGGER.error(f"Failed to get components {log_context}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error") from e
@@ -70,6 +76,7 @@ async def get_all_components_global(
         session,
         release_stage,
         f"(global) by super admin (release_stage={release_stage})",
+        use_global=True,
     )
 
 

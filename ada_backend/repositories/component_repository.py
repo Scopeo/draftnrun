@@ -498,6 +498,27 @@ def get_tool_parameter_by_component_version(
     )
 
 
+def _build_component_with_version_dto(
+    comp: db.Component,
+    ver: db.ComponentVersion,
+) -> ComponentWithVersionDTO:
+    return ComponentWithVersionDTO(
+        component_id=comp.id,
+        name=comp.name,
+        icon=comp.icon,
+        description=ver.description,
+        component_version_id=ver.id,
+        version_tag=ver.version_tag,
+        release_stage=ver.release_stage,
+        is_agent=comp.is_agent,
+        function_callable=comp.function_callable,
+        can_use_function_calling=comp.can_use_function_calling,
+        is_protected=comp.is_protected,
+        integration_id=ver.integration_id,
+        default_tool_description_id=ver.default_tool_description_id,
+    )
+
+
 def get_current_component_versions(
     session: Session,
     allowed_stages: Optional[List[ReleaseStage]],
@@ -521,24 +542,25 @@ def get_current_component_versions(
 
     result = query.all()
 
-    return [
-        ComponentWithVersionDTO(
-            component_id=comp.id,
-            name=comp.name,
-            icon=comp.icon,
-            description=ver.description,
-            component_version_id=ver.id,
-            version_tag=ver.version_tag,
-            release_stage=ver.release_stage,
-            is_agent=comp.is_agent,
-            function_callable=comp.function_callable,
-            can_use_function_calling=comp.can_use_function_calling,
-            is_protected=comp.is_protected,
-            integration_id=ver.integration_id,
-            default_tool_description_id=ver.default_tool_description_id,
-        )
-        for comp, ver in result
-    ]
+    return [_build_component_with_version_dto(comp, ver) for comp, ver in result]
+
+
+def get_all_component_versions(
+    session: Session,
+    allowed_stages: Optional[List[ReleaseStage]],
+) -> list[ComponentWithVersionDTO]:
+    """
+    Retrieves all versions of all components (not just current versions).
+    """
+    query = (
+        session.query(db.Component, db.ComponentVersion)
+        .join(db.Component, db.Component.id == db.ComponentVersion.component_id)
+        .filter(db.ComponentVersion.release_stage.in_(allowed_stages))
+    )
+
+    result = query.all()
+
+    return [_build_component_with_version_dto(comp, ver) for comp, ver in result]
 
 
 # TODO: Put in service layer or write as query
@@ -576,26 +598,10 @@ def get_port_definitions_for_component_version_ids(
     )
 
 
-def get_all_components_with_parameters(
+def process_components_with_versions(
     session: Session,
-    allowed_stages: Optional[List[ReleaseStage]],
+    components_with_version: list[ComponentWithVersionDTO],
 ) -> List[ComponentWithParametersDTO]:
-    """
-    Retrieves all components and their parameter definitions from the database.
-    Component type parameters are moved to the tools list, while other parameters
-    remain in the parameters list.
-
-    Args:
-        session (Session): SQLAlchemy session.
-        allowed_stages (Optional[List[ReleaseStage]]): Optional release stage filter.
-
-    Returns:
-        List[ComponentWithParametersDTO]: A list of DTOs containing components,
-        their tools (component parameters) and other parameter definitions.
-    """
-    components_with_version = get_current_component_versions(session, allowed_stages)
-
-    # For each component, get its parameter definitions and build result
     result = []
     for component_with_version in components_with_version:
         try:
