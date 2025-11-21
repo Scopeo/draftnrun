@@ -37,6 +37,8 @@ from ada_backend.services.pipeline.update_pipeline_service import create_or_upda
 from ada_backend.segment_analytics import track_project_saved
 from ada_backend.repositories.field_expression_repository import (
     upsert_field_expression,
+    get_field_expressions_for_instances,
+    delete_field_expression,
 )
 from engine.field_expressions.parser import parse_expression
 from engine.field_expressions.errors import FieldExpressionError, FieldExpressionParseError
@@ -203,9 +205,26 @@ async def update_graph_service(
     _ensure_port_mappings_for_edges(session, graph_runner_id, graph_project)
 
     # Field expressions (nested per component instance)
+    existing_field_expressions_by_instance: dict[UUID, set[str]] = {}
+    existing_expressions = get_field_expressions_for_instances(session, list(instance_ids))
+    for expr in existing_expressions:
+        if expr.component_instance_id not in existing_field_expressions_by_instance:
+            existing_field_expressions_by_instance[expr.component_instance_id] = set()
+        existing_field_expressions_by_instance[expr.component_instance_id].add(expr.field_name)
+
+    updated_field_expressions_by_instance: dict[UUID, set[str]] = {}
     for instance in graph_project.component_instances:
-        if not instance.field_expressions:
+        if instance.field_expressions is None:
             continue
+
+        if not instance.field_expressions:
+            if instance.id in existing_field_expressions_by_instance:
+                for field_name in existing_field_expressions_by_instance[instance.id]:
+                    delete_field_expression(session, instance.id, field_name)
+            continue
+
+        if instance.id not in updated_field_expressions_by_instance:
+            updated_field_expressions_by_instance[instance.id] = set()
 
         for expression in instance.field_expressions:
             if not instance.id:
@@ -213,6 +232,8 @@ async def update_graph_service(
 
             if instance.id not in instance_ids:
                 raise ValueError("Invalid field expression target: component instance " f"{instance.id} not in update")
+
+            updated_field_expressions_by_instance[instance.id].add(expression.field_name)
 
             try:
                 ast = parse_expression(expression.expression_text)
@@ -239,6 +260,13 @@ async def update_graph_service(
                     field_name=expression.field_name,
                     ref_node=ref_node,
                 )
+
+    # Delete field expressions that were removed (exist in DB but not in update)
+    for instance_id, updated_fields in updated_field_expressions_by_instance.items():
+        if instance_id in existing_field_expressions_by_instance:
+            fields_to_delete = existing_field_expressions_by_instance[instance_id] - updated_fields
+            for field_name in fields_to_delete:
+                delete_field_expression(session, instance_id, field_name)
 
     nodes_to_delete = previous_graph_nodes - instance_ids
     if len(nodes_to_delete) > 0:
