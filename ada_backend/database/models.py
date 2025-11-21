@@ -385,6 +385,7 @@ class ReleaseStageToCurrentVersionMapping(Base):
     updated_at = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     component_version = relationship("ComponentVersion")
+    component = relationship("Component")
 
     __table_args__ = (
         ForeignKeyConstraint(

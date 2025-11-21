@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from ada_backend.database import models as db
 from ada_backend.database.utils import update_model_fields, models_are_equal
+from ada_backend.repositories.component_repository import upsert_release_stage_mapping_core
 
 
 LOGGER = logging.getLogger(__name__)
@@ -250,70 +251,17 @@ def upsert_release_stage_to_current_version_mapping(
     Upserts a single release stage to current version mapping in the database.
     This allows manual control over which component version is considered "current"
     for a specific release stage. This is required for get_current_component_versions to work properly.
+
+    This function is used for seeding and does NOT handle finding replacements for old stages.
+    For service updates that need replacement logic, use update_component_version_release_stage_service.
+
     Args:
         session: SQLAlchemy session
         component_id: ID of the component
         release_stage: The release stage (PUBLIC, BETA, EARLY_ACCESS, INTERNAL)
         component_version_id: ID of the component version to set as current for this stage
     """
-    existing_mapping = (
-        session.query(db.ReleaseStageToCurrentVersionMapping)
-        .filter(
-            db.ReleaseStageToCurrentVersionMapping.component_id == component_id,
-            db.ReleaseStageToCurrentVersionMapping.release_stage == release_stage,
-        )
-        .first()
-    )
-    if existing_mapping:
-        # Update the mapping to point to the specified version
-        if existing_mapping.component_version_id != component_version_id:
-            existing_mapping.component_version_id = component_version_id
-            LOGGER.info(
-                f"Updated release stage mapping for component {component_id} "
-                f"stage {release_stage} to version {component_version_id}"
-            )
-        else:
-            LOGGER.info(
-                f"Release stage mapping for component {component_id} "
-                f"stage {release_stage} already points to correct version, skipping."
-            )
-    else:
-        # Create new mapping
-        new_mapping = db.ReleaseStageToCurrentVersionMapping(
-            component_id=component_id,
-            release_stage=release_stage,
-            component_version_id=component_version_id,
-        )
-        session.add(new_mapping)
-        LOGGER.info(
-            f"Created release stage mapping for component {component_id} "
-            f"stage {release_stage} to version {component_version_id}"
-        )
-    stage_order = [
-        db.ReleaseStage.INTERNAL,
-        db.ReleaseStage.BETA,
-        db.ReleaseStage.EARLY_ACCESS,
-        db.ReleaseStage.PUBLIC,
-    ]
-    target_stage_index = stage_order.index(release_stage)
-
-    higher_stages = stage_order[target_stage_index + 1 :]
-    if higher_stages:
-        deleted_count = (
-            session.query(db.ReleaseStageToCurrentVersionMapping)
-            .filter(
-                db.ReleaseStageToCurrentVersionMapping.component_id == component_id,
-                db.ReleaseStageToCurrentVersionMapping.component_version_id == component_version_id,
-                db.ReleaseStageToCurrentVersionMapping.release_stage.in_(higher_stages),
-            )
-            .delete(synchronize_session=False)
-        )
-
-        if deleted_count > 0:
-            LOGGER.info(
-                f"Removed {deleted_count} higher release stage mapping(s) for component {component_id} "
-                f"version {component_version_id} (downgrade to {release_stage})"
-            )
+    upsert_release_stage_mapping_core(session, component_id, release_stage, component_version_id)
     session.commit()
 
 
