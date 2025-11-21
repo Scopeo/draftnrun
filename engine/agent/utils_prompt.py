@@ -17,11 +17,7 @@ def fill_prompt_template(prompt_template: str, component_name: str = "", variabl
     if not variables:
         return prompt_template
 
-    # Escape single braces that are not part of @{{}} field expressions
-    # This prevents accidental template variable interpretation while preserving field expressions
-    # Pattern to match @{{...}} expressions - we'll preserve these
     field_expr_pattern = r"@\{\{[^}]+\}\}"
-    # Find all field expressions and temporarily replace them with placeholders
     field_expressions = re.findall(field_expr_pattern, prompt_template)
     placeholder_map = {}
     escaped_template = prompt_template
@@ -30,11 +26,8 @@ def fill_prompt_template(prompt_template: str, component_name: str = "", variabl
         placeholder_map[placeholder] = expr
         escaped_template = escaped_template.replace(expr, placeholder, 1)
 
-    # Escape single braces (not part of field expressions) by doubling them
-    # This makes {role} become {{role}} which will render as {role} in the output
     escaped_template = escaped_template.replace("{", "{{").replace("}", "}}")
 
-    # Restore original field expressions (they should remain as @{{...}}, not escaped)
     for placeholder, expr in placeholder_map.items():
         escaped_template = escaped_template.replace(placeholder, expr)
 
@@ -55,7 +48,7 @@ def fill_prompt_template(prompt_template: str, component_name: str = "", variabl
     for key in prompt_keys:
         value = variables[key]
         try:
-            str_value = str(value)  # Try casting
+            str_value = str(value)
         except Exception as e:
             LOGGER.error(f"Value for key '{key}' cannot be cast to string: {e}")
             raise ValueError(f"Value for key '{key}' cannot be cast to string: {e}")
