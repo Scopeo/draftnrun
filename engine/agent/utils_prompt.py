@@ -11,10 +11,10 @@ def fill_prompt_template(prompt_template: str, component_name: str = "", variabl
     Ensures all values used can be converted to string.
     Raises ValueError for missing keys or uncastable values.
 
-    Note: Single braces { and } that are not part of @{{}} field expressions are automatically
-    escaped to prevent accidental template variable interpretation (e.g., {role} in text).
+    Note: Single braces { and } that are not template variables or @{{}} field expressions
+    are automatically escaped to prevent accidental template variable interpretation.
     """
-    if not variables:
+    if variables is None:
         return prompt_template
 
     field_expr_pattern = r"@\{\{[^}]+\}\}"
@@ -26,15 +26,21 @@ def fill_prompt_template(prompt_template: str, component_name: str = "", variabl
         placeholder_map[placeholder] = expr
         escaped_template = escaped_template.replace(expr, placeholder, 1)
 
-    escaped_template = escaped_template.replace("{", "{{").replace("}", "}}")
-
-    for placeholder, expr in placeholder_map.items():
-        escaped_template = escaped_template.replace(placeholder, expr)
-
     formatter = string.Formatter()
-    prompt_keys = {field_name for _, field_name, _, _ in formatter.parse(escaped_template) if field_name}
+    potential_vars = {field_name for _, field_name, _, _ in formatter.parse(escaped_template) if field_name}
 
-    missing_keys = prompt_keys - variables.keys()
+    valid_var_pattern = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
+    valid_potential_vars = {var for var in potential_vars if valid_var_pattern.match(var)}
+
+    template_vars = valid_potential_vars & variables.keys()
+
+    double_brace_pattern = r"\{\{([a-zA-Z_][a-zA-Z0-9_]*)\}\}"
+    for match in re.finditer(double_brace_pattern, escaped_template):
+        var_name = match.group(1)
+        if var_name in variables:
+            template_vars.add(var_name)
+
+    missing_keys = valid_potential_vars - variables.keys()
     if missing_keys:
         error_message = (
             f"Missing template variable(s) {list(missing_keys)} needed in prompt template "
@@ -44,8 +50,22 @@ def fill_prompt_template(prompt_template: str, component_name: str = "", variabl
         LOGGER.error(error_message)
         raise ValueError(error_message)
 
+    for var_name in template_vars:
+        if var_name in variables:
+            single_brace = "{" + var_name + "}"
+            double_brace = "{{" + var_name + "}}"
+            placeholder = f"__TEMPLATE_VAR_{var_name}__"
+            escaped_template = escaped_template.replace(double_brace, placeholder)
+            escaped_template = escaped_template.replace(single_brace, placeholder)
+            placeholder_map[placeholder] = "{" + var_name + "}"
+
+    escaped_template = escaped_template.replace("{", "{{").replace("}", "}}")
+
+    for placeholder, original in placeholder_map.items():
+        escaped_template = escaped_template.replace(placeholder, original)
+
     filtered_input = {}
-    for key in prompt_keys:
+    for key in template_vars:
         value = variables[key]
         try:
             str_value = str(value)
