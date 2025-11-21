@@ -24,6 +24,39 @@ LLM_CALL_PROMPT_TEMPLATE_PARAM_ID = UUID("e79b8f5f-d9cc-4a1f-a98a-4992f42a0196")
 
 
 def upgrade() -> None:
+    connection = op.get_bind()
+
+    table_exists = connection.execute(
+        text(
+            """
+            SELECT EXISTS (
+                SELECT FROM information_schema.tables
+                WHERE table_name = 'component_parameter_definitions'
+            )
+            """
+        )
+    ).scalar()
+
+    if not table_exists:
+        return
+
+    params_exist = connection.execute(
+        text(
+            """
+            SELECT EXISTS (
+                SELECT 1 FROM component_parameter_definitions
+                WHERE id IN (:ai_agent_id, :llm_call_id)
+            )
+            """
+        ).bindparams(
+            ai_agent_id=str(AI_AGENT_INITIAL_PROMPT_PARAM_ID),
+            llm_call_id=str(LLM_CALL_PROMPT_TEMPLATE_PARAM_ID),
+        )
+    ).scalar()
+
+    if not params_exist:
+        return
+
     regex_pattern = r"(?<!@)(?<!\{)\{([a-zA-Z_][a-zA-Z0-9_]*)\}(?!\})"
     replacement = r"{{\1}}"
 
@@ -47,6 +80,39 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    connection = op.get_bind()
+
+    table_exists = connection.execute(
+        text(
+            """
+            SELECT EXISTS (
+                SELECT FROM information_schema.tables
+                WHERE table_name = 'component_parameter_definitions'
+            )
+            """
+        )
+    ).scalar()
+
+    if not table_exists:
+        return
+
+    params_exist = connection.execute(
+        text(
+            """
+            SELECT EXISTS (
+                SELECT 1 FROM component_parameter_definitions
+                WHERE id IN (:ai_agent_id, :llm_call_id)
+            )
+            """
+        ).bindparams(
+            ai_agent_id=str(AI_AGENT_INITIAL_PROMPT_PARAM_ID),
+            llm_call_id=str(LLM_CALL_PROMPT_TEMPLATE_PARAM_ID),
+        )
+    ).scalar()
+
+    if not params_exist:
+        return
+
     regex_pattern = r"(?<!@)\{\{([a-zA-Z_][a-zA-Z0-9_]*)\}\}"
     replacement = r"{\1}"
 

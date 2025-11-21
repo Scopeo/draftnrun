@@ -71,6 +71,5 @@ def delete_field_expression(
         db.FieldExpression.component_instance_id == component_instance_id,
         db.FieldExpression.field_name == field_name,
     ).delete()
-    # Only commit if something was actually deleted (avoid unnecessary commits)
     if deleted_count > 0:
         session.commit()

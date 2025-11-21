@@ -205,7 +205,6 @@ async def update_graph_service(
     _ensure_port_mappings_for_edges(session, graph_runner_id, graph_project)
 
     # Field expressions (nested per component instance)
-    # First, get existing field expressions to track what needs to be deleted
     existing_field_expressions_by_instance: dict[UUID, set[str]] = {}
     existing_expressions = get_field_expressions_for_instances(session, list(instance_ids))
     for expr in existing_expressions:
@@ -213,15 +212,12 @@ async def update_graph_service(
             existing_field_expressions_by_instance[expr.component_instance_id] = set()
         existing_field_expressions_by_instance[expr.component_instance_id].add(expr.field_name)
 
-    # Process field expressions from the update
     updated_field_expressions_by_instance: dict[UUID, set[str]] = {}
     for instance in graph_project.component_instances:
-        # Handle empty field_expressions array - this means all expressions should be deleted
         if instance.field_expressions is None:
             continue
 
         if not instance.field_expressions:
-            # Empty array means delete all field expressions for this instance
             if instance.id in existing_field_expressions_by_instance:
                 for field_name in existing_field_expressions_by_instance[instance.id]:
                     delete_field_expression(session, instance.id, field_name)
