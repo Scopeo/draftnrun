@@ -33,6 +33,7 @@ from settings import settings
 from logger import setup_logging
 from ada_backend.routers.ingestion_database_router import router as ingestion_database_router
 from ada_backend.routers.llm_models_router import router as llm_models_router
+from ada_backend.routers.costs_router import router as costs_router
 
 setup_logging()
 
@@ -123,6 +124,10 @@ app = FastAPI(
             "name": "LLM Models",
             "description": "Endpoints for managing LLM models",
         },
+        {
+            "name": "Costs",
+            "description": "Endpoints for managing costs",
+        },
     ],
 )
 
@@ -156,6 +161,7 @@ app.include_router(cron_router)
 app.include_router(global_secret_router)
 app.include_router(ingestion_database_router)
 app.include_router(llm_models_router)
+app.include_router(costs_router)
 
 app.add_middleware(RequestContextMiddleware)
 app.add_middleware(
