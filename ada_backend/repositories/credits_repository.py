@@ -5,6 +5,24 @@ from typing import Optional, List
 import ada_backend.database.models as db
 
 
+def _update_cost_fields(
+    cost_obj: db.Cost,
+    credits_per_input_token: Optional[float] = None,
+    credits_per_output_token: Optional[float] = None,
+    credits_per_call: Optional[float] = None,
+    credits_per_second: Optional[float] = None,
+) -> None:
+    """Helper function to update cost fields on a Cost object."""
+    if credits_per_input_token is not None:
+        cost_obj.credits_per_input_token = credits_per_input_token
+    if credits_per_output_token is not None:
+        cost_obj.credits_per_output_token = credits_per_output_token
+    if credits_per_call is not None:
+        cost_obj.credits_per_call = credits_per_call
+    if credits_per_second is not None:
+        cost_obj.credits_per_second = credits_per_second
+
+
 def create_llm_cost(
     session: Session,
     llm_model_id: UUID,
@@ -40,14 +58,9 @@ def update_llm_cost(
     if llm_cost is None:
         raise ValueError(f"LLM cost with model id {llm_model_id} not found")
 
-    if credits_per_input_token is not None:
-        llm_cost.credits_per_input_token = credits_per_input_token
-    if credits_per_output_token is not None:
-        llm_cost.credits_per_output_token = credits_per_output_token
-    if credits_per_call is not None:
-        llm_cost.credits_per_call = credits_per_call
-    if credits_per_second is not None:
-        llm_cost.credits_per_second = credits_per_second
+    _update_cost_fields(
+        llm_cost, credits_per_input_token, credits_per_output_token, credits_per_call, credits_per_second
+    )
     session.commit()
     session.refresh(llm_cost)
     return llm_cost
@@ -82,14 +95,9 @@ def upsert_llm_cost(
         )
     else:
         # Update existing cost
-        if credits_per_input_token is not None:
-            llm_cost.credits_per_input_token = credits_per_input_token
-        if credits_per_output_token is not None:
-            llm_cost.credits_per_output_token = credits_per_output_token
-        if credits_per_call is not None:
-            llm_cost.credits_per_call = credits_per_call
-        if credits_per_second is not None:
-            llm_cost.credits_per_second = credits_per_second
+        _update_cost_fields(
+            llm_cost, credits_per_input_token, credits_per_output_token, credits_per_call, credits_per_second
+        )
         session.commit()
         session.refresh(llm_cost)
 
@@ -99,18 +107,18 @@ def upsert_llm_cost(
 def create_component_version_cost(
     session: Session,
     component_version_id: UUID,
-    credits_per_call: Optional[float] = None,
-    credits_per_second: Optional[float] = None,
     credits_per_input_token: Optional[float] = None,
     credits_per_output_token: Optional[float] = None,
+    credits_per_call: Optional[float] = None,
+    credits_per_second: Optional[float] = None,
 ) -> db.ComponentCost:
 
     component_cost = db.ComponentCost(
         component_version_id=component_version_id,
-        credits_per_call=credits_per_call,
-        credits_per_second=credits_per_second,
         credits_per_input_token=credits_per_input_token,
         credits_per_output_token=credits_per_output_token,
+        credits_per_call=credits_per_call,
+        credits_per_second=credits_per_second,
     )
     session.add(component_cost)
     session.commit()
@@ -121,10 +129,10 @@ def create_component_version_cost(
 def upsert_component_version_cost(
     session: Session,
     component_version_id: UUID,
-    credits_per_call: Optional[float] = None,
-    credits_per_second: Optional[float] = None,
     credits_per_input_token: Optional[float] = None,
     credits_per_output_token: Optional[float] = None,
+    credits_per_call: Optional[float] = None,
+    credits_per_second: Optional[float] = None,
 ) -> db.ComponentCost:
 
     component_cost = (
@@ -136,21 +144,16 @@ def upsert_component_version_cost(
         component_cost = create_component_version_cost(
             session,
             component_version_id,
-            credits_per_call,
-            credits_per_second,
             credits_per_input_token,
             credits_per_output_token,
+            credits_per_call,
+            credits_per_second,
         )
     else:
         # Update existing cost
-        if credits_per_call is not None:
-            component_cost.credits_per_call = credits_per_call
-        if credits_per_second is not None:
-            component_cost.credits_per_second = credits_per_second
-        if credits_per_input_token is not None:
-            component_cost.credits_per_input_token = credits_per_input_token
-        if credits_per_output_token is not None:
-            component_cost.credits_per_output_token = credits_per_output_token
+        _update_cost_fields(
+            component_cost, credits_per_input_token, credits_per_output_token, credits_per_call, credits_per_second
+        )
         session.commit()
         session.refresh(component_cost)
 

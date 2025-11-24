@@ -119,10 +119,10 @@ def upsert_component_version_cost_endpoint(
         return upsert_component_version_cost_service(
             session,
             component_version_id,
-            component_version_cost_update.credits_per_call,
-            component_version_cost_update.credits_per_second,
             component_version_cost_update.credits_per_input_token,
             component_version_cost_update.credits_per_output_token,
+            component_version_cost_update.credits_per_call,
+            component_version_cost_update.credits_per_second,
         )
     except Exception as e:
         LOGGER.error(f"Failed to update component version cost: {str(e)}", exc_info=True)
