@@ -75,8 +75,6 @@ def update_organization_limit_service(
         organization_id=organization_id,
         limit=limit,
     )
-    if organization_limit is None:
-        raise ValueError(f"Organization limit with id {id} and organization id {organization_id} not found")
     return OrganizationLimitResponse.model_validate(organization_limit, from_attributes=True)
 
 

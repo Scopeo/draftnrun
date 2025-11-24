@@ -10,8 +10,7 @@ from ada_backend.repositories.llm_models_repository import (
     llm_model_exists,
 )
 from ada_backend.repositories.credits_repository import (
-    create_llm_cost,
-    update_llm_cost,
+    upsert_llm_cost,
     delete_llm_cost,
 )
 from ada_backend.schemas.llm_models_schema import (
@@ -126,7 +125,7 @@ def create_llm_model_service(
         llm_model_data.model_name,
     )
 
-    create_llm_cost(
+    upsert_llm_cost(
         session,
         llm_model_id=created_llm_model.id,
         credits_per_input_token=llm_model_data.credits_per_input_token,
@@ -161,7 +160,7 @@ def update_llm_model_service(
     if updated_llm_model is None:
         raise LLMModelNotFound(llm_model_id)
 
-    update_llm_cost(
+    upsert_llm_cost(
         session,
         llm_model_id=llm_model_id,
         credits_per_input_token=llm_model_data.credits_per_input_token,

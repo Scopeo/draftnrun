@@ -55,10 +55,45 @@ def update_llm_cost(
 
 def delete_llm_cost(session: Session, llm_model_id: UUID) -> None:
     llm_cost = session.query(db.LLMCost).filter(db.LLMCost.llm_model_id == llm_model_id).first()
+    if llm_cost is not None:
+        session.delete(llm_cost)
+        session.commit()
+
+
+def upsert_llm_cost(
+    session: Session,
+    llm_model_id: UUID,
+    credits_per_input_token: Optional[float] = None,
+    credits_per_output_token: Optional[float] = None,
+    credits_per_call: Optional[float] = None,
+    credits_per_second: Optional[float] = None,
+) -> db.LLMCost:
+    llm_cost = session.query(db.LLMCost).filter(db.LLMCost.llm_model_id == llm_model_id).first()
+
     if llm_cost is None:
-        raise ValueError(f"LLM cost with model id {llm_model_id} not found")
-    session.delete(llm_cost)
-    session.commit()
+        # Create new cost
+        llm_cost = create_llm_cost(
+            session,
+            llm_model_id,
+            credits_per_input_token,
+            credits_per_output_token,
+            credits_per_call,
+            credits_per_second,
+        )
+    else:
+        # Update existing cost
+        if credits_per_input_token is not None:
+            llm_cost.credits_per_input_token = credits_per_input_token
+        if credits_per_output_token is not None:
+            llm_cost.credits_per_output_token = credits_per_output_token
+        if credits_per_call is not None:
+            llm_cost.credits_per_call = credits_per_call
+        if credits_per_second is not None:
+            llm_cost.credits_per_second = credits_per_second
+        session.commit()
+        session.refresh(llm_cost)
+
+    return llm_cost
 
 
 def create_component_version_cost(
@@ -126,10 +161,9 @@ def delete_component_version_cost(session: Session, component_version_id: UUID) 
     component_cost = (
         session.query(db.ComponentCost).filter(db.ComponentCost.component_version_id == component_version_id).first()
     )
-    if component_cost is None:
-        raise ValueError(f"Component version cost with id {component_version_id} not found")
-    session.delete(component_cost)
-    session.commit()
+    if component_cost is not None:
+        session.delete(component_cost)
+        session.commit()
 
 
 def get_all_organization_limits(session: Session, year: int, month: int) -> List[db.OrganizationLimit]:
