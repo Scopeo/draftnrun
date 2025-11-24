@@ -71,12 +71,8 @@ def get_all_components_endpoint(
         if comp_id not in component_dict:
             component_dict[comp_id] = comp
         else:
-            current_stage_index = _STAGE_ORDER.index(comp.release_stage) if comp.release_stage in _STAGE_ORDER else 999
-            existing_stage_index = (
-                _STAGE_ORDER.index(component_dict[comp_id].release_stage)
-                if component_dict[comp_id].release_stage in _STAGE_ORDER
-                else 999
-            )
+            current_stage_index = _STAGE_ORDER.index(comp.release_stage)
+            existing_stage_index = _STAGE_ORDER.index(component_dict[comp_id].release_stage)
             if current_stage_index < existing_stage_index:
                 component_dict[comp_id] = comp
 
