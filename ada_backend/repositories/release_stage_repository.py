@@ -8,13 +8,27 @@ from ada_backend.database.models import ReleaseStage
 
 LOGGER = logging.getLogger(__name__)
 
-# Stage order for determining downgrades (lower index = lower stage)
-_STAGE_ORDER = [
-    ReleaseStage.INTERNAL,
-    ReleaseStage.BETA,
-    ReleaseStage.EARLY_ACCESS,
-    ReleaseStage.PUBLIC,
-]
+
+STAGE_HIERARCHY = {
+    ReleaseStage.INTERNAL: [ReleaseStage.INTERNAL, ReleaseStage.BETA, ReleaseStage.EARLY_ACCESS, ReleaseStage.PUBLIC],
+    ReleaseStage.BETA: [ReleaseStage.BETA, ReleaseStage.EARLY_ACCESS, ReleaseStage.PUBLIC],
+    ReleaseStage.EARLY_ACCESS: [ReleaseStage.EARLY_ACCESS, ReleaseStage.PUBLIC],
+    ReleaseStage.PUBLIC: [ReleaseStage.PUBLIC],
+}
+
+
+def _build_stage_order() -> list[ReleaseStage]:
+    """
+    Builds the stage order from the stage hierarchy.
+    Stages are ordered by the length of their accessible stages list
+    (longest list = lowest stage, shortest list = highest stage).
+    This ensures _STAGE_ORDER stays in sync with STAGE_HIERARCHY.
+    """
+    sorted_stages = sorted(STAGE_HIERARCHY.keys(), key=lambda stage: len(STAGE_HIERARCHY[stage]), reverse=True)
+    return sorted_stages
+
+
+_STAGE_ORDER = _build_stage_order()
 
 
 def upsert_release_stage_mapping_core(

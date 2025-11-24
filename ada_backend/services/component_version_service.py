@@ -12,6 +12,7 @@ from ada_backend.repositories.component_repository import (
     get_component_version_by_id,
 )
 from ada_backend.repositories.release_stage_repository import (
+    _STAGE_ORDER,
     delete_release_stage_mapping,
     find_next_best_version_for_stage,
     get_release_stage_mapping,
@@ -24,14 +25,6 @@ from ada_backend.services.errors import (
 )
 
 LOGGER = logging.getLogger(__name__)
-
-# Stage order for determining downgrades (lower index = lower stage)
-_STAGE_ORDER = [
-    ReleaseStage.INTERNAL,
-    ReleaseStage.BETA,
-    ReleaseStage.EARLY_ACCESS,
-    ReleaseStage.PUBLIC,
-]
 
 
 def update_component_version_release_stage_service(
@@ -54,14 +47,11 @@ def update_component_version_release_stage_service(
             actual_component_id=component_version.component_id,
         )
 
-    # Capture the old release stage before updating
     old_release_stage = component_version.release_stage
 
-    # Update the version's release stage
     component_version.release_stage = release_stage
     session.add(component_version)
 
-    # Update the mapping with replacement logic
     _update_release_stage_mapping_with_replacement(
         session,
         component_id,
@@ -87,21 +77,17 @@ def _update_release_stage_mapping_with_replacement(
 
     This is service layer logic that orchestrates repository calls.
     """
-    # Get the old stage mapping to check if this version was current
     old_stage_mapping = get_release_stage_mapping(session, component_id, old_release_stage)
     was_current_for_old_stage = (
         old_stage_mapping is not None and old_stage_mapping.component_version_id == component_version_id
     )
 
-    # Determine if this is a downgrade
     old_stage_index = _STAGE_ORDER.index(old_release_stage)
     new_stage_index = _STAGE_ORDER.index(new_release_stage)
     is_downgrade = new_stage_index < old_stage_index
 
-    # Update the mapping for the new release stage
     upsert_release_stage_mapping_core(session, component_id, new_release_stage, component_version_id)
 
-    # If downgrading and this version was current for the old stage, find a replacement
     if is_downgrade and was_current_for_old_stage:
         next_best_version = find_next_best_version_for_stage(
             session, component_id, old_release_stage, component_version_id
