@@ -25,7 +25,6 @@ from ada_backend.database.component_definition_seeding import (
     upsert_components_parameter_definitions,
     upsert_release_stage_to_current_version_mapping,
 )
-from ada_backend.repositories.release_stage_repository import STAGE_HIERARCHY
 from ada_backend.schemas.pipeline.base import ToolDescriptionSchema
 from ada_backend.utils.component_utils import get_ui_component_properties_with_llm_options
 
