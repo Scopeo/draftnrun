@@ -596,7 +596,7 @@ def process_components_with_versions(
     session: Session,
     components_with_version: list[ComponentWithVersionDTO],
 ) -> List[ComponentWithParametersDTO]:
-    # Batch query all component costs to avoid N+1 query problem
+
     component_version_ids = [c.component_version_id for c in components_with_version]
     component_costs = (
         {
@@ -701,7 +701,6 @@ def process_components_with_versions(
             if component_with_version.integration_id:
                 integration = get_integration(session, component_with_version.integration_id)
 
-            # Get component cost from batch-loaded dictionary
             component_cost = component_costs.get(component_with_version.component_version_id)
 
             # Create ComponentWithParametersDTO

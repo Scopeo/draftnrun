@@ -55,9 +55,6 @@ def update_llm_cost(
 ) -> db.LLMCost:
     llm_cost = session.query(db.LLMCost).filter(db.LLMCost.llm_model_id == llm_model_id).first()
 
-    if llm_cost is None:
-        raise ValueError(f"LLM cost with model id {llm_model_id} not found")
-
     _update_cost_fields(
         llm_cost, credits_per_input_token, credits_per_output_token, credits_per_call, credits_per_second
     )
@@ -84,7 +81,6 @@ def upsert_llm_cost(
     llm_cost = session.query(db.LLMCost).filter(db.LLMCost.llm_model_id == llm_model_id).first()
 
     if llm_cost is None:
-        # Create new cost
         llm_cost = create_llm_cost(
             session,
             llm_model_id,
@@ -94,7 +90,6 @@ def upsert_llm_cost(
             credits_per_second,
         )
     else:
-        # Update existing cost
         _update_cost_fields(
             llm_cost, credits_per_input_token, credits_per_output_token, credits_per_call, credits_per_second
         )
@@ -140,7 +135,6 @@ def upsert_component_version_cost(
     )
 
     if component_cost is None:
-        # Create new cost
         component_cost = create_component_version_cost(
             session,
             component_version_id,
@@ -150,7 +144,6 @@ def upsert_component_version_cost(
             credits_per_second,
         )
     else:
-        # Update existing cost
         _update_cost_fields(
             component_cost, credits_per_input_token, credits_per_output_token, credits_per_call, credits_per_second
         )
@@ -210,8 +203,7 @@ def update_organization_limit(
         )
         .first()
     )
-    if organization_limit is None:
-        raise ValueError(f"Organization limit with id {id} and organization id {organization_id} not found")
+
     organization_limit.limit = limit
     session.commit()
     session.refresh(organization_limit)
@@ -227,7 +219,5 @@ def delete_organization_limit(session: Session, id: UUID, organization_id: UUID)
         )
         .first()
     )
-    if organization_limit is None:
-        raise ValueError(f"Organization limit with id {id} and organization id {organization_id} not found")
     session.delete(organization_limit)
     session.commit()

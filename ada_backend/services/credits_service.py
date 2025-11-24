@@ -13,6 +13,10 @@ from ada_backend.repositories.credits_repository import (
     delete_organization_limit,
     get_all_organization_limits,
 )
+from ada_backend.services.errors import (
+    ComponentVersionCostNotFound,
+    OrganizationLimitNotFound,
+)
 
 
 def upsert_component_version_cost_service(
@@ -31,6 +35,8 @@ def upsert_component_version_cost_service(
         credits_per_call,
         credits_per_second,
     )
+    if component_cost is None:
+        raise ComponentVersionCostNotFound(component_version_id)
     return ComponentVersionCostResponse.model_validate(component_cost, from_attributes=True)
 
 
@@ -75,6 +81,8 @@ def update_organization_limit_service(
         organization_id=organization_id,
         limit=limit,
     )
+    if organization_limit is None:
+        raise OrganizationLimitNotFound(id, organization_id)
     return OrganizationLimitResponse.model_validate(organization_limit, from_attributes=True)
 
 

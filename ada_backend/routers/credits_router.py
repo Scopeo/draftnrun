@@ -22,6 +22,10 @@ from ada_backend.services.credits_service import (
     get_all_organization_limits_service,
     delete_component_version_cost_service,
 )
+from ada_backend.services.errors import (
+    ComponentVersionCostNotFound,
+    OrganizationLimitNotFound,
+)
 
 router = APIRouter(tags=["Credits"])
 LOGGER = logging.getLogger(__name__)
@@ -81,6 +85,8 @@ def update_organization_limit_endpoint(
             organization_id=organization_id,
             limit=organization_limit,
         )
+    except OrganizationLimitNotFound as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
     except Exception as e:
         LOGGER.error(f"Failed to update organization limit: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error") from e
@@ -124,6 +130,8 @@ def upsert_component_version_cost_endpoint(
             component_version_cost_update.credits_per_call,
             component_version_cost_update.credits_per_second,
         )
+    except ComponentVersionCostNotFound as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
     except Exception as e:
         LOGGER.error(f"Failed to update component version cost: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error") from e

@@ -1085,7 +1085,6 @@ class Project(Base):
     # Quality Assurance relationships
     datasets = relationship("DatasetProject", back_populates="project", cascade="all, delete-orphan")
 
-    # Usage tracking
     usage = relationship("Usage", back_populates="project")
 
     __mapper_args__ = {"polymorphic_on": type, "polymorphic_identity": "base"}
