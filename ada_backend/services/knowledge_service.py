@@ -35,6 +35,8 @@ from ada_backend.services.knowledge.errors import (
     KnowledgeServiceSourceError,
     KnowledgeServiceFileNotFoundError,
     KnowledgeServiceDBSourceConfigError,
+    KnowledgeServiceDBOperationError,
+    KnowledgeServiceChunkNotFoundError,
 )
 from engine.llm_services.llm_service import EmbeddingService
 from engine.qdrant_service import QdrantService, QdrantCollectionSchema
@@ -350,7 +352,7 @@ async def update_chunk_for_data_source(
 
     _check_token_size_chunk(updated_content)
 
-    updated_chunk_for_qdrant = _update_payload_chunk_for_update(
+    updated_chunk_for_qdrant = _get_updated_payload_chunk_for_update(
         content=updated_content, last_edited_ts=updated_last_edited_ts, payload=existing_qdrant_chunk_dict
     )
     await _upsert_chunk_in_qdrant(
@@ -367,7 +369,7 @@ async def update_chunk_for_data_source(
         chunk_id=chunk_id,
     )
 
-    updated_chunk_for_table = _update_payload_chunk_for_update(
+    updated_chunk_for_table = _get_updated_payload_chunk_for_update(
         content=updated_content,
         last_edited_ts=updated_last_edited_ts,
         payload=existing_chunk_dict_from_table,
@@ -402,12 +404,26 @@ async def delete_chunk_for_data_source(
         LOGGER.error(f"Failed to delete chunk from Qdrant: {str(e)}", exc_info=True)
         raise KnowledgeServiceQdrantOperationError(f"Failed to delete chunk {chunk_id} from Qdrant: {str(e)}") from e
 
-    delete_chunk(
-        sql_local_service=sql_local_service,
-        schema_name=source.database_schema,
-        table_name=source.database_table_name,
-        chunk_id=chunk_id,
-    )
+    try:
+        delete_chunk(
+            sql_local_service=sql_local_service,
+            schema_name=source.database_schema,
+            table_name=source.database_table_name,
+            chunk_id=chunk_id,
+        )
+    except KnowledgeServiceChunkNotFoundError:
+        raise
+    except Exception as e:
+        LOGGER.error(
+            f"Failed to delete chunk from Table {source.database_table_name}"
+            f"in Schema {source.database_schema}: {str(e)}",
+            exc_info=True,
+        )
+        raise KnowledgeServiceDBOperationError(
+            f"Failed to delete chunk {chunk_id} "
+            f"from Table {source.database_table_name} "
+            f"in Schema {source.database_schema}: {str(e)}"
+        ) from e
 
 
 async def _get_chunk_from_qdrant_by_id(chunk_id: str, collection_name: str, qdrant_service: QdrantService):
@@ -416,10 +432,8 @@ async def _get_chunk_from_qdrant_by_id(chunk_id: str, collection_name: str, qdra
     Uses filter approach instead of point ID to avoid UUID conversion issues.
     """
     try:
-        # Get the chunk_id_field from the schema
         chunk_id_field = qdrant_service.default_schema.chunk_id_field
 
-        # Use filter to find chunk by chunk_id in payload (similar to delete_chunks_async)
         filter_on_chunk_id = {"should": [{"key": chunk_id_field, "match": {"any": [chunk_id]}}]}
         points = await qdrant_service.get_points_async(filter=filter_on_chunk_id, collection_name=collection_name)
 
@@ -440,7 +454,9 @@ async def _get_chunk_from_qdrant_by_id(chunk_id: str, collection_name: str, qdra
         raise KnowledgeServiceQdrantOperationError(f"Failed to get chunk {chunk_id} from Qdrant: {str(e)}") from e
 
 
-def _update_payload_chunk_for_update(content: str, last_edited_ts: str, payload: Dict[str, Any]) -> KnowledgeChunk:
+def _get_updated_payload_chunk_for_update(
+    content: str, last_edited_ts: str, payload: Dict[str, Any]
+) -> KnowledgeChunk:
     chunk_data = payload.copy()
     chunk_data["content"] = content
     chunk_data["last_edited_ts"] = last_edited_ts

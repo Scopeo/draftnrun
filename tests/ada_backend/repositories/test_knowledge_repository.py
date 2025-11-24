@@ -3,9 +3,10 @@ from pathlib import Path
 from typing import Iterator
 
 import pytest
-import sqlalchemy
+from sqlalchemy import select
 
 from engine.storage_service.local_service import SQLLocalService
+from engine.storage_service.db_utils import DBDefinition, DBColumn, PROCESSED_DATETIME_FIELD
 from ada_backend.repositories.knowledge_repository import (
     create_chunk,
     delete_chunk,
@@ -27,22 +28,27 @@ from ada_backend.services.knowledge.errors import (
 def sql_local_service(tmp_path: Path) -> Iterator[SQLLocalService]:
     db_path = tmp_path / "knowledge.sqlite"
     service = SQLLocalService(engine_url=f"sqlite:///{db_path}")
-    metadata = sqlalchemy.MetaData()
-    sqlalchemy.Table(
-        "knowledge_chunks",
-        metadata,
-        sqlalchemy.Column("_processed_datetime", sqlalchemy.String, nullable=True),
-        sqlalchemy.Column("chunk_id", sqlalchemy.String, primary_key=True),
-        sqlalchemy.Column("file_id", sqlalchemy.String, nullable=False),
-        sqlalchemy.Column("content", sqlalchemy.String, nullable=False),
-        sqlalchemy.Column("document_title", sqlalchemy.String, nullable=True),
-        sqlalchemy.Column("url", sqlalchemy.String, nullable=True),
-        sqlalchemy.Column("last_edited_ts", sqlalchemy.String, nullable=True),
-        sqlalchemy.Column("metadata", sqlalchemy.JSON, nullable=True),
-        sqlalchemy.Column("bounding_boxes", sqlalchemy.String, nullable=True),
+
+    table_definition = DBDefinition(
+        columns=[
+            DBColumn(name=PROCESSED_DATETIME_FIELD, type="VARCHAR", is_nullable=True),
+            DBColumn(name="chunk_id", type="VARCHAR", is_primary_key=True),
+            DBColumn(name="file_id", type="VARCHAR", is_nullable=False),
+            DBColumn(name="content", type="VARCHAR", is_nullable=False),
+            DBColumn(name="document_title", type="VARCHAR", is_nullable=True),
+            DBColumn(name="url", type="VARCHAR", is_nullable=True),
+            DBColumn(name="last_edited_ts", type="VARCHAR", is_nullable=True),
+            DBColumn(name="metadata", type="VARIANT", is_nullable=True),
+            DBColumn(name="bounding_boxes", type="VARCHAR", is_nullable=True),
+        ]
     )
-    metadata.create_all(service.engine)
-    service.metadata.reflect(bind=service.engine)
+
+    service.create_table(
+        table_name="knowledge_chunks",
+        table_definition=table_definition,
+        schema_name=None,
+    )
+
     yield service
 
 
@@ -154,7 +160,7 @@ def test_delete_file_removes_chunks(sql_local_service: SQLLocalService) -> None:
 
     table = sql_local_service.get_table(table_name="knowledge_chunks", schema_name=None)
     with sql_local_service.engine.connect() as conn:
-        remaining = conn.execute(sqlalchemy.select(table)).fetchall()
+        remaining = conn.execute(select(table)).fetchall()
     assert remaining == []
 
 

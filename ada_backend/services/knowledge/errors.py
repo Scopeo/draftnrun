@@ -36,3 +36,7 @@ class KnowledgeServiceChunkNotFoundError(KnowledgeServiceDBError):
 
 class KnowledgeServiceChunkAlreadyExistsError(KnowledgeServiceDBError):
     """Raised when attempting to create a chunk that already exists in the database."""
+
+
+class KnowledgeServiceDBOperationError(KnowledgeServiceDBError):
+    """Raised when a database operation fails at runtime (e.g., create/update/delete chunk failures)."""
