@@ -5,7 +5,6 @@ from sqlalchemy.orm import Session
 
 from ada_backend.database.models import ReleaseStage
 from ada_backend.repositories.component_repository import (
-    STAGE_HIERARCHY,
     count_component_instances,
     delete_component_by_id,
     get_all_component_versions,
@@ -14,7 +13,7 @@ from ada_backend.repositories.component_repository import (
     get_port_definitions_for_component_version_ids,
     process_components_with_versions,
 )
-from ada_backend.repositories.release_stage_repository import _STAGE_ORDER
+from ada_backend.repositories.release_stage_repository import _STAGE_ORDER, STAGE_HIERARCHY
 from ada_backend.schemas.components_schema import ComponentsResponse, PortDefinitionSchema
 from ada_backend.services.errors import EntityInUseDeletionError
 
