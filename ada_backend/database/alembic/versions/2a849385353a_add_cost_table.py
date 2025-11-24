@@ -25,7 +25,7 @@ def upgrade() -> None:
     op.create_table(
         "costs",
         sa.Column("id", sa.UUID(), nullable=False),
-        sa.Column("entity_type", sa.Enum("llm", "component", "parameter_value", name="entity_type"), nullable=False),
+        sa.Column("entity_type", sa.Enum("llm", "component", "parameter_value", name="entity_type"), nullable=True),
         sa.Column("credits_per_second", sa.Float(), nullable=True),
         sa.Column("credits_per_call", sa.Float(), nullable=True),
         sa.Column("credits_per_input_token", sa.Float(), nullable=True),
