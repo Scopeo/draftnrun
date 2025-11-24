@@ -57,7 +57,6 @@ def upsert_release_stage_mapping_core(
         .first()
     )
     if existing_mapping:
-        # Update the mapping to point to the specified version
         if existing_mapping.component_version_id != component_version_id:
             existing_mapping.component_version_id = component_version_id
             LOGGER.info(
@@ -70,7 +69,6 @@ def upsert_release_stage_mapping_core(
                 f"stage {release_stage} already points to correct version, skipping."
             )
     else:
-        # Create new mapping
         new_mapping = db.ReleaseStageToCurrentVersionMapping(
             component_id=component_id,
             release_stage=release_stage,
