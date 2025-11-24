@@ -3,7 +3,7 @@ from uuid import UUID
 import logging
 from dataclasses import dataclass
 
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from ada_backend.database import models as db
 from ada_backend.database.models import ParameterType, ReleaseStage, UIComponent, UIComponentProperties
@@ -526,6 +526,7 @@ def get_current_component_versions(
             db.ReleaseStageToCurrentVersionMapping,
             db.ReleaseStageToCurrentVersionMapping.component_id == db.Component.id,
         )
+        .options(joinedload(db.ComponentVersion.component_cost))
         .filter(
             db.ReleaseStageToCurrentVersionMapping.component_version_id == db.ComponentVersion.id,
             db.ReleaseStageToCurrentVersionMapping.release_stage.in_(allowed_stages),
@@ -547,6 +548,7 @@ def get_all_component_versions(
     query = (
         session.query(db.Component, db.ComponentVersion)
         .join(db.Component, db.Component.id == db.ComponentVersion.component_id)
+        .options(joinedload(db.ComponentVersion.component_cost))
         .filter(db.ComponentVersion.release_stage.in_(allowed_stages))
     )
 
@@ -685,6 +687,16 @@ def process_components_with_versions(
             )
             if component_with_version.integration_id:
                 integration = get_integration(session, component_with_version.integration_id)
+
+            # Get component cost
+            component_version = (
+                session.query(db.ComponentVersion)
+                .options(joinedload(db.ComponentVersion.component_cost))
+                .filter(db.ComponentVersion.id == component_with_version.component_version_id)
+                .first()
+            )
+            component_cost = component_version.component_cost if component_version else None
+
             # Create ComponentWithParametersDTO
             result.append(
                 ComponentWithParametersDTO(
@@ -720,6 +732,10 @@ def process_components_with_versions(
                         for subcomponent_param, param_child_def in subcomponent_params
                     ],
                     categories=fetch_associated_category_names(session, component_with_version.component_id),
+                    credits_per_input_token=component_cost.credits_per_input_token if component_cost else None,
+                    credits_per_output_token=component_cost.credits_per_output_token if component_cost else None,
+                    credits_per_call=component_cost.credits_per_call if component_cost else None,
+                    credits_per_second=component_cost.credits_per_second if component_cost else None,
                 )
             )
         except Exception as e:

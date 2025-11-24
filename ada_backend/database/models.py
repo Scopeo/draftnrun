@@ -330,6 +330,9 @@ class ComponentVersion(Base):
     updated_at = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     component = relationship("Component")
+    component_cost = relationship(
+        "ComponentCost", back_populates="component_version", uselist=False, cascade="all, delete-orphan"
+    )
     definitions = relationship(
         "ComponentParameterDefinition",
         back_populates="component_version",
@@ -1577,6 +1580,8 @@ class ComponentCost(Cost):
 
     id = mapped_column(UUID(as_uuid=True), ForeignKey("costs.id"), primary_key=True)
     component_version_id = mapped_column(UUID(as_uuid=True), ForeignKey("component_versions.id"), unique=True)
+
+    component_version = relationship("ComponentVersion", back_populates="component_cost")
 
     __mapper_args__ = {"polymorphic_identity": EntityType.COMPONENT.value}
 

@@ -2,16 +2,11 @@ from sqlalchemy.orm import Session
 from uuid import UUID
 from typing import Optional, List
 from ada_backend.schemas.credits_schema import (
-    LLMCostResponse,
     ComponentVersionCostResponse,
     OrganizationLimitResponse,
 )
 from ada_backend.repositories.credits_repository import (
-    create_llm_cost,
-    update_llm_cost,
-    delete_llm_cost,
-    create_component_version_cost,
-    update_component_version_cost,
+    upsert_component_version_cost,
     delete_component_version_cost,
     create_organization_limit,
     update_organization_limit,
@@ -20,49 +15,7 @@ from ada_backend.repositories.credits_repository import (
 )
 
 
-def create_llm_cost_service(
-    session: Session,
-    llm_model_id: UUID,
-    credits_per_input_token: Optional[float] = None,
-    credits_per_output_token: Optional[float] = None,
-    credits_per_call: Optional[float] = None,
-    credits_per_second: Optional[float] = None,
-) -> LLMCostResponse:
-    llm_cost = create_llm_cost(
-        session,
-        llm_model_id,
-        credits_per_input_token,
-        credits_per_output_token,
-        credits_per_call,
-        credits_per_second,
-    )
-    return LLMCostResponse.model_validate(llm_cost, from_attributes=True)
-
-
-def update_llm_cost_service(
-    session: Session,
-    llm_model_id: UUID,
-    credits_per_input_token: Optional[float] = None,
-    credits_per_output_token: Optional[float] = None,
-    credits_per_call: Optional[float] = None,
-    credits_per_second: Optional[float] = None,
-) -> LLMCostResponse:
-    llm_cost = update_llm_cost(
-        session,
-        llm_model_id,
-        credits_per_input_token,
-        credits_per_output_token,
-        credits_per_call,
-        credits_per_second,
-    )
-    return LLMCostResponse.model_validate(llm_cost, from_attributes=True)
-
-
-def delete_llm_cost_service(session: Session, llm_model_id: UUID) -> None:
-    return delete_llm_cost(session, llm_model_id)
-
-
-def create_component_version_cost_service(
+def upsert_component_version_cost_service(
     session: Session,
     component_version_id: UUID,
     credits_per_call: Optional[float] = None,
@@ -70,26 +23,7 @@ def create_component_version_cost_service(
     credits_per_input_token: Optional[float] = None,
     credits_per_output_token: Optional[float] = None,
 ) -> ComponentVersionCostResponse:
-    component_cost = create_component_version_cost(
-        session,
-        component_version_id,
-        credits_per_call,
-        credits_per_second,
-        credits_per_input_token,
-        credits_per_output_token,
-    )
-    return ComponentVersionCostResponse.model_validate(component_cost, from_attributes=True)
-
-
-def update_component_version_cost_service(
-    session: Session,
-    component_version_id: UUID,
-    credits_per_call: Optional[float] = None,
-    credits_per_second: Optional[float] = None,
-    credits_per_input_token: Optional[float] = None,
-    credits_per_output_token: Optional[float] = None,
-) -> ComponentVersionCostResponse:
-    component_cost = update_component_version_cost(
+    component_cost = upsert_component_version_cost(
         session,
         component_version_id,
         credits_per_call,

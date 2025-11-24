@@ -20,18 +20,6 @@ class OrganizationLimitResponse(OrganizationLimit):
     model_config = ConfigDict(from_attributes=True)
 
 
-class LLMCost(BaseModel):
-    credits_per_second: Optional[float] = None
-    credits_per_call: Optional[float] = None
-    credits_per_input_token: Optional[float] = None
-    credits_per_output_token: Optional[float] = None
-
-
-class LLMCostResponse(LLMCost):
-    id: UUID
-    llm_model_id: UUID
-
-
 class ComponentVersionCost(BaseModel):
     credits_per_second: Optional[float] = None
     credits_per_call: Optional[float] = None

@@ -9,24 +9,18 @@ from ada_backend.schemas.auth_schema import SupabaseUser
 from ada_backend.routers.auth_router import UserRights, user_has_access_to_organization_dependency
 from ada_backend.database.setup_db import get_db
 from ada_backend.schemas.credits_schema import (
-    LLMCostResponse,
-    LLMCost,
     ComponentVersionCostResponse,
     ComponentVersionCost,
     OrganizationLimitResponse,
     OrganizationLimit,
 )
 from ada_backend.services.credits_service import (
-    create_llm_cost_service,
-    update_llm_cost_service,
-    delete_llm_cost_service,
-    create_component_version_cost_service,
-    update_component_version_cost_service,
-    delete_component_version_cost_service,
+    upsert_component_version_cost_service,
     create_organization_limit_service,
     update_organization_limit_service,
     delete_organization_limit_service,
     get_all_organization_limits_service,
+    delete_component_version_cost_service,
 )
 
 router = APIRouter(tags=["Credits"])
@@ -108,102 +102,11 @@ def delete_organization_limit_endpoint(
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
-@router.post("/organizations/{organization_id}/llm-costs/{llm_model_id}", response_model=LLMCostResponse)
-def create_llm_cost_endpoint(
-    organization_id: UUID,
-    llm_model_id: UUID,
-    llm_cost_create: LLMCost,
-    user: Annotated[
-        SupabaseUser, Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.WRITER.value))
-    ],
-    session: Session = Depends(get_db),
-) -> LLMCostResponse:
-    try:
-        return create_llm_cost_service(
-            session,
-            llm_model_id,
-            llm_cost_create.credits_per_input_token,
-            llm_cost_create.credits_per_output_token,
-            llm_cost_create.credits_per_call,
-            llm_cost_create.credits_per_second,
-        )
-    except Exception as e:
-        LOGGER.error(f"Failed to create LLM cost: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Internal server error") from e
-
-
-@router.patch("/organizations/{organization_id}/llm-costs/{llm_model_id}", response_model=LLMCostResponse)
-def update_llm_cost_endpoint(
-    organization_id: UUID,
-    llm_model_id: UUID,
-    llm_cost_update: LLMCost,
-    user: Annotated[
-        SupabaseUser, Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.WRITER.value))
-    ],
-    session: Session = Depends(get_db),
-) -> LLMCostResponse:
-    try:
-        return update_llm_cost_service(
-            session,
-            llm_model_id,
-            llm_cost_update.credits_per_input_token,
-            llm_cost_update.credits_per_output_token,
-            llm_cost_update.credits_per_call,
-            llm_cost_update.credits_per_second,
-        )
-    except Exception as e:
-        LOGGER.error(f"Failed to update LLM cost: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Internal server error") from e
-
-
-@router.delete("/organizations/{organization_id}/llm-costs/{llm_model_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_llm_cost_endpoint(
-    organization_id: UUID,
-    llm_model_id: UUID,
-    user: Annotated[
-        SupabaseUser, Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.WRITER.value))
-    ],
-    session: Session = Depends(get_db),
-) -> None:
-    try:
-        return delete_llm_cost_service(session, llm_model_id)
-    except Exception as e:
-        LOGGER.error(f"Failed to delete LLM cost: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Internal server error") from e
-
-
-@router.post(
-    "/organizations/{organization_id}/component-version-costs/{component_version_id}",
-    response_model=ComponentVersionCostResponse,
-)
-def create_component_version_cost_endpoint(
-    organization_id: UUID,
-    component_version_id: UUID,
-    component_version_cost_create: ComponentVersionCost,
-    user: Annotated[
-        SupabaseUser, Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.WRITER.value))
-    ],
-    session: Session = Depends(get_db),
-) -> ComponentVersionCostResponse:
-    try:
-        return create_component_version_cost_service(
-            session,
-            component_version_id,
-            component_version_cost_create.credits_per_call,
-            component_version_cost_create.credits_per_second,
-            component_version_cost_create.credits_per_input_token,
-            component_version_cost_create.credits_per_output_token,
-        )
-    except Exception as e:
-        LOGGER.error(f"Failed to create component version cost: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Internal server error") from e
-
-
 @router.patch(
     "/organizations/{organization_id}/component-version-costs/{component_version_id}",
     response_model=ComponentVersionCostResponse,
 )
-def update_component_version_cost_endpoint(
+def upsert_component_version_cost_endpoint(
     organization_id: UUID,
     component_version_id: UUID,
     component_version_cost_update: ComponentVersionCost,
@@ -213,7 +116,7 @@ def update_component_version_cost_endpoint(
     session: Session = Depends(get_db),
 ) -> ComponentVersionCostResponse:
     try:
-        return update_component_version_cost_service(
+        return upsert_component_version_cost_service(
             session,
             component_version_id,
             component_version_cost_update.credits_per_call,
@@ -243,6 +146,3 @@ def delete_component_version_cost_endpoint(
     except Exception as e:
         LOGGER.error(f"Failed to delete component version cost: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error") from e
-
-
-# TODO: Add parameter value cost endpoints

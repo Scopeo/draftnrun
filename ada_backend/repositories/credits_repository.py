@@ -83,7 +83,7 @@ def create_component_version_cost(
     return component_cost
 
 
-def update_component_version_cost(
+def upsert_component_version_cost(
     session: Session,
     component_version_id: UUID,
     credits_per_call: Optional[float] = None,
@@ -91,21 +91,34 @@ def update_component_version_cost(
     credits_per_input_token: Optional[float] = None,
     credits_per_output_token: Optional[float] = None,
 ) -> db.ComponentCost:
+
     component_cost = (
         session.query(db.ComponentCost).filter(db.ComponentCost.component_version_id == component_version_id).first()
     )
+
     if component_cost is None:
-        raise ValueError(f"Component version cost with id {component_version_id} not found")
-    if credits_per_call is not None:
-        component_cost.credits_per_call = credits_per_call
-    if credits_per_second is not None:
-        component_cost.credits_per_second = credits_per_second
-    if credits_per_input_token is not None:
-        component_cost.credits_per_input_token = credits_per_input_token
-    if credits_per_output_token is not None:
-        component_cost.credits_per_output_token = credits_per_output_token
-    session.commit()
-    session.refresh(component_cost)
+        # Create new cost
+        component_cost = create_component_version_cost(
+            session,
+            component_version_id,
+            credits_per_call,
+            credits_per_second,
+            credits_per_input_token,
+            credits_per_output_token,
+        )
+    else:
+        # Update existing cost
+        if credits_per_call is not None:
+            component_cost.credits_per_call = credits_per_call
+        if credits_per_second is not None:
+            component_cost.credits_per_second = credits_per_second
+        if credits_per_input_token is not None:
+            component_cost.credits_per_input_token = credits_per_input_token
+        if credits_per_output_token is not None:
+            component_cost.credits_per_output_token = credits_per_output_token
+        session.commit()
+        session.refresh(component_cost)
+
     return component_cost
 
 
