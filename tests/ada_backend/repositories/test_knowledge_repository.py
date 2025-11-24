@@ -16,6 +16,11 @@ from ada_backend.repositories.knowledge_repository import (
     update_chunk,
 )
 from ada_backend.schemas.knowledge_schema import KnowledgeChunk
+from ada_backend.services.knowledge.errors import (
+    KnowledgeServiceChunkNotFoundError,
+    KnowledgeServiceChunkAlreadyExistsError,
+    KnowledgeServiceFileNotFoundError,
+)
 
 
 @pytest.fixture
@@ -154,7 +159,7 @@ def test_delete_file_removes_chunks(sql_local_service: SQLLocalService) -> None:
 
 
 def test_delete_file_raises_for_missing_file(sql_local_service: SQLLocalService) -> None:
-    with pytest.raises(ValueError):
+    with pytest.raises(KnowledgeServiceFileNotFoundError):
         delete_file(
             sql_local_service=sql_local_service,
             schema_name=None,
@@ -210,7 +215,7 @@ def test_create_chunk_raises_for_duplicate_id(sql_local_service: SQLLocalService
         content="other",
         last_edited_ts="2024-01-02",
     )
-    with pytest.raises(ValueError):
+    with pytest.raises(KnowledgeServiceChunkAlreadyExistsError):
         create_chunk(
             sql_local_service=sql_local_service,
             schema_name=None,
@@ -289,7 +294,7 @@ def test_delete_chunk_removes_row(sql_local_service: SQLLocalService) -> None:
         chunk_id="c1",
     )
 
-    with pytest.raises(ValueError):
+    with pytest.raises(KnowledgeServiceChunkNotFoundError):
         get_chunk_by_id(
             sql_local_service=sql_local_service,
             schema_name=None,
@@ -299,10 +304,43 @@ def test_delete_chunk_removes_row(sql_local_service: SQLLocalService) -> None:
 
 
 def test_delete_chunk_raises_for_missing_chunk(sql_local_service: SQLLocalService) -> None:
-    with pytest.raises(ValueError):
+    with pytest.raises(KnowledgeServiceChunkNotFoundError):
         delete_chunk(
             sql_local_service=sql_local_service,
             schema_name=None,
             table_name="knowledge_chunks",
             chunk_id="missing",
+        )
+
+
+def test_delete_chunk_is_idempotent(sql_local_service: SQLLocalService) -> None:
+    """Test that deleting a chunk multiple times is idempotent (second delete raises error)."""
+    chunk = KnowledgeChunk(
+        chunk_id="c1",
+        file_id="file-a",
+        content="content",
+        last_edited_ts="2024-01-01",
+    )
+    create_chunk(
+        sql_local_service=sql_local_service,
+        schema_name=None,
+        table_name="knowledge_chunks",
+        chunk=chunk,
+    )
+
+    # First delete should succeed
+    delete_chunk(
+        sql_local_service=sql_local_service,
+        schema_name=None,
+        table_name="knowledge_chunks",
+        chunk_id="c1",
+    )
+
+    # Second delete should raise error (chunk not found)
+    with pytest.raises(KnowledgeServiceChunkNotFoundError):
+        delete_chunk(
+            sql_local_service=sql_local_service,
+            schema_name=None,
+            table_name="knowledge_chunks",
+            chunk_id="c1",
         )

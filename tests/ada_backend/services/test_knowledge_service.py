@@ -19,6 +19,12 @@ from ada_backend.schemas.knowledge_schema import (
     UpdateKnowledgeChunkRequest,
 )
 from ada_backend.repositories.knowledge_repository import get_chunk_by_id
+from ada_backend.services.knowledge.errors import (
+    KnowledgeServiceChunkWrongSizeError,
+    KnowledgeServiceFileNotFoundError,
+    KnowledgeServiceQdrantConfigurationError,
+    KnowledgeServiceChunkNotFoundError,
+)
 from engine.llm_services.llm_service import EmbeddingService
 from engine.qdrant_service import QdrantCollectionSchema, QdrantService
 from engine.storage_service.local_service import SQLLocalService
@@ -26,7 +32,7 @@ from engine.storage_service.db_utils import DBColumn, DBDefinition, PROCESSED_DA
 from settings import settings
 from tests.mocks.trace_manager import MockTraceManager
 
-TEST_COLLECTION_NAME_PREFIX = "test_knowledge_v2"
+TEST_COLLECTION_NAME_PREFIX = "test_knowledge"
 EMBEDDING_SIZE = 3072
 
 
@@ -127,7 +133,6 @@ def _setup_test_table_and_collection_with_dummy_chunk(
     file_id = f"test_file_{uuid4()}"
     dummy_chunk_id = str(uuid4())
 
-    # Insert directly into SQL table with explicit non-default values
     table = sql_local_service.get_table(table_name=table_name, schema_name=schema_name)
     with sql_local_service.Session() as session:
         insert_data = {
@@ -267,12 +272,14 @@ def test_chunk_operations_integration(
     )
 
     mock_session = Mock()
-    create_result = knowledge_service.create_chunk_for_data_source(
-        session=mock_session,
-        organization_id=uuid4(),
-        source_id=test_source.id,
-        file_id=file_id,
-        request=create_request,
+    create_result = asyncio.run(
+        knowledge_service.create_chunk_for_data_source(
+            session=mock_session,
+            organization_id=uuid4(),
+            source_id=test_source.id,
+            file_id=file_id,
+            request=create_request,
+        )
     )
 
     assert isinstance(create_result, KnowledgeChunk)
@@ -286,10 +293,10 @@ def test_chunk_operations_integration(
     )
     assert sql_chunk["chunk_id"] == create_result.chunk_id
     assert sql_chunk["content"] == new_chunk_content
-    # Check that metadata_to_keep_by_qdrant_field is in the DB with default value
+
     assert "metadata_to_keep_by_qdrant_field" in sql_chunk
     assert sql_chunk["metadata_to_keep_by_qdrant_field"] == ""
-    # Check that not_kept_by_qdrant_chunk_field is in the DB with default value (VARIANT type should be {})
+
     assert "not_kept_by_qdrant_chunk_field" in sql_chunk
     assert sql_chunk["not_kept_by_qdrant_chunk_field"] == {}
 
@@ -300,14 +307,13 @@ def test_chunk_operations_integration(
     qdrant_chunk = collection_data[collection_data["chunk_id"] == create_result.chunk_id].iloc[0]
     assert qdrant_chunk["content"] == new_chunk_content
     assert qdrant_chunk["url"] == ""
-    # Check that metadata_to_keep_by_qdrant_field was added with default value (empty string for VARCHAR)
+
     assert "metadata_to_keep_by_qdrant_field" in qdrant_chunk
     assert qdrant_chunk["metadata_to_keep_by_qdrant_field"] == ""
 
     assert dummy_chunk_id in chunk_ids
 
     # ========== TEST UPDATE CHUNK ==========
-    # Capture state before update
     sql_chunk_before = get_chunk_by_id(
         sql_local_service=sql_local_service,
         schema_name=test_source.database_schema,
@@ -323,18 +329,19 @@ def test_chunk_operations_integration(
         content=updated_content,
     )
 
-    update_result = knowledge_service.update_chunk_for_data_source(
-        session=mock_session,
-        organization_id=uuid4(),
-        source_id=test_source.id,
-        chunk_id=create_result.chunk_id,
-        request=update_request,
+    update_result = asyncio.run(
+        knowledge_service.update_chunk_for_data_source(
+            session=mock_session,
+            organization_id=uuid4(),
+            source_id=test_source.id,
+            chunk_id=create_result.chunk_id,
+            request=update_request,
+        )
     )
 
     assert isinstance(update_result, KnowledgeChunk)
     assert update_result.content == updated_content
 
-    # Verify SQL chunk after update
     sql_chunk_after = get_chunk_by_id(
         sql_local_service=sql_local_service,
         schema_name=test_source.database_schema,
@@ -344,7 +351,6 @@ def test_chunk_operations_integration(
     assert sql_chunk_after["chunk_id"] == create_result.chunk_id
     assert sql_chunk_after["content"] == updated_content
 
-    # Verify Qdrant chunk after update
     collection_data_after = asyncio.run(qdrant_service.get_collection_data_async(test_source.qdrant_collection_name))
     chunk_ids = collection_data_after["chunk_id"].tolist()
     assert create_result.chunk_id in chunk_ids
@@ -352,21 +358,17 @@ def test_chunk_operations_integration(
     qdrant_chunk_after = collection_data_after[collection_data_after["chunk_id"] == create_result.chunk_id].iloc[0]
     assert qdrant_chunk_after["content"] == updated_content
 
-    # Verify that only updated fields changed, all other fields remain the same
-    # Fields that should have changed: content, last_edited_ts
     assert sql_chunk_after["content"] != sql_chunk_before["content"]
     assert sql_chunk_after["last_edited_ts"] != sql_chunk_before["last_edited_ts"]
     assert qdrant_chunk_after["content"] != qdrant_chunk_before["content"]
     assert qdrant_chunk_after["last_edited_ts"] != qdrant_chunk_before["last_edited_ts"]
 
-    # Fields that should remain the same in SQL
     assert sql_chunk_after["chunk_id"] == sql_chunk_before["chunk_id"]
     assert sql_chunk_after["file_id"] == sql_chunk_before["file_id"]
     assert sql_chunk_after["url"] == sql_chunk_before["url"]
     assert sql_chunk_after["metadata_to_keep_by_qdrant_field"] == sql_chunk_before["metadata_to_keep_by_qdrant_field"]
     assert sql_chunk_after["not_kept_by_qdrant_chunk_field"] == sql_chunk_before["not_kept_by_qdrant_chunk_field"]
 
-    # Fields that should remain the same in Qdrant
     assert qdrant_chunk_after["chunk_id"] == qdrant_chunk_before["chunk_id"]
     assert qdrant_chunk_after["file_id"] == qdrant_chunk_before["file_id"]
     assert qdrant_chunk_after["url"] == qdrant_chunk_before["url"]
@@ -381,16 +383,16 @@ def test_chunk_operations_integration(
     assert create_result.chunk_id in initial_chunk_ids
     initial_count = len(initial_chunk_ids)
 
-    # Delete chunk
-    knowledge_service.delete_chunk_for_data_source(
-        session=mock_session,
-        organization_id=uuid4(),
-        source_id=test_source.id,
-        chunk_id=create_result.chunk_id,
+    asyncio.run(
+        knowledge_service.delete_chunk_for_data_source(
+            session=mock_session,
+            organization_id=uuid4(),
+            source_id=test_source.id,
+            chunk_id=create_result.chunk_id,
+        )
     )
 
-    # Verify SQL database - chunk should be deleted
-    with pytest.raises(ValueError, match="not found"):
+    with pytest.raises(KnowledgeServiceChunkNotFoundError):
         get_chunk_by_id(
             sql_local_service=sql_local_service,
             schema_name=test_source.database_schema,
@@ -415,7 +417,7 @@ def test_create_chunk_raises_when_zero_tokens(
     qdrant_service: QdrantService,
     test_collection_name: str,
 ) -> None:
-    """Test that creating a chunk with zero tokens raises ValueError."""
+    """Test that creating a chunk with zero tokens raises KnowledgeServiceChunkWrongSizeError."""
     test_source, file_id, dummy_chunk_id = _setup_test_environment(
         monkeypatch, sql_local_service, qdrant_service, test_collection_name
     )
@@ -424,13 +426,15 @@ def test_create_chunk_raises_when_zero_tokens(
     request = CreateKnowledgeChunkRequest(content="")
     mock_session = Mock()
 
-    with pytest.raises(ValueError, match="zero tokens"):
-        knowledge_service.create_chunk_for_data_source(
-            session=mock_session,
-            organization_id=uuid4(),
-            source_id=test_source.id,
-            file_id=file_id,
-            request=request,
+    with pytest.raises(KnowledgeServiceChunkWrongSizeError, match="zero tokens"):
+        asyncio.run(
+            knowledge_service.create_chunk_for_data_source(
+                session=mock_session,
+                organization_id=uuid4(),
+                source_id=test_source.id,
+                file_id=file_id,
+                request=request,
+            )
         )
 
     _verify_dummy_chunk_unchanged(sql_local_service, qdrant_service, test_source, dummy_chunk_id)
@@ -443,7 +447,7 @@ def test_create_chunk_raises_when_exceeds_max_tokens(
     qdrant_service: QdrantService,
     test_collection_name: str,
 ) -> None:
-    """Test that creating a chunk exceeding max tokens raises ValueError."""
+    """Test that creating a chunk exceeding max tokens raises KnowledgeServiceChunkWrongSizeError."""
     test_source, file_id, dummy_chunk_id = _setup_test_environment(
         monkeypatch, sql_local_service, qdrant_service, test_collection_name
     )
@@ -452,13 +456,15 @@ def test_create_chunk_raises_when_exceeds_max_tokens(
     request = CreateKnowledgeChunkRequest(content="Very long content...")
     mock_session = Mock()
 
-    with pytest.raises(ValueError, match="exceeds maximum allowed token count"):
-        knowledge_service.create_chunk_for_data_source(
-            session=mock_session,
-            organization_id=uuid4(),
-            source_id=test_source.id,
-            file_id=file_id,
-            request=request,
+    with pytest.raises(KnowledgeServiceChunkWrongSizeError, match="exceeds maximum allowed token count"):
+        asyncio.run(
+            knowledge_service.create_chunk_for_data_source(
+                session=mock_session,
+                organization_id=uuid4(),
+                source_id=test_source.id,
+                file_id=file_id,
+                request=request,
+            )
         )
 
     _verify_dummy_chunk_unchanged(sql_local_service, qdrant_service, test_source, dummy_chunk_id)
@@ -471,7 +477,7 @@ def test_update_chunk_raises_when_zero_tokens(
     qdrant_service: QdrantService,
     test_collection_name: str,
 ) -> None:
-    """Test that updating a chunk to zero tokens raises ValueError."""
+    """Test that updating a chunk to zero tokens raises KnowledgeServiceChunkWrongSizeError."""
     test_source, file_id, dummy_chunk_id = _setup_test_environment(
         monkeypatch, sql_local_service, qdrant_service, test_collection_name
     )
@@ -480,13 +486,15 @@ def test_update_chunk_raises_when_zero_tokens(
     request = UpdateKnowledgeChunkRequest(content="")
     mock_session = Mock()
 
-    with pytest.raises(ValueError, match="zero tokens"):
-        knowledge_service.update_chunk_for_data_source(
-            session=mock_session,
-            organization_id=uuid4(),
-            source_id=test_source.id,
-            chunk_id=dummy_chunk_id,
-            request=request,
+    with pytest.raises(KnowledgeServiceChunkWrongSizeError, match="zero tokens"):
+        asyncio.run(
+            knowledge_service.update_chunk_for_data_source(
+                session=mock_session,
+                organization_id=uuid4(),
+                source_id=test_source.id,
+                chunk_id=dummy_chunk_id,
+                request=request,
+            )
         )
 
     _verify_dummy_chunk_unchanged(sql_local_service, qdrant_service, test_source, dummy_chunk_id)
@@ -499,7 +507,7 @@ def test_update_chunk_raises_when_exceeds_max_tokens(
     qdrant_service: QdrantService,
     test_collection_name: str,
 ) -> None:
-    """Test that updating a chunk exceeding max tokens raises ValueError."""
+    """Test that updating a chunk exceeding max tokens raises KnowledgeServiceChunkWrongSizeError."""
     test_source, file_id, dummy_chunk_id = _setup_test_environment(
         monkeypatch, sql_local_service, qdrant_service, test_collection_name
     )
@@ -508,13 +516,15 @@ def test_update_chunk_raises_when_exceeds_max_tokens(
     request = UpdateKnowledgeChunkRequest(content="Very long content...")
     mock_session = Mock()
 
-    with pytest.raises(ValueError, match="exceeds maximum allowed token count"):
-        knowledge_service.update_chunk_for_data_source(
-            session=mock_session,
-            organization_id=uuid4(),
-            source_id=test_source.id,
-            chunk_id=dummy_chunk_id,
-            request=request,
+    with pytest.raises(KnowledgeServiceChunkWrongSizeError, match="exceeds maximum allowed token count"):
+        asyncio.run(
+            knowledge_service.update_chunk_for_data_source(
+                session=mock_session,
+                organization_id=uuid4(),
+                source_id=test_source.id,
+                chunk_id=dummy_chunk_id,
+                request=request,
+            )
         )
 
     _verify_dummy_chunk_unchanged(sql_local_service, qdrant_service, test_source, dummy_chunk_id)
@@ -527,7 +537,7 @@ def test_create_chunk_raises_when_file_not_exists(
     qdrant_service: QdrantService,
     test_collection_name: str,
 ) -> None:
-    """Test that creating a chunk for non-existent file raises ValueError."""
+    """Test that creating a chunk for non-existent file raises KnowledgeServiceFileNotFoundError."""
     test_source, file_id, dummy_chunk_id = _setup_test_environment(
         monkeypatch, sql_local_service, qdrant_service, test_collection_name
     )
@@ -535,13 +545,15 @@ def test_create_chunk_raises_when_file_not_exists(
     request = CreateKnowledgeChunkRequest(content="Test content")
     mock_session = Mock()
 
-    with pytest.raises(ValueError, match="not found"):
-        knowledge_service.create_chunk_for_data_source(
-            session=mock_session,
-            organization_id=uuid4(),
-            source_id=test_source.id,
-            file_id="non_existent_file",
-            request=request,
+    with pytest.raises(KnowledgeServiceFileNotFoundError):
+        asyncio.run(
+            knowledge_service.create_chunk_for_data_source(
+                session=mock_session,
+                organization_id=uuid4(),
+                source_id=test_source.id,
+                file_id="non_existent_file",
+                request=request,
+            )
         )
 
     _verify_dummy_chunk_unchanged(sql_local_service, qdrant_service, test_source, dummy_chunk_id)
@@ -551,7 +563,7 @@ def test_create_chunk_raises_when_file_not_exists(
 def test_validate_qdrant_service_raises_when_missing_collection_name(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Test that missing qdrant_collection_name raises ValueError."""
+    """Test that missing qdrant_collection_name raises KnowledgeServiceQdrantConfigurationError."""
     source = SimpleNamespace(
         id=uuid4(),
         database_schema="schema",
@@ -567,15 +579,15 @@ def test_validate_qdrant_service_raises_when_missing_collection_name(
         embedding_model_reference="openai:text-embedding-3-large",
     )
 
-    with pytest.raises(ValueError, match="missing qdrant_collection_name"):
-        knowledge_service._validate_and_get_qdrant_service(source)
+    with pytest.raises(KnowledgeServiceQdrantConfigurationError, match="missing qdrant_collection_name"):
+        asyncio.run(knowledge_service._validate_and_get_qdrant_service(source))
 
 
 def test_validate_qdrant_service_raises_when_collection_not_exists(
     monkeypatch: pytest.MonkeyPatch,
     qdrant_service: QdrantService,
 ) -> None:
-    """Test that non-existent Qdrant collection raises ValueError."""
+    """Test that non-existent Qdrant collection raises KnowledgeServiceQdrantConfigurationError."""
     mock_trace_manager = MockTraceManager(project_name="test")
     monkeypatch.setattr(knowledge_service, "get_trace_manager", lambda: mock_trace_manager)
 
@@ -595,14 +607,14 @@ def test_validate_qdrant_service_raises_when_collection_not_exists(
         embedding_model_reference="openai:text-embedding-3-large",
     )
 
-    with pytest.raises(ValueError, match="does not exist"):
-        knowledge_service._validate_and_get_qdrant_service(source)
+    with pytest.raises(KnowledgeServiceQdrantConfigurationError, match="does not exist"):
+        asyncio.run(knowledge_service._validate_and_get_qdrant_service(source))
 
 
 def test_validate_qdrant_service_raises_when_invalid_schema(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Test that invalid qdrant_schema raises ValueError."""
+    """Test that invalid qdrant_schema raises KnowledgeServiceQdrantConfigurationError."""
     source = SimpleNamespace(
         id=uuid4(),
         database_schema="schema",
@@ -612,14 +624,14 @@ def test_validate_qdrant_service_raises_when_invalid_schema(
         embedding_model_reference="openai:text-embedding-3-large",
     )
 
-    with pytest.raises(ValueError, match="invalid qdrant_schema"):
-        knowledge_service._validate_and_get_qdrant_service(source)
+    with pytest.raises(KnowledgeServiceQdrantConfigurationError, match="invalid qdrant_schema"):
+        asyncio.run(knowledge_service._validate_and_get_qdrant_service(source))
 
 
 def test_validate_qdrant_service_raises_when_invalid_embedding_model(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Test that invalid embedding_model_reference raises ValueError."""
+    """Test that invalid embedding_model_reference raises KnowledgeServiceQdrantConfigurationError."""
     source = SimpleNamespace(
         id=uuid4(),
         database_schema="schema",
@@ -635,5 +647,51 @@ def test_validate_qdrant_service_raises_when_invalid_embedding_model(
         embedding_model_reference="invalid_format",
     )
 
-    with pytest.raises(ValueError, match="invalid embedding_model_reference"):
-        knowledge_service._validate_and_get_qdrant_service(source)
+    with pytest.raises(KnowledgeServiceQdrantConfigurationError, match="invalid embedding_model_reference"):
+        asyncio.run(knowledge_service._validate_and_get_qdrant_service(source))
+
+
+def test_delete_chunk_is_idempotent(
+    monkeypatch: pytest.MonkeyPatch,
+    sql_local_service: SQLLocalService,
+    qdrant_service: QdrantService,
+    test_collection_name: str,
+) -> None:
+    """Test that deleting a chunk multiple times is idempotent (second delete raises error)."""
+    test_source, file_id, dummy_chunk_id = _setup_test_environment(
+        monkeypatch, sql_local_service, qdrant_service, test_collection_name
+    )
+
+    create_request = CreateKnowledgeChunkRequest(content="Test chunk for deletion")
+    mock_session = Mock()
+    create_result = asyncio.run(
+        knowledge_service.create_chunk_for_data_source(
+            session=mock_session,
+            organization_id=uuid4(),
+            source_id=test_source.id,
+            file_id=file_id,
+            request=create_request,
+        )
+    )
+
+    asyncio.run(
+        knowledge_service.delete_chunk_for_data_source(
+            session=mock_session,
+            organization_id=uuid4(),
+            source_id=test_source.id,
+            chunk_id=create_result.chunk_id,
+        )
+    )
+
+    with pytest.raises(KnowledgeServiceChunkNotFoundError):
+        asyncio.run(
+            knowledge_service.delete_chunk_for_data_source(
+                session=mock_session,
+                organization_id=uuid4(),
+                source_id=test_source.id,
+                chunk_id=create_result.chunk_id,
+            )
+        )
+
+    _verify_dummy_chunk_unchanged(sql_local_service, qdrant_service, test_source, dummy_chunk_id)
+    _cleanup_test_environment(sql_local_service, qdrant_service, test_source)

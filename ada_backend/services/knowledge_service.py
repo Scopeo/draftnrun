@@ -1,4 +1,3 @@
-import asyncio
 import logging
 from datetime import datetime
 from typing import Any, Dict
@@ -29,11 +28,19 @@ from ada_backend.schemas.knowledge_schema import (
     UpdateKnowledgeChunkRequest,
 )
 from ada_backend.services.ingestion_database_service import get_sql_local_service_for_ingestion
+from ada_backend.services.knowledge.errors import (
+    KnowledgeServiceChunkWrongSizeError,
+    KnowledgeServiceQdrantConfigurationError,
+    KnowledgeServiceQdrantOperationError,
+    KnowledgeServiceSourceError,
+    KnowledgeServiceFileNotFoundError,
+    KnowledgeServiceDBSourceConfigError,
+)
 from engine.llm_services.llm_service import EmbeddingService
 from engine.qdrant_service import QdrantService, QdrantCollectionSchema
 from engine.trace.trace_context import get_trace_manager
 from ada_backend.services.entity_factory import get_llm_provider_and_model
-from engine.storage_service.local_service import SQLLocalService
+from engine.storage_service.db_utils import get_default_value_for_column_type
 
 LOGGER = logging.getLogger(__name__)
 
@@ -46,6 +53,17 @@ def _count_tokens(text: str) -> int:
     return len(_TOKEN_ENCODING.encode(text))
 
 
+def _check_token_size_chunk(chunk_content: str):
+    token_count = _count_tokens(chunk_content)
+    if token_count == 0:
+        raise KnowledgeServiceChunkWrongSizeError(
+            "Chunk content cannot be empty (zero tokens)."
+            " Vector database requires non-empty content for embeddings."
+        )
+    if token_count > MAX_CHUNK_TOKENS:
+        raise KnowledgeServiceChunkWrongSizeError("Chunk exceeds maximum allowed token count of 8000")
+
+
 def _get_source_for_organization(
     session: Session,
     organization_id: UUID,
@@ -55,72 +73,52 @@ def _get_source_for_organization(
         session_sql_alchemy=session, organization_id=organization_id, source_id=source_id
     )
     if source is None:
-        raise ValueError(f"Data source '{source_id}' not found for organization '{organization_id}'")
+        raise KnowledgeServiceSourceError(f"Data source '{source_id}' not found for organization '{organization_id}'")
     if not source.database_schema or not source.database_table_name:
-        raise ValueError(f"Data source '{source_id}' is missing ingestion database identifiers (schema/table)")
+        raise KnowledgeServiceDBSourceConfigError(
+            f"Data source '{source_id}' " "is missing ingestion database identifiers (schema/table)"
+        )
     return source
 
 
-def _validate_and_get_qdrant_service(source: db.DataSource) -> QdrantService:
-    """
-    Validate Qdrant configuration and return a configured QdrantService.
-    Validates that all required fields are present, schema is valid, embedding model is valid,
-    and that the Qdrant collection exists.
-
-    Args:
-        source: The data source object
-
-    Returns:
-        QdrantService: Configured Qdrant service instance
-
-    Raises:
-        ValueError: If Qdrant configuration is incomplete, invalid, or collection doesn't exist
-    """
+async def _validate_and_get_qdrant_service(source: db.DataSource) -> QdrantService:
     if not source.qdrant_collection_name:
-        raise ValueError(f"Data source '{source.id}' is missing qdrant_collection_name")
+        raise KnowledgeServiceQdrantConfigurationError(f"Data source '{source.id}' is missing qdrant_collection_name")
     if not source.qdrant_schema:
-        raise ValueError(f"Data source '{source.id}' is missing qdrant_schema")
+        raise KnowledgeServiceQdrantConfigurationError(f"Data source '{source.id}' is missing qdrant_schema")
     if not source.embedding_model_reference:
-        raise ValueError(f"Data source '{source.id}' is missing embedding_model_reference")
-
+        raise KnowledgeServiceQdrantConfigurationError(
+            f"Data source '{source.id}' is missing embedding_model_reference"
+        )
     try:
         QdrantCollectionSchema(**source.qdrant_schema)
     except Exception as e:
-        raise ValueError(f"Data source '{source.id}' has invalid qdrant_schema: {str(e)}") from e
+        raise KnowledgeServiceQdrantConfigurationError(
+            f"Data source '{source.id}' has invalid qdrant_schema: {str(e)}"
+        )
 
     try:
         get_llm_provider_and_model(source.embedding_model_reference)
     except Exception as e:
-        raise ValueError(f"Data source '{source.id}' has invalid embedding_model_reference: {str(e)}") from e
+        raise KnowledgeServiceQdrantConfigurationError(
+            f"Data source '{source.id}' has invalid embedding_model_reference: {str(e)}"
+        ) from e
 
-    qdrant_service = _get_qdrant_service(
-        source.qdrant_collection_name, source.qdrant_schema, source.embedding_model_reference
-    )
-    if not qdrant_service.collection_exists(source.qdrant_collection_name):
-        raise ValueError(
+    qdrant_service = _get_qdrant_service(source.qdrant_schema, source.embedding_model_reference)
+    if not await qdrant_service.collection_exists_async(source.qdrant_collection_name):
+        raise KnowledgeServiceQdrantConfigurationError(
             f"Data source '{source.id}' references "
-            f"Qdrant collection '{source.qdrant_collection_name}' which does not exist"
+            f"Qdrant collection '{source.qdrant_collection_name}' "
+            "which does not exist"
         )
 
     return qdrant_service
 
 
 def _get_qdrant_service(
-    qdrant_collection_name: str,
     qdrant_schema: Dict[str, Any],
     embedding_model_reference: str,
 ) -> QdrantService:
-    """
-    Create and configure a Qdrant service instance.
-
-    Args:
-        qdrant_collection_name: Name of the Qdrant collection
-        qdrant_schema: Qdrant collection schema as a dictionary
-        embedding_model_reference: Embedding model reference (e.g., "openai:text-embedding-3-large")
-
-    Returns:
-        QdrantService
-    """
     trace_manager = get_trace_manager()
     provider, model_name = get_llm_provider_and_model(embedding_model_reference)
 
@@ -138,6 +136,13 @@ def _get_qdrant_service(
     )
 
     return qdrant_service
+
+
+async def _get_source_and_services(session: Session, organization_id: UUID, source_id: UUID):
+    source = _get_source_for_organization(session, organization_id, source_id)
+    qdrant_service = await _validate_and_get_qdrant_service(source)
+    sql_local_service = get_sql_local_service_for_ingestion()
+    return source, qdrant_service, sql_local_service
 
 
 def list_files_for_data_source(
@@ -197,13 +202,10 @@ def _build_enriched_chunk(
     content: str,
     last_edited_ts: str,
     qdrant_schema: QdrantCollectionSchema,
-    sql_local_service: SQLLocalService,
-    schema_name: str,
-    table_name: str,
 ) -> KnowledgeChunk:
     """
     Build enriched KnowledgeChunk with all required fields from qdrant schema.
-    Missing fields are populated with default values based on table column types.
+    Missing fields are populated with default values based on metadata types.
 
     Args:
         chunk_id: Chunk ID
@@ -211,22 +213,16 @@ def _build_enriched_chunk(
         content: Chunk content
         last_edited_ts: Last edited timestamp
         qdrant_schema: Qdrant collection schema defining required fields
-        sql_local_service: SQL service to query table schema
-        schema_name: Database schema name
-        table_name: Table name
 
     Returns:
         Enriched KnowledgeChunk with all required fields
     """
-    # Start with required fields
     chunk_data = {
         "chunk_id": chunk_id,
         "file_id": file_id,
         "content": content,
-        "last_edited_ts": last_edited_ts,
     }
 
-    # Get required fields from qdrant schema
     required_fields = {
         qdrant_schema.chunk_id_field,
         qdrant_schema.content_field,
@@ -235,116 +231,92 @@ def _build_enriched_chunk(
 
     if qdrant_schema.url_id_field:
         required_fields.add(qdrant_schema.url_id_field)
+        chunk_data[qdrant_schema.url_id_field] = ""
     if qdrant_schema.last_edited_ts_field:
         required_fields.add(qdrant_schema.last_edited_ts_field)
+        chunk_data[qdrant_schema.last_edited_ts_field] = last_edited_ts
+    for field_name in qdrant_schema.metadata_fields_to_keep:
+        required_fields.add(field_name)
 
-    # Add metadata_fields_to_keep as top-level fields on KnowledgeChunk
-    if qdrant_schema.metadata_fields_to_keep:
-        for field_name in qdrant_schema.metadata_fields_to_keep:
-            if field_name not in chunk_data:
-                # Get default value based on metadata field type if available
-                from engine.storage_service.db_utils import get_default_value_for_column_type
-
-                if qdrant_schema.metadata_field_types and field_name in qdrant_schema.metadata_field_types:
-                    field_type = qdrant_schema.metadata_field_types[field_name]
-                    default_value = get_default_value_for_column_type(field_type)
-                else:
-                    # Default to empty string if no type info
-                    default_value = ""
-                chunk_data[field_name] = default_value
-
-    # Get table description to determine default values
-    try:
-        table_description = sql_local_service.describe_table(table_name=table_name, schema_name=schema_name)
-        column_info_map = {col["name"].lower(): col for col in table_description}
-    except Exception as e:
-        LOGGER.warning(f"Could not get table description for {schema_name}.{table_name}: {str(e)}")
-        column_info_map = {}
-
-    # Add missing required fields with defaults
     for field in required_fields:
         if field not in chunk_data:
-            column_info = column_info_map.get(field.lower())
-
-            if column_info:
-                from engine.storage_service.db_utils import get_default_value_for_column_type
-
-                default_value = get_default_value_for_column_type(column_info.get("type", ""))
-                chunk_data[field] = default_value
-                LOGGER.debug(f"Added missing field '{field}' with default value {default_value} based on column type")
+            if qdrant_schema.metadata_field_types and field in qdrant_schema.metadata_field_types:
+                field_type = qdrant_schema.metadata_field_types[field]
+                try:
+                    chunk_data[field] = get_default_value_for_column_type(field_type)
+                except ValueError:
+                    LOGGER.warning(
+                        f"Unknown field type '{field_type}' for field '{field}', using empty string as default"
+                    )
+                    chunk_data[field] = ""
             else:
                 chunk_data[field] = ""
-                LOGGER.debug(f"Added missing field '{field}' with default empty string (column not found in table)")
-
     return KnowledgeChunk(**chunk_data)
 
 
-def _upsert_chunk_in_qdrant(
+async def _upsert_chunk_in_qdrant(
     qdrant_service: QdrantService,
     qdrant_collection_name: str,
     chunk: KnowledgeChunk,
     type_of_operation: str,
 ):
     try:
-        # Convert KnowledgeChunk to dict for Qdrant (exclude processed_datetime)
         chunk_dict = chunk.model_dump(exclude_none=True)
         chunk_dict.pop("processed_datetime", None)
         chunk_dict.pop("_processed_datetime", None)
 
-        asyncio.run(
-            qdrant_service.add_chunks_async(
-                list_chunks=[chunk_dict],
-                collection_name=qdrant_collection_name,
-            )
+        await qdrant_service.add_chunks_async(
+            list_chunks=[chunk_dict],
+            collection_name=qdrant_collection_name,
         )
+
         LOGGER.info(f"{type_of_operation} chunk {chunk.chunk_id} in Qdrant collection {qdrant_collection_name}")
     except Exception as e:
         LOGGER.error(f"Failed to add chunk to Qdrant: {str(e)}", exc_info=True)
-        raise
+        raise KnowledgeServiceQdrantOperationError(
+            f"Failed to {type_of_operation.lower()} chunk {chunk.chunk_id} in Qdrant: {str(e)}"
+        ) from e
 
 
-def create_chunk_for_data_source(
+async def create_chunk_for_data_source(
     session: Session,
     organization_id: UUID,
     source_id: UUID,
     file_id: str,
     request: CreateKnowledgeChunkRequest,
 ) -> KnowledgeChunk:
-    source = _get_source_for_organization(session, organization_id, source_id)
-    qdrant_service = _validate_and_get_qdrant_service(source)
-    sql_local_service = get_sql_local_service_for_ingestion()
+    source, qdrant_service, sql_local_service = await _get_source_and_services(session, organization_id, source_id)
 
     if not file_exists(sql_local_service, source.database_schema, source.database_table_name, file_id):
-        raise ValueError(f"File '{file_id}' not found for source '{source_id}'")
+        raise KnowledgeServiceFileNotFoundError(f"File '{file_id}' not found for source '{source_id}'")
 
     content = request.content
-    token_count = _count_tokens(content)
-    if token_count == 0:
-        raise ValueError(
-            "Chunk content cannot be empty (zero tokens). Vector database requires non-empty content for embeddings."
-        )
-    if token_count > MAX_CHUNK_TOKENS:
-        raise ValueError("Chunk exceeds maximum allowed token count of 8000")
+
+    _check_token_size_chunk(content)
 
     chunk_id = request.chunk_id or str(uuid4())
     last_edited_ts = request.last_edited_ts or datetime.utcnow().isoformat()
 
-    qdrant_collection_schema = QdrantCollectionSchema(**source.qdrant_schema)
-    chunk = _build_enriched_chunk(
+    minimal_chunk = KnowledgeChunk(
         chunk_id=chunk_id,
         file_id=file_id,
         content=content,
         last_edited_ts=last_edited_ts,
-        qdrant_schema=qdrant_collection_schema,
-        sql_local_service=sql_local_service,
-        schema_name=source.database_schema,
-        table_name=source.database_table_name,
     )
 
-    _upsert_chunk_in_qdrant(
+    qdrant_collection_schema = QdrantCollectionSchema(**source.qdrant_schema)
+    enriched_chunk = _build_enriched_chunk(
+        chunk_id=minimal_chunk.chunk_id,
+        file_id=minimal_chunk.file_id,
+        content=minimal_chunk.content,
+        last_edited_ts=minimal_chunk.last_edited_ts,
+        qdrant_schema=qdrant_collection_schema,
+    )
+
+    await _upsert_chunk_in_qdrant(
         qdrant_service=qdrant_service,
         qdrant_collection_name=source.qdrant_collection_name,
-        chunk=chunk,
+        chunk=enriched_chunk,
         type_of_operation="Created",
     )
 
@@ -352,92 +324,83 @@ def create_chunk_for_data_source(
         sql_local_service=sql_local_service,
         schema_name=source.database_schema,
         table_name=source.database_table_name,
-        chunk=chunk,
+        chunk=minimal_chunk,
     )
 
     return chunk
 
 
-def update_chunk_for_data_source(
+async def update_chunk_for_data_source(
     session: Session,
     organization_id: UUID,
     source_id: UUID,
     chunk_id: str,
     request: UpdateKnowledgeChunkRequest,
 ) -> KnowledgeChunk:
-    source = _get_source_for_organization(session, organization_id, source_id)
-    qdrant_service = _validate_and_get_qdrant_service(source)
-    sql_local_service = get_sql_local_service_for_ingestion()
+    source, qdrant_service, sql_local_service = await _get_source_and_services(session, organization_id, source_id)
 
-    existing_chunk_dict = get_chunk_by_id(
+    existing_qdrant_chunk_dict = await _get_chunk_from_qdrant_by_id(
+        chunk_id, source.qdrant_collection_name, qdrant_service
+    )
+
+    updated_content = request.content if request.content is not None else existing_qdrant_chunk_dict["content"]
+    updated_last_edited_ts = (
+        request.last_edited_ts if request.last_edited_ts is not None else datetime.utcnow().isoformat()
+    )
+
+    _check_token_size_chunk(updated_content)
+
+    updated_chunk_for_qdrant = _update_payload_chunk_for_update(
+        content=updated_content, last_edited_ts=updated_last_edited_ts, payload=existing_qdrant_chunk_dict
+    )
+    await _upsert_chunk_in_qdrant(
+        qdrant_service=qdrant_service,
+        qdrant_collection_name=source.qdrant_collection_name,
+        chunk=updated_chunk_for_qdrant,
+        type_of_operation="Updated",
+    )
+
+    existing_chunk_dict_from_table = get_chunk_by_id(
         sql_local_service=sql_local_service,
         schema_name=source.database_schema,
         table_name=source.database_table_name,
         chunk_id=chunk_id,
     )
 
-    # Convert existing chunk to KnowledgeChunk
-    existing_chunk = KnowledgeChunk(**existing_chunk_dict)
-
-    # Apply modifications
-    updated_content = request.content if request.content is not None else existing_chunk.content
-    updated_last_edited_ts = (
-        request.last_edited_ts if request.last_edited_ts is not None else datetime.utcnow().isoformat()
-    )
-
-    token_count = _count_tokens(updated_content)
-    if token_count == 0:
-        raise ValueError(
-            "Chunk content cannot be empty (zero tokens). Vector database requires non-empty content for embeddings."
-        )
-    if token_count > MAX_CHUNK_TOKENS:
-        raise ValueError("Chunk exceeds maximum allowed token count of 8000")
-
-    # Create updated chunk by modifying the existing one
-    updated_chunk_dict = existing_chunk.model_dump()
-    updated_chunk_dict["content"] = updated_content
-    updated_chunk_dict["last_edited_ts"] = updated_last_edited_ts
-    updated_chunk = KnowledgeChunk(**updated_chunk_dict)
-
-    _upsert_chunk_in_qdrant(
-        qdrant_service=qdrant_service,
-        qdrant_collection_name=source.qdrant_collection_name,
-        chunk=updated_chunk,
-        type_of_operation="Updated",
+    updated_chunk_for_table = _update_payload_chunk_for_update(
+        content=updated_content,
+        last_edited_ts=updated_last_edited_ts,
+        payload=existing_chunk_dict_from_table,
     )
 
     updated_chunk = update_chunk(
         sql_local_service=sql_local_service,
         schema_name=source.database_schema,
         table_name=source.database_table_name,
-        chunk=updated_chunk,
+        chunk=updated_chunk_for_table,
     )
 
     return updated_chunk
 
 
-def delete_chunk_for_data_source(
+async def delete_chunk_for_data_source(
     session: Session,
     organization_id: UUID,
     source_id: UUID,
     chunk_id: str,
 ) -> None:
-    source = _get_source_for_organization(session, organization_id, source_id)
-    qdrant_service = _validate_and_get_qdrant_service(source)
-    sql_local_service = get_sql_local_service_for_ingestion()
+    source, qdrant_service, sql_local_service = await _get_source_and_services(session, organization_id, source_id)
     qdrant_collection_schema = qdrant_service._get_schema(source.qdrant_collection_name)
     try:
-        asyncio.run(
-            qdrant_service.delete_chunks_async(
-                point_ids=[chunk_id],
-                id_field=qdrant_collection_schema.chunk_id_field,
-                collection_name=source.qdrant_collection_name,
-            )
+        await qdrant_service.delete_chunks_async(
+            point_ids=[chunk_id],
+            id_field=qdrant_collection_schema.chunk_id_field,
+            collection_name=source.qdrant_collection_name,
         )
         LOGGER.info(f"Deleted chunk {chunk_id} from Qdrant collection {source.qdrant_collection_name}")
     except Exception as e:
         LOGGER.error(f"Failed to delete chunk from Qdrant: {str(e)}", exc_info=True)
-        raise
+        raise KnowledgeServiceQdrantOperationError(f"Failed to delete chunk {chunk_id} from Qdrant: {str(e)}") from e
 
     delete_chunk(
         sql_local_service=sql_local_service,
@@ -445,3 +408,40 @@ def delete_chunk_for_data_source(
         table_name=source.database_table_name,
         chunk_id=chunk_id,
     )
+
+
+async def _get_chunk_from_qdrant_by_id(chunk_id: str, collection_name: str, qdrant_service: QdrantService):
+    """
+    Retrieve chunk from Qdrant by filtering on chunk_id field in payload.
+    Uses filter approach instead of point ID to avoid UUID conversion issues.
+    """
+    try:
+        # Get the chunk_id_field from the schema
+        chunk_id_field = qdrant_service.default_schema.chunk_id_field
+
+        # Use filter to find chunk by chunk_id in payload (similar to delete_chunks_async)
+        filter_on_chunk_id = {"should": [{"key": chunk_id_field, "match": {"any": [chunk_id]}}]}
+        points = await qdrant_service.get_points_async(filter=filter_on_chunk_id, collection_name=collection_name)
+
+        if points and len(points) > 0:
+            point = points[0]
+            chunk_data = point.get("payload")
+            if not chunk_data:
+                raise KnowledgeServiceQdrantOperationError(f"Chunk {chunk_id} found in Qdrant but payload is missing")
+            return chunk_data
+        else:
+            raise KnowledgeServiceQdrantOperationError(
+                f"Chunk {chunk_id} not found in Qdrant collection {collection_name}"
+            )
+    except KnowledgeServiceQdrantOperationError:
+        raise
+    except Exception as e:
+        LOGGER.error(f"Failed to get chunk from Qdrant: {str(e)}", exc_info=True)
+        raise KnowledgeServiceQdrantOperationError(f"Failed to get chunk {chunk_id} from Qdrant: {str(e)}") from e
+
+
+def _update_payload_chunk_for_update(content: str, last_edited_ts: str, payload: Dict[str, Any]) -> KnowledgeChunk:
+    chunk_data = payload.copy()
+    chunk_data["content"] = content
+    chunk_data["last_edited_ts"] = last_edited_ts
+    return KnowledgeChunk(**chunk_data)

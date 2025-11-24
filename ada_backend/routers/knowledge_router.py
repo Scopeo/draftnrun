@@ -1,5 +1,6 @@
 from typing import Annotated
 from uuid import UUID
+import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.orm import Session
@@ -25,6 +26,16 @@ from ada_backend.services.knowledge_service import (
     get_file_detail_for_data_source,
     list_files_for_data_source,
 )
+from ada_backend.services.knowledge.errors import (
+    KnowledgeServiceChunkWrongSizeError,
+    KnowledgeServiceQdrantConfigurationError,
+    KnowledgeServiceQdrantOperationError,
+    KnowledgeServiceSourceError,
+    KnowledgeServiceFileNotFoundError,
+    KnowledgeServiceDBSourceConfigError,
+)
+
+LOGGER = logging.getLogger(__name__)
 
 
 router = APIRouter(prefix="/knowledge", tags=["Knowledge"])
@@ -43,8 +54,17 @@ def list_files(
         raise HTTPException(status_code=400, detail="User ID not found")
     try:
         return list_files_for_data_source(session, organization_id, source_id)
-    except ValueError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except KnowledgeServiceSourceError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    except KnowledgeServiceDBSourceConfigError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except KnowledgeServiceQdrantConfigurationError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except Exception as e:
+        LOGGER.error(
+            f"Failed to list files for source {source_id} in organization {organization_id}: {str(e)}", exc_info=True
+        )
+        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @router.get(
@@ -64,8 +84,20 @@ def get_file_detail(
         raise HTTPException(status_code=400, detail="User ID not found")
     try:
         return get_file_detail_for_data_source(session, organization_id, source_id, file_id)
-    except ValueError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except KnowledgeServiceSourceError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    except KnowledgeServiceFileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    except KnowledgeServiceDBSourceConfigError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except KnowledgeServiceQdrantConfigurationError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except Exception as e:
+        LOGGER.error(
+            f"Failed to get file detail {file_id} for source {source_id} in organization {organization_id}: {str(e)}",
+            exc_info=True,
+        )
+        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @router.delete("/organizations/{organization_id}/sources/{source_id}/files/{file_id}")
@@ -82,8 +114,20 @@ def delete_file(
         raise HTTPException(status_code=400, detail="User ID not found")
     try:
         delete_file_for_data_source(session, organization_id, source_id, file_id)
-    except ValueError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except KnowledgeServiceSourceError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    except KnowledgeServiceFileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    except KnowledgeServiceDBSourceConfigError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except KnowledgeServiceQdrantConfigurationError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except Exception as e:
+        LOGGER.error(
+            f"Failed to delete file {file_id} for source {source_id} in organization {organization_id}: {str(e)}",
+            exc_info=True,
+        )
+        raise HTTPException(status_code=500, detail="Internal server error") from e
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
@@ -92,7 +136,7 @@ def delete_file(
     response_model=KnowledgeChunk,
     status_code=status.HTTP_201_CREATED,
 )
-def create_chunk(
+async def create_chunk(
     organization_id: UUID,
     source_id: UUID,
     file_id: str,
@@ -105,16 +149,32 @@ def create_chunk(
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
     try:
-        return create_chunk_for_data_source(session, organization_id, source_id, file_id, request)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return await create_chunk_for_data_source(session, organization_id, source_id, file_id, request)
+    except KnowledgeServiceChunkWrongSizeError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except KnowledgeServiceSourceError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    except KnowledgeServiceFileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    except KnowledgeServiceDBSourceConfigError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except KnowledgeServiceQdrantConfigurationError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except KnowledgeServiceQdrantOperationError as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
+    except Exception as e:
+        LOGGER.error(
+            f"Failed to create chunk for file {file_id} in source {source_id} for organization {organization_id}: {str(e)}",
+            exc_info=True,
+        )
+        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @router.put(
     "/organizations/{organization_id}/sources/{source_id}/chunks/{chunk_id}",
     response_model=KnowledgeChunk,
 )
-def update_chunk(
+async def update_chunk(
     organization_id: UUID,
     source_id: UUID,
     chunk_id: str,
@@ -127,16 +187,30 @@ def update_chunk(
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
     try:
-        return update_chunk_for_data_source(session, organization_id, source_id, chunk_id, request)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return await update_chunk_for_data_source(session, organization_id, source_id, chunk_id, request)
+    except KnowledgeServiceChunkWrongSizeError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except KnowledgeServiceSourceError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    except KnowledgeServiceDBSourceConfigError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except KnowledgeServiceQdrantConfigurationError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except KnowledgeServiceQdrantOperationError as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
+    except Exception as e:
+        LOGGER.error(
+            f"Failed to update chunk {chunk_id} for source {source_id} in organization {organization_id}: {str(e)}",
+            exc_info=True,
+        )
+        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @router.delete(
     "/organizations/{organization_id}/sources/{source_id}/chunks/{chunk_id}",
     status_code=status.HTTP_204_NO_CONTENT,
 )
-def delete_chunk(
+async def delete_chunk(
     organization_id: UUID,
     source_id: UUID,
     chunk_id: str,
@@ -148,7 +222,19 @@ def delete_chunk(
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
     try:
-        delete_chunk_for_data_source(session, organization_id, source_id, chunk_id)
-    except ValueError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+        await delete_chunk_for_data_source(session, organization_id, source_id, chunk_id)
+    except KnowledgeServiceSourceError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    except KnowledgeServiceDBSourceConfigError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except KnowledgeServiceQdrantConfigurationError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except KnowledgeServiceQdrantOperationError as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
+    except Exception as e:
+        LOGGER.error(
+            f"Failed to delete chunk {chunk_id} for source {source_id} in organization {organization_id}: {str(e)}",
+            exc_info=True,
+        )
+        raise HTTPException(status_code=500, detail="Internal server error") from e
     return Response(status_code=status.HTTP_204_NO_CONTENT)

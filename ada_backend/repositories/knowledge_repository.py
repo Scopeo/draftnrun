@@ -1,11 +1,18 @@
 import json
 import logging
+from contextlib import contextmanager
 from typing import Any, Dict, List
 
 from sqlalchemy import func, select, update, delete
 
 from ada_backend.schemas.knowledge_schema import KnowledgeChunk
+from ada_backend.services.knowledge.errors import (
+    KnowledgeServiceChunkNotFoundError,
+    KnowledgeServiceChunkAlreadyExistsError,
+    KnowledgeServiceFileNotFoundError,
+)
 from engine.storage_service.local_service import SQLLocalService
+from engine.storage_service.db_utils import PROCESSED_DATETIME_FIELD, get_default_value_for_column_type
 
 
 LOGGER = logging.getLogger(__name__)
@@ -20,24 +27,99 @@ def _deserialize_json_field(value: Any) -> Any:
     return value
 
 
+def _get_table(
+    sql_local_service: SQLLocalService,
+    schema_name: str,
+    table_name: str,
+):
+    return sql_local_service.get_table(table_name=table_name, schema_name=schema_name)
+
+
+def _prepare_chunk_data_for_table(
+    chunk: KnowledgeChunk,
+    table_description: List[Dict[str, Any]],
+    include_defaults: bool = True,
+) -> Dict[str, Any]:
+    """Prepare chunk data matching table columns, optionally with default values for missing fields.
+
+    Args:
+        chunk: KnowledgeChunk object
+        table_description: Table description from describe_table()
+        include_defaults: If True, add default values for missing columns (for CREATE).
+                         If False, only include fields present in chunk (for UPDATE).
+
+    Returns:
+        Dictionary with chunk fields matched to table columns, including defaults if specified
+    """
+    table_column_names = {col["name"] for col in table_description}
+    chunk_dict = chunk.model_dump(exclude_none=True)
+
+    data = {}
+
+    for field_name, field_value in chunk_dict.items():
+        if field_name in table_column_names:
+            data[field_name] = field_value
+
+    if include_defaults:
+        for column in table_description:
+            column_name = column["name"]
+            if column_name == PROCESSED_DATETIME_FIELD or column_name == "_processed_datetime":
+                continue
+            if column_name not in data:
+                column_type = column.get("type", "")
+                if column_type:
+                    try:
+                        default_value = get_default_value_for_column_type(column_type)
+                        data[column_name] = default_value
+                    except ValueError:
+                        LOGGER.warning(
+                            f"Unknown column type '{column_type}' for column '{column_name}', skipping default value"
+                        )
+                        data[column_name] = ""
+                else:
+                    data[column_name] = ""
+    return data
+
+
+@contextmanager
+def _execute_statement(
+    sql_local_service: SQLLocalService,
+    stmt,
+):
+    """Execute a SQL statement within a session context with error handling.
+
+    Yields:
+        tuple: (result, session) - The result object and session.
+        The caller can use result methods (.all(), .fetchone(), .scalar(), etc.)
+        and call session.commit() if needed for writes.
+    """
+    try:
+        with sql_local_service.Session() as session:
+            result = session.execute(stmt)
+            yield result, session
+    except Exception as e:
+        LOGGER.error(f"Error executing statement: {str(e)}", exc_info=True)
+        raise
+
+
 def list_files_for_source(
     sql_local_service: SQLLocalService,
     schema_name: str,
     table_name: str,
 ) -> List[Dict[str, Any]]:
-    table = sql_local_service.get_table(table_name=table_name, schema_name=schema_name)
-    with sql_local_service.Session() as session:
-        stmt = (
-            select(
-                table.c.file_id.label("file_id"),
-                func.max(table.c.document_title).label("document_title"),
-                func.count().label("chunk_count"),
-                func.max(table.c.last_edited_ts).label("last_edited_ts"),
-            )
-            .group_by(table.c.file_id)
-            .order_by(func.max(table.c.last_edited_ts).desc())
+    table = _get_table(sql_local_service, schema_name, table_name)
+    stmt = (
+        select(
+            table.c.file_id.label("file_id"),
+            func.max(table.c.document_title).label("document_title"),
+            func.count().label("chunk_count"),
+            func.max(table.c.last_edited_ts).label("last_edited_ts"),
         )
-        rows = session.execute(stmt).all()
+        .group_by(table.c.file_id)
+        .order_by(func.max(table.c.last_edited_ts).desc())
+    )
+    with _execute_statement(sql_local_service, stmt) as (result, session):
+        rows = result.all()
 
     files: List[Dict[str, Any]] = []
     for row in rows:
@@ -58,18 +140,17 @@ def get_file_with_chunks(
     table_name: str,
     file_id: str,
 ) -> Dict[str, Any]:
-    table = sql_local_service.get_table(table_name=table_name, schema_name=schema_name)
-
-    with sql_local_service.Session() as session:
-        stmt = (
-            select(table)
-            .where(table.c.file_id == file_id)
-            .order_by(table.c.last_edited_ts.desc(), table.c.chunk_id.desc())
-        )
-        rows = session.execute(stmt).fetchall()
+    table = _get_table(sql_local_service, schema_name, table_name)
+    stmt = (
+        select(table)
+        .where(table.c.file_id == file_id)
+        .order_by(table.c.last_edited_ts.desc(), table.c.chunk_id.desc())
+    )
+    with _execute_statement(sql_local_service, stmt) as (result, session):
+        rows = result.fetchall()
 
     if not rows:
-        raise ValueError(f"No chunks found for file_id='{file_id}' in table '{table_name}'")
+        raise KnowledgeServiceFileNotFoundError(f"No chunks found for file_id='{file_id}' in table '{table_name}'")
 
     chunks: List[Dict[str, Any]] = []
     for row in rows:
@@ -106,14 +187,13 @@ def get_chunk_by_id(
     table_name: str,
     chunk_id: str,
 ) -> Dict[str, Any]:
-    table = sql_local_service.get_table(table_name=table_name, schema_name=schema_name)
-
-    with sql_local_service.Session() as session:
-        stmt = select(table).where(table.c.chunk_id == chunk_id)
-        row = session.execute(stmt).fetchone()
+    table = _get_table(sql_local_service, schema_name, table_name)
+    stmt = select(table).where(table.c.chunk_id == chunk_id)
+    with _execute_statement(sql_local_service, stmt) as (result, session):
+        row = result.fetchone()
 
     if row is None:
-        raise ValueError(f"Chunk with id='{chunk_id}' not found in table '{table_name}'")
+        raise KnowledgeServiceChunkNotFoundError(f"Chunk with id='{chunk_id}' not found in table '{table_name}'")
 
     row_dict = {column.name: getattr(row, column.name) for column in table.columns}
     row_dict["metadata"] = _deserialize_json_field(row_dict.get("metadata"))
@@ -129,11 +209,10 @@ def file_exists(
     table_name: str,
     file_id: str,
 ) -> bool:
-    table = sql_local_service.get_table(table_name=table_name, schema_name=schema_name)
-
-    with sql_local_service.Session() as session:
-        stmt = select(func.count()).select_from(table).where(table.c.file_id == file_id)
-        count = session.execute(stmt).scalar()
+    table = _get_table(sql_local_service, schema_name, table_name)
+    stmt = select(func.count()).select_from(table).where(table.c.file_id == file_id)
+    with _execute_statement(sql_local_service, stmt) as (result, session):
+        count = result.scalar()
 
     return bool(count)
 
@@ -144,13 +223,11 @@ def delete_file(
     table_name: str,
     file_id: str,
 ) -> None:
-    table = sql_local_service.get_table(table_name=table_name, schema_name=schema_name)
-
-    with sql_local_service.Session() as session:
-        stmt = delete(table).where(table.c.file_id == file_id)
-        result = session.execute(stmt)
+    table = _get_table(sql_local_service, schema_name, table_name)
+    stmt = delete(table).where(table.c.file_id == file_id)
+    with _execute_statement(sql_local_service, stmt) as (result, session):
         if result.rowcount == 0:
-            raise ValueError(f"No rows deleted for file_id='{file_id}' in table '{table_name}'")
+            raise KnowledgeServiceFileNotFoundError(f"No rows deleted for file_id='{file_id}' in table '{table_name}'")
         session.commit()
 
 
@@ -172,39 +249,19 @@ def create_chunk(
     Returns:
         KnowledgeChunk object
     """
-    from engine.storage_service.db_utils import PROCESSED_DATETIME_FIELD, get_default_value_for_column_type
-
-    table = sql_local_service.get_table(table_name=table_name, schema_name=schema_name)
+    table = _get_table(sql_local_service, schema_name, table_name)
     table_description = sql_local_service.describe_table(table_name=table_name, schema_name=schema_name)
-    table_column_names = {col["name"] for col in table_description}
+    payload = _prepare_chunk_data_for_table(chunk, table_description)
 
     chunk_id = chunk.chunk_id
-    chunk_dict = chunk.model_dump(exclude_none=True)
 
-    # Prepare payload: match chunk fields with table columns
-    payload = {}
-
-    # Add matching fields from chunk to table
-    for field_name, field_value in chunk_dict.items():
-        if field_name in table_column_names:
-            payload[field_name] = field_value
-        # Exclude fields not in table (no error, just ignore them)
-
-    # Add default values for missing table columns (excluding processed_datetime)
-    for column in table_description:
-        column_name = column["name"]
-        if column_name == PROCESSED_DATETIME_FIELD or column_name == "_processed_datetime":
-            continue
-        if column_name not in payload:
-            column_type = column.get("type", "")
-            default_value = get_default_value_for_column_type(column_type)
-            payload[column_name] = default_value
-
-    with sql_local_service.Session() as session:
-        exists_stmt = select(table.c.chunk_id).where(table.c.chunk_id == chunk_id)
-        existing = session.execute(exists_stmt).scalar_one_or_none()
+    exists_stmt = select(table.c.chunk_id).where(table.c.chunk_id == chunk_id)
+    with _execute_statement(sql_local_service, exists_stmt) as (result, session):
+        existing = result.scalar_one_or_none()
         if existing:
-            raise ValueError(f"Chunk with id='{chunk_id}' already exists in table '{table_name}'")
+            raise KnowledgeServiceChunkAlreadyExistsError(
+                f"Chunk with id='{chunk_id}' already exists in table '{table_name}'"
+            )
 
     sql_local_service.insert_data(table_name=table_name, data=payload, schema_name=schema_name)
 
@@ -229,40 +286,17 @@ def update_chunk(
     Returns:
         KnowledgeChunk object
     """
-    from engine.storage_service.db_utils import PROCESSED_DATETIME_FIELD, get_default_value_for_column_type
-
-    table = sql_local_service.get_table(table_name=table_name, schema_name=schema_name)
+    table = _get_table(sql_local_service, schema_name, table_name)
     table_description = sql_local_service.describe_table(table_name=table_name, schema_name=schema_name)
-    table_column_names = {col["name"] for col in table_description}
-
-    chunk_dict = chunk.model_dump(exclude_none=True)
-
-    # Prepare update values: match chunk fields with table columns
-    update_values = {}
-
-    # Add matching fields from chunk to table
-    for field_name, field_value in chunk_dict.items():
-        if field_name in table_column_names:
-            update_values[field_name] = field_value
-        # Exclude fields not in table (no error, just ignore them)
-
-    # Add default values for missing table columns (excluding processed_datetime)
-    for column in table_description:
-        column_name = column["name"]
-        if column_name == PROCESSED_DATETIME_FIELD or column_name == "_processed_datetime":
-            continue
-        if column_name not in update_values:
-            column_type = column.get("type", "")
-            default_value = get_default_value_for_column_type(column_type)
-            update_values[column_name] = default_value
-
+    # For UPDATE, only include fields present in chunk, don't add defaults (preserve existing values)
+    update_values = _prepare_chunk_data_for_table(chunk, table_description, include_defaults=False)
     update_values = SQLLocalService.add_processed_datetime_if_exists(table, update_values)
-
-    with sql_local_service.Session() as session:
-        stmt = update(table).where(table.c.chunk_id == chunk.chunk_id).values(**update_values)
-        result = session.execute(stmt)
+    stmt = update(table).where(table.c.chunk_id == chunk.chunk_id).values(**update_values)
+    with _execute_statement(sql_local_service, stmt) as (result, session):
         if result.rowcount == 0:
-            raise ValueError(f"Chunk with id='{chunk.chunk_id}' not found in table '{table_name}'")
+            raise KnowledgeServiceChunkNotFoundError(
+                f"Chunk with id='{chunk.chunk_id}' not found in table '{table_name}'"
+            )
         session.commit()
 
     return chunk
@@ -274,11 +308,9 @@ def delete_chunk(
     table_name: str,
     chunk_id: str,
 ) -> None:
-    table = sql_local_service.get_table(table_name=table_name, schema_name=schema_name)
-
-    with sql_local_service.Session() as session:
-        stmt = delete(table).where(table.c.chunk_id == chunk_id)
-        result = session.execute(stmt)
+    table = _get_table(sql_local_service, schema_name, table_name)
+    stmt = delete(table).where(table.c.chunk_id == chunk_id)
+    with _execute_statement(sql_local_service, stmt) as (result, session):
         if result.rowcount == 0:
-            raise ValueError(f"Chunk with id='{chunk_id}' not found in table '{table_name}'")
+            raise KnowledgeServiceChunkNotFoundError(f"Chunk with id='{chunk_id}' not found in table '{table_name}'")
         session.commit()
