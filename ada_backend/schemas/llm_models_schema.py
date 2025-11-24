@@ -2,6 +2,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from uuid import UUID
 from datetime import datetime
 from enum import Enum
+from typing import Optional
 
 
 class ModelCapabilityEnum(str, Enum):
@@ -31,22 +32,6 @@ class ModelCapabilitiesResponse(BaseModel):
     capabilities: list[ModelCapabilityOption]
 
 
-class LLMModelResponse(BaseModel):
-    id: UUID
-    display_name: str
-    description: str | None = None
-    provider: str
-    model_name: str
-    model_capacity: list[str] | None = None
-    created_at: datetime
-    updated_at: datetime
-
-    model_config = ConfigDict(from_attributes=True)
-
-    def get_reference(self) -> str:
-        return f"{self.provider}:{self.model_name}"
-
-
 class LLMModelCreate(BaseModel):
     display_name: str
     description: str | None = None
@@ -56,8 +41,21 @@ class LLMModelCreate(BaseModel):
         default=None,
         description="List of model capabilities.",
     )
+    credits_per_input_token: Optional[float] = 0.0
+    credits_per_output_token: Optional[float] = 0.0
+    credits_per_call: Optional[float] = 0.0
+    credits_per_second: Optional[float] = 0.0
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class LLMModelResponse(LLMModelCreate):
+    id: UUID
+    created_at: datetime
+    updated_at: datetime
+
+    def get_reference(self) -> str:
+        return f"{self.provider}:{self.model_name}"
 
 
 class LLMModelUpdate(LLMModelCreate):

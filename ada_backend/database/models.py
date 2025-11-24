@@ -1540,6 +1540,8 @@ class LLMModel(Base):
     created_at = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
+    llm_cost = relationship("LLMCost", back_populates="llm_model", uselist=False, cascade="all, delete-orphan")
+
     def __str__(self) -> str:
         return f"LLMModel(id={self.id}, name={self.name}, provider={self.provider})"
 
@@ -1564,6 +1566,8 @@ class LLMCost(Cost):
 
     id = mapped_column(UUID(as_uuid=True), ForeignKey("costs.id"), primary_key=True)
     llm_model_id = mapped_column(UUID(as_uuid=True), ForeignKey("llm_models.id"), unique=True)
+
+    llm_model = relationship("LLMModel", back_populates="llm_cost")
 
     __mapper_args__ = {"polymorphic_identity": EntityType.LLM.value}
 
