@@ -25,9 +25,7 @@ def upgrade() -> None:
     op.create_table(
         "costs",
         sa.Column("id", sa.UUID(), nullable=False),
-        sa.Column(
-            "entity_type", sa.Enum("base", "llm", "component", "parameter_value", name="entity_type"), nullable=False
-        ),
+        sa.Column("entity_type", sa.Enum("llm", "component", "parameter_value", name="entity_type"), nullable=False),
         sa.Column("credits_per_second", sa.Float(), nullable=True),
         sa.Column("credits_per_call", sa.Float(), nullable=True),
         sa.Column("credits_per_input_token", sa.Float(), nullable=True),
@@ -52,6 +50,22 @@ def upgrade() -> None:
     )
     op.create_index(op.f("ix_usages_id"), "usages", ["id"], unique=False)
     op.create_index(op.f("ix_usages_project_id"), "usages", ["project_id"], unique=False)
+    op.create_table(
+        "organization_limits",
+        sa.Column("id", sa.UUID(), nullable=False),
+        sa.Column("organization_id", sa.UUID(), nullable=False),
+        sa.Column("year", sa.Integer(), nullable=False),
+        sa.Column("month", sa.Integer(), nullable=False),
+        sa.Column("limit", sa.Float(), nullable=True),
+        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=True),
+        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=True),
+        sa.PrimaryKeyConstraint("id"),
+        sa.UniqueConstraint("organization_id", "year", "month", name="uq_organization_limit_year_month"),
+    )
+    op.create_index(op.f("ix_organization_limits_id"), "organization_limits", ["id"], unique=False)
+    op.create_index(
+        op.f("ix_organization_limits_organization_id"), "organization_limits", ["organization_id"], unique=False
+    )
     op.create_table(
         "component_costs",
         sa.Column("id", sa.UUID(), nullable=False),
@@ -105,12 +119,15 @@ def downgrade() -> None:
     op.drop_table("parameter_value_costs")
     op.drop_table("llm_costs")
     op.drop_table("component_costs")
+    op.drop_index(op.f("ix_organization_limits_organization_id"), table_name="organization_limits")
+    op.drop_index(op.f("ix_organization_limits_id"), table_name="organization_limits")
+    op.drop_table("organization_limits")
     op.drop_index(op.f("ix_usages_project_id"), table_name="usages")
     op.drop_index(op.f("ix_usages_id"), table_name="usages")
     op.drop_table("usages")
     op.drop_index(op.f("ix_costs_id"), table_name="costs")
     op.drop_table("costs")
     # Drop the enum type
-    entity_type_enum = psql.ENUM("base", "llm", "component", "parameter_value", name="entity_type")
+    entity_type_enum = psql.ENUM("llm", "component", "parameter_value", name="entity_type")
     entity_type_enum.drop(op.get_bind(), checkfirst=True)
     # ### end Alembic commands ###

@@ -194,7 +194,6 @@ class PortType(StrEnum):
 
 
 class EntityType(StrEnum):
-    BASE = "base"
     LLM = "llm"
     COMPONENT = "component"
     PARAMETER_VALUE = "parameter_value"
@@ -1549,7 +1548,7 @@ class Cost(Base):
     __tablename__ = "costs"
 
     id = mapped_column(UUID(as_uuid=True), primary_key=True, index=True, default=uuid.uuid4)
-    entity_type = mapped_column(make_pg_enum(EntityType), nullable=False, default=EntityType.BASE)
+    entity_type = mapped_column(make_pg_enum(EntityType), nullable=True)
     credits_per_second = mapped_column(Float, nullable=True)
     credits_per_call = mapped_column(Float, nullable=True)
     credits_per_input_token = mapped_column(Float, nullable=True)
@@ -1557,7 +1556,6 @@ class Cost(Base):
 
     __mapper_args__ = {
         "polymorphic_on": entity_type,
-        "polymorphic_identity": EntityType.BASE.value,
     }
 
 
@@ -1603,3 +1601,25 @@ class Usage(Base):
     updated_at = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     project = relationship("Project", back_populates="usage")
+
+
+class OrganizationLimit(Base):
+    """
+    Tracks monthly limits for organizations.
+    Allows setting different limits per organization per month.
+    """
+
+    __tablename__ = "organization_limits"
+
+    id = mapped_column(UUID(as_uuid=True), primary_key=True, index=True, default=uuid.uuid4)
+    organization_id = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
+    year = mapped_column(Integer, nullable=False)
+    month = mapped_column(Integer, nullable=False)
+    limit = mapped_column(Float, nullable=True)
+    created_at = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    __table_args__ = (UniqueConstraint("organization_id", "year", "month", name="uq_organization_limit_year_month"),)
+
+    def __str__(self):
+        return f"OrganizationLimit(org={self.organization_id}, " f"{self.year}-{self.month:02d}, limit={self.limit})"
