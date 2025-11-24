@@ -69,6 +69,9 @@ def test_get_token_usage(monkeypatch):
 
     usage = Usage(str(org_id), 12345)
     monkeypatch.setattr(sql_exporter, "get_session_trace", lambda: SessionWithUsage(usage))
+    
+    # Mock get_organization_token_usage where it's imported in the service module
+    monkeypatch.setattr("ada_backend.services.trace_service.get_organization_token_usage", lambda org_id: usage)
 
     res2 = trace_service.get_token_usage(org_id)
     assert res2.organization_id == usage.organization_id

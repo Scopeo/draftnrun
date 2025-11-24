@@ -66,7 +66,9 @@ def test_get_component_params_org_secret_missing(monkeypatch):
 
 def test__get_tool_description_not_found(monkeypatch):
     session = object()
-    comp_inst = type("CI", (), {"id": uuid.uuid4(), "component_id": uuid.uuid4()})
+    comp_inst = type(
+        "CI", (), {"id": uuid.uuid4(), "component_id": uuid.uuid4(), "component_version_id": uuid.uuid4()}
+    )
 
     monkeypatch.setattr(absrv, "get_tool_description", lambda s, cid: None)
     monkeypatch.setattr(absrv, "get_tool_description_component", lambda s, cid: None)
@@ -102,6 +104,7 @@ def test_instantiate_component_not_found(monkeypatch):
     comp_id = uuid.uuid4()
 
     monkeypatch.setattr(absrv, "get_component_instance_by_id", lambda s, id: None)
+    monkeypatch.setattr(absrv, "get_component_name_from_instance", lambda s, id: None)
 
     with pytest.raises(ValueError):
         absrv.instantiate_component(session, comp_id)

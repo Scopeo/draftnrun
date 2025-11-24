@@ -309,7 +309,7 @@ def test_delete_graph_runner():
 
     # Verify it's gone
     response = client.get(endpoint, headers=HEADERS_JWT)
-    assert response.status_code == 400
+    assert response.status_code == 404
 
 
 def test_load_copy_graph_endpoint_success(monkeypatch):
@@ -318,6 +318,24 @@ def test_load_copy_graph_endpoint_success(monkeypatch):
 
     # Build a minimal GraphLoadResponse-like dict
     payload = {"component_instances": [], "relationships": [], "edges": []}
+
+    # Mock get_project in repository, auth router, and graph router modules
+    mock_project = type("Project", (), {"id": UUID(PROJECT_ID), "organization_id": UUID(ORGANIZATION_ID)})()
+
+    def mock_get_project(session, project_id=None, project_name=None):
+        return mock_project
+
+    monkeypatch.setattr("ada_backend.repositories.project_repository.get_project", mock_get_project)
+    monkeypatch.setattr("ada_backend.routers.auth_router.get_project", mock_get_project)
+    monkeypatch.setattr("ada_backend.routers.graph_router.get_project", mock_get_project)
+
+    # Mock get_user_access_to_organization to return access
+    from ada_backend.schemas.auth_schema import OrganizationAccess
+
+    async def mock_get_access(user, org_id):
+        return OrganizationAccess(org_id=org_id, role="admin")
+
+    monkeypatch.setattr("ada_backend.routers.auth_router.get_user_access_to_organization", mock_get_access)
 
     monkeypatch.setattr(
         "ada_backend.routers.graph_router.load_copy_graph_service",
@@ -333,6 +351,21 @@ def test_load_copy_graph_endpoint_value_error(monkeypatch):
     """When service raises ValueError, endpoint should return 400."""
     endpoint = f"/projects/{PROJECT_ID}/graph/{GRAPH_RUNNER_ID}/load-copy"
 
+    # Mock get_project in the repository module (used by auth dependency and endpoint)
+    mock_project = type("Project", (), {"id": UUID(PROJECT_ID), "organization_id": UUID(ORGANIZATION_ID)})()
+    monkeypatch.setattr(
+        "ada_backend.repositories.project_repository.get_project",
+        lambda session, project_id=None, project_name=None: mock_project,
+    )
+
+    # Mock get_user_access_to_organization to return access
+    from ada_backend.schemas.auth_schema import OrganizationAccess
+
+    async def mock_get_access(user, org_id):
+        return OrganizationAccess(org_id=org_id, role="admin")
+
+    monkeypatch.setattr("ada_backend.routers.auth_router.get_user_access_to_organization", mock_get_access)
+
     def fake(session, project_id_to_copy, graph_runner_id_to_copy):
         raise ValueError("invalid relationship")
 
@@ -345,6 +378,21 @@ def test_load_copy_graph_endpoint_value_error(monkeypatch):
 def test_load_copy_graph_endpoint_unexpected_error(monkeypatch):
     """When service raises unexpected exception, endpoint should return 500."""
     endpoint = f"/projects/{PROJECT_ID}/graph/{GRAPH_RUNNER_ID}/load-copy"
+
+    # Mock get_project in the repository module (used by auth dependency and endpoint)
+    mock_project = type("Project", (), {"id": UUID(PROJECT_ID), "organization_id": UUID(ORGANIZATION_ID)})()
+    monkeypatch.setattr(
+        "ada_backend.repositories.project_repository.get_project",
+        lambda session, project_id=None, project_name=None: mock_project,
+    )
+
+    # Mock get_user_access_to_organization to return access
+    from ada_backend.schemas.auth_schema import OrganizationAccess
+
+    async def mock_get_access(user, org_id):
+        return OrganizationAccess(org_id=org_id, role="admin")
+
+    monkeypatch.setattr("ada_backend.routers.auth_router.get_user_access_to_organization", mock_get_access)
 
     def fake(session, project_id_to_copy, graph_runner_id_to_copy):
         raise RuntimeError("boom")

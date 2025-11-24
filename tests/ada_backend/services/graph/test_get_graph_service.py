@@ -5,6 +5,7 @@ from ada_backend.services.graph.get_graph_service import get_graph_service
 from ada_backend.schemas.pipeline.graph_schema import GraphGetResponse, EdgeSchema
 from ada_backend.schemas.pipeline.get_pipeline_schema import ComponentInstanceReadSchema
 from ada_backend.schemas.parameter_schema import PipelineParameterReadSchema
+from ada_backend.database.models import ReleaseStage
 
 
 class DummyComponentNode:
@@ -23,13 +24,15 @@ class DummyEdge:
 
 class DummyEnvRel:
     class _GraphRunnerStub:
-        def __init__(self, tag_version: str | None = None):
+        def __init__(self, tag_version: str | None = None, version_name: str | None = None, change_log: str | None = None):
             self.tag_version = tag_version
+            self.version_name = version_name
+            self.change_log = change_log
 
-    def __init__(self, project_id, tag_version: str | None = None):
+    def __init__(self, project_id, tag_version: str | None = None, version_name: str | None = None, change_log: str | None = None):
         self.project_id = project_id
         # Provide a minimal graph_runner relationship expected by service code
-        self.graph_runner = DummyEnvRel._GraphRunnerStub(tag_version=tag_version)
+        self.graph_runner = DummyEnvRel._GraphRunnerStub(tag_version=tag_version, version_name=version_name, change_log=change_log)
 
 
 class DummyComponentInstance:
@@ -38,6 +41,7 @@ class DummyComponentInstance:
         self.is_start_node = is_start_node
         # minimal compatible fields for ComponentInstanceReadSchema
         self.component_id = id
+        self.component_version_id = uuid.uuid4()
         self.name = "dummy"
         self.component_name = "dummy_component"
         self.component_description = "desc"
@@ -57,9 +61,13 @@ class DummyComponentInstance:
         # fields from ComponentUseInfoSchema
         self.is_agent = True
         self.subcomponents_info = []
+        self.release_stage = ReleaseStage.PUBLIC
+        self.version_tag = "v1.0"
 
 
 def test_get_graph_service_graph_not_found(monkeypatch):
+    from ada_backend.services.errors import GraphNotFound
+    
     session = object()
     project_id = uuid.uuid4()
     graph_runner_id = uuid.uuid4()
@@ -69,9 +77,9 @@ def test_get_graph_service_graph_not_found(monkeypatch):
         lambda s, gid: False,
     )
 
-    with pytest.raises(ValueError) as exc:
+    with pytest.raises(GraphNotFound) as exc:
         get_graph_service(session, project_id, graph_runner_id)
-    assert "not found" in str(exc.value)
+    assert "not found" in str(exc.value).lower()
 
 
 def test_get_graph_service_env_not_bound(monkeypatch):
@@ -146,6 +154,7 @@ def test_get_graph_service_success(monkeypatch):
             name=dummy.name,
             is_start_node=dummy.is_start_node,
             component_id=dummy.component_id,
+            component_version_id=dummy.component_version_id,
             parameters=dummy.parameters,
             tool_description=dummy.tool_description,
             integration=dummy.integration,
@@ -153,6 +162,8 @@ def test_get_graph_service_success(monkeypatch):
             subcomponents_info=dummy.subcomponents_info,
             component_name=dummy.component_name,
             component_description=dummy.component_description,
+            release_stage=dummy.release_stage,
+            version_tag=dummy.version_tag,
         )
 
     monkeypatch.setattr(
@@ -171,6 +182,18 @@ def test_get_graph_service_success(monkeypatch):
     monkeypatch.setattr(
         "ada_backend.services.graph.get_graph_service.get_edges",
         lambda s, gid: [e1],
+    )
+
+    # mock port mappings
+    monkeypatch.setattr(
+        "ada_backend.services.graph.get_graph_service.list_port_mappings_for_graph",
+        lambda s, gid: [],
+    )
+
+    # mock field expressions
+    monkeypatch.setattr(
+        "ada_backend.services.graph.get_graph_service.get_field_expressions_for_instances",
+        lambda s, ids: [],
     )
 
     res = get_graph_service(session, project_id, graph_runner_id)
