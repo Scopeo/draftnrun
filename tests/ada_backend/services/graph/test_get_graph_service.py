@@ -24,15 +24,24 @@ class DummyEdge:
 
 class DummyEnvRel:
     class _GraphRunnerStub:
-        def __init__(self, tag_version: str | None = None, version_name: str | None = None, change_log: str | None = None):
+        def __init__(
+            self, tag_version: str | None = None, version_name: str | None = None, change_log: str | None = None
+        ):
             self.tag_version = tag_version
             self.version_name = version_name
             self.change_log = change_log
 
-    def __init__(self, project_id, tag_version: str | None = None, version_name: str | None = None, change_log: str | None = None):
+    def __init__(
+        self,
+        project_id,
+        tag_version: str | None = None,
+        version_name: str | None = None,
+        change_log: str | None = None,
+    ):
         self.project_id = project_id
-        # Provide a minimal graph_runner relationship expected by service code
-        self.graph_runner = DummyEnvRel._GraphRunnerStub(tag_version=tag_version, version_name=version_name, change_log=change_log)
+        self.graph_runner = DummyEnvRel._GraphRunnerStub(
+            tag_version=tag_version, version_name=version_name, change_log=change_log
+        )
 
 
 class DummyComponentInstance:
@@ -67,7 +76,7 @@ class DummyComponentInstance:
 
 def test_get_graph_service_graph_not_found(monkeypatch):
     from ada_backend.services.errors import GraphNotFound
-    
+
     session = object()
     project_id = uuid.uuid4()
     graph_runner_id = uuid.uuid4()

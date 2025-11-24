@@ -11,8 +11,6 @@ from engine.trace import sql_exporter
 
 
 def test_get_token_usage(monkeypatch):
-    from uuid import uuid4
-
     org_id = uuid4()
 
     # Case 1: no usage row -> should return total_tokens = 0
@@ -69,7 +67,7 @@ def test_get_token_usage(monkeypatch):
 
     usage = Usage(str(org_id), 12345)
     monkeypatch.setattr(sql_exporter, "get_session_trace", lambda: SessionWithUsage(usage))
-    
+
     # Mock get_organization_token_usage where it's imported in the service module
     monkeypatch.setattr("ada_backend.services.trace_service.get_organization_token_usage", lambda org_id: usage)
 
