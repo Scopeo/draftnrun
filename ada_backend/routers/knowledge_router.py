@@ -164,7 +164,8 @@ async def create_chunk(
         raise HTTPException(status_code=500, detail=str(e)) from e
     except Exception as e:
         LOGGER.error(
-            f"Failed to create chunk for file {file_id} in source {source_id} for organization {organization_id}: {str(e)}",
+            f"Failed to create chunk for file {file_id} in source {source_id} "
+            f"for organization {organization_id}: {str(e)}",
             exc_info=True,
         )
         raise HTTPException(status_code=500, detail="Internal server error") from e
