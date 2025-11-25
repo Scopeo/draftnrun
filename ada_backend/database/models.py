@@ -1550,6 +1550,7 @@ class LLMModel(Base):
 
 class Cost(Base):
     __tablename__ = "costs"
+    __table_args__ = {"schema": "credits"}
 
     id = mapped_column(UUID(as_uuid=True), primary_key=True, index=True, default=uuid.uuid4)
     entity_type = mapped_column(make_pg_enum(EntityType), nullable=True)
@@ -1565,8 +1566,9 @@ class Cost(Base):
 
 class LLMCost(Cost):
     __tablename__ = "llm_costs"
+    __table_args__ = {"schema": "credits"}
 
-    id = mapped_column(UUID(as_uuid=True), ForeignKey("costs.id"), primary_key=True)
+    id = mapped_column(UUID(as_uuid=True), ForeignKey("credits.costs.id"), primary_key=True)
     llm_model_id = mapped_column(UUID(as_uuid=True), ForeignKey("llm_models.id"), unique=True)
 
     llm_model = relationship("LLMModel", back_populates="llm_cost")
@@ -1576,8 +1578,9 @@ class LLMCost(Cost):
 
 class ComponentCost(Cost):
     __tablename__ = "component_costs"
+    __table_args__ = {"schema": "credits"}
 
-    id = mapped_column(UUID(as_uuid=True), ForeignKey("costs.id"), primary_key=True)
+    id = mapped_column(UUID(as_uuid=True), ForeignKey("credits.costs.id"), primary_key=True)
     component_version_id = mapped_column(UUID(as_uuid=True), ForeignKey("component_versions.id"), unique=True)
 
     component_version = relationship("ComponentVersion", back_populates="component_cost")
@@ -1587,8 +1590,9 @@ class ComponentCost(Cost):
 
 class ParameterValueCost(Cost):
     __tablename__ = "parameter_value_costs"
+    __table_args__ = {"schema": "credits"}
 
-    id = mapped_column(UUID(as_uuid=True), ForeignKey("costs.id"), primary_key=True)
+    id = mapped_column(UUID(as_uuid=True), ForeignKey("credits.costs.id"), primary_key=True)
     component_parameter_definition_id = mapped_column(
         UUID(as_uuid=True), ForeignKey("component_parameter_definitions.id")
     )
@@ -1599,6 +1603,7 @@ class ParameterValueCost(Cost):
 
 class Usage(Base):
     __tablename__ = "usages"
+    __table_args__ = {"schema": "credits"}
 
     id = mapped_column(UUID(as_uuid=True), primary_key=True, index=True, default=uuid.uuid4)
     project_id = mapped_column(UUID(as_uuid=True), ForeignKey("projects.id"), nullable=False, index=True)
@@ -1618,6 +1623,10 @@ class OrganizationLimit(Base):
     """
 
     __tablename__ = "organization_limits"
+    __table_args__ = (
+        UniqueConstraint("organization_id", "year", "month", name="uq_organization_limit_year_month"),
+        {"schema": "credits"},
+    )
 
     id = mapped_column(UUID(as_uuid=True), primary_key=True, index=True, default=uuid.uuid4)
     organization_id = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
@@ -1626,8 +1635,6 @@ class OrganizationLimit(Base):
     limit = mapped_column(Float, nullable=True)
     created_at = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
-
-    __table_args__ = (UniqueConstraint("organization_id", "year", "month", name="uq_organization_limit_year_month"),)
 
     def __str__(self):
         return f"OrganizationLimit(org={self.organization_id}, " f"{self.year}-{self.month:02d}, limit={self.limit})"
