@@ -332,8 +332,8 @@ def test_load_copy_graph_endpoint_success(monkeypatch):
     # Mock get_user_access_to_organization to return access
     from ada_backend.schemas.auth_schema import OrganizationAccess
 
-    async def mock_get_access(user, org_id):
-        return OrganizationAccess(org_id=org_id, role="admin")
+    async def mock_get_access(user, organization_id):
+        return OrganizationAccess(org_id=organization_id, role="admin")
 
     monkeypatch.setattr("ada_backend.routers.auth_router.get_user_access_to_organization", mock_get_access)
 
@@ -357,12 +357,14 @@ def test_load_copy_graph_endpoint_value_error(monkeypatch):
         "ada_backend.repositories.project_repository.get_project",
         lambda session, project_id=None, project_name=None: mock_project,
     )
+    monkeypatch.setattr("ada_backend.routers.auth_router.get_project", lambda session, project_id=None, project_name=None: mock_project)
+    monkeypatch.setattr("ada_backend.routers.graph_router.get_project", lambda session, project_id=None, project_name=None: mock_project)
 
     # Mock get_user_access_to_organization to return access
     from ada_backend.schemas.auth_schema import OrganizationAccess
 
-    async def mock_get_access(user, org_id):
-        return OrganizationAccess(org_id=org_id, role="admin")
+    async def mock_get_access(user, organization_id):
+        return OrganizationAccess(org_id=organization_id, role="admin")
 
     monkeypatch.setattr("ada_backend.routers.auth_router.get_user_access_to_organization", mock_get_access)
 
@@ -385,12 +387,14 @@ def test_load_copy_graph_endpoint_unexpected_error(monkeypatch):
         "ada_backend.repositories.project_repository.get_project",
         lambda session, project_id=None, project_name=None: mock_project,
     )
+    monkeypatch.setattr("ada_backend.routers.auth_router.get_project", lambda session, project_id=None, project_name=None: mock_project)
+    monkeypatch.setattr("ada_backend.routers.graph_router.get_project", lambda session, project_id=None, project_name=None: mock_project)
 
     # Mock get_user_access_to_organization to return access
     from ada_backend.schemas.auth_schema import OrganizationAccess
 
-    async def mock_get_access(user, org_id):
-        return OrganizationAccess(org_id=org_id, role="admin")
+    async def mock_get_access(user, organization_id):
+        return OrganizationAccess(org_id=organization_id, role="admin")
 
     monkeypatch.setattr("ada_backend.routers.auth_router.get_user_access_to_organization", mock_get_access)
 
