@@ -1,5 +1,5 @@
 from sqlalchemy.orm import Session
-from sqlalchemy import and_, case, func
+from sqlalchemy import and_, case
 from uuid import UUID
 from typing import Optional
 
