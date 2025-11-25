@@ -781,10 +781,10 @@ def build_reranker_processor(target_name: str = "reranker") -> ParameterProcesso
 
     def processor(params: dict, constructor_params: dict[str, Any]) -> dict:
         use_reranker = params.pop("use_reranker", False)
-
-        # Convert string boolean if needed
-        if isinstance(use_reranker, str):
-            use_reranker = use_reranker.lower() in ("true", "1", "yes")
+        try:
+            use_reranker = bool(use_reranker)
+        except ValueError as e:
+            raise ValueError(f"use_reranker must be a boolean, got {use_reranker}: {e}")
 
         if not use_reranker:
             # Remove reranker-specific parameters even when disabled to prevent them from being passed to RAG
@@ -795,7 +795,6 @@ def build_reranker_processor(target_name: str = "reranker") -> ParameterProcesso
             params[target_name] = None
             return params
 
-        # Create CohereReranker if enabled
         cohere_model = params.pop("cohere_model", "rerank-multilingual-v3.0")
         score_threshold = params.pop("score_threshold", "0.0")
         num_doc_reranked = params.pop("num_doc_reranked", "5")
@@ -840,10 +839,10 @@ def build_vocabulary_search_processor(target_name: str = "vocabulary_search") ->
 
     def processor(params: dict, constructor_params: dict[str, Any]) -> dict:
         use_vocabulary_search = params.pop("use_vocabulary_search", False)
-
-        # Convert string boolean if needed
-        if isinstance(use_vocabulary_search, str):
-            use_vocabulary_search = use_vocabulary_search.lower() in ("true", "1", "yes")
+        try:
+            use_vocabulary_search = bool(use_vocabulary_search)
+        except ValueError as e:
+            raise ValueError(f"use_vocabulary_search must be a boolean, got {use_vocabulary_search}: {e}")
 
         if not use_vocabulary_search:
             # Remove vocabulary search-specific parameters even when disabled
@@ -854,13 +853,11 @@ def build_vocabulary_search_processor(target_name: str = "vocabulary_search") ->
             params[target_name] = None
             return params
 
-        # Create VocabularySearch if enabled
         vocabulary_context_data = params.pop("vocabulary_context_data", {})
         fuzzy_threshold = params.pop("fuzzy_threshold", "90")
         fuzzy_matching_candidates = params.pop("fuzzy_matching_candidates", "10")
         vocabulary_context_prompt_key = params.pop("vocabulary_context_prompt_key", "retrieved_definitions")
 
-        # Parse JSON if it's a string
         if isinstance(vocabulary_context_data, str):
             try:
                 vocabulary_context_data = json.loads(vocabulary_context_data)
@@ -909,10 +906,10 @@ def build_formatter_processor(target_name: str = "formatter") -> ParameterProces
 
     def processor(params: dict, constructor_params: dict[str, Any]) -> dict:
         use_formatter = params.pop("use_formatter", False)
-
-        # Convert string boolean if needed
-        if isinstance(use_formatter, str):
-            use_formatter = use_formatter.lower() in ("true", "1", "yes")
+        try:
+            use_formatter = bool(use_formatter)
+        except ValueError as e:
+            raise ValueError(f"use_formatter must be a boolean, got {use_formatter}: {e}")
 
         if not use_formatter:
             # Remove formatter-specific parameters even when disabled
@@ -920,10 +917,8 @@ def build_formatter_processor(target_name: str = "formatter") -> ParameterProces
             params[target_name] = None
             return params
 
-        # Create Formatter if enabled
         add_sources = params.pop("add_sources", "True")
 
-        # Convert string boolean if needed
         if isinstance(add_sources, str):
             add_sources = add_sources.lower() in ("true", "1", "yes")
         elif not isinstance(add_sources, bool):

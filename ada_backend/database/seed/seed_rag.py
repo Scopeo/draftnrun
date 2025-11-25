@@ -605,7 +605,6 @@ def seed_rag_components(session: Session):
 
     upsert_component_categories(session=session, component_id=rag_agent.id, category_ids=[CATEGORY_UUIDS["query"]])
 
-    # RAG v3 - New version with grouped optional components
     rag_agent_v3_version = db.ComponentVersion(
         id=COMPONENT_VERSION_UUIDS["rag_agent_v3"],
         component_id=COMPONENT_UUIDS["rag_agent"],
@@ -619,7 +618,6 @@ def seed_rag_components(session: Session):
         component_versions=[rag_agent_v3_version],
     )
 
-    # RAG v3 - Basic Parameters (Non-Advanced) - Same as v2
     rag_v3_data_source_param = db.ComponentParameterDefinition(
         id=UUID("a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d"),
         component_version_id=rag_agent_v3_version.id,
@@ -667,7 +665,6 @@ def seed_rag_components(session: Session):
         is_advanced=False,
     )
 
-    # RAG v3 - Advanced Parameters (Retriever) - Same as v2
     rag_v3_max_retrieved_chunks_param = db.ComponentParameterDefinition(
         id=UUID("d4e5f6a7-b8c9-4d0e-1f2a-3b4c5d6e7f8a"),
         component_version_id=rag_agent_v3_version.id,
@@ -784,7 +781,6 @@ def seed_rag_components(session: Session):
         is_advanced=True,
     )
 
-    # RAG v3 - Advanced Parameters (Synthesizer) - Same as v2
     rag_v3_temperature_param = db.ComponentParameterDefinition(
         id=UUID("d0e1f2a3-b4c5-4d6e-7f8a-9b0c1d2e3f4a"),
         component_version_id=rag_agent_v3_version.id,
@@ -853,7 +849,6 @@ def seed_rag_components(session: Session):
         nullable=True,
     )
 
-    # RAG v3 - Reranker Parameters Group
     rag_v3_use_reranker_param = db.ComponentParameterDefinition(
         id=UUID("b4c5d6e7-f8a9-4b0c-1d2e-3f4a5b6c7d8e"),
         component_version_id=rag_agent_v3_version.id,
@@ -923,7 +918,6 @@ def seed_rag_components(session: Session):
         nullable=True,
     )
 
-    # RAG v3 - Vocabulary Search Parameters Group
     rag_v3_use_vocabulary_search_param = db.ComponentParameterDefinition(
         id=UUID("a9b0c1d2-e3f4-4a5b-6c7d-8e9f0a1b2c3d"),
         component_version_id=rag_agent_v3_version.id,
@@ -1019,7 +1013,6 @@ def seed_rag_components(session: Session):
         is_advanced=True,
     )
 
-    # RAG v3 - Formatter Parameters Group
     rag_v3_use_formatter_param = db.ComponentParameterDefinition(
         id=UUID("f4a5b6c7-d8e9-4f0a-1b2c-3d4e5f6a7b8c"),
         component_version_id=rag_agent_v3_version.id,
@@ -1069,19 +1062,19 @@ def seed_rag_components(session: Session):
             rag_v3_verbosity_param,
             rag_v3_reasoning_param,
             rag_v3_llm_api_key_param,
-            # Reranker parameters
+            # Advanced Reranker parameters
             rag_v3_use_reranker_param,
             rag_v3_cohere_model_param,
             rag_v3_score_threshold_param,
             rag_v3_num_doc_reranked_param,
             rag_v3_cohere_api_key_param,
-            # Vocabulary search parameters
+            # Advanced Vocabulary search parameters
             rag_v3_use_vocabulary_search_param,
             rag_v3_vocabulary_context_data_param,
             rag_v3_fuzzy_threshold_param,
             rag_v3_fuzzy_matching_candidates_param,
             rag_v3_vocabulary_context_prompt_key_param,
-            # Formatter parameters
+            # Advanced Formatter parameters
             rag_v3_use_formatter_param,
             rag_v3_add_sources_param,
         ],
@@ -1672,7 +1665,7 @@ def seed_rag_components(session: Session):
         component_version_id=rag_agent_v2_version.id,
     )
 
-    # RAG Agent v3: PUBLIC version
+    # RAG Agent v3: INTERNAL version
     upsert_release_stage_to_current_version_mapping(
         session=session,
         component_id=rag_agent_v3_version.component_id,
