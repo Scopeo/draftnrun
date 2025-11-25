@@ -3,7 +3,6 @@ from uuid import UUID
 
 from sqlalchemy.orm import Session
 
-from ada_backend.database.component_definition_seeding import upsert_release_stage_to_current_version_mapping
 from ada_backend.database.models import ReleaseStage
 from ada_backend.repositories.component_repository import (
     count_component_instances_by_version_id,
@@ -11,6 +10,13 @@ from ada_backend.repositories.component_repository import (
     delete_component_by_id,
     delete_component_version_by_id,
     get_component_version_by_id,
+)
+from ada_backend.repositories.release_stage_repository import (
+    _STAGE_ORDER,
+    delete_release_stage_mapping,
+    find_next_best_version_for_stage,
+    get_release_stage_mapping,
+    upsert_release_stage_mapping_core,
 )
 from ada_backend.services.errors import (
     ComponentNotFound,
@@ -40,12 +46,66 @@ def update_component_version_release_stage_service(
             expected_component_id=component_id,
             actual_component_id=component_version.component_id,
         )
+
+    old_release_stage = component_version.release_stage
+
     component_version.release_stage = release_stage
     session.add(component_version)
-    upsert_release_stage_to_current_version_mapping(
-        session, component_version.component_id, release_stage, component_version_id
+
+    _update_release_stage_mapping_with_replacement(
+        session,
+        component_id,
+        old_release_stage,
+        release_stage,
+        component_version_id,
     )
+
     session.commit()
+
+
+def _update_release_stage_mapping_with_replacement(
+    session: Session,
+    component_id: UUID,
+    old_release_stage: ReleaseStage,
+    new_release_stage: ReleaseStage,
+    component_version_id: UUID,
+) -> None:
+    """
+    Updates the release stage mapping with replacement logic.
+    If downgrading a version that was current for its old stage, finds and promotes
+    the next best version for that stage, or removes the mapping if no suitable version exists.
+
+    This is service layer logic that orchestrates repository calls.
+    """
+    old_stage_mapping = get_release_stage_mapping(session, component_id, old_release_stage)
+    was_current_for_old_stage = (
+        old_stage_mapping is not None and old_stage_mapping.component_version_id == component_version_id
+    )
+
+    old_stage_index = _STAGE_ORDER.index(old_release_stage)
+    new_stage_index = _STAGE_ORDER.index(new_release_stage)
+    is_downgrade = new_stage_index < old_stage_index
+
+    upsert_release_stage_mapping_core(session, component_id, new_release_stage, component_version_id)
+
+    if is_downgrade and was_current_for_old_stage:
+        next_best_version = find_next_best_version_for_stage(
+            session, component_id, old_release_stage, component_version_id
+        )
+
+        if next_best_version:
+            LOGGER.info(
+                f"Downgrading version {component_version_id} from {old_release_stage} to {new_release_stage}. "
+                f"Promoting version {next_best_version.id} (stage: {next_best_version.release_stage}) "
+                f"to be the new current version for {old_release_stage}."
+            )
+            upsert_release_stage_mapping_core(session, component_id, old_release_stage, next_best_version.id)
+        elif old_stage_mapping:
+            delete_release_stage_mapping(session, old_stage_mapping, commit=False)
+            LOGGER.info(
+                f"No suitable version found for {old_release_stage} stage for component {component_id}. "
+                f"Removed {old_release_stage} mapping for downgraded version {component_version_id}."
+            )
 
 
 def delete_component_version_service(

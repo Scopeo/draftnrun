@@ -253,14 +253,14 @@ class ReleaseStageToCurrentVersionMappingAdmin(EnhancedModelView, model=db.Relea
     icon = "fas fa-cubes"
     column_list = [
         "id",
-        "component",
+        "component_version.component",
         "release_stage",
         "component_version",
         "created_at",
         "updated_at",
     ]
-    column_searchable_list = ["component.name", "release_stage"]
-    form_columns = ["component", "release_stage", "component_version"]
+    column_searchable_list = ["component_version.component.name", "release_stage"]
+    form_columns = ["component_version", "release_stage"]
 
 
 class ComponentCategoryAdmin(EnhancedModelView, model=db.ComponentCategory):

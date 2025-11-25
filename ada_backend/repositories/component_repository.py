@@ -62,14 +62,6 @@ class ComponentWithVersionDTO:
     default_tool_description_id: Optional[UUID] = None
 
 
-STAGE_HIERARCHY = {
-    ReleaseStage.INTERNAL: [ReleaseStage.INTERNAL, ReleaseStage.EARLY_ACCESS, ReleaseStage.BETA, ReleaseStage.PUBLIC],
-    ReleaseStage.BETA: [ReleaseStage.BETA, ReleaseStage.EARLY_ACCESS, ReleaseStage.PUBLIC],
-    ReleaseStage.EARLY_ACCESS: [ReleaseStage.EARLY_ACCESS, ReleaseStage.PUBLIC],
-    ReleaseStage.PUBLIC: [ReleaseStage.PUBLIC],
-}
-
-
 def get_global_parameters_by_component_version_id(
     session: Session,
     component_version_id: UUID,
