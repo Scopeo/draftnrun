@@ -66,12 +66,6 @@ def upgrade() -> None:
     op.create_index(
         op.f("ix_organization_limits_organization_id"), "organization_limits", ["organization_id"], unique=False
     )
-    op.create_index(
-        "ix_organization_limits_org_year_month",
-        "organization_limits",
-        ["organization_id", "year", "month"],
-        unique=False,
-    )
     op.create_table(
         "component_costs",
         sa.Column("id", sa.UUID(), nullable=False),
@@ -125,7 +119,6 @@ def downgrade() -> None:
     op.drop_table("parameter_value_costs")
     op.drop_table("llm_costs")
     op.drop_table("component_costs")
-    op.drop_index("ix_organization_limits_org_year_month", table_name="organization_limits")
     op.drop_index(op.f("ix_organization_limits_organization_id"), table_name="organization_limits")
     op.drop_index(op.f("ix_organization_limits_id"), table_name="organization_limits")
     op.drop_table("organization_limits")
