@@ -27,7 +27,18 @@ class RefNode:
 class ConcatNode:
     """Concatenation of literal and ref parts."""
 
-    parts: List[Union[LiteralNode, RefNode]]
+    parts: List[Union[LiteralNode, RefNode, "ExternalRefNode"]]
 
 
-ExpressionNode = Union[LiteralNode, RefNode, ConcatNode]
+@dataclass(frozen=True)
+class ExternalRefNode:
+    """Reference to an external value (e.g. settings, secrets).
+
+    Syntax: @{ $source.key }
+    """
+
+    source: str
+    key: str
+
+
+ExpressionNode = Union[LiteralNode, RefNode, ConcatNode, ExternalRefNode]

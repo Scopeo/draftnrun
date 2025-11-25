@@ -10,7 +10,7 @@ import logging
 from typing import Any, Callable
 
 from engine.graph_runner.types import Task
-from engine.field_expressions.ast import ExpressionNode, LiteralNode, RefNode, ConcatNode
+from engine.field_expressions.ast import ExpressionNode, LiteralNode, RefNode, ConcatNode, ExternalRefNode
 from engine.field_expressions.errors import FieldExpressionError
 
 LOGGER = logging.getLogger(__name__)
@@ -20,6 +20,7 @@ def evaluate_expression(
     expression: ExpressionNode,
     target_field_name: str,
     tasks: dict[str, Task],
+    external_context: dict[str, Any] | None = None,
     to_string: Callable[[Any], str] = lambda v: str(v),
 ) -> str:
     """Evaluate a field expression AST and return the result.
@@ -60,6 +61,31 @@ def evaluate_expression(
                     raw_value = raw_value[key]
 
                 return to_string(raw_value)
+
+            case ExternalRefNode(source=source, key=key):
+                if not external_context:
+                    raise FieldExpressionError(
+                        f"External context missing while evaluating '{target_field_name}': "
+                        f"cannot resolve reference @{{ ${source}.{key} }}"
+                    )
+                
+                if source not in external_context:
+                    raise FieldExpressionError(
+                        f"External source '{source}' not found in context while evaluating '{target_field_name}'"
+                    )
+                
+                source_data = external_context[source]
+                if not isinstance(source_data, dict):
+                     raise FieldExpressionError(
+                        f"External source '{source}' is not a dictionary, got {type(source_data)}"
+                    )
+
+                if key not in source_data:
+                    raise FieldExpressionError(
+                        f"Key '{key}' not found in external source '{source}' while evaluating '{target_field_name}'"
+                    )
+                
+                return to_string(source_data[key])
 
             case ConcatNode(parts=parts):
                 return "".join(evaluate_node(part) for part in parts)
