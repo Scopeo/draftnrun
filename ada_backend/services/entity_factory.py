@@ -11,6 +11,9 @@ from pydantic import BaseModel
 
 from engine.agent.types import ToolDescription
 from engine.agent.rag.retriever import Retriever
+from engine.agent.rag.cohere_reranker import CohereReranker
+from engine.agent.rag.vocabulary_search import VocabularySearch
+from engine.agent.rag.formatter import Formatter
 from engine.agent.synthesizer import Synthesizer
 from engine.trace.trace_context import get_trace_manager
 from engine.llm_services.llm_service import EmbeddingService, CompletionService, WebSearchService, OCRService
@@ -759,6 +762,179 @@ def build_synthesizer_processor(target_name: str = "synthesizer") -> ParameterPr
         )
 
         params[target_name] = synthesizer
+        return params
+
+    return processor
+
+
+def build_reranker_processor(target_name: str = "reranker") -> ParameterProcessor:
+    """
+    Creates a processor that builds a CohereReranker from reranker-specific parameters.
+    Only creates the reranker if use_reranker is True.
+
+    Args:
+        target_name (str): Parameter name for the created Reranker.
+
+    Returns:
+        ParameterProcessor: A processor function that handles Reranker creation
+    """
+
+    def processor(params: dict, constructor_params: dict[str, Any]) -> dict:
+        use_reranker = params.pop("use_reranker", False)
+
+        # Convert string boolean if needed
+        if isinstance(use_reranker, str):
+            use_reranker = use_reranker.lower() in ("true", "1", "yes")
+
+        if not use_reranker:
+            # Remove reranker-specific parameters even when disabled to prevent them from being passed to RAG
+            params.pop("cohere_model", None)
+            params.pop("score_threshold", None)
+            params.pop("num_doc_reranked", None)
+            params.pop("cohere_api_key", None)
+            params[target_name] = None
+            return params
+
+        # Create CohereReranker if enabled
+        cohere_model = params.pop("cohere_model", "rerank-multilingual-v3.0")
+        score_threshold = params.pop("score_threshold", "0.0")
+        num_doc_reranked = params.pop("num_doc_reranked", "5")
+        cohere_api_key = params.pop("cohere_api_key", None)
+
+        try:
+            score_threshold = float(score_threshold) if score_threshold is not None else 0.0
+        except (ValueError, TypeError) as e:
+            raise ValueError(f"score_threshold must be a float, got {score_threshold}: {e}")
+
+        try:
+            num_doc_reranked = int(num_doc_reranked) if num_doc_reranked is not None else 5
+        except (ValueError, TypeError) as e:
+            raise ValueError(f"num_doc_reranked must be an integer, got {num_doc_reranked}: {e}")
+
+        reranker = CohereReranker(
+            trace_manager=get_trace_manager(),
+            cohere_api_key=cohere_api_key,
+            cohere_model=cohere_model,
+            num_doc_reranked=num_doc_reranked,
+            score_threshold=score_threshold,
+            component_attributes=params.pop("component_attributes", None),
+        )
+
+        params[target_name] = reranker
+        return params
+
+    return processor
+
+
+def build_vocabulary_search_processor(target_name: str = "vocabulary_search") -> ParameterProcessor:
+    """
+    Creates a processor that builds a VocabularySearch from vocabulary search parameters.
+    Only creates the vocabulary search if use_vocabulary_search is True.
+
+    Args:
+        target_name (str): Parameter name for the created VocabularySearch.
+
+    Returns:
+        ParameterProcessor: A processor function that handles VocabularySearch creation
+    """
+
+    def processor(params: dict, constructor_params: dict[str, Any]) -> dict:
+        use_vocabulary_search = params.pop("use_vocabulary_search", False)
+
+        # Convert string boolean if needed
+        if isinstance(use_vocabulary_search, str):
+            use_vocabulary_search = use_vocabulary_search.lower() in ("true", "1", "yes")
+
+        if not use_vocabulary_search:
+            # Remove vocabulary search-specific parameters even when disabled
+            params.pop("vocabulary_context_data", None)
+            params.pop("fuzzy_threshold", None)
+            params.pop("fuzzy_matching_candidates", None)
+            params.pop("vocabulary_context_prompt_key", None)
+            params[target_name] = None
+            return params
+
+        # Create VocabularySearch if enabled
+        vocabulary_context_data = params.pop("vocabulary_context_data", {})
+        fuzzy_threshold = params.pop("fuzzy_threshold", "90")
+        fuzzy_matching_candidates = params.pop("fuzzy_matching_candidates", "10")
+        vocabulary_context_prompt_key = params.pop("vocabulary_context_prompt_key", "retrieved_definitions")
+
+        # Parse JSON if it's a string
+        if isinstance(vocabulary_context_data, str):
+            try:
+                vocabulary_context_data = json.loads(vocabulary_context_data)
+            except json.JSONDecodeError as e:
+                raise ValueError(f"vocabulary_context_data must be valid JSON, got {vocabulary_context_data}: {e}")
+
+        if not isinstance(vocabulary_context_data, dict):
+            raise ValueError(f"vocabulary_context_data must be a dict, got {type(vocabulary_context_data)}")
+
+        try:
+            fuzzy_threshold = int(fuzzy_threshold) if fuzzy_threshold is not None else 90
+        except (ValueError, TypeError) as e:
+            raise ValueError(f"fuzzy_threshold must be an integer, got {fuzzy_threshold}: {e}")
+
+        try:
+            fuzzy_matching_candidates = int(fuzzy_matching_candidates) if fuzzy_matching_candidates is not None else 10
+        except (ValueError, TypeError) as e:
+            raise ValueError(f"fuzzy_matching_candidates must be an integer, got {fuzzy_matching_candidates}: {e}")
+
+        vocabulary_search = VocabularySearch(
+            trace_manager=get_trace_manager(),
+            vocabulary_context_data=vocabulary_context_data,
+            fuzzy_threshold=fuzzy_threshold,
+            fuzzy_matching_candidates=fuzzy_matching_candidates,
+            vocabulary_context_prompt_key=vocabulary_context_prompt_key,
+            component_attributes=params.pop("component_attributes", None),
+        )
+
+        params[target_name] = vocabulary_search
+        return params
+
+    return processor
+
+
+def build_formatter_processor(target_name: str = "formatter") -> ParameterProcessor:
+    """
+    Creates a processor that builds a Formatter from formatter parameters.
+    Only creates the formatter if use_formatter is True.
+
+    Args:
+        target_name (str): Parameter name for the created Formatter.
+
+    Returns:
+        ParameterProcessor: A processor function that handles Formatter creation
+    """
+
+    def processor(params: dict, constructor_params: dict[str, Any]) -> dict:
+        use_formatter = params.pop("use_formatter", False)
+
+        # Convert string boolean if needed
+        if isinstance(use_formatter, str):
+            use_formatter = use_formatter.lower() in ("true", "1", "yes")
+
+        if not use_formatter:
+            # Remove formatter-specific parameters even when disabled
+            params.pop("add_sources", None)
+            params[target_name] = None
+            return params
+
+        # Create Formatter if enabled
+        add_sources = params.pop("add_sources", "True")
+
+        # Convert string boolean if needed
+        if isinstance(add_sources, str):
+            add_sources = add_sources.lower() in ("true", "1", "yes")
+        elif not isinstance(add_sources, bool):
+            add_sources = bool(add_sources)
+
+        formatter = Formatter(
+            add_sources=add_sources,
+            component_attributes=params.pop("component_attributes", None),
+        )
+
+        params[target_name] = formatter
         return params
 
     return processor

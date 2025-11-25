@@ -51,6 +51,9 @@ from ada_backend.services.entity_factory import (
     build_db_service_processor,
     build_retriever_processor,
     build_synthesizer_processor,
+    build_reranker_processor,
+    build_vocabulary_search_processor,
+    build_formatter_processor,
     build_llm_capability_resolver_processor,
 )
 from ada_backend.database.seed.constants import (
@@ -333,6 +336,19 @@ def create_factory_registry() -> FactoryRegistry:
             parameter_processors=[
                 build_retriever_processor(),
                 build_synthesizer_processor(),
+            ],
+        ),
+    )
+    registry.register(
+        component_version_id=COMPONENT_VERSION_UUIDS["rag_agent_v3"],
+        factory=AgentFactory(
+            entity_class=RAG,
+            parameter_processors=[
+                build_retriever_processor(),
+                build_synthesizer_processor(),
+                build_reranker_processor(),
+                build_vocabulary_search_processor(),
+                build_formatter_processor(),
             ],
         ),
     )
