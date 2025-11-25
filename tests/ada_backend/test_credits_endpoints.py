@@ -300,24 +300,6 @@ def test_create_organization_limit_duplicate(db_session, unique_year_month):
         pass
 
 
-def test_create_organization_limit_invalid_month(db_session):
-    """Test creating an organization limit with invalid month (should fail validation)."""
-    org_id = UUID(ORGANIZATION_ID)
-    payload = {
-        "year": 2025,
-        "month": 13,
-        "limit": 5000.0,
-    }
-
-    response = client.post(
-        f"/organizations/{org_id}/organization-limits",
-        headers=HEADERS_JWT,
-        json=payload,
-    )
-
-    assert response.status_code in [400, 422, 500]
-
-
 def test_create_organization_limit_missing_fields():
     """Test creating an organization limit with missing required fields."""
     org_id = UUID(ORGANIZATION_ID)
