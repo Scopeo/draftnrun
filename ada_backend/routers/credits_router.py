@@ -26,6 +26,8 @@ from ada_backend.services.errors import (
     ComponentVersionCostNotFound,
     OrganizationLimitNotFound,
 )
+from ada_backend.services.user_roles_service import is_user_super_admin
+from ada_backend.routers.auth_router import get_user_from_supabase_token
 
 router = APIRouter(tags=["Credits"])
 LOGGER = logging.getLogger(__name__)
@@ -48,14 +50,15 @@ def get_all_organization_limits_endpoint(
 def create_organization_limit_endpoint(
     organization_id: UUID,
     organization_limit_create: OrganizationLimit,
-    user: Annotated[
-        SupabaseUser, Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.WRITER.value))
-    ],
+    user: Annotated[SupabaseUser, Depends(get_user_from_supabase_token)],
     session: Session = Depends(get_db),
 ) -> OrganizationLimitResponse:
     try:
         if not user.id:
             raise HTTPException(status_code=400, detail="User ID not found")
+        is_super = is_user_super_admin(user)
+        if not is_super:
+            raise HTTPException(status_code=403, detail="Access denied")
         return create_organization_limit_service(
             session,
             organization_id,
@@ -73,12 +76,15 @@ def update_organization_limit_endpoint(
     id: UUID,
     organization_id: UUID,
     organization_limit: float,
-    user: Annotated[
-        SupabaseUser, Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.WRITER.value))
-    ],
+    user: Annotated[SupabaseUser, Depends(get_user_from_supabase_token)],
     session: Session = Depends(get_db),
 ) -> OrganizationLimitResponse:
     try:
+        if not user.id:
+            raise HTTPException(status_code=400, detail="User ID not found")
+        is_super = is_user_super_admin(user)
+        if not is_super:
+            raise HTTPException(status_code=403, detail="Access denied")
         return update_organization_limit_service(
             session,
             id=id,
@@ -96,12 +102,15 @@ def update_organization_limit_endpoint(
 def delete_organization_limit_endpoint(
     id: UUID,
     organization_id: UUID,
-    user: Annotated[
-        SupabaseUser, Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.WRITER.value))
-    ],
+    user: Annotated[SupabaseUser, Depends(get_user_from_supabase_token)],
     session: Session = Depends(get_db),
 ) -> None:
     try:
+        if not user.id:
+            raise HTTPException(status_code=400, detail="User ID not found")
+        is_super = is_user_super_admin(user)
+        if not is_super:
+            raise HTTPException(status_code=403, detail="Access denied")
         return delete_organization_limit_service(session, id, organization_id)
     except Exception as e:
         LOGGER.error(f"Failed to delete organization limit: {str(e)}", exc_info=True)

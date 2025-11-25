@@ -204,6 +204,9 @@ def update_organization_limit(
         .first()
     )
 
+    if organization_limit is None:
+        return None
+
     organization_limit.limit = limit
     session.commit()
     session.refresh(organization_limit)
