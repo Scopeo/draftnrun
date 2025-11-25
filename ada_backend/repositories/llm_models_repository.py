@@ -1,13 +1,22 @@
 from sqlalchemy.orm import Session
-from sqlalchemy import and_
+from sqlalchemy import and_, case, func
 from uuid import UUID
 from typing import Optional
 
 from ada_backend.database import models as db
 
+PROVIDER_ORDER = {
+    "openai": 1,
+    "google": 2,
+    "mistral": 3,
+    "cerebras": 4,
+}
+
 
 def get_all_llm_models(session: Session) -> list[db.LLMModel]:
-    return session.query(db.LLMModel).all()
+    provider_order = case({db.LLMModel.provider == k: v for k, v in PROVIDER_ORDER.items()}, else_=99)
+
+    return session.query(db.LLMModel).order_by(provider_order, db.LLMModel.display_name.asc()).all()
 
 
 def get_llm_models_by_capability(session: Session, capabilities: list[str]) -> list[db.LLMModel]:
