@@ -9,8 +9,6 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import pytest
-
 from engine.agent.agent import ComponentAttributes
 from engine.agent.llm_call_agent import LLMCallAgent
 from engine.agent.react_function_calling import ReActAgent
@@ -341,4 +339,3 @@ def test_template_vars_as_tool_property(get_span_mock, agent_calls_mock):
     assert username in text_content, f"Expected '{username}' in content: {text_content}"
     assert tone in text_content, f"Expected '{tone}' in content: {text_content}"
     assert question in text_content, f"Expected '{question}' in content: {text_content}"
-
