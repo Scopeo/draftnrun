@@ -6,12 +6,13 @@ import pytest
 from sqlalchemy import select
 
 from engine.storage_service.local_service import SQLLocalService
-from engine.storage_service.db_utils import DBDefinition, DBColumn, PROCESSED_DATETIME_FIELD
+from tests.ada_backend.test_utils_knowledge import get_knowledge_chunks_table_definition
 from ada_backend.repositories.knowledge_repository import (
     create_chunk,
     delete_chunk,
     delete_file,
     get_chunk_by_id,
+    get_chunk_ids_for_file,
     get_file_with_chunks,
     list_files_for_source,
     update_chunk,
@@ -29,19 +30,7 @@ def sql_local_service(tmp_path: Path) -> Iterator[SQLLocalService]:
     db_path = tmp_path / "knowledge.sqlite"
     service = SQLLocalService(engine_url=f"sqlite:///{db_path}")
 
-    table_definition = DBDefinition(
-        columns=[
-            DBColumn(name=PROCESSED_DATETIME_FIELD, type="VARCHAR", is_nullable=True),
-            DBColumn(name="chunk_id", type="VARCHAR", is_primary_key=True),
-            DBColumn(name="file_id", type="VARCHAR", is_nullable=False),
-            DBColumn(name="content", type="VARCHAR", is_nullable=False),
-            DBColumn(name="document_title", type="VARCHAR", is_nullable=True),
-            DBColumn(name="url", type="VARCHAR", is_nullable=True),
-            DBColumn(name="last_edited_ts", type="VARCHAR", is_nullable=True),
-            DBColumn(name="metadata", type="VARIANT", is_nullable=True),
-            DBColumn(name="bounding_boxes", type="VARCHAR", is_nullable=True),
-        ]
-    )
+    table_definition = get_knowledge_chunks_table_definition()
 
     service.create_table(
         table_name="knowledge_chunks",
@@ -350,3 +339,70 @@ def test_delete_chunk_is_idempotent(sql_local_service: SQLLocalService) -> None:
             table_name="knowledge_chunks",
             chunk_id="c1",
         )
+
+
+def test_get_chunk_ids_for_file_returns_sorted_ids(sql_local_service: SQLLocalService) -> None:
+    """Test that get_chunk_ids_for_file returns chunk IDs sorted by chunk_id."""
+    _insert_rows(
+        sql_local_service,
+        [
+            {
+                "chunk_id": "file123_3",
+                "file_id": "file123",
+                "content": "third",
+                "document_title": "Doc",
+                "url": "http://test",
+                "last_edited_ts": "2024-01-01",
+                "metadata": {},
+            },
+            {
+                "chunk_id": "file123_1",
+                "file_id": "file123",
+                "content": "first",
+                "document_title": "Doc",
+                "url": "http://test",
+                "last_edited_ts": "2024-01-01",
+                "metadata": {},
+            },
+            {
+                "chunk_id": "file123_2",
+                "file_id": "file123",
+                "content": "second",
+                "document_title": "Doc",
+                "url": "http://test",
+                "last_edited_ts": "2024-01-01",
+                "metadata": {},
+            },
+            {
+                "chunk_id": "file456_1",
+                "file_id": "file456",
+                "content": "other file",
+                "document_title": "Doc",
+                "url": "http://test",
+                "last_edited_ts": "2024-01-01",
+                "metadata": {},
+            },
+        ],
+    )
+
+    chunk_ids = get_chunk_ids_for_file(
+        sql_local_service=sql_local_service,
+        schema_name=None,
+        table_name="knowledge_chunks",
+        file_id="file123",
+    )
+
+    assert len(chunk_ids) == 3
+    assert chunk_ids == ["file123_1", "file123_2", "file123_3"]
+
+
+def test_get_chunk_ids_for_file_returns_empty_list_for_no_chunks(sql_local_service: SQLLocalService) -> None:
+    """Test that get_chunk_ids_for_file returns empty list when file has no chunks."""
+    chunk_ids = get_chunk_ids_for_file(
+        sql_local_service=sql_local_service,
+        schema_name=None,
+        table_name="knowledge_chunks",
+        file_id="nonexistent",
+    )
+
+    assert chunk_ids == []

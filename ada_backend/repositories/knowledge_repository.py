@@ -140,14 +140,7 @@ def get_file_with_chunks(
     table_name: str,
     file_id: str,
 ) -> Dict[str, Any]:
-    table = _get_table(sql_local_service, schema_name, table_name)
-    stmt = (
-        select(table)
-        .where(table.c.file_id == file_id)
-        .order_by(table.c.last_edited_ts.desc(), table.c.chunk_id.desc())
-    )
-    with _execute_statement(sql_local_service, stmt) as (result, session):
-        rows = result.fetchall()
+    rows, table = get_chunk_rows_for_file(sql_local_service, schema_name, table_name, file_id)
 
     if not rows:
         raise KnowledgeServiceFileNotFoundError(f"No chunks found for file_id='{file_id}' in table '{table_name}'")
@@ -201,6 +194,31 @@ def get_chunk_by_id(
     if row_dict["metadata"] is None:
         row_dict["metadata"] = {}
     return row_dict
+
+
+def get_chunk_rows_for_file(
+    sql_local_service: SQLLocalService,
+    schema_name: str,
+    table_name: str,
+    file_id: str,
+) -> tuple:
+    """Get all chunk rows for a given file_id, sorted by chunk_id. Returns (rows, table)."""
+    table = _get_table(sql_local_service, schema_name, table_name)
+    stmt = select(table).where(table.c.file_id == file_id).order_by(table.c.chunk_id)
+    with _execute_statement(sql_local_service, stmt) as (result, session):
+        rows = result.fetchall()
+    return rows, table
+
+
+def get_chunk_ids_for_file(
+    sql_local_service: SQLLocalService,
+    schema_name: str,
+    table_name: str,
+    file_id: str,
+) -> List[str]:
+    """Get all chunk_ids for a given file_id, sorted by chunk_id."""
+    rows, table = get_chunk_rows_for_file(sql_local_service, schema_name, table_name, file_id)
+    return [getattr(row, "chunk_id") for row in rows]
 
 
 def file_exists(

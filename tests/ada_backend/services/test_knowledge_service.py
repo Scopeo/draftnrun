@@ -28,7 +28,7 @@ from ada_backend.services.knowledge.errors import (
 from engine.llm_services.llm_service import EmbeddingService
 from engine.qdrant_service import QdrantCollectionSchema, QdrantService
 from engine.storage_service.local_service import SQLLocalService
-from engine.storage_service.db_utils import DBColumn, DBDefinition, PROCESSED_DATETIME_FIELD
+from tests.ada_backend.test_utils_knowledge import get_knowledge_chunks_table_definition
 from settings import settings
 from tests.mocks.trace_manager import MockTraceManager
 
@@ -104,18 +104,12 @@ def _setup_test_table_and_collection_with_dummy_chunk(
     if not sql_local_service.schema_exists(schema_name):
         sql_local_service.create_schema(schema_name)
 
-    table_definition = DBDefinition(
-        columns=[
-            DBColumn(name=PROCESSED_DATETIME_FIELD, type="STRING", default="CURRENT_TIMESTAMP", is_nullable=True),
-            DBColumn(name="chunk_id", type="VARCHAR", is_primary_key=True),
-            DBColumn(name="file_id", type="VARCHAR", is_nullable=False),
-            DBColumn(name="content", type="VARCHAR", is_nullable=False),
-            DBColumn(name="document_title", type="VARCHAR", is_nullable=True),
-            DBColumn(name="url", type="VARCHAR", is_nullable=True),
-            DBColumn(name="last_edited_ts", type="VARCHAR", is_nullable=True),
-            DBColumn(name="metadata_to_keep_by_qdrant_field", type="VARCHAR", is_nullable=True),
-            DBColumn(name="not_kept_by_qdrant_chunk_field", type="VARIANT", is_nullable=True),
-        ]
+    table_definition = get_knowledge_chunks_table_definition(
+        include_metadata=False,
+        include_bounding_boxes=False,
+        include_qdrant_fields=True,
+        processed_datetime_type="STRING",
+        processed_datetime_default="CURRENT_TIMESTAMP",
     )
 
     if sql_local_service.table_exists(table_name, schema_name):
@@ -131,7 +125,7 @@ def _setup_test_table_and_collection_with_dummy_chunk(
     asyncio.run(qdrant_service.create_collection_async(collection_name=test_collection_name))
 
     file_id = f"test_file_{uuid4()}"
-    dummy_chunk_id = str(uuid4())
+    dummy_chunk_id = f"{file_id}_1"
 
     table = sql_local_service.get_table(table_name=table_name, schema_name=schema_name)
     with sql_local_service.Session() as session:
@@ -284,6 +278,8 @@ def test_chunk_operations_integration(
 
     assert isinstance(create_result, KnowledgeChunk)
     assert create_result.content == new_chunk_content
+    # Verify chunk_id is correctly auto-generated (dummy chunk is file_id_1, so next should be file_id_2)
+    assert create_result.chunk_id == f"{file_id}_2"
 
     sql_chunk = get_chunk_by_id(
         sql_local_service=sql_local_service,
@@ -694,4 +690,87 @@ def test_delete_chunk_is_idempotent(
         )
 
     _verify_dummy_chunk_unchanged(sql_local_service, qdrant_service, test_source, dummy_chunk_id)
+    _cleanup_test_environment(sql_local_service, qdrant_service, test_source)
+
+
+def test_extract_chunk_id_parts_with_correct_format() -> None:
+    """Test that _extract_chunk_id_parts correctly extracts prefix and number from valid chunk_ids."""
+    prefix, number = knowledge_service._extract_chunk_id_parts("file123_1")
+    assert prefix == "file123"
+    assert number == 1
+
+    prefix, number = knowledge_service._extract_chunk_id_parts("file123_Sheet1_0")
+    assert prefix == "file123_Sheet1"
+    assert number == 0
+
+    prefix, number = knowledge_service._extract_chunk_id_parts("document.pdf_2")
+    assert prefix == "document.pdf"
+    assert number == 2
+
+
+def test_extract_chunk_id_parts_raises_value_error_for_invalid_format() -> None:
+    """Test that _extract_chunk_id_parts raises ValueError for invalid chunk_id formats."""
+    with pytest.raises(ValueError):
+        knowledge_service._extract_chunk_id_parts("550e8400-e29b-41d4-a716-446655440000")
+
+    with pytest.raises(ValueError):
+        knowledge_service._extract_chunk_id_parts("file123")
+
+    with pytest.raises(ValueError):
+        knowledge_service._extract_chunk_id_parts("file123_abc")
+
+    with pytest.raises(ValueError):
+        knowledge_service._extract_chunk_id_parts("")
+
+
+def test_create_chunk_fallback_when_chunk_id_format_incorrect(
+    monkeypatch: pytest.MonkeyPatch,
+    sql_local_service: SQLLocalService,
+    qdrant_service: QdrantService,
+    test_collection_name: str,
+) -> None:
+    """Test that creating a chunk falls back to file_id_1 when last chunk_id has incorrect format."""
+    test_source, file_id, dummy_chunk_id = _setup_test_environment(
+        monkeypatch, sql_local_service, qdrant_service, test_collection_name
+    )
+
+    from ada_backend.repositories.knowledge_repository import delete_chunk
+
+    delete_chunk(
+        sql_local_service=sql_local_service,
+        schema_name=test_source.database_schema,
+        table_name=test_source.database_table_name,
+        chunk_id=dummy_chunk_id,
+    )
+
+    invalid_chunk_id = "550e8400-e29b-41d4-a716-446655440000"
+    invalid_chunk = KnowledgeChunk(
+        chunk_id=invalid_chunk_id,
+        file_id=file_id,
+        content="Chunk with invalid format",
+        last_edited_ts="2024-01-01T00:00:00",
+    )
+    from ada_backend.repositories.knowledge_repository import create_chunk
+
+    create_chunk(
+        sql_local_service=sql_local_service,
+        schema_name=test_source.database_schema,
+        table_name=test_source.database_table_name,
+        chunk=invalid_chunk,
+    )
+
+    create_request = CreateKnowledgeChunkRequest(content="New chunk")
+    mock_session = Mock()
+    create_result = asyncio.run(
+        knowledge_service.create_chunk_for_data_source(
+            session=mock_session,
+            organization_id=uuid4(),
+            source_id=test_source.id,
+            file_id=file_id,
+            request=create_request,
+        )
+    )
+
+    assert create_result.chunk_id == f"{file_id}_1"
+
     _cleanup_test_environment(sql_local_service, qdrant_service, test_source)

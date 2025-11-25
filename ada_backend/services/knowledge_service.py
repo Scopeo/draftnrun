@@ -1,7 +1,8 @@
 import logging
+import re
 from datetime import datetime
-from typing import Any, Dict
-from uuid import UUID, uuid4
+from typing import Any, Dict, Tuple
+from uuid import UUID
 
 import tiktoken
 from sqlalchemy.orm import Session
@@ -16,6 +17,7 @@ from ada_backend.repositories.knowledge_repository import (
     file_exists,
     create_chunk,
     update_chunk,
+    get_chunk_ids_for_file,
 )
 from ada_backend.repositories.source_repository import get_data_source_by_org_id
 from ada_backend.schemas.knowledge_schema import (
@@ -64,6 +66,25 @@ def _check_token_size_chunk(chunk_content: str):
         )
     if token_count > MAX_CHUNK_TOKENS:
         raise KnowledgeServiceChunkWrongSizeError("Chunk exceeds maximum allowed token count of 8000")
+
+
+def _extract_chunk_id_parts(chunk_id: str) -> Tuple[str, int]:
+    """
+    Extract prefix and numeric index from chunk_id.
+    Args:
+        chunk_id: str
+
+    Returns:
+        Tuple[str, int]
+    """
+    # Match pattern: anything_<digits> at the end
+    match = re.search(r"^(.+?)_(\d+)$", chunk_id)
+    if match:
+        prefix = match.group(1)
+        number = int(match.group(2))
+        return prefix, number
+    LOGGER.error(f"Could not extract chunk_id parts from chunk_id: {chunk_id}")
+    raise ValueError("Could not extract chunk_id file_id name and number " f"of chunks from chunk_id: {chunk_id}")
 
 
 def _get_source_for_organization(
@@ -296,7 +317,28 @@ async def create_chunk_for_data_source(
 
     _check_token_size_chunk(content)
 
-    chunk_id = request.chunk_id or str(uuid4())
+    if request.chunk_id:
+        chunk_id = request.chunk_id
+    else:
+        chunk_ids = get_chunk_ids_for_file(
+            sql_local_service=sql_local_service,
+            schema_name=source.database_schema,
+            table_name=source.database_table_name,
+            file_id=file_id,
+        )
+        chunk_id = f"{file_id}_1"
+        try:
+            last_chunk_id = chunk_ids[-1]
+            prefix, number = _extract_chunk_id_parts(last_chunk_id)
+            chunk_id = f"{prefix}_{number + 1}"
+        except IndexError:
+            LOGGER.warning(f"No chunks found for file '{file_id}'. Using file_id as prefix for new chunk.")
+        except ValueError:
+            LOGGER.warning(
+                f"Could not extract chunk_id parts from '{last_chunk_id}'. "
+                f"Using file_id '{file_id}' as prefix for new chunk."
+            )
+
     last_edited_ts = request.last_edited_ts or datetime.utcnow().isoformat()
 
     minimal_chunk = KnowledgeChunk(
