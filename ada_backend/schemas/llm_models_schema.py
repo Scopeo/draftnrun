@@ -41,10 +41,10 @@ class LLMModelCreate(BaseModel):
         default=None,
         description="List of model capabilities.",
     )
-    credits_per_input_token: Optional[float] = 0.0
-    credits_per_output_token: Optional[float] = 0.0
-    credits_per_call: Optional[float] = 0.0
-    credits_per_second: Optional[float] = 0.0
+    credits_per_input_token: Optional[float] = None
+    credits_per_output_token: Optional[float] = None
+    credits_per_call: Optional[float] = None
+    credits_per_second: Optional[float] = None
 
     model_config = ConfigDict(from_attributes=True)
 

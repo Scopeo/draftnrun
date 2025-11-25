@@ -24,7 +24,7 @@ class AdminCategory(StrEnum):
     SCHEDULER = "Scheduler"
     QUALITY_ASSURANCE = "Quality Assurance"
     LLM_MODELS = "LLM Models"
-    COSTS = "Costs"
+    CREDITS = "Credits"
 
 
 class EnhancedModelView(ModelView):
@@ -611,8 +611,8 @@ class LLMModelsAdmin(EnhancedModelView, model=db.LLMModel):
     column_filters = ["provider", "model_name"]
 
 
-class CostAdmin(EnhancedModelView, model=db.Cost):
-    category = AdminCategory.COSTS
+class CreditAdmin(EnhancedModelView, model=db.Cost):
+    category = AdminCategory.CREDITS
     icon = "fas fa-money-bill"
     column_list = [
         "id",
@@ -634,7 +634,7 @@ class CostAdmin(EnhancedModelView, model=db.Cost):
 
 
 class UsageAdmin(EnhancedModelView, model=db.Usage):
-    category = AdminCategory.COSTS
+    category = AdminCategory.CREDITS
     icon = "fas fa-money-bill"
     column_list = [
         "id",
@@ -726,7 +726,7 @@ def setup_admin(app: FastAPI):
     admin.add_view(EndpointPollingHistoryAdmin)
     admin.add_view(LLMJudgeAdmin)
     admin.add_view(LLMModelsAdmin)
-    admin.add_view(CostAdmin)
+    admin.add_view(CreditAdmin)
     admin.add_view(UsageAdmin)
 
     return admin

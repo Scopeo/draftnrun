@@ -1,9 +1,8 @@
-from fastapi import APIRouter
 from typing import Annotated, List
 from uuid import UUID
 import logging
 from sqlalchemy.orm import Session
-from fastapi import Depends, status, HTTPException
+from fastapi import Depends, status, HTTPException, APIRouter
 
 from ada_backend.schemas.auth_schema import SupabaseUser
 from ada_backend.routers.auth_router import UserRights, user_has_access_to_organization_dependency
@@ -47,7 +46,7 @@ def get_all_organization_limits_endpoint(
 
 
 @router.post("/organizations/{organization_id}/organization-limits", response_model=OrganizationLimitResponse)
-def create_organization_limit_endpoint(
+async def create_organization_limit_endpoint(
     organization_id: UUID,
     organization_limit_create: OrganizationLimit,
     user: Annotated[SupabaseUser, Depends(get_user_from_supabase_token)],
@@ -56,7 +55,7 @@ def create_organization_limit_endpoint(
     try:
         if not user.id:
             raise HTTPException(status_code=400, detail="User ID not found")
-        is_super = is_user_super_admin(user)
+        is_super = await is_user_super_admin(user)
         if not is_super:
             raise HTTPException(status_code=403, detail="Access denied")
         return create_organization_limit_service(
@@ -72,7 +71,7 @@ def create_organization_limit_endpoint(
 
 
 @router.patch("/organizations/{organization_id}/organization-limits", response_model=OrganizationLimitResponse)
-def update_organization_limit_endpoint(
+async def update_organization_limit_endpoint(
     id: UUID,
     organization_id: UUID,
     organization_limit: float,
@@ -82,7 +81,7 @@ def update_organization_limit_endpoint(
     try:
         if not user.id:
             raise HTTPException(status_code=400, detail="User ID not found")
-        is_super = is_user_super_admin(user)
+        is_super = await is_user_super_admin(user)
         if not is_super:
             raise HTTPException(status_code=403, detail="Access denied")
         return update_organization_limit_service(
@@ -99,7 +98,7 @@ def update_organization_limit_endpoint(
 
 
 @router.delete("/organizations/{organization_id}/organization-limits", status_code=status.HTTP_204_NO_CONTENT)
-def delete_organization_limit_endpoint(
+async def delete_organization_limit_endpoint(
     id: UUID,
     organization_id: UUID,
     user: Annotated[SupabaseUser, Depends(get_user_from_supabase_token)],
@@ -108,7 +107,7 @@ def delete_organization_limit_endpoint(
     try:
         if not user.id:
             raise HTTPException(status_code=400, detail="User ID not found")
-        is_super = is_user_super_admin(user)
+        is_super = await is_user_super_admin(user)
         if not is_super:
             raise HTTPException(status_code=403, detail="Access denied")
         return delete_organization_limit_service(session, id, organization_id)

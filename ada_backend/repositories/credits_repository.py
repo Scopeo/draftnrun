@@ -13,14 +13,11 @@ def _update_cost_fields(
     credits_per_second: Optional[float] = None,
 ) -> None:
     """Helper function to update cost fields on a Cost object."""
-    if credits_per_input_token is not None:
-        cost_obj.credits_per_input_token = credits_per_input_token
-    if credits_per_output_token is not None:
-        cost_obj.credits_per_output_token = credits_per_output_token
-    if credits_per_call is not None:
-        cost_obj.credits_per_call = credits_per_call
-    if credits_per_second is not None:
-        cost_obj.credits_per_second = credits_per_second
+
+    cost_obj.credits_per_input_token = credits_per_input_token
+    cost_obj.credits_per_output_token = credits_per_output_token
+    cost_obj.credits_per_call = credits_per_call
+    cost_obj.credits_per_second = credits_per_second
 
 
 def create_llm_cost(
