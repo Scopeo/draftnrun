@@ -357,8 +357,13 @@ def test_load_copy_graph_endpoint_value_error(monkeypatch):
         "ada_backend.repositories.project_repository.get_project",
         lambda session, project_id=None, project_name=None: mock_project,
     )
-    monkeypatch.setattr("ada_backend.routers.auth_router.get_project", lambda session, project_id=None, project_name=None: mock_project)
-    monkeypatch.setattr("ada_backend.routers.graph_router.get_project", lambda session, project_id=None, project_name=None: mock_project)
+    monkeypatch.setattr(
+        "ada_backend.routers.auth_router.get_project", lambda session, project_id=None, project_name=None: mock_project
+    )
+    monkeypatch.setattr(
+        "ada_backend.routers.graph_router.get_project",
+        lambda session, project_id=None, project_name=None: mock_project,
+    )
 
     # Mock get_user_access_to_organization to return access
     from ada_backend.schemas.auth_schema import OrganizationAccess
@@ -387,8 +392,13 @@ def test_load_copy_graph_endpoint_unexpected_error(monkeypatch):
         "ada_backend.repositories.project_repository.get_project",
         lambda session, project_id=None, project_name=None: mock_project,
     )
-    monkeypatch.setattr("ada_backend.routers.auth_router.get_project", lambda session, project_id=None, project_name=None: mock_project)
-    monkeypatch.setattr("ada_backend.routers.graph_router.get_project", lambda session, project_id=None, project_name=None: mock_project)
+    monkeypatch.setattr(
+        "ada_backend.routers.auth_router.get_project", lambda session, project_id=None, project_name=None: mock_project
+    )
+    monkeypatch.setattr(
+        "ada_backend.routers.graph_router.get_project",
+        lambda session, project_id=None, project_name=None: mock_project,
+    )
 
     # Mock get_user_access_to_organization to return access
     from ada_backend.schemas.auth_schema import OrganizationAccess
