@@ -1,4 +1,3 @@
-import asyncio
 import logging
 from functools import partial
 from typing import Optional
@@ -33,29 +32,33 @@ async def scrape_website(
     url: str,
     follow_links: bool = False,
     max_depth: int = 1,
-    selectors: Optional[dict[str, str]] = None,
-    visited: Optional[set] = None,
-    current_depth: int = 0,
-    timeout: int = 30,
     limit: Optional[int] = None,
+    include_paths: Optional[list[str]] = None,
+    exclude_paths: Optional[list[str]] = None,
+    include_tags: Optional[list[str]] = None,
+    exclude_tags: Optional[list[str]] = None,
 ) -> list[dict]:
     """
     Scrape a website using Firecrawl API.
 
     Args:
-        url: Starting URL
-        follow_links: Whether to follow links (maps to crawl_entire_domain)
-        max_depth: Maximum depth for link following (maps to maxDiscoveryDepth)
-        selectors: CSS selectors for content extraction (not used with Firecrawl, kept for compatibility)
-        visited: Set of already visited URLs (not used with Firecrawl, kept for compatibility)
-        current_depth: Current depth in the crawl (not used with Firecrawl, kept for compatibility)
-        timeout: Request timeout in seconds (not used with Firecrawl, kept for compatibility)
-        limit: Maximum number of pages to crawl
+        url: Starting URL to crawl
+        follow_links: Whether to follow links (maps to crawlEntireDomain)
+        max_depth: Maximum depth for link following (maps to maxDepth)
+        limit: Maximum number of pages to crawl (default: 100).
+               Recommended: 10-100 for small sites, 100-500 for medium sites, 500+ for large sites.
+        include_paths: URL pathname regex patterns that include matching URLs
+        exclude_paths: URL pathname regex patterns that exclude matching URLs
+        include_tags: HTML tags to include in content extraction
+        exclude_tags: HTML tags to exclude from content extraction
 
     Returns:
         List of scraped page data with 'url', 'title', 'content', 'html'
     """
-    LOGGER.info(f"Starting Firecrawl scrape for URL: {url} (follow_links={follow_links}, max_depth={max_depth})")
+    LOGGER.info(
+        f"Starting Firecrawl scrape for URL: {url} (follow_links={follow_links}, max_depth={max_depth}, "
+        f"limit={limit}, include_paths={include_paths}, exclude_paths={exclude_paths})"
+    )
 
     try:
         # Initialize Firecrawl client with API key from settings
@@ -64,14 +67,30 @@ async def scrape_website(
 
         firecrawl = AsyncFirecrawl(api_key=settings.FIRECRAWL_API_KEY)
 
-        # Build crawl options
-        crawl_options = {
-            "limit": limit,
-            "scrapeOptions": {
-                "formats": ["markdown", "html"],
-                "onlyMainContent": True,
-            },
+        # Build scrape options
+        scrape_options = {
+            "formats": ["markdown", "html"],
+            "onlyMainContent": True,
         }
+
+        # Add include/exclude tags to scrape options
+        if include_tags:
+            scrape_options["includeTags"] = include_tags
+        if exclude_tags:
+            scrape_options["excludeTags"] = exclude_tags
+
+        # Build crawl options
+        # Default to 100 pages if limit not specified (Firecrawl default is 10000, which is too high for most cases)
+        crawl_options = {
+            "limit": limit if limit is not None else 100,
+            "scrapeOptions": scrape_options,
+        }
+
+        # Add include/exclude paths
+        if include_paths:
+            crawl_options["includePaths"] = include_paths
+        if exclude_paths:
+            crawl_options["excludePaths"] = exclude_paths
 
         # Map follow_links to crawl_entire_domain
         if follow_links:
@@ -124,26 +143,32 @@ async def upload_website_source(
     storage_schema_name: str,
     storage_table_name: str,
     qdrant_collection_name: str,
-    urls_to_scrape: list[str],
-    follow_links: bool = False,
+    url: str,
+    follow_links: bool = True,
     max_depth: int = 1,
-    selectors: Optional[dict[str, str]] = None,
+    limit: Optional[int] = None,
+    include_paths: Optional[list[str]] = None,
+    exclude_paths: Optional[list[str]] = None,
+    include_tags: Optional[list[str]] = None,
+    exclude_tags: Optional[list[str]] = None,
     chunk_size: int = 1024,
     chunk_overlap: int = 0,
     update_existing: bool = False,
 ) -> None:
-    """
-    Upload website content to database and Qdrant.
-    This function is called by upload_source utility.
-    """
-    LOGGER.info(f"Starting to scrape {len(urls_to_scrape)} URL(s)")
-    all_scraped_data = []
+    LOGGER.info(f"Starting to scrape URL: {url} using Firecrawl")
 
-    for url_to_scrape in urls_to_scrape:
-        scraped_pages = await scrape_website(
-            url=url_to_scrape, follow_links=follow_links, max_depth=max_depth, selectors=selectors
-        )
-        all_scraped_data.extend(scraped_pages)
+    scraped_pages = await scrape_website(
+        url=url,
+        follow_links=follow_links,
+        max_depth=max_depth,
+        limit=limit,
+        include_paths=include_paths,
+        exclude_paths=exclude_paths,
+        include_tags=include_tags,
+        exclude_tags=exclude_tags,
+    )
+
+    all_scraped_data = scraped_pages
 
     if not all_scraped_data:
         LOGGER.warning("No content scraped from URLs")
@@ -224,7 +249,7 @@ async def upload_website_source(
             table_definition=FILE_TABLE_DEFINITION,
             id_column_name=ID_COLUMN_NAME,
             timestamp_column_name=TIMESTAMP_COLUMN_NAME,
-            append_mode=update_existing,
+            append_mode=True,
             schema_name=storage_schema_name,
         )
 
@@ -234,56 +259,50 @@ async def upload_website_source(
 
 
 async def ingest_website_source(
-    url: Optional[str] = None,
-    urls: Optional[list[str]] = None,
+    url: str,
     organization_id: str = None,
     source_name: str = None,
     task_id: UUID = None,
-    follow_links: bool = False,
+    follow_links: bool = True,
     max_depth: int = 1,
-    selectors: Optional[dict[str, str]] = None,
+    limit: Optional[int] = 100,
+    include_paths: Optional[list[str]] = None,
+    exclude_paths: Optional[list[str]] = None,
+    include_tags: Optional[list[str]] = None,
+    exclude_tags: Optional[list[str]] = None,
     chunk_size: Optional[int] = 1024,
     chunk_overlap: Optional[int] = 0,
-    source_attributes: Optional[SourceAttributes] = None,
     source_id: Optional[UUID] = None,
 ) -> None:
-    """
-    Ingest content from one or more websites.
-    """
     LOGGER.info(
-        f"[INGESTION_SOURCE] Starting WEBSITE ingestion - Source: '{source_name}', "
-        f"URL(s): {url or urls}, Organization: {organization_id}"
+        f"[INGESTION_SOURCE] Starting WEBSITE ingestion with Firecrawl - Source: '{source_name}', "
+        f"URL: {url}, Organization: {organization_id}"
     )
-
-    urls_to_scrape = []
-    if urls:
-        urls_to_scrape = urls
-    elif url:
-        urls_to_scrape = [url]
-    else:
-        raise ValueError("Either 'url' or 'urls' must be provided")
 
     qdrant_schema = QDRANT_SCHEMA
     source_type = db.SourceType.WEBSITE
-    update_existing = source_attributes.update_existing if source_attributes else False
 
-    LOGGER.info("Start ingestion data from the website source...")
+    LOGGER.info("Starting Firecrawl website ingestion...")
     await upload_source(
         source_name,
         organization_id,
         task_id,
         source_type,
         qdrant_schema,
-        update_existing=update_existing,
+        update_existing=False,
         ingestion_function=partial(
             upload_website_source,
-            urls_to_scrape=urls_to_scrape,
+            url=url,
             follow_links=follow_links,
             max_depth=max_depth,
-            selectors=selectors,
+            limit=limit,
+            include_paths=include_paths,
+            exclude_paths=exclude_paths,
+            include_tags=include_tags,
+            exclude_tags=exclude_tags,
             chunk_size=chunk_size or 1024,
             chunk_overlap=chunk_overlap or 0,
         ),
-        attributes=source_attributes,
+        attributes=None,
         source_id=source_id,
     )

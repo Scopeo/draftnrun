@@ -44,7 +44,12 @@ class SourceAttributes(BaseModel):
     urls: Optional[list[str]] = None  # Multiple URLs to scrape
     follow_links: Optional[bool] = False  # Whether to follow links on the page
     max_depth: Optional[int] = 1  # Maximum depth for link following
-    selectors: Optional[dict[str, str]] = None  # CSS selectors for content extraction
+    limit: Optional[int] = None  # Maximum number of pages to crawl
+    include_paths: Optional[list[str]] = None  # URL pathname regex patterns to include
+    exclude_paths: Optional[list[str]] = None  # URL pathname regex patterns to exclude
+    include_tags: Optional[list[str]] = None  # HTML tags to include in content extraction
+    exclude_tags: Optional[list[str]] = None  # HTML tags to exclude from content extraction
+    selectors: Optional[dict[str, str]] = None  # Legacy: CSS selectors (not used with Firecrawl)
 
 
 class IngestionTaskUpdate(IngestionTask):
