@@ -10,7 +10,7 @@ import logging
 from typing import Any, Callable
 
 from engine.graph_runner.types import Task
-from engine.field_expressions.ast import ExpressionNode, LiteralNode, RefNode, ConcatNode
+from engine.field_expressions.ast import ExpressionNode, LiteralNode, RefNode, ConcatNode, VarNode, VarType
 from engine.field_expressions.errors import FieldExpressionError
 
 LOGGER = logging.getLogger(__name__)
@@ -20,11 +20,19 @@ def evaluate_expression(
     expression: ExpressionNode,
     target_field_name: str,
     tasks: dict[str, Task],
+    inject_vars: dict[VarType, dict[str, str]] | None = None,
     to_string: Callable[[Any], str] = lambda v: str(v),
 ) -> str:
     """Evaluate a field expression AST and return the result.
 
     Uses structural pattern matching over AST node classes.
+
+    Args:
+        expression: The AST to evaluate.
+        target_field_name: Name of the target field (for error messages).
+        tasks: Dict of completed tasks (for RefNode resolution).
+        inject_vars: Dict of injected variables by VarType (e.g. {VarType.SECRETS: {uuid: value}}).
+        to_string: Function to convert values to string.
     """
 
     def evaluate_node(node: ExpressionNode) -> str:
@@ -60,6 +68,27 @@ def evaluate_expression(
                     raw_value = raw_value[key]
 
                 return to_string(raw_value)
+
+            case VarNode(var_type=var_type, key=key):
+                if inject_vars is None:
+                    raise FieldExpressionError(
+                        f"Injected variables missing while evaluating '{target_field_name}': "
+                        f"cannot resolve ${{{{{var_type.value}.{key}}}}}"
+                    )
+
+                if var_type not in inject_vars:
+                    raise FieldExpressionError(
+                        f"Variable type '{var_type.value}' not found in inject_vars "
+                        f"while evaluating '{target_field_name}'"
+                    )
+
+                var_data = inject_vars[var_type]
+                if key not in var_data:
+                    raise FieldExpressionError(
+                        f"Key '{key}' not found in '{var_type.value}' while evaluating '{target_field_name}'"
+                    )
+
+                return to_string(var_data[key])
 
             case ConcatNode(parts=parts):
                 return "".join(evaluate_node(part) for part in parts)

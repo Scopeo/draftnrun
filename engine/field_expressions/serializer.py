@@ -11,6 +11,8 @@ from engine.field_expressions.ast import (
     LiteralNode,
     RefNode,
     ConcatNode,
+    VarNode,
+    VarType,
 )
 
 
@@ -24,6 +26,8 @@ def to_json(expression: ExpressionNode) -> Dict[str, Any]:
             if key is not None:
                 result["key"] = key
             return result
+        case VarNode(var_type=var_type, key=key):
+            return {"type": "var", "var_type": var_type.value, "key": key}
         case ConcatNode(parts=parts):
             return {"type": "concat", "parts": [to_json(p) for p in parts]}
         case _:
@@ -37,11 +41,13 @@ def from_json(ast_dict: Dict[str, Any]) -> ExpressionNode:
             return LiteralNode(value=str(value))
         case {"type": "ref", "instance": instance, "port": port, **rest}:
             return RefNode(instance=str(instance), port=str(port), key=rest.get("key"))
+        case {"type": "var", "var_type": var_type, "key": key}:
+            return VarNode(var_type=VarType(str(var_type)), key=str(key))
         case {"type": "concat", "parts": parts}:
             hydrated: List[ExpressionNode] = [from_json(p) for p in (parts or [])]
-            # Filter to only LiteralNode | RefNode for now; nested concat collapses by flattening literals
-            filtered: List[Union[LiteralNode, RefNode]] = [
-                n for n in hydrated if isinstance(n, (LiteralNode, RefNode))
+            # Filter to only LiteralNode | RefNode | VarNode for now; nested concat collapses by flattening literals
+            filtered: List[Union[LiteralNode, RefNode, VarNode]] = [
+                n for n in hydrated if isinstance(n, (LiteralNode, RefNode, VarNode))
             ]
             return ConcatNode(parts=filtered)
         case _:
