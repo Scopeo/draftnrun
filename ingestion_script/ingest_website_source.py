@@ -92,19 +92,19 @@ async def scrape_website(
                 crawl_options["maxDepth"] = max_depth
 
         LOGGER.info(f"Starting Firecrawl crawl with options: {crawl_options}")
-        crawl_result = await firecrawl.crawl(url, **crawl_options)
+        crawl_result = await firecrawl.crawl(url=url, **crawl_options)
 
-        if not crawl_result or not crawl_result.get("data"):
+        if not crawl_result or not crawl_result.data:
             raise ValueError(f"Failed to crawl: {crawl_result}")
 
-        pages = crawl_result.get("data", [])
+        pages = crawl_result.data
         LOGGER.info(f"Firecrawl crawl completed. Found {len(pages)} pages")
 
         scraped_pages = []
         for page in pages:
-            page_url = page.get("url", url)
-            page_title = page.get("metadata", {}).get("title") or page.get("title", "") or page_url
-            markdown_content = page.get("markdown", "") or page.get("content", "")
+            page_url = (page.metadata.url if page.metadata else None) or url
+            page_title = (page.metadata.title if page.metadata else None) or page_url
+            markdown_content = page.markdown or ""
 
             if not markdown_content:
                 LOGGER.warning(f"No content found for page: {page_url}")

@@ -256,10 +256,26 @@ class QdrantService:
                 response.raise_for_status()
                 return response.json()
         except httpx.HTTPStatusError as http_err:
-            LOGGER.error(f"HTTP error occurred: {http_err}")
+            status_code = http_err.response.status_code if http_err.response else "unknown"
+            response_text = http_err.response.text if http_err.response else "no body"
+            LOGGER.error(
+                "Qdrant HTTP error (%s %s) status=%s body=%s",
+                method,
+                endpoint,
+                status_code,
+                response_text,
+            )
             raise
         except Exception as err:
-            LOGGER.error(f"Request error: {err}", exc_info=True)
+            LOGGER.error(
+                "Request error calling Qdrant (%s %s) payload=%s timeout=%s: %s",
+                method,
+                endpoint,
+                payload,
+                self._timeout,
+                err,
+                exc_info=True,
+            )
             raise
 
     def search_vectors(
