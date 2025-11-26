@@ -1,7 +1,7 @@
 """add website type in sources
 
 Revision ID: 1d0c97757e4d
-Revises: b0ba5107a7e3
+Revises: 2a849385353a
 Create Date: 2025-01-27 12:00:00.000000
 
 """
@@ -13,7 +13,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "1d0c97757e4d"
-down_revision: Union[str, None] = "b0ba5107a7e3"
+down_revision: Union[str, None] = "2a849385353a"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
