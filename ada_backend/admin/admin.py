@@ -24,6 +24,7 @@ class AdminCategory(StrEnum):
     SCHEDULER = "Scheduler"
     QUALITY_ASSURANCE = "Quality Assurance"
     LLM_MODELS = "LLM Models"
+    CREDITS = "Credits"
 
 
 class EnhancedModelView(ModelView):
@@ -610,6 +611,48 @@ class LLMModelsAdmin(EnhancedModelView, model=db.LLMModel):
     column_filters = ["provider", "model_name"]
 
 
+class CreditAdmin(EnhancedModelView, model=db.Cost):
+    category = AdminCategory.CREDITS
+    icon = "fas fa-money-bill"
+    column_list = [
+        "id",
+        "entity_type",
+        "credits_per_second",
+        "credits_per_call",
+        "credits_per_input_token",
+        "credits_per_output_token",
+    ]
+    form_columns = [
+        "entity_type",
+        "credits_per_second",
+        "credits_per_call",
+        "credits_per_input_token",
+        "credits_per_output_token",
+    ]
+    column_filters = ["entity_type"]
+    column_searchable_list = ["entity_type"]
+
+
+class UsageAdmin(EnhancedModelView, model=db.Usage):
+    category = AdminCategory.CREDITS
+    icon = "fas fa-money-bill"
+    column_list = [
+        "id",
+        "project_id",
+        "year",
+        "month",
+        "credits_used",
+    ]
+    form_columns = [
+        "project_id",
+        "year",
+        "month",
+        "credits_used",
+    ]
+    column_filters = ["project_id", "year", "month"]
+    column_searchable_list = ["project_id", "year", "month"]
+
+
 class AdminAuth(AuthenticationBackend):
     """Basic username/password authentication for admin interface."""
 
@@ -683,5 +726,7 @@ def setup_admin(app: FastAPI):
     admin.add_view(EndpointPollingHistoryAdmin)
     admin.add_view(LLMJudgeAdmin)
     admin.add_view(LLMModelsAdmin)
+    admin.add_view(CreditAdmin)
+    admin.add_view(UsageAdmin)
 
     return admin

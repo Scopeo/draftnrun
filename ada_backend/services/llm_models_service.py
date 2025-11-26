@@ -9,6 +9,10 @@ from ada_backend.repositories.llm_models_repository import (
     get_all_llm_models,
     llm_model_exists,
 )
+from ada_backend.repositories.credits_repository import (
+    upsert_llm_cost,
+    delete_llm_cost,
+)
 from ada_backend.schemas.llm_models_schema import (
     LLMModelResponse,
     LLMModelUpdate,
@@ -58,6 +62,10 @@ def get_all_llm_models_service(session: Session) -> list[LLMModelResponse]:
             model_capacity=[
                 cap.value if isinstance(cap, ModelCapabilityEnum) else str(cap) for cap in (model.model_capacity or [])
             ],
+            credits_per_input_token=model.llm_cost.credits_per_input_token if model.llm_cost else None,
+            credits_per_output_token=model.llm_cost.credits_per_output_token if model.llm_cost else None,
+            credits_per_call=model.llm_cost.credits_per_call if model.llm_cost else None,
+            credits_per_second=model.llm_cost.credits_per_second if model.llm_cost else None,
             created_at=model.created_at,
             updated_at=model.updated_at,
         )
@@ -80,6 +88,10 @@ def get_llm_models_by_capability_service(session: Session, capabilities: list[st
             model_capacity=[
                 cap.value if isinstance(cap, ModelCapabilityEnum) else str(cap) for cap in (model.model_capacity or [])
             ],
+            credits_per_input_token=model.llm_cost.credits_per_input_token if model.llm_cost else None,
+            credits_per_output_token=model.llm_cost.credits_per_output_token if model.llm_cost else None,
+            credits_per_call=model.llm_cost.credits_per_call if model.llm_cost else None,
+            credits_per_second=model.llm_cost.credits_per_second if model.llm_cost else None,
             created_at=model.created_at,
             updated_at=model.updated_at,
         )
@@ -112,10 +124,22 @@ def create_llm_model_service(
         llm_model_data.provider,
         llm_model_data.model_name,
     )
+
+    upsert_llm_cost(
+        session,
+        llm_model_id=created_llm_model.id,
+        credits_per_input_token=llm_model_data.credits_per_input_token,
+        credits_per_output_token=llm_model_data.credits_per_output_token,
+        credits_per_call=llm_model_data.credits_per_call,
+        credits_per_second=llm_model_data.credits_per_second,
+    )
+
     return LLMModelResponse.model_validate(created_llm_model)
 
 
 def delete_llm_model_service(session: Session, llm_model_id: UUID) -> None:
+
+    delete_llm_cost(session, llm_model_id)
     delete_llm_model(session, llm_model_id)
 
 
@@ -135,6 +159,16 @@ def update_llm_model_service(
     )
     if updated_llm_model is None:
         raise LLMModelNotFound(llm_model_id)
+
+    upsert_llm_cost(
+        session,
+        llm_model_id=llm_model_id,
+        credits_per_input_token=llm_model_data.credits_per_input_token,
+        credits_per_output_token=llm_model_data.credits_per_output_token,
+        credits_per_call=llm_model_data.credits_per_call,
+        credits_per_second=llm_model_data.credits_per_second,
+    )
+
     return LLMModelResponse.model_validate(updated_llm_model)
 
 

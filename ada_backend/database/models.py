@@ -193,6 +193,12 @@ class PortType(StrEnum):
     OUTPUT = "OUTPUT"
 
 
+class EntityType(StrEnum):
+    LLM = "llm"
+    COMPONENT = "component"
+    PARAMETER_VALUE = "parameter_value"
+
+
 class SelectOption(BaseModel):
     """Option for Select and similar UI components"""
 
@@ -324,6 +330,9 @@ class ComponentVersion(Base):
     updated_at = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     component = relationship("Component")
+    component_cost = relationship(
+        "ComponentCost", back_populates="component_version", uselist=False, cascade="all, delete-orphan"
+    )
     definitions = relationship(
         "ComponentParameterDefinition",
         back_populates="component_version",
@@ -1076,6 +1085,8 @@ class Project(Base):
     # Quality Assurance relationships
     datasets = relationship("DatasetProject", back_populates="project", cascade="all, delete-orphan")
 
+    usage = relationship("Usage", back_populates="project")
+
     __mapper_args__ = {"polymorphic_on": type, "polymorphic_identity": "base"}
 
     def __str__(self):
@@ -1531,5 +1542,99 @@ class LLMModel(Base):
     created_at = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
+    llm_cost = relationship("LLMCost", back_populates="llm_model", uselist=False, cascade="all, delete-orphan")
+
     def __str__(self) -> str:
         return f"LLMModel(id={self.id}, name={self.name}, provider={self.provider})"
+
+
+class Cost(Base):
+    __tablename__ = "costs"
+    __table_args__ = {"schema": "credits"}
+
+    id = mapped_column(UUID(as_uuid=True), primary_key=True, index=True, default=uuid.uuid4)
+    entity_type = mapped_column(make_pg_enum(EntityType), nullable=True)
+    credits_per_second = mapped_column(Float, nullable=True)
+    credits_per_call = mapped_column(Float, nullable=True)
+    credits_per_input_token = mapped_column(Float, nullable=True)
+    credits_per_output_token = mapped_column(Float, nullable=True)
+
+    __mapper_args__ = {
+        "polymorphic_on": entity_type,
+    }
+
+
+class LLMCost(Cost):
+    __tablename__ = "llm_costs"
+    __table_args__ = {"schema": "credits"}
+
+    id = mapped_column(UUID(as_uuid=True), ForeignKey("credits.costs.id"), primary_key=True)
+    llm_model_id = mapped_column(UUID(as_uuid=True), ForeignKey("llm_models.id"), unique=True)
+
+    llm_model = relationship("LLMModel", back_populates="llm_cost")
+
+    __mapper_args__ = {"polymorphic_identity": EntityType.LLM.value}
+
+
+class ComponentCost(Cost):
+    __tablename__ = "component_costs"
+    __table_args__ = {"schema": "credits"}
+
+    id = mapped_column(UUID(as_uuid=True), ForeignKey("credits.costs.id"), primary_key=True)
+    component_version_id = mapped_column(UUID(as_uuid=True), ForeignKey("component_versions.id"), unique=True)
+
+    component_version = relationship("ComponentVersion", back_populates="component_cost")
+
+    __mapper_args__ = {"polymorphic_identity": EntityType.COMPONENT.value}
+
+
+class ParameterValueCost(Cost):
+    __tablename__ = "parameter_value_costs"
+    __table_args__ = {"schema": "credits"}
+
+    id = mapped_column(UUID(as_uuid=True), ForeignKey("credits.costs.id"), primary_key=True)
+    component_parameter_definition_id = mapped_column(
+        UUID(as_uuid=True), ForeignKey("component_parameter_definitions.id")
+    )
+    parameter_value = mapped_column(String)
+
+    __mapper_args__ = {"polymorphic_identity": EntityType.PARAMETER_VALUE.value}
+
+
+class Usage(Base):
+    __tablename__ = "usages"
+    __table_args__ = {"schema": "credits"}
+
+    id = mapped_column(UUID(as_uuid=True), primary_key=True, index=True, default=uuid.uuid4)
+    project_id = mapped_column(UUID(as_uuid=True), ForeignKey("projects.id"), nullable=False, index=True)
+    year = mapped_column(Integer, nullable=False)
+    month = mapped_column(Integer, nullable=False)
+    credits_used = mapped_column(Float, nullable=False, default=0.0)
+    created_at = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    project = relationship("Project", back_populates="usage")
+
+
+class OrganizationLimit(Base):
+    """
+    Tracks monthly limits for organizations.
+    Allows setting different limits per organization per month.
+    """
+
+    __tablename__ = "organization_limits"
+    __table_args__ = (
+        UniqueConstraint("organization_id", "year", "month", name="uq_organization_limit_year_month"),
+        {"schema": "credits"},
+    )
+
+    id = mapped_column(UUID(as_uuid=True), primary_key=True, index=True, default=uuid.uuid4)
+    organization_id = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
+    year = mapped_column(Integer, nullable=False)
+    month = mapped_column(Integer, nullable=False)
+    limit = mapped_column(Float, nullable=True)
+    created_at = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    def __str__(self):
+        return f"OrganizationLimit(org={self.organization_id}, " f"{self.year}-{self.month:02d}, limit={self.limit})"

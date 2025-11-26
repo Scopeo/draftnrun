@@ -96,3 +96,16 @@ class LLMModelNotFound(Exception):
     def __init__(self, llm_model_id: UUID):
         self.llm_model_id = llm_model_id
         super().__init__(f"LLM model not found: {llm_model_id}")
+
+
+class ComponentVersionCostNotFound(Exception):
+    def __init__(self, component_version_id: UUID):
+        self.component_version_id = component_version_id
+        super().__init__(f"Component version cost not found: {component_version_id}")
+
+
+class OrganizationLimitNotFound(Exception):
+    def __init__(self, id: UUID, organization_id: UUID):
+        self.id = id
+        self.organization_id = organization_id
+        super().__init__(f"Organization limit not found: {id} for organization {organization_id}")
