@@ -78,7 +78,8 @@ def evaluate_expression(
 
                 if var_type not in inject_vars:
                     raise FieldExpressionError(
-                        f"Variable type '{var_type.value}' not found in inject_vars while evaluating '{target_field_name}'"
+                        f"Variable type '{var_type.value}' not found in inject_vars "
+                        f"while evaluating '{target_field_name}'"
                     )
 
                 var_data = inject_vars[var_type]

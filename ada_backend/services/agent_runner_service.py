@@ -24,7 +24,10 @@ from ada_backend.repositories.graph_runner_repository import (
 from ada_backend.repositories.port_mapping_repository import list_port_mappings_for_graph
 from ada_backend.repositories.field_expression_repository import get_field_expressions_for_instances
 from ada_backend.repositories.project_repository import get_project, get_project_with_details
-from ada_backend.repositories.organization_repository import get_organization_secrets, get_organization_secrets_from_project_id
+from ada_backend.repositories.organization_repository import (
+    get_organization_secrets,
+    get_organization_secrets_from_project_id,
+)
 from engine.field_expressions.ast import VarType
 from engine.graph_runner.runnable import Runnable
 from engine.trace.trace_context import get_trace_manager
