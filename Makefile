@@ -107,34 +107,3 @@ db-reset:
 	@echo "Closing all existing connections to the database..."
 	@docker exec -it ada_postgres psql -U ada_user -d postgres -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = 'ada_backend' AND pid <> pg_backend_pid();"
 	@docker exec -it ada_postgres psql -U ada_user -d postgres -c "DROP DATABASE IF EXISTS ada_backend;" && docker exec -it ada_postgres psql -U ada_user -d postgres -c "CREATE DATABASE ada_backend;"
-
-
-# -------------------------------------------
-# Trace Database Migrations (Alembic)
-# -------------------------------------------
-TRACE_ALEMBIC_CMD = uv run alembic -c engine/trace/alembic.ini
-
-.PHONY: trace-db-revision
-trace-db-revision:
-	@echo "Creating a new migration"
-	@$(TRACE_ALEMBIC_CMD) revision --autogenerate -m "$(message)"
-
-.PHONY: trace-db-upgrade
-trace-db-upgrade:
-	@echo "Applying migrations"
-	@$(TRACE_ALEMBIC_CMD) upgrade head
-
-.PHONY: trace-db-downgrade
-trace-db-downgrade:
-	@echo "Reverting last migration"
-	@$(TRACE_ALEMBIC_CMD) downgrade -1
-
-.PHONY: trace-db-history
-trace-db-history:
-	@echo "Showing migration history"
-	@$(TRACE_ALEMBIC_CMD) history
-
-.PHONY: trace-db-current
-trace-db-current:
-	@echo "Checking current migration"
-	@$(TRACE_ALEMBIC_CMD) current

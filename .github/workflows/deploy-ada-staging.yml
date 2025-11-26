@@ -38,9 +38,6 @@ jobs:
             echo "📦 Install dependencies"
             pip install --upgrade uv
             uv sync
-
-            echo "👁️ Re-setup the traces database"
-            make trace-db-upgrade
             
             echo "🔄 Re-setup the database"
             make db-upgrade

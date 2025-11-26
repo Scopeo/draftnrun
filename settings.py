@@ -87,9 +87,6 @@ class BaseConfig(BaseSettings):
     # Ingestion database settings
     INGESTION_DB_URL: Optional[str] = None
 
-    # Traces database settings
-    TRACES_DB_URL: Optional[str] = None
-
     SUPABASE_PROJECT_URL: Optional[str] = None
     SUPABASE_PROJECT_KEY: Optional[str] = None
     SUPABASE_SERVICE_ROLE_SECRET_KEY: Optional[str] = None
