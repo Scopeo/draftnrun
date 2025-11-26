@@ -39,6 +39,12 @@ class SourceAttributes(BaseModel):
     update_existing: Optional[bool] = False
     query_filter: Optional[str] = None
     timestamp_filter: Optional[str] = None
+    # Website ingestion fields
+    url: Optional[str] = None  # Single URL to scrape
+    urls: Optional[list[str]] = None  # Multiple URLs to scrape
+    follow_links: Optional[bool] = False  # Whether to follow links on the page
+    max_depth: Optional[int] = 1  # Maximum depth for link following
+    selectors: Optional[dict[str, str]] = None  # CSS selectors for content extraction
 
 
 class IngestionTaskUpdate(IngestionTask):

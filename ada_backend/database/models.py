@@ -150,6 +150,7 @@ class SourceType(StrEnum):
     GOOGLE_DRIVE = "google_drive"
     LOCAL = "local"
     DATABASE = "database"
+    WEBSITE = "website"
 
 
 class TaskStatus(StrEnum):

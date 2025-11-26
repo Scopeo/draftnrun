@@ -257,9 +257,15 @@ class QdrantService:
                 return response.json()
         except httpx.HTTPStatusError as http_err:
             LOGGER.error(f"HTTP error occurred: {http_err}")
+            if hasattr(http_err, "response") and http_err.response is not None:
+                try:
+                    error_detail = http_err.response.text
+                    LOGGER.error(f"Response body: {error_detail}")
+                except Exception:
+                    pass
             raise
         except Exception as err:
-            LOGGER.error(f"Request error: {err}")
+            LOGGER.error(f"Request error: {err}", exc_info=True)
             raise
 
     def search_vectors(

@@ -48,10 +48,12 @@ class FileChunk(Chunk):
     url: Optional[str] = None
 
 
-class FileDocument(BaseModel):
+class BaseDocument(BaseModel):
+    """Base model for all document types."""
+
     id: str
-    last_edited_ts: str
     type: FileDocumentType
+    last_edited_ts: Optional[str] = None
     file_name: str
     folder_name: str
     metadata: dict[str, Any] = Field(default_factory=dict)
@@ -59,6 +61,18 @@ class FileDocument(BaseModel):
     @property
     def url(self) -> str | None:
         return self.metadata.get("supabase_url") or self.metadata.get("source_url", None)
+
+
+class FileDocument(BaseDocument):
+    """Document model for file-based sources."""
+
+    last_edited_ts: str  # Required for files
+
+
+class WebsiteDocument(BaseDocument):
+    """Document model for website sources."""
+
+    type: FileDocumentType = FileDocumentType.MARKDOWN  # Default to markdown for chunking
 
 
 class FolderManager(ABC):

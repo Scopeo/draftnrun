@@ -11,6 +11,7 @@ from engine.trace.span_context import set_tracing_span
 from engine.trace.trace_context import set_trace_manager
 from engine.trace.trace_manager import TraceManager
 from ingestion_script.ingest_folder_source import ingest_google_drive_source, ingest_local_folder_source
+from ingestion_script.ingest_website_source import ingest_website_source
 from ingestion_script.utils import update_ingestion_task
 from ada_backend.database import models as db
 
@@ -190,6 +191,38 @@ async def ingestion_main_async(
             )
         except Exception as e:
             LOGGER.error(f"Error during database ingestion: {str(e)}")
+            update_ingestion_task(
+                organization_id=organization_id,
+                ingestion_task=failed_ingestion_task,
+            )
+            raise  # Re-raise the exception to ensure subprocess exits with non-zero code
+
+    elif source_type == SourceType.WEBSITE:
+        # Check if at least one URL is provided
+        if not source_attributes.get("url") and not source_attributes.get("urls"):
+            LOGGER.error("Either 'url' or 'urls' must be provided for website ingestion")
+            update_ingestion_task(
+                organization_id=organization_id,
+                ingestion_task=failed_ingestion_task,
+            )
+            return
+
+        try:
+            await ingest_website_source(
+                url=source_attributes.get("url"),
+                urls=source_attributes.get("urls"),
+                organization_id=organization_id,
+                source_name=source_name,
+                task_id=task_id,
+                follow_links=source_attributes.get("follow_links", False),
+                max_depth=source_attributes.get("max_depth", 1),
+                selectors=source_attributes.get("selectors"),
+                chunk_size=chunk_size,
+                chunk_overlap=chunk_overlap,
+                source_id=source_id,
+            )
+        except Exception as e:
+            LOGGER.error(f"Error during website ingestion: {str(e)}")
             update_ingestion_task(
                 organization_id=organization_id,
                 ingestion_task=failed_ingestion_task,
