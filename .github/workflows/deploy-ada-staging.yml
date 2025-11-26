@@ -5,11 +5,17 @@ on:
     branches:
       - staging
   workflow_dispatch:
+    inputs:
+      force_sync:
+        description: "Force full data + Qdrant sync even if TTL cache is valid"
+        required: false
+        default: false
+        type: boolean
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    steps: 
+    steps:
       - name: Connexion à EC2 et git pull
         uses: appleboy/ssh-action@master
         with:
@@ -23,7 +29,34 @@ jobs:
             git fetch origin
             git checkout staging
             git reset --hard origin/staging
-    
+
+      - name: Sync data from prod to staging (with TTL cache)
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.EC2_HOST_SCOPEO_STAGING }}
+          username: ec2-user
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          script: |
+            set -e
+            cd /home/ec2-user/draftnrun
+
+            FORCE_SYNC_FLAG=""
+            if [ "${{ inputs.force_sync }}" = "true" ]; then
+              FORCE_SYNC_FLAG="--force-sync"
+            fi
+
+            ./scripts/copy_data/sync_data.sh \
+              --source-db-url "${{ secrets.PROD_DB_URL }}" \
+              --source-ingestion-db-url "${{ secrets.PROD_INGESTION_DB_URL }}" \
+              --target-db-url "${{ secrets.STAGING_DB_URL }}" \
+              --target-ingestion-db-url "${{ secrets.STAGING_INGESTION_DB_URL }}" \
+              --source-qdrant-url "${{ secrets.PROD_QDRANT_CLUSTER_URL }}" \
+              --source-qdrant-key "${{ secrets.PROD_QDRANT_API_KEY }}" \
+              --target-qdrant-url "${{ secrets.STAGING_QDRANT_CLUSTER_URL }}" \
+              --target-qdrant-key "${{ secrets.STAGING_QDRANT_API_KEY }}" \
+              $FORCE_SYNC_FLAG
+
       - name: SSH Remote Commands
         uses: appleboy/ssh-action@master
         with:
@@ -38,7 +71,7 @@ jobs:
             echo "📦 Install dependencies"
             pip install --upgrade uv
             uv sync
-            
+
             echo "🔄 Re-setup the database"
             make db-upgrade
             make db-seed
