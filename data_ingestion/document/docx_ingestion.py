@@ -89,7 +89,7 @@ def get_image_content_from_path(image_path: Path) -> bytes:
 
 def parse_docx_to_md(
     docx_to_process: FileDocument,
-    get_file_content_func: Callable[[FileDocument], str],
+    get_file_content_func: Callable[[str], bytes | str],
     include_images_descriptions: bool = False,
     llm_service_images: Optional[VisionService] = None,
 ) -> str:
@@ -134,7 +134,7 @@ def parse_docx_to_md(
 
 def get_chunks_from_docx(
     docx_to_process: FileDocument,
-    get_file_content_func: Callable[[FileDocument], str],
+    get_file_content_func: Callable[[str], bytes | str],
     include_images_descriptions: bool = False,
     llm_service_images: Optional[VisionService] = None,
     chunk_size: int = CHUNK_SIZE,

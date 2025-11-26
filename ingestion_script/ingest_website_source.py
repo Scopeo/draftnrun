@@ -18,7 +18,6 @@ from ingestion_script.ingest_folder_source import (
     ID_COLUMN_NAME,
     QDRANT_SCHEMA,
     TIMESTAMP_COLUMN_NAME,
-    load_llms_services,
     sync_chunks_to_qdrant,
 )
 from ingestion_script.utils import upload_source
@@ -163,16 +162,9 @@ async def upload_website_source(
 
     LOGGER.info(f"Scraped {len(all_scraped_data)} pages")
 
-    if settings.USE_LLM_FOR_PDF_PARSING:
-        try:
-            vision_completion_service, fallback_vision_llm_service = load_llms_services()
-        except ValueError as e:
-            LOGGER.warning(f"Failed to load LLM services: {str(e)}")
-            vision_completion_service = None
-            fallback_vision_llm_service = None
-    else:
-        vision_completion_service = None
-        fallback_vision_llm_service = None
+    # Firecrawl content is already Markdown, so no LLM/vision processing is required.
+    vision_completion_service = None
+    fallback_vision_llm_service = None
 
     content_storage = {}
 

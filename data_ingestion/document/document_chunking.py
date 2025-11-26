@@ -166,7 +166,5 @@ async def get_chunks_dataframe_from_doc(
         lower_field = field.lower()
         if lower_field in chunks_df.columns:
             chunks_df[lower_field] = chunks_df[lower_field].apply(json.dumps)
-    chunks_df = chunks_df.fillna("")
     chunks_df = chunks_df.astype(str)
-    chunks_df = chunks_df.replace("nan", "")
     return chunks_df
