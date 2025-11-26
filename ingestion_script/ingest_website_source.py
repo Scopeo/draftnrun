@@ -5,7 +5,6 @@ from uuid import UUID
 import hashlib
 
 from ada_backend.database import models as db
-from ada_backend.schemas.ingestion_task_schema import SourceAttributes
 from data_ingestion.document.document_chunking import (
     document_chunking_mapping,
     get_chunks_dataframe_from_doc,
