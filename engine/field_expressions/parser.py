@@ -6,8 +6,8 @@ from engine.field_expressions.errors import FieldExpressionParseError
 # Matches @{{instance.port}} where instance and port allow [a-zA-Z0-9_-]. An optional key can be provided after ::.
 _REF_PATTERN = re.compile(r"@\{\{\s*([a-zA-Z0-9_-]+)\.([a-zA-Z0-9_-]+)(?:::([a-zA-Z0-9_-]+))?\s*\}\}")
 
-# Matches @{ $var_type.key } where var_type is a VarType value and key is typically a UUID.
-_VAR_PATTERN = re.compile(r"@\{\s*\$([a-zA-Z0-9_-]+)\.([a-zA-Z0-9_-]+)\s*\}")
+# Matches ${{var_type.key}} where var_type is a VarType value and key is typically a UUID.
+_VAR_PATTERN = re.compile(r"\$\{\{\s*([a-zA-Z0-9_-]+)\.([a-zA-Z0-9_-]+)\s*\}\}")
 
 # Valid var_type values (from VarType enum)
 _VALID_VAR_TYPES = {v.value for v in VarType}
@@ -21,7 +21,7 @@ def parse_expression(expression_text: str) -> ExpressionNode:
       - Plain text -> LiteralNode
       - @{{instance.port}} -> RefNode
       - @{{instance.port::key}} -> RefNode with key extraction
-      - @{ $var_type.id } -> VarNode (e.g. @{ $secrets.550e8400-... })
+      - ${{var_type.id}} -> VarNode (e.g. ${{secrets.550e8400-...}})
       - Mixed text with multiple refs -> ConcatNode
 
     Errors:
@@ -31,11 +31,12 @@ def parse_expression(expression_text: str) -> ExpressionNode:
     if expression_text == "":
         return LiteralNode(value="")
 
-    # Early malformed detection: unbalanced @{{ and }} anywhere in the string
-    open_count = expression_text.count("@{{")
+    # Early malformed detection: unbalanced @{{ or ${{ and }} anywhere in the string
+    ref_open_count = expression_text.count("@{{")
+    var_open_count = expression_text.count("${{")
     close_count = expression_text.count("}}")
-    if open_count != close_count:
-        raise FieldExpressionParseError("Unbalanced reference delimiters '@{{' and '}}'")
+    if ref_open_count + var_open_count != close_count:
+        raise FieldExpressionParseError("Unbalanced expression delimiters '@{{'/'${{' and '}}'")
 
     parts: list[LiteralNode | RefNode | VarNode] = []
     idx = 0
@@ -45,7 +46,7 @@ def parse_expression(expression_text: str) -> ExpressionNode:
     # Or better: iterate through the string and check which pattern matches next
 
     # Actually, let's use a single combined regex for iteration to ensure correct ordering
-    # But since the syntax is distinct (@{{ vs @{ $), we can just search for @ and see what follows
+    # But since the syntax is distinct (@{{ vs ${{), we can just search for @ or $ and see what follows
 
     # Let's stick to the current structure but handle both.
     # Since we need to preserve order, we can find all matches from both patterns and sort them.
@@ -105,7 +106,7 @@ def unparse_expression(expression: ExpressionNode) -> str:
         case RefNode(instance=i, port=p, key=k) if k is not None:
             return "@{{" + i + "." + p + "::" + k + "}}"
         case VarNode(var_type=vt, key=k):
-            return "@{ $" + vt.value + "." + k + " }"
+            return "${{" + vt.value + "." + k + "}}"
         case ConcatNode(parts=parts):
             return "".join(unparse_expression(p) for p in parts)
         case _:

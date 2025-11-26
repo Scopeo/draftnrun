@@ -42,8 +42,8 @@ class ConcatNode:
 class VarNode:
     """Reference to an injected variable (e.g. secrets, settings).
 
-    Syntax: @{ $var_type.id }
-    Example: @{ $secrets.550e8400-e29b-41d4-a716-446655440000 }
+    Syntax: ${{var_type.id}}
+    Example: ${{secrets.550e8400-e29b-41d4-a716-446655440000}}
     """
 
     var_type: VarType

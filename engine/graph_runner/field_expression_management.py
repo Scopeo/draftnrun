@@ -73,7 +73,7 @@ def evaluate_expression(
                 if inject_vars is None:
                     raise FieldExpressionError(
                         f"Injected variables missing while evaluating '{target_field_name}': "
-                        f"cannot resolve @{{ ${var_type.value}.{key} }}"
+                        f"cannot resolve ${{{{{var_type.value}.{key}}}}}"
                     )
 
                 if var_type not in inject_vars:
