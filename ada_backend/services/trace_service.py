@@ -29,7 +29,19 @@ TOKEN_LIMIT = 2000000
 
 
 def get_attributes_with_messages(span_kind: str, row: pd.Series) -> dict:
-    input = json.loads(row["input_content"]) if row["input_content"] else []
+    input_data = json.loads(row["input_content"]) if row["input_content"] else []
+    input = []
+    try:
+        if input_data and isinstance(input_data[0], dict) and "messages" in input_data[0]:
+            messages = input_data[0].get("messages", [])
+            user_msgs = [msg for msg in messages if isinstance(msg, dict) and msg.get("role") == "user"]
+            if user_msgs:
+                input.append({**input_data[0], "messages": [user_msgs[-1]]})
+        if not input:
+            input = input_data
+    except Exception as e:
+        LOGGER.error(f"Error extracting last user message: {e}, input_data: {input_data}")
+        input = input_data
     output = json.loads(row["output_content"]) if row["output_content"] else []
     documents = []
     tool_info = {}
