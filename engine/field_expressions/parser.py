@@ -1,13 +1,16 @@
 import re
 
-from engine.field_expressions.ast import ConcatNode, LiteralNode, RefNode, ExpressionNode, VarNode
+from engine.field_expressions.ast import ConcatNode, LiteralNode, RefNode, ExpressionNode, VarNode, VarType
 from engine.field_expressions.errors import FieldExpressionParseError
 
 # Matches @{{instance.port}} where instance and port allow [a-zA-Z0-9_-]. An optional key can be provided after ::.
 _REF_PATTERN = re.compile(r"@\{\{\s*([a-zA-Z0-9_-]+)\.([a-zA-Z0-9_-]+)(?:::([a-zA-Z0-9_-]+))?\s*\}\}")
 
-# Matches @{ $source.key } where source and key allow [a-zA-Z0-9_-].
-_EXTERNAL_REF_PATTERN = re.compile(r"@\{\s*\$([a-zA-Z0-9_-]+)\.([a-zA-Z0-9_-]+)\s*\}")
+# Matches @{ $var_type.key } where var_type is a VarType value and key is typically a UUID.
+_VAR_PATTERN = re.compile(r"@\{\s*\$([a-zA-Z0-9_-]+)\.([a-zA-Z0-9_-]+)\s*\}")
+
+# Valid var_type values (from VarType enum)
+_VALID_VAR_TYPES = {v.value for v in VarType}
 
 
 # TODO: Use a more robust parser instead of a regex
@@ -18,11 +21,12 @@ def parse_expression(expression_text: str) -> ExpressionNode:
       - Plain text -> LiteralNode
       - @{{instance.port}} -> RefNode
       - @{{instance.port::key}} -> RefNode with key extraction
-      - @{ $source.key } -> ExternalRefNode
+      - @{ $var_type.id } -> VarNode (e.g. @{ $secrets.550e8400-... })
       - Mixed text with multiple refs -> ConcatNode
 
     Errors:
       - Malformed reference patterns raise FieldExpressionParseError
+      - Invalid var_type raises FieldExpressionParseError
     """
     if expression_text == "":
         return LiteralNode(value="")
@@ -49,8 +53,8 @@ def parse_expression(expression_text: str) -> ExpressionNode:
     matches = []
     for match in _REF_PATTERN.finditer(expression_text):
         matches.append((match.start(), match.end(), match, "ref"))
-    for match in _EXTERNAL_REF_PATTERN.finditer(expression_text):
-        matches.append((match.start(), match.end(), match, "ext"))
+    for match in _VAR_PATTERN.finditer(expression_text):
+        matches.append((match.start(), match.end(), match, "var"))
 
     matches.sort(key=lambda x: x[0])
 
@@ -67,9 +71,13 @@ def parse_expression(expression_text: str) -> ExpressionNode:
             instance, port = match.group(1), match.group(2)
             key: str | None = match.group(3)
             parts.append(RefNode(instance=instance, port=port, key=key))
-        else:  # type_ == "ext"
-            source, key = match.group(1), match.group(2)
-            parts.append(VarNode(source=source, key=key))
+        else:  # type_ == "var"
+            var_type_str, key = match.group(1), match.group(2)
+            if var_type_str not in _VALID_VAR_TYPES:
+                raise FieldExpressionParseError(
+                    f"Invalid variable type '{var_type_str}'. Valid types: {list(_VALID_VAR_TYPES)}"
+                )
+            parts.append(VarNode(var_type=VarType(var_type_str), key=key))
 
         idx = end
 
@@ -96,8 +104,8 @@ def unparse_expression(expression: ExpressionNode) -> str:
             return "@{{" + i + "." + p + "}}"
         case RefNode(instance=i, port=p, key=k) if k is not None:
             return "@{{" + i + "." + p + "::" + k + "}}"
-        case VarNode(source=s, key=k):
-            return "@{ $" + s + "." + k + " }"
+        case VarNode(var_type=vt, key=k):
+            return "@{ $" + vt.value + "." + k + " }"
         case ConcatNode(parts=parts):
             return "".join(unparse_expression(p) for p in parts)
         case _:

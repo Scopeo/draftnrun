@@ -1,7 +1,15 @@
 """AST nodes for field expressions."""
 
 from dataclasses import dataclass
+from enum import StrEnum
 from typing import List, Optional, Union
+
+
+class VarType(StrEnum):
+    """Types of injectable variables."""
+
+    SECRETS = "secrets"
+    # Future: SETTINGS = "settings", ENV = "env"
 
 
 @dataclass(frozen=True)
@@ -32,13 +40,14 @@ class ConcatNode:
 
 @dataclass(frozen=True)
 class VarNode:
-    """Reference to an external variable (e.g. settings, secrets).
+    """Reference to an injected variable (e.g. secrets, settings).
 
-    Syntax: @{ $source.key }
+    Syntax: @{ $var_type.id }
+    Example: @{ $secrets.550e8400-e29b-41d4-a716-446655440000 }
     """
 
-    source: str
-    key: str
+    var_type: VarType
+    key: str  # UUID of the entity (e.g. OrganizationSecret.id)
 
 
 ExpressionNode = Union[LiteralNode, RefNode, ConcatNode, VarNode]

@@ -24,7 +24,8 @@ from ada_backend.repositories.graph_runner_repository import (
 from ada_backend.repositories.port_mapping_repository import list_port_mappings_for_graph
 from ada_backend.repositories.field_expression_repository import get_field_expressions_for_instances
 from ada_backend.repositories.project_repository import get_project, get_project_with_details
-from ada_backend.repositories.organization_repository import get_organization_secrets
+from ada_backend.repositories.organization_repository import get_organization_secrets, get_organization_secrets_from_project_id
+from engine.field_expressions.ast import VarType
 from engine.graph_runner.runnable import Runnable
 from engine.trace.trace_context import get_trace_manager
 from engine.trace.span_context import set_tracing_span
@@ -106,6 +107,12 @@ async def build_graph_runner(
         if edge.source_node_id:
             graph.add_edge(str(edge.source_node_id), str(edge.target_node_id), order=edge.order)
 
+    # Build inject_vars: fetch organization secrets indexed by UUID
+    org_secrets = get_organization_secrets_from_project_id(session, project_id)
+    inject_vars: dict[VarType, dict[str, str]] = {
+        VarType.SECRETS: {str(secret.id): secret.secret for secret in org_secrets},
+    }
+
     return GraphRunner(
         graph,
         runnables,
@@ -113,6 +120,7 @@ async def build_graph_runner(
         trace_manager=trace_manager,
         port_mappings=port_mappings,
         expressions=expressions,
+        inject_vars=inject_vars,
     )
 
 

@@ -18,7 +18,7 @@ from engine.graph_runner.port_management import (
     synthesize_default_mappings,
 )
 from engine.graph_runner.field_expression_management import evaluate_expression
-from engine.field_expressions.ast import ExpressionNode, RefNode
+from engine.field_expressions.ast import ExpressionNode, RefNode, VarType
 from engine.field_expressions.traversal import select_nodes
 from engine import legacy_compatibility
 from engine.trace.trace_manager import TraceManager
@@ -47,6 +47,7 @@ class GraphRunner:
         port_mappings: list[dict[str, Any]] | None = None,
         expressions: list[ExpressionSpec] | None = None,
         coercion_matrix: CoercionMatrix | None = None,
+        inject_vars: dict[VarType, dict[str, str]] | None = None,
     ):
         self.trace_manager = trace_manager
         self.graph = graph
@@ -55,6 +56,8 @@ class GraphRunner:
         self.run_context: dict[str, Any] = {}
         # Initialize coercion matrix - use provided one or create default
         self.coercion_matrix = coercion_matrix or create_default_coercion_matrix()
+        # Injected variables (e.g. secrets, settings) for VarNode resolution
+        self.inject_vars = inject_vars or {}
 
         # Convert raw mapping dicts into structured PortMapping objects.
         self.port_mappings: list[PortMapping] = [
@@ -328,6 +331,7 @@ class GraphRunner:
                     expression_ast,
                     field_name,
                     self.tasks,
+                    inject_vars=self.inject_vars,
                     to_string=_to_string,
                 )
                 LOGGER.debug(f"Evaluating non-ref expression for {node_id}.{field_name}")
