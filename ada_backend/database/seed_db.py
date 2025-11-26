@@ -22,7 +22,6 @@ from ada_backend.database.seed.seed_filter import seed_filter_components
 from ada_backend.database.seed.seed_llm_call import seed_llm_call_components
 from ada_backend.database.seed.seed_rag import (
     seed_rag_components,
-    seed_rag_v2_parameter_groups,
     seed_rag_v3_parameter_groups,
 )
 from ada_backend.database.seed.seed_react_sql import seed_react_sql_components
@@ -61,7 +60,6 @@ def seed_db(session: Session):
         seed_ai_agent_components(session)
         seed_ai_agent_parameter_groups(session)
         seed_rag_components(session)
-        seed_rag_v2_parameter_groups(session)
         seed_rag_v3_parameter_groups(session)
         seed_api_call_components(session)
         seed_python_code_runner_components(session)
