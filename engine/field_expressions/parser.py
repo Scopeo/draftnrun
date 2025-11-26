@@ -1,6 +1,6 @@
 import re
 
-from engine.field_expressions.ast import ConcatNode, LiteralNode, RefNode, ExpressionNode, ExternalRefNode
+from engine.field_expressions.ast import ConcatNode, LiteralNode, RefNode, ExpressionNode, VarNode
 from engine.field_expressions.errors import FieldExpressionParseError
 
 # Matches @{{instance.port}} where instance and port allow [a-zA-Z0-9_-]. An optional key can be provided after ::.
@@ -33,44 +33,44 @@ def parse_expression(expression_text: str) -> ExpressionNode:
     if open_count != close_count:
         raise FieldExpressionParseError("Unbalanced reference delimiters '@{{' and '}}'")
 
-    parts: list[LiteralNode | RefNode | ExternalRefNode] = []
+    parts: list[LiteralNode | RefNode | VarNode] = []
     idx = 0
 
     # Combine both patterns to find all matches in order
     # We'll use a simple approach: find all matches for both, sort by position, and iterate
     # Or better: iterate through the string and check which pattern matches next
-    
+
     # Actually, let's use a single combined regex for iteration to ensure correct ordering
     # But since the syntax is distinct (@{{ vs @{ $), we can just search for @ and see what follows
-    
+
     # Let's stick to the current structure but handle both.
     # Since we need to preserve order, we can find all matches from both patterns and sort them.
-    
+
     matches = []
     for match in _REF_PATTERN.finditer(expression_text):
         matches.append((match.start(), match.end(), match, "ref"))
     for match in _EXTERNAL_REF_PATTERN.finditer(expression_text):
         matches.append((match.start(), match.end(), match, "ext"))
-    
+
     matches.sort(key=lambda x: x[0])
-    
+
     for start, end, match, type_ in matches:
         if start < idx:
             # Overlapping match (shouldn't happen with well-formed distinct syntax)
             continue
-            
+
         if start > idx:
             # preceding literal
             parts.append(LiteralNode(value=expression_text[idx:start]))
-            
+
         if type_ == "ref":
             instance, port = match.group(1), match.group(2)
             key: str | None = match.group(3)
             parts.append(RefNode(instance=instance, port=port, key=key))
-        else: # type_ == "ext"
+        else:  # type_ == "ext"
             source, key = match.group(1), match.group(2)
-            parts.append(ExternalRefNode(source=source, key=key))
-            
+            parts.append(VarNode(source=source, key=key))
+
         idx = end
 
     # trailing literal
@@ -96,7 +96,7 @@ def unparse_expression(expression: ExpressionNode) -> str:
             return "@{{" + i + "." + p + "}}"
         case RefNode(instance=i, port=p, key=k) if k is not None:
             return "@{{" + i + "." + p + "::" + k + "}}"
-        case ExternalRefNode(source=s, key=k):
+        case VarNode(source=s, key=k):
             return "@{ $" + s + "." + k + " }"
         case ConcatNode(parts=parts):
             return "".join(unparse_expression(p) for p in parts)

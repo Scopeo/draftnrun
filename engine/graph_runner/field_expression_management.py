@@ -10,7 +10,7 @@ import logging
 from typing import Any, Callable
 
 from engine.graph_runner.types import Task
-from engine.field_expressions.ast import ExpressionNode, LiteralNode, RefNode, ConcatNode, ExternalRefNode
+from engine.field_expressions.ast import ExpressionNode, LiteralNode, RefNode, ConcatNode, VarNode
 from engine.field_expressions.errors import FieldExpressionError
 
 LOGGER = logging.getLogger(__name__)
@@ -62,21 +62,21 @@ def evaluate_expression(
 
                 return to_string(raw_value)
 
-            case ExternalRefNode(source=source, key=key):
+            case VarNode(source=source, key=key):
                 if not external_context:
                     raise FieldExpressionError(
                         f"External context missing while evaluating '{target_field_name}': "
                         f"cannot resolve reference @{{ ${source}.{key} }}"
                     )
-                
+
                 if source not in external_context:
                     raise FieldExpressionError(
                         f"External source '{source}' not found in context while evaluating '{target_field_name}'"
                     )
-                
+
                 source_data = external_context[source]
                 if not isinstance(source_data, dict):
-                     raise FieldExpressionError(
+                    raise FieldExpressionError(
                         f"External source '{source}' is not a dictionary, got {type(source_data)}"
                     )
 
@@ -84,7 +84,7 @@ def evaluate_expression(
                     raise FieldExpressionError(
                         f"Key '{key}' not found in external source '{source}' while evaluating '{target_field_name}'"
                     )
-                
+
                 return to_string(source_data[key])
 
             case ConcatNode(parts=parts):
