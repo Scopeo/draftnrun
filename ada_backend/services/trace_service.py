@@ -37,6 +37,8 @@ def get_attributes_with_messages(span_kind: str, row: pd.Series) -> dict:
             user_msgs = [msg for msg in messages if isinstance(msg, dict) and msg.get("role") == "user"]
             if user_msgs:
                 input.append({**input_data[0], "messages": [user_msgs[-1]]})
+        if not input:
+            input = input_data
     except Exception as e:
         LOGGER.error(f"Error extracting last user message: {e}, input_data: {input_data}")
         input = input_data
