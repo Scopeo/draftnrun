@@ -32,7 +32,7 @@ async def scrape_website(
     url: str,
     follow_links: bool = False,
     max_depth: int = 1,
-    limit: Optional[int] = None,
+    limit: Optional[int] = 100,
     include_paths: Optional[list[str]] = None,
     exclude_paths: Optional[list[str]] = None,
     include_tags: Optional[list[str]] = None,
@@ -53,7 +53,7 @@ async def scrape_website(
         exclude_tags: HTML tags to exclude from content extraction
 
     Returns:
-        List of scraped page data with 'url', 'title', 'content', 'html'
+        List of scraped page data with 'url', 'title', 'content'
     """
     LOGGER.info(
         f"Starting Firecrawl scrape for URL: {url} (follow_links={follow_links}, max_depth={max_depth}, "
@@ -61,63 +61,52 @@ async def scrape_website(
     )
 
     try:
-        # Initialize Firecrawl client with API key from settings
         if not settings.FIRECRAWL_API_KEY:
             raise ValueError("Firecrawl API key is required. Set FIRECRAWL_API_KEY in settings.")
 
         firecrawl = AsyncFirecrawl(api_key=settings.FIRECRAWL_API_KEY)
 
-        # Build scrape options
         scrape_options = {
-            "formats": ["markdown", "html"],
+            "formats": ["markdown"],
             "onlyMainContent": True,
         }
 
-        # Add include/exclude tags to scrape options
         if include_tags:
             scrape_options["includeTags"] = include_tags
         if exclude_tags:
             scrape_options["excludeTags"] = exclude_tags
 
-        # Build crawl options
-        # Default to 100 pages if limit not specified (Firecrawl default is 10000, which is too high for most cases)
         crawl_options = {
-            "limit": limit if limit is not None else 100,
+            "limit": limit,
             "scrapeOptions": scrape_options,
         }
 
-        # Add include/exclude paths
         if include_paths:
             crawl_options["includePaths"] = include_paths
         if exclude_paths:
             crawl_options["excludePaths"] = exclude_paths
 
-        # Map follow_links to crawl_entire_domain
         if follow_links:
             crawl_options["crawlEntireDomain"] = True
             if max_depth > 0:
                 crawl_options["maxDepth"] = max_depth
 
-        # Start the crawl - the SDK handles polling automatically
         LOGGER.info(f"Starting Firecrawl crawl with options: {crawl_options}")
         crawl_result = await firecrawl.crawl(url, **crawl_options)
 
-        # The SDK's crawl method returns the results directly after polling
         if not crawl_result or not crawl_result.get("data"):
             raise ValueError(f"Failed to crawl: {crawl_result}")
 
         pages = crawl_result.get("data", [])
         LOGGER.info(f"Firecrawl crawl completed. Found {len(pages)} pages")
 
-        # Convert Firecrawl format to our expected format
         scraped_pages = []
         for page in pages:
             page_url = page.get("url", url)
             page_title = page.get("metadata", {}).get("title") or page.get("title", "") or page_url
             markdown_content = page.get("markdown", "") or page.get("content", "")
-            html_content = page.get("html", "")
 
-            if not markdown_content and not html_content:
+            if not markdown_content:
                 LOGGER.warning(f"No content found for page: {page_url}")
                 continue
 
@@ -126,7 +115,6 @@ async def scrape_website(
                     "url": page_url,
                     "title": page_title,
                     "content": markdown_content,
-                    "html": html_content,
                 }
             )
 
@@ -146,7 +134,7 @@ async def upload_website_source(
     url: str,
     follow_links: bool = True,
     max_depth: int = 1,
-    limit: Optional[int] = None,
+    limit: Optional[int] = 100,
     include_paths: Optional[list[str]] = None,
     exclude_paths: Optional[list[str]] = None,
     include_tags: Optional[list[str]] = None,

@@ -41,15 +41,13 @@ class SourceAttributes(BaseModel):
     timestamp_filter: Optional[str] = None
     # Website ingestion fields
     url: Optional[str] = None  # Single URL to scrape
-    urls: Optional[list[str]] = None  # Multiple URLs to scrape
-    follow_links: Optional[bool] = False  # Whether to follow links on the page
+    follow_links: Optional[bool] = True  # Whether to follow links on the page
     max_depth: Optional[int] = 1  # Maximum depth for link following
-    limit: Optional[int] = None  # Maximum number of pages to crawl
+    limit: Optional[int] = 100  # Maximum number of pages to crawl
     include_paths: Optional[list[str]] = None  # URL pathname regex patterns to include
     exclude_paths: Optional[list[str]] = None  # URL pathname regex patterns to exclude
     include_tags: Optional[list[str]] = None  # HTML tags to include in content extraction
     exclude_tags: Optional[list[str]] = None  # HTML tags to exclude from content extraction
-    selectors: Optional[dict[str, str]] = None  # Legacy: CSS selectors (not used with Firecrawl)
 
 
 class IngestionTaskUpdate(IngestionTask):
