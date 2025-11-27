@@ -22,6 +22,7 @@ from ada_backend.repositories.project_repository import get_project
 from ada_backend.context import get_request_context
 from ada_backend.services.user_roles_service import get_user_access_to_organization
 from ada_backend.services.llm_models_service import get_llm_models_by_capability_select_options_service
+from ada_backend.services.errors import MissingDataSourceError
 from engine.storage_service.local_service import SQLLocalService
 
 LOGGER = logging.getLogger(__name__)
@@ -595,7 +596,9 @@ def build_retriever_processor(target_name: str = "retriever") -> ParameterProces
     def processor(params: dict, constructor_params: dict[str, Any]) -> dict:
         data_source = params.pop("data_source", None)
         if data_source is None:
-            raise ValueError("data_source is required for Retriever")
+            component_attrs = params.get("component_attributes")
+            component_name = getattr(component_attrs, "component_instance_name", None)
+            raise MissingDataSourceError(component_name)
 
         if isinstance(data_source, str):
             import json

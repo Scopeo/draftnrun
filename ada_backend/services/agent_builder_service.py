@@ -23,6 +23,7 @@ from ada_backend.repositories.component_repository import (
     get_global_parameters_by_component_version_id,
 )
 from ada_backend.services.registry import FACTORY_REGISTRY
+from ada_backend.services.errors import MissingDataSourceError
 from ada_backend.utils.secret_resolver import replace_secret_placeholders
 from ada_backend.database.seed.utils import COMPONENT_VERSION_UUIDS
 
@@ -160,6 +161,8 @@ def instantiate_component(
             if param_name not in grouped_sub_components:
                 grouped_sub_components[param_name] = []
             grouped_sub_components[param_name].append((sub_component.order, instantiated_sub_component))
+        except MissingDataSourceError:
+            raise
         except Exception as e:
             raise ValueError(
                 f"Failed to instantiate sub-component '{param_name}' "
@@ -251,6 +254,8 @@ def instantiate_component(
             f"Failed to connect to database for component '{component_name}' "
             f"(instance ID: {component_instance.id}): {str(e)}"
         ) from e
+    except MissingDataSourceError:
+        raise
     except Exception as e:
         raise ValueError(
             f"Failed to instantiate component '{component_name}' "

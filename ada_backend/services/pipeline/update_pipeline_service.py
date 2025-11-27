@@ -121,7 +121,11 @@ def create_or_update_component_instance(
 
         if param_def.type == db.ParameterType.DATA_SOURCE:
             if param.value is None or (isinstance(param.value, str) and param.value.lower() == "none"):
-                raise ValueError(f"Data source parameter cannot be None in component '{component_name}'")
+                LOGGER.warning(
+                    f"Data source parameter is missing in component '{component_name}'. "
+                    "The component will not work until a data source is configured."
+                )
+                continue
 
         if param_def.type == db.ParameterType.SECRETS:
             organization_secrets = get_organization_secrets_from_project_id(session, project_id)

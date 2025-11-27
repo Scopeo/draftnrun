@@ -20,7 +20,7 @@ from ada_backend.schemas.pipeline.graph_schema import (
 )
 from ada_backend.database.setup_db import get_db
 
-from ada_backend.services.errors import GraphNotFound, ProjectNotFound
+from ada_backend.services.errors import GraphNotFound, MissingDataSourceError, ProjectNotFound
 from ada_backend.services.graph.deploy_graph_service import deploy_graph_service
 from ada_backend.services.graph.load_copy_graph_service import load_copy_graph_service
 from ada_backend.services.graph.update_graph_service import update_graph_service
@@ -111,6 +111,11 @@ async def update_project_pipeline(
             f"Failed to update graph for project {project_id} runner {graph_runner_id}: {error_msg}", exc_info=True
         )
         raise HTTPException(status_code=400, detail=error_msg) from e
+    except MissingDataSourceError as e:
+        LOGGER.warning(
+            f"Graph saved with missing data source for project {project_id} runner {graph_runner_id}: {str(e)}"
+        )
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except ValueError as e:
         error_msg = str(e)
         LOGGER.error(
