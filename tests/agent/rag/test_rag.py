@@ -29,6 +29,7 @@ def make_mock_llm_service():
         mock_llm = MagicMock(spec=CompletionService)
         mock_llm.last_prompt = None
         mock_llm._model_name = "mock_model"
+        mock_llm._model_id = None
 
         from engine.agent.synthesizer import SynthesizerResponse
 
