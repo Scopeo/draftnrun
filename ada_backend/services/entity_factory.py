@@ -351,7 +351,7 @@ def build_completion_service_processor(
     def processor(params: dict, constructor_params: dict[str, Any]) -> dict:
         provider, model_name = get_llm_provider_and_model(llm_model=params.pop("completion_model"))
 
-        model_id = fetch_model_id_by_name(model_name)
+        model_id = get_model_id_by_name_service(model_name)
 
         completion_service = CompletionService(
             provider=provider,
