@@ -4,6 +4,7 @@ from typing import Optional
 from uuid import UUID
 import hashlib
 
+import pandas as pd
 from firecrawl import AsyncFirecrawl
 from pydantic import BaseModel
 
@@ -188,6 +189,8 @@ async def upload_website_source(
 
     db_service.create_schema(storage_schema_name)
 
+    all_chunks_dfs = []
+
     for page_data in scraped_pages:
         if not page_data.content or not page_data.content.strip():
             LOGGER.warning(f"Skipping page {page_data.url} - no content extracted")
@@ -199,7 +202,7 @@ async def upload_website_source(
         document = WebsiteDocument(
             id=file_id,
             file_name=page_data.title,
-            folder_name="",
+            folder_name=page_data.url,
             metadata={
                 "title": page_data.title,
                 "source_url": page_data.url,
@@ -219,25 +222,41 @@ async def upload_website_source(
             LOGGER.warning(f"No chunks created for {page_data.url} - skipping")
             continue
 
-        if "url" not in chunks_df.columns:
-            chunks_df["url"] = page_data.url
-        else:
-            chunks_df["url"] = page_data.url
+        chunks_df["url"] = page_data.url
+        all_chunks_dfs.append(chunks_df)
+        LOGGER.info(f"Created {len(chunks_df)} chunks for {page_data.url}")
 
-        LOGGER.info(f"Syncing {len(chunks_df)} chunks to db table {storage_table_name} for {page_data.url}")
-        db_service.update_table(
-            new_df=chunks_df,
-            table_name=storage_table_name,
-            table_definition=FILE_TABLE_DEFINITION,
-            id_column_name=ID_COLUMN_NAME,
-            timestamp_column_name=TIMESTAMP_COLUMN_NAME,
-            append_mode=True,
-            schema_name=storage_schema_name,
-        )
+    if not all_chunks_dfs:
+        LOGGER.warning("No chunks created from any page - nothing to sync")
+        return
 
-        await sync_chunks_to_qdrant(
-            storage_schema_name, storage_table_name, qdrant_collection_name, db_service, qdrant_service
-        )
+    all_chunks_df = pd.concat(all_chunks_dfs, ignore_index=True)
+
+    initial_count = len(all_chunks_df)
+    all_chunks_df = all_chunks_df[all_chunks_df["content"].notna() & (all_chunks_df["content"].str.strip() != "")]
+    filtered_count = initial_count - len(all_chunks_df)
+    if filtered_count > 0:
+        LOGGER.info(f"Filtered out {filtered_count} chunks with empty content")
+
+    if all_chunks_df.empty:
+        LOGGER.warning("No valid chunks remaining after filtering - nothing to sync")
+        return
+
+    LOGGER.info(f"Syncing {len(all_chunks_df)} total chunks to db table {storage_table_name}")
+
+    db_service.update_table(
+        new_df=all_chunks_df,
+        table_name=storage_table_name,
+        table_definition=FILE_TABLE_DEFINITION,
+        id_column_name=ID_COLUMN_NAME,
+        timestamp_column_name=TIMESTAMP_COLUMN_NAME,
+        append_mode=True,
+        schema_name=storage_schema_name,
+    )
+
+    await sync_chunks_to_qdrant(
+        storage_schema_name, storage_table_name, qdrant_collection_name, db_service, qdrant_service
+    )
 
 
 async def ingest_website_source(
