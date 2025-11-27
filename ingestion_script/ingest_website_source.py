@@ -201,8 +201,6 @@ async def upload_website_source(
             file_name=page_data.title,
             folder_name="",
             metadata={
-                "url": page_data.url,
-                "content": page_data.content,
                 "title": page_data.title,
                 "source_url": page_data.url,
             },
@@ -211,7 +209,6 @@ async def upload_website_source(
         chunks_df = await get_chunks_dataframe_from_doc(
             document,
             document_chunk_mapping=document_chunk_mapping,
-            llm_service=fallback_vision_llm_service,
             add_doc_description_to_chunks=False,
             documents_summary_func=None,
             add_summary_in_chunks_func=None,
