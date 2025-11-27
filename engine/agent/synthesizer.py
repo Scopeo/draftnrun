@@ -57,6 +57,7 @@ class Synthesizer:
                     SpanAttributes.INPUT_VALUE: input_str,
                     SpanAttributes.LLM_MODEL_NAME: self._completion_service._model_name,
                     "component_instance_id": str(self.component_attributes.component_instance_id),
+                    "model_id": str(self._completion_service._model_id),
                 }
             )
             response = await self._completion_service.constrained_complete_with_pydantic_async(

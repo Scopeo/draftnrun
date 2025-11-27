@@ -6,6 +6,7 @@ from typing import Optional
 from abc import ABC
 from pydantic import BaseModel
 import base64
+from uuid import UUID
 
 from opentelemetry.trace import get_current_span
 from openinference.semconv.trace import SpanAttributes
@@ -69,12 +70,14 @@ class LLMService(ABC):
         model_name: str,
         api_key: Optional[str] = None,
         base_url: Optional[str] = None,
+        model_id: Optional[UUID] = None,
     ):
         self._trace_manager = trace_manager
         self._provider = provider
         self._model_name = model_name
         self._api_key = api_key
         self._base_url = base_url
+        self._model_id = model_id
         if self._api_key is None:
             match self._provider:
                 case "openai":
@@ -199,8 +202,9 @@ class CompletionService(LLMService):
         temperature: float = DEFAULT_TEMPERATURE,
         verbosity: Optional[str] = None,
         reasoning: Optional[str] = None,
+        model_id: Optional[UUID] = None,
     ):
-        super().__init__(trace_manager, provider, model_name, api_key, base_url)
+        super().__init__(trace_manager, provider, model_name, api_key, base_url, model_id)
         self._invocation_parameters = {"temperature": temperature}
         if verbosity is not None:
             self._invocation_parameters["verbosity"] = verbosity
@@ -918,8 +922,9 @@ class WebSearchService(LLMService):
         model_name: str = "gpt-4.1-mini",
         api_key: Optional[str] = None,
         base_url: Optional[str] = None,
+        model_id: Optional[UUID] = None,
     ):
-        super().__init__(trace_manager, provider, model_name, api_key, base_url)
+        super().__init__(trace_manager, provider, model_name, api_key, base_url, model_id)
 
     @with_usage_check
     def web_search(self, query: str, allowed_domains: Optional[list[str]] = None) -> str:
@@ -1094,8 +1099,9 @@ class OCRService(LLMService):
         model_name: str = "mistral-ocr-latest",
         api_key: Optional[str] = None,
         base_url: Optional[str] = None,
+        model_id: Optional[UUID] = None,
     ):
-        super().__init__(trace_manager, provider, model_name, api_key, base_url)
+        super().__init__(trace_manager, provider, model_name, api_key, base_url, model_id)
 
     def get_ocr_text(self, messages: list[dict]) -> str:
         return asyncio.run(self.get_ocr_text_async(messages))

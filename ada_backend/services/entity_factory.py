@@ -21,13 +21,21 @@ from ada_backend.repositories.source_repository import get_data_source_by_id
 from ada_backend.repositories.project_repository import get_project
 from ada_backend.context import get_request_context
 from ada_backend.services.user_roles_service import get_user_access_to_organization
-from ada_backend.services.llm_models_service import get_llm_models_by_capability_select_options_service
+from ada_backend.services.llm_models_service import (
+    get_llm_models_by_capability_select_options_service,
+    get_model_id_by_name_service,
+)
 from ada_backend.services.errors import MissingDataSourceError
 from engine.storage_service.local_service import SQLLocalService
 
 LOGGER = logging.getLogger(__name__)
 
 ParameterProcessor = Callable[[dict, dict[str, Any]], dict]
+
+
+def get_model_id_by_name(model_name: str) -> UUID | None:
+    with get_db_session() as session:
+        return get_model_id_by_name_service(session, model_name)
 
 
 class EntityFactory:
@@ -333,6 +341,8 @@ def build_completion_service_processor(
     def processor(params: dict, constructor_params: dict[str, Any]) -> dict:
         provider, model_name = get_llm_provider_and_model(llm_model=params.pop("completion_model"))
 
+        model_id = get_model_id_by_name(model_name)
+
         completion_service = CompletionService(
             provider=provider,
             model_name=model_name,
@@ -341,6 +351,7 @@ def build_completion_service_processor(
             api_key=params.pop("llm_api_key", None),
             verbosity=params.pop("verbosity", None),
             reasoning=params.pop("reasoning", None),
+            model_id=model_id,
         )
 
         params[target_name] = completion_service
@@ -384,11 +395,14 @@ def build_web_service_processor(
     def processor(params: dict, constructor_params: dict[str, Any]) -> dict:
         provider, model_name = get_llm_provider_and_model(llm_model=params.pop("completion_model"))
 
+        model_id = get_model_id_by_name(model_name)
+
         web_service = WebSearchService(
             trace_manager=get_trace_manager(),
             provider=provider,
             model_name=model_name,
             api_key=params.pop("llm_api_key", None),
+            model_id=model_id,
         )
 
         params[target_name] = web_service
@@ -406,11 +420,15 @@ def build_ocr_service_processor(
 
     def processor(params: dict, constructor_params: dict[str, Any]) -> dict:
         provider, model_name = get_llm_provider_and_model(llm_model=params.pop("completion_model"))
+
+        model_id = get_model_id_by_name(model_name)
+
         ocr_service = OCRService(
             trace_manager=get_trace_manager(),
             provider=provider,
             model_name=model_name,
             api_key=params.pop("llm_api_key", None),
+            model_id=model_id,
         )
 
         params[target_name] = ocr_service
@@ -710,6 +728,8 @@ def build_synthesizer_processor(target_name: str = "synthesizer") -> ParameterPr
             except ValueError as e:
                 raise ValueError(f"temperature must be a float, got {temperature}: {e}")
 
+        model_id = get_model_id_by_name(model_name)
+
         completion_service = CompletionService(
             provider=provider,
             model_name=model_name,
@@ -718,6 +738,7 @@ def build_synthesizer_processor(target_name: str = "synthesizer") -> ParameterPr
             api_key=params.pop("llm_api_key", None),
             verbosity=params.pop("verbosity", None),
             reasoning=params.pop("reasoning", None),
+            model_id=model_id,
         )
 
         prompt_template = params.pop("prompt_template", None)
