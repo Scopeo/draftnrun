@@ -4,13 +4,15 @@ from typing import Optional
 from uuid import UUID
 import hashlib
 
+from firecrawl import AsyncFirecrawl
+from pydantic import BaseModel
+
 from ada_backend.database import models as db
 from data_ingestion.document.document_chunking import (
     document_chunking_mapping,
     get_chunks_dataframe_from_doc,
 )
 from data_ingestion.document.folder_management.folder_management import WebsiteDocument
-from firecrawl import AsyncFirecrawl
 from engine.qdrant_service import QdrantService
 from engine.storage_service.db_service import DBService
 from ingestion_script.ingest_folder_source import (
@@ -26,6 +28,12 @@ from settings import settings
 LOGGER = logging.getLogger(__name__)
 
 
+class ScrapedPage(BaseModel):
+    url: str
+    title: str
+    content: str
+
+
 async def scrape_website(
     url: str,
     follow_links: bool = False,
@@ -35,7 +43,7 @@ async def scrape_website(
     exclude_paths: Optional[list[str]] = None,
     include_tags: Optional[list[str]] = None,
     exclude_tags: Optional[list[str]] = None,
-) -> list[dict]:
+) -> list[ScrapedPage]:
     """
     Scrape a website using Firecrawl API.
 
@@ -98,7 +106,7 @@ async def scrape_website(
         pages = crawl_result.data
         LOGGER.info(f"Firecrawl crawl completed. Found {len(pages)} pages")
 
-        scraped_pages = []
+        scraped_pages: list[ScrapedPage] = []
         for page in pages:
             page_url = (page.metadata.url if page.metadata else None) or url
             page_title = (page.metadata.title if page.metadata else None) or page_url
@@ -109,11 +117,11 @@ async def scrape_website(
                 continue
 
             scraped_pages.append(
-                {
-                    "url": page_url,
-                    "title": page_title,
-                    "content": markdown_content,
-                }
+                ScrapedPage(
+                    url=page_url,
+                    title=page_title,
+                    content=markdown_content,
+                )
             )
 
         return scraped_pages
@@ -154,13 +162,11 @@ async def upload_website_source(
         exclude_tags=exclude_tags,
     )
 
-    all_scraped_data = scraped_pages
-
-    if not all_scraped_data:
+    if not scraped_pages:
         LOGGER.warning("No content scraped from URLs")
         return
 
-    LOGGER.info(f"Scraped {len(all_scraped_data)} pages")
+    LOGGER.info(f"Scraped {len(scraped_pages)} pages")
 
     # Firecrawl content is already Markdown, so no LLM/vision processing is required.
     vision_completion_service = None
@@ -182,29 +188,29 @@ async def upload_website_source(
 
     db_service.create_schema(storage_schema_name)
 
-    for page_data in all_scraped_data:
-        if not page_data.get("content") or not page_data["content"].strip():
-            LOGGER.warning(f"Skipping page {page_data['url']} - no content extracted")
+    for page_data in scraped_pages:
+        if not page_data.content or not page_data.content.strip():
+            LOGGER.warning(f"Skipping page {page_data.url} - no content extracted")
             continue
 
-        file_id = hashlib.md5(page_data["url"].encode()).hexdigest()
-        content_storage[file_id] = page_data["content"].encode("utf-8")
+        file_id = hashlib.md5(page_data.url.encode()).hexdigest()
+        content_storage[file_id] = page_data.content.encode("utf-8")
 
         document = WebsiteDocument(
             id=file_id,
-            file_name=page_data["title"],
+            file_name=page_data.title,
             folder_name="",
             metadata={
-                "url": page_data["url"],
-                "content": page_data["content"],
-                "title": page_data["title"],
-                "source_url": page_data["url"],
+                "url": page_data.url,
+                "content": page_data.content,
+                "title": page_data.title,
+                "source_url": page_data.url,
             },
         )
 
         chunks_df = await get_chunks_dataframe_from_doc(
             document,
-            document_chunk_mapping,
+            document_chunk_mapping=document_chunk_mapping,
             llm_service=fallback_vision_llm_service,
             add_doc_description_to_chunks=False,
             documents_summary_func=None,
@@ -213,15 +219,15 @@ async def upload_website_source(
         )
 
         if chunks_df.empty:
-            LOGGER.warning(f"No chunks created for {page_data['url']} - skipping")
+            LOGGER.warning(f"No chunks created for {page_data.url} - skipping")
             continue
 
         if "url" not in chunks_df.columns:
-            chunks_df["url"] = page_data["url"]
+            chunks_df["url"] = page_data.url
         else:
-            chunks_df["url"] = page_data["url"]
+            chunks_df["url"] = page_data.url
 
-        LOGGER.info(f"Syncing {len(chunks_df)} chunks to db table {storage_table_name} for {page_data['url']}")
+        LOGGER.info(f"Syncing {len(chunks_df)} chunks to db table {storage_table_name} for {page_data.url}")
         db_service.update_table(
             new_df=chunks_df,
             table_name=storage_table_name,

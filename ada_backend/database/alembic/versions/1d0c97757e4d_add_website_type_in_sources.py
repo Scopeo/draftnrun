@@ -23,18 +23,6 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.execute(
-        """
-        DELETE FROM ingestion_tasks
-        WHERE source_id IN (
-            SELECT id FROM data_sources
-            WHERE type = 'website'
-        )
-    """
-    )
-    op.execute(
-        """
-        DELETE FROM data_sources
-        WHERE type = 'website'
-    """
-    )
+    # Nothing to do: removing enum values requires a manual migration and we
+    # intentionally keep existing website sources to avoid data loss.
+    pass
