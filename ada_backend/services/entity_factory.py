@@ -33,6 +33,7 @@ LOGGER = logging.getLogger(__name__)
 ParameterProcessor = Callable[[dict, dict[str, Any]], dict]
 
 
+# TODO: Remove this when llm service has only model_id as an argument
 def get_model_id_by_name(model_name: str) -> UUID | None:
     with get_db_session() as session:
         return get_model_id_by_name_service(session, model_name)

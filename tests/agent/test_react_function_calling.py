@@ -45,6 +45,7 @@ def mock_tool_description():
 def mock_llm_service():
     mock_llm_service = MagicMock(spec=CompletionService)
     mock_llm_service._model_name = "test_model"
+    mock_llm_service._model_id = None
     message = SimpleNamespace(
         role="assistant",
         content="Test response",
