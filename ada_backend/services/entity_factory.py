@@ -795,9 +795,9 @@ def build_reranker_processor(target_name: str = "reranker") -> ParameterProcesso
             params[target_name] = None
             return params
 
-        cohere_model = params.pop("cohere_model", "rerank-multilingual-v3.0")
-        score_threshold = params.pop("score_threshold", "0.0")
-        num_doc_reranked = params.pop("num_doc_reranked", "5")
+        cohere_model = params.pop("cohere_model")
+        score_threshold = params.pop("score_threshold")
+        num_doc_reranked = params.pop("num_doc_reranked")
         cohere_api_key = params.pop("cohere_api_key", None)
 
         try:
@@ -853,10 +853,10 @@ def build_vocabulary_search_processor(target_name: str = "vocabulary_search") ->
             params[target_name] = None
             return params
 
-        vocabulary_context_data = params.pop("vocabulary_context_data", {})
-        fuzzy_threshold = params.pop("fuzzy_threshold", "90")
-        fuzzy_matching_candidates = params.pop("fuzzy_matching_candidates", "10")
-        vocabulary_context_prompt_key = params.pop("vocabulary_context_prompt_key", "retrieved_definitions")
+        vocabulary_context_data = params.pop("vocabulary_context_data")
+        fuzzy_threshold = params.pop("fuzzy_threshold")
+        fuzzy_matching_candidates = params.pop("fuzzy_matching_candidates")
+        vocabulary_context_prompt_key = params.pop("vocabulary_context_prompt_key")
 
         if isinstance(vocabulary_context_data, str):
             try:
@@ -868,12 +868,12 @@ def build_vocabulary_search_processor(target_name: str = "vocabulary_search") ->
             raise ValueError(f"vocabulary_context_data must be a dict, got {type(vocabulary_context_data)}")
 
         try:
-            fuzzy_threshold = int(fuzzy_threshold) if fuzzy_threshold is not None else 90
+            fuzzy_threshold = int(fuzzy_threshold)
         except (ValueError, TypeError) as e:
             raise ValueError(f"fuzzy_threshold must be an integer, got {fuzzy_threshold}: {e}")
 
         try:
-            fuzzy_matching_candidates = int(fuzzy_matching_candidates) if fuzzy_matching_candidates is not None else 10
+            fuzzy_matching_candidates = int(fuzzy_matching_candidates)
         except (ValueError, TypeError) as e:
             raise ValueError(f"fuzzy_matching_candidates must be an integer, got {fuzzy_matching_candidates}: {e}")
 
