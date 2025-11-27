@@ -8,6 +8,7 @@ from ada_backend.repositories.llm_models_repository import (
     update_llm_model,
     get_all_llm_models,
     llm_model_exists,
+    get_model_id_by_name,
 )
 from ada_backend.repositories.credits_repository import (
     upsert_llm_cost,
@@ -109,6 +110,10 @@ def get_llm_models_by_capability_select_options_service(
 ) -> list[SelectOption]:
     models = get_llm_models_by_capability_service(session, capabilities)
     return convert_llm_models_to_select_options_service(models)
+
+
+def get_model_id_by_name_service(session: Session, model_name: str) -> UUID | None:
+    return get_model_id_by_name(session, model_name)
 
 
 def create_llm_model_service(

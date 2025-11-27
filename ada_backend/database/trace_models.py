@@ -53,6 +53,12 @@ class Span(Base):
     call_type = mapped_column(make_pg_enum(CallType), nullable=True)
     project_id = mapped_column(String, nullable=True, index=True)
     tag_name = mapped_column(String, nullable=True)
+    component_instance_id = mapped_column(
+        UUID(as_uuid=True), ForeignKey("component_instances.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    model_id = mapped_column(
+        UUID(as_uuid=True), ForeignKey("llm_models.id", ondelete="SET NULL"), nullable=True, index=True
+    )
 
     def __str__(self):
         return f"Span(span_id={self.span_id}, name={self.name})"

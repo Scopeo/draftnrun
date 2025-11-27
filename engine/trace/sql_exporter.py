@@ -15,6 +15,7 @@ from sqlalchemy.orm import sessionmaker
 from engine.trace.nested_utils import split_nested_keys
 from ada_backend.database.trace_models import Span, SpanMessage, OrganizationUsage
 from ada_backend.database.setup_db import get_db_url
+from ada_backend.services.llm_models_service import get_model_id_by_name_service
 
 LOGGER = logging.getLogger(__name__)
 
@@ -157,6 +158,13 @@ class SQLSpanExporter(SpanExporter):
             project_id = formatted_attributes.pop("project_id", None)
             graph_runner_id = formatted_attributes.pop("graph_runner_id", None)
             tag_name = formatted_attributes.pop("tag_name", None)
+            component_instance_id = formatted_attributes.pop("component_instance_id", None)
+            model_id = None
+
+            llm_model_name = span.attributes.get(SpanAttributes.LLM_MODEL_NAME)
+            if llm_model_name:
+                model_id = get_model_id_by_name_service(self.session, llm_model_name)
+
             input, output, formatted_attributes = extract_messages_from_attributes(formatted_attributes)
 
             openinference_span_kind = json_span["attributes"].get(SpanAttributes.OPENINFERENCE_SPAN_KIND, "UNKNOWN")
@@ -182,6 +190,8 @@ class SQLSpanExporter(SpanExporter):
                 project_id=project_id,
                 graph_runner_id=graph_runner_id,
                 tag_name=tag_name,
+                component_instance_id=component_instance_id,
+                model_id=model_id,
             )
             ancestors = select(Span.id, Span.parent_id).where(Span.span_id == span_row.parent_id).cte(recursive=True)
             child = ancestors.alias()
