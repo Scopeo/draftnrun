@@ -69,7 +69,7 @@ def upgrade() -> None:
           AND attributes->>'component_instance_id' != 'None'
           AND attributes->>'component_instance_id' != 'null'
           AND EXISTS (
-            SELECT 1 FROM component_instances 
+            SELECT 1 FROM component_instances
             WHERE id = CAST(attributes->>'component_instance_id' AS UUID)
           )
     """
@@ -89,6 +89,22 @@ def upgrade() -> None:
 
     result = connection.execute(remove_query)
     LOGGER.info(f"Removed component_instance_id from attributes in {result.rowcount} rows")
+
+    # Data migration: Look up model_id from llm_models table based on llm.model_name in attributes
+    LOGGER.info("Looking up model_id from llm_models based on attributes...")
+    model_id_query = text(
+        """
+        UPDATE traces.spans s
+        SET model_id = m.id
+        FROM llm_models m
+        WHERE s.attributes->'llm'->>'model_name' IS NOT NULL
+          AND s.attributes->'llm'->>'model_name' = m.model_name
+          AND s.model_id IS NULL
+    """
+    )
+
+    result = connection.execute(model_id_query)
+    LOGGER.info(f"Updated {result.rowcount} rows with model_id")
 
 
 def downgrade() -> None:
