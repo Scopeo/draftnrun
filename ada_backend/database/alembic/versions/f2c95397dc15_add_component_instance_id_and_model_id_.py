@@ -1,7 +1,7 @@
 """add component_instance_id and model_id as columns
 
 Revision ID: f2c95397dc15
-Revises: 2a849385353a
+Revises: 1d0c97757e4d
 Create Date: 2025-11-27 12:22:02.950658
 
 """
@@ -18,7 +18,7 @@ LOGGER = logging.getLogger(__name__)
 
 # revision identifiers, used by Alembic.
 revision: str = "f2c95397dc15"
-down_revision: Union[str, None] = "2a849385353a"
+down_revision: Union[str, None] = "1d0c97757e4d"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
