@@ -119,7 +119,7 @@ class MissingDataSourceError(Exception):
         if component_name:
             message = (
                 f"The component '{component_name}' requires a data source to be configured. "
-                "Please select a knowledge base in the component settings before running the agent."
+                "Please select a data source in the component settings before running the agent."
             )
         else:
             message = (
