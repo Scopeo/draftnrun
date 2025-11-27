@@ -124,6 +124,6 @@ class MissingDataSourceError(Exception):
         else:
             message = (
                 "A component requires a data source to be configured. "
-                "Please select a knowledge base in the component settings before running the agent."
+                "Please select a data source in the component settings before running the agent."
             )
         super().__init__(message)
