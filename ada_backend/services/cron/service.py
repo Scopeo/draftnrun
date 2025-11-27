@@ -17,6 +17,7 @@ from ada_backend.repositories.cron_repository import (
     update_cron_job,
     delete_cron_job,
 )
+from ada_backend.repositories.tracker_history_repository import seed_initial_endpoint_history
 from ada_backend.schemas.cron_schema import (
     CronJobCreate,
     CronJobUpdate,
@@ -93,7 +94,7 @@ def _validate_and_enrich_payload_for_entrypoint(
     organization_id: UUID,
     cron_id: UUID,
     **kwargs,
-) -> dict[str, Any]:
+) -> Any:
     """Validate user payload and produce persisted execution payload."""
     if entrypoint not in CRON_REGISTRY:
         available = ", ".join(e.value for e in CRON_REGISTRY.keys())
@@ -115,10 +116,20 @@ def _validate_and_enrich_payload_for_entrypoint(
         )
 
         # Execution Pydantic Model -> Store as JSON (dict)
-        return execution_model.model_dump(mode="json")
+        return execution_model
 
     except Exception as e:
         raise CronValidationError(f"Invalid payload for entrypoint '{entrypoint}': {e}") from e
+
+
+def _run_post_registration_hooks(session: Session, execution_model: Any, cron_id: UUID) -> None:
+    seed_values = getattr(execution_model, "initial_history_seed", None)
+    if not seed_values:
+        return
+
+    inserted = seed_initial_endpoint_history(session, cron_id, seed_values)
+    if inserted:
+        LOGGER.info(f"Seeded {inserted} existing endpoint values into history for cron {cron_id} during registration")
 
 
 def get_cron_jobs_for_organization(
@@ -172,7 +183,7 @@ def create_cron_job(
     # Generate cron_id early so it can be passed to registration validator
     cron_id = uuid.uuid4()
 
-    execution_payload = _validate_and_enrich_payload_for_entrypoint(
+    execution_model = _validate_and_enrich_payload_for_entrypoint(
         entrypoint=cron_data.entrypoint,
         payload=cron_data.payload,
         session=session,
@@ -180,6 +191,7 @@ def create_cron_job(
         cron_id=cron_id,
         **kwargs,
     )
+    execution_payload = execution_model.model_dump(mode="json")
 
     cron_job = insert_cron_job(
         session=session,
@@ -194,6 +206,12 @@ def create_cron_job(
     )
 
     LOGGER.info(f"Created cron job {cron_id}.")
+
+    _run_post_registration_hooks(
+        session=session,
+        execution_model=execution_model,
+        cron_id=cron_id,
+    )
 
     return CronJobResponse.model_validate(cron_job)
 
@@ -217,7 +235,7 @@ def update_cron_job_service(
     payload_to_store = None
     if cron_data.payload is not None:
         entrypoint = cron_data.entrypoint or existing_cron.entrypoint
-        payload_to_store = _validate_and_enrich_payload_for_entrypoint(
+        execution_model = _validate_and_enrich_payload_for_entrypoint(
             entrypoint=entrypoint,
             payload=cron_data.payload,
             session=session,
@@ -225,6 +243,7 @@ def update_cron_job_service(
             cron_id=cron_id,
             **kwargs,
         )
+        payload_to_store = execution_model.model_dump(mode="json")
 
     updated_cron = update_cron_job(
         session=session,

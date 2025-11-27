@@ -138,6 +138,7 @@ class EndpointPollingExecutionPayload(BaseExecutionPayload):
     timeout: int
     workflow_input: AgentInferenceExecutionPayload
     workflow_input_template: Optional[str] = None
+    initial_history_seed: Optional[list[str]] = Field(default=None, exclude=True)
 
 
 def validate_registration(
@@ -160,6 +161,8 @@ def validate_registration(
         **kwargs,
     )
 
+    initial_tracked_values: set[str] = set()
+
     # Validate endpoint accessibility and ID extraction
     LOGGER.info(f"Validating endpoint polling configuration: {user_input.endpoint_url}")
     try:
@@ -181,6 +184,7 @@ def validate_registration(
 
         try:
             extracted_ids = _extract_ids_from_response(endpoint_data, user_input.tracking_field_path)
+            initial_tracked_values = set(extracted_ids)
             if not extracted_ids:
                 LOGGER.warning(
                     f"Endpoint {user_input.endpoint_url} returned no IDs "
@@ -227,6 +231,7 @@ def validate_registration(
                 )
 
                 matching_ids = _filter_matching_items(items_with_filter_values, effective_filter_fields)
+                initial_tracked_values = set(matching_ids)
                 matching_count = len(matching_ids)
 
                 LOGGER.info(
@@ -270,6 +275,7 @@ def validate_registration(
         timeout=user_input.timeout,
         workflow_input=agent_inference_execution_payload,
         workflow_input_template=user_input.workflow_input_template,
+        initial_history_seed=sorted(initial_tracked_values) if initial_tracked_values else None,
     )
 
 
