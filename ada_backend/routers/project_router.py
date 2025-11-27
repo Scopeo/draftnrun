@@ -28,7 +28,7 @@ from ada_backend.routers.auth_router import (
     UserRights,
 )
 from ada_backend.services.charts_service import get_charts_by_project
-from ada_backend.services.errors import ProjectNotFound, EnvironmentNotFound
+from ada_backend.services.errors import MissingDataSourceError, ProjectNotFound, EnvironmentNotFound
 from ada_backend.services.metrics.monitor_kpis_service import get_monitoring_kpis_by_project
 from ada_backend.services.project_service import (
     create_workflow,
@@ -202,6 +202,9 @@ async def run_env_agent_endpoint(
     except EnvironmentNotFound as e:
         LOGGER.error(f"Environment not found for project {project_id} in environment {env}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=404, detail=str(e)) from e
+    except MissingDataSourceError as e:
+        LOGGER.error(f"Data source not found for project {project_id} in environment {env}: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except ConnectionError as e:
         LOGGER.error(
             f"Database connection failed for project {project_id} in environment {env}: {str(e)}", exc_info=True
@@ -306,6 +309,12 @@ async def chat(
             exc_info=True,
         )
         raise HTTPException(status_code=400, detail=str(e)) from e
+    except MissingDataSourceError as e:
+        LOGGER.error(
+            f"Data source not found for project {project_id} for graph runner {graph_runner_id}: {str(e)}",
+            exc_info=True,
+        )
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except ConnectionError as e:
         LOGGER.error(
             f"Database connection failed for project {project_id}, graph_runner {graph_runner_id}: {str(e)}",
@@ -364,6 +373,9 @@ async def chat_env(
     except EnvironmentNotFound as e:
         LOGGER.error(f"Environment not found for project {project_id} in environment {env}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=404, detail=str(e)) from e
+    except MissingDataSourceError as e:
+        LOGGER.error(f"Data source not found for project {project_id} in environment {env}: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except ConnectionError as e:
         LOGGER.error(
             f"Database connection failed for project {project_id} in environment {env}: {str(e)}", exc_info=True
