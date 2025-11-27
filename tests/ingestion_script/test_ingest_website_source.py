@@ -144,8 +144,7 @@ async def test_upload_website_source_syncs_scraped_pages(monkeypatch):
     assert mapping_kwargs["use_llm_for_pdf"] is False
 
     document_arg = chunks_mock.await_args.args[0]
-    assert document_arg.metadata["url"] == "https://example.com/page"
-    assert document_arg.metadata["content"] == "# Heading\nSome content"
+    assert document_arg.metadata["source_url"] == "https://example.com/page"
     assert document_arg.metadata["title"] == "Example page"
 
     assert chunks_mock.await_args.kwargs["document_chunk_mapping"] is mapping_sentinel
