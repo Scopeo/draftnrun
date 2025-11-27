@@ -1,0 +1,138 @@
+name: Reset Staging to Main
+
+on:
+  workflow_dispatch:
+
+jobs:
+  reset-staging:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main branch
+        uses: actions/checkout@v2
+        with:
+          ref: main
+          lfs: true
+
+      - name: Set up SSH key
+        uses: webfactory/ssh-agent@v0.5.3
+        with:
+          ssh-private-key: ${{ secrets.DEPLOY_KEY }}
+
+      - name: Auto-downgrade migrations before reset
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.EC2_HOST_SCOPEO_STAGING }}
+          username: ec2-user
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          script: |
+            set -e
+            cd /home/ec2-user/draftnrun
+            
+            echo "🔄 Fetching latest changes"
+            git remote set-url origin git@github.com:scopeo/draftnrun.git
+            git fetch origin
+            
+            echo "📊 Current staging Alembic revision:"
+            uv run alembic -c ada_backend/database/alembic.ini current
+            
+            # Get list of migration files in main
+            MAIN_MIGRATIONS=$(git ls-tree -r origin/main --name-only ada_backend/database/alembic/versions/ | grep '\.py$' | xargs -I {} basename {} .py | cut -d'_' -f1 | sort)
+            
+            # Get current revision
+            CURRENT_REV=$(uv run alembic -c ada_backend/database/alembic.ini current 2>/dev/null | grep -oE '^[a-f0-9]+' || echo "")
+            
+            if [ -n "$CURRENT_REV" ]; then
+              # Check if current revision exists in main
+              if ! echo "$MAIN_MIGRATIONS" | grep -q "^${CURRENT_REV:0:12}"; then
+                echo "⬇️ Current revision $CURRENT_REV not in main, downgrading..."
+                
+                # Downgrade one by one until we reach a revision that exists in main
+                while true; do
+                  CURRENT_REV=$(uv run alembic -c ada_backend/database/alembic.ini current 2>/dev/null | grep -oE '^[a-f0-9]+' || echo "")
+                  
+                  if [ -z "$CURRENT_REV" ]; then
+                    echo "📊 Reached base revision"
+                    break
+                  fi
+                  
+                  # Check if current revision exists in main (match first 12 chars)
+                  REV_PREFIX="${CURRENT_REV:0:12}"
+                  if echo "$MAIN_MIGRATIONS" | grep -q "^$REV_PREFIX"; then
+                    echo "📊 Reached revision $CURRENT_REV which exists in main"
+                    break
+                  fi
+                  
+                  echo "⬇️ Downgrading from $CURRENT_REV..."
+                  uv run alembic -c ada_backend/database/alembic.ini downgrade -1
+                done
+              else
+                echo "✅ Current revision exists in main, no downgrade needed"
+              fi
+            else
+              echo "📊 No current revision (fresh database)"
+            fi
+            
+            echo "📊 Final revision after downgrade:"
+            uv run alembic -c ada_backend/database/alembic.ini current || echo "At base"
+
+      - name: Reset staging branch to main
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.EC2_HOST_SCOPEO_STAGING }}
+          username: ec2-user
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          script: |
+            set -e
+            cd /home/ec2-user/draftnrun
+            
+            echo "🔀 Resetting staging branch to main"
+            git checkout staging
+            git reset --hard origin/main
+            
+            echo "📦 Installing dependencies"
+            pip install --upgrade uv
+            uv sync
+
+      - name: Run database migrations
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.EC2_HOST_SCOPEO_STAGING }}
+          username: ec2-user
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          script: |
+            set -e
+            cd /home/ec2-user/draftnrun
+            
+            echo "📊 Current Alembic revision:"
+            make db-current || echo "No current revision (fresh database)"
+            
+            echo "⬆️ Running database migrations"
+            make db-upgrade
+            
+            echo "🌱 Seeding database"
+            make db-seed
+            
+            echo "📊 Final Alembic revision:"
+            make db-current
+
+      - name: Restart services
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.EC2_HOST_SCOPEO_STAGING }}
+          username: ec2-user
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          script: |
+            set -e
+            
+            echo "🔄 Restarting Gunicorn"
+            sudo systemctl restart gunicorn
+            
+            echo "🔄 Restarting APScheduler"
+            sudo systemctl restart apscheduler.service
+            
+            echo "✅ Staging reset to main complete!"
+
