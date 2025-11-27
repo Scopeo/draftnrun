@@ -11,7 +11,7 @@ LOGGER = logging.getLogger(__name__)
 
 def ingest_csv_file(
     document: FileDocument,
-    get_file_content_func: Callable[[FileDocument], str],
+    get_file_content_func: Callable[[str], bytes | str],
     chunk_size: Optional[int] = 1024,
     **kwargs,
 ) -> list[FileChunk]:

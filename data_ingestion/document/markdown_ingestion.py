@@ -1,6 +1,6 @@
 from typing import Callable
 
-from data_ingestion.document.folder_management.folder_management import FileChunk, FileDocument
+from data_ingestion.document.folder_management.folder_management import BaseDocument, FileChunk
 from data_ingestion.markdown.tree_chunker import parse_markdown_to_chunks
 
 CHUNK_SIZE = 750
@@ -13,8 +13,8 @@ def get_md_from_bytes(file_content: bytes) -> str:
 
 
 def get_chunks_from_markdown(
-    md_doc_to_process: FileDocument,
-    get_file_content_func: Callable[[FileDocument], str],
+    md_doc_to_process: BaseDocument,
+    get_file_content_func: Callable[[str], bytes | str],
     chunk_size: int = CHUNK_SIZE,
     chunk_overlap: int = CHUNK_OVERLAP,
 ):
@@ -27,21 +27,21 @@ def get_chunks_from_markdown(
     )
 
 
-def build_chunk(document: FileDocument, content: str, chunk_id: str) -> FileChunk:
+def build_chunk(document: BaseDocument, content: str, chunk_id: str) -> FileChunk:
     return FileChunk(
         chunk_id=chunk_id,
         file_id=str(document.id),
         content=content,
         url=document.url,
-        last_edited_ts=document.last_edited_ts,
-        document_title=document.file_name,
+        last_edited_ts=document.last_edited_ts if document.last_edited_ts else None,
+        document_title=document.file_name if document.file_name else None,
         bounding_boxes=[],
-        metadata=document.metadata,
+        metadata=document.metadata if document.metadata else {},
     )
 
 
 def chunk_markdown(
-    document_to_process: FileDocument,
+    document_to_process: BaseDocument,
     content: str,
     chunk_size: int = CHUNK_SIZE,
     chunk_overlap: int = CHUNK_OVERLAP,

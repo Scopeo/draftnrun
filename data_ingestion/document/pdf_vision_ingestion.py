@@ -294,7 +294,7 @@ async def _process_pdf_with_table_of_contents(
 
 async def create_chunks_from_document(
     document: FileDocument,
-    get_file_content: Callable[[FileDocument], str],
+    get_file_content: Callable[[str], bytes | str],
     google_llm_service: VisionService,
     openai_llm_service: VisionService,
     # TODO: Fix when we handle via frontend

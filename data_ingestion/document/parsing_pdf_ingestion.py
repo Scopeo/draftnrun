@@ -20,7 +20,7 @@ def _parse_pdf_without_llm(file_input: str) -> str:
 
 async def create_chunks_from_document_without_llm(
     document: FileDocument,
-    get_file_content: Callable[[FileDocument], str],
+    get_file_content: Callable[[str], bytes | str],
     chunk_size: Optional[int] = 1024,
     chunk_overlap: Optional[int] = 0,
     **kwargs,

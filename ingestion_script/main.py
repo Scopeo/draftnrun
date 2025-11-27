@@ -11,8 +11,10 @@ from engine.trace.span_context import set_tracing_span
 from engine.trace.trace_context import set_trace_manager
 from engine.trace.trace_manager import TraceManager
 from ingestion_script.ingest_folder_source import ingest_google_drive_source, ingest_local_folder_source
+from ingestion_script.ingest_website_source import ingest_website_source
 from ingestion_script.utils import update_ingestion_task
 from ada_backend.database import models as db
+from settings import settings
 
 # Configure logging to ensure all logs are captured by worker subprocess
 logging.basicConfig(
@@ -190,6 +192,48 @@ async def ingestion_main_async(
             )
         except Exception as e:
             LOGGER.error(f"Error during database ingestion: {str(e)}")
+            update_ingestion_task(
+                organization_id=organization_id,
+                ingestion_task=failed_ingestion_task,
+            )
+            raise  # Re-raise the exception to ensure subprocess exits with non-zero code
+
+    elif source_type == SourceType.WEBSITE:
+        if not source_attributes.get("url"):
+            LOGGER.error("URL must be provided for website ingestion")
+            update_ingestion_task(
+                organization_id=organization_id,
+                ingestion_task=failed_ingestion_task,
+            )
+            return
+
+        if not settings.FIRECRAWL_API_KEY:
+            LOGGER.error("FIRECRAWL_API_KEY is not set. Please configure it in your settings.")
+            update_ingestion_task(
+                organization_id=organization_id,
+                ingestion_task=failed_ingestion_task,
+            )
+            raise ValueError("FIRECRAWL_API_KEY is required for website ingestion. Please set it in your settings.")
+
+        try:
+            await ingest_website_source(
+                url=source_attributes.get("url"),
+                organization_id=organization_id,
+                source_name=source_name,
+                task_id=task_id,
+                follow_links=source_attributes.get("follow_links", True),
+                max_depth=source_attributes.get("max_depth", 1),
+                limit=source_attributes.get("limit", 100),
+                include_paths=source_attributes.get("include_paths"),
+                exclude_paths=source_attributes.get("exclude_paths"),
+                include_tags=source_attributes.get("include_tags"),
+                exclude_tags=source_attributes.get("exclude_tags"),
+                chunk_size=chunk_size,
+                chunk_overlap=chunk_overlap,
+                source_id=source_id,
+            )
+        except Exception as e:
+            LOGGER.error(f"Error during website ingestion: {str(e)}")
             update_ingestion_task(
                 organization_id=organization_id,
                 ingestion_task=failed_ingestion_task,

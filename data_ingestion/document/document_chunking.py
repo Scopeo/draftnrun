@@ -13,6 +13,7 @@ from data_ingestion.document.parsing_pdf_ingestion import create_chunks_from_doc
 from data_ingestion.document.excel_ingestion import ingest_excel_file
 from data_ingestion.document.csv_ingestion import ingest_csv_file
 from data_ingestion.document.folder_management.folder_management import (
+    BaseDocument,
     FileChunk,
     FileDocument,
     FileDocumentType,
@@ -81,9 +82,9 @@ def document_chunking_mapping(
 
 
 async def get_chunks_dataframe_from_doc(
-    document: FileDocument,
+    document: BaseDocument,
     document_chunk_mapping: dict[FileDocumentType, FileProcessor],
-    llm_service: CompletionService,
+    llm_service: Optional[CompletionService] = None,
     json_type_fields: list[str] = ["bounding_boxes", "metadata"],
     add_doc_description_to_chunks: bool = False,
     documents_summary_func: Optional[Callable] = None,

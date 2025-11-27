@@ -1,5 +1,5 @@
 import json
-from typing import Any
+from typing import Any, Optional
 import os
 from datetime import datetime
 import re
@@ -34,7 +34,7 @@ class Chunk(BaseModel):
     chunk_id: str
     file_id: str
     content: str
-    last_edited_ts: str
+    last_edited_ts: Optional[str] = None
     metadata: dict[str, Any] = Field(default_factory=dict)
 
     def model_dump_with_metadata(self) -> dict[str, Any]:
