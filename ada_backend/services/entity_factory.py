@@ -947,13 +947,11 @@ def _pop_and_validate_parameter(params: dict, parameter_name: str, expected_type
     if parameter_value is None:
         raise ValueError(f"{error_message}: parameter '{parameter_name}' cannot be None")
 
-    # For strings, validate type rather than converting (str() converts None to "None")
     if expected_type is str:
         if not isinstance(parameter_value, str):
             raise ValueError(f"{error_message}, got {type(parameter_value).__name__}: {parameter_value}")
         return parameter_value
 
-    # For other types, attempt conversion
     try:
         parameter_value = expected_type(parameter_value)
     except ValueError as e:
