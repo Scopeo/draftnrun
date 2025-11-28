@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pandas as pd
 import pytest
 
-from ingestion_script.ingest_folder_source import FILE_TABLE_DEFINITION
+from ingestion_script.ingest_folder_source import UNIFIED_TABLE_DEFINITION
 from ingestion_script.ingest_website_source import ScrapedPage, scrape_website, upload_website_source
 from settings import settings
 
@@ -153,7 +153,7 @@ async def test_upload_website_source_syncs_scraped_pages(monkeypatch):
     update_kwargs = db_service.update_table.call_args.kwargs
     assert update_kwargs["table_name"] == "web_table"
     assert update_kwargs["schema_name"] == "web_schema"
-    assert update_kwargs["table_definition"] is FILE_TABLE_DEFINITION
+    assert update_kwargs["table_definition"] is UNIFIED_TABLE_DEFINITION
     assert update_kwargs["append_mode"] is True
 
     sync_mock.assert_awaited_once_with(
