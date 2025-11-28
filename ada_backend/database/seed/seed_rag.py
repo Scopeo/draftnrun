@@ -42,11 +42,11 @@ from engine.agent.synthesizer_prompts import (
 )
 
 RAG_V3_PARAMETER_GROUP_UUIDS = {
-    "knowledge_parameters": UUID("3c4d5e6f-7a8b-4c9d-0e1f-2a3b4c5d6e7f"),
-    "llm_parameters": UUID("4d5e6f7a-8b9c-4d0e-1f2a-3b4c5d6e7f8a"),
-    "reranker_parameters": UUID("5e6f7a8b-9c0d-4e1f-2a3b-4c5d6e7f8a9b"),
-    "vocabulary_search_parameters": UUID("6f7a8b9c-0d1e-4f2a-3b4c-5d6e7f8a9b0c"),
-    "formatter_parameters": UUID("7a8b9c0d-1e2f-4a3b-4c5d-6e7f8a9b0c1d"),
+    "knowledge_parameters": UUID("585a504e-1bd6-42fa-8224-de297f969691"),
+    "llm_parameters": UUID("c02788db-f787-40b2-bfdd-b5e435689d3d"),
+    "reranker_parameters": UUID("d0de66e3-ff84-4b9a-b4ef-af7695a7d2a0"),
+    "vocabulary_search_parameters": UUID("2dfcfbe9-b50c-4079-b132-0cc493871362"),
+    "formatter_parameters": UUID("7eb2e948-1f96-442b-b555-f86e328b46a9"),
 }
 
 
@@ -291,7 +291,7 @@ def seed_rag_components(session: Session):
     )
 
     rag_v3_data_source_param = db.ComponentParameterDefinition(
-        id=UUID("a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d"),
+        id=UUID("cb319b62-7b01-497b-89eb-696985e779e8"),
         component_version_id=rag_agent_v3_version.id,
         name="data_source",
         type=ParameterType.DATA_SOURCE,
@@ -307,7 +307,7 @@ def seed_rag_components(session: Session):
     )
 
     rag_v3_completion_model_param = db.ComponentParameterDefinition(
-        id=UUID("b2c3d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e"),
+        id=UUID("134a4ddb-6906-4a22-b6b9-404f48543cc7"),
         component_version_id=rag_agent_v3_version.id,
         name="completion_model",
         type=ParameterType.LLM_MODEL,
@@ -321,7 +321,7 @@ def seed_rag_components(session: Session):
     )
 
     rag_v3_prompt_template_param = db.ComponentParameterDefinition(
-        id=UUID("c3d4e5f6-a7b8-4c9d-0e1f-2a3b4c5d6e7f"),
+        id=UUID("0bfd2f69-ee7f-44a5-8e1b-84bde9678183"),
         component_version_id=rag_agent_v3_version.id,
         name="prompt_template",
         type=ParameterType.STRING,
@@ -338,7 +338,7 @@ def seed_rag_components(session: Session):
     )
 
     rag_v3_max_retrieved_chunks_param = db.ComponentParameterDefinition(
-        id=UUID("d4e5f6a7-b8c9-4d0e-1f2a-3b4c5d6e7f8a"),
+        id=UUID("0a707b52-172b-4cb9-a8af-c303fe95e684"),
         component_version_id=rag_agent_v3_version.id,
         name="max_retrieved_chunks",
         type=ParameterType.INTEGER,
@@ -357,7 +357,7 @@ def seed_rag_components(session: Session):
     )
 
     rag_v3_enable_date_penalty_param = db.ComponentParameterDefinition(
-        id=UUID("e5f6a7b8-c9d0-4e1f-2a3b-4c5d6e7f8a9b"),
+        id=UUID("73de2a61-251e-4944-aff3-d835e837a927"),
         component_version_id=rag_agent_v3_version.id,
         name="enable_date_penalty_for_chunks",
         type=ParameterType.BOOLEAN,
@@ -373,7 +373,7 @@ def seed_rag_components(session: Session):
     )
 
     rag_v3_chunk_age_penalty_rate_param = db.ComponentParameterDefinition(
-        id=UUID("f6a7b8c9-d0e1-4f2a-3b4c-5d6e7f8a9b0c"),
+        id=UUID("ecb4cac9-36f2-4f6d-a4f5-7f86df2762e2"),
         component_version_id=rag_agent_v3_version.id,
         name="chunk_age_penalty_rate",
         type=ParameterType.FLOAT,
@@ -393,7 +393,7 @@ def seed_rag_components(session: Session):
     )
 
     rag_v3_default_penalty_rate_param = db.ComponentParameterDefinition(
-        id=UUID("a7b8c9d0-e1f2-4a3b-4c5d-6e7f8a9b0c1d"),
+        id=UUID("a41401b9-73cc-46b4-882f-eaf58d9338cb"),
         component_version_id=rag_agent_v3_version.id,
         name="default_penalty_rate",
         type=ParameterType.FLOAT,
@@ -413,7 +413,7 @@ def seed_rag_components(session: Session):
     )
 
     rag_v3_metadata_date_key_param = db.ComponentParameterDefinition(
-        id=UUID("b8c9d0e1-f2a3-4b4c-5d6e-7f8a9b0c1d2e"),
+        id=UUID("9dc1e4ad-734d-4ccd-ab17-8692a7bedd5f"),
         component_version_id=rag_agent_v3_version.id,
         name="metadata_date_key",
         type=ParameterType.STRING,
@@ -435,7 +435,7 @@ def seed_rag_components(session: Session):
     )
 
     rag_v3_max_retrieved_chunks_after_penalty_param = db.ComponentParameterDefinition(
-        id=UUID("c9d0e1f2-a3b4-4c5d-6e7f-8a9b0c1d2e3f"),
+        id=UUID("76a5318b-d1f9-44fe-82bc-b11f313c72b5"),
         component_version_id=rag_agent_v3_version.id,
         name="max_retrieved_chunks_after_penalty",
         type=ParameterType.INTEGER,
@@ -454,7 +454,7 @@ def seed_rag_components(session: Session):
     )
 
     rag_v3_temperature_param = db.ComponentParameterDefinition(
-        id=UUID("d0e1f2a3-b4c5-4d6e-7f8a-9b0c1d2e3f4a"),
+        id=UUID("697a921c-c0b7-4393-a9e1-67f180265226"),
         component_version_id=rag_agent_v3_version.id,
         name="temperature",
         type=ParameterType.FLOAT,
@@ -473,7 +473,7 @@ def seed_rag_components(session: Session):
     )
 
     rag_v3_verbosity_param = db.ComponentParameterDefinition(
-        id=UUID("e1f2a3b4-c5d6-4e7f-8a9b-0c1d2e3f4a5b"),
+        id=UUID("72111114-d1ab-4bf6-9248-6f493e1b4728"),
         component_version_id=rag_agent_v3_version.id,
         name="verbosity",
         type=ParameterType.STRING,
@@ -493,7 +493,7 @@ def seed_rag_components(session: Session):
     )
 
     rag_v3_reasoning_param = db.ComponentParameterDefinition(
-        id=UUID("f2a3b4c5-d6e7-4f8a-9b0c-1d2e3f4a5b6c"),
+        id=UUID("7f6312f7-84f7-4984-b5e5-1dec0deee4c0"),
         component_version_id=rag_agent_v3_version.id,
         name="reasoning",
         type=ParameterType.STRING,
@@ -514,7 +514,7 @@ def seed_rag_components(session: Session):
     )
 
     rag_v3_llm_api_key_param = db.ComponentParameterDefinition(
-        id=UUID("a3b4c5d6-e7f8-4a9b-0c1d-2e3f4a5b6c7d"),
+        id=UUID("f885ed15-e661-4790-bf14-1bb780459047"),
         component_version_id=rag_agent_v3_version.id,
         name="llm_api_key",
         type=ParameterType.LLM_API_KEY,
@@ -522,7 +522,7 @@ def seed_rag_components(session: Session):
     )
 
     rag_v3_use_reranker_param = db.ComponentParameterDefinition(
-        id=UUID("b4c5d6e7-f8a9-4b0c-1d2e-3f4a5b6c7d8e"),
+        id=UUID("b8bf7e20-e758-4f79-b834-db9fd14520a4"),
         component_version_id=rag_agent_v3_version.id,
         name="use_reranker",
         type=ParameterType.BOOLEAN,
@@ -537,7 +537,7 @@ def seed_rag_components(session: Session):
     )
 
     rag_v3_cohere_model_param = db.ComponentParameterDefinition(
-        id=UUID("c5d6e7f8-a9b0-4c1d-2e3f-4a5b6c7d8e9f"),
+        id=UUID("086d1d92-89d9-4ff3-be44-c9fd873f866c"),
         component_version_id=rag_agent_v3_version.id,
         name="cohere_model",
         type=ParameterType.STRING,
@@ -555,7 +555,7 @@ def seed_rag_components(session: Session):
     )
 
     rag_v3_score_threshold_param = db.ComponentParameterDefinition(
-        id=UUID("d6e7f8a9-b0c1-4d2e-3f4a-5b6c7d8e9f0a"),
+        id=UUID("b2555d77-46dd-4b65-99a8-fec1f75b47d2"),
         component_version_id=rag_agent_v3_version.id,
         name="score_threshold",
         type=ParameterType.FLOAT,
@@ -569,7 +569,7 @@ def seed_rag_components(session: Session):
     )
 
     rag_v3_num_doc_reranked_param = db.ComponentParameterDefinition(
-        id=UUID("e7f8a9b0-c1d2-4e3f-4a5b-6c7d8e9f0a1b"),
+        id=UUID("fb763048-d235-42f6-8e52-f40755114b26"),
         component_version_id=rag_agent_v3_version.id,
         name="num_doc_reranked",
         type=ParameterType.INTEGER,
@@ -583,7 +583,7 @@ def seed_rag_components(session: Session):
     )
 
     rag_v3_cohere_api_key_param = db.ComponentParameterDefinition(
-        id=UUID("f8a9b0c1-d2e3-4f4a-5b6c-7d8e9f0a1b2c"),
+        id=UUID("e866ac4a-06b2-46ec-8733-da6dcd15e8e7"),
         component_version_id=rag_agent_v3_version.id,
         name="cohere_api_key",
         type=ParameterType.LLM_API_KEY,
@@ -591,7 +591,7 @@ def seed_rag_components(session: Session):
     )
 
     rag_v3_use_vocabulary_search_param = db.ComponentParameterDefinition(
-        id=UUID("a9b0c1d2-e3f4-4a5b-6c7d-8e9f0a1b2c3d"),
+        id=UUID("0c1b699c-20d6-4464-95d7-edeb51f936cd"),
         component_version_id=rag_agent_v3_version.id,
         name="use_vocabulary_search",
         type=ParameterType.BOOLEAN,
@@ -606,7 +606,7 @@ def seed_rag_components(session: Session):
     )
 
     rag_v3_vocabulary_context_data_param = db.ComponentParameterDefinition(
-        id=UUID("b0c1d2e3-f4a5-4b6c-7d8e-9f0a1b2c3d4e"),
+        id=UUID("0bb7ebdb-fe26-4649-9832-cab3bff5b989"),
         component_version_id=rag_agent_v3_version.id,
         name="vocabulary_context_data",
         type=ParameterType.STRING,
@@ -629,7 +629,7 @@ def seed_rag_components(session: Session):
     )
 
     rag_v3_fuzzy_threshold_param = db.ComponentParameterDefinition(
-        id=UUID("c1d2e3f4-a5b6-4c7d-8e9f-0a1b2c3d4e5f"),
+        id=UUID("40433921-b7ee-4718-9766-41af2fbe9480"),
         component_version_id=rag_agent_v3_version.id,
         name="fuzzy_threshold",
         type=ParameterType.INTEGER,
@@ -654,7 +654,7 @@ def seed_rag_components(session: Session):
     )
 
     rag_v3_fuzzy_matching_candidates_param = db.ComponentParameterDefinition(
-        id=UUID("d2e3f4a5-b6c7-4d8e-9f0a-1b2c3d4e5f6a"),
+        id=UUID("bb8a97e3-879a-4753-91f5-7b779e4b8df8"),
         component_version_id=rag_agent_v3_version.id,
         name="fuzzy_matching_candidates",
         type=ParameterType.INTEGER,
@@ -668,7 +668,7 @@ def seed_rag_components(session: Session):
     )
 
     rag_v3_vocabulary_context_prompt_key_param = db.ComponentParameterDefinition(
-        id=UUID("e3f4a5b6-c7d8-4e9f-0a1b-2c3d4e5f6a7b"),
+        id=UUID("492b6d55-ac6e-4140-b21a-0487a30c79b0"),
         component_version_id=rag_agent_v3_version.id,
         name="vocabulary_context_prompt_key",
         type=ParameterType.STRING,
@@ -686,7 +686,7 @@ def seed_rag_components(session: Session):
     )
 
     rag_v3_use_formatter_param = db.ComponentParameterDefinition(
-        id=UUID("f4a5b6c7-d8e9-4f0a-1b2c-3d4e5f6a7b8c"),
+        id=UUID("cf697051-9370-4b8c-a6e7-44f194acf9e3"),
         component_version_id=rag_agent_v3_version.id,
         name="use_formatter",
         type=ParameterType.BOOLEAN,
@@ -701,7 +701,7 @@ def seed_rag_components(session: Session):
     )
 
     rag_v3_add_sources_param = db.ComponentParameterDefinition(
-        id=UUID("a5b6c7d8-e9f0-4a1b-2c3d-4e5f6a7b8c9d"),
+        id=UUID("9cb6751f-edd1-49bb-b269-9be5244bb596"),
         component_version_id=rag_agent_v3_version.id,
         name="add_sources",
         type=ParameterType.BOOLEAN,
@@ -1394,107 +1394,107 @@ def seed_rag_v3_parameter_groups(session: Session):
 
     parameter_group_assignments = {
         # Knowledge Parameters Group
-        UUID("a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d"): {  # data_source
+        UUID("cb319b62-7b01-497b-89eb-696985e779e8"): {  # data_source
             "parameter_group_id": RAG_V3_PARAMETER_GROUP_UUIDS["knowledge_parameters"],
             "parameter_order_within_group": 1,
         },
-        UUID("d4e5f6a7-b8c9-4d0e-1f2a-3b4c5d6e7f8a"): {  # max_retrieved_chunks
+        UUID("0a707b52-172b-4cb9-a8af-c303fe95e684"): {  # max_retrieved_chunks
             "parameter_group_id": RAG_V3_PARAMETER_GROUP_UUIDS["knowledge_parameters"],
             "parameter_order_within_group": 2,
         },
-        UUID("e5f6a7b8-c9d0-4e1f-2a3b-4c5d6e7f8a9b"): {  # enable_date_penalty_for_chunks
+        UUID("73de2a61-251e-4944-aff3-d835e837a927"): {  # enable_date_penalty_for_chunks
             "parameter_group_id": RAG_V3_PARAMETER_GROUP_UUIDS["knowledge_parameters"],
             "parameter_order_within_group": 3,
         },
-        UUID("f6a7b8c9-d0e1-4f2a-3b4c-5d6e7f8a9b0c"): {  # chunk_age_penalty_rate
+        UUID("ecb4cac9-36f2-4f6d-a4f5-7f86df2762e2"): {  # chunk_age_penalty_rate
             "parameter_group_id": RAG_V3_PARAMETER_GROUP_UUIDS["knowledge_parameters"],
             "parameter_order_within_group": 4,
         },
-        UUID("a7b8c9d0-e1f2-4a3b-4c5d-6e7f8a9b0c1d"): {  # default_penalty_rate
+        UUID("a41401b9-73cc-46b4-882f-eaf58d9338cb"): {  # default_penalty_rate
             "parameter_group_id": RAG_V3_PARAMETER_GROUP_UUIDS["knowledge_parameters"],
             "parameter_order_within_group": 5,
         },
-        UUID("b8c9d0e1-f2a3-4b4c-5d6e-7f8a9b0c1d2e"): {  # metadata_date_key
+        UUID("9dc1e4ad-734d-4ccd-ab17-8692a7bedd5f"): {  # metadata_date_key
             "parameter_group_id": RAG_V3_PARAMETER_GROUP_UUIDS["knowledge_parameters"],
             "parameter_order_within_group": 6,
         },
-        UUID("c9d0e1f2-a3b4-4c5d-6e7f-8a9b0c1d2e3f"): {  # max_retrieved_chunks_after_penalty
+        UUID("76a5318b-d1f9-44fe-82bc-b11f313c72b5"): {  # max_retrieved_chunks_after_penalty
             "parameter_group_id": RAG_V3_PARAMETER_GROUP_UUIDS["knowledge_parameters"],
             "parameter_order_within_group": 7,
         },
         # LLM Parameters Group (Synthesizer)
-        UUID("b2c3d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e"): {  # completion_model
+        UUID("134a4ddb-6906-4a22-b6b9-404f48543cc7"): {  # completion_model
             "parameter_group_id": RAG_V3_PARAMETER_GROUP_UUIDS["llm_parameters"],
             "parameter_order_within_group": 1,
         },
-        UUID("c3d4e5f6-a7b8-4c9d-0e1f-2a3b4c5d6e7f"): {  # prompt_template
+        UUID("0bfd2f69-ee7f-44a5-8e1b-84bde9678183"): {  # prompt_template
             "parameter_group_id": RAG_V3_PARAMETER_GROUP_UUIDS["llm_parameters"],
             "parameter_order_within_group": 2,
         },
-        UUID("d0e1f2a3-b4c5-4d6e-7f8a-9b0c1d2e3f4a"): {  # temperature
+        UUID("697a921c-c0b7-4393-a9e1-67f180265226"): {  # temperature
             "parameter_group_id": RAG_V3_PARAMETER_GROUP_UUIDS["llm_parameters"],
             "parameter_order_within_group": 3,
         },
-        UUID("e1f2a3b4-c5d6-4e7f-8a9b-0c1d2e3f4a5b"): {  # verbosity
+        UUID("72111114-d1ab-4bf6-9248-6f493e1b4728"): {  # verbosity
             "parameter_group_id": RAG_V3_PARAMETER_GROUP_UUIDS["llm_parameters"],
             "parameter_order_within_group": 4,
         },
-        UUID("f2a3b4c5-d6e7-4f8a-9b0c-1d2e3f4a5b6c"): {  # reasoning
+        UUID("7f6312f7-84f7-4984-b5e5-1dec0deee4c0"): {  # reasoning
             "parameter_group_id": RAG_V3_PARAMETER_GROUP_UUIDS["llm_parameters"],
             "parameter_order_within_group": 5,
         },
-        UUID("a3b4c5d6-e7f8-4a9b-0c1d-2e3f4a5b6c7d"): {  # llm_api_key
+        UUID("f885ed15-e661-4790-bf14-1bb780459047"): {  # llm_api_key
             "parameter_group_id": RAG_V3_PARAMETER_GROUP_UUIDS["llm_parameters"],
             "parameter_order_within_group": 6,
         },
         # Reranker Parameters Group
-        UUID("b4c5d6e7-f8a9-4b0c-1d2e-3f4a5b6c7d8e"): {  # use_reranker
+        UUID("b8bf7e20-e758-4f79-b834-db9fd14520a4"): {  # use_reranker
             "parameter_group_id": RAG_V3_PARAMETER_GROUP_UUIDS["reranker_parameters"],
             "parameter_order_within_group": 1,
         },
-        UUID("c5d6e7f8-a9b0-4c1d-2e3f-4a5b6c7d8e9f"): {  # cohere_model
+        UUID("086d1d92-89d9-4ff3-be44-c9fd873f866c"): {  # cohere_model
             "parameter_group_id": RAG_V3_PARAMETER_GROUP_UUIDS["reranker_parameters"],
             "parameter_order_within_group": 2,
         },
-        UUID("d6e7f8a9-b0c1-4d2e-3f4a-5b6c7d8e9f0a"): {  # score_threshold
+        UUID("b2555d77-46dd-4b65-99a8-fec1f75b47d2"): {  # score_threshold
             "parameter_group_id": RAG_V3_PARAMETER_GROUP_UUIDS["reranker_parameters"],
             "parameter_order_within_group": 3,
         },
-        UUID("e7f8a9b0-c1d2-4e3f-4a5b-6c7d8e9f0a1b"): {  # num_doc_reranked
+        UUID("fb763048-d235-42f6-8e52-f40755114b26"): {  # num_doc_reranked
             "parameter_group_id": RAG_V3_PARAMETER_GROUP_UUIDS["reranker_parameters"],
             "parameter_order_within_group": 4,
         },
-        UUID("f8a9b0c1-d2e3-4f4a-5b6c-7d8e9f0a1b2c"): {  # cohere_api_key
+        UUID("e866ac4a-06b2-46ec-8733-da6dcd15e8e7"): {  # cohere_api_key
             "parameter_group_id": RAG_V3_PARAMETER_GROUP_UUIDS["reranker_parameters"],
             "parameter_order_within_group": 5,
         },
         # Vocabulary Search Parameters Group
-        UUID("a9b0c1d2-e3f4-4a5b-6c7d-8e9f0a1b2c3d"): {  # use_vocabulary_search
+        UUID("0c1b699c-20d6-4464-95d7-edeb51f936cd"): {  # use_vocabulary_search
             "parameter_group_id": RAG_V3_PARAMETER_GROUP_UUIDS["vocabulary_search_parameters"],
             "parameter_order_within_group": 1,
         },
-        UUID("b0c1d2e3-f4a5-4b6c-7d8e-9f0a1b2c3d4e"): {  # vocabulary_context_data
+        UUID("0bb7ebdb-fe26-4649-9832-cab3bff5b989"): {  # vocabulary_context_data
             "parameter_group_id": RAG_V3_PARAMETER_GROUP_UUIDS["vocabulary_search_parameters"],
             "parameter_order_within_group": 2,
         },
-        UUID("c1d2e3f4-a5b6-4c7d-8e9f-0a1b2c3d4e5f"): {  # fuzzy_threshold
+        UUID("40433921-b7ee-4718-9766-41af2fbe9480"): {  # fuzzy_threshold
             "parameter_group_id": RAG_V3_PARAMETER_GROUP_UUIDS["vocabulary_search_parameters"],
             "parameter_order_within_group": 3,
         },
-        UUID("d2e3f4a5-b6c7-4d8e-9f0a-1b2c3d4e5f6a"): {  # fuzzy_matching_candidates
+        UUID("bb8a97e3-879a-4753-91f5-7b779e4b8df8"): {  # fuzzy_matching_candidates
             "parameter_group_id": RAG_V3_PARAMETER_GROUP_UUIDS["vocabulary_search_parameters"],
             "parameter_order_within_group": 4,
         },
-        UUID("e3f4a5b6-c7d8-4e9f-0a1b-2c3d4e5f6a7b"): {  # vocabulary_context_prompt_key
+        UUID("492b6d55-ac6e-4140-b21a-0487a30c79b0"): {  # vocabulary_context_prompt_key
             "parameter_group_id": RAG_V3_PARAMETER_GROUP_UUIDS["vocabulary_search_parameters"],
             "parameter_order_within_group": 5,
         },
         # Formatter Parameters Group
-        UUID("f4a5b6c7-d8e9-4f0a-1b2c-3d4e5f6a7b8c"): {  # use_formatter
+        UUID("cf697051-9370-4b8c-a6e7-44f194acf9e3"): {  # use_formatter
             "parameter_group_id": RAG_V3_PARAMETER_GROUP_UUIDS["formatter_parameters"],
             "parameter_order_within_group": 1,
         },
-        UUID("a5b6c7d8-e9f0-4a1b-2c3d-4e5f6a7b8c9d"): {  # add_sources
+        UUID("9cb6751f-edd1-49bb-b269-9be5244bb596"): {  # add_sources
             "parameter_group_id": RAG_V3_PARAMETER_GROUP_UUIDS["formatter_parameters"],
             "parameter_order_within_group": 2,
         },
