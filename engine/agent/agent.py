@@ -125,7 +125,11 @@ class Agent(ABC):
                         {
                             SpanAttributes.OPENINFERENCE_SPAN_KIND: self.TRACE_SPAN_KIND,
                             SpanAttributes.INPUT_VALUE: serialize_to_json(input_node_data.data, shorten_string=True),
-                            "component_instance_id": str(self.component_attributes.component_instance_id),
+                            "component_instance_id": (
+                                str(self.component_attributes.component_instance_id)
+                                if self.component_attributes.component_instance_id is not None
+                                else None
+                            ),
                         }
                     )
                     if self.tool_description.is_tool:
@@ -199,7 +203,11 @@ class Agent(ABC):
                     {
                         SpanAttributes.OPENINFERENCE_SPAN_KIND: self.TRACE_SPAN_KIND,
                         SpanAttributes.INPUT_VALUE: serialize_to_json(legacy_input_preview, shorten_string=True),
-                        "component_instance_id": str(self.component_attributes.component_instance_id),
+                        "component_instance_id": (
+                            str(self.component_attributes.component_instance_id)
+                            if self.component_attributes.component_instance_id is not None
+                            else None
+                        ),
                     }
                 )
                 if self.tool_description.is_tool:

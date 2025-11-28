@@ -96,7 +96,11 @@ class DocumentSearch:
                 {
                     SpanAttributes.OPENINFERENCE_SPAN_KIND: OpenInferenceSpanKindValues.RETRIEVER.value,
                     SpanAttributes.INPUT_VALUE: documents_name,
-                    "component_instance_id": str(self.component_attributes.component_instance_id),
+                    "component_instance_id": (
+                        str(self.component_attributes.component_instance_id)
+                        if self.component_attributes.component_instance_id is not None
+                        else None
+                    ),
                 }
             )
 

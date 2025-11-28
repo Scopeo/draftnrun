@@ -35,7 +35,11 @@ class Reranker(ABC):
                     SpanAttributes.OPENINFERENCE_SPAN_KIND: OpenInferenceSpanKindValues.RERANKER.value,
                     RerankerAttributes.RERANKER_QUERY: query,
                     RerankerAttributes.RERANKER_MODEL_NAME: self._model,
-                    "component_instance_id": str(self.component_attributes.component_instance_id),
+                    "component_instance_id": (
+                        str(self.component_attributes.component_instance_id)
+                        if self.component_attributes.component_instance_id is not None
+                        else None
+                    ),
                 }
             )
 

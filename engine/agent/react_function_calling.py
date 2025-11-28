@@ -353,7 +353,11 @@ class ReActAgent(Agent):
                     SpanAttributes.OPENINFERENCE_SPAN_KIND: OpenInferenceSpanKindValues.LLM.value,
                     SpanAttributes.LLM_INPUT_MESSAGES: json.dumps(llm_input_messages),
                     SpanAttributes.LLM_MODEL_NAME: self._completion_service._model_name,
-                    "model_id": str(self._completion_service._model_id),
+                    "model_id": (
+                        str(self._completion_service._model_id)
+                        if self._completion_service._model_id is not None
+                        else None
+                    ),
                 }
             )
             chat_response = await self._completion_service.function_call_async(
