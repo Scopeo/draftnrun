@@ -330,6 +330,12 @@ def create_factory_registry() -> FactoryRegistry:
         ),
     )
     registry.register(
+        component_version_id=COMPONENT_VERSION_UUIDS["rag_agent_v2"],
+        factory=AgentFactory(
+            entity_class=RAG,
+        ),
+    )
+    registry.register(
         component_version_id=COMPONENT_VERSION_UUIDS["rag_agent_v3"],
         factory=AgentFactory(
             entity_class=RAG,
