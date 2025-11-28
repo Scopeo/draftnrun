@@ -34,7 +34,7 @@ ParameterProcessor = Callable[[dict, dict[str, Any]], dict]
 
 
 # TODO: Remove this when llm service has only model_id as an argument
-def get_model_id_by_name(model_name: str) -> UUID | None:
+def fetch_model_id_by_name(model_name: str) -> UUID | None:
     with get_db_session() as session:
         return get_model_id_by_name_service(session, model_name)
 
@@ -342,7 +342,7 @@ def build_completion_service_processor(
     def processor(params: dict, constructor_params: dict[str, Any]) -> dict:
         provider, model_name = get_llm_provider_and_model(llm_model=params.pop("completion_model"))
 
-        model_id = get_model_id_by_name(model_name)
+        model_id = fetch_model_id_by_name(model_name)
 
         completion_service = CompletionService(
             provider=provider,
@@ -396,7 +396,7 @@ def build_web_service_processor(
     def processor(params: dict, constructor_params: dict[str, Any]) -> dict:
         provider, model_name = get_llm_provider_and_model(llm_model=params.pop("completion_model"))
 
-        model_id = get_model_id_by_name(model_name)
+        model_id = fetch_model_id_by_name(model_name)
 
         web_service = WebSearchService(
             trace_manager=get_trace_manager(),
@@ -422,7 +422,7 @@ def build_ocr_service_processor(
     def processor(params: dict, constructor_params: dict[str, Any]) -> dict:
         provider, model_name = get_llm_provider_and_model(llm_model=params.pop("completion_model"))
 
-        model_id = get_model_id_by_name(model_name)
+        model_id = fetch_model_id_by_name(model_name)
 
         ocr_service = OCRService(
             trace_manager=get_trace_manager(),
@@ -729,7 +729,7 @@ def build_synthesizer_processor(target_name: str = "synthesizer") -> ParameterPr
             except ValueError as e:
                 raise ValueError(f"temperature must be a float, got {temperature}: {e}")
 
-        model_id = get_model_id_by_name(model_name)
+        model_id = fetch_model_id_by_name(model_name)
 
         completion_service = CompletionService(
             provider=provider,
