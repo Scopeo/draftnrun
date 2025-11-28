@@ -17,8 +17,9 @@ from data_ingestion.document.folder_management.folder_management import WebsiteD
 from engine.qdrant_service import QdrantService
 from engine.storage_service.db_service import DBService
 from ingestion_script.ingest_folder_source import (
-    FILE_TABLE_DEFINITION,
-    QDRANT_SCHEMA,
+    UNIFIED_TABLE_DEFINITION,
+    ID_COLUMN_NAME,
+    UNIFIED_QDRANT_SCHEMA,
     TIMESTAMP_COLUMN_NAME,
     sync_chunks_to_qdrant,
 )
@@ -279,7 +280,7 @@ async def ingest_website_source(
         f"URL: {url}, Organization: {organization_id}"
     )
 
-    qdrant_schema = QDRANT_SCHEMA
+    qdrant_schema = UNIFIED_QDRANT_SCHEMA
     source_type = db.SourceType.WEBSITE
 
     LOGGER.info("Starting Firecrawl website ingestion...")
