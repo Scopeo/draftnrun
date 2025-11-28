@@ -58,7 +58,7 @@ META_DATA_TO_KEEP = [
 UNIFIED_TABLE_DEFINITION = DBDefinition(
     columns=[
         DBColumn(name=PROCESSED_DATETIME_FIELD, type="DATETIME", default="CURRENT_TIMESTAMP"),
-        DBColumn(name=CHUNK_ID_COLUMN_NAME, type="VARCHAR", is_primary_key=True),
+        DBColumn(name=CHUNK_ID_COLUMN_NAME, type="VARCHAR", is_primary=True),
         DBColumn(name=SOURCE_ID_COLUMN_NAME, type="UUID"),
         DBColumn(name=SOURCE_IDENTIFIER_COLUMN_NAME, type="VARCHAR"),
         DBColumn(name=CHUNK_COLUMN_NAME, type="VARCHAR"),
