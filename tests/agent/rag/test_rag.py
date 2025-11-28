@@ -137,7 +137,7 @@ def test_vocabulary_rag_run(
     mock_llm_service = make_mock_llm_service(
         default_response="Test Response [1][2]\nSources:\n[1] <url1|SourceChunk_1>\n[2] <url2|SourceChunk_2>\n"
     )
-    prompt_template = "{context_str} ---\n{vocabulary_context_str}\n---{query_str}"
+    prompt_template = "{{context_str}} ---\n{{vocabulary_context_str}}\n---{{query_str}}"
     vocabulary_context = {"term": ["term1", "term2"], "definition": ["definition1", "definition2"]}
     vocabulary_search = VocabularySearch(
         trace_manager=mock_trace_manager,

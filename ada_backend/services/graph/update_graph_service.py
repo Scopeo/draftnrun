@@ -1,4 +1,5 @@
 import logging
+from collections import defaultdict
 from typing import Optional, Iterator
 from uuid import UUID
 
@@ -37,6 +38,8 @@ from ada_backend.services.pipeline.update_pipeline_service import create_or_upda
 from ada_backend.segment_analytics import track_project_saved
 from ada_backend.repositories.field_expression_repository import (
     upsert_field_expression,
+    get_field_expressions_for_instances,
+    delete_field_expression,
 )
 from engine.field_expressions.parser import parse_expression
 from engine.field_expressions.errors import FieldExpressionError, FieldExpressionParseError
@@ -203,16 +206,22 @@ async def update_graph_service(
     _ensure_port_mappings_for_edges(session, graph_runner_id, graph_project)
 
     # Field expressions (nested per component instance)
-    for instance in graph_project.component_instances:
-        if not instance.field_expressions:
-            continue
+    db_field_expressions_by_instance: dict[UUID, set[str]] = defaultdict(set)
+    existing_expressions = get_field_expressions_for_instances(session, list(instance_ids))
+    for expr in existing_expressions:
+        db_field_expressions_by_instance[expr.component_instance_id].add(expr.field_name)
 
+    incoming_field_expressions_by_instance: dict[UUID, set[str]] = defaultdict(set)
+    for instance in graph_project.component_instances:
+        incoming_field_expressions_by_instance[instance.id] = set()
         for expression in instance.field_expressions:
             if not instance.id:
                 raise ValueError(f"Component instance ID is required for field expressions. Instance: {instance}")
 
             if instance.id not in instance_ids:
                 raise ValueError("Invalid field expression target: component instance " f"{instance.id} not in update")
+
+            incoming_field_expressions_by_instance[instance.id].add(expression.field_name)
 
             try:
                 ast = parse_expression(expression.expression_text)
@@ -239,6 +248,12 @@ async def update_graph_service(
                     field_name=expression.field_name,
                     ref_node=ref_node,
                 )
+
+    for instance_id, incoming_fields in incoming_field_expressions_by_instance.items():
+        if instance_id in db_field_expressions_by_instance:
+            fields_to_delete = db_field_expressions_by_instance[instance_id] - incoming_fields
+            for field_name in fields_to_delete:
+                delete_field_expression(session, instance_id, field_name)
 
     nodes_to_delete = previous_graph_nodes - instance_ids
     if len(nodes_to_delete) > 0:

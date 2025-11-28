@@ -47,7 +47,7 @@ def llm_agent(mock_trace_manager, mock_llm_service):
             name="llm_call", description="llm_call", tool_properties={}, required_tool_properties=[]
         ),
         component_attributes=ComponentAttributes(component_instance_name="Test LLM"),
-        prompt_template="Say {yes} to {name}. User said: {input}",
+        prompt_template="Say {{yes}} to {{name}}. User said: {{input}}",
         capability_resolver=make_capability_resolver(mock_llm_service),
     )
 
@@ -62,7 +62,7 @@ def react_agent(mock_trace_manager, mock_llm_service):
         tool_description=ToolDescription(
             name="react", description="react", tool_properties={}, required_tool_properties=[]
         ),
-        initial_prompt="You are {name}, say {yes}",
+        initial_prompt="You are {{name}}, say {{yes}}",
         agent_tools=[],  # No tools for this test
     )
 
@@ -130,7 +130,7 @@ def test_llm_call_missing_template_var(get_span_mock, agent_calls_mock, mock_llm
             name="llm_call", description="llm_call", tool_properties={}, required_tool_properties=[]
         ),
         component_attributes=ComponentAttributes(component_instance_name="Test LLM"),
-        prompt_template="Say {missing_var}",
+        prompt_template="Say {{missing_var}}",
         capability_resolver=make_capability_resolver(mock_llm_service),
     )
 
@@ -162,7 +162,7 @@ def test_llm_call_with_input_var(get_span_mock, agent_calls_mock, llm_agent):
             name="llm_call", description="llm_call", tool_properties={}, required_tool_properties=[]
         ),
         component_attributes=ComponentAttributes(component_instance_name="Test LLM"),
-        prompt_template="User said: {input}",
+        prompt_template="User said: {{input}}",
         capability_resolver=make_capability_resolver(llm_agent._completion_service),
     )
 
@@ -211,7 +211,7 @@ def test_template_vars_priority(get_span_mock, agent_calls_mock, mock_llm_servic
             name="llm_call", description="llm_call", tool_properties={}, required_tool_properties=[]
         ),
         component_attributes=ComponentAttributes(component_instance_name="Test LLM"),
-        prompt_template="Message: {input}, Template var: {yes}",
+        prompt_template="Message: {{input}}, Template var: {{yes}}",
         capability_resolver=make_capability_resolver(mock_llm_service),
     )
 
@@ -243,7 +243,7 @@ def test_llm_call_with_file_handling(get_span_mock, agent_calls_mock, mock_llm_s
             name="llm_call", description="llm_call", tool_properties={}, required_tool_properties=[]
         ),
         component_attributes=ComponentAttributes(component_instance_name="Test LLM"),
-        prompt_template="Process this file: {input}",
+        prompt_template="Process this file: {{input}}",
         file_content_key="my_file_content",
         file_url_key="my_file_url",
         capability_resolver=make_capability_resolver(mock_llm_service, {"openai:gpt-4o"}),
@@ -311,7 +311,7 @@ def test_llm_call_with_flat_template_vars(get_span_mock, agent_calls_mock, mock_
             name="llm_call", description="llm_call", tool_properties={}, required_tool_properties=[]
         ),
         component_attributes=ComponentAttributes(component_instance_name="LLM Call"),
-        prompt_template="The user's name it's {username}. Greet it.\nAnswer this question: {input}",
+        prompt_template="The user's name it's {{username}}. Greet it.\nAnswer this question: {{input}}",
         file_url_key="cs_book",
         capability_resolver=make_capability_resolver(mock_llm_service, {"openai:gpt-4o"}),
     )
@@ -348,7 +348,7 @@ def test_llm_call_template_vars_from_tool_args(get_span_mock, agent_calls_mock, 
             name="Get_content", description="", tool_properties={}, required_tool_properties=[]
         ),
         component_attributes=ComponentAttributes(component_instance_name="LLM Call"),
-        prompt_template="Respond to {query}. Speak like a {speak}",
+        prompt_template="Respond to {{query}}. Speak like a {{speak}}",
         file_url_key="doc_url",
         capability_resolver=make_capability_resolver(mock_llm_service, {"openai:gpt-4o"}),
     )
@@ -414,7 +414,7 @@ def test_react_agent_two_tool_calls_different_urls(
             name="Get_content", description="", tool_properties={}, required_tool_properties=[]
         ),
         component_attributes=ComponentAttributes(component_instance_name="Get content"),
-        prompt_template="Describe: {input}",
+        prompt_template="Describe: {{input}}",
         file_url_key="file_url",
         capability_resolver=make_capability_resolver(mock_llm_service, {"openai:gpt-4o"}),
     )

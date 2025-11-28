@@ -6,6 +6,7 @@ from engine.agent.types import (
     ToolDescription,
     ComponentAttributes,
 )
+from engine.agent.utils_prompt import fill_prompt_template
 from engine.trace.trace_manager import TraceManager
 from engine.llm_services.llm_service import LLMService
 
@@ -22,7 +23,7 @@ INITIAL_PROMPT = (
     "that you identify are the one the user is interested to load."
     "-If the choices of documents is clear, always call for the tool.\n\n"
     "Here is a description in an ascii tree of the documents available: \n\n"
-    "{documents_tree}\n\n"
+    "{{documents_tree}}\n\n"
 )
 
 
@@ -66,4 +67,8 @@ class DocumentReactLoaderAgent(ReActAgent):
         )
 
     def get_initial_prompt(self, initial_prompt, document_enhanced_llm_call_agent) -> str:
-        return initial_prompt.format(documents_tree=document_enhanced_llm_call_agent.tree_of_documents)
+        return fill_prompt_template(
+            initial_prompt,
+            component_name="DocumentReactLoaderAgent",
+            variables={"documents_tree": document_enhanced_llm_call_agent.tree_of_documents},
+        )

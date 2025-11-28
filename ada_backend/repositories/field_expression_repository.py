@@ -48,3 +48,32 @@ def get_field_expressions_for_instances(
         .filter(db.FieldExpression.component_instance_id.in_(component_instance_ids))
         .all()
     )
+
+
+def delete_field_expressions_for_instance(
+    session: Session,
+    component_instance_id: UUID,
+) -> None:
+    """Delete all field expressions for a component instance"""
+    session.query(db.FieldExpression).filter(
+        db.FieldExpression.component_instance_id == component_instance_id
+    ).delete()
+    session.commit()
+
+
+def delete_field_expression(
+    session: Session,
+    component_instance_id: UUID,
+    field_name: str,
+) -> None:
+    """Delete a specific field expression for a component instance and field name"""
+    deleted_count = (
+        session.query(db.FieldExpression)
+        .filter(
+            db.FieldExpression.component_instance_id == component_instance_id,
+            db.FieldExpression.field_name == field_name,
+        )
+        .delete()
+    )
+    if deleted_count > 0:
+        session.commit()

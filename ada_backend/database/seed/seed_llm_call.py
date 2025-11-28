@@ -67,13 +67,13 @@ def seed_llm_call_components(session: Session):
                 name="prompt_template",
                 type=ParameterType.STRING,
                 nullable=False,
-                default="Answer this question: {input}",
+                default="Answer this question: {{input}}",
                 ui_component=UIComponent.TEXTAREA,
                 ui_component_properties=UIComponentProperties(
                     label="Prompt Template",
                     placeholder=(
-                        "Enter the prompt here. Use {input} (or similar) to insert dynamic content "
-                        "-  the {} braces with a keyword are mandatory."
+                        "Enter the prompt here. Use {{input}} (or similar) to insert dynamic content "
+                        "-  the {{}} braces with a keyword are mandatory."
                     ),
                 ).model_dump(exclude_unset=True, exclude_none=True),
             ),
