@@ -114,7 +114,6 @@ def _validate_and_enrich_payload_for_entrypoint(
             **kwargs,
         )
 
-        # Execution Pydantic Model -> Store as JSON (dict)
         return execution_model
 
     except Exception as e:
@@ -200,7 +199,6 @@ def create_cron_job(
         cron_id=cron_id,
         **kwargs,
     )
-    execution_payload = execution_model.model_dump(mode="json")
 
     cron_job = insert_cron_job(
         session=session,
@@ -210,7 +208,7 @@ def create_cron_job(
         cron_expr=cron_data.cron_expr,
         tz=cron_data.tz,
         entrypoint=cron_data.entrypoint,
-        payload=execution_payload,
+        payload=execution_model.model_dump(mode="json"),
         is_enabled=True,
     )
 
