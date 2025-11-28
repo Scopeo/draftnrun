@@ -109,3 +109,21 @@ class OrganizationLimitNotFound(Exception):
         self.id = id
         self.organization_id = organization_id
         super().__init__(f"Organization limit not found: {id} for organization {organization_id}")
+
+
+class MissingDataSourceError(Exception):
+    """Raised when a component requires a data source but none is configured."""
+
+    def __init__(self, component_name: str | None = None):
+        self.component_name = component_name
+        if component_name:
+            message = (
+                f"The component '{component_name}' requires a data source to be configured. "
+                "Please select a data source in the component settings before running the agent."
+            )
+        else:
+            message = (
+                "A component requires a data source to be configured. "
+                "Please select a data source in the component settings before running the agent."
+            )
+        super().__init__(message)
