@@ -88,7 +88,11 @@ class Start:
                     SpanAttributes.OPENINFERENCE_SPAN_KIND: OpenInferenceSpanKindValues.UNKNOWN.value,
                     SpanAttributes.INPUT_VALUE: serialize_to_json(base, shorten_string=True),
                     SpanAttributes.OUTPUT_VALUE: serialize_to_json(filtered_input, shorten_string=True),
-                    "component_instance_id": str(self.component_attributes.component_instance_id),
+                    "component_instance_id": (
+                        str(self.component_attributes.component_instance_id)
+                        if self.component_attributes.component_instance_id is not None
+                        else None
+                    ),
                 }
             )
             span.set_status(trace_api.StatusCode.OK)
