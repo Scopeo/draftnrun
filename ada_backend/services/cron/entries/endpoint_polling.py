@@ -18,6 +18,7 @@ import httpx
 from ada_backend.repositories.tracker_history_repository import (
     create_tracked_values_bulk,
     get_tracked_values_history,
+    seed_initial_endpoint_history,
 )
 from ada_backend.services.cron.core import BaseUserPayload, BaseExecutionPayload, CronEntrySpec
 from ada_backend.services.cron.entries.agent_inference import AgentInferenceExecutionPayload, AgentInferenceUserPayload
@@ -282,6 +283,30 @@ def validate_registration(
 def validate_execution(execution_payload: EndpointPollingExecutionPayload, **kwargs) -> None:
     """Validate execution payload and return None."""
     validate_execution_agent_inference(execution_payload.workflow_input, **kwargs)
+
+
+def post_registration(execution_payload: EndpointPollingExecutionPayload, **kwargs) -> None:
+    """
+    Post-registration hook: seed history with existing endpoint values.
+
+    This ensures the first execution only processes truly new values,
+    not all values that existed when the cron was created.
+    """
+    seed_values = execution_payload.initial_history_seed
+    if not seed_values:
+        return
+
+    db = kwargs.get("db")
+    if not db:
+        raise ValueError("db missing from context")
+
+    cron_id = kwargs.get("cron_id")
+    if not cron_id:
+        raise ValueError("cron_id missing from context")
+
+    inserted = seed_initial_endpoint_history(db, cron_id, seed_values)
+    if inserted:
+        LOGGER.info(f"Seeded {inserted} existing endpoint values into history for cron {cron_id}")
 
 
 def _extract_nested_path(data: Any, path: str) -> Any:
@@ -729,4 +754,5 @@ spec = CronEntrySpec(
     registration_validator=validate_registration,
     execution_validator=validate_execution,
     executor=execute,
+    post_registration_hook=post_registration,
 )
