@@ -2,7 +2,7 @@
 Core protocols and spec for cron handlers and executors.
 """
 
-from typing import Optional, Protocol, runtime_checkable
+from typing import Callable, Optional, Protocol, runtime_checkable
 from pydantic import BaseModel
 
 
@@ -81,7 +81,7 @@ class CronEntrySpec(BaseModel):
     registration_validator: registration_validator
     execution_validator: execution_validator
     executor: cron_job_executor
-    post_registration_hook: Optional[post_registration_hook] = None
+    post_registration_hook: Optional[Callable[..., None]] = None
 
     class Config:
         arbitrary_types_allowed = True
