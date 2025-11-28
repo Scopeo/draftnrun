@@ -780,35 +780,23 @@ def build_reranker_processor(target_name: str = "reranker") -> ParameterProcesso
     """
 
     def processor(params: dict, constructor_params: dict[str, Any]) -> dict:
-        use_reranker = params.pop("use_reranker", False)
-        try:
-            use_reranker = bool(use_reranker)
-        except ValueError as e:
-            raise ValueError(f"use_reranker must be a boolean, got {use_reranker}: {e}")
+        use_reranker = _pop_and_validate_parameter(params, "use_reranker", bool, "use_reranker must be a boolean")
 
         if not use_reranker:
-            # Remove reranker-specific parameters even when disabled to prevent them from being passed to RAG
-            params.pop("cohere_model", None)
-            params.pop("score_threshold", None)
-            params.pop("num_doc_reranked", None)
-            params.pop("cohere_api_key", None)
-            params[target_name] = None
-            return params
+            return _remove_parameters_from_optional_subcomponents(
+                params,
+                parameters_name=["cohere_model", "score_threshold", "num_doc_reranked", "cohere_api_key"],
+                target_name=target_name,
+            )
 
-        cohere_model = params.pop("cohere_model")
-        score_threshold = params.pop("score_threshold")
-        num_doc_reranked = params.pop("num_doc_reranked")
+        cohere_model = _pop_and_validate_parameter(params, "cohere_model", str, "cohere_model must be a string")
+        score_threshold = _pop_and_validate_parameter(
+            params, "score_threshold", float, "score_threshold must be a float"
+        )
+        num_doc_reranked = _pop_and_validate_parameter(
+            params, "num_doc_reranked", int, "num_doc_reranked must be an integer"
+        )
         cohere_api_key = params.pop("cohere_api_key", None)
-
-        try:
-            score_threshold = float(score_threshold) if score_threshold is not None else 0.0
-        except (ValueError, TypeError) as e:
-            raise ValueError(f"score_threshold must be a float, got {score_threshold}: {e}")
-
-        try:
-            num_doc_reranked = int(num_doc_reranked) if num_doc_reranked is not None else 5
-        except (ValueError, TypeError) as e:
-            raise ValueError(f"num_doc_reranked must be an integer, got {num_doc_reranked}: {e}")
 
         reranker = CohereReranker(
             trace_manager=get_trace_manager(),
@@ -838,25 +826,32 @@ def build_vocabulary_search_processor(target_name: str = "vocabulary_search") ->
     """
 
     def processor(params: dict, constructor_params: dict[str, Any]) -> dict:
-        use_vocabulary_search = params.pop("use_vocabulary_search", False)
-        try:
-            use_vocabulary_search = bool(use_vocabulary_search)
-        except ValueError as e:
-            raise ValueError(f"use_vocabulary_search must be a boolean, got {use_vocabulary_search}: {e}")
+        use_vocabulary_search = _pop_and_validate_parameter(
+            params, "use_vocabulary_search", bool, "use_vocabulary_search must be a boolean"
+        )
 
         if not use_vocabulary_search:
-            # Remove vocabulary search-specific parameters even when disabled
-            params.pop("vocabulary_context_data", None)
-            params.pop("fuzzy_threshold", None)
-            params.pop("fuzzy_matching_candidates", None)
-            params.pop("vocabulary_context_prompt_key", None)
-            params[target_name] = None
-            return params
+            return _remove_parameters_from_optional_subcomponents(
+                params,
+                parameters_name=[
+                    "vocabulary_context_data",
+                    "fuzzy_threshold",
+                    "fuzzy_matching_candidates",
+                    "vocabulary_context_prompt_key",
+                ],
+                target_name=target_name,
+            )
 
         vocabulary_context_data = params.pop("vocabulary_context_data")
-        fuzzy_threshold = params.pop("fuzzy_threshold")
-        fuzzy_matching_candidates = params.pop("fuzzy_matching_candidates")
-        vocabulary_context_prompt_key = params.pop("vocabulary_context_prompt_key")
+        fuzzy_threshold = _pop_and_validate_parameter(
+            params, "fuzzy_threshold", int, "fuzzy_threshold must be an integer"
+        )
+        fuzzy_matching_candidates = _pop_and_validate_parameter(
+            params, "fuzzy_matching_candidates", int, "fuzzy_matching_candidates must be an integer"
+        )
+        vocabulary_context_prompt_key = _pop_and_validate_parameter(
+            params, "vocabulary_context_prompt_key", str, "vocabulary_context_prompt_key must be a string"
+        )
 
         if isinstance(vocabulary_context_data, str):
             try:
@@ -866,16 +861,6 @@ def build_vocabulary_search_processor(target_name: str = "vocabulary_search") ->
 
         if not isinstance(vocabulary_context_data, dict):
             raise ValueError(f"vocabulary_context_data must be a dict, got {type(vocabulary_context_data)}")
-
-        try:
-            fuzzy_threshold = int(fuzzy_threshold)
-        except (ValueError, TypeError) as e:
-            raise ValueError(f"fuzzy_threshold must be an integer, got {fuzzy_threshold}: {e}")
-
-        try:
-            fuzzy_matching_candidates = int(fuzzy_matching_candidates)
-        except (ValueError, TypeError) as e:
-            raise ValueError(f"fuzzy_matching_candidates must be an integer, got {fuzzy_matching_candidates}: {e}")
 
         vocabulary_search = VocabularySearch(
             trace_manager=get_trace_manager(),
@@ -905,24 +890,12 @@ def build_formatter_processor(target_name: str = "formatter") -> ParameterProces
     """
 
     def processor(params: dict, constructor_params: dict[str, Any]) -> dict:
-        use_formatter = params.pop("use_formatter", False)
-        try:
-            use_formatter = bool(use_formatter)
-        except ValueError as e:
-            raise ValueError(f"use_formatter must be a boolean, got {use_formatter}: {e}")
+        use_formatter = _pop_and_validate_parameter(params, "use_formatter", bool, "use_formatter must be a boolean")
 
         if not use_formatter:
-            # Remove formatter-specific parameters even when disabled
-            params.pop("add_sources", None)
-            params[target_name] = None
-            return params
+            return _remove_parameters_from_optional_subcomponents(params, ["add_sources"], target_name)
 
-        add_sources = params.pop("add_sources", "True")
-
-        if isinstance(add_sources, str):
-            add_sources = add_sources.lower() in ("true", "1", "yes")
-        elif not isinstance(add_sources, bool):
-            add_sources = bool(add_sources)
+        add_sources = _pop_and_validate_parameter(params, "add_sources", bool, "add_sources must be a boolean")
 
         formatter = Formatter(
             add_sources=add_sources,
@@ -948,3 +921,48 @@ def compose_processors(*processors: ParameterProcessor) -> ParameterProcessor:
         return result
 
     return composed_processor
+
+
+def _pop_and_validate_parameter(params: dict, parameter_name: str, expected_type: type, error_message: str) -> Any:
+    """
+    Pops a parameter from params dict, validates and converts its type.
+
+    Args:
+        params: Dictionary to pop parameter from
+        parameter_name: Name of the parameter to pop
+        expected_type: Type to convert the parameter to
+        error_message: Error message prefix if conversion fails
+
+    Returns:
+        The converted parameter value
+
+    Raises:
+        ValueError: If conversion fails or parameter is missing
+    """
+    try:
+        parameter_value = params.pop(parameter_name)
+    except KeyError:
+        raise ValueError(f"{error_message}: parameter '{parameter_name}' is required but not found")
+
+    if parameter_value is None:
+        raise ValueError(f"{error_message}: parameter '{parameter_name}' cannot be None")
+
+    # For strings, validate type rather than converting (str() converts None to "None")
+    if expected_type is str:
+        if not isinstance(parameter_value, str):
+            raise ValueError(f"{error_message}, got {type(parameter_value).__name__}: {parameter_value}")
+        return parameter_value
+
+    # For other types, attempt conversion
+    try:
+        parameter_value = expected_type(parameter_value)
+    except ValueError as e:
+        raise ValueError(f"{error_message}, got {parameter_value}: {e}")
+    return parameter_value
+
+
+def _remove_parameters_from_optional_subcomponents(params: dict, parameters_name: list[str], target_name: str) -> dict:
+    for parameter in parameters_name:
+        params.pop(parameter, None)
+    params[target_name] = None
+    return params

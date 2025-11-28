@@ -281,7 +281,7 @@ def seed_rag_components(session: Session):
         id=COMPONENT_VERSION_UUIDS["rag_agent_v3"],
         component_id=COMPONENT_UUIDS["rag_agent"],
         version_tag="0.2.0",
-        description="RAG Agent for retrieving information from knowledge bases with grouped optional components",
+        description="RAG Agent for retrieving information from knowledge bases",
         default_tool_description_id=TOOL_DESCRIPTION_UUIDS["default_rag_tool_description"],
         release_stage=db.ReleaseStage.INTERNAL,
     )
