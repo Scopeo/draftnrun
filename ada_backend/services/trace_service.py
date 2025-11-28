@@ -28,11 +28,11 @@ LOGGER = logging.getLogger(__name__)
 TOKEN_LIMIT = 2000000
 
 
-def get_attributes_with_messages(span_kind: str, row: pd.Series) -> dict:
+def get_attributes_with_messages(span_kind: str, row: pd.Series, filter_to_last_message: bool = False) -> dict:
     input_data = json.loads(row["input_content"]) if row["input_content"] else []
     input = []
     try:
-        if input_data and isinstance(input_data[0], dict) and "messages" in input_data[0]:
+        if filter_to_last_message and input_data and isinstance(input_data[0], dict) and "messages" in input_data[0]:
             messages = input_data[0].get("messages", [])
             user_msgs = [msg for msg in messages if isinstance(msg, dict) and msg.get("role") == "user"]
             if user_msgs:
@@ -76,7 +76,9 @@ def build_span_trees(df: pd.DataFrame) -> List[TraceSpan]:
         span_id = row["span_id"]
         parent_id = row["parent_id"]
         span_kind = row["span_kind"]
-        input, output, documents, tool_info, model_name = get_attributes_with_messages(span_kind, row)
+        input, output, documents, tool_info, model_name = get_attributes_with_messages(
+            span_kind, row, filter_to_last_message=False
+        )
         attributes = row.get("attributes", {})
 
         traces[trace_id][span_id] = TraceSpan(
@@ -126,7 +128,7 @@ def build_root_spans(df: pd.DataFrame) -> List[RootTraceSpan]:
     for _, row in df.iterrows():
         LOGGER.debug(f"Processing row: {row}")
         span_kind = row["span_kind"]
-        input, output, _, _, _ = get_attributes_with_messages(span_kind, row)
+        input, output, _, _, _ = get_attributes_with_messages(span_kind, row, filter_to_last_message=True)
         attributes = row.get("attributes", {})
         root_spans.append(
             RootTraceSpan(
