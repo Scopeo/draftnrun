@@ -17,10 +17,10 @@ from data_ingestion.document.folder_management.folder_management import WebsiteD
 from engine.qdrant_service import QdrantService
 from engine.storage_service.db_service import DBService
 from ingestion_script.ingest_folder_source import (
-    UNIFIED_TABLE_DEFINITION,
     ID_COLUMN_NAME,
-    UNIFIED_QDRANT_SCHEMA,
     TIMESTAMP_COLUMN_NAME,
+    UNIFIED_QDRANT_SCHEMA,
+    UNIFIED_TABLE_DEFINITION,
     sync_chunks_to_qdrant,
 )
 from ingestion_script.utils import CHUNK_ID_COLUMN_NAME, upload_source
@@ -247,7 +247,7 @@ async def upload_website_source(
     db_service.update_table(
         new_df=all_chunks_df,
         table_name=storage_table_name,
-        table_definition=FILE_TABLE_DEFINITION,
+        table_definition=UNIFIED_TABLE_DEFINITION,
         id_column_name=CHUNK_ID_COLUMN_NAME,
         timestamp_column_name=TIMESTAMP_COLUMN_NAME,
         append_mode=True,
