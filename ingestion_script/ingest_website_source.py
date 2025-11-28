@@ -189,7 +189,7 @@ async def upload_website_source(
 
     db_service.create_schema(storage_schema_name)
 
-    all_chunks_dfs = []
+    page_chunks_dfs = []
 
     for page_data in scraped_pages:
         if not page_data.content or not page_data.content.strip():
@@ -223,14 +223,14 @@ async def upload_website_source(
             continue
 
         chunks_df["url"] = page_data.url
-        all_chunks_dfs.append(chunks_df)
+        page_chunks_dfs.append(chunks_df)
         LOGGER.info(f"Created {len(chunks_df)} chunks for {page_data.url}")
 
-    if not all_chunks_dfs:
+    if not page_chunks_dfs:
         LOGGER.warning("No chunks created from any page - nothing to sync")
         return
 
-    all_chunks_df = pd.concat(all_chunks_dfs, ignore_index=True)
+    all_chunks_df = pd.concat(page_chunks_dfs, ignore_index=True)
 
     initial_count = len(all_chunks_df)
     all_chunks_df = all_chunks_df[all_chunks_df["content"].notna() & (all_chunks_df["content"].str.strip() != "")]
