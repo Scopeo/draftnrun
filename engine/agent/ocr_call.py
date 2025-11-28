@@ -41,6 +41,7 @@ class OCRCall(Agent):
                 {
                     SpanAttributes.INPUT_VALUE: serialize_to_json(payload_json, shorten_string=True),
                     SpanAttributes.LLM_MODEL_NAME: self._ocr_service._model_name,
+                    "model_id": str(self._ocr_service._model_id),
                 }
             )
             response = await self._ocr_service.get_ocr_text_async(payload_json)

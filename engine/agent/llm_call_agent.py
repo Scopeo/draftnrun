@@ -226,6 +226,7 @@ class LLMCallAgent(Agent):
                     [{"role": "user", "content": content}], shorten_string=True
                 ),
                 SpanAttributes.LLM_MODEL_NAME: self._completion_service._model_name,
+                "model_id": str(self._completion_service._model_id),
             }
         )
         if output_format:

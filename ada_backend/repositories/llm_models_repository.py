@@ -44,6 +44,10 @@ def get_llm_models_by_capability(session: Session, capabilities: list[str]) -> l
     return query.all()
 
 
+def get_model_id_by_name(session: Session, model_name: str) -> UUID | None:
+    return session.query(db.LLMModel.id).filter(db.LLMModel.model_name == model_name).first().id
+
+
 def create_llm_model(
     session: Session,
     display_name: str,

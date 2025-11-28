@@ -157,6 +157,8 @@ class SQLSpanExporter(SpanExporter):
             project_id = formatted_attributes.pop("project_id", None)
             graph_runner_id = formatted_attributes.pop("graph_runner_id", None)
             tag_name = formatted_attributes.pop("tag_name", None)
+            component_instance_id = formatted_attributes.pop("component_instance_id", None)
+            model_id = formatted_attributes.pop("model_id", None)
             input, output, formatted_attributes = extract_messages_from_attributes(formatted_attributes)
 
             openinference_span_kind = json_span["attributes"].get(SpanAttributes.OPENINFERENCE_SPAN_KIND, "UNKNOWN")
@@ -182,6 +184,8 @@ class SQLSpanExporter(SpanExporter):
                 project_id=project_id,
                 graph_runner_id=graph_runner_id,
                 tag_name=tag_name,
+                component_instance_id=component_instance_id,
+                model_id=model_id,
             )
             ancestors = select(Span.id, Span.parent_id).where(Span.span_id == span_row.parent_id).cte(recursive=True)
             child = ancestors.alias()

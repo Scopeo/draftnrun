@@ -53,6 +53,7 @@ def mock_llm_service():
     mock_llm_service = MagicMock(spec=CompletionService)
     mock_llm_service._model_name = "gpt-4o"
     mock_llm_service._provider = "openai"
+    mock_llm_service._model_id = None
 
     message = create_mock_message()
     response = create_mock_llm_response(message)
@@ -70,6 +71,7 @@ def mock_llm_service_with_tool_calls():
     mock_llm_service = MagicMock(spec=CompletionService)
     mock_llm_service._model_name = "gpt-4o"
     mock_llm_service._provider = "openai"
+    mock_llm_service._model_id = None
 
     tool_call = create_mock_tool_call()
     message = create_mock_message(content="Tool response", tool_calls=[tool_call])
@@ -88,6 +90,7 @@ def mock_llm_service_sequential():
     mock_llm_service = MagicMock(spec=CompletionService)
     mock_llm_service._model_name = "gpt-4o"
     mock_llm_service._provider = "openai"
+    mock_llm_service._model_id = None
 
     # First call: with tool calls
     tool_call = create_mock_tool_call()
