@@ -132,7 +132,7 @@ def llm_call_with_file_content():
     component_attributes = ComponentAttributes(
         component_instance_name="test_component",
     )
-    prompt_template = "{input}"
+    prompt_template = "{{input}}"
     file_content = "{file}"
     return LLMCallAgent(
         trace_manager,
@@ -158,7 +158,7 @@ def llm_call_without_file_content():
 
     tool_description = MagicMock()
     component_attributes = ComponentAttributes(component_instance_name="test_component")
-    prompt_template = "{input}"
+    prompt_template = "{{input}}"
     return LLMCallAgent(
         trace_manager,
         llm_service,

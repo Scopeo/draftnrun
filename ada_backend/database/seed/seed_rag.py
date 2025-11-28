@@ -330,7 +330,7 @@ def seed_rag_components(session: Session):
         ui_component_properties=UIComponentProperties(
             label="Prompt Template",
             placeholder=(
-                "Enter your prompt template here. " "Use {context_str} and {query_str} for variable substitution."
+                "Enter your prompt template here. " "Use {{context_str}} and {{query_str}} for variable substitution."
             ),
         ).model_dump(exclude_unset=True, exclude_none=True),
         is_advanced=False,
@@ -908,7 +908,7 @@ def seed_rag_components(session: Session):
                 ui_component=UIComponent.TEXTFIELD,
                 ui_component_properties=UIComponentProperties(
                     label="Prompt key for vocabulary context injection",
-                    description="Put {retrieved_definitions} in the Synthesizer prompt of your RAG to allow the "
+                    description="Put {{retrieved_definitions}} in the Synthesizer prompt of your RAG to allow the "
                     "injection of retrieved definitions from your Glossary into the Synthesizer prompt "
                     "during a RAG call. This will allow the RAG to answer using your collection "
                     "and Glossary.",
@@ -982,7 +982,7 @@ def seed_rag_components(session: Session):
                     label="Prompt Template",
                     placeholder=(
                         "Enter your prompt template here. "
-                        "Use {context_str} and {query_str} for variable substitution."
+                        "Use {{context_str}} and {{query_str}} for variable substitution."
                     ),
                 ).model_dump(exclude_unset=True, exclude_none=True),
                 is_advanced=False,
@@ -1025,7 +1025,7 @@ def seed_rag_components(session: Session):
                     label="Prompt Template",
                     placeholder=(
                         "Enter your prompt template here. "
-                        "Use {context_str} and {query_str} for variable substitution."
+                        "Use {{context_str}} and {{query_str}} for variable substitution."
                     ),
                 ).model_dump(exclude_unset=True, exclude_none=True),
                 is_advanced=False,
@@ -1065,7 +1065,7 @@ def seed_rag_components(session: Session):
                 ui_component=UIComponent.TEXTAREA,
                 ui_component_properties=UIComponentProperties(
                     label="Prompt Template",
-                    placeholder="Enter your prompt template here. Use {input} for variable substitution.",
+                    placeholder="Enter your prompt template here. Use {{input}} for variable substitution.",
                 ).model_dump(exclude_unset=True, exclude_none=True),
                 is_advanced=False,
             ),

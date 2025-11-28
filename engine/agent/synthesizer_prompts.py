@@ -62,9 +62,9 @@ DEFAULT_INSTRUCTIONS_FEW_SHOT_LEARNING = (
 END_QA_INSTRUCTIONS = (
     "Below are several numbered sources of information:"
     "\n------\n"
-    "{context_str}"
+    "{{context_str}}"
     "\n------\n"
-    "Query: {query_str}\n"
+    "Query: {{query_str}}\n"
     "Answer:"
 )
 
@@ -155,12 +155,12 @@ VOCABULARY_RAG_FEW_SHOT_LEARNING = (
 END_QA_VOCABULARY_INSTRUCTIONS = (
     "Here are the different definitions from the glossary:"
     "\n------\n"
-    "{vocabulary_context_str}"
+    "{{vocabulary_context_str}}"
     "Below are several numbered sources of information:"
     "\n------\n"
-    "{context_str}"
+    "{{context_str}}"
     "\n------\n"
-    "Query: {query_str}\n"
+    "Query: {{query_str}}\n"
     "Answer:"
 )
 
@@ -174,10 +174,10 @@ give the partial answer and say that you need more information.
 If the question is ambiguous, say that you need more information to answer the question.
 
 Here are the documents that can help you answer the question:
-{context_str}
+{{context_str}}
 
 Here is the question:
-{query_str}
+{{query_str}}
 """
 
 

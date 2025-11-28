@@ -25,7 +25,9 @@ def parse_expression(expression_text: str) -> ExpressionNode:
 
     # Early malformed detection: unbalanced @{{ and }} anywhere in the string
     open_count = expression_text.count("@{{")
-    close_count = expression_text.count("}}")
+    total_close = expression_text.count("}}")
+    template_var_count = len(re.findall(r"(?<!@)\{\{[^}]*\}\}", expression_text))
+    close_count = total_close - template_var_count
     if open_count != close_count:
         raise FieldExpressionParseError("Unbalanced reference delimiters '@{{' and '}}'")
 

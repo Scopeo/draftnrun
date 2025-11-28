@@ -66,7 +66,7 @@ def llm_call_with_output_format():
     component_attributes = ComponentAttributes(
         component_instance_name="test_component",
     )
-    prompt_template = "{input}"
+    prompt_template = "{{input}}"
     output_format = load_str_to_json(
         """{
         "name": "weather_data",

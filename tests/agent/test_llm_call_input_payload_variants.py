@@ -38,7 +38,7 @@ def test_file_url_from_api_input(get_span_mock, agent_calls_mock):
             name="llm_call", description="llm_call", tool_properties={}, required_tool_properties=[]
         ),
         component_attributes=ComponentAttributes(component_instance_name="LLM Call"),
-        prompt_template="Process this file: {input}",
+        prompt_template="Process this file: {{input}}",
         file_url_key="document_url",
         capability_resolver=make_capability_resolver(llm_service, {"openai:gpt-4o"}),
     )
@@ -88,7 +88,7 @@ def test_file_content_from_api_input(get_span_mock, agent_calls_mock):
             name="llm_call", description="llm_call", tool_properties={}, required_tool_properties=[]
         ),
         component_attributes=ComponentAttributes(component_instance_name="LLM Call"),
-        prompt_template="Process this file: {input}",
+        prompt_template="Process this file: {{input}}",
         file_content_key="document_file",
         capability_resolver=make_capability_resolver(llm_service, {"openai:gpt-4o"}),
     )
@@ -148,7 +148,7 @@ def test_template_vars_from_api_input(get_span_mock, agent_calls_mock):
             name="llm_call", description="llm_call", tool_properties={}, required_tool_properties=[]
         ),
         component_attributes=ComponentAttributes(component_instance_name="LLM Call"),
-        prompt_template="Hello {username}, answer this: {input}. Use style: {style}",
+        prompt_template="Hello {{username}}, answer this: {{input}}. Use style: {{style}}",
         capability_resolver=make_capability_resolver(llm_service, {"openai:gpt-4o"}),
     )
 
@@ -292,7 +292,7 @@ def test_template_vars_as_tool_property(get_span_mock, agent_calls_mock):
             required_tool_properties=["username", "tone", "question"],
         ),
         component_attributes=ComponentAttributes(component_instance_name="Generate Response"),
-        prompt_template="Hello {username}. Answer this question: {question}. Use a {tone} tone.",
+        prompt_template="Hello {{username}}. Answer this question: {{question}}. Use a {{tone}} tone.",
         capability_resolver=make_capability_resolver(llm_service, {"openai:gpt-4o"}),
     )
 

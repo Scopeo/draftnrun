@@ -169,7 +169,8 @@ def seed_smart_rag_components(session: Session):
                 ui_component=UIComponent.TEXTAREA,
                 ui_component_properties=UIComponentProperties(
                     label="Initial Prompt for the agent",
-                    placeholder="Enter the initial prompt for the agent ({document_tree} is mandatory) on the prompt",
+                    placeholder="Enter the initial prompt for the agent "
+                    "({{document_tree}} is mandatory) on the prompt",
                 ).model_dump(exclude_unset=True, exclude_none=True),
                 is_advanced=False,
             ),
