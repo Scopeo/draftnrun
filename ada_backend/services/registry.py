@@ -333,6 +333,10 @@ def create_factory_registry() -> FactoryRegistry:
         component_version_id=COMPONENT_VERSION_UUIDS["rag_agent_v2"],
         factory=AgentFactory(
             entity_class=RAG,
+            parameter_processors=[
+                build_retriever_processor(),
+                build_synthesizer_processor(),
+            ],
         ),
     )
     registry.register(
