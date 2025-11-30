@@ -46,6 +46,7 @@ class APICallTool(Agent):
         method: str = "GET",
         headers: Optional[Union[Dict[str, Any], str]] = None,
         timeout: int = 30,
+        allowed_domains: Optional[str] = None,
         fixed_parameters: Optional[Union[Dict[str, Any], str]] = None,
         tool_description: ToolDescription = API_CALL_TOOL_DESCRIPTION,
     ) -> None:
@@ -62,6 +63,7 @@ class APICallTool(Agent):
         else:
             self.headers = headers or {}
         self.timeout = timeout
+        self.allowed_domains = allowed_domains
         if isinstance(fixed_parameters, str):
             self.fixed_parameters = load_str_to_json(fixed_parameters) if fixed_parameters else {}
         else:
