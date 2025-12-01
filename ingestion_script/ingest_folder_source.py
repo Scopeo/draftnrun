@@ -150,6 +150,10 @@ def prepare_df_for_qdrant(df):
     Reads metadata from JSONB column and flattens it into separate columns for Qdrant.
     """
     df = df.copy()
+    if SOURCE_ID_COLUMN_NAME in df.columns:
+        df[SOURCE_ID_COLUMN_NAME] = df[SOURCE_ID_COLUMN_NAME].apply(
+            lambda value: str(value) if isinstance(value, UUID) else value
+        )
     if METADATA_COLUMN_NAME in df.columns:
 
         def parse_and_flatten_metadata(row):
