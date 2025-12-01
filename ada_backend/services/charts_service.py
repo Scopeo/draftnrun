@@ -12,7 +12,7 @@ from ada_backend.services.metrics.utils import (
     query_trace_duration,
     calculate_calls_per_day,
     count_conversations_per_day,
-    query_daily_credits,
+    query_daily_llm_credits,
 )
 from settings import settings
 
@@ -221,7 +221,7 @@ def get_llm_credits_usage_chart(project_id: UUID, duration_days: int, call_type:
         pd.date_range(start=start_date.date(), end=current_date.date(), freq="D", tz=timezone.utc), columns=["date"]
     )
 
-    df = query_daily_credits(project_id, duration_days, call_type)
+    df = query_daily_llm_credits(project_id, duration_days, call_type)
 
     if df.empty:
         all_dates_df["date_label"] = pd.to_datetime(all_dates_df["date"]).dt.strftime("%b %d")
