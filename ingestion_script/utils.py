@@ -1,3 +1,4 @@
+import json
 import logging
 import inspect
 from typing import Optional
@@ -5,6 +6,8 @@ from uuid import UUID
 from datetime import datetime, timezone
 import uuid
 import requests
+
+import pandas as pd
 
 from ada_backend.schemas.ingestion_task_schema import IngestionTaskUpdate
 from ada_backend.database import models as db
@@ -19,6 +22,8 @@ from settings import settings
 
 LOGGER = logging.getLogger(__name__)
 
+TIMESTAMP_COLUMN_NAME = "last_edited_ts"
+
 # Default column names used across database ingestion
 CHUNK_ID_COLUMN_NAME = "chunk_id"
 CHUNK_COLUMN_NAME = "content"
@@ -29,6 +34,80 @@ SOURCE_ID_COLUMN_NAME = "source_id"
 METADATA_COLUMN_NAME = "metadata"  # JSONB column for source-specific metadata
 
 DEFAULT_EMBEDDING_MODEL = "openai:text-embedding-3-large"
+
+# Columns required for the unified database table
+UNIFIED_TABLE_COLUMNS = [
+    CHUNK_ID_COLUMN_NAME,
+    SOURCE_ID_COLUMN_NAME,
+    SOURCE_IDENTIFIER_COLUMN_NAME,
+    CHUNK_COLUMN_NAME,
+    TIMESTAMP_COLUMN_NAME,
+    METADATA_COLUMN_NAME,
+]
+
+
+def _build_flattened_metadata(row) -> str:
+    """Build flattened metadata by merging metadata dict into top level."""
+    metadata_dict = {
+        "document_title": row.get("document_title"),
+        "url": row.get("url"),
+    }
+
+    # Flatten the nested metadata dict
+    metadata_value = row.get("metadata", {})
+    if isinstance(metadata_value, str):
+        try:
+            metadata_value = json.loads(metadata_value)
+        except (json.JSONDecodeError, TypeError):
+            metadata_value = {}
+
+    if isinstance(metadata_value, dict):
+        metadata_dict.update(metadata_value)
+
+    return json.dumps(metadata_dict, ensure_ascii=False)
+
+
+def transform_chunks_df_for_unified_table(
+    chunks_df: pd.DataFrame,
+    source_id: UUID,
+) -> pd.DataFrame:
+    """
+    Transform a raw chunks DataFrame into the unified table schema format.
+
+    This function:
+    1. Builds flattened metadata from document_title, url, and existing metadata
+    2. Renames columns to match unified table schema
+    3. Adds source_id column
+    4. Returns only the required columns for the database
+
+    Args:
+        chunks_df: Raw DataFrame from document chunking (with columns like file_id,
+                   chunk_id, content, document_title, url, metadata, etc.)
+        source_id: UUID of the source to associate with all chunks
+
+    Returns:
+        DataFrame with only the unified table columns ready for database insertion
+    """
+    df = chunks_df.copy()
+
+    # Build flattened metadata JSON from document_title, url, and existing metadata
+    df[METADATA_COLUMN_NAME] = df.apply(_build_flattened_metadata, axis=1)
+
+    # Rename columns to match unified table schema
+    df = df.rename(
+        columns={
+            "chunk_id": CHUNK_ID_COLUMN_NAME,
+            "file_id": SOURCE_IDENTIFIER_COLUMN_NAME,
+            "content": CHUNK_COLUMN_NAME,
+            "last_edited_ts": TIMESTAMP_COLUMN_NAME,
+        }
+    )
+
+    # Add source_id column
+    df[SOURCE_ID_COLUMN_NAME] = str(source_id)
+
+    # Select only the required columns for the database
+    return df[UNIFIED_TABLE_COLUMNS]
 
 
 def get_sanitize_names(
@@ -190,6 +269,7 @@ async def upload_source(
             "storage_schema_name",
             "storage_table_name",
             "qdrant_collection_name",
+            "source_id",
         ],
     )
     if settings.INGESTION_DB_URL is None:
@@ -225,22 +305,6 @@ async def upload_source(
         default_collection_schema=qdrant_schema,
     )
 
-    if not update_existing and db_service.schema_exists(schema_name=schema_name):
-        if db_service.table_exists(table_name=table_name, schema_name=schema_name):
-            LOGGER.error(f"Source {source_name} already exists db in {schema_name}")
-            update_ingestion_task(
-                organization_id=organization_id,
-                ingestion_task=ingestion_task,
-            )
-            raise ValueError(f"Source '{source_name}' already exists in database schema '{schema_name}'")
-    elif not update_existing and await qdrant_service.collection_exists_async(qdrant_collection_name):
-        LOGGER.error(f"Source {source_name} already exists in Qdrant")
-        update_ingestion_task(
-            organization_id=organization_id,
-            ingestion_task=ingestion_task,
-        )
-        raise ValueError(f"Source '{source_name}' already exists in Qdrant collection '{qdrant_collection_name}'")
-
     try:
         await ingestion_function(
             db_service=db_service,
@@ -249,6 +313,7 @@ async def upload_source(
             storage_table_name=table_name,
             qdrant_collection_name=qdrant_collection_name,
             update_existing=update_existing,
+            source_id=result_source_id,
         )
     except Exception as e:
         LOGGER.error(f"Failed to get data from the database: {str(e)}")

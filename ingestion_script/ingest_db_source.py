@@ -4,7 +4,7 @@ from typing import Optional
 import json
 
 import pandas as pd
-from sqlalchemy import UUID
+from uuid import UUID
 from llama_index.core.node_parser import SentenceSplitter
 
 from engine.qdrant_service import QdrantService
@@ -147,6 +147,7 @@ async def upload_db_source(
     storage_schema_name: str,
     storage_table_name: str,
     qdrant_collection_name: str,
+    source_id: UUID,
     source_db_url: str,
     source_table_name: str,
     id_column_name: str,
@@ -160,7 +161,6 @@ async def upload_db_source(
     update_existing: bool = False,
     query_filter: Optional[str] = None,
     timestamp_filter: Optional[str] = None,
-    source_id: Optional[str] = None,
 ):
     resolved_timestamp_filter = resolve_sql_timestamp_filter(timestamp_filter)
 
@@ -192,8 +192,7 @@ async def upload_db_source(
         sql_query_filter=combined_filter_sql,
     )
 
-    if source_id:
-        df[SOURCE_ID_COLUMN_NAME] = str(source_id)
+    df[SOURCE_ID_COLUMN_NAME] = str(source_id)
 
     db_service.update_table(
         new_df=df,
@@ -266,7 +265,6 @@ async def ingestion_database(
             chunk_overlap=chunk_overlap,
             query_filter=query_filter,
             timestamp_filter=timestamp_filter,
-            source_id=str(source_id) if source_id else None,
         ),
         attributes=source_attributes,
         source_id=source_id,

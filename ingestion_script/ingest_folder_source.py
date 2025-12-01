@@ -1,8 +1,8 @@
+import json
 import logging
 from uuid import UUID
 from typing import Optional
 import uuid
-import json
 
 import pandas as pd
 
@@ -43,6 +43,8 @@ from ingestion_script.utils import (
     CHUNK_COLUMN_NAME,
     SOURCE_IDENTIFIER_COLUMN_NAME,
     URL_COLUMN_NAME,
+    TIMESTAMP_COLUMN_NAME,
+    transform_chunks_df_for_unified_table,
     ORDER_COLUMN_NAME,
 )
 from settings import settings
@@ -460,51 +462,8 @@ async def _ingest_folder_source(
             if "url" in unified_chunks_df.columns:
                 unified_chunks_df["url"] = unified_chunks_df["url"].apply(sanitize_for_json)
 
-            def build_flattened_metadata(row):
-                """Build flattened metadata by merging metadata dict into top level."""
-                metadata_dict = {
-                    "document_title": row.get("document_title"),
-                    "url": row.get("url"),
-                }
-
-                # Flatten the nested metadata dict
-                metadata_value = row.get("metadata", {})
-                if isinstance(metadata_value, str):
-                    try:
-                        metadata_value = json.loads(metadata_value)
-                    except (json.JSONDecodeError, TypeError):
-                        metadata_value = {}
-
-                if isinstance(metadata_value, dict):
-                    metadata_dict.update(metadata_value)
-
-                return json.dumps(metadata_dict, ensure_ascii=False)
-
-            unified_chunks_df[METADATA_COLUMN_NAME] = unified_chunks_df.apply(
-                build_flattened_metadata,
-                axis=1,
-            )
-
-            unified_chunks_df = unified_chunks_df.rename(
-                columns={
-                    "chunk_id": CHUNK_ID_COLUMN_NAME,
-                    "file_id": SOURCE_IDENTIFIER_COLUMN_NAME,
-                    "content": CHUNK_COLUMN_NAME,
-                    "last_edited_ts": TIMESTAMP_COLUMN_NAME,
-                }
-            )
-            unified_chunks_df[SOURCE_ID_COLUMN_NAME] = str(source_id)
-
-            unified_chunks_df_for_db = unified_chunks_df[
-                [
-                    CHUNK_ID_COLUMN_NAME,
-                    SOURCE_ID_COLUMN_NAME,
-                    SOURCE_IDENTIFIER_COLUMN_NAME,
-                    CHUNK_COLUMN_NAME,
-                    TIMESTAMP_COLUMN_NAME,
-                    METADATA_COLUMN_NAME,
-                ]
-            ]
+            # Transform to unified table format
+            unified_chunks_df_for_db = transform_chunks_df_for_unified_table(unified_chunks_df, source_id)
 
             LOGGER.info(f"Sync chunks to db table {db_table_name}")
             db_service.update_table(
