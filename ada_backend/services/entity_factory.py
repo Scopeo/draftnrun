@@ -701,7 +701,7 @@ def build_retriever_processor(target_name: str = "retriever") -> ParameterProces
             default_penalty_rate=default_penalty_rate,
             metadata_date_key=metadata_date_key,
             max_retrieved_chunks_after_penalty=max_retrieved_chunks_after_penalty,
-            component_attributes=params.pop("component_attributes", None),
+            component_attributes=None,
         )
 
         params[target_name] = retriever
@@ -758,7 +758,7 @@ def build_synthesizer_processor(target_name: str = "synthesizer") -> ParameterPr
             completion_service=completion_service,
             trace_manager=get_trace_manager(),
             prompt_template=prompt_template,
-            component_attributes=params.pop("component_attributes", None),
+            component_attributes=None,
         )
 
         params[target_name] = synthesizer
@@ -804,7 +804,7 @@ def build_reranker_processor(target_name: str = "reranker") -> ParameterProcesso
             cohere_model=cohere_model,
             num_doc_reranked=num_doc_reranked,
             score_threshold=score_threshold,
-            component_attributes=params.pop("component_attributes", None),
+            component_attributes=None,
         )
 
         params[target_name] = reranker
@@ -868,7 +868,7 @@ def build_vocabulary_search_processor(target_name: str = "vocabulary_search") ->
             fuzzy_threshold=fuzzy_threshold,
             fuzzy_matching_candidates=fuzzy_matching_candidates,
             vocabulary_context_prompt_key=vocabulary_context_prompt_key,
-            component_attributes=params.pop("component_attributes", None),
+            component_attributes=None,
         )
 
         params[target_name] = vocabulary_search
@@ -899,7 +899,7 @@ def build_formatter_processor(target_name: str = "formatter") -> ParameterProces
 
         formatter = Formatter(
             add_sources=add_sources,
-            component_attributes=params.pop("component_attributes", None),
+            component_attributes=None,
         )
 
         params[target_name] = formatter
