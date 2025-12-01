@@ -13,7 +13,7 @@ from engine.trace.sql_exporter import get_session_trace
 LOGGER = logging.getLogger(__name__)
 
 
-def query_daily_credits(
+def query_daily_llm_credits(
     project_id: UUID,
     duration_days: int,
     call_type: CallType | None = None,
