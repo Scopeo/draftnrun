@@ -18,6 +18,7 @@ import httpx
 from ada_backend.repositories.tracker_history_repository import (
     create_tracked_values_bulk,
     get_tracked_values_history,
+    seed_initial_endpoint_history,
 )
 from ada_backend.services.cron.core import BaseUserPayload, BaseExecutionPayload, CronEntrySpec
 from ada_backend.services.cron.entries.agent_inference import AgentInferenceExecutionPayload, AgentInferenceUserPayload
@@ -138,6 +139,7 @@ class EndpointPollingExecutionPayload(BaseExecutionPayload):
     timeout: int
     workflow_input: AgentInferenceExecutionPayload
     workflow_input_template: Optional[str] = None
+    initial_history_seed: Optional[list[str]] = Field(default=None, exclude=True)
 
 
 def validate_registration(
@@ -160,6 +162,8 @@ def validate_registration(
         **kwargs,
     )
 
+    initial_tracked_values: set[str] = set()
+
     # Validate endpoint accessibility and ID extraction
     LOGGER.info(f"Validating endpoint polling configuration: {user_input.endpoint_url}")
     try:
@@ -181,6 +185,7 @@ def validate_registration(
 
         try:
             extracted_ids = _extract_ids_from_response(endpoint_data, user_input.tracking_field_path)
+            initial_tracked_values = set(extracted_ids)
             if not extracted_ids:
                 LOGGER.warning(
                     f"Endpoint {user_input.endpoint_url} returned no IDs "
@@ -227,6 +232,7 @@ def validate_registration(
                 )
 
                 matching_ids = _filter_matching_items(items_with_filter_values, effective_filter_fields)
+                initial_tracked_values = set(matching_ids)
                 matching_count = len(matching_ids)
 
                 LOGGER.info(
@@ -270,12 +276,37 @@ def validate_registration(
         timeout=user_input.timeout,
         workflow_input=agent_inference_execution_payload,
         workflow_input_template=user_input.workflow_input_template,
+        initial_history_seed=sorted(initial_tracked_values) if initial_tracked_values else None,
     )
 
 
 def validate_execution(execution_payload: EndpointPollingExecutionPayload, **kwargs) -> None:
     """Validate execution payload and return None."""
     validate_execution_agent_inference(execution_payload.workflow_input, **kwargs)
+
+
+def post_registration(execution_payload: EndpointPollingExecutionPayload, **kwargs) -> None:
+    """
+    Post-registration hook: seed history with existing endpoint values.
+
+    This ensures the first execution only processes truly new values,
+    not all values that existed when the cron was created.
+    """
+    seed_values = execution_payload.initial_history_seed
+    if not seed_values:
+        return
+
+    db = kwargs.get("db")
+    if not db:
+        raise ValueError("db missing from context")
+
+    cron_id = kwargs.get("cron_id")
+    if not cron_id:
+        raise ValueError("cron_id missing from context")
+
+    inserted = seed_initial_endpoint_history(db, cron_id, seed_values)
+    if inserted:
+        LOGGER.info(f"Seeded {inserted} existing endpoint values into history for cron {cron_id}")
 
 
 def _extract_nested_path(data: Any, path: str) -> Any:
@@ -723,4 +754,5 @@ spec = CronEntrySpec(
     registration_validator=validate_registration,
     execution_validator=validate_execution,
     executor=execute,
+    post_registration_hook=post_registration,
 )

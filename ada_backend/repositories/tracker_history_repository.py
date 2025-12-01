@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Iterable
 from uuid import UUID
 
 from sqlalchemy.orm import Session
@@ -45,6 +46,35 @@ def create_tracked_values_bulk(
     ]
     session.bulk_save_objects(new_records)
     session.commit()
+
+
+def seed_initial_endpoint_history(session: Session, cron_id: UUID, tracked_values: Iterable[str]) -> int:
+    """
+    Seed existing endpoint values for a cron job so that the first execution only processes new values.
+
+    Returns the number of inserted records.
+    """
+    tracked_values = {str(value) for value in tracked_values if value}
+    if not tracked_values:
+        return 0
+
+    existing_history = (
+        session.query(EndpointPollingHistory.id).filter(EndpointPollingHistory.cron_id == cron_id).limit(1).first()
+    )
+    if existing_history:
+        return 0
+
+    records = [
+        EndpointPollingHistory(
+            cron_id=cron_id,
+            tracked_value=value,
+        )
+        for value in tracked_values
+    ]
+
+    session.add_all(records)
+    session.commit()
+    return len(records)
 
 
 def delete_tracked_values_history(session: Session, cron_id: UUID, tracked_values: list[UUID]) -> None:
