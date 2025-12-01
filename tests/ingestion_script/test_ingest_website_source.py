@@ -1,5 +1,6 @@
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
+from uuid import UUID
 
 import pandas as pd
 import pytest
@@ -82,8 +83,12 @@ async def test_upload_website_source_syncs_scraped_pages(monkeypatch):
     chunk_df = pd.DataFrame(
         {
             "chunk_id": ["chunk-1"],
+            "file_id": ["file-1"],
             "content": ["chunk content"],
             "url": ["https://example.com/page"],
+            "document_title": ["Example page"],
+            "last_edited_ts": ["2025-01-01T00:00:00Z"],
+            "metadata": ["{}"],
         }
     )
     chunks_mock = AsyncMock(return_value=chunk_df)
@@ -107,6 +112,7 @@ async def test_upload_website_source_syncs_scraped_pages(monkeypatch):
 
     db_service = MagicMock()
     qdrant_service = MagicMock()
+    test_source_id = UUID("12345678-1234-5678-1234-567812345678")
 
     await upload_website_source(
         db_service=db_service,
@@ -114,6 +120,7 @@ async def test_upload_website_source_syncs_scraped_pages(monkeypatch):
         storage_schema_name="web_schema",
         storage_table_name="web_table",
         qdrant_collection_name="web_collection",
+        source_id=test_source_id,
         url="https://example.com",
         follow_links=True,
         max_depth=3,
@@ -162,4 +169,5 @@ async def test_upload_website_source_syncs_scraped_pages(monkeypatch):
         "web_collection",
         db_service,
         qdrant_service,
+        source_id=str(test_source_id),
     )

@@ -23,7 +23,10 @@ from ingestion_script.ingest_folder_source import (
     UNIFIED_TABLE_DEFINITION,
     sync_chunks_to_qdrant,
 )
-from ingestion_script.utils import upload_source
+from ingestion_script.utils import (
+    upload_source,
+    transform_chunks_df_for_unified_table,
+)
 from settings import settings
 
 LOGGER = logging.getLogger(__name__)
@@ -138,6 +141,7 @@ async def upload_website_source(
     storage_schema_name: str,
     storage_table_name: str,
     qdrant_collection_name: str,
+    source_id: UUID,
     url: str,
     follow_links: bool = True,
     max_depth: int = 1,
@@ -244,8 +248,10 @@ async def upload_website_source(
 
     LOGGER.info(f"Syncing {len(all_chunks_df)} total chunks to db table {storage_table_name}")
 
+    all_chunks_df_for_db = transform_chunks_df_for_unified_table(all_chunks_df, source_id)
+
     db_service.update_table(
-        new_df=all_chunks_df,
+        new_df=all_chunks_df_for_db,
         table_name=storage_table_name,
         table_definition=UNIFIED_TABLE_DEFINITION,
         id_column_name=ID_COLUMN_NAME,
@@ -255,7 +261,12 @@ async def upload_website_source(
     )
 
     await sync_chunks_to_qdrant(
-        storage_schema_name, storage_table_name, qdrant_collection_name, db_service, qdrant_service
+        storage_schema_name,
+        storage_table_name,
+        qdrant_collection_name,
+        db_service,
+        qdrant_service,
+        source_id=str(source_id),
     )
 
 
