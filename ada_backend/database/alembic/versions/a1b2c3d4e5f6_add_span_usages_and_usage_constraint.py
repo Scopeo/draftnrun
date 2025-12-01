@@ -35,13 +35,10 @@ def upgrade() -> None:
             ondelete="CASCADE",
         ),
         sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("span_id"),
         schema="credits",
     )
-    op.create_index(op.f("ix_credits_span_usages_id"), "span_usages", ["id"], unique=False, schema="credits")
-    op.create_index(
-        op.f("ix_credits_span_usages_span_id"), "span_usages", ["span_id"], unique=False, schema="credits"
-    )
+    # Create unique index on span_id (matches model: unique=True, index=True)
+    op.create_index(op.f("ix_credits_span_usages_span_id"), "span_usages", ["span_id"], unique=True, schema="credits")
 
     # Add unique constraint to usages table
     op.create_unique_constraint(
@@ -56,7 +53,6 @@ def downgrade() -> None:
     # Drop unique constraint from usages
     op.drop_constraint("uq_usage_project_year_month", "usages", schema="credits", type_="unique")
 
-    # Drop span_usages table
+    # Drop span_usages table (indexes are dropped automatically with table)
     op.drop_index(op.f("ix_credits_span_usages_span_id"), table_name="span_usages", schema="credits")
-    op.drop_index(op.f("ix_credits_span_usages_id"), table_name="span_usages", schema="credits")
     op.drop_table("span_usages", schema="credits")
