@@ -434,15 +434,11 @@ async def _ingest_folder_source(
                 if value is None:
                     return None
                 if isinstance(value, str):
-                    # Try to decode/encode to remove invalid UTF-8 sequences
                     try:
-                        # If it's already a JSON string, parse it first
                         try:
                             parsed = json.loads(value)
                             return parsed
                         except (json.JSONDecodeError, TypeError):
-                            # Not a JSON string, sanitize the string itself
-                            # Remove or replace invalid UTF-8 sequences
                             return value.encode("utf-8", errors="replace").decode("utf-8")
                     except Exception:
                         return str(value).encode("utf-8", errors="replace").decode("utf-8")
