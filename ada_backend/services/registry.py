@@ -189,6 +189,25 @@ def create_factory_registry() -> FactoryRegistry:
         ),
         build_ocr_service_processor(),
     )
+    synthesizer_processor = compose_processors(
+        build_param_name_translator(
+            {
+                "api_key": "llm_api_key",
+            }
+        ),
+        build_synthesizer_processor(),
+    )
+    retriever_processor = compose_processors(
+        build_param_name_translator(
+            {
+                "api_key": "llm_api_key",
+            }
+        ),
+        build_retriever_processor(),
+    )
+    reranker_processor = build_reranker_processor()
+    vocabulary_search_processor = build_vocabulary_search_processor()
+    formatter_processor = build_formatter_processor()
     db_service_processor = build_db_service_processor()
     llm_capability_resolver_processor = build_llm_capability_resolver_processor()
 
@@ -334,8 +353,8 @@ def create_factory_registry() -> FactoryRegistry:
         factory=AgentFactory(
             entity_class=RAG,
             parameter_processors=[
-                build_retriever_processor(),
-                build_synthesizer_processor(),
+                retriever_processor,
+                synthesizer_processor,
             ],
         ),
     )
@@ -344,11 +363,11 @@ def create_factory_registry() -> FactoryRegistry:
         factory=AgentFactory(
             entity_class=RAG,
             parameter_processors=[
-                build_retriever_processor(),
-                build_synthesizer_processor(),
-                build_reranker_processor(),
-                build_vocabulary_search_processor(),
-                build_formatter_processor(),
+                retriever_processor,
+                synthesizer_processor,
+                reranker_processor,
+                vocabulary_search_processor,
+                formatter_processor,
             ],
         ),
     )
