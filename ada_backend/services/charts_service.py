@@ -13,7 +13,6 @@ from ada_backend.services.metrics.utils import (
     calculate_calls_per_day,
     count_conversations_per_day,
     query_daily_credits,
-    query_daily_component_credits,
 )
 from settings import settings
 
@@ -267,55 +266,6 @@ def get_llm_credits_usage_chart(project_id: UUID, duration_days: int, call_type:
     )
 
 
-def get_component_credits_usage_chart(
-    project_id: UUID, duration_days: int, call_type: CallType | None = None
-) -> Chart:
-    """Generate a bar chart showing daily component credits usage based on duration (seconds)."""
-    current_date = datetime.now(tz=timezone.utc)
-    start_date = current_date - timedelta(days=duration_days)
-    all_dates_df = pd.DataFrame(
-        pd.date_range(start=start_date.date(), end=current_date.date(), freq="D", tz=timezone.utc), columns=["date"]
-    )
-
-    df = query_daily_component_credits(project_id, duration_days, call_type)
-
-    if df.empty:
-        all_dates_df["date_label"] = pd.to_datetime(all_dates_df["date"]).dt.strftime("%b %d")
-        return Chart(
-            id=f"component_credits_usage_{project_id}",
-            type=ChartType.BAR,
-            title="Daily Component Credits Usage (Per Second)",
-            data=ChartData(
-                labels=all_dates_df["date_label"].tolist(),
-                datasets=[
-                    Dataset(label="Component Credits", data=[0] * len(all_dates_df), backgroundColor="#9B59B6"),
-                ],
-            ),
-        )
-
-    # Convert date column and merge with all dates
-    df["date"] = pd.to_datetime(df["date"]).dt.tz_localize("UTC")
-    daily_usage = pd.merge(all_dates_df, df, on="date", how="left").fillna(0)
-    daily_usage = daily_usage.sort_values(by="date", ascending=True)
-    daily_usage["date_label"] = pd.to_datetime(daily_usage["date"]).dt.strftime("%b %d")
-
-    return Chart(
-        id=f"component_credits_usage_{project_id}",
-        type=ChartType.BAR,
-        title="Daily Component Credits Usage (Per Second)",
-        data=ChartData(
-            labels=daily_usage["date_label"].tolist(),
-            datasets=[
-                Dataset(
-                    label="Component Credits",
-                    data=daily_usage["component_credits"].round(2).tolist(),
-                    backgroundColor="#9B59B6",
-                ),
-            ],
-        ),
-    )
-
-
 async def get_charts_by_project(
     project_id: UUID, duration_days: int, call_type: CallType | None = None
 ) -> ChartsResponse:
@@ -326,7 +276,6 @@ async def get_charts_by_project(
                 get_latence_chart(project_id, duration_days, call_type),
                 get_tokens_distribution_chart(project_id, duration_days, call_type),
                 get_llm_credits_usage_chart(project_id, duration_days, call_type),
-                get_component_credits_usage_chart(project_id, duration_days, call_type),
             ]
         )
     )
