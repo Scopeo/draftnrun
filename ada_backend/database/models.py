@@ -1604,7 +1604,10 @@ class ParameterValueCost(Cost):
 
 class Usage(Base):
     __tablename__ = "usages"
-    __table_args__ = {"schema": "credits"}
+    __table_args__ = (
+        UniqueConstraint("project_id", "year", "month", name="uq_usage_project_year_month"),
+        {"schema": "credits"},
+    )
 
     id = mapped_column(UUID(as_uuid=True), primary_key=True, index=True, default=uuid.uuid4)
     project_id = mapped_column(UUID(as_uuid=True), ForeignKey("projects.id"), nullable=False, index=True)
@@ -1615,6 +1618,34 @@ class Usage(Base):
     updated_at = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     project = relationship("Project", back_populates="usage")
+
+
+class SpanUsage(Base):
+    """Stores credit usage for spans that have billable usage."""
+
+    __tablename__ = "span_usages"
+    __table_args__ = {"schema": "credits"}
+
+    id = mapped_column(Integer, primary_key=True, autoincrement=True)
+    span_id = mapped_column(
+        String,
+        ForeignKey("traces.spans.span_id", ondelete="CASCADE"),
+        unique=True,
+        nullable=False,
+        index=True,
+    )
+
+    credits_input_token = mapped_column(Float, nullable=True)
+    credits_output_token = mapped_column(Float, nullable=True)
+    credits_per_call = mapped_column(Float, nullable=True)
+    credits_per_second = mapped_column(Float, nullable=True)
+
+    def __str__(self):
+        return (
+            f"SpanUsage(span_id={self.span_id}, credits_input_token={self.credits_input_token}, "
+            f"credits_output_token={self.credits_output_token}, credits_per_call={self.credits_per_call}, "
+            f"credits_per_second={self.credits_per_second})"
+        )
 
 
 class OrganizationLimit(Base):

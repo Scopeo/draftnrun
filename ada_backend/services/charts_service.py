@@ -12,7 +12,6 @@ from ada_backend.services.metrics.utils import (
     query_trace_duration,
     calculate_calls_per_day,
     count_conversations_per_day,
-    query_daily_llm_credits,
 )
 from settings import settings
 
@@ -213,59 +212,6 @@ def get_tokens_distribution_chart(project_id: UUID, duration_days: int, call_typ
     )
 
 
-def get_llm_credits_usage_chart(project_id: UUID, duration_days: int, call_type: CallType | None = None) -> Chart:
-    """Generate a bar chart showing daily LLM credits usage (input/output)."""
-    current_date = datetime.now(tz=timezone.utc)
-    start_date = current_date - timedelta(days=duration_days)
-    all_dates_df = pd.DataFrame(
-        pd.date_range(start=start_date.date(), end=current_date.date(), freq="D", tz=timezone.utc), columns=["date"]
-    )
-
-    df = query_daily_llm_credits(project_id, duration_days, call_type)
-
-    if df.empty:
-        all_dates_df["date_label"] = pd.to_datetime(all_dates_df["date"]).dt.strftime("%b %d")
-        return Chart(
-            id=f"llm_credits_usage_{project_id}",
-            type=ChartType.BAR,
-            title="Daily LLM Credits Usage",
-            data=ChartData(
-                labels=all_dates_df["date_label"].tolist(),
-                datasets=[
-                    Dataset(label="Input Credits", data=[0] * len(all_dates_df), backgroundColor="#3498DB"),
-                    Dataset(label="Output Credits", data=[0] * len(all_dates_df), backgroundColor="#E74C3C"),
-                ],
-            ),
-        )
-
-    # Convert date column and merge with all dates
-    df["date"] = pd.to_datetime(df["date"]).dt.tz_localize("UTC")
-    daily_usage = pd.merge(all_dates_df, df, on="date", how="left").fillna(0)
-    daily_usage = daily_usage.sort_values(by="date", ascending=True)
-    daily_usage["date_label"] = pd.to_datetime(daily_usage["date"]).dt.strftime("%b %d")
-
-    return Chart(
-        id=f"llm_credits_usage_{project_id}",
-        type=ChartType.BAR,
-        title="Daily LLM Credits Usage",
-        data=ChartData(
-            labels=daily_usage["date_label"].tolist(),
-            datasets=[
-                Dataset(
-                    label="Input Credits",
-                    data=daily_usage["input_credits"].round(2).tolist(),
-                    backgroundColor="#3498DB",
-                ),
-                Dataset(
-                    label="Output Credits",
-                    data=daily_usage["output_credits"].round(2).tolist(),
-                    backgroundColor="#E74C3C",
-                ),
-            ],
-        ),
-    )
-
-
 async def get_charts_by_project(
     project_id: UUID, duration_days: int, call_type: CallType | None = None
 ) -> ChartsResponse:
@@ -275,7 +221,6 @@ async def get_charts_by_project(
             + [
                 get_latence_chart(project_id, duration_days, call_type),
                 get_tokens_distribution_chart(project_id, duration_days, call_type),
-                get_llm_credits_usage_chart(project_id, duration_days, call_type),
             ]
         )
     )

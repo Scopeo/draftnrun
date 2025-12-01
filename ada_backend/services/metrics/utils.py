@@ -13,53 +13,6 @@ from engine.trace.sql_exporter import get_session_trace
 LOGGER = logging.getLogger(__name__)
 
 
-def query_daily_llm_credits(
-    project_id: UUID,
-    duration_days: int,
-    call_type: CallType | None = None,
-) -> pd.DataFrame:
-    """
-    Query daily LLM credits usage for a project using SQL.
-
-    Args:
-        project_id: The project ID to calculate credits for
-        duration_days: Number of days to look back
-        call_type: Optional filter for specific call types
-
-    Returns:
-        DataFrame with 'date', 'input_credits', 'output_credits' columns
-    """
-    start_time = (datetime.now() - timedelta(days=duration_days)).isoformat()
-
-    call_type_filter = ""
-    if call_type is not None:
-        call_type_filter = f"AND s.call_type = '{call_type.value}'"
-
-    query = f"""
-        SELECT
-            DATE(s.start_time) as date,
-            COALESCE(SUM(s.llm_token_count_prompt * COALESCE(co.credits_per_input_token, 0)), 0) as input_credits,
-            COALESCE(SUM(s.llm_token_count_completion * COALESCE(co.credits_per_output_token, 0)), 0) as output_credits
-        FROM traces.spans s
-        LEFT JOIN llm_models lm ON s.model_id = lm.id
-        LEFT JOIN credits.llm_costs lc ON lm.id = lc.llm_model_id
-        LEFT JOIN credits.costs co ON lc.id = co.id
-        WHERE s.project_id = '{project_id}'
-        AND s.start_time > '{start_time}'
-        {call_type_filter}
-        GROUP BY DATE(s.start_time)
-        ORDER BY date ASC
-    """
-
-    session = get_session_trace()
-    try:
-        df = pd.read_sql_query(query, session.bind)
-    finally:
-        session.close()
-
-    return df
-
-
 def query_total_credits(
     project_id: UUID,
     duration_days: int,
@@ -85,28 +38,13 @@ def query_total_credits(
     query = f"""
         SELECT
             COALESCE(SUM(
-                -- LLM credits (only if model_id exists and tokens are present)
-                COALESCE(s.llm_token_count_prompt, 0) * COALESCE(co_llm.credits_per_input_token, 0)
-                + COALESCE(s.llm_token_count_completion, 0) * COALESCE(co_llm.credits_per_output_token, 0)
-            ), 0)
-            + COALESCE(SUM(
-                -- Component credits (only if component_instance_id exists)
-                CASE
-                    WHEN s.component_instance_id IS NOT NULL THEN
-                        EXTRACT(EPOCH FROM (s.end_time - s.start_time)) * COALESCE(co_comp.credits_per_second, 0)
-                        + COALESCE(co_comp.credits_per_call, 0)
-                    ELSE 0
-                END
+                COALESCE(su.credits_input_token, 0)
+                + COALESCE(su.credits_output_token, 0)
+                + COALESCE(su.credits_per_call, 0)
+                + COALESCE(su.credits_per_second, 0)
             ), 0) as total_credits
-        FROM traces.spans s
-        -- LLM credits joins
-        LEFT JOIN llm_models lm ON s.model_id = lm.id
-        LEFT JOIN credits.llm_costs lc ON lm.id = lc.llm_model_id
-        LEFT JOIN credits.costs co_llm ON lc.id = co_llm.id
-        -- Component credits joins
-        LEFT JOIN component_instances ci ON s.component_instance_id = ci.id
-        LEFT JOIN credits.component_costs cc ON ci.component_version_id = cc.component_version_id
-        LEFT JOIN credits.costs co_comp ON cc.id = co_comp.id
+        FROM credits.span_usages su
+        JOIN traces.spans s ON s.span_id = su.span_id
         WHERE s.project_id = '{project_id}'
         AND s.start_time > '{start_time}'
         {call_type_filter}
