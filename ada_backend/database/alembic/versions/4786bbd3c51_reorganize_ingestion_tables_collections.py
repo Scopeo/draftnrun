@@ -1,7 +1,7 @@
 """reorganize_ingestion_tables_collections
 
 Revision ID: 4786bbd3c51
-Revises: f2c95397dc15
+Revises: 7f2bae4dea37
 Create Date: 2025-01-20 12:00:00.000000
 
 """
@@ -39,7 +39,7 @@ from engine.storage_service.local_service import SQLLocalService
 
 # revision identifiers, used by Alembic.
 revision: str = "4786bbd3c51"
-down_revision: Union[str, None] = "f2c95397dc15"
+down_revision: Union[str, None] = "7f2bae4dea37"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
