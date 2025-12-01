@@ -60,58 +60,6 @@ def query_daily_credits(
     return df
 
 
-def query_daily_component_credits(
-    project_id: UUID,
-    duration_days: int,
-    call_type: CallType | None = None,
-) -> pd.DataFrame:
-    """
-    Query daily component credits usage for a project based on duration (seconds) using SQL.
-
-    Calculates credits based on span duration * credits_per_second + credits_per_call for each component.
-
-    Args:
-        project_id: The project ID to calculate credits for
-        duration_days: Number of days to look back
-        call_type: Optional filter for specific call types
-
-    Returns:
-        DataFrame with 'date', 'component_credits' columns
-    """
-    start_time = (datetime.now() - timedelta(days=duration_days)).isoformat()
-
-    call_type_filter = ""
-    if call_type is not None:
-        call_type_filter = f"AND s.call_type = '{call_type.value}'"
-
-    query = f"""
-        SELECT
-            DATE(s.start_time) as date,
-            COALESCE(SUM(
-                EXTRACT(EPOCH FROM (s.end_time - s.start_time)) * COALESCE(co.credits_per_second, 0)
-                + COALESCE(co.credits_per_call, 0)
-            ), 0) as component_credits
-        FROM traces.spans s
-        LEFT JOIN component_instances ci ON s.component_instance_id = ci.id
-        LEFT JOIN credits.component_costs cc ON ci.component_version_id = cc.component_version_id
-        LEFT JOIN credits.costs co ON cc.id = co.id
-        WHERE s.project_id = '{project_id}'
-        AND s.start_time > '{start_time}'
-        AND s.component_instance_id IS NOT NULL
-        {call_type_filter}
-        GROUP BY DATE(s.start_time)
-        ORDER BY date ASC
-    """
-
-    session = get_session_trace()
-    try:
-        df = pd.read_sql_query(query, session.bind)
-    finally:
-        session.close()
-
-    return df
-
-
 def query_total_credits(
     project_id: UUID,
     duration_days: int,
