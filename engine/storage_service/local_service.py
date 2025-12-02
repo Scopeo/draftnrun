@@ -473,10 +473,10 @@ class SQLLocalService(DBService):
             update_values = update_data.copy()
             update_values = self.add_processed_datetime_if_exists(table, update_values)
 
-            where_clause = table.c[CHUNK_ID_COLUMN] == chunk_id
+            filter_condition = table.c[CHUNK_ID_COLUMN] == chunk_id
             if sql_query_filter:
-                where_clause = where_clause & text(sql_query_filter)
-            stmt = sqlalchemy.update(table).where(where_clause).values(**update_values)
+                filter_condition = filter_condition & text(sql_query_filter)
+            stmt = sqlalchemy.update(table).where(filter_condition).values(**update_values)
             result = session.execute(stmt)
 
             if result.rowcount == 0:
