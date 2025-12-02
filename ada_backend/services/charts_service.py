@@ -16,7 +16,7 @@ from ada_backend.services.metrics.utils import (
     calculate_calls_per_day,
     count_conversations_per_day,
 )
-from ada_backend.services.credits_service import get_total_credits_service, get_organization_limit_service
+from ada_backend.services.credits_service import get_organization_total_credits_service, get_organization_limit_service
 from ada_backend.repositories.project_repository import get_project
 from ada_backend.database.setup_db import get_db_session
 from settings import settings
@@ -227,14 +227,17 @@ def get_organization_credit_usage_data(session: Session, project_id: UUID) -> Op
     today = datetime.now()
     organization_id = project.organization_id
 
-    credits_used = get_total_credits_service(session, project_id, today.year, today.month)
+    # Get organization-level credits (sum across all projects)
+    credits_used = get_organization_total_credits_service(session, organization_id, today.year, today.month)
     org_limit = get_organization_limit_service(session, organization_id, today.year, today.month)
     credits_limit = org_limit.limit if org_limit else None
-    percentage_used = (
-        round((credits_used / credits_limit) * 100, 1) if credits_limit and credits_limit > 0 else None
-    )
+    percentage_used = round((credits_used / credits_limit) * 100, 1) if credits_limit and credits_limit > 0 else None
 
-    reset_date = f"{today.year}-{today.month:02d}-{monthrange(today.year, today.month)[1]}"
+    # Calculate days remaining until reset (end of current month)
+    last_day = monthrange(today.year, today.month)[1]
+    reset_datetime = datetime(today.year, today.month, last_day, 23, 59, 59)
+    days_left = (reset_datetime - today).days
+    reset_date = f"{days_left} days left" if days_left >= 0 else "0 days left"
 
     return CreditUsage(
         credits_used=credits_used,

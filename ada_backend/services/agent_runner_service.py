@@ -14,7 +14,7 @@ from ada_backend.repositories.edge_repository import get_edges
 from ada_backend.schemas.project_schema import ChatResponse
 from ada_backend.services.agent_builder_service import instantiate_component
 from ada_backend.services.errors import ProjectNotFound, EnvironmentNotFound, OrganizationLimitExceededError
-from ada_backend.services.credits_service import get_total_credits_service, get_organization_limit_service
+from ada_backend.services.credits_service import get_organization_total_credits_service, get_organization_limit_service
 from engine.graph_runner.graph_runner import GraphRunner
 from engine.llm_services.utils import LLMKeyLimitExceededError
 from ada_backend.repositories.graph_runner_repository import (
@@ -201,11 +201,12 @@ async def run_agent(
         month=today.month,
     )
     if organization_limit and organization_limit.limit is not None:
-        current_usage = get_total_credits_service(
+        # Check organization-level credits (sum across all projects)
+        current_usage = get_organization_total_credits_service(
             session,
-            project_id,
+            project_details.organization_id,
             today.year,
-            today.mont,
+            today.month,
         )
         if current_usage >= organization_limit.limit:
             raise OrganizationLimitExceededError(
