@@ -128,7 +128,7 @@ def get_monitoring_kpis_by_project(
             KPI(
                 title="Total Credits Usage",
                 color="info",
-                icon="tabler-currency-dollar",
+                icon="tabler-credit-card",
                 stats=str(total_credits),
                 change="N/A",
             ),

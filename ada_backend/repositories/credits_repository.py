@@ -221,3 +221,18 @@ def delete_organization_limit(session: Session, id: UUID, organization_id: UUID)
     )
     session.delete(organization_limit)
     session.commit()
+
+
+def get_organization_limit(
+    session: Session, organization_id: UUID, year: int, month: int
+) -> Optional[db.OrganizationLimit]:
+    """Get organization limit for a specific year and month."""
+    return (
+        session.query(db.OrganizationLimit)
+        .filter(
+            db.OrganizationLimit.organization_id == organization_id,
+            db.OrganizationLimit.year == year,
+            db.OrganizationLimit.month == month,
+        )
+        .first()
+    )

@@ -6,12 +6,16 @@ import traceback
 from sqlalchemy.orm import Session
 import networkx as nx
 
+from datetime import datetime
+
 from ada_backend.database.models import EnvType, OrgSecretType, CallType
 from ada_backend.services.tag_service import compose_tag_name
 from ada_backend.repositories.edge_repository import get_edges
 from ada_backend.schemas.project_schema import ChatResponse
 from ada_backend.services.agent_builder_service import instantiate_component
-from ada_backend.services.errors import ProjectNotFound, EnvironmentNotFound
+from ada_backend.services.errors import ProjectNotFound, EnvironmentNotFound, OrganizationLimitExceededError
+from ada_backend.repositories.credits_repository import get_organization_limit
+from ada_backend.services.metrics.utils import query_total_credits
 from engine.graph_runner.graph_runner import GraphRunner
 from engine.llm_services.utils import LLMKeyLimitExceededError
 from ada_backend.repositories.graph_runner_repository import (
@@ -168,6 +172,16 @@ async def run_agent(
     project_details = get_project_with_details(session, project_id=project_id)
     if not project_details:
         raise ProjectNotFound(project_id)
+
+    today = datetime.now()
+    organization_limit = get_organization_limit(session, project_details.organization_id, today.year, today.month)
+
+    if organization_limit and organization_limit.limit is not None:
+        current_usage = query_total_credits(session, project_id, duration_days=30, call_type=call_type)
+        if current_usage >= organization_limit.limit:
+            raise OrganizationLimitExceededError(
+                project_details.organization_id, organization_limit.limit, current_usage
+            )
     agent = await get_agent_for_project(
         session,
         project_id=project_id,
