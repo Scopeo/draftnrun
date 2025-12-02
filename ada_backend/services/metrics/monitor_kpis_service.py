@@ -3,6 +3,7 @@ import logging
 from uuid import UUID
 
 import pandas as pd
+from sqlalchemy.orm import Session
 
 from ada_backend.database.models import CallType
 from ada_backend.schemas.monitor_schema import KPI, KPISResponse, TraceKPIS
@@ -14,9 +15,11 @@ from ada_backend.segment_analytics import track_project_monitoring_loaded
 LOGGER = logging.getLogger(__name__)
 
 
-def get_total_credits(project_id: UUID, duration_days: int, call_type: CallType | None = None) -> float:
+def get_total_credits(
+    session: Session, project_id: UUID, duration_days: int, call_type: CallType | None = None
+) -> float:
     """Calculate total credits (LLM + Component) for a project using SQL."""
-    return query_total_credits(project_id, duration_days, call_type)
+    return query_total_credits(session, project_id, duration_days, call_type)
 
 
 def get_trace_metrics(project_id: UUID, duration_days: int, call_type: CallType | None = None) -> TraceKPIS:
@@ -114,10 +117,10 @@ def get_trace_metrics(project_id: UUID, duration_days: int, call_type: CallType 
 
 
 def get_monitoring_kpis_by_project(
-    user_id: UUID, project_id: UUID, duration_days: int, call_type: CallType | None = None
+    session: Session, user_id: UUID, project_id: UUID, duration_days: int, call_type: CallType | None = None
 ) -> KPISResponse:
     trace_kpis = get_trace_metrics(project_id, duration_days, call_type)
-    total_credits = get_total_credits(project_id, duration_days, call_type)
+    total_credits = get_total_credits(session, project_id, duration_days, call_type)
     LOGGER.info(f"Trace metrics for project {project_id} and duration {duration_days} days retrieved successfully.")
     track_project_monitoring_loaded(user_id, project_id)
     return KPISResponse(
