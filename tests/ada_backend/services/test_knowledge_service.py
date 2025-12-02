@@ -4,6 +4,7 @@ Only the embedding service (LLM calls) is mocked.
 """
 
 import asyncio
+import logging
 from typing import Iterator
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, Mock
@@ -27,6 +28,8 @@ from tests.mocks.trace_manager import MockTraceManager
 
 TEST_COLLECTION_NAME_PREFIX = "test_knowledge"
 EMBEDDING_SIZE = 3072
+
+LOGGER = logging.getLogger(__name__)
 
 
 @pytest.fixture
@@ -193,7 +196,7 @@ def _cleanup_test_environment(
             conn.execute(text(f"DROP SCHEMA IF EXISTS {test_source.database_schema} CASCADE"))
             conn.commit()
     except Exception as e:
-        print(f"Warning: Failed to cleanup schema {test_source.database_schema}: {e}")
+        LOGGER.warning(f"Failed to cleanup schema {test_source.database_schema}: {e}")
 
     if asyncio.run(qdrant_service.collection_exists_async(test_source.qdrant_collection_name)):
         asyncio.run(qdrant_service.delete_collection_async(test_source.qdrant_collection_name))
