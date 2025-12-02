@@ -24,8 +24,8 @@ from ada_backend.services.knowledge_service import (
 from ada_backend.services.knowledge.errors import (
     KnowledgeServiceQdrantConfigurationError,
     KnowledgeServiceQdrantOperationError,
-    KnowledgeServiceSourceError,
-    KnowledgeServiceFileNotFoundError,
+    KnowledgeSourceNotFoundError,
+    KnowledgeServiceDocumentNotFoundError,
     KnowledgeServiceDBSourceConfigError,
 )
 
@@ -50,7 +50,7 @@ def list_documents(
         raise HTTPException(status_code=400, detail="User ID not found")
     try:
         return list_documents_service(session, organization_id, source_id)
-    except KnowledgeServiceSourceError as e:
+    except KnowledgeSourceNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
     except KnowledgeServiceDBSourceConfigError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
@@ -80,9 +80,9 @@ def get_document_detail(
         raise HTTPException(status_code=400, detail="User ID not found")
     try:
         return get_document_with_chunks_service(session, organization_id, source_id, document_id)
-    except KnowledgeServiceSourceError as e:
+    except KnowledgeSourceNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
-    except KnowledgeServiceFileNotFoundError as e:
+    except KnowledgeServiceDocumentNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
     except KnowledgeServiceDBSourceConfigError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
@@ -113,9 +113,9 @@ def delete_document(
         raise HTTPException(status_code=400, detail="User ID not found")
     try:
         delete_document_service(session, organization_id, source_id, document_id)
-    except KnowledgeServiceSourceError as e:
+    except KnowledgeSourceNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
-    except KnowledgeServiceFileNotFoundError as e:
+    except KnowledgeServiceDocumentNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
     except KnowledgeServiceDBSourceConfigError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
@@ -150,7 +150,7 @@ async def delete_chunk(
         raise HTTPException(status_code=400, detail="User ID not found")
     try:
         await delete_chunk_service(session, organization_id, source_id, chunk_id)
-    except KnowledgeServiceSourceError as e:
+    except KnowledgeSourceNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
     except KnowledgeServiceDBSourceConfigError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e

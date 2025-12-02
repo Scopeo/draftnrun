@@ -14,7 +14,9 @@ from sqlalchemy import text
 
 from ada_backend.services import knowledge_service
 from ada_backend.services.knowledge.errors import (
-    KnowledgeServiceQdrantConfigurationError,
+    KnowledgeServiceInvalidEmbeddingModelReferenceError,
+    KnowledgeServiceInvalidQdrantSchemaError,
+    KnowledgeServiceQdrantCollectionNotFoundError,
 )
 from engine.llm_services.llm_service import EmbeddingService
 from engine.qdrant_service import QdrantCollectionSchema, QdrantService
@@ -268,7 +270,7 @@ def test_validate_qdrant_service_raises_when_collection_not_exists(
         embedding_model_reference="openai:text-embedding-3-large",
     )
 
-    with pytest.raises(KnowledgeServiceQdrantConfigurationError, match="does not exist"):
+    with pytest.raises(KnowledgeServiceQdrantCollectionNotFoundError, match="does not exist"):
         asyncio.run(knowledge_service._validate_and_get_qdrant_service(source))
 
 
@@ -285,7 +287,7 @@ def test_validate_qdrant_service_raises_when_invalid_schema(
         embedding_model_reference="openai:text-embedding-3-large",
     )
 
-    with pytest.raises(KnowledgeServiceQdrantConfigurationError, match="invalid qdrant_schema"):
+    with pytest.raises(KnowledgeServiceInvalidQdrantSchemaError, match="invalid qdrant_schema"):
         asyncio.run(knowledge_service._validate_and_get_qdrant_service(source))
 
 
@@ -308,7 +310,7 @@ def test_validate_qdrant_service_raises_when_invalid_embedding_model(
         embedding_model_reference="invalid_format",
     )
 
-    with pytest.raises(KnowledgeServiceQdrantConfigurationError, match="invalid embedding_model_reference"):
+    with pytest.raises(KnowledgeServiceInvalidEmbeddingModelReferenceError, match="invalid embedding_model_reference"):
         asyncio.run(knowledge_service._validate_and_get_qdrant_service(source))
 
 

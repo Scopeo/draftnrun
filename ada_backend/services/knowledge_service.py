@@ -3,6 +3,7 @@ from typing import Any, Dict, List
 from uuid import UUID
 import json
 
+from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
 from ada_backend.database import models as db
@@ -22,10 +23,15 @@ from ada_backend.schemas.knowledge_schema import (
 )
 from ada_backend.services.ingestion_database_service import get_sql_local_service_for_ingestion
 from ada_backend.services.knowledge.errors import (
-    KnowledgeServiceFileNotFoundError,
-    KnowledgeServiceQdrantConfigurationError,
+    KnowledgeServiceDocumentNotFoundError,
+    KnowledgeServiceInvalidEmbeddingModelReferenceError,
+    KnowledgeServiceInvalidQdrantSchemaError,
+    KnowledgeServiceQdrantCollectionCheckError,
+    KnowledgeServiceQdrantCollectionNotFoundError,
+    KnowledgeServiceQdrantMissingFieldsError,
     KnowledgeServiceQdrantOperationError,
-    KnowledgeServiceSourceError,
+    KnowledgeServiceQdrantServiceCreationError,
+    KnowledgeSourceNotFoundError,
     KnowledgeServiceDBSourceConfigError,
     KnowledgeServiceDBOperationError,
 )
@@ -55,7 +61,7 @@ def _get_source_for_organization(
         session_sql_alchemy=session, organization_id=organization_id, source_id=source_id
     )
     if source is None:
-        raise KnowledgeServiceSourceError(f"Data source '{source_id}' not found for organization '{organization_id}'")
+        raise KnowledgeSourceNotFoundError(source_id=str(source_id), organization_id=str(organization_id))
     if not source.database_schema or not source.database_table_name:
         raise KnowledgeServiceDBSourceConfigError(
             f"Data source '{source_id}' " "is missing ingestion database identifiers (schema/table)"
@@ -64,34 +70,55 @@ def _get_source_for_organization(
 
 
 async def _validate_and_get_qdrant_service(source: db.DataSource) -> QdrantService:
+    missing = []
     if not source.qdrant_collection_name:
-        raise KnowledgeServiceQdrantConfigurationError(f"Data source '{source.id}' is missing qdrant_collection_name")
+        missing.append("qdrant_collection_name")
     if not source.qdrant_schema:
-        raise KnowledgeServiceQdrantConfigurationError(f"Data source '{source.id}' is missing qdrant_schema")
+        missing.append("qdrant_schema")
     if not source.embedding_model_reference:
-        raise KnowledgeServiceQdrantConfigurationError(
-            f"Data source '{source.id}' is missing embedding_model_reference"
-        )
+        missing.append("embedding_model_reference")
+
+    if missing:
+        raise KnowledgeServiceQdrantMissingFieldsError(source_id=str(source.id), missing=missing)
+
     try:
         QdrantCollectionSchema(**source.qdrant_schema)
-    except Exception as e:
-        raise KnowledgeServiceQdrantConfigurationError(
-            f"Data source '{source.id}' has invalid qdrant_schema: {str(e)}"
-        )
+    except ValidationError as e:
+        raise KnowledgeServiceInvalidQdrantSchemaError(
+            source_id=str(source.id),
+            schema=source.qdrant_schema,
+            reason=str(e),
+        ) from e
 
     try:
         get_llm_provider_and_model(source.embedding_model_reference)
-    except Exception as e:
-        raise KnowledgeServiceQdrantConfigurationError(
-            f"Data source '{source.id}' has invalid embedding_model_reference: {str(e)}"
+    except (ValueError, KeyError) as e:
+        raise KnowledgeServiceInvalidEmbeddingModelReferenceError(
+            source_id=str(source.id),
+            embedding_model_reference=source.embedding_model_reference,
+            reason=str(e),
         ) from e
 
-    qdrant_service = _get_qdrant_service(source.qdrant_schema, source.embedding_model_reference)
-    if not await qdrant_service.collection_exists_async(source.qdrant_collection_name):
-        raise KnowledgeServiceQdrantConfigurationError(
-            f"Data source '{source.id}' references "
-            f"Qdrant collection '{source.qdrant_collection_name}' "
-            "which does not exist"
+    try:
+        qdrant_service = _get_qdrant_service(source.qdrant_schema, source.embedding_model_reference)
+    except Exception as e:
+        raise KnowledgeServiceQdrantServiceCreationError(
+            source_id=str(source.id),
+            reason=str(e),
+        ) from e
+
+    try:
+        exists = await qdrant_service.collection_exists_async(source.qdrant_collection_name)
+    except Exception as e:
+        raise KnowledgeServiceQdrantCollectionCheckError(
+            source_id=str(source.id),
+            collection_name=source.qdrant_collection_name,
+            reason=str(e),
+        ) from e
+
+    if not exists:
+        raise KnowledgeServiceQdrantCollectionNotFoundError(
+            source_id=str(source.id), collection_name=source.qdrant_collection_name
         )
 
     return qdrant_service
@@ -166,8 +193,12 @@ def get_document_with_chunks_service(
     )
 
     if not rows:
-        raise KnowledgeServiceFileNotFoundError(
-            f"No chunks found for document_id='{document_id}' in table '{source.database_table_name}'"
+        LOGGER.error(
+            f"Document with id='{document_id}' not found for source '{source_id}' in database table '{source.database_table_name}'"
+        )
+        raise KnowledgeServiceDocumentNotFoundError(
+            document_id=document_id,
+            source_id=source_id,
         )
 
     chunks: List[KnowledgeChunk] = []
