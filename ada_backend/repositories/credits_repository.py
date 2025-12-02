@@ -228,7 +228,7 @@ def get_organization_limit(
     session: Session, organization_id: UUID, year: int, month: int
 ) -> Optional[db.OrganizationLimit]:
     """Get organization limit for a specific year and month."""
-    return (
+    organization_limit = (
         session.query(db.OrganizationLimit)
         .filter(
             db.OrganizationLimit.organization_id == organization_id,
@@ -237,6 +237,9 @@ def get_organization_limit(
         )
         .first()
     )
+    if organization_limit is None:
+        return None
+    return organization_limit
 
 
 def get_organization_total_credits(session: Session, organization_id: UUID, year: int, month: int) -> float:
