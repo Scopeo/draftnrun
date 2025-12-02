@@ -1,7 +1,7 @@
 """add graph runner modification history
 
 Revision ID: f44ef4de7468
-Revises: f2c95397dc15
+Revises: 7f2bae4dea37
 Create Date: 2025-01-27 12:00:00.000000
 
 """
@@ -14,7 +14,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision: str = "f44ef4de7468"
-down_revision: Union[str, None] = "f2c95397dc15"
+down_revision: Union[str, None] = "7f2bae4dea37"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
@@ -72,4 +72,3 @@ def downgrade() -> None:
     )
     op.drop_table("graph_runner_modification_history")
     # ### end Alembic commands ###
-
