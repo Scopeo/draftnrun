@@ -84,7 +84,7 @@ async def _validate_and_get_qdrant_service(source: db.DataSource) -> QdrantServi
 
     try:
         QdrantCollectionSchema(**source.qdrant_schema)
-    except ValidationError as e:
+    except (ValidationError, TypeError) as e:
         raise KnowledgeServiceInvalidQdrantSchemaError(
             source_id=str(source.id),
             schema=source.qdrant_schema,

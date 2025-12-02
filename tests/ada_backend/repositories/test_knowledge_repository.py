@@ -74,9 +74,9 @@ def test_list_documents_for_source_returns_grouped_data(sql_local_service: SQLLo
     )
 
     assert len(files) == 2
-    summary = {item["document_id"]: item for item in files}
-    assert summary["file-a"]["chunk_count"] == 2
-    assert summary["file-b"]["chunk_count"] == 1
+    summary = {item.document_id: item for item in files}
+    assert summary["file-a"].chunk_count == 2
+    assert summary["file-b"].chunk_count == 1
 
 
 def test_delete_document_removes_chunks(sql_local_service: SQLLocalService) -> None:

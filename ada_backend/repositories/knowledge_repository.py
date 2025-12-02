@@ -1,7 +1,9 @@
 import logging
-from typing import Any, Dict, List
+from typing import List, Tuple
 
 from sqlalchemy import func, select, delete
+from sqlalchemy.engine import Row
+from sqlalchemy import Table
 
 from engine.storage_service.local_service import SQLLocalService
 
@@ -13,7 +15,7 @@ def list_documents_for_source(
     sql_local_service: SQLLocalService,
     schema_name: str,
     table_name: str,
-) -> List[Dict[str, Any]]:
+) -> List[Row]:
     table = sql_local_service.get_table(table_name=table_name, schema_name=schema_name)
     # TODO: Change file_id to document_id
     stmt = (
@@ -38,7 +40,7 @@ def get_chunk_rows_for_document(
     document_id: str,
     limit: int = None,
     offset: int = None,
-) -> tuple:
+) -> Tuple[List[Row], Table, int]:
     """Get all chunk rows for a given document_id, sorted by chunk_id. Returns (rows, table, total_count)."""
     table = sql_local_service.get_table(table_name=table_name, schema_name=schema_name)
     # TODO: Change file_id to document_id
