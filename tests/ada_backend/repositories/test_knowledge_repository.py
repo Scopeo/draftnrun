@@ -8,11 +8,8 @@ from engine.storage_service.local_service import SQLLocalService
 from tests.ada_backend.test_utils_knowledge import get_knowledge_chunks_table_definition
 from ada_backend.repositories.knowledge_repository import (
     delete_chunk,
-    delete_file,
-    list_files_for_source,
-)
-from ada_backend.services.knowledge.errors import (
-    KnowledgeServiceFileNotFoundError,
+    delete_document,
+    list_documents_for_source,
 )
 
 
@@ -38,7 +35,7 @@ def _insert_rows(service: SQLLocalService, rows: list[dict]) -> None:
         conn.execute(table.insert(), rows)
 
 
-def test_list_files_for_source_returns_grouped_data(sql_local_service: SQLLocalService) -> None:
+def test_list_documents_for_source_returns_grouped_data(sql_local_service: SQLLocalService) -> None:
     _insert_rows(
         sql_local_service,
         [
@@ -72,19 +69,19 @@ def test_list_files_for_source_returns_grouped_data(sql_local_service: SQLLocalS
         ],
     )
 
-    files = list_files_for_source(
+    files = list_documents_for_source(
         sql_local_service=sql_local_service,
         schema_name=None,
         table_name="knowledge_chunks",
     )
 
     assert len(files) == 2
-    summary = {item["file_id"]: item for item in files}
+    summary = {item["document_id"]: item for item in files}
     assert summary["file-a"]["chunk_count"] == 2
     assert summary["file-b"]["chunk_count"] == 1
 
 
-def test_delete_file_removes_chunks(sql_local_service: SQLLocalService) -> None:
+def test_delete_document_removes_chunks(sql_local_service: SQLLocalService) -> None:
     _insert_rows(
         sql_local_service,
         [
@@ -100,12 +97,13 @@ def test_delete_file_removes_chunks(sql_local_service: SQLLocalService) -> None:
         ],
     )
 
-    delete_file(
+    deleted = delete_document(
         sql_local_service=sql_local_service,
         schema_name=None,
         table_name="knowledge_chunks",
-        file_id="file-a",
+        document_id="file-a",
     )
+    assert deleted is True
 
     table = sql_local_service.get_table(table_name="knowledge_chunks", schema_name=None)
     with sql_local_service.engine.connect() as conn:
@@ -113,14 +111,14 @@ def test_delete_file_removes_chunks(sql_local_service: SQLLocalService) -> None:
     assert remaining == []
 
 
-def test_delete_file_raises_for_missing_file(sql_local_service: SQLLocalService) -> None:
-    with pytest.raises(KnowledgeServiceFileNotFoundError):
-        delete_file(
-            sql_local_service=sql_local_service,
-            schema_name=None,
-            table_name="knowledge_chunks",
-            file_id="missing",
-        )
+def test_delete_document_returns_false_for_missing_document(sql_local_service: SQLLocalService) -> None:
+    deleted = delete_document(
+        sql_local_service=sql_local_service,
+        schema_name=None,
+        table_name="knowledge_chunks",
+        document_id="missing",
+    )
+    assert deleted is False
 
 
 def test_delete_chunk_removes_row(sql_local_service: SQLLocalService) -> None:
@@ -148,7 +146,7 @@ def test_delete_chunk_removes_row(sql_local_service: SQLLocalService) -> None:
 
 
 def test_delete_chunk_is_idempotent(sql_local_service: SQLLocalService) -> None:
-    """Test that deleting a chunk multiple times is idempotent (second delete raises error)."""
+    """Test that deleting a chunk multiple times is idempotent (second delete returns False)."""
     _insert_rows(
         sql_local_service,
         [
@@ -165,17 +163,19 @@ def test_delete_chunk_is_idempotent(sql_local_service: SQLLocalService) -> None:
     )
 
     # First delete should succeed
-    delete_chunk(
+    deleted = delete_chunk(
         sql_local_service=sql_local_service,
         schema_name=None,
         table_name="knowledge_chunks",
         chunk_id="c1",
     )
+    assert deleted is True
 
-    # second delete should succeed
-    delete_chunk(
+    # second delete should succeed (return False)
+    deleted = delete_chunk(
         sql_local_service=sql_local_service,
         schema_name=None,
         table_name="knowledge_chunks",
         chunk_id="c1",
     )
+    assert deleted is False

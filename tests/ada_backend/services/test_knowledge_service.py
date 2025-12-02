@@ -318,7 +318,7 @@ def test_delete_chunk_is_idempotent(
     qdrant_service: QdrantService,
     test_collection_name: str,
 ) -> None:
-    """Test that deleting a chunk multiple times is idempotent (second delete raises error)."""
+    """Test that deleting a chunk multiple times is idempotent."""
     test_source, file_id, dummy_chunk_id = _setup_test_environment(
         monkeypatch, sql_local_service, qdrant_service, test_collection_name
     )
