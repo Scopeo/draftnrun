@@ -2,6 +2,14 @@ name: Deploy Ada preprod and restart
 
 on:
     workflow_dispatch:
+        inputs:
+            force_sync:
+                description: "Force full data + Qdrant sync even if TTL cache is valid"
+                required: false
+                default: false
+                type: boolean
+    # # TODO: Delete preprod file
+    # push:
 
 jobs:
     deploy:
@@ -25,7 +33,7 @@ jobs:
                       # Use the branch that triggered the workflow
                       BRANCH_NAME="${{ github.ref_name }}"
                       TARGET="origin/${BRANCH_NAME}"
-                      
+
                       if ! git rev-parse --verify --quiet "${TARGET}" >/dev/null; then
                           echo "Branch '${BRANCH_NAME}' not found on remote" >&2
                           exit 1
@@ -34,6 +42,33 @@ jobs:
                       # Force checkout into a throwaway local branch to avoid merges/conflicts
                       git checkout --force -B preprod-deploy "${TARGET}"
                       git clean -fd
+
+            - name: Sync data from prod to preprod (with TTL cache)
+              uses: appleboy/ssh-action@master
+              with:
+                  host: ${{ secrets.EC2_HOST_SCOPEO_PREPROD }}
+                  username: ec2-user
+                  key: ${{ secrets.SSH_PRIVATE_KEY }}
+                  port: 22
+                  script: |
+                      set -e
+                      cd /home/ec2-user/draftnrun
+
+                      FORCE_SYNC_FLAG=""
+                      if [ "${{ inputs.force_sync }}" = "true" ]; then
+                        FORCE_SYNC_FLAG="--force-sync"
+                      fi
+
+                      ./scripts/copy_data/sync_data.sh \
+                        --source-db-url "${{ secrets.PROD_DB_URL }}" \
+                        --source-ingestion-db-url "${{ secrets.PROD_INGESTION_DB_URL }}" \
+                        --target-db-url "${{ secrets.PREPROD_DB_URL }}" \
+                        --target-ingestion-db-url "${{ secrets.PREPROD_INGESTION_DB_URL }}" \
+                        --source-qdrant-url "${{ secrets.PROD_QDRANT_CLUSTER_URL }}" \
+                        --source-qdrant-key "${{ secrets.PROD_QDRANT_API_KEY }}" \
+                        --target-qdrant-url "${{ secrets.PREPROD_QDRANT_CLUSTER_URL }}" \
+                        --target-qdrant-key "${{ secrets.PREPROD_QDRANT_API_KEY }}" \
+                        $FORCE_SYNC_FLAG
 
             - name: SSH Remote Commands
               uses: appleboy/ssh-action@master
