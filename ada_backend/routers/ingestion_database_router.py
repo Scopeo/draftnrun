@@ -74,7 +74,7 @@ def update_chunk_info_in_database(
     chunk_id: str,
     update_request: UpdateChunk,
     user: Annotated[
-        SupabaseUser, Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.WRITER.value))
+        SupabaseUser, Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.DEVELOPER.value))
     ],
 ) -> ChunkData:
     if not user.id:
@@ -91,3 +91,29 @@ def update_chunk_info_in_database(
             chunk_id,
         )
         raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@router.delete("/organizations/{organization_id}/ingestion_database/sources/{source_name}/chunks")
+def delete_chunks_in_database(
+    organization_id: UUID,
+    source_name: str,
+    chunk_ids: list[str],
+    user: Annotated[
+        SupabaseUser, Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.DEVELOPER.value))
+    ],
+):
+    if not user.id:
+        raise HTTPException(status_code=400, detail="User ID not found")
+    try:
+        delete_chunks_from_ingestion_db(organization_id, source_name, chunk_ids)
+    except Exception as e:
+        LOGGER.error(
+            "Failed to delete chunks in database for organization %s, source %s, chunk %s: %s",
+            organization_id,
+            source_name,
+            chunk_ids,
+            str(e),
+        )
+        raise HTTPException(status_code=500, detail="Internal Server Error") from e
+
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

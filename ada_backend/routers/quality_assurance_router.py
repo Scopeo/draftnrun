@@ -169,7 +169,7 @@ def delete_dataset_endpoint(
     delete_data: DatasetDeleteList,
     user: Annotated[
         SupabaseUser,
-        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.ADMIN.value)),
+        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.DEVELOPER.value)),
     ],
     session: Session = Depends(get_db),
 ) -> dict:
@@ -381,7 +381,7 @@ def delete_input_groundtruth_endpoint(
     delete_data: InputGroundtruthDeleteList,
     user: Annotated[
         SupabaseUser,
-        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.ADMIN.value)),
+        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.DEVELOPER.value)),
     ],
     session: Session = Depends(get_db),
 ) -> dict:
@@ -533,7 +533,7 @@ async def import_qa_data_from_csv_endpoint(
     file: Annotated[UploadFile, File(..., description="CSV file to import")],
     user: Annotated[
         SupabaseUser,
-        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.WRITER.value)),
+        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.DEVELOPER.value)),
     ],
     session: Session = Depends(get_db),
 ) -> InputGroundtruthResponseList:

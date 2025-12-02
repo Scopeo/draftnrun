@@ -61,7 +61,7 @@ def create_ingestion_task(
     ingestion_task_data: IngestionTaskQueue,
     auth_ids: Annotated[
         tuple[UUID | None, UUID | None],
-        Depends(user_has_access_to_organization_xor_verify_api_key(allowed_roles=UserRights.WRITER.value)),
+        Depends(user_has_access_to_organization_xor_verify_api_key(allowed_roles=UserRights.DEVELOPER.value)),
     ],
     session: Session = Depends(get_db),
 ) -> UUID:

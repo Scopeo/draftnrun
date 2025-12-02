@@ -125,7 +125,7 @@ def upsert_component_version_cost_endpoint(
     component_version_id: UUID,
     component_version_cost_update: ComponentVersionCost,
     user: Annotated[
-        SupabaseUser, Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.WRITER.value))
+        SupabaseUser, Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.DEVELOPER.value))
     ],
     session: Session = Depends(get_db),
 ) -> ComponentVersionCostResponse:
@@ -153,7 +153,7 @@ def delete_component_version_cost_endpoint(
     organization_id: UUID,
     component_version_id: UUID,
     user: Annotated[
-        SupabaseUser, Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.WRITER.value))
+        SupabaseUser, Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.DEVELOPER.value))
     ],
     session: Session = Depends(get_db),
 ) -> None:

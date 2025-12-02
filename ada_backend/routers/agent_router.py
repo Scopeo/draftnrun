@@ -79,7 +79,7 @@ def get_agent_by_id(
 def create_agent(
     organization_id: UUID,
     user: Annotated[
-        SupabaseUser, Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.WRITER.value))
+        SupabaseUser, Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.DEVELOPER.value))
     ],
     agent_data: ProjectAgentSchema,
     session: Session = Depends(get_db),
@@ -101,7 +101,7 @@ async def update_agent(
     graph_runner_id: UUID,
     agent_data: AgentUpdateSchema,
     user: Annotated[
-        SupabaseUser, Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.WRITER.value))
+        SupabaseUser, Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.DEVELOPER.value))
     ],
     session: Session = Depends(get_db),
 ) -> GraphUpdateResponse:

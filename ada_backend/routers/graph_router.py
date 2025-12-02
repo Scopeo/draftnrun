@@ -77,7 +77,7 @@ async def update_project_pipeline(
     graph_runner_id: UUID,
     project_graph: GraphUpdateSchema,
     user: Annotated[
-        SupabaseUser, Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.WRITER.value))
+        SupabaseUser, Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.DEVELOPER.value))
     ],
     session: Session = Depends(get_db),
 ) -> GraphUpdateResponse:

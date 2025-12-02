@@ -2,10 +2,11 @@ import logging
 from uuid import UUID
 from typing import Annotated, List
 
-from fastapi import APIRouter, Body, Depends, HTTPException
+from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from ada_backend.schemas.auth_schema import SupabaseUser
+from ada_backend.database.models import EvaluationType
 from ada_backend.schemas.qa_evaluation_schema import (
     JudgeEvaluationResponse,
 )
@@ -13,6 +14,7 @@ from ada_backend.services.errors import ProjectNotFound, LLMJudgeNotFound
 from ada_backend.routers.auth_router import (
     user_has_access_to_project_dependency,
     UserRights,
+    get_user_from_supabase_token,
 )
 from ada_backend.database.setup_db import get_db
 from ada_backend.services.qa.qa_evaluation_service import (
@@ -53,6 +55,21 @@ def get_evaluations_by_version_output_endpoint(
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
+@router.get(
+    "/qa/llm-judges/defaults",
+    response_model=LLMJudgeTemplate,
+    summary="Get template with default values for LLM Judge creation",
+)
+def get_llm_judge_defaults(
+    user: Annotated[SupabaseUser, Depends(get_user_from_supabase_token)],
+    evaluation_type: EvaluationType = Query(default=EvaluationType.BOOLEAN, description="Evaluation type"),
+) -> LLMJudgeTemplate:
+    if not user.id:
+        raise HTTPException(status_code=400, detail="User ID not found")
+
+    return get_llm_judge_defaults_service(evaluation_type=evaluation_type)
+
+
 @router.post(
     "/projects/{project_id}/qa/llm-judges/{judge_id}/evaluations/run",
     response_model=JudgeEvaluationResponse,
@@ -63,7 +80,7 @@ async def run_judge_evaluation_endpoint(
     judge_id: UUID,
     user: Annotated[
         SupabaseUser,
-        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.MEMBER.value)),
+        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.DEVELOPER.value)),
     ],
     session: Session = Depends(get_db),
     version_output_id: UUID = Body(..., embed=True, description="Version output ID to evaluate"),
@@ -103,7 +120,7 @@ def delete_judge_evaluations_endpoint(
     project_id: UUID,
     user: Annotated[
         SupabaseUser,
-        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.WRITER.value)),
+        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.ADMIN.value)),
     ],
     session: Session = Depends(get_db),
     evaluation_ids: List[UUID] = Body(...),

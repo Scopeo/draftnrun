@@ -56,7 +56,7 @@ async def generate_s3_upload_presigned_urls(
 async def upload_files(
     organization_id: UUID,
     user: Annotated[
-        SupabaseUser, Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.WRITER.value))
+        SupabaseUser, Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.DEVELOPER.value))
     ],
     files: Annotated[Optional[list[UploadFile]], File()] = None,
 ):
@@ -86,7 +86,7 @@ async def upload_files(
 async def delete_files(
     organization_id: UUID,
     user: Annotated[
-        SupabaseUser, Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.WRITER.value))
+        SupabaseUser, Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.DEVELOPER.value))
     ],
     file_ids: list[str],
 ):
