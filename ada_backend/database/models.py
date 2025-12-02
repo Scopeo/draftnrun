@@ -542,6 +542,12 @@ class GraphRunner(Base):
     graph_edges = relationship("GraphRunnerEdge", back_populates="graph_runner")
     nodes = relationship("GraphRunnerNode", back_populates="graph_runner")
     port_mappings = relationship("PortMapping", back_populates="graph_runner")
+    modification_history = relationship(
+        "GraphRunnerModificationHistory",
+        back_populates="graph_runner",
+        cascade="all, delete-orphan",
+        order_by="GraphRunnerModificationHistory.created_at.desc()",
+    )
 
     __table_args__ = (
         CheckConstraint(
@@ -552,6 +558,28 @@ class GraphRunner(Base):
 
     def __str__(self):
         return f"Graph Runner({self.id})"
+
+
+class GraphRunnerModificationHistory(Base):
+    """Tracks modification history for graph runners by storing hash of graph structure."""
+
+    __tablename__ = "graph_runner_modification_history"
+
+    id = mapped_column(UUID(as_uuid=True), primary_key=True, index=True, default=uuid.uuid4)
+    graph_runner_id = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("graph_runners.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    user_id = mapped_column(UUID(as_uuid=True), nullable=True)
+    modification_hash = mapped_column(String, nullable=False)
+    created_at = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
+
+    graph_runner = relationship("GraphRunner", back_populates="modification_history")
+
+    def __str__(self):
+        return f"GraphRunnerModificationHistory(graph_runner_id={self.graph_runner_id}, created_at={self.created_at})"
 
 
 class ComponentParameterDefinition(Base):

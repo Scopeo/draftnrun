@@ -1,3 +1,5 @@
+import hashlib
+import json
 import logging
 from collections import defaultdict
 from typing import Optional, Iterator
@@ -18,8 +20,10 @@ from ada_backend.repositories.env_repository import get_env_relationship_by_grap
 from ada_backend.repositories.graph_runner_repository import (
     delete_node,
     get_component_nodes,
+    get_latest_modification_hash,
     graph_runner_exists,
     insert_graph_runner_and_bind_to_project,
+    insert_modification_history,
     upsert_component_node,
 )
 from ada_backend.repositories.port_mapping_repository import (
@@ -49,6 +53,22 @@ from engine.field_expressions.traversal import select_nodes, get_pure_ref
 
 
 LOGGER = logging.getLogger(__name__)
+
+
+def _calculate_graph_hash(graph_project: GraphUpdateSchema) -> str:
+    """
+    Calculate SHA256 hash of the graph structure (including port_mappings).
+
+    Args:
+        graph_project: The graph update schema to hash
+
+    Returns:
+        Hex digest of the SHA256 hash
+    """
+    graph_dict = graph_project.model_dump()
+    json_str = json.dumps(graph_dict, sort_keys=True, separators=(",", ":"))
+    hash_obj = hashlib.sha256(json_str.encode("utf-8"))
+    return hash_obj.hexdigest()
 
 
 def resolve_component_version_id_from_instance_id(session: Session, instance_id: UUID) -> UUID:
@@ -135,6 +155,16 @@ async def update_graph_service(
             LOGGER.info(f"Updating existing graph {graph_runner_id} (validated as draft)")
         else:
             LOGGER.warning(f"Updating graph {graph_runner_id} with validation bypassed (seeding/migration mode)")
+
+    current_hash = _calculate_graph_hash(graph_project)
+    previous_hash = get_latest_modification_hash(session, graph_runner_id)
+
+    if current_hash != previous_hash:
+        if user_id is not None:
+            insert_modification_history(session, graph_runner_id, user_id, current_hash)
+            LOGGER.info(f"Logged modification history for graph {graph_runner_id} by user {user_id}")
+        else:
+            LOGGER.debug(f"Graph {graph_runner_id} modified but no user_id provided, skipping history log")
 
     # TODO: Add the get_graph_runner_nodes function when we will handle nested graphs
     previous_graph_nodes = set(node.id for node in get_component_nodes(session, graph_runner_id))
