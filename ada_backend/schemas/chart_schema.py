@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import List, Union
+from typing import List, Union, Optional
 from pydantic import BaseModel
 
 
@@ -38,5 +38,15 @@ class Chart(BaseModel):
     y_axis_type: str | None = None
 
 
+class CreditUsage(BaseModel):
+    """Organization credit usage data for table display"""
+
+    credits_used: float
+    credits_limit: Optional[float] = None
+    percentage_used: Optional[float] = None
+    reset_date: Optional[str] = None
+
+
 class ChartsResponse(BaseModel):
     charts: List[Chart]
+    credit_usage: Optional[CreditUsage] = None

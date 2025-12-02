@@ -252,13 +252,12 @@ async def get_project_monitoring_kpi(
     project_id: UUID,
     duration: int,
     user: Annotated[SupabaseUser, Depends(get_user_from_supabase_token)],
-    session: Session = Depends(get_db),
     call_type: CallType | None = None,
 ):
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
     try:
-        response = get_monitoring_kpis_by_project(session, user.id, project_id, duration, call_type)
+        response = get_monitoring_kpis_by_project(user.id, project_id, duration, call_type)
         return response
     except ValueError as e:
         LOGGER.error(f"Failed to get KPIs for project {project_id} with duration {duration}: {str(e)}", exc_info=True)

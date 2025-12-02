@@ -12,6 +12,8 @@ from ada_backend.repositories.credits_repository import (
     update_organization_limit,
     delete_organization_limit,
     get_all_organization_limits,
+    get_organization_limit,
+    get_total_credits,
 )
 from ada_backend.services.errors import (
     ComponentVersionCostNotFound,
@@ -92,3 +94,14 @@ def delete_organization_limit_service(
     organization_id: UUID,
 ) -> None:
     return delete_organization_limit(session, id, organization_id)
+
+
+def get_organization_limit_service(
+    session: Session, organization_id: UUID, year: int, month: int
+) -> Optional[OrganizationLimitResponse]:
+    organization_limit = get_organization_limit(session, organization_id, year, month)
+    return OrganizationLimitResponse.model_validate(organization_limit, from_attributes=True)
+
+
+def get_total_credits_service(session: Session, project_id: UUID, year: int, month: int) -> Optional[float]:
+    return get_total_credits(session, project_id, year, month)

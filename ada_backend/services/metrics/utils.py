@@ -6,47 +6,11 @@ import json
 import numpy as np
 import pandas as pd
 from sqlalchemy import text
-from sqlalchemy.orm import Session
 
 from ada_backend.database.models import CallType
 from engine.trace.sql_exporter import get_session_trace
 
 LOGGER = logging.getLogger(__name__)
-
-
-def query_total_credits(
-    session: Session,
-    project_id: UUID,
-    duration_days: int,
-    call_type: CallType | None = None,
-) -> float:
-    """
-    Query total credits from the usages table for a project.
-
-    Args:
-        session: Database session from FastAPI
-        project_id: The project ID to calculate credits for
-        duration_days: Number of days to look back
-        call_type: Optional filter for specific call types (not currently supported for usages table)
-
-    Returns:
-        Total credits as a float
-    """
-    today = datetime.now()
-    today_year = today.year
-    today_month = today.month
-
-    query = f"""
-        SELECT
-            COALESCE(SUM(credits_used), 0) as total_credits
-        FROM credits.usages
-        WHERE project_id = '{project_id}'
-        AND year = {today_year}
-        AND month = {today_month}
-    """
-
-    result = session.execute(text(query)).scalar()
-    return round(float(result) if result else 0.0, 2)
 
 
 def query_trace_duration(project_id: UUID, duration_days: int, call_type: CallType | None = None) -> pd.DataFrame:
