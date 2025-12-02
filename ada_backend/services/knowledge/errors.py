@@ -21,6 +21,20 @@ class KnowledgeServiceQdrantOperationError(KnowledgeServiceError):
 
 
 @dataclass
+class KnowledgeServiceQdrantChunkDeletionError(KnowledgeServiceQdrantOperationError):
+    chunk_id: str
+    collection_name: str
+    reason: str
+
+    code = "qdrant_chunk_deletion_error"
+
+    def __post_init__(self):
+        super().__init__(
+            f"Failed to delete chunk {self.chunk_id} from Qdrant collection {self.collection_name}: {self.reason}"
+        )
+
+
+@dataclass
 class KnowledgeServiceQdrantMissingFieldsError(KnowledgeServiceQdrantConfigurationError):
     source_id: str
     missing: List[str]
@@ -124,5 +138,18 @@ class KnowledgeServiceDBSourceConfigError(KnowledgeServiceDBError):
     """Raised when data source is missing required database configuration (e.g., schema/table identifiers)."""
 
 
-class KnowledgeServiceDBOperationError(KnowledgeServiceDBError):
-    """Raised when a database operation fails at runtime (e.g., create/update/delete chunk failures)."""
+@dataclass
+class KnowledgeServiceDBChunkDeletionError(KnowledgeServiceDBError):
+    chunk_id: str
+    table_name: str
+    schema_name: str
+    reason: str
+
+    code = "db_chunk_deletion_error"
+
+    def __post_init__(self):
+        super().__init__(
+            f"Failed to delete chunk {self.chunk_id} "
+            f"from Table {self.table_name} "
+            f"in Schema {self.schema_name}: {self.reason}"
+        )

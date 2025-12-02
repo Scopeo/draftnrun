@@ -29,11 +29,11 @@ from ada_backend.services.knowledge.errors import (
     KnowledgeServiceQdrantCollectionCheckError,
     KnowledgeServiceQdrantCollectionNotFoundError,
     KnowledgeServiceQdrantMissingFieldsError,
-    KnowledgeServiceQdrantOperationError,
     KnowledgeServiceQdrantServiceCreationError,
+    KnowledgeServiceQdrantChunkDeletionError,
     KnowledgeSourceNotFoundError,
     KnowledgeServiceDBSourceConfigError,
-    KnowledgeServiceDBOperationError,
+    KnowledgeServiceDBChunkDeletionError,
 )
 from engine.llm_services.llm_service import EmbeddingService
 from engine.qdrant_service import QdrantService, QdrantCollectionSchema
@@ -257,7 +257,11 @@ async def delete_chunk_service(
         LOGGER.info(f"Deleted chunk {chunk_id} from Qdrant collection {source.qdrant_collection_name}")
     except Exception as e:
         LOGGER.error(f"Failed to delete chunk from Qdrant: {str(e)}", exc_info=True)
-        raise KnowledgeServiceQdrantOperationError(f"Failed to delete chunk {chunk_id} from Qdrant: {str(e)}") from e
+        raise KnowledgeServiceQdrantChunkDeletionError(
+            chunk_id=chunk_id,
+            collection_name=source.qdrant_collection_name,
+            reason=str(e),
+        ) from e
 
     try:
         delete_chunk(
@@ -272,8 +276,9 @@ async def delete_chunk_service(
             f"in Schema {source.database_schema}: {str(e)}",
             exc_info=True,
         )
-        raise KnowledgeServiceDBOperationError(
-            f"Failed to delete chunk {chunk_id} "
-            f"from Table {source.database_table_name} "
-            f"in Schema {source.database_schema}: {str(e)}"
+        raise KnowledgeServiceDBChunkDeletionError(
+            chunk_id=chunk_id,
+            table_name=source.database_table_name,
+            schema_name=source.database_schema,
+            reason=str(e),
         ) from e
