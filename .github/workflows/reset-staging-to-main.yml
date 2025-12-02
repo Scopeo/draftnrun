@@ -117,6 +117,20 @@ jobs:
             
             echo "📊 Final Alembic revision:"
             make db-current
+      
+      - name: Alembic migration checks
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.EC2_HOST_SCOPEO_STAGING }}
+          username: ec2-user
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          script: |
+            set -e
+            echo "===> Changing directory to /home/ec2-user/draftnrun"
+            cd /home/ec2-user/draftnrun
+            echo "===> Running pytest-alembic suite"
+            uv run pytest -q -m alembic tests/alembic
 
       - name: Restart services
         uses: appleboy/ssh-action@master
