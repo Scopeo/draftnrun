@@ -39,7 +39,7 @@ class UserRights(Enum):
     SUPER_ADMIN = ("super-admin",)
     ADMIN = ("super-admin", "admin")
     WRITER = ("super-admin", "admin", "developer")
-    READER = ("super-admin", "admin", "developer", "member")
+    MEMBER = ("super-admin", "admin", "developer", "member")
     USER = ("super-admin", "admin", "developer", "member", "user")
 
 
@@ -173,7 +173,7 @@ def user_has_access_to_organization_dependency(allowed_roles: set[str]):
 async def get_api_keys(
     user: Annotated[
         SupabaseUser,
-        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.USER.value)),
+        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.MEMBER.value)),
     ],
     session: Session = Depends(get_db),
     project_id: UUID = Query(..., description="The ID of the project to retrieve API keys for"),
@@ -215,7 +215,7 @@ async def create_api_key(
         raise HTTPException(status_code=400, detail="User ID not found")
 
     _is_user = user_has_access_to_project_dependency(
-        allowed_roles=set(UserRights.USER.value),
+        allowed_roles=set(UserRights.WRITER.value),
     )
     # Check if user has access to project. If not, a 403 is raised
     user = await _is_user(project_id=api_key_create.project_id, user=user, session=session)
@@ -236,7 +236,7 @@ async def create_api_key(
 async def get_org_api_keys(
     user: Annotated[
         SupabaseUser,
-        Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.USER.value)),
+        Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.MEMBER.value)),
     ],
     session: Session = Depends(get_db),
     organization_id: UUID = Query(..., description="The ID of the organization to retrieve API keys for"),
@@ -278,7 +278,7 @@ async def create_org_api_key(
         raise HTTPException(status_code=400, detail="User ID not found")
 
     _is_user = user_has_access_to_organization_dependency(
-        allowed_roles=set(UserRights.USER.value),
+        allowed_roles=set(UserRights.WRITER.value),
     )
     user = await _is_user(organization_id=org_api_key_create.org_id, user=user)
 

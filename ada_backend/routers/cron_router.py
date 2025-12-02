@@ -47,7 +47,7 @@ def get_organization_cron_jobs(
     organization_id: UUID,
     user: Annotated[
         SupabaseUser,
-        Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.READER.value)),
+        Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.MEMBER.value)),
     ],
     session: Session = Depends(get_db),
     enabled_only: bool = Query(False, description="Return only enabled cron jobs"),
@@ -71,7 +71,7 @@ def get_cron_job_details(
     cron_id: UUID,
     user: Annotated[
         SupabaseUser,
-        Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.READER.value)),
+        Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.MEMBER.value)),
     ],
     session: Session = Depends(get_db),
     include_runs: bool = Query(True, description="Include recent execution runs"),
@@ -251,7 +251,7 @@ def get_cron_job_runs(
     cron_id: UUID,
     user: Annotated[
         SupabaseUser,
-        Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.READER.value)),
+        Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.MEMBER.value)),
     ],
     session: Session = Depends(get_db),
 ):

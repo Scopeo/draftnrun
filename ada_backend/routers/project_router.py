@@ -55,7 +55,7 @@ def get_projects_by_organization_endpoint(
         SupabaseUser,
         Depends(
             user_has_access_to_organization_dependency(
-                allowed_roles=UserRights.USER.value,
+                allowed_roles=UserRights.MEMBER.value,
             )
         ),
     ],
@@ -87,7 +87,7 @@ def get_workflow_endpoint(
     project_id: UUID,
     user: Annotated[
         SupabaseUser,
-        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.USER.value)),
+        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.MEMBER.value)),
     ],
     session: Session = Depends(get_db),
 ):

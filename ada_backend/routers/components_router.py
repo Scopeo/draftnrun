@@ -48,7 +48,7 @@ def get_all_components(
     organization_id: UUID,
     user: Annotated[
         SupabaseUser,
-        Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.READER.value)),
+        Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.MEMBER.value)),
     ],
     release_stage: Optional[ReleaseStage] = None,
     session: Session = Depends(get_db),

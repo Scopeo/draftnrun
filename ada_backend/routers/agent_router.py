@@ -37,7 +37,7 @@ LOGGER = logging.getLogger(__name__)
 def get_all_agents(
     organization_id: UUID,
     user: Annotated[
-        SupabaseUser, Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.READER.value))
+        SupabaseUser, Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.MEMBER.value))
     ],
     session: Session = Depends(get_db),
 ) -> list[AgentWithGraphRunnersSchema]:
@@ -55,7 +55,7 @@ def get_agent_by_id(
     project_id: UUID,
     graph_runner_id: UUID,
     user: Annotated[
-        SupabaseUser, Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.READER.value))
+        SupabaseUser, Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.MEMBER.value))
     ],
     session: Session = Depends(get_db),
 ) -> AgentInfoSchema:

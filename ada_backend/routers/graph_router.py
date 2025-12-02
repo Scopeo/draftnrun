@@ -39,7 +39,7 @@ def get_project_graph(
     project_id: UUID,
     graph_runner_id: UUID,
     user: Annotated[
-        SupabaseUser, Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.READER.value))
+        SupabaseUser, Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.MEMBER.value))
     ],
     sqlaclhemy_db_session: Session = Depends(get_db),
 ) -> GraphGetResponse:
@@ -173,7 +173,7 @@ def load_copy_graph_runner(
     project_id: UUID,
     graph_runner_id: UUID,
     user: Annotated[
-        SupabaseUser, Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.READER.value))
+        SupabaseUser, Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.MEMBER.value))
     ],
     session: Session = Depends(get_db),
 ) -> GraphLoadResponse:

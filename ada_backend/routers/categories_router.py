@@ -28,7 +28,7 @@ LOGGER = logging.getLogger(__name__)
 @router.get(path="/categories", response_model=list[CategoryResponse])
 def get_all_categories(
     user: Annotated[
-        SupabaseUser, Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.READER.value))
+        SupabaseUser, Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.MEMBER.value))
     ],
     session: Session = Depends(get_db),
 ) -> list[CategoryResponse]:
@@ -45,7 +45,7 @@ def get_all_categories(
 def get_category_by_id(
     category_id: UUID,
     user: Annotated[
-        SupabaseUser, Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.READER.value))
+        SupabaseUser, Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.MEMBER.value))
     ],
     session: Session = Depends(get_db),
 ) -> CategoryResponse:
@@ -107,7 +107,7 @@ def update_category(
 def delete_category(
     category_id: UUID,
     user: Annotated[
-        SupabaseUser, Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.WRITER.value))
+        SupabaseUser, Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.ADMIN.value))
     ],
     session: Session = Depends(get_db),
 ) -> None:
