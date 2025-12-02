@@ -291,7 +291,6 @@ async def ingest_website_source(
         f"URL: {url}, Organization: {organization_id}"
     )
 
-    qdrant_schema = UNIFIED_QDRANT_SCHEMA
     source_type = db.SourceType.WEBSITE
 
     LOGGER.info("Starting Firecrawl website ingestion...")
@@ -300,7 +299,7 @@ async def ingest_website_source(
         organization_id,
         task_id,
         source_type,
-        qdrant_schema,
+        UNIFIED_QDRANT_SCHEMA,
         update_existing=False,
         ingestion_function=partial(
             upload_website_source,

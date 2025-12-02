@@ -451,7 +451,6 @@ async def _ingest_folder_source(
             if "url" in unified_chunks_df.columns:
                 unified_chunks_df["url"] = unified_chunks_df["url"].apply(sanitize_for_json)
 
-            # Transform to unified table format
             unified_chunks_df_for_db = transform_chunks_df_for_unified_table(unified_chunks_df, source_id)
 
             LOGGER.info(f"Sync chunks to db table {db_table_name}")
