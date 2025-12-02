@@ -208,6 +208,8 @@ def get_document_with_chunks_service(
         row_dict["bounding_boxes"] = _deserialize_json_field(row_dict.get("bounding_boxes"))
         if row_dict["metadata"] is None:
             row_dict["metadata"] = {}
+        if "document_id" not in row_dict:
+            row_dict["document_id"] = document_id
         chunks.append(KnowledgeChunk(**row_dict))
 
     first_chunk = chunks[0]

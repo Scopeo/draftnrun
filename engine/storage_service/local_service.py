@@ -75,6 +75,10 @@ class SQLLocalService(DBService):
         self.Session = sessionmaker(bind=self.engine)
         self.database_name = self.engine.url.database
 
+    def get_session(self):
+        """Create and return a new database session."""
+        return self.Session()
+
     def get_table(self, table_name: str, schema_name: Optional[str] = None) -> sqlalchemy.Table:
         """
         Get the SQLAlchemy Table object for the given table name.
