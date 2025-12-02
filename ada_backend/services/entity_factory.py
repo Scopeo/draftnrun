@@ -755,9 +755,9 @@ def build_reranker_processor(target_name: str = "reranker") -> ParameterProcesso
             )
 
         list_of_params_to_pop = [
-            {"arg": "cohere_model", "type": str},
-            {"arg": "score_threshold", "type": float},
-            {"arg": "num_doc_reranked", "type": int},
+            {"arg": "cohere_model", "type": str, "optional": False},
+            {"arg": "score_threshold", "type": float, "optional": False},
+            {"arg": "num_doc_reranked", "type": int, "optional": False},
         ]
         validated_params = _pop_and_validate_parameters(list_of_params_to_pop, params)
 
@@ -806,9 +806,9 @@ def build_vocabulary_search_processor(target_name: str = "vocabulary_search") ->
                 target_name=target_name,
             )
         list_of_params_to_pop = [
-            {"arg": "fuzzy_threshold", "type": int},
-            {"arg": "fuzzy_matching_candidates", "type": int},
-            {"arg": "vocabulary_context_prompt_key", "type": str},
+            {"arg": "fuzzy_threshold", "type": int, "optional": False},
+            {"arg": "fuzzy_matching_candidates", "type": int, "optional": False},
+            {"arg": "vocabulary_context_prompt_key", "type": str, "optional": False},
         ]
         validated_params = _pop_and_validate_parameters(list_of_params_to_pop, params)
 
