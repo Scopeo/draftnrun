@@ -36,6 +36,12 @@ LOGGER = logging.getLogger(__name__)
 ParameterProcessor = Callable[[dict, dict[str, Any]], dict]
 
 
+class ParameterToValidate(BaseModel):
+    argument: Any
+    type: Any
+    optional: bool = False
+
+
 # TODO: Remove this when llm service has only model_id as an argument
 def fetch_model_id_by_name(model_name: str) -> UUID | None:
     with get_db_session() as session:
@@ -652,12 +658,12 @@ def build_retriever_processor(target_name: str = "retriever") -> ParameterProces
             default_collection_schema=qdrant_schema,
         )
         list_of_params_to_pop = [
-            {"arg": "max_retrieved_chunks", "type": int, "optional": False},
-            {"arg": "enable_date_penalty_for_chunks", "type": bool, "optional": False},
-            {"arg": "chunk_age_penalty_rate", "type": float, "optional": True},
-            {"arg": "default_penalty_rate", "type": float, "optional": True},
-            {"arg": "max_retrieved_chunks_after_penalty", "type": int, "optional": True},
-            {"arg": "metadata_date_key", "type": str, "optional": True},
+            ParameterToValidate(argument="max_retrieved_chunks", type=int, optional=False),
+            ParameterToValidate(argument="enable_date_penalty_for_chunks", type=bool, optional=False),
+            ParameterToValidate(argument="chunk_age_penalty_rate", type=float, optional=True),
+            ParameterToValidate(argument="default_penalty_rate", type=float, optional=True),
+            ParameterToValidate(argument="max_retrieved_chunks_after_penalty", type=int, optional=True),
+            ParameterToValidate(argument="metadata_date_key", type=str, optional=True),
         ]
         validated_params = _pop_and_validate_parameters(list_of_params_to_pop, params)
 
@@ -755,9 +761,9 @@ def build_reranker_processor(target_name: str = "reranker") -> ParameterProcesso
             )
 
         list_of_params_to_pop = [
-            {"arg": "cohere_model", "type": str, "optional": False},
-            {"arg": "score_threshold", "type": float, "optional": False},
-            {"arg": "num_doc_reranked", "type": int, "optional": False},
+            ParameterToValidate(argument="cohere_model", type=str, optional=False),
+            ParameterToValidate(argument="score_threshold", type=float, optional=False),
+            ParameterToValidate(argument="num_doc_reranked", type=int, optional=False),
         ]
         validated_params = _pop_and_validate_parameters(list_of_params_to_pop, params)
 
@@ -806,9 +812,9 @@ def build_vocabulary_search_processor(target_name: str = "vocabulary_search") ->
                 target_name=target_name,
             )
         list_of_params_to_pop = [
-            {"arg": "fuzzy_threshold", "type": int, "optional": False},
-            {"arg": "fuzzy_matching_candidates", "type": int, "optional": False},
-            {"arg": "vocabulary_context_prompt_key", "type": str, "optional": False},
+            ParameterToValidate(argument="fuzzy_threshold", type=int, optional=False),
+            ParameterToValidate(argument="fuzzy_matching_candidates", type=int, optional=False),
+            ParameterToValidate(argument="vocabulary_context_prompt_key", type=str, optional=False),
         ]
         validated_params = _pop_and_validate_parameters(list_of_params_to_pop, params)
 
@@ -887,18 +893,6 @@ def _pop_and_validate_parameter(params: dict, parameter_name: str, expected_type
     Pops a parameter from params dict, validates and converts its type.
     The goal is not rely on running the component to get an error if a parameter coming from the
     front is of a bad type but raise the error directly when trying to save the graph.
-
-    Args:
-        params: Dictionary to pop parameter from
-        parameter_name: Name of the parameter to pop
-        expected_type: Type to convert the parameter to
-        error_message: Error message prefix if conversion fails
-
-    Returns:
-        The converted parameter value
-
-    Raises:
-        ValueError: If conversion fails or parameter is missing
     """
     try:
         parameter_value = params.pop(parameter_name)
@@ -927,27 +921,16 @@ def _remove_parameters_from_optional_subcomponents(params: dict, parameters_name
     return params
 
 
-def _pop_and_validate_parameters(list_of_params: list[dict[str, Any]], params: dict) -> dict[str, Any]:
+def _pop_and_validate_parameters(list_of_params: list[ParameterToValidate], params: dict) -> dict[str, Any]:
     """
     Pops and validates multiple parameters from params dict.
-
-    Args:
-        list_of_params: List of dictionaries containing parameter details:
-                        - arg: Name of the parameter to pop
-                        - type: Expected type of the parameter
-                        - optional: (optional) If True, parameter can be missing or None
-    Returns:
-        Dictionary of validated parameters
-
-    Raises:
-        ValueError: If conversion fails or required parameter is missing
     """
     validated_params = {}
     for param in list_of_params:
-        arg = param["arg"]
-        expected_type = param["type"]
+        arg = param.argument
+        expected_type = param.type
         error_message = f"{arg} must be of type {expected_type.__name__}"
-        is_optional = param.get("optional", False)
+        is_optional = param.optional
         if (not is_optional) or (arg in params and params[arg] is not None):
             validated_params[arg] = _pop_and_validate_parameter(params, arg, expected_type, error_message)
         else:
