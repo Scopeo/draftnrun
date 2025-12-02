@@ -6,6 +6,7 @@ import json
 import numpy as np
 import pandas as pd
 from sqlalchemy import text
+from sqlalchemy.orm import Session
 
 from ada_backend.database.models import CallType
 from engine.trace.sql_exporter import get_session_trace
@@ -14,48 +15,38 @@ LOGGER = logging.getLogger(__name__)
 
 
 def query_total_credits(
+    session: Session,
     project_id: UUID,
     duration_days: int,
     call_type: CallType | None = None,
 ) -> float:
     """
-    Query total credits (LLM + Component) for a project using SQL.
+    Query total credits from the usages table for a project.
 
     Args:
+        session: Database session from FastAPI
         project_id: The project ID to calculate credits for
         duration_days: Number of days to look back
-        call_type: Optional filter for specific call types
+        call_type: Optional filter for specific call types (not currently supported for usages table)
 
     Returns:
         Total credits as a float
     """
-    start_time = (datetime.now() - timedelta(days=duration_days)).isoformat()
-
-    call_type_filter = ""
-    if call_type is not None:
-        call_type_filter = f"AND s.call_type = '{call_type.value}'"
+    today = datetime.now()
+    today_year = today.year
+    today_month = today.month
 
     query = f"""
         SELECT
-            COALESCE(SUM(
-                COALESCE(su.credits_input_token, 0)
-                + COALESCE(su.credits_output_token, 0)
-                + COALESCE(su.credits_per_call, 0)
-                + COALESCE(su.credits_per_second, 0)
-            ), 0) as total_credits
-        FROM credits.span_usages su
-        JOIN traces.spans s ON s.span_id = su.span_id
-        WHERE s.project_id = '{project_id}'
-        AND s.start_time > '{start_time}'
-        {call_type_filter}
+            COALESCE(SUM(credits_used), 0) as total_credits
+        FROM credits.usages
+        WHERE project_id = '{project_id}'
+        AND year = {today_year}
+        AND month = {today_month}
     """
 
-    session = get_session_trace()
-    try:
-        result = session.execute(text(query)).scalar()
-        return round(float(result) if result else 0.0, 2)
-    finally:
-        session.close()
+    result = session.execute(text(query)).scalar()
+    return round(float(result) if result else 0.0, 2)
 
 
 def query_trace_duration(project_id: UUID, duration_days: int, call_type: CallType | None = None) -> pd.DataFrame:
