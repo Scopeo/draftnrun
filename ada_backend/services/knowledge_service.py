@@ -187,7 +187,6 @@ def get_document_with_chunks_service(
 ) -> KnowledgeDocumentWithChunks:
     source = _get_source_for_organization(session, organization_id, source_id)
     sql_local_service = get_sql_local_service_for_ingestion()
-    session = sql_local_service.get_session()
     rows, table = get_chunk_rows_for_document(
         sql_local_service, source.database_schema, source.database_table_name, document_id
     )
