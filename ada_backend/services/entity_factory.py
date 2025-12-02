@@ -11,6 +11,9 @@ from pydantic import BaseModel
 
 from engine.agent.types import ToolDescription
 from engine.agent.rag.retriever import Retriever
+from engine.agent.rag.cohere_reranker import CohereReranker
+from engine.agent.rag.vocabulary_search import VocabularySearch
+from engine.agent.rag.formatter import Formatter
 from engine.agent.synthesizer import Synthesizer
 from engine.trace.trace_context import get_trace_manager
 from engine.llm_services.llm_service import EmbeddingService, CompletionService, WebSearchService, OCRService
@@ -31,6 +34,12 @@ from engine.storage_service.local_service import SQLLocalService
 LOGGER = logging.getLogger(__name__)
 
 ParameterProcessor = Callable[[dict, dict[str, Any]], dict]
+
+
+class ParameterToValidate(BaseModel):
+    argument: Any
+    type: Any
+    optional: bool = False
 
 
 # TODO: Remove this when llm service has only model_id as an argument
@@ -648,57 +657,22 @@ def build_retriever_processor(target_name: str = "retriever") -> ParameterProces
             embedding_service=embedding_service,
             default_collection_schema=qdrant_schema,
         )
+        list_of_params_to_pop = [
+            ParameterToValidate(argument="max_retrieved_chunks", type=int, optional=False),
+            ParameterToValidate(argument="enable_date_penalty_for_chunks", type=bool, optional=False),
+            ParameterToValidate(argument="chunk_age_penalty_rate", type=float, optional=True),
+            ParameterToValidate(argument="default_penalty_rate", type=float, optional=True),
+            ParameterToValidate(argument="max_retrieved_chunks_after_penalty", type=int, optional=True),
+            ParameterToValidate(argument="metadata_date_key", type=str, optional=True),
+        ]
+        validated_params = _pop_and_validate_parameters(list_of_params_to_pop, params)
 
-        max_retrieved_chunks = params.pop("max_retrieved_chunks", None)
-        if max_retrieved_chunks is not None:
-            try:
-                max_retrieved_chunks = int(max_retrieved_chunks)
-            except ValueError as e:
-                raise ValueError(f"max_retrieved_chunks must be an integer, got {max_retrieved_chunks}: {e}")
-
-        enable_date_penalty = params.pop("enable_date_penalty_for_chunks", None)
-        if enable_date_penalty is not None:
-            try:
-                enable_date_penalty = bool(enable_date_penalty)
-            except (AttributeError, ValueError) as e:
-                raise ValueError(f"enable_date_penalty_for_chunks must be a boolean, got {enable_date_penalty}: {e}")
-
-        chunk_age_penalty_rate = params.pop("chunk_age_penalty_rate", None)
-        if chunk_age_penalty_rate is not None:
-            try:
-                chunk_age_penalty_rate = float(chunk_age_penalty_rate)
-            except ValueError as e:
-                raise ValueError(f"chunk_age_penalty_rate must be a float, got {chunk_age_penalty_rate}: {e}")
-
-        default_penalty_rate = params.pop("default_penalty_rate", None)
-        if default_penalty_rate is not None:
-            try:
-                default_penalty_rate = float(default_penalty_rate)
-            except ValueError as e:
-                raise ValueError(f"default_penalty_rate must be a float, got {default_penalty_rate}: {e}")
-
-        metadata_date_key = params.pop("metadata_date_key", None)
-
-        max_retrieved_chunks_after_penalty = params.pop("max_retrieved_chunks_after_penalty", None)
-        if max_retrieved_chunks_after_penalty is not None:
-            try:
-                max_retrieved_chunks_after_penalty = int(max_retrieved_chunks_after_penalty)
-            except ValueError as e:
-                raise ValueError(
-                    "max_retrieved_chunks_after_penalty must be an integer, "
-                    f"got {max_retrieved_chunks_after_penalty}: {e}"
-                )
         retriever = Retriever(
             trace_manager=get_trace_manager(),
             qdrant_service=qdrant_service,
             collection_name=collection_name,
-            max_retrieved_chunks=max_retrieved_chunks,
-            enable_date_penalty_for_chunks=enable_date_penalty,
-            chunk_age_penalty_rate=chunk_age_penalty_rate,
-            default_penalty_rate=default_penalty_rate,
-            metadata_date_key=metadata_date_key,
-            max_retrieved_chunks_after_penalty=max_retrieved_chunks_after_penalty,
-            component_attributes=params.pop("component_attributes", None),
+            component_attributes=None,
+            **validated_params,
         )
 
         params[target_name] = retriever
@@ -755,10 +729,145 @@ def build_synthesizer_processor(target_name: str = "synthesizer") -> ParameterPr
             completion_service=completion_service,
             trace_manager=get_trace_manager(),
             prompt_template=prompt_template,
-            component_attributes=params.pop("component_attributes", None),
+            component_attributes=None,
         )
 
         params[target_name] = synthesizer
+        return params
+
+    return processor
+
+
+def build_reranker_processor(target_name: str = "reranker") -> ParameterProcessor:
+    """
+    Creates a processor that builds a CohereReranker from reranker-specific parameters.
+    Only creates the reranker if use_reranker is True.
+
+    Args:
+        target_name (str): Parameter name for the created Reranker.
+
+    Returns:
+        ParameterProcessor: A processor function that handles Reranker creation
+    """
+
+    def processor(params: dict, constructor_params: dict[str, Any]) -> dict:
+        use_reranker = _pop_and_validate_parameter(params, "use_reranker", bool, "use_reranker must be a boolean")
+
+        if not use_reranker:
+            return _remove_parameters_from_optional_subcomponents(
+                params,
+                parameters_name=["cohere_model", "score_threshold", "num_doc_reranked", "cohere_api_key"],
+                target_name=target_name,
+            )
+
+        list_of_params_to_pop = [
+            ParameterToValidate(argument="cohere_model", type=str, optional=False),
+            ParameterToValidate(argument="score_threshold", type=float, optional=False),
+            ParameterToValidate(argument="num_doc_reranked", type=int, optional=False),
+        ]
+        validated_params = _pop_and_validate_parameters(list_of_params_to_pop, params)
+
+        cohere_api_key = params.pop("cohere_api_key", None)
+
+        reranker_params = {"cohere_api_key": cohere_api_key, **validated_params}
+
+        reranker = CohereReranker(
+            trace_manager=get_trace_manager(),
+            component_attributes=None,
+            **reranker_params,
+        )
+
+        params[target_name] = reranker
+        return params
+
+    return processor
+
+
+def build_vocabulary_search_processor(target_name: str = "vocabulary_search") -> ParameterProcessor:
+    """
+    Creates a processor that builds a VocabularySearch from vocabulary search parameters.
+    Only creates the vocabulary search if use_vocabulary_search is True.
+
+    Args:
+        target_name (str): Parameter name for the created VocabularySearch.
+
+    Returns:
+        ParameterProcessor: A processor function that handles VocabularySearch creation
+    """
+
+    def processor(params: dict, constructor_params: dict[str, Any]) -> dict:
+        use_vocabulary_search = _pop_and_validate_parameter(
+            params, "use_vocabulary_search", bool, "use_vocabulary_search must be a boolean"
+        )
+
+        if not use_vocabulary_search:
+            return _remove_parameters_from_optional_subcomponents(
+                params,
+                parameters_name=[
+                    "vocabulary_context_data",
+                    "fuzzy_threshold",
+                    "fuzzy_matching_candidates",
+                    "vocabulary_context_prompt_key",
+                ],
+                target_name=target_name,
+            )
+        list_of_params_to_pop = [
+            ParameterToValidate(argument="fuzzy_threshold", type=int, optional=False),
+            ParameterToValidate(argument="fuzzy_matching_candidates", type=int, optional=False),
+            ParameterToValidate(argument="vocabulary_context_prompt_key", type=str, optional=False),
+        ]
+        validated_params = _pop_and_validate_parameters(list_of_params_to_pop, params)
+
+        vocabulary_context_data = params.pop("vocabulary_context_data")
+        if isinstance(vocabulary_context_data, str):
+            try:
+                vocabulary_context_data = json.loads(vocabulary_context_data)
+            except json.JSONDecodeError as e:
+                raise ValueError(f"vocabulary_context_data must be valid JSON, got {vocabulary_context_data}: {e}")
+
+        if not isinstance(vocabulary_context_data, dict):
+            raise ValueError(f"vocabulary_context_data must be a dict, got {type(vocabulary_context_data)}")
+
+        vocab_params = {"vocabulary_context_data": vocabulary_context_data, **validated_params}
+
+        vocabulary_search = VocabularySearch(
+            trace_manager=get_trace_manager(),
+            component_attributes=None,
+            **vocab_params,
+        )
+
+        params[target_name] = vocabulary_search
+        return params
+
+    return processor
+
+
+def build_formatter_processor(target_name: str = "formatter") -> ParameterProcessor:
+    """
+    Creates a processor that builds a Formatter from formatter parameters.
+    Only creates the formatter if use_formatter is True.
+
+    Args:
+        target_name (str): Parameter name for the created Formatter.
+
+    Returns:
+        ParameterProcessor: A processor function that handles Formatter creation
+    """
+
+    def processor(params: dict, constructor_params: dict[str, Any]) -> dict:
+        use_formatter = _pop_and_validate_parameter(params, "use_formatter", bool, "use_formatter must be a boolean")
+
+        if not use_formatter:
+            return _remove_parameters_from_optional_subcomponents(params, ["add_sources"], target_name)
+
+        add_sources = _pop_and_validate_parameter(params, "add_sources", bool, "add_sources must be a boolean")
+
+        formatter = Formatter(
+            add_sources=add_sources,
+            component_attributes=None,
+        )
+
+        params[target_name] = formatter
         return params
 
     return processor
@@ -777,3 +886,53 @@ def compose_processors(*processors: ParameterProcessor) -> ParameterProcessor:
         return result
 
     return composed_processor
+
+
+def _pop_and_validate_parameter(params: dict, parameter_name: str, expected_type: type, error_message: str) -> Any:
+    """
+    Pops a parameter from params dict, validates and converts its type.
+    The goal is not rely on running the component to get an error if a parameter coming from the
+    front is of a bad type but raise the error directly when trying to save the graph.
+    """
+    try:
+        parameter_value = params.pop(parameter_name)
+    except KeyError:
+        raise ValueError(f"{error_message}: parameter '{parameter_name}' is required but not found")
+
+    if parameter_value is None:
+        raise ValueError(f"{error_message}: parameter '{parameter_name}' cannot be None")
+
+    if expected_type is str:
+        if not isinstance(parameter_value, str):
+            raise ValueError(f"{error_message}, got {type(parameter_value).__name__}: {parameter_value}")
+        return parameter_value
+
+    try:
+        parameter_value = expected_type(parameter_value)
+    except ValueError as e:
+        raise ValueError(f"{error_message}, got {parameter_value}: {e}")
+    return parameter_value
+
+
+def _remove_parameters_from_optional_subcomponents(params: dict, parameters_name: list[str], target_name: str) -> dict:
+    for parameter in parameters_name:
+        params.pop(parameter, None)
+    params[target_name] = None
+    return params
+
+
+def _pop_and_validate_parameters(list_of_params: list[ParameterToValidate], params: dict) -> dict[str, Any]:
+    """
+    Pops and validates multiple parameters from params dict.
+    """
+    validated_params = {}
+    for param in list_of_params:
+        arg = param.argument
+        expected_type = param.type
+        error_message = f"{arg} must be of type {expected_type.__name__}"
+        is_optional = param.optional
+        if (not is_optional) or (arg in params and params[arg] is not None):
+            validated_params[arg] = _pop_and_validate_parameter(params, arg, expected_type, error_message)
+        else:
+            params.pop(arg, None)
+    return validated_params
