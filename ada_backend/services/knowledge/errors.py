@@ -2,10 +2,6 @@ class KnowledgeServiceError(Exception):
     """Base exception for Knowledge service errors."""
 
 
-class KnowledgeServiceChunkWrongSizeError(KnowledgeServiceError):
-    """Raised when user attempts to create/update chunks with wrong token size."""
-
-
 class KnowledgeServiceQdrantConfigurationError(KnowledgeServiceError):
     """Raised when Qdrant configuration is missing or invalid (validation/configuration errors)."""
 
@@ -28,10 +24,6 @@ class KnowledgeServiceDBError(KnowledgeServiceError):
 
 class KnowledgeServiceDBSourceConfigError(KnowledgeServiceDBError):
     """Raised when data source is missing required database configuration (e.g., schema/table identifiers)."""
-
-
-class KnowledgeServiceChunkAlreadyExistsError(KnowledgeServiceDBError):
-    """Raised when attempting to create a chunk that already exists in the database."""
 
 
 class KnowledgeServiceDBOperationError(KnowledgeServiceDBError):

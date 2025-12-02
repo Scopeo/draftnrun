@@ -25,20 +25,6 @@ PANDAS_DTYPE_MAPPING: dict[str, str] = {
     "VARIANT": "object",
 }
 
-DEFAULT_VALUE_MAPPING: dict[str, Any] = {
-    "STRING": "",
-    "VARCHAR": "",
-    "TEXT": "",
-    "TIMESTAMP": lambda: datetime.utcnow().isoformat(),
-    "DATETIME": lambda: datetime.utcnow().isoformat(),
-    "INTEGER": 0,
-    "FLOAT": 0.0,
-    "BOOLEAN": False,
-    "ARRAY": {},
-    "VARIANT": {},
-    "JSON": {},
-}
-
 
 class DBColumn(BaseModel):
     name: str
@@ -115,36 +101,3 @@ def check_columns_matching_between_data_and_database_table(columns_data, table_d
     if set(columns_data) != set(column_table):
         LOGGER.error(f"Columns in data and table do not match : data {columns_data}, table {column_table}")
         raise ValueError("Columns in data and table do not match")
-
-
-def get_default_value_for_column_type(column_type: str) -> Any:
-    """
-    Get a default value based on SQL column type.
-    Uses DEFAULT_VALUE_MAPPING to determine the appropriate default value.
-
-    Args:
-        column_type: SQL column type string (e.g., "VARCHAR", "INTEGER", "VARIANT")
-
-    Returns:
-        Default value appropriate for the column type:
-        - VARIANT/ARRAY types → {}
-        - TIMESTAMP/DATETIME types → current datetime ISO string
-        - INTEGER → 0
-        - FLOAT → 0.0
-        - BOOLEAN → False
-        - STRING/VARCHAR/TEXT → ""
-    """
-    type_upper = str(column_type).upper()
-
-    if type_upper in DEFAULT_VALUE_MAPPING:
-        default_value = DEFAULT_VALUE_MAPPING[type_upper]
-        if callable(default_value):
-            return default_value()
-        return default_value
-
-    for mapped_type, default_value in DEFAULT_VALUE_MAPPING.items():
-        if mapped_type in type_upper:
-            if callable(default_value):
-                return default_value()
-            return default_value
-    raise ValueError("Unknown column type to get default " f"value on: {column_type}")
