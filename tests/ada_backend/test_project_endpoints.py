@@ -2,7 +2,7 @@ from uuid import uuid4
 from fastapi.testclient import TestClient
 
 from ada_backend.main import app
-from ada_backend.database.seed.utils import COMPONENT_UUIDS
+from ada_backend.database.seed.utils import COMPONENT_UUIDS, COMPONENT_VERSION_UUIDS
 from ada_backend.scripts.get_supabase_token import get_user_jwt
 from settings import settings
 
@@ -117,3 +117,141 @@ def test_delete_project():
     # Verify that the project has been deleted
     response = client.get(endpoint, headers=HEADERS_JWT)
     assert response.status_code == 404
+
+
+def test_chat_endpoint_missing_prompt_key():
+    """Test that chat endpoint returns HTTP 400 when prompt template key is missing."""
+    project_uuid = str(uuid4())
+    project_payload = {
+        "project_id": project_uuid,
+        "project_name": f"test_missing_key_{project_uuid}",
+        "description": "Test project for missing prompt key error",
+    }
+
+    project_response = client.post(f"/projects/{ORGANIZATION_ID}", headers=HEADERS_JWT, json=project_payload)
+    assert project_response.status_code == 200
+
+    project_details = client.get(f"/projects/{project_uuid}", headers=HEADERS_JWT).json()
+    graph_runner_id = None
+    for gr in project_details["graph_runners"]:
+        if gr["env"] == "draft":
+            graph_runner_id = gr["graph_runner_id"]
+            break
+    assert graph_runner_id is not None
+
+    start_id = str(uuid4())
+    llm_call_id = str(uuid4())
+    edge_id = str(uuid4())
+
+    workflow_config = {
+        "component_instances": [
+            {
+                "is_agent": True,
+                "is_protected": False,
+                "function_callable": False,
+                "can_use_function_calling": False,
+                "tool_parameter_name": None,
+                "subcomponents_info": [],
+                "id": start_id,
+                "name": "Start",
+                "ref": "Start",
+                "is_start_node": True,
+                "component_id": str(COMPONENT_UUIDS["start"]),
+                "component_version_id": str(COMPONENT_VERSION_UUIDS["start"]),
+                "parameters": [
+                    {
+                        "value": '{"messages": []}',
+                        "name": "payload_schema",
+                        "order": None,
+                        "type": "string",
+                        "nullable": False,
+                        "default": '{"messages": []}',
+                        "ui_component": "Textarea",
+                        "ui_component_properties": {},
+                        "is_advanced": False,
+                    }
+                ],
+                "tool_description": {
+                    "name": "default",
+                    "description": "",
+                    "tool_properties": {},
+                    "required_tool_properties": [],
+                },
+                "component_name": "Start",
+                "component_description": "This block is triggered by an API call",
+            },
+            {
+                "is_agent": True,
+                "is_protected": False,
+                "function_callable": False,
+                "can_use_function_calling": False,
+                "tool_parameter_name": None,
+                "subcomponents_info": [],
+                "id": llm_call_id,
+                "name": "LLM Call",
+                "ref": "",
+                "is_start_node": False,
+                "component_id": str(COMPONENT_UUIDS["llm_call"]),
+                "component_version_id": str(COMPONENT_VERSION_UUIDS["llm_call"]),
+                "parameters": [
+                    {
+                        "value": "Hello {user_name}, {input}",
+                        "name": "prompt_template",
+                        "order": None,
+                        "type": "string",
+                        "nullable": False,
+                        "default": "Answer this question: {input}",
+                        "ui_component": "Textarea",
+                        "ui_component_properties": {},
+                        "is_advanced": False,
+                    },
+                    {
+                        "value": "openai:gpt-4o-mini",
+                        "name": "completion_model",
+                        "order": None,
+                        "type": "string",
+                        "nullable": False,
+                        "default": "openai:gpt-4o-mini",
+                        "ui_component": "Select",
+                        "ui_component_properties": {},
+                        "is_advanced": False,
+                    },
+                ],
+                "tool_description": {
+                    "name": "default",
+                    "description": "",
+                    "tool_properties": {},
+                    "required_tool_properties": [],
+                },
+                "component_name": "LLM Call",
+                "component_description": "Templated LLM Call",
+            },
+        ],
+        "relationships": [],
+        "edges": [{"id": edge_id, "origin": start_id, "destination": llm_call_id, "order": 0}],
+        "port_mappings": [
+            {
+                "source_instance_id": start_id,
+                "source_port_name": "messages",
+                "target_instance_id": llm_call_id,
+                "target_port_name": "messages",
+            }
+        ],
+    }
+
+    update_response = client.put(
+        f"/projects/{project_uuid}/graph/{graph_runner_id}", headers=HEADERS_JWT, json=workflow_config
+    )
+    assert update_response.status_code == 200
+
+    chat_payload = {"messages": [{"role": "user", "content": "Hello"}]}
+
+    chat_response = client.post(
+        f"/projects/{project_uuid}/graphs/{graph_runner_id}/chat", headers=HEADERS_JWT, json=chat_payload
+    )
+
+    assert chat_response.status_code == 400
+    assert "Missing" in chat_response.json()["detail"]
+    assert "user_name" in chat_response.json()["detail"]
+
+    client.delete(f"/projects/{project_uuid}", headers=HEADERS_JWT)

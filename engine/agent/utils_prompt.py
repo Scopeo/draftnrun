@@ -1,6 +1,11 @@
 import logging
 import re
 
+from engine.agent.errors import (
+    MissingKeyFromPromptTemplateError,
+    WrongKeyTypeInjectionFromPromptTemplateError,
+)
+
 LOGGER = logging.getLogger(__name__)
 
 
@@ -44,7 +49,7 @@ def fill_prompt_template(prompt_template: str, component_name: str = "", variabl
             f"Available template vars: {list(variables.keys())}"
         )
         LOGGER.error(error_message)
-        raise ValueError(error_message)
+        raise MissingKeyFromPromptTemplateError(error_message)
 
     for var_name in template_vars:
         if var_name in variables:
@@ -64,8 +69,9 @@ def fill_prompt_template(prompt_template: str, component_name: str = "", variabl
         try:
             str_value = str(value)
         except Exception as e:
-            LOGGER.error(f"Value for key '{key}' cannot be cast to string: {e}")
-            raise ValueError(f"Value for key '{key}' cannot be cast to string: {e}")
+            error_message = f"Value for key '{key}' cannot be cast to string: {e}"
+            LOGGER.error(error_message)
+            raise WrongKeyTypeInjectionFromPromptTemplateError(error_message)
         filtered_input[key] = str_value
 
     return escaped_template.format(**filtered_input)
