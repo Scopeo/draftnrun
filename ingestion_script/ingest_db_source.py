@@ -238,9 +238,6 @@ async def ingestion_database(
     source_id: Optional[UUID] = None,
 ) -> None:
 
-    db_definition = UNIFIED_TABLE_DEFINITION
-    qdrant_schema = UNIFIED_QDRANT_SCHEMA
-
     source_type = db.SourceType.DATABASE
     LOGGER.info("Start ingestion data from the database source...")
     await upload_source(
@@ -248,11 +245,11 @@ async def ingestion_database(
         organization_id,
         task_id,
         source_type,
-        qdrant_schema,
+        UNIFIED_QDRANT_SCHEMA,
         update_existing=update_existing,
         ingestion_function=partial(
             upload_db_source,
-            db_definition=db_definition,
+            db_definition=UNIFIED_TABLE_DEFINITION,
             source_db_url=source_db_url,
             source_schema_name=source_schema_name,
             source_table_name=source_table_name,
