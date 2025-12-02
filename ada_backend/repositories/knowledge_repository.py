@@ -1,10 +1,8 @@
-import json
 import logging
 from typing import Any, Dict, List
 
 from sqlalchemy import func, select, delete
 
-from ada_backend.services.knowledge.errors import KnowledgeServiceChunkNotFoundError, KnowledgeServiceFileNotFoundError
 from engine.storage_service.local_service import SQLLocalService
 
 
@@ -53,15 +51,14 @@ def delete_document(
     schema_name: str,
     table_name: str,
     document_id: str,
-) -> None:
+) -> bool:
     table = sql_local_service.get_table(table_name=table_name, schema_name=schema_name)
     # TODO: Change file_id to document_id
     stmt = delete(table).where(table.c.file_id == document_id)
     with sql_local_service.execute_query(stmt) as (result, connection):
         if result.rowcount == 0:
-            raise KnowledgeServiceFileNotFoundError(
-                f"No rows deleted for document_id='{document_id}' in table '{table_name}'"
-            )
+            return False
+        return True
 
 
 def delete_chunk(
@@ -69,9 +66,10 @@ def delete_chunk(
     schema_name: str,
     table_name: str,
     chunk_id: str,
-) -> None:
+) -> bool:
     table = sql_local_service.get_table(table_name=table_name, schema_name=schema_name)
     stmt = delete(table).where(table.c.chunk_id == chunk_id)
     with sql_local_service.execute_query(stmt) as (result, _):
         if result.rowcount == 0:
-            raise KnowledgeServiceChunkNotFoundError(f"Chunk with id='{chunk_id}' not found in table '{table_name}'")
+            return False
+        return True

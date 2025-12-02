@@ -1,7 +1,7 @@
 import logging
 from fastapi import APIRouter
 from typing import Annotated
-from fastapi import Depends, HTTPException, Query, Response, status
+from fastapi import Depends, HTTPException
 from uuid import UUID
 
 from engine.storage_service.db_utils import DBDefinition
@@ -18,7 +18,6 @@ from ada_backend.schemas.ingestion_database_schema import (
 from ada_backend.services.ingestion_database_service import (
     create_table_in_ingestion_db,
     update_chunk_info_in_ingestion_db,
-    delete_chunks_from_ingestion_db,
 )
 
 

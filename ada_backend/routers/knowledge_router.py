@@ -90,7 +90,10 @@ def get_document_detail(
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
         LOGGER.error(
-            f"Failed to get document detail {document_id} for source {source_id} in organization {organization_id}: {str(e)}",
+            (
+                f"Failed to get document detail {document_id} for source {source_id} "
+                f"in organization {organization_id}: {str(e)}"
+            ),
             exc_info=True,
         )
         raise HTTPException(status_code=500, detail="Internal server error") from e
@@ -120,7 +123,10 @@ def delete_document(
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
         LOGGER.error(
-            f"Failed to delete document {document_id} for source {source_id} in organization {organization_id}: {str(e)}",
+            (
+                f"Failed to delete document {document_id} for source {source_id} "
+                f"in organization {organization_id}: {str(e)}"
+            ),
             exc_info=True,
         )
         raise HTTPException(status_code=500, detail="Internal server error") from e

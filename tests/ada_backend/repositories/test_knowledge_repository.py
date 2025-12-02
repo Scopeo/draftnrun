@@ -1,4 +1,3 @@
-import json
 from pathlib import Path
 from typing import Iterator
 
@@ -13,7 +12,6 @@ from ada_backend.repositories.knowledge_repository import (
     list_files_for_source,
 )
 from ada_backend.services.knowledge.errors import (
-    KnowledgeServiceChunkNotFoundError,
     KnowledgeServiceFileNotFoundError,
 )
 
@@ -149,16 +147,6 @@ def test_delete_chunk_removes_row(sql_local_service: SQLLocalService) -> None:
     )
 
 
-def test_delete_chunk_raises_for_missing_chunk(sql_local_service: SQLLocalService) -> None:
-    with pytest.raises(KnowledgeServiceChunkNotFoundError):
-        delete_chunk(
-            sql_local_service=sql_local_service,
-            schema_name=None,
-            table_name="knowledge_chunks",
-            chunk_id="missing",
-        )
-
-
 def test_delete_chunk_is_idempotent(sql_local_service: SQLLocalService) -> None:
     """Test that deleting a chunk multiple times is idempotent (second delete raises error)."""
     _insert_rows(
@@ -184,11 +172,10 @@ def test_delete_chunk_is_idempotent(sql_local_service: SQLLocalService) -> None:
         chunk_id="c1",
     )
 
-    # Second delete should raise error (chunk not found)
-    with pytest.raises(KnowledgeServiceChunkNotFoundError):
-        delete_chunk(
-            sql_local_service=sql_local_service,
-            schema_name=None,
-            table_name="knowledge_chunks",
-            chunk_id="c1",
-        )
+    # second delete should succeed
+    delete_chunk(
+        sql_local_service=sql_local_service,
+        schema_name=None,
+        table_name="knowledge_chunks",
+        chunk_id="c1",
+    )

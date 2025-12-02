@@ -28,7 +28,6 @@ from ada_backend.services.knowledge.errors import (
     KnowledgeServiceSourceError,
     KnowledgeServiceDBSourceConfigError,
     KnowledgeServiceDBOperationError,
-    KnowledgeServiceChunkNotFoundError,
 )
 from engine.llm_services.llm_service import EmbeddingService
 from engine.qdrant_service import QdrantService, QdrantCollectionSchema
@@ -236,8 +235,6 @@ async def delete_chunk_service(
             table_name=source.database_table_name,
             chunk_id=chunk_id,
         )
-    except KnowledgeServiceChunkNotFoundError:
-        raise
     except Exception as e:
         LOGGER.error(
             f"Failed to delete chunk from Table {source.database_table_name}"

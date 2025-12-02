@@ -13,14 +13,8 @@ import pytest
 from sqlalchemy import text
 
 from ada_backend.services import knowledge_service
-from ada_backend.schemas.knowledge_schema import (
-    KnowledgeChunk,
-)
 from ada_backend.services.knowledge.errors import (
-    KnowledgeServiceChunkWrongSizeError,
-    KnowledgeServiceFileNotFoundError,
     KnowledgeServiceQdrantConfigurationError,
-    KnowledgeServiceChunkNotFoundError,
 )
 from engine.llm_services.llm_service import EmbeddingService
 from engine.qdrant_service import QdrantCollectionSchema, QdrantService
@@ -340,14 +334,12 @@ def test_delete_chunk_is_idempotent(
         )
     )
 
-    with pytest.raises(KnowledgeServiceChunkNotFoundError):
-        asyncio.run(
-            knowledge_service.delete_chunk_service(
-                session=mock_session,
-                organization_id=uuid4(),
-                source_id=test_source.id,
-                chunk_id=dummy_chunk_id,
-            )
+    asyncio.run(
+        knowledge_service.delete_chunk_service(
+            session=mock_session,
+            organization_id=uuid4(),
+            source_id=test_source.id,
+            chunk_id=dummy_chunk_id,
         )
-
+    )
     _cleanup_test_environment(sql_local_service, qdrant_service, test_source)

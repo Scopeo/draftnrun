@@ -30,10 +30,6 @@ class KnowledgeServiceDBSourceConfigError(KnowledgeServiceDBError):
     """Raised when data source is missing required database configuration (e.g., schema/table identifiers)."""
 
 
-class KnowledgeServiceChunkNotFoundError(KnowledgeServiceDBError):
-    """Raised when a chunk cannot be found in the database."""
-
-
 class KnowledgeServiceChunkAlreadyExistsError(KnowledgeServiceDBError):
     """Raised when attempting to create a chunk that already exists in the database."""
 
