@@ -193,7 +193,10 @@ def get_document_with_chunks_service(
 
     if not rows:
         LOGGER.error(
-            f"Document with id='{document_id}' not found for source '{source_id}' in database table '{source.database_table_name}'"
+            (
+                f"Document with id='{document_id}' not found for "
+                f"source '{source_id}' in database table '{source.database_table_name}'"
+            )
         )
         raise KnowledgeServiceDocumentNotFoundError(
             document_id=document_id,
