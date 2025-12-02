@@ -8,19 +8,12 @@ from sqlalchemy import select
 from engine.storage_service.local_service import SQLLocalService
 from tests.ada_backend.test_utils_knowledge import get_knowledge_chunks_table_definition
 from ada_backend.repositories.knowledge_repository import (
-    create_chunk,
     delete_chunk,
     delete_file,
-    get_chunk_by_id,
-    get_chunk_ids_for_file,
-    get_file_with_chunks,
     list_files_for_source,
-    update_chunk,
 )
-from ada_backend.schemas.knowledge_schema import KnowledgeChunk
 from ada_backend.services.knowledge.errors import (
     KnowledgeServiceChunkNotFoundError,
-    KnowledgeServiceChunkAlreadyExistsError,
     KnowledgeServiceFileNotFoundError,
 )
 
@@ -93,37 +86,6 @@ def test_list_files_for_source_returns_grouped_data(sql_local_service: SQLLocalS
     assert summary["file-b"]["chunk_count"] == 1
 
 
-def test_get_file_with_chunks_returns_deserialized_metadata(sql_local_service: SQLLocalService) -> None:
-    bounding_boxes = json.dumps([{"page": 1}])
-    _insert_rows(
-        sql_local_service,
-        [
-            {
-                "chunk_id": "c1",
-                "file_id": "file-a",
-                "content": "alpha",
-                "document_title": "Doc A",
-                "url": "http://a",
-                "last_edited_ts": "2024-01-02",
-                "metadata": {"folder_name": "Folder"},
-                "bounding_boxes": bounding_boxes,
-            }
-        ],
-    )
-
-    payload = get_file_with_chunks(
-        sql_local_service=sql_local_service,
-        schema_name=None,
-        table_name="knowledge_chunks",
-        file_id="file-a",
-    )
-
-    assert payload["file"]["document_title"] == "Doc A"
-    assert payload["file"]["folder_name"] == "Folder"
-    assert payload["chunks"][0]["metadata"] == {"folder_name": "Folder"}
-    assert payload["chunks"][0]["bounding_boxes"] == [{"page": 1}]
-
-
 def test_delete_file_removes_chunks(sql_local_service: SQLLocalService) -> None:
     _insert_rows(
         sql_local_service,
@@ -163,123 +125,20 @@ def test_delete_file_raises_for_missing_file(sql_local_service: SQLLocalService)
         )
 
 
-def test_create_chunk_persists_row(sql_local_service: SQLLocalService) -> None:
-    chunk = KnowledgeChunk(
-        chunk_id="c1",
-        file_id="file-a",
-        content="some content",
-        last_edited_ts="2024-01-01",
-    )
-    create_chunk(
-        sql_local_service=sql_local_service,
-        schema_name=None,
-        table_name="knowledge_chunks",
-        chunk=chunk,
-    )
-
-    persisted_chunk = get_chunk_by_id(
-        sql_local_service=sql_local_service,
-        schema_name=None,
-        table_name="knowledge_chunks",
-        chunk_id="c1",
-    )
-
-    assert persisted_chunk["chunk_id"] == "c1"
-    assert persisted_chunk["content"] == "some content"
-    assert persisted_chunk["file_id"] == "file-a"
-    assert persisted_chunk["last_edited_ts"] == "2024-01-01"
-
-
-def test_create_chunk_raises_for_duplicate_id(sql_local_service: SQLLocalService) -> None:
-    chunk1 = KnowledgeChunk(
-        chunk_id="c1",
-        file_id="file-a",
-        content="some content",
-        last_edited_ts="2024-01-01",
-    )
-    create_chunk(
-        sql_local_service=sql_local_service,
-        schema_name=None,
-        table_name="knowledge_chunks",
-        chunk=chunk1,
-    )
-
-    chunk2 = KnowledgeChunk(
-        chunk_id="c1",
-        file_id="file-a",
-        content="other",
-        last_edited_ts="2024-01-02",
-    )
-    with pytest.raises(KnowledgeServiceChunkAlreadyExistsError):
-        create_chunk(
-            sql_local_service=sql_local_service,
-            schema_name=None,
-            table_name="knowledge_chunks",
-            chunk=chunk2,
-        )
-
-
-def test_update_chunk_applies_changes(sql_local_service: SQLLocalService) -> None:
-    chunk = KnowledgeChunk(
-        chunk_id="c1",
-        file_id="file-a",
-        content="original",
-        last_edited_ts="2024-01-01",
-    )
-    create_chunk(
-        sql_local_service=sql_local_service,
-        schema_name=None,
-        table_name="knowledge_chunks",
-        chunk=chunk,
-    )
-
-    initial_chunk = get_chunk_by_id(
-        sql_local_service=sql_local_service,
-        schema_name=None,
-        table_name="knowledge_chunks",
-        chunk_id="c1",
-    )
-    assert initial_chunk["content"] == "original"
-    assert initial_chunk["last_edited_ts"] == "2024-01-01"
-
-    updated_chunk = KnowledgeChunk(
-        chunk_id="c1",
-        file_id="file-a",
-        content="updated",
-        last_edited_ts="2024-01-02",
-    )
-    update_chunk(
-        sql_local_service=sql_local_service,
-        schema_name=None,
-        table_name="knowledge_chunks",
-        chunk=updated_chunk,
-    )
-
-    persisted_chunk = get_chunk_by_id(
-        sql_local_service=sql_local_service,
-        schema_name=None,
-        table_name="knowledge_chunks",
-        chunk_id="c1",
-    )
-
-    assert persisted_chunk["content"] == "updated"
-    assert persisted_chunk["last_edited_ts"] == "2024-01-02"
-    assert persisted_chunk["chunk_id"] == "c1"
-    assert persisted_chunk["file_id"] == "file-a"
-
-
 def test_delete_chunk_removes_row(sql_local_service: SQLLocalService) -> None:
-    chunk = KnowledgeChunk(
-        chunk_id="c1",
-        file_id="file-a",
-        content="content",
-        last_edited_ts="2024-01-01",
-    )
-    create_chunk(
-        sql_local_service=sql_local_service,
-        schema_name=None,
-        table_name="knowledge_chunks",
-        chunk=chunk,
+    _insert_rows(
+        sql_local_service,
+        [
+            {
+                "chunk_id": "c1",
+                "file_id": "file-a",
+                "content": "content",
+                "document_title": "Doc",
+                "url": "http://url",
+                "last_edited_ts": "2024-01-01",
+                "metadata": {},
+            }
+        ],
     )
 
     delete_chunk(
@@ -288,14 +147,6 @@ def test_delete_chunk_removes_row(sql_local_service: SQLLocalService) -> None:
         table_name="knowledge_chunks",
         chunk_id="c1",
     )
-
-    with pytest.raises(KnowledgeServiceChunkNotFoundError):
-        get_chunk_by_id(
-            sql_local_service=sql_local_service,
-            schema_name=None,
-            table_name="knowledge_chunks",
-            chunk_id="c1",
-        )
 
 
 def test_delete_chunk_raises_for_missing_chunk(sql_local_service: SQLLocalService) -> None:
@@ -310,17 +161,19 @@ def test_delete_chunk_raises_for_missing_chunk(sql_local_service: SQLLocalServic
 
 def test_delete_chunk_is_idempotent(sql_local_service: SQLLocalService) -> None:
     """Test that deleting a chunk multiple times is idempotent (second delete raises error)."""
-    chunk = KnowledgeChunk(
-        chunk_id="c1",
-        file_id="file-a",
-        content="content",
-        last_edited_ts="2024-01-01",
-    )
-    create_chunk(
-        sql_local_service=sql_local_service,
-        schema_name=None,
-        table_name="knowledge_chunks",
-        chunk=chunk,
+    _insert_rows(
+        sql_local_service,
+        [
+            {
+                "chunk_id": "c1",
+                "file_id": "file-a",
+                "content": "content",
+                "document_title": "Doc",
+                "url": "http://url",
+                "last_edited_ts": "2024-01-01",
+                "metadata": {},
+            }
+        ],
     )
 
     # First delete should succeed
@@ -339,70 +192,3 @@ def test_delete_chunk_is_idempotent(sql_local_service: SQLLocalService) -> None:
             table_name="knowledge_chunks",
             chunk_id="c1",
         )
-
-
-def test_get_chunk_ids_for_file_returns_sorted_ids(sql_local_service: SQLLocalService) -> None:
-    """Test that get_chunk_ids_for_file returns chunk IDs sorted by chunk_id."""
-    _insert_rows(
-        sql_local_service,
-        [
-            {
-                "chunk_id": "file123_3",
-                "file_id": "file123",
-                "content": "third",
-                "document_title": "Doc",
-                "url": "http://test",
-                "last_edited_ts": "2024-01-01",
-                "metadata": {},
-            },
-            {
-                "chunk_id": "file123_1",
-                "file_id": "file123",
-                "content": "first",
-                "document_title": "Doc",
-                "url": "http://test",
-                "last_edited_ts": "2024-01-01",
-                "metadata": {},
-            },
-            {
-                "chunk_id": "file123_2",
-                "file_id": "file123",
-                "content": "second",
-                "document_title": "Doc",
-                "url": "http://test",
-                "last_edited_ts": "2024-01-01",
-                "metadata": {},
-            },
-            {
-                "chunk_id": "file456_1",
-                "file_id": "file456",
-                "content": "other file",
-                "document_title": "Doc",
-                "url": "http://test",
-                "last_edited_ts": "2024-01-01",
-                "metadata": {},
-            },
-        ],
-    )
-
-    chunk_ids = get_chunk_ids_for_file(
-        sql_local_service=sql_local_service,
-        schema_name=None,
-        table_name="knowledge_chunks",
-        file_id="file123",
-    )
-
-    assert len(chunk_ids) == 3
-    assert chunk_ids == ["file123_1", "file123_2", "file123_3"]
-
-
-def test_get_chunk_ids_for_file_returns_empty_list_for_no_chunks(sql_local_service: SQLLocalService) -> None:
-    """Test that get_chunk_ids_for_file returns empty list when file has no chunks."""
-    chunk_ids = get_chunk_ids_for_file(
-        sql_local_service=sql_local_service,
-        schema_name=None,
-        table_name="knowledge_chunks",
-        file_id="nonexistent",
-    )
-
-    assert chunk_ids == []
