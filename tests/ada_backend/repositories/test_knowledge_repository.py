@@ -5,7 +5,7 @@ import pytest
 from sqlalchemy import select
 
 from engine.storage_service.local_service import SQLLocalService
-from tests.ada_backend.test_utils_knowledge import get_knowledge_chunks_table_definition
+from ingestion_script.ingest_folder_source import FILE_TABLE_DEFINITION
 from ada_backend.repositories.knowledge_repository import (
     delete_chunk,
     delete_document,
@@ -18,11 +18,9 @@ def sql_local_service(tmp_path: Path) -> Iterator[SQLLocalService]:
     db_path = tmp_path / "knowledge.sqlite"
     service = SQLLocalService(engine_url=f"sqlite:///{db_path}")
 
-    table_definition = get_knowledge_chunks_table_definition()
-
     service.create_table(
         table_name="knowledge_chunks",
-        table_definition=table_definition,
+        table_definition=FILE_TABLE_DEFINITION,
         schema_name=None,
     )
 

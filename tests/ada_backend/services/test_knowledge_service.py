@@ -21,7 +21,7 @@ from ada_backend.services.knowledge.errors import (
 from engine.llm_services.llm_service import EmbeddingService
 from engine.qdrant_service import QdrantCollectionSchema, QdrantService
 from engine.storage_service.local_service import SQLLocalService
-from tests.ada_backend.test_utils_knowledge import get_knowledge_chunks_table_definition
+from ingestion_script.ingest_folder_source import FILE_TABLE_DEFINITION
 from settings import settings
 from tests.mocks.trace_manager import MockTraceManager
 
@@ -97,19 +97,11 @@ def _setup_test_table_and_collection_with_dummy_chunk(
     if not sql_local_service.schema_exists(schema_name):
         sql_local_service.create_schema(schema_name)
 
-    table_definition = get_knowledge_chunks_table_definition(
-        include_metadata=False,
-        include_bounding_boxes=False,
-        include_qdrant_fields=True,
-        processed_datetime_type="STRING",
-        processed_datetime_default="CURRENT_TIMESTAMP",
-    )
-
     if sql_local_service.table_exists(table_name, schema_name):
         sql_local_service.drop_table(table_name, schema_name)
     sql_local_service.create_table(
         table_name=table_name,
-        table_definition=table_definition,
+        table_definition=FILE_TABLE_DEFINITION,
         schema_name=schema_name,
     )
 
