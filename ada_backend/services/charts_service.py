@@ -1,18 +1,24 @@
 from collections import OrderedDict
 from uuid import UUID
 from datetime import datetime, timedelta, timezone
+from calendar import monthrange
+from typing import Optional
 import requests
 
 import numpy as np
 import pandas as pd
+from sqlalchemy.orm import Session
 
 from ada_backend.database.models import CallType
-from ada_backend.schemas.chart_schema import Chart, ChartData, ChartType, ChartsResponse, Dataset
+from ada_backend.schemas.chart_schema import Chart, ChartData, ChartType, ChartsResponse, Dataset, CreditUsage
 from ada_backend.services.metrics.utils import (
     query_trace_duration,
     calculate_calls_per_day,
     count_conversations_per_day,
 )
+from ada_backend.services.credits_service import get_total_credits_service, get_organization_limit_service
+from ada_backend.repositories.project_repository import get_project
+from ada_backend.database.setup_db import get_db_session
 from settings import settings
 
 
@@ -212,18 +218,45 @@ def get_tokens_distribution_chart(project_id: UUID, duration_days: int, call_typ
     )
 
 
+def get_organization_credit_usage_data(session: Session, project_id: UUID) -> Optional[CreditUsage]:
+    """Get organization credit usage data for table display."""
+    project = get_project(session, project_id=project_id)
+    if not project:
+        return None
+
+    today = datetime.now()
+    organization_id = project.organization_id
+
+    credits_used = get_total_credits_service(session, project_id, today.year, today.month)
+    org_limit = get_organization_limit_service(session, organization_id, today.year, today.month)
+    credits_limit = org_limit.limit if org_limit else None
+    percentage_used = (
+        round((credits_used / credits_limit) * 100, 1) if credits_limit and credits_limit > 0 else None
+    )
+
+    reset_date = f"{today.year}-{today.month:02d}-{monthrange(today.year, today.month)[1]}"
+
+    return CreditUsage(
+        credits_used=credits_used,
+        credits_limit=credits_limit,
+        percentage_used=percentage_used,
+        reset_date=reset_date,
+    )
+
+
 async def get_charts_by_project(
     project_id: UUID, duration_days: int, call_type: CallType | None = None
 ) -> ChartsResponse:
-    response = ChartsResponse(
-        charts=(
-            get_agent_usage_chart(project_id, duration_days, call_type)
-            + [
-                get_latence_chart(project_id, duration_days, call_type),
-                get_tokens_distribution_chart(project_id, duration_days, call_type),
-            ]
-        )
-    )
+    charts = get_agent_usage_chart(project_id, duration_days, call_type) + [
+        get_latence_chart(project_id, duration_days, call_type),
+        get_tokens_distribution_chart(project_id, duration_days, call_type),
+    ]
+
+    credit_usage = None
+    with get_db_session() as session:
+        credit_usage = get_organization_credit_usage_data(session, project_id)
+
+    response = ChartsResponse(charts=charts, credit_usage=credit_usage)
     if len(response.charts) == 0:
         raise ValueError("No charts found for this project")
     return response

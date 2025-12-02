@@ -236,3 +236,13 @@ def get_organization_limit(
         )
         .first()
     )
+
+
+def get_total_credits(session: Session, project_id: UUID, year: int, month: int) -> float:
+    """Get total credits for a project for a specific year and month."""
+    usage = (
+        session.query(db.Usage)
+        .filter(db.Usage.project_id == project_id, db.Usage.year == year, db.Usage.month == month)
+        .first()
+    )
+    return usage.credits_used if usage else 0.0
