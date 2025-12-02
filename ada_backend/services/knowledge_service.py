@@ -34,6 +34,7 @@ from ada_backend.services.knowledge.errors import (
     KnowledgeSourceNotFoundError,
     KnowledgeServiceDBSourceConfigError,
     KnowledgeServiceDBChunkDeletionError,
+    KnowledgeServicePageOutOfRangeError,
 )
 from engine.llm_services.llm_service import EmbeddingService
 from engine.qdrant_service import QdrantService, QdrantCollectionSchema
@@ -184,14 +185,24 @@ def get_document_with_chunks_service(
     organization_id: UUID,
     source_id: UUID,
     document_id: str,
+    page: int = 1,
+    page_size: int = 50,
 ) -> KnowledgeDocumentWithChunks:
     source = _get_source_for_organization(session, organization_id, source_id)
     sql_local_service = get_sql_local_service_for_ingestion()
-    rows, table = get_chunk_rows_for_document(
-        sql_local_service, source.database_schema, source.database_table_name, document_id
+
+    offset = (page - 1) * page_size
+
+    rows, table, total_count = get_chunk_rows_for_document(
+        sql_local_service,
+        source.database_schema,
+        source.database_table_name,
+        document_id,
+        limit=page_size,
+        offset=offset,
     )
 
-    if not rows:
+    if total_count == 0:
         LOGGER.error(
             (
                 f"Document with id='{document_id}' not found for "
@@ -202,6 +213,9 @@ def get_document_with_chunks_service(
             document_id=document_id,
             source_id=source_id,
         )
+
+    if not rows:
+        raise KnowledgeServicePageOutOfRangeError(page=page, total_count=total_count)
 
     chunks: List[KnowledgeChunk] = []
     for row in rows:
@@ -225,7 +239,7 @@ def get_document_with_chunks_service(
         folder_name=metadata.get("folder_name") if isinstance(metadata, dict) else None,
     )
 
-    return KnowledgeDocumentWithChunks(document=document_metadata, chunks=chunks)
+    return KnowledgeDocumentWithChunks(document=document_metadata, chunks=chunks, total_chunks=total_count)
 
 
 def delete_document_service(

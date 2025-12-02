@@ -37,6 +37,7 @@ class KnowledgeChunk(BaseModel):
 class KnowledgeDocumentWithChunks(BaseModel):
     document: KnowledgeDocumentMetadata
     chunks: List[KnowledgeChunk]
+    total_chunks: int
 
 
 class KnowledgeDocumentsListResponse(BaseModel):

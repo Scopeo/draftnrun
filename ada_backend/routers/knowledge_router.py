@@ -2,7 +2,7 @@ from typing import Annotated
 from uuid import UUID
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status, Query
 from sqlalchemy.orm import Session
 
 from ada_backend.database.setup_db import get_db
@@ -27,6 +27,7 @@ from ada_backend.services.knowledge.errors import (
     KnowledgeSourceNotFoundError,
     KnowledgeServiceDocumentNotFoundError,
     KnowledgeServiceDBSourceConfigError,
+    KnowledgeServicePageOutOfRangeError,
 )
 
 LOGGER = logging.getLogger(__name__)
@@ -67,19 +68,23 @@ def list_documents(
     "/organizations/{organization_id}/sources/{source_id}/documents/{document_id}",
     response_model=KnowledgeDocumentWithChunks,
 )
-def get_document_detail(
+def get_document(
     organization_id: UUID,
     source_id: UUID,
     document_id: str,
     user: Annotated[
         SupabaseUser, Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.READER.value))
     ],
+    page: int = Query(1, ge=1, description="Page number"),
+    page_size: int = Query(50, ge=1, le=100, description="Items per page"),
     session: Session = Depends(get_db),
 ) -> KnowledgeDocumentWithChunks:
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
     try:
-        return get_document_with_chunks_service(session, organization_id, source_id, document_id)
+        return get_document_with_chunks_service(
+            session, organization_id, source_id, document_id, page=page, page_size=page_size
+        )
     except KnowledgeSourceNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
     except KnowledgeServiceDocumentNotFoundError as e:
@@ -87,6 +92,8 @@ def get_document_detail(
     except KnowledgeServiceDBSourceConfigError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except KnowledgeServiceQdrantConfigurationError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except KnowledgeServicePageOutOfRangeError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
         LOGGER.error(

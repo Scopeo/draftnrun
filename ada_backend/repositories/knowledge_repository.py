@@ -36,14 +36,28 @@ def get_chunk_rows_for_document(
     schema_name: str,
     table_name: str,
     document_id: str,
+    limit: int = None,
+    offset: int = None,
 ) -> tuple:
-    """Get all chunk rows for a given document_id, sorted by chunk_id. Returns (rows, table)."""
+    """Get all chunk rows for a given document_id, sorted by chunk_id. Returns (rows, table, total_count)."""
     table = sql_local_service.get_table(table_name=table_name, schema_name=schema_name)
     # TODO: Change file_id to document_id
+    count_stmt = select(func.count()).select_from(table).where(table.c.file_id == document_id)
+
     stmt = select(table).where(table.c.file_id == document_id).order_by(table.c.chunk_id)
+
+    if limit is not None:
+        stmt = stmt.limit(limit)
+    if offset is not None:
+        stmt = stmt.offset(offset)
+
+    with sql_local_service.execute_query(count_stmt) as (result, _):
+        total_count = result.scalar()
+
     with sql_local_service.execute_query(stmt) as (result, connection):
         rows = result.fetchall()
-    return rows, table
+
+    return rows, table, total_count
 
 
 def delete_document(
