@@ -43,7 +43,9 @@ from engine.agent.synthesizer_prompts import (
 
 RAG_V3_PARAMETER_GROUP_UUIDS = {
     "knowledge_parameters": UUID("585a504e-1bd6-42fa-8224-de297f969691"),
+    "advanced_knowledge_parameters": UUID("9398b278-3736-46a5-bfdb-72e4ce068af0"),
     "llm_parameters": UUID("c02788db-f787-40b2-bfdd-b5e435689d3d"),
+    "advanced_llm_parameters": UUID("3602044e-0de7-4e06-a397-b3f6357871ad"),
     "reranker_parameters": UUID("d0de66e3-ff84-4b9a-b4ef-af7695a7d2a0"),
     "vocabulary_search_parameters": UUID("2dfcfbe9-b50c-4079-b132-0cc493871362"),
     "formatter_parameters": UUID("7eb2e948-1f96-442b-b555-f86e328b46a9"),
@@ -346,7 +348,7 @@ def seed_rag_components(session: Session):
         default="10",
         ui_component=UIComponent.TEXTFIELD,
         ui_component_properties=UIComponentProperties(
-            label="Maximum number of chunks in the synthesizer",
+            label="Maximum number of chunks to retrieve",
             description=(
                 "The maximum number of chunks to retrieve before applying any filtering or penalties. "
                 "This sets the upper limit for how many chunks will be returned by the retrieval process."
@@ -1344,8 +1346,16 @@ def seed_rag_v3_parameter_groups(session: Session):
             name="Knowledge Parameters",
         ),
         db.ParameterGroup(
+            id=RAG_V3_PARAMETER_GROUP_UUIDS["advanced_knowledge_parameters"],
+            name="Advanced Knowledge Parameters",
+        ),
+        db.ParameterGroup(
             id=RAG_V3_PARAMETER_GROUP_UUIDS["llm_parameters"],
             name="LLM Parameters",
+        ),
+        db.ParameterGroup(
+            id=RAG_V3_PARAMETER_GROUP_UUIDS["advanced_llm_parameters"],
+            name="Advanced LLM Parameters",
         ),
         db.ParameterGroup(
             id=RAG_V3_PARAMETER_GROUP_UUIDS["reranker_parameters"],
@@ -1370,30 +1380,40 @@ def seed_rag_v3_parameter_groups(session: Session):
         ),
         db.ComponentParameterGroup(
             component_version_id=COMPONENT_VERSION_UUIDS["rag_agent_v3"],
-            parameter_group_id=RAG_V3_PARAMETER_GROUP_UUIDS["llm_parameters"],
+            parameter_group_id=RAG_V3_PARAMETER_GROUP_UUIDS["advanced_knowledge_parameters"],
             group_order_within_component=2,
         ),
         db.ComponentParameterGroup(
             component_version_id=COMPONENT_VERSION_UUIDS["rag_agent_v3"],
-            parameter_group_id=RAG_V3_PARAMETER_GROUP_UUIDS["reranker_parameters"],
+            parameter_group_id=RAG_V3_PARAMETER_GROUP_UUIDS["llm_parameters"],
             group_order_within_component=3,
         ),
         db.ComponentParameterGroup(
             component_version_id=COMPONENT_VERSION_UUIDS["rag_agent_v3"],
-            parameter_group_id=RAG_V3_PARAMETER_GROUP_UUIDS["vocabulary_search_parameters"],
+            parameter_group_id=RAG_V3_PARAMETER_GROUP_UUIDS["advanced_llm_parameters"],
             group_order_within_component=4,
         ),
         db.ComponentParameterGroup(
             component_version_id=COMPONENT_VERSION_UUIDS["rag_agent_v3"],
-            parameter_group_id=RAG_V3_PARAMETER_GROUP_UUIDS["formatter_parameters"],
+            parameter_group_id=RAG_V3_PARAMETER_GROUP_UUIDS["reranker_parameters"],
             group_order_within_component=5,
+        ),
+        db.ComponentParameterGroup(
+            component_version_id=COMPONENT_VERSION_UUIDS["rag_agent_v3"],
+            parameter_group_id=RAG_V3_PARAMETER_GROUP_UUIDS["vocabulary_search_parameters"],
+            group_order_within_component=6,
+        ),
+        db.ComponentParameterGroup(
+            component_version_id=COMPONENT_VERSION_UUIDS["rag_agent_v3"],
+            parameter_group_id=RAG_V3_PARAMETER_GROUP_UUIDS["formatter_parameters"],
+            group_order_within_component=7,
         ),
     ]
 
     build_parameters_group_definitions(session, component_parameter_groups)
 
     parameter_group_assignments = {
-        # Knowledge Parameters Group
+        # Knowledge Parameters Group (Basic)
         UUID("cb319b62-7b01-497b-89eb-696985e779e8"): {  # data_source
             "parameter_group_id": RAG_V3_PARAMETER_GROUP_UUIDS["knowledge_parameters"],
             "parameter_order_within_group": 1,
@@ -1402,27 +1422,28 @@ def seed_rag_v3_parameter_groups(session: Session):
             "parameter_group_id": RAG_V3_PARAMETER_GROUP_UUIDS["knowledge_parameters"],
             "parameter_order_within_group": 2,
         },
+        # Advanced Knowledge Parameters Group
         UUID("73de2a61-251e-4944-aff3-d835e837a927"): {  # enable_date_penalty_for_chunks
-            "parameter_group_id": RAG_V3_PARAMETER_GROUP_UUIDS["knowledge_parameters"],
-            "parameter_order_within_group": 3,
+            "parameter_group_id": RAG_V3_PARAMETER_GROUP_UUIDS["advanced_knowledge_parameters"],
+            "parameter_order_within_group": 1,
         },
         UUID("ecb4cac9-36f2-4f6d-a4f5-7f86df2762e2"): {  # chunk_age_penalty_rate
-            "parameter_group_id": RAG_V3_PARAMETER_GROUP_UUIDS["knowledge_parameters"],
-            "parameter_order_within_group": 4,
+            "parameter_group_id": RAG_V3_PARAMETER_GROUP_UUIDS["advanced_knowledge_parameters"],
+            "parameter_order_within_group": 2,
         },
         UUID("a41401b9-73cc-46b4-882f-eaf58d9338cb"): {  # default_penalty_rate
-            "parameter_group_id": RAG_V3_PARAMETER_GROUP_UUIDS["knowledge_parameters"],
-            "parameter_order_within_group": 5,
+            "parameter_group_id": RAG_V3_PARAMETER_GROUP_UUIDS["advanced_knowledge_parameters"],
+            "parameter_order_within_group": 3,
         },
         UUID("9dc1e4ad-734d-4ccd-ab17-8692a7bedd5f"): {  # metadata_date_key
-            "parameter_group_id": RAG_V3_PARAMETER_GROUP_UUIDS["knowledge_parameters"],
-            "parameter_order_within_group": 6,
+            "parameter_group_id": RAG_V3_PARAMETER_GROUP_UUIDS["advanced_knowledge_parameters"],
+            "parameter_order_within_group": 4,
         },
         UUID("76a5318b-d1f9-44fe-82bc-b11f313c72b5"): {  # max_retrieved_chunks_after_penalty
-            "parameter_group_id": RAG_V3_PARAMETER_GROUP_UUIDS["knowledge_parameters"],
-            "parameter_order_within_group": 7,
+            "parameter_group_id": RAG_V3_PARAMETER_GROUP_UUIDS["advanced_knowledge_parameters"],
+            "parameter_order_within_group": 5,
         },
-        # LLM Parameters Group (Synthesizer)
+        # LLM Parameters Group (Basic)
         UUID("134a4ddb-6906-4a22-b6b9-404f48543cc7"): {  # completion_model
             "parameter_group_id": RAG_V3_PARAMETER_GROUP_UUIDS["llm_parameters"],
             "parameter_order_within_group": 1,
@@ -1431,21 +1452,22 @@ def seed_rag_v3_parameter_groups(session: Session):
             "parameter_group_id": RAG_V3_PARAMETER_GROUP_UUIDS["llm_parameters"],
             "parameter_order_within_group": 2,
         },
+        # Advanced LLM Parameters Group
         UUID("697a921c-c0b7-4393-a9e1-67f180265226"): {  # temperature
-            "parameter_group_id": RAG_V3_PARAMETER_GROUP_UUIDS["llm_parameters"],
-            "parameter_order_within_group": 3,
+            "parameter_group_id": RAG_V3_PARAMETER_GROUP_UUIDS["advanced_llm_parameters"],
+            "parameter_order_within_group": 1,
         },
         UUID("72111114-d1ab-4bf6-9248-6f493e1b4728"): {  # verbosity
-            "parameter_group_id": RAG_V3_PARAMETER_GROUP_UUIDS["llm_parameters"],
-            "parameter_order_within_group": 4,
+            "parameter_group_id": RAG_V3_PARAMETER_GROUP_UUIDS["advanced_llm_parameters"],
+            "parameter_order_within_group": 2,
         },
         UUID("7f6312f7-84f7-4984-b5e5-1dec0deee4c0"): {  # reasoning
-            "parameter_group_id": RAG_V3_PARAMETER_GROUP_UUIDS["llm_parameters"],
-            "parameter_order_within_group": 5,
+            "parameter_group_id": RAG_V3_PARAMETER_GROUP_UUIDS["advanced_llm_parameters"],
+            "parameter_order_within_group": 3,
         },
         UUID("f885ed15-e661-4790-bf14-1bb780459047"): {  # llm_api_key
-            "parameter_group_id": RAG_V3_PARAMETER_GROUP_UUIDS["llm_parameters"],
-            "parameter_order_within_group": 6,
+            "parameter_group_id": RAG_V3_PARAMETER_GROUP_UUIDS["advanced_llm_parameters"],
+            "parameter_order_within_group": 4,
         },
         # Reranker Parameters Group
         UUID("b8bf7e20-e758-4f79-b834-db9fd14520a4"): {  # use_reranker
