@@ -22,7 +22,7 @@ from ada_backend.services.knowledge.errors import (
 from engine.llm_services.llm_service import EmbeddingService
 from engine.qdrant_service import QdrantCollectionSchema, QdrantService
 from engine.storage_service.local_service import SQLLocalService
-from ingestion_script.ingest_folder_source import FILE_TABLE_DEFINITION
+from ingestion_script.ingest_folder_source import UNIFIED_TABLE_DEFINITION
 from settings import settings
 from tests.mocks.trace_manager import MockTraceManager
 
@@ -104,7 +104,7 @@ def _setup_test_table_and_collection_with_dummy_chunk(
         sql_local_service.drop_table(table_name, schema_name)
     sql_local_service.create_table(
         table_name=table_name,
-        table_definition=FILE_TABLE_DEFINITION,
+        table_definition=UNIFIED_TABLE_DEFINITION,
         schema_name=schema_name,
     )
 
