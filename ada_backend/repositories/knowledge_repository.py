@@ -17,15 +17,14 @@ def list_documents_for_source(
     table_name: str,
 ) -> List[Row]:
     table = sql_local_service.get_table(table_name=table_name, schema_name=schema_name)
-    # TODO: Change file_id to document_id
     stmt = (
         select(
-            table.c.file_id.label("document_id"),
+            table.c.document_id.label("document_id"),
             func.max(table.c.document_title).label("document_title"),
             func.count().label("chunk_count"),
             func.max(table.c.last_edited_ts).label("last_edited_ts"),
         )
-        .group_by(table.c.file_id)
+        .group_by(table.c.document_id)
         .order_by(func.max(table.c.last_edited_ts).desc())
     )
     with sql_local_service.execute_query(stmt) as (result, _):
@@ -57,8 +56,7 @@ def delete_document(
     document_id: str,
 ) -> bool:
     table = sql_local_service.get_table(table_name=table_name, schema_name=schema_name)
-    # TODO: Change file_id to document_id
-    stmt = delete(table).where(table.c.file_id == document_id)
+    stmt = delete(table).where(table.c.document_id == document_id)
     with sql_local_service.execute_query(stmt) as (result, connection):
         if result.rowcount == 0:
             return False
