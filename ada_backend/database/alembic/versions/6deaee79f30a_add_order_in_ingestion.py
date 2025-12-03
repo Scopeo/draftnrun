@@ -80,7 +80,6 @@ def add_order_column_to_table(db_service: SQLLocalService, table_name: str, sche
             # Step 2: Populate the order column from chunk_id
             # Extract the last part after the last underscore, convert to int, subtract 1
             # chunk_id format: <prefix>_<index> where index is typically 1-based
-            # order should be 0-based, so we subtract 1
             # Handle cases where the last part might not be numeric (e.g., Excel sheets)
             LOGGER.info(f"  Populating '{ORDER_COLUMN_NAME}' column from {CHUNK_ID_COLUMN_NAME}...")
             update_sql = text(
@@ -94,7 +93,7 @@ def add_order_column_to_table(db_service: SQLLocalService, table_name: str, sche
                             0,
                             CAST(
                                 SPLIT_PART("{CHUNK_ID_COLUMN_NAME}", '_', -1) AS INTEGER
-                            ) - 1
+                            )
                         )
                         ELSE NULL
                     END
