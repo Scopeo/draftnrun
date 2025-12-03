@@ -74,7 +74,7 @@ def test_list_documents_for_source_returns_grouped_data(sql_local_service: SQLLo
     )
 
     assert len(files) == 2
-    summary = {item.file_id: item for item in files}
+    summary = {item.document_id: item for item in files}
     assert summary["file-a"].chunk_count == 2
     assert summary["file-b"].chunk_count == 1
 

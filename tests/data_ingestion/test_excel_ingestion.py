@@ -18,8 +18,8 @@ EXPECTED_CONTENT = (
 )
 
 
-def get_file_content_func(file_id: str) -> bytes:
-    with open(file_id, "rb") as f:
+def get_file_content_func(document_id: str) -> bytes:
+    with open(document_id, "rb") as f:
         return f.read()
 
 
