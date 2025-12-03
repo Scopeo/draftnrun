@@ -10,7 +10,7 @@ import pandas as pd
 from sqlalchemy.orm import Session
 
 from ada_backend.database.models import CallType
-from ada_backend.schemas.chart_schema import Chart, ChartData, ChartType, ChartsResponse, Dataset, CreditUsage
+from ada_backend.schemas.chart_schema import Chart, ChartData, ChartType, ChartsResponse, Dataset
 from ada_backend.services.metrics.utils import (
     query_trace_duration,
     calculate_calls_per_day,
@@ -217,8 +217,8 @@ def get_tokens_distribution_chart(project_id: UUID, duration_days: int, call_typ
     )
 
 
-def get_organization_credit_usage_data(session: Session, project_id: UUID) -> Optional[CreditUsage]:
-    """Get organization credit usage data for table display."""
+def get_credit_usage_table_chart(session: Session, project_id: UUID) -> Optional[Chart]:
+    """Get organization credit usage as a table chart."""
     project = get_project(session, project_id=project_id)
     if not project:
         return None
@@ -234,13 +234,34 @@ def get_organization_credit_usage_data(session: Session, project_id: UUID) -> Op
     last_day = monthrange(today.year, today.month)[1]
     reset_datetime = datetime(today.year, today.month, last_day, 23, 59, 59)
     days_left = (reset_datetime - today).days
-    reset_date = f"{days_left} days left" if days_left >= 0 else "0 days left"
 
-    return CreditUsage(
-        credits_used=credits_used,
-        credits_limit=credits_limit,
-        percentage_used=percentage_used,
-        reset_date=reset_date,
+    credits_used_formatted = f"{credits_used:,.0f}".replace(",", " ")
+    credits_limit_formatted = f"{credits_limit:,.0f}".replace(",", " ") if credits_limit is not None else "N/A"
+
+    labels = ["Organization Credit Usage", "Percentage Used", "Reset Date"]
+
+    credits_display = (
+        f"{credits_used_formatted} / {credits_limit_formatted} credits"
+        if credits_limit is not None
+        else f"{credits_used_formatted} credits"
+    )
+    percentage_display = f"{percentage_used}% used" if percentage_used is not None else "N/A"
+    reset_display = f"Resets in {days_left} days" if days_left >= 0 else "Resets today"
+
+    data_values = [
+        credits_display,
+        percentage_display,
+        reset_display,
+    ]
+
+    return Chart(
+        id=f"credit_usage_{project_id}",
+        type=ChartType.TABLE,
+        title="Organization Credit Usage",
+        data=ChartData(
+            labels=labels,
+            datasets=[Dataset(label="Value", data=data_values)],
+        ),
     )
 
 
@@ -250,14 +271,20 @@ async def get_charts_by_project(
     duration_days: int,
     call_type: CallType | None = None,
 ) -> ChartsResponse:
-    charts = get_agent_usage_chart(project_id, duration_days, call_type) + [
-        get_latence_chart(project_id, duration_days, call_type),
-        get_tokens_distribution_chart(project_id, duration_days, call_type),
-    ]
+    charts = []
+    credit_usage_chart = get_credit_usage_table_chart(session=session, project_id=project_id)
+    if credit_usage_chart:
+        charts.append(credit_usage_chart)
 
-    credit_usage = get_organization_credit_usage_data(session=session, project_id=project_id)
+    charts.extend(get_agent_usage_chart(project_id, duration_days, call_type))
+    charts.extend(
+        [
+            get_latence_chart(project_id, duration_days, call_type),
+            get_tokens_distribution_chart(project_id, duration_days, call_type),
+        ]
+    )
 
-    response = ChartsResponse(charts=charts, credit_usage=credit_usage)
+    response = ChartsResponse(charts=charts)
     if len(response.charts) == 0:
         raise ValueError("No charts found for this project")
     return response
