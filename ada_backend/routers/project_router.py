@@ -222,7 +222,10 @@ async def run_env_agent_endpoint(
 async def get_project_charts(
     project_id: UUID,
     duration: int,
-    user: Annotated[SupabaseUser, Depends(get_user_from_supabase_token)],
+    user: Annotated[
+        SupabaseUser,
+        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.MEMBER.value)),
+    ],
     call_type: CallType | None = None,
 ):
     if not user.id:
@@ -246,7 +249,10 @@ async def get_project_charts(
 async def get_project_monitoring_kpi(
     project_id: UUID,
     duration: int,
-    user: Annotated[SupabaseUser, Depends(get_user_from_supabase_token)],
+    user: Annotated[
+        SupabaseUser,
+        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.MEMBER.value)),
+    ],
     call_type: CallType | None = None,
 ):
     if not user.id:

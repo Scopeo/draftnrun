@@ -36,6 +36,7 @@ LOGGER = logging.getLogger(__name__)
 def get_all_organization_limits_endpoint(
     year: int,
     month: int,
+    user: Annotated[SupabaseUser, Depends(get_user_from_supabase_token)],
     session: Session = Depends(get_db),
 ) -> List[OrganizationLimitResponse]:
     try:

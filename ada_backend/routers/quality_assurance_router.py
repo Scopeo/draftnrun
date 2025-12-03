@@ -470,6 +470,10 @@ async def create_entry_from_history(
     project_id: UUID,
     dataset_id: UUID,
     trace_id: str,
+    user: Annotated[
+        SupabaseUser,
+        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.MEMBER.value)),
+    ],
     session: Session = Depends(get_db),
 ) -> List[InputGroundtruthResponse]:
     try:
