@@ -277,6 +277,16 @@ def get_latest_modification_hash(session: Session, graph_runner_id: UUID) -> Opt
     return latest_history.modification_hash if latest_history else None
 
 
+def get_latest_modification_history(session: Session, graph_runner_id: UUID) -> Optional[db.GraphRunnerModificationHistory]:
+    """Get the most recent modification history record for a graph runner."""
+    return (
+        session.query(db.GraphRunnerModificationHistory)
+        .filter(db.GraphRunnerModificationHistory.graph_runner_id == graph_runner_id)
+        .order_by(db.GraphRunnerModificationHistory.created_at.desc())
+        .first()
+    )
+
+
 def insert_modification_history(
     session: Session, graph_runner_id: UUID, user_id: Optional[UUID], modification_hash: str
 ) -> None:
