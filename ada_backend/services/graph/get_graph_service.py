@@ -9,6 +9,7 @@ from ada_backend.repositories.env_repository import get_env_relationship_by_grap
 from ada_backend.repositories.graph_runner_repository import (
     get_component_nodes,
     graph_runner_exists,
+    get_latest_modification_history,
 )
 from ada_backend.repositories.port_mapping_repository import list_port_mappings_for_graph
 from ada_backend.repositories.field_expression_repository import get_field_expressions_for_instances
@@ -107,6 +108,8 @@ def get_graph_service(
     for ci in component_instances_with_definitions:
         ci.field_expressions = field_expressions_by_instance.get(ci.id, [])
 
+    latest_modification_history = get_latest_modification_history(session, graph_runner_id)
+
     # Build response, omitting change_log if unset (None)
     response = GraphGetResponse(
         component_instances=component_instances_with_definitions,
@@ -118,5 +121,7 @@ def get_graph_service(
             project_env_binding.graph_runner.version_name,
         ),
         change_log=project_env_binding.graph_runner.change_log,
+        last_edited_time=latest_modification_history.created_at if latest_modification_history else None,
+        last_edited_user_id=latest_modification_history.user_id if latest_modification_history else None,
     )
     return response

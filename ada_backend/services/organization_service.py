@@ -25,6 +25,7 @@ async def update_api_key_in_organization(session: Session, organization_id: UUID
         for graph_runner in graph_runners:
             try:
                 graph_project = get_graph_service(session, project_id=project.id, graph_runner_id=graph_runner.id)
+                # user_id=None intentionally: this is an automatic update, not a user modification
                 await update_graph_service(session, graph_runner.id, project.id, graph_project)
             except Exception as e:
                 LOGGER.error(

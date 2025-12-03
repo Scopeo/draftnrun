@@ -1,5 +1,6 @@
 from typing import Optional
 from uuid import UUID
+from datetime import datetime
 
 from pydantic import BaseModel, Field
 
@@ -26,6 +27,8 @@ class GraphGetResponse(BaseModel):
     port_mappings: list[PortMappingSchema] = Field(default_factory=list)
     tag_name: Optional[str] = None
     change_log: Optional[str] = None
+    last_edited_time: Optional[datetime] = None
+    last_edited_user_id: Optional[UUID] = None
 
 
 class GraphLoadResponse(BaseModel):
