@@ -26,6 +26,7 @@ from ingestion_script.utils import (
     update_ingestion_task,
     get_first_available_embeddings_custom_llm,
     get_first_available_multimodal_custom_llm,
+    ORDER_COLUMN_NAME,
 )
 from settings import settings
 
@@ -43,6 +44,7 @@ FILE_TABLE_DEFINITION = DBDefinition(
         DBColumn(name=PROCESSED_DATETIME_FIELD, type="DATETIME", default="CURRENT_TIMESTAMP"),
         DBColumn(name=ID_COLUMN_NAME, type="VARCHAR", is_primary_key=True),
         DBColumn(name="file_id", type="VARCHAR"),
+        DBColumn(name=ORDER_COLUMN_NAME, type="INTEGER", is_nullable=True),
         DBColumn(name="content", type="VARCHAR"),
         DBColumn(name="document_title", type="VARCHAR"),
         DBColumn(name="url", type="VARCHAR"),

@@ -26,7 +26,7 @@ def list_documents_for_source(
             func.max(table.c.last_edited_ts).label("last_edited_ts"),
         )
         .group_by(table.c.file_id)
-        .order_by(func.max(table.c.last_edited_ts).desc())
+        .order_by(func.max(table.c.order).desc())
     )
     with sql_local_service.execute_query(stmt) as (result, _):
         rows = result.all()

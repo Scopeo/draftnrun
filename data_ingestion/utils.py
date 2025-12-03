@@ -12,6 +12,9 @@ from pydantic import BaseModel, Field
 
 from engine.storage_service.db_service import DBService
 
+# Column name constants
+ORDER_COLUMN_NAME = "order"
+
 IMAGE_DESCRIPTION_INITIAL_PROMPT = (
     "You will be provided with both the text and the image, "
     "as well as the specific location of the image within that section. "
@@ -32,7 +35,8 @@ IMAGE_DESCRIPTION_INTRODUCTION_PROMPT_TEMPLATE = (
 
 class Chunk(BaseModel):
     chunk_id: str
-    file_id: str
+    document_id: str
+    order: Optional[int] = None
     content: str
     last_edited_ts: Optional[str] = None
     metadata: dict[str, Any] = Field(default_factory=dict)

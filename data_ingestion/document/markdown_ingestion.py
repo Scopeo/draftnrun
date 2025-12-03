@@ -1,4 +1,5 @@
 from typing import Callable
+import uuid
 
 from data_ingestion.document.folder_management.folder_management import BaseDocument, FileChunk
 from data_ingestion.markdown.tree_chunker import parse_markdown_to_chunks
@@ -27,10 +28,11 @@ def get_chunks_from_markdown(
     )
 
 
-def build_chunk(document: BaseDocument, content: str, chunk_id: str) -> FileChunk:
+def build_chunk(document: BaseDocument, content: str, order: int) -> FileChunk:
     return FileChunk(
-        chunk_id=chunk_id,
-        file_id=str(document.id),
+        chunk_id=str(uuid.uuid4()),
+        document_id=str(document.id),
+        order=order,
         content=content,
         url=document.url,
         last_edited_ts=document.last_edited_ts if document.last_edited_ts else None,
@@ -56,7 +58,7 @@ def chunk_markdown(
         build_chunk(
             document=document_to_process,
             content=tree_chunk.content,
-            chunk_id=f"{str(document_to_process.id)}_{i}",
+            order=i,
         )
         for i, tree_chunk in enumerate(tree_chunks)
     ]

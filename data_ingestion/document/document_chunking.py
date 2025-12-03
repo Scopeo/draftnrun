@@ -18,6 +18,7 @@ from data_ingestion.document.folder_management.folder_management import (
     FileDocument,
     FileDocumentType,
 )
+from data_ingestion.utils import ORDER_COLUMN_NAME
 from engine.llm_services.llm_service import CompletionService, VisionService
 
 LOGGER = logging.getLogger(__name__)
@@ -162,9 +163,13 @@ async def get_chunks_dataframe_from_doc(
     all_chunks.extend(chunks)
     chunks_df = pd.DataFrame([chunk.model_dump() for chunk in all_chunks])
     chunks_df.columns = [col.lower() for col in chunks_df.columns]
+    if ORDER_COLUMN_NAME not in chunks_df.columns or chunks_df[ORDER_COLUMN_NAME].isna().all():
+        chunks_df[ORDER_COLUMN_NAME] = range(len(chunks_df))
     for field in json_type_fields:
         lower_field = field.lower()
         if lower_field in chunks_df.columns:
             chunks_df[lower_field] = chunks_df[lower_field].apply(json.dumps)
-    chunks_df = chunks_df.astype(str)
+    for col in chunks_df.columns:
+        if col != ORDER_COLUMN_NAME:
+            chunks_df[col] = chunks_df[col].astype(str)
     return chunks_df
