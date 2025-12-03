@@ -235,7 +235,10 @@ async def get_project_charts(
         raise HTTPException(status_code=400, detail="User ID not found")
     try:
         response = await get_charts_by_project(
-            session=session, project_id=project_id, duration_days=duration, call_type=call_type
+            session=session,
+            project_id=project_id,
+            duration_days=duration,
+            call_type=call_type,
         )
         return response
     except ValueError as e:

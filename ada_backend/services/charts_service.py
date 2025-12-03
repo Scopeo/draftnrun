@@ -2,7 +2,6 @@ from collections import OrderedDict
 from uuid import UUID
 from datetime import datetime, timedelta, timezone
 from calendar import monthrange
-from typing import Optional
 import requests
 
 import numpy as np
@@ -217,17 +216,13 @@ def get_tokens_distribution_chart(project_id: UUID, duration_days: int, call_typ
     )
 
 
-def get_credit_usage_table_chart(session: Session, project_id: UUID) -> Optional[Chart]:
+def get_credit_usage_table_chart(session: Session, project_id: UUID) -> Chart:
     """Get organization credit usage as a table chart."""
-    project = get_project(session, project_id=project_id)
-    if not project:
-        return None
-
     today = datetime.now()
-    organization_id = project.organization_id
+    project = get_project(session, project_id=project_id)
 
-    credits_used = get_organization_total_credits(session, organization_id, today.year, today.month)
-    org_limit = get_organization_limit(session, organization_id, today.year, today.month)
+    credits_used = get_organization_total_credits(session, project.organization_id, today.year, today.month)
+    org_limit = get_organization_limit(session, project.organization_id, today.year, today.month)
     credits_limit = org_limit.limit if org_limit else None
     percentage_used = round((credits_used / credits_limit) * 100, 1) if credits_limit and credits_limit > 0 else None
 
@@ -271,20 +266,18 @@ async def get_charts_by_project(
     duration_days: int,
     call_type: CallType | None = None,
 ) -> ChartsResponse:
-    charts = []
-    credit_usage_chart = get_credit_usage_table_chart(session=session, project_id=project_id)
-    if credit_usage_chart:
-        charts.append(credit_usage_chart)
-
-    charts.extend(get_agent_usage_chart(project_id, duration_days, call_type))
-    charts.extend(
-        [
-            get_latence_chart(project_id, duration_days, call_type),
-            get_tokens_distribution_chart(project_id, duration_days, call_type),
-        ]
+    response = ChartsResponse(
+        charts=(
+            # TODO: Move credit charts to organization level
+            [get_credit_usage_table_chart(session=session, project_id=project_id)]
+            + get_agent_usage_chart(project_id, duration_days, call_type)
+            + [
+                get_latence_chart(project_id, duration_days, call_type),
+                # get_prometheus_agent_calls_chart(project_id, duration_days),
+                get_tokens_distribution_chart(project_id, duration_days, call_type),
+            ]
+        )
     )
-
-    response = ChartsResponse(charts=charts)
     if len(response.charts) == 0:
         raise ValueError("No charts found for this project")
     return response
