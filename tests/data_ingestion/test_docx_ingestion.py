@@ -57,7 +57,7 @@ def test_get_chunks_from_docx(mock_docx_to_md, mock_file_document):
     chunks = get_chunks_from_docx(mock_file_document, mock_get_file_content)
     assert len(chunks) == 1
     assert chunks[0].content == "\nmock markdown content"
-    assert chunks[0].chunk_id == "/path/to/mock/file.docx_0"
+    assert chunks[0].order == 0
     assert chunks[0].file_id == "/path/to/mock/file.docx"
     assert chunks[0].document_title == "file.docx"
     assert chunks[0].last_edited_ts == "2024-11-26 10:40:40"
@@ -71,7 +71,7 @@ def test_get_chunks_from_docx_with_error(mock_docx_to_md, mock_file_document):
     chunks = get_chunks_from_docx(mock_file_document, mock_get_file_content)
     assert len(chunks) == 1
     assert chunks[0].content == "\nmock markdown content"
-    assert chunks[0].chunk_id == "/path/to/mock/file.docx_0"
+    assert chunks[0].order == 0
     assert chunks[0].file_id == "/path/to/mock/file.docx"
     assert chunks[0].document_title == "file.docx"
     assert chunks[0].last_edited_ts == "2024-11-26 10:40:40"
@@ -84,7 +84,7 @@ def test_get_chunks_from_docx_multiple_chunks(mock_docx_to_md, mock_file_documen
     chunks = get_chunks_from_docx(mock_file_document, mock_get_file_content)
     assert len(chunks) > 1
     for i, chunk in enumerate(chunks):
-        assert chunk.chunk_id == f"/path/to/mock/file.docx_{i}"
+        assert chunk.order == i
         assert chunk.file_id == "/path/to/mock/file.docx"
         assert chunk.document_title == "file.docx"
         assert chunk.last_edited_ts == "2024-11-26 10:40:40"

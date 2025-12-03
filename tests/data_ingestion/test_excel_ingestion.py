@@ -33,12 +33,11 @@ def test_ingest_excel_file():
         metadata={},
     )
     result = ingest_excel_file(document, get_file_content_func=get_file_content_func)
-    print(result[0].content)
+
     assert len(result) == 1
     assert result[0].content == EXPECTED_CONTENT
     assert result[0].file_id == FILE_PATH
-    assert result[0].chunk_id == f"{FILE_PATH}_test_0"
+    assert result[0].order == 0
     assert result[0].document_title == "test_excel.xlsx"
     assert result[0].last_edited_ts == "2025-07-10T00:00:00Z"
-    assert result[0].metadata == {}
-    print(result)
+    assert "sheet_name" in result[0].metadata
