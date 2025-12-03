@@ -140,7 +140,7 @@ class GoogleDriveFolderManager(FolderManager):
             id=file["id"],
             last_edited_ts=file.get("modifiedTime", None),
             type=file_type,
-            file_name=file["name"],
+            title=file["name"],
             folder_name="/".join(reversed(folder_names)),
             metadata={
                 "source_url": file.get("webViewLink", None),
