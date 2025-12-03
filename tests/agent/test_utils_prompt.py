@@ -1,6 +1,7 @@
 """Unit tests for fill_prompt_template function."""
 
 import pytest
+from engine.agent.errors import MissingKeyFromPromptTemplateError
 from engine.agent.utils_prompt import fill_prompt_template
 
 
@@ -35,10 +36,10 @@ class TestFillPromptTemplate:
         assert result == template
 
     def test_missing_required_variable(self):
-        """Test that missing required variable raises ValueError."""
+        """Test that missing required variable raises MissingKeyFromPromptTemplateError."""
         template = "Hello {{name}}, welcome to {{place}}!"
         variables = {"name": "Alice"}
-        with pytest.raises(ValueError) as exc_info:
+        with pytest.raises(MissingKeyFromPromptTemplateError) as exc_info:
             fill_prompt_template(template, component_name="test_component", variables=variables)
         assert "Missing template variable(s)" in str(exc_info.value)
         assert "place" in str(exc_info.value)
@@ -48,7 +49,7 @@ class TestFillPromptTemplate:
         """Test that multiple missing variables are reported."""
         template = "Hello {{name}}, from {{city}}, in {{country}}!"
         variables = {"name": "Alice"}
-        with pytest.raises(ValueError) as exc_info:
+        with pytest.raises(MissingKeyFromPromptTemplateError) as exc_info:
             fill_prompt_template(template, component_name="test", variables=variables)
         error_msg = str(exc_info.value)
         assert "Missing template variable(s)" in error_msg
@@ -135,7 +136,7 @@ class TestFillPromptTemplate:
         """Test that component_name appears in error messages."""
         template = "Hello {{missing}}!"
         variables = {}
-        with pytest.raises(ValueError) as exc_info:
+        with pytest.raises(MissingKeyFromPromptTemplateError) as exc_info:
             fill_prompt_template(template, component_name="MyComponent", variables=variables)
         assert "MyComponent" in str(exc_info.value)
 
@@ -143,7 +144,7 @@ class TestFillPromptTemplate:
         """Test that available variables are listed in error message."""
         template = "Hello {{missing}}!"
         variables = {"available1": "value1", "available2": "value2"}
-        with pytest.raises(ValueError) as exc_info:
+        with pytest.raises(MissingKeyFromPromptTemplateError) as exc_info:
             fill_prompt_template(template, component_name="test", variables=variables)
         error_msg = str(exc_info.value)
         assert "available1" in error_msg or "available2" in error_msg
