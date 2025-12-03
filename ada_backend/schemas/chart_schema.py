@@ -1,11 +1,11 @@
 from enum import Enum
-from typing import List, Union, Optional
+from typing import List, Union
 from pydantic import BaseModel
 
 
 class Dataset(BaseModel):
     label: str
-    data: List[Union[int, float, None]]
+    data: List[Union[int, float, str, None]]
     borderColor: str | None = None
     backgroundColor: str | List[str] | None = None
     fill: bool | None = None
@@ -27,6 +27,7 @@ class ChartType(Enum):
     AREA = "area"
     CANDLESTICK = "candlestick"
     BOXPLOT = "boxplot"
+    TABLE = "table"
 
 
 class Chart(BaseModel):
@@ -38,15 +39,5 @@ class Chart(BaseModel):
     y_axis_type: str | None = None
 
 
-class CreditUsage(BaseModel):
-    """Organization credit usage data for table display"""
-
-    credits_used: float
-    credits_limit: Optional[float] = None
-    percentage_used: Optional[float] = None
-    reset_date: Optional[str] = None
-
-
 class ChartsResponse(BaseModel):
     charts: List[Chart]
-    credit_usage: Optional[CreditUsage] = None
