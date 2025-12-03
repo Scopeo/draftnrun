@@ -37,6 +37,7 @@ class Chart(BaseModel):
     data: ChartData
     x_axis_type: str | None = None
     y_axis_type: str | None = None
+    progress_percentage: float | None = None
 
 
 class ChartsResponse(BaseModel):

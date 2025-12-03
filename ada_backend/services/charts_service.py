@@ -228,24 +228,22 @@ def get_credit_usage_table_chart(session: Session, project_id: UUID) -> Chart:
 
     last_day = monthrange(today.year, today.month)[1]
     reset_datetime = datetime(today.year, today.month, last_day, 23, 59, 59)
-    days_left = (reset_datetime - today).days
 
     credits_used_formatted = f"{credits_used:,.0f}".replace(",", " ")
     credits_limit_formatted = f"{credits_limit:,.0f}".replace(",", " ") if credits_limit is not None else "N/A"
 
-    labels = ["Organization Credit Usage", "Percentage Used", "Reset Date"]
+    labels = ["Organization Credit Usage", "Reset Date"]
 
     credits_display = (
         f"{credits_used_formatted} / {credits_limit_formatted} credits"
         if credits_limit is not None
         else f"{credits_used_formatted} credits"
     )
-    percentage_display = f"{percentage_used}% used" if percentage_used is not None else "N/A"
-    reset_display = f"Resets in {days_left} days" if days_left >= 0 else "Resets today"
+
+    reset_display = reset_datetime.strftime("%d/%m/%Y")
 
     data_values = [
         credits_display,
-        percentage_display,
         reset_display,
     ]
 
@@ -257,6 +255,7 @@ def get_credit_usage_table_chart(session: Session, project_id: UUID) -> Chart:
             labels=labels,
             datasets=[Dataset(label="Value", data=data_values)],
         ),
+        progress_percentage=percentage_used if percentage_used is not None else None,
     )
 
 
