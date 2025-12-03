@@ -19,14 +19,17 @@ LOGGER = logging.getLogger(__name__)
 
 
 async def update_api_key_in_organization(session: Session, organization_id: UUID):
+    """
+    Updates all graphs in an organization after an API key change.
+    History tracking is disabled to avoid polluting modification history with automatic updates.
+    """
     org_projects = get_workflows_by_organization(session, organization_id)
     for project in org_projects:
         graph_runners = get_graph_runners_by_project(session, project.id)
         for graph_runner in graph_runners:
             try:
                 graph_project = get_graph_service(session, project_id=project.id, graph_runner_id=graph_runner.id)
-                # user_id=None intentionally: this is an automatic update, not a user modification
-                await update_graph_service(session, graph_runner.id, project.id, graph_project)
+                await update_graph_service(session, graph_runner.id, project.id, graph_project, track_history=False)
             except Exception as e:
                 LOGGER.error(
                     f"Failed to update graph for project {project.id} and graph runner {graph_runner.id}: {str(e)}"
