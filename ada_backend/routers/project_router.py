@@ -20,7 +20,6 @@ from ada_backend.schemas.project_schema import (
 )
 from ada_backend.services.agent_runner_service import run_agent, run_env_agent
 from ada_backend.routers.auth_router import (
-    get_user_from_supabase_token,
     verify_api_key_dependency,
     VerifiedApiKey,
     user_has_access_to_organization_dependency,

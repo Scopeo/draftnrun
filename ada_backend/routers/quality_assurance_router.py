@@ -101,7 +101,7 @@ def create_dataset_endpoint(
     dataset_data: DatasetCreateList,
     user: Annotated[
         SupabaseUser,
-        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.MEMBER.value)),
+        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.DEVELOPER.value)),
     ],
     session: Session = Depends(get_db),
 ) -> DatasetListResponse:
@@ -136,7 +136,7 @@ def update_dataset_endpoint(
     dataset_name: str,
     user: Annotated[
         SupabaseUser,
-        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.MEMBER.value)),
+        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.DEVELOPER.value)),
     ],
     session: Session = Depends(get_db),
 ) -> DatasetResponse:
@@ -312,7 +312,7 @@ def create_input_groundtruth_endpoint(
     input_groundtruth_data: InputGroundtruthCreateList,
     user: Annotated[
         SupabaseUser,
-        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.MEMBER.value)),
+        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.DEVELOPER.value)),
     ],
     session: Session = Depends(get_db),
 ) -> InputGroundtruthResponseList:
@@ -416,7 +416,6 @@ async def run_qa_endpoint(
     project_id: UUID,
     dataset_id: UUID,
     run_request: QARunRequest,
-    # Should QA be only for developers ? Even running QA ?
     user: Annotated[
         SupabaseUser,
         Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.MEMBER.value)),
