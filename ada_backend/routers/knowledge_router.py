@@ -112,7 +112,7 @@ def delete_document(
     source_id: UUID,
     document_id: str,
     user: Annotated[
-        SupabaseUser, Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.WRITER.value))
+        SupabaseUser, Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.DEVELOPER.value))
     ],
     session: Session = Depends(get_db),
 ) -> Response:
@@ -149,7 +149,7 @@ async def delete_chunk(
     source_id: UUID,
     chunk_id: str,
     user: Annotated[
-        SupabaseUser, Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.WRITER.value))
+        SupabaseUser, Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.DEVELOPER.value))
     ],
     session: Session = Depends(get_db),
 ) -> Response:
