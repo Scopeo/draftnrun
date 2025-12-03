@@ -277,7 +277,9 @@ def get_latest_modification_hash(session: Session, graph_runner_id: UUID) -> Opt
     return latest_history.modification_hash if latest_history else None
 
 
-def get_latest_modification_history(session: Session, graph_runner_id: UUID) -> Optional[db.GraphRunnerModificationHistory]:
+def get_latest_modification_history(
+    session: Session, graph_runner_id: UUID
+) -> Optional[db.GraphRunnerModificationHistory]:
     """Get the most recent modification history record for a graph runner."""
     return (
         session.query(db.GraphRunnerModificationHistory)
