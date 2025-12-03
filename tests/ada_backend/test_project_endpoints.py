@@ -157,7 +157,7 @@ def test_chat_endpoint_missing_prompt_key():
                 "ref": "Start",
                 "is_start_node": True,
                 "component_id": str(COMPONENT_UUIDS["start"]),
-                "component_version_id": str(COMPONENT_VERSION_UUIDS["start"]),
+                "component_version_id": str(COMPONENT_VERSION_UUIDS["start_v2"]),
                 "parameters": [
                     {
                         "value": '{"messages": []}',
@@ -195,12 +195,12 @@ def test_chat_endpoint_missing_prompt_key():
                 "component_version_id": str(COMPONENT_VERSION_UUIDS["llm_call"]),
                 "parameters": [
                     {
-                        "value": "Hello {user_name}, {input}",
+                        "value": "Hello {{user_name}}, {{input}}",
                         "name": "prompt_template",
                         "order": None,
                         "type": "string",
                         "nullable": False,
-                        "default": "Answer this question: {input}",
+                        "default": "Answer this question: {{input}}",
                         "ui_component": "Textarea",
                         "ui_component_properties": {},
                         "is_advanced": False,
@@ -251,7 +251,7 @@ def test_chat_endpoint_missing_prompt_key():
     )
 
     assert chat_response.status_code == 400
-    assert "Missing" in chat_response.json()["detail"]
+    assert "Missing template variable(s)" in chat_response.json()["detail"]
     assert "user_name" in chat_response.json()["detail"]
 
     client.delete(f"/projects/{project_uuid}", headers=HEADERS_JWT)

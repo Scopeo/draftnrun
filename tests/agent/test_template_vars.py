@@ -17,6 +17,13 @@ from tests.agent.test_llm_call_agent import make_capability_resolver
 # Mock services are available as fixtures from conftest.py
 
 
+class UnstringableValue:
+    """A class that raises an exception when str() is called on it."""
+
+    def __str__(self):
+        raise TypeError("Cannot convert this object to string")
+
+
 @pytest.fixture
 def mock_trace_manager():
     """Mock trace manager for tests."""
@@ -140,7 +147,7 @@ def test_llm_call_missing_template_var(get_span_mock, agent_calls_mock, mock_llm
         ctx={"yes": "LOL"},  # missing_var not provided
     )
 
-    with pytest.raises(MissingKeyFromPromptTemplateError, match="Missing template variable 'missing_var'"):
+    with pytest.raises(MissingKeyFromPromptTemplateError, match="Missing template variable\\(s\\).*missing_var"):
         asyncio.run(agent.run(input_node_data))
 
 
@@ -152,15 +159,8 @@ def test_llm_call_wrong_type_template_var(get_span_mock, agent_calls_mock, mock_
     counter_mock = MagicMock()
     agent_calls_mock.labels.return_value = counter_mock
 
-    # Create a class that cannot be cast to string
-    class UnstringableValue:
-        """A class that raises an exception when str() is called on it."""
-
-        def __str__(self):
-            raise ValueError("This value cannot be converted to string")
-
     tm = MagicMock(spec=TraceManager)
-    # Add _provider attribute to mock
+
     mock_llm_service._provider = "test_provider"
     agent = LLMCallAgent(
         trace_manager=tm,
@@ -175,7 +175,7 @@ def test_llm_call_wrong_type_template_var(get_span_mock, agent_calls_mock, mock_
 
     input_node_data = NodeData(
         data={"messages": [{"role": "user", "content": "hi"}]},
-        ctx={"bad_var": UnstringableValue()},  # Value that cannot be cast to string
+        ctx={"bad_var": UnstringableValue()},
     )
 
     with pytest.raises(
@@ -237,20 +237,11 @@ def test_react_agent_with_template_vars(get_span_mock, agent_calls_mock, react_a
 
 @patch("engine.prometheus_metric.agent_calls")
 @patch("engine.prometheus_metric.get_tracing_span")
-def test_react_agent_wrong_type_template_var(
-    get_span_mock, agent_calls_mock, mock_llm_service, mock_trace_manager
-):  # noqa: F811
+def test_react_agent_wrong_type_template_var(get_span_mock, agent_calls_mock, mock_llm_service, mock_trace_manager):
     """Test ReActAgent raises error for template var that cannot be cast to string."""
     get_span_mock.return_value = MagicMock(project_id="test_project")
     counter_mock = MagicMock()
     agent_calls_mock.labels.return_value = counter_mock
-
-    # Create a class that cannot be cast to string
-    class UnstringableValue:
-        """A class that raises an exception when str() is called on it."""
-
-        def __str__(self):
-            raise TypeError("Cannot convert this object to string")
 
     react_agent = ReActAgent(
         completion_service=mock_llm_service,
@@ -260,12 +251,12 @@ def test_react_agent_wrong_type_template_var(
             name="react", description="react", tool_properties={}, required_tool_properties=[]
         ),
         initial_prompt="You are {{name}}, say {{bad_var}}",
-        agent_tools=[],  # No tools for this test
+        agent_tools=[],
     )
 
     input_node_data = NodeData(
         data={"messages": [{"role": "user", "content": "hi"}]},
-        ctx={"name": "Alice", "bad_var": UnstringableValue()},  # bad_var cannot be cast to string
+        ctx={"name": "Alice", "bad_var": UnstringableValue()},
     )
 
     with pytest.raises(
