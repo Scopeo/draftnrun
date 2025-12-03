@@ -12,7 +12,12 @@ from engine.trace.trace_context import set_trace_manager
 from engine.trace.trace_manager import TraceManager
 from data_ingestion.boto3_client import get_s3_boto3_client, file_exists_in_bucket
 from ingestion_script.ingest_folder_source import ingest_local_folder_source
-from ingestion_script.utils import get_sanitize_names
+from ingestion_script.utils import (
+    get_sanitize_names,
+    DOCUMENT_ID_COLUMN_NAME,
+    CHUNK_COLUMN_NAME,
+    SOURCE_ID_COLUMN_NAME,
+)
 from engine.qdrant_service import QdrantService
 from engine.storage_service.local_service import SQLLocalService
 from settings import settings
@@ -60,7 +65,6 @@ def test_ingest_local_folder_source():
     test_source_id = str(uuid.uuid4())
     database_schema, database_table_name, qdrant_collection_name = get_sanitize_names(
         organization_id=ORGANIZATION_ID,
-        source_id=test_source_id,
     )
 
     endpoint_upload_file = f"{BASE_URL}/files/{ORGANIZATION_ID}/upload"
@@ -140,8 +144,8 @@ def test_ingest_local_folder_source():
         schema_name=database_schema,
     )
     assert not chunk_df.empty
-    assert "content" in chunk_df.columns
-    assert "file_id" in chunk_df.columns
+    assert CHUNK_COLUMN_NAME in chunk_df.columns
+    assert DOCUMENT_ID_COLUMN_NAME in chunk_df.columns
 
     delete_endpoint = f"{BASE_URL}/ingestion_task/{ORGANIZATION_ID}/{task_id}"
     delete_response = requests.delete(delete_endpoint, headers=HEADERS_JWT)
@@ -151,10 +155,25 @@ def test_ingest_local_folder_source():
     delete_source_response = requests.delete(delete_source_endpoint, headers=HEADERS_JWT)
     assert delete_source_response.status_code == 204
 
-    assert not qdrant_service.collection_exists(qdrant_collection_name)
-    assert not db_service.table_exists(
+    # Collections and tables are shared per organization, so they should still exist
+    # But the data for this specific source should be deleted
+    assert qdrant_service.collection_exists(qdrant_collection_name)
+    # Check that points for this source_id have been deleted from Qdrant
+    source_id_filter = {"must": [{"key": SOURCE_ID_COLUMN_NAME, "match": {"value": test_source_id}}]}
+    point_count = qdrant_service.count_points(collection_name=qdrant_collection_name, filter=source_id_filter)
+    assert point_count == 0, f"Expected 0 points for source {test_source_id}, but found {point_count}"
+
+    assert db_service.table_exists(
         table_name=database_table_name,
         schema_name=database_schema,
     )
+    # Check that rows for this source_id have been deleted from the database
+    remaining_chunks_df = db_service.get_table_df(
+        table_name=database_table_name,
+        schema_name=database_schema,
+    )
+    if not remaining_chunks_df.empty:
+        source_chunks = remaining_chunks_df[remaining_chunks_df[SOURCE_ID_COLUMN_NAME] == test_source_id]
+        assert source_chunks.empty, f"Expected no chunks for source {test_source_id}, but found {len(source_chunks)}"
 
     assert not file_exists_in_bucket(s3_client=S3_CLIENT, bucket_name=settings.S3_BUCKET_NAME, key=sanitized_file_name)

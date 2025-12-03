@@ -204,7 +204,7 @@ def _create_chunks_from_markdown(
     extracted_table_of_content: TableOfContent,
     document: FileDocument,
 ) -> list[FileChunk]:
-    markdown_chunks = parse_markdown_to_chunks(file_content=extracted_text, file_name=document.file_name)
+    markdown_chunks = parse_markdown_to_chunks(file_content=extracted_text, file_name=document.title)
     page_numbers = set()
     chunks = []
     for i, chunk in enumerate(markdown_chunks):
@@ -213,11 +213,11 @@ def _create_chunks_from_markdown(
                 page_numbers.add(section.page_number)
         document.metadata["page_number"] = sorted(list(page_numbers))
         chunk = FileChunk(
-            chunk_id=f"{document.file_name}_{i + 1}",
-            file_id=document.file_name,
+            chunk_id=f"{document.title}_{i + 1}",
+            document_id=document.title,
             content=chunk.content,
             last_edited_ts=document.last_edited_ts,
-            document_title=document.file_name,
+            document_title=document.title,
             bounding_boxes=[],
             url=document.url,
             metadata=document.metadata,
@@ -234,11 +234,11 @@ def _create_chunk_from_text(
     """Helper function to create a single chunk from extracted text."""
     document.metadata["page_number"] = page_number
     return FileChunk(
-        chunk_id=f"{document.file_name}_{page_number}",
-        file_id=document.file_name,
+        chunk_id=f"{document.title}_{page_number}",
+        document_id=document.title,
         content=extracted_text,
         last_edited_ts=document.last_edited_ts,
-        document_title=document.file_name,
+        document_title=document.title,
         bounding_boxes=None,
         url=document.url,
         metadata=document.metadata,

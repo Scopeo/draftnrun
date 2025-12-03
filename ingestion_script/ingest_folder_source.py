@@ -1,7 +1,10 @@
+import json
 import logging
 from uuid import UUID
 from typing import Optional
 import uuid
+
+import pandas as pd
 
 from ada_backend.database import models as db
 from ada_backend.schemas.ingestion_task_schema import IngestionTaskUpdate
@@ -17,48 +20,68 @@ from data_ingestion.document.supabase_file_uploader import sync_files_to_supabas
 from engine.llm_services.llm_service import EmbeddingService, VisionService
 from engine.qdrant_service import QdrantCollectionSchema, QdrantService
 from engine.storage_service.db_service import DBService
-from engine.storage_service.db_utils import PROCESSED_DATETIME_FIELD, DBColumn, DBDefinition, create_db_if_not_exists
+from engine.storage_service.db_utils import (
+    PROCESSED_DATETIME_FIELD,
+    CREATED_AT_COLUMN,
+    UPDATED_AT_COLUMN,
+    DBColumn,
+    DBDefinition,
+    create_db_if_not_exists,
+)
 from engine.storage_service.local_service import SQLLocalService
 from engine.trace.trace_manager import TraceManager
 from ingestion_script.utils import (
+    DOCUMENT_TITLE_COLUMN_NAME,
     create_source,
     get_sanitize_names,
     update_ingestion_task,
     get_first_available_embeddings_custom_llm,
     get_first_available_multimodal_custom_llm,
+    SOURCE_ID_COLUMN_NAME,
+    METADATA_COLUMN_NAME,
+    CHUNK_ID_COLUMN_NAME,
+    CHUNK_COLUMN_NAME,
+    DOCUMENT_ID_COLUMN_NAME,
+    URL_COLUMN_NAME,
+    TIMESTAMP_COLUMN_NAME,
+    transform_chunks_df_for_unified_table,
 )
 from settings import settings
 
 LOGGER = logging.getLogger(__name__)
 
 ID_COLUMN_NAME = "chunk_id"
-TIMESTAMP_COLUMN_NAME = "last_edited_ts"
 META_DATA_TO_KEEP = [
     "folder_name",
     "page_number",
 ]
 
-FILE_TABLE_DEFINITION = DBDefinition(
+# Unified table definition for all source types
+UNIFIED_TABLE_DEFINITION = DBDefinition(
     columns=[
         DBColumn(name=PROCESSED_DATETIME_FIELD, type="DATETIME", default="CURRENT_TIMESTAMP"),
-        DBColumn(name=ID_COLUMN_NAME, type="VARCHAR", is_primary_key=True),
-        DBColumn(name="file_id", type="VARCHAR"),
-        DBColumn(name="content", type="VARCHAR"),
-        DBColumn(name="document_title", type="VARCHAR"),
-        DBColumn(name="url", type="VARCHAR"),
-        DBColumn(name="bounding_boxes", type="VARCHAR"),
+        DBColumn(name=CHUNK_ID_COLUMN_NAME, type="VARCHAR", is_primary=True),
+        DBColumn(name=SOURCE_ID_COLUMN_NAME, type="UUID"),
+        DBColumn(name=DOCUMENT_ID_COLUMN_NAME, type="VARCHAR"),
+        DBColumn(name=DOCUMENT_TITLE_COLUMN_NAME, type="VARCHAR"),
+        DBColumn(name=CHUNK_COLUMN_NAME, type="VARCHAR"),
         DBColumn(name=TIMESTAMP_COLUMN_NAME, type="VARCHAR"),
-        DBColumn(name="metadata", type="VARIANT"),
+        DBColumn(name=METADATA_COLUMN_NAME, type="JSONB"),
+        DBColumn(name=CREATED_AT_COLUMN, type="TIMESTAMP_TZ", default="CURRENT_TIMESTAMP"),
+        DBColumn(name=UPDATED_AT_COLUMN, type="TIMESTAMP_TZ", default="CURRENT_TIMESTAMP"),
     ]
 )
 
-QDRANT_SCHEMA = QdrantCollectionSchema(
-    chunk_id_field=ID_COLUMN_NAME,
-    content_field="content",
-    url_id_field="url",
-    file_id_field="file_id",
+# Unified Qdrant schema for all source types
+# Note: metadata_fields_to_keep is None because we flatten metadata into separate columns
+UNIFIED_QDRANT_SCHEMA = QdrantCollectionSchema(
+    chunk_id_field=CHUNK_ID_COLUMN_NAME,
+    content_field=CHUNK_COLUMN_NAME,
+    url_id_field=URL_COLUMN_NAME,
+    file_id_field=DOCUMENT_ID_COLUMN_NAME,
     last_edited_ts_field=TIMESTAMP_COLUMN_NAME,
-    metadata_fields_to_keep=["metadata"],
+    metadata_fields_to_keep=None,
+    source_id_field=SOURCE_ID_COLUMN_NAME,
 )
 
 
@@ -97,6 +120,58 @@ def load_embedding_service():
         )
 
 
+def flatten_metadata_json(metadata_value):
+    """Parse and flatten metadata JSON to a dictionary.
+
+    Args:
+        metadata_value: Can be a JSON string, dict, or None
+
+    Returns:
+        dict: Flattened metadata dictionary
+    """
+    if pd.isna(metadata_value) or metadata_value is None:
+        return {}
+
+    if isinstance(metadata_value, str):
+        try:
+            parsed = json.loads(metadata_value)
+            if isinstance(parsed, dict):
+                return parsed
+        except (json.JSONDecodeError, TypeError):
+            pass
+    elif isinstance(metadata_value, dict):
+        return metadata_value
+
+    return {}
+
+
+def prepare_df_for_qdrant(df):
+    """Prepare DataFrame for Qdrant by flattening metadata JSON column.
+
+    Reads metadata from JSONB column and flattens it into separate columns for Qdrant.
+    """
+    df = df.copy()
+    if SOURCE_ID_COLUMN_NAME in df.columns:
+        df[SOURCE_ID_COLUMN_NAME] = df[SOURCE_ID_COLUMN_NAME].apply(
+            lambda value: str(value) if isinstance(value, UUID) else value
+        )
+    if METADATA_COLUMN_NAME in df.columns:
+
+        def parse_and_flatten_metadata(row):
+            """Parse metadata JSON and return flattened dict."""
+            return flatten_metadata_json(row.get(METADATA_COLUMN_NAME))
+
+        metadata_df = df.apply(parse_and_flatten_metadata, axis=1, result_type="expand")
+        if not metadata_df.empty and len(metadata_df.columns) > 0:
+            for col in metadata_df.columns:
+                if col not in df.columns:
+                    df[col] = metadata_df[col]
+
+        df = df.drop(columns=[METADATA_COLUMN_NAME], errors="ignore")
+
+    return df
+
+
 async def sync_chunks_to_qdrant(
     table_schema: str,
     table_name: str,
@@ -105,12 +180,23 @@ async def sync_chunks_to_qdrant(
     qdrant_service: QdrantService,
     sql_query_filter: Optional[str] = None,
     query_filter_qdrant: Optional[dict] = None,
+    source_id: Optional[str] = None,
 ) -> None:
+    if source_id and sql_query_filter:
+        combined_filter = f"({sql_query_filter}) AND {SOURCE_ID_COLUMN_NAME} = '{source_id}'"
+    elif source_id:
+        combined_filter = f"{SOURCE_ID_COLUMN_NAME} = '{source_id}'"
+    else:
+        combined_filter = sql_query_filter
+
     chunks_df = db_service.get_table_df(
         table_name,
         schema_name=table_schema,
-        sql_query_filter=sql_query_filter,
+        sql_query_filter=combined_filter,
     )
+
+    chunks_df = prepare_df_for_qdrant(chunks_df)
+
     LOGGER.info(f"Syncing chunks to Qdrant collection {collection_name} with {len(chunks_df)} rows")
     if not await qdrant_service.collection_exists_async(collection_name):
         await qdrant_service.create_collection_async(collection_name)
@@ -241,9 +327,10 @@ async def _ingest_folder_source(
             ingestion_task=ingestion_task,
         )
         return
+    embedding_model_ref = f"{embedding_service._provider}:{embedding_service._model_name}"
     db_table_schema, db_table_name, qdrant_collection_name = get_sanitize_names(
-        source_id=str(source_id),
         organization_id=organization_id,
+        embedding_model_reference=embedding_model_ref,
     )
 
     LOGGER.info(f"Table schema in ingestion : {db_table_schema}")
@@ -255,8 +342,8 @@ async def _ingest_folder_source(
         database_schema=db_table_schema,
         database_table_name=db_table_name,
         qdrant_collection_name=qdrant_collection_name,
-        qdrant_schema=QDRANT_SCHEMA.to_dict(),
-        embedding_model_reference=f"{embedding_service._provider}:{embedding_service._model_name}",
+        qdrant_schema=UNIFIED_QDRANT_SCHEMA.to_dict(),
+        embedding_model_reference=embedding_model_ref,
     )
     if settings.INGESTION_DB_URL is None:
         raise ValueError("INGESTION_DB_URL is not set")
@@ -264,27 +351,8 @@ async def _ingest_folder_source(
     db_service = SQLLocalService(engine_url=settings.INGESTION_DB_URL)
     qdrant_service = QdrantService.from_defaults(
         embedding_service=embedding_service,
-        default_collection_schema=QDRANT_SCHEMA,
+        default_collection_schema=UNIFIED_QDRANT_SCHEMA,
     )
-
-    # Check if source already exists in either database or Qdrant
-    if db_service.schema_exists(schema_name=db_table_schema) and db_service.table_exists(
-        table_name=db_table_name, schema_name=db_table_schema
-    ):
-        LOGGER.error(f"Source {source_id} already exists in Database")
-        update_ingestion_task(
-            organization_id=organization_id,
-            ingestion_task=ingestion_task,
-        )
-        raise ValueError(f"Source '{source_id}' already exists in database table '{db_table_schema}.{db_table_name}'")
-
-    if await qdrant_service.collection_exists_async(qdrant_collection_name):
-        LOGGER.error(f"Source {source_id} already exists in Qdrant")
-        update_ingestion_task(
-            organization_id=organization_id,
-            ingestion_task=ingestion_task,
-        )
-        raise ValueError(f"Source '{source_id}' already exists in Qdrant collection '{qdrant_collection_name}'")
 
     LOGGER.info("Starting ingestion process")
     files_info = folder_manager.list_all_files_info()
@@ -360,18 +428,51 @@ async def _ingest_folder_source(
                 add_summary_in_chunks_func=add_summary_in_chunks_func,
                 default_chunk_size=chunk_size,
             )
+
+            unified_chunks_df = chunks_df.copy()
+
+            def sanitize_for_json(value):
+                """Sanitize a value for JSON encoding, handling invalid UTF-8 and already-encoded JSON strings."""
+                if value is None:
+                    return None
+                if isinstance(value, str):
+                    try:
+                        try:
+                            parsed = json.loads(value)
+                            return parsed
+                        except (json.JSONDecodeError, TypeError):
+                            return value.encode("utf-8", errors="replace").decode("utf-8")
+                    except Exception:
+                        return str(value).encode("utf-8", errors="replace").decode("utf-8")
+                return value
+
+            if "document_title" in unified_chunks_df.columns:
+                unified_chunks_df["document_title"] = unified_chunks_df["document_title"].apply(sanitize_for_json)
+            if "metadata" in unified_chunks_df.columns:
+                unified_chunks_df["metadata"] = unified_chunks_df["metadata"].apply(sanitize_for_json)
+            if "url" in unified_chunks_df.columns:
+                unified_chunks_df["url"] = unified_chunks_df["url"].apply(sanitize_for_json)
+
+            unified_chunks_df_for_db = transform_chunks_df_for_unified_table(unified_chunks_df, source_id)
+
             LOGGER.info(f"Sync chunks to db table {db_table_name}")
             db_service.update_table(
-                new_df=chunks_df,
+                new_df=unified_chunks_df_for_db,
                 table_name=db_table_name,
-                table_definition=FILE_TABLE_DEFINITION,
-                id_column_name=ID_COLUMN_NAME,
+                table_definition=UNIFIED_TABLE_DEFINITION,
+                id_column_name=CHUNK_ID_COLUMN_NAME,
                 timestamp_column_name=TIMESTAMP_COLUMN_NAME,
                 append_mode=True,
                 schema_name=db_table_schema,
             )
+
             await sync_chunks_to_qdrant(
-                db_table_schema, db_table_name, qdrant_collection_name, db_service, qdrant_service
+                table_schema=db_table_schema,
+                table_name=db_table_name,
+                collection_name=qdrant_collection_name,
+                db_service=db_service,
+                qdrant_service=qdrant_service,
+                source_id=str(source_id),
             )
     except Exception as e:
         LOGGER.error(f"Failed to ingest folder source: {str(e)}")

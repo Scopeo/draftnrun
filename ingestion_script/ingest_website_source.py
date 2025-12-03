@@ -17,13 +17,16 @@ from data_ingestion.document.folder_management.folder_management import WebsiteD
 from engine.qdrant_service import QdrantService
 from engine.storage_service.db_service import DBService
 from ingestion_script.ingest_folder_source import (
-    FILE_TABLE_DEFINITION,
     ID_COLUMN_NAME,
-    QDRANT_SCHEMA,
     TIMESTAMP_COLUMN_NAME,
+    UNIFIED_QDRANT_SCHEMA,
+    UNIFIED_TABLE_DEFINITION,
     sync_chunks_to_qdrant,
 )
-from ingestion_script.utils import upload_source
+from ingestion_script.utils import (
+    upload_source,
+    transform_chunks_df_for_unified_table,
+)
 from settings import settings
 
 LOGGER = logging.getLogger(__name__)
@@ -138,6 +141,7 @@ async def upload_website_source(
     storage_schema_name: str,
     storage_table_name: str,
     qdrant_collection_name: str,
+    source_id: UUID,
     url: str,
     follow_links: bool = True,
     max_depth: int = 1,
@@ -175,8 +179,8 @@ async def upload_website_source(
 
     content_storage = {}
 
-    def get_file_content_func(file_id: str) -> bytes:
-        return content_storage.get(file_id, b"")
+    def get_file_content_func(document_id: str) -> bytes:
+        return content_storage.get(document_id, b"")
 
     document_chunk_mapping = document_chunking_mapping(
         vision_ingestion_service=vision_completion_service,
@@ -196,12 +200,12 @@ async def upload_website_source(
             LOGGER.warning(f"Skipping page {page_data.url} - no content extracted")
             continue
 
-        file_id = hashlib.md5(page_data.url.encode()).hexdigest()
-        content_storage[file_id] = page_data.content.encode("utf-8")
+        document_id = hashlib.md5(page_data.url.encode()).hexdigest()
+        content_storage[document_id] = page_data.content.encode("utf-8")
 
         document = WebsiteDocument(
-            id=file_id,
-            file_name=page_data.title,
+            id=document_id,
+            title=page_data.title if page_data.title else page_data.url,
             folder_name=page_data.url,
             metadata={
                 "title": page_data.title,
@@ -244,10 +248,12 @@ async def upload_website_source(
 
     LOGGER.info(f"Syncing {len(all_chunks_df)} total chunks to db table {storage_table_name}")
 
+    all_chunks_df_for_db = transform_chunks_df_for_unified_table(all_chunks_df, source_id)
+
     db_service.update_table(
-        new_df=all_chunks_df,
+        new_df=all_chunks_df_for_db,
         table_name=storage_table_name,
-        table_definition=FILE_TABLE_DEFINITION,
+        table_definition=UNIFIED_TABLE_DEFINITION,
         id_column_name=ID_COLUMN_NAME,
         timestamp_column_name=TIMESTAMP_COLUMN_NAME,
         append_mode=True,
@@ -255,7 +261,12 @@ async def upload_website_source(
     )
 
     await sync_chunks_to_qdrant(
-        storage_schema_name, storage_table_name, qdrant_collection_name, db_service, qdrant_service
+        storage_schema_name,
+        storage_table_name,
+        qdrant_collection_name,
+        db_service,
+        qdrant_service,
+        source_id=str(source_id),
     )
 
 
@@ -280,7 +291,6 @@ async def ingest_website_source(
         f"URL: {url}, Organization: {organization_id}"
     )
 
-    qdrant_schema = QDRANT_SCHEMA
     source_type = db.SourceType.WEBSITE
 
     LOGGER.info("Starting Firecrawl website ingestion...")
@@ -289,7 +299,7 @@ async def ingest_website_source(
         organization_id,
         task_id,
         source_type,
-        qdrant_schema,
+        UNIFIED_QDRANT_SCHEMA,
         update_existing=False,
         ingestion_function=partial(
             upload_website_source,
