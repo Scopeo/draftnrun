@@ -1,5 +1,6 @@
 import logging
 from pathlib import Path
+from contextlib import contextmanager
 from typing import Optional, Type, Dict, Any
 
 import sqlalchemy
@@ -278,7 +279,8 @@ class SQLLocalService(DBService):
     ):
         LOGGER.warning("Granting privileges is database-dependent; consider abstracting this functionality.")
         qualified_table_name = f"{schema_name}.{table_name.lower()}" if schema_name else table_name.lower()
-        self._execute_query(f"GRANT SELECT ON {qualified_table_name} TO {role}")
+        with self.execute_query(f"GRANT SELECT ON {qualified_table_name} TO {role}"):
+            pass
 
     def _fetch_sql_query_as_dataframe(self, query: str) -> pd.DataFrame:
         return pd.read_sql(query, self.engine)
@@ -364,11 +366,19 @@ class SQLLocalService(DBService):
             session.execute(delete_stmt)
             session.commit()
 
-    def _execute_query(self, query: str):
+    @contextmanager
+    def execute_query(self, stmt):
+        """Execute a SQL statement (or string) within a connection context.
+
+        Yields:
+            tuple: (result, connection) - The result object and connection.
+        """
+        if isinstance(stmt, str):
+            stmt = sqlalchemy.text(stmt)
         with self.engine.connect() as connection:
-            with connection.begin() as transaction:
-                connection.execute(sqlalchemy.text(query))
-                transaction.commit()
+            with connection.begin():
+                result = connection.execute(stmt)
+                yield result, connection
 
     def get_db_description(
         self,

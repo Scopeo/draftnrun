@@ -2,7 +2,6 @@ from uuid import UUID
 
 from engine.storage_service.local_service import SQLLocalService
 from ada_backend.schemas.ingestion_database_schema import (
-    PaginatedChunkDataResponse,
     ChunkData,
     UpdateChunk,
 )
@@ -33,27 +32,6 @@ def create_table_in_ingestion_db(
     return table_name, table_definition
 
 
-def get_paginated_chunks_from_ingestion_db(
-    organization_id: UUID,
-    source_name: str,
-    page: int,
-    page_size: int,
-) -> PaginatedChunkDataResponse:
-    sql_local_service = get_sql_local_service_for_ingestion()
-    schema_name, table_name, qdrant_collection_name = get_sanitize_names(
-        source_name=source_name,
-        organization_id=str(organization_id),
-    )
-    rows, total_count = sql_local_service.get_rows_paginated(table_name, schema_name, page, page_size)
-    items = []
-    for row_dict in rows:
-        items.append(ChunkData(data=row_dict))
-    total_pages = (total_count + page_size - 1) // page_size
-    return PaginatedChunkDataResponse(
-        items=items, total=total_count, page=page, page_size=page_size, total_pages=total_pages
-    )
-
-
 def update_chunk_info_in_ingestion_db(
     organization_id: UUID,
     source_name: str,
@@ -77,20 +55,3 @@ def update_chunk_info_in_ingestion_db(
         chunk_id=chunk_id,
     )
     return ChunkData(data=updated_row)
-
-
-def delete_chunks_from_ingestion_db(
-    organization_id: UUID,
-    source_name: str,
-    chunk_ids: list[str],
-):
-    sql_local_service = get_sql_local_service_for_ingestion()
-    schema_name, table_name, qdrant_collection_name = get_sanitize_names(
-        source_name=source_name,
-        organization_id=str(organization_id),
-    )
-    sql_local_service.delete_rows_from_table(
-        table_name=table_name,
-        schema_name=schema_name,
-        ids=chunk_ids,
-    )

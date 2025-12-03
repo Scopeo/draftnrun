@@ -1,7 +1,7 @@
 import logging
 from fastapi import APIRouter
 from typing import Annotated
-from fastapi import Depends, HTTPException, Query, Response, status
+from fastapi import Depends, HTTPException
 from uuid import UUID
 
 from engine.storage_service.db_utils import DBDefinition
@@ -13,14 +13,11 @@ from ada_backend.routers.auth_router import (
 )
 from ada_backend.schemas.ingestion_database_schema import (
     ChunkData,
-    PaginatedChunkDataResponse,
     UpdateChunk,
 )
 from ada_backend.services.ingestion_database_service import (
     create_table_in_ingestion_db,
-    get_paginated_chunks_from_ingestion_db,
     update_chunk_info_in_ingestion_db,
-    delete_chunks_from_ingestion_db,
 )
 
 
@@ -41,29 +38,6 @@ def create_table_in_database(
     except Exception as e:
         LOGGER.exception(
             "Failed to create table in database for organization %s, source %s",
-            organization_id,
-            source_name,
-        )
-        raise HTTPException(status_code=500, detail=str(e)) from e
-
-
-@router.get("/organizations/{organization_id}/ingestion_database/sources/{source_name}/chunks")
-def get_chunks_in_database(
-    organization_id: UUID,
-    source_name: str,
-    user: Annotated[
-        SupabaseUser, Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.READER.value))
-    ],
-    page: int = Query(1, ge=1, description="Page number (1-based)"),
-    page_size: int = Query(10, ge=1, le=1000, description="Number of items per page"),
-) -> PaginatedChunkDataResponse:
-    if not user.id:
-        raise HTTPException(status_code=400, detail="User ID not found")
-    try:
-        return get_paginated_chunks_from_ingestion_db(organization_id, source_name, page, page_size)
-    except Exception as e:
-        LOGGER.exception(
-            "Failed to get chunks in database for organization %s, source %s",
             organization_id,
             source_name,
         )
@@ -94,29 +68,3 @@ def update_chunk_info_in_database(
             chunk_id,
         )
         raise HTTPException(status_code=500, detail=str(e)) from e
-
-
-@router.delete("/organizations/{organization_id}/ingestion_database/sources/{source_name}/chunks")
-def delete_chunks_in_database(
-    organization_id: UUID,
-    source_name: str,
-    chunk_ids: list[str],
-    user: Annotated[
-        SupabaseUser, Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.WRITER.value))
-    ],
-):
-    if not user.id:
-        raise HTTPException(status_code=400, detail="User ID not found")
-    try:
-        delete_chunks_from_ingestion_db(organization_id, source_name, chunk_ids)
-    except Exception as e:
-        LOGGER.error(
-            "Failed to delete chunks in database for organization %s, source %s, chunk %s: %s",
-            organization_id,
-            source_name,
-            chunk_ids,
-            str(e),
-        )
-        raise HTTPException(status_code=500, detail="Internal Server Error") from e
-
-    return Response(status_code=status.HTTP_204_NO_CONTENT)

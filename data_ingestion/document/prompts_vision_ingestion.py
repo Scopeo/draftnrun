@@ -123,7 +123,6 @@ Your task is to extract only the information of section that are provided.
   - Do not start like "Okay, I'm ready to process the images and extract
   the information as requested", etc, just give the content.
   - Do not include any extra information between pages.
-  - Only wrap the start and end with "```".
   - If in the images you have table of content, do not include it in the output.
   - Only extract information of sections that are provided.
     If there is another section ignore it you will have it in another batch.
@@ -171,7 +170,6 @@ Your task is to extract information from the provided images of the document.
   - Remove headers, footers, page numbers.
   - Do not start like "Okay, I'm ready to process the images and extract
   the information as requested", etc, just give the content.
-  - Only wrap the start and end with "```".
   - If in the images you have table of content, do not include it in the output.
 
     Example Output:
