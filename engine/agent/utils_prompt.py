@@ -13,7 +13,8 @@ def fill_prompt_template(prompt_template: str, component_name: str = "", variabl
     """
     Fills the system prompt with only the keys required from variables.
     Ensures all values used can be converted to string.
-    Raises ValueError for missing keys or uncastable values.
+    Raises MissingKeyFromPromptTemplateError for missing keys or
+    WrongKeyTypeInjectionFromPromptTemplateError for uncastable stringvalues.
 
     Note: Only double braces {{variable}} are supported for template variables.
     Field expressions use @{{expression}} format. Single braces { and } that are not
