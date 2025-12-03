@@ -55,21 +55,6 @@ def get_evaluations_by_version_output_endpoint(
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
-@router.get(
-    "/qa/llm-judges/defaults",
-    response_model=LLMJudgeTemplate,
-    summary="Get template with default values for LLM Judge creation",
-)
-def get_llm_judge_defaults(
-    user: Annotated[SupabaseUser, Depends(get_user_from_supabase_token)],
-    evaluation_type: EvaluationType = Query(default=EvaluationType.BOOLEAN, description="Evaluation type"),
-) -> LLMJudgeTemplate:
-    if not user.id:
-        raise HTTPException(status_code=400, detail="User ID not found")
-
-    return get_llm_judge_defaults_service(evaluation_type=evaluation_type)
-
-
 @router.post(
     "/projects/{project_id}/qa/llm-judges/{judge_id}/evaluations/run",
     response_model=JudgeEvaluationResponse,
@@ -120,7 +105,7 @@ def delete_judge_evaluations_endpoint(
     project_id: UUID,
     user: Annotated[
         SupabaseUser,
-        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.ADMIN.value)),
+        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.DEVELOPER.value)),
     ],
     session: Session = Depends(get_db),
     evaluation_ids: List[UUID] = Body(...),
