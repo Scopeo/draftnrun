@@ -30,11 +30,11 @@ def get_chunks_from_markdown(
 def build_chunk(document: BaseDocument, content: str, chunk_id: str) -> FileChunk:
     return FileChunk(
         chunk_id=chunk_id,
-        file_id=str(document.id),
+        document_id=str(document.id),
         content=content,
         url=document.url,
         last_edited_ts=document.last_edited_ts if document.last_edited_ts else None,
-        document_title=document.file_name if document.file_name else None,
+        document_title=document.title if document.title else None,
         bounding_boxes=[],
         metadata=document.metadata if document.metadata else {},
     )
@@ -48,7 +48,7 @@ def chunk_markdown(
 ) -> list[FileChunk]:
     tree_chunks = parse_markdown_to_chunks(
         file_content=content,
-        file_name=document_to_process.file_name,
+        file_name=document_to_process.title,
         chunk_size=chunk_size,
         chunk_overlap=chunk_overlap,
     )

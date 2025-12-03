@@ -27,7 +27,8 @@ TIMESTAMP_COLUMN_NAME = "last_edited_ts"
 # Default column names used across database ingestion
 CHUNK_ID_COLUMN_NAME = "chunk_id"
 CHUNK_COLUMN_NAME = "content"
-SOURCE_IDENTIFIER_COLUMN_NAME = "source_identifier"
+DOCUMENT_ID_COLUMN_NAME = "document_id"
+DOCUMENT_TITLE_COLUMN_NAME = "document_title"
 URL_COLUMN_NAME = "url"
 SOURCE_ID_COLUMN_NAME = "source_id"
 METADATA_COLUMN_NAME = "metadata"  # JSONB column for source-specific metadata
@@ -38,7 +39,8 @@ DEFAULT_EMBEDDING_MODEL = "openai:text-embedding-3-large"
 UNIFIED_TABLE_COLUMNS = [
     CHUNK_ID_COLUMN_NAME,
     SOURCE_ID_COLUMN_NAME,
-    SOURCE_IDENTIFIER_COLUMN_NAME,
+    DOCUMENT_ID_COLUMN_NAME,
+    DOCUMENT_TITLE_COLUMN_NAME,
     CHUNK_COLUMN_NAME,
     TIMESTAMP_COLUMN_NAME,
     METADATA_COLUMN_NAME,
@@ -96,7 +98,8 @@ def transform_chunks_df_for_unified_table(
     df = df.rename(
         columns={
             "chunk_id": CHUNK_ID_COLUMN_NAME,
-            "file_id": SOURCE_IDENTIFIER_COLUMN_NAME,
+            "file_id": DOCUMENT_ID_COLUMN_NAME,
+            "document_title": DOCUMENT_TITLE_COLUMN_NAME,
             "content": CHUNK_COLUMN_NAME,
             "last_edited_ts": TIMESTAMP_COLUMN_NAME,
         }

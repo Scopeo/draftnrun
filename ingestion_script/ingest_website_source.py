@@ -179,8 +179,8 @@ async def upload_website_source(
 
     content_storage = {}
 
-    def get_file_content_func(file_id: str) -> bytes:
-        return content_storage.get(file_id, b"")
+    def get_file_content_func(document_id: str) -> bytes:
+        return content_storage.get(document_id, b"")
 
     document_chunk_mapping = document_chunking_mapping(
         vision_ingestion_service=vision_completion_service,
@@ -200,12 +200,12 @@ async def upload_website_source(
             LOGGER.warning(f"Skipping page {page_data.url} - no content extracted")
             continue
 
-        file_id = hashlib.md5(page_data.url.encode()).hexdigest()
-        content_storage[file_id] = page_data.content.encode("utf-8")
+        document_id = hashlib.md5(page_data.url.encode()).hexdigest()
+        content_storage[document_id] = page_data.content.encode("utf-8")
 
         document = WebsiteDocument(
-            id=file_id,
-            file_name=page_data.title,
+            id=document_id,
+            title=page_data.title if page_data.title else page_data.url,
             folder_name=page_data.url,
             metadata={
                 "title": page_data.title,

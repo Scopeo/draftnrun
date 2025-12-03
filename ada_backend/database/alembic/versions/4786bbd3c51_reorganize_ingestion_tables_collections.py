@@ -22,11 +22,12 @@ from engine.llm_services.llm_service import EmbeddingService
 from engine.trace.trace_manager import TraceManager
 from ada_backend.services.entity_factory import get_llm_provider_and_model
 from ingestion_script.utils import (
+    DOCUMENT_TITLE_COLUMN_NAME,
     SOURCE_ID_COLUMN_NAME,
     METADATA_COLUMN_NAME,
     CHUNK_ID_COLUMN_NAME,
     CHUNK_COLUMN_NAME,
-    SOURCE_IDENTIFIER_COLUMN_NAME,
+    DOCUMENT_ID_COLUMN_NAME,
     get_sanitize_names,
     DEFAULT_EMBEDDING_MODEL,
 )
@@ -185,8 +186,8 @@ def _build_select_parts_for_migration(source_id, mapped_cols, metadata_cols, col
     else:
         select_parts.append(f'NULL AS "{CHUNK_ID_COLUMN_NAME}"')
 
-    # 3-5. Other mapped columns in order: source_identifier/file_id, content, timestamp
-    other_cols_order = [SOURCE_IDENTIFIER_COLUMN_NAME, CHUNK_COLUMN_NAME, TIMESTAMP_COLUMN_NAME]
+    # 3-5. Other mapped columns in order: document_id, document_title, content, timestamp
+    other_cols_order = [DOCUMENT_ID_COLUMN_NAME, DOCUMENT_TITLE_COLUMN_NAME, CHUNK_COLUMN_NAME, TIMESTAMP_COLUMN_NAME]
     for unified_col in other_cols_order:
         if unified_col in unified_cols_in_mapped:
             orig_col = unified_cols_in_mapped[unified_col]
@@ -257,9 +258,10 @@ def _classify_columns(source_columns, column_types):
     normal_columns_map = {
         CHUNK_ID_COLUMN_NAME.lower(): CHUNK_ID_COLUMN_NAME,
         CHUNK_COLUMN_NAME.lower(): CHUNK_COLUMN_NAME,
-        SOURCE_IDENTIFIER_COLUMN_NAME.lower(): SOURCE_IDENTIFIER_COLUMN_NAME,
-        "file_id": SOURCE_IDENTIFIER_COLUMN_NAME,  # Alternative name
-        "source_identifier": SOURCE_IDENTIFIER_COLUMN_NAME,  # Alternative name
+        DOCUMENT_ID_COLUMN_NAME.lower(): DOCUMENT_ID_COLUMN_NAME,
+        "file_id": DOCUMENT_ID_COLUMN_NAME,  # Alternative name
+        DOCUMENT_TITLE_COLUMN_NAME.lower(): DOCUMENT_TITLE_COLUMN_NAME,
+        "source_identifier": DOCUMENT_ID_COLUMN_NAME,  # Alternative name
         PROCESSED_DATETIME_FIELD.lower(): PROCESSED_DATETIME_FIELD,
         TIMESTAMP_COLUMN_NAME.lower(): TIMESTAMP_COLUMN_NAME,
         # url, metadata, and source_metadata are NOT in normal_columns_map - they go to metadata
@@ -313,7 +315,7 @@ def _migrate_table_with_sql_alternative(
     insert_sql = f"""
         INSERT INTO "{target_schema}"."{target_table}"
         ({PROCESSED_DATETIME_FIELD}, {SOURCE_ID_COLUMN_NAME}, {CHUNK_ID_COLUMN_NAME},
-        {SOURCE_IDENTIFIER_COLUMN_NAME}, {CHUNK_COLUMN_NAME}, {TIMESTAMP_COLUMN_NAME}, {METADATA_COLUMN_NAME})
+        {DOCUMENT_ID_COLUMN_NAME}, {CHUNK_COLUMN_NAME}, {TIMESTAMP_COLUMN_NAME}, {METADATA_COLUMN_NAME})
         SELECT {', '.join(select_parts)}
         FROM "{source_schema}"."{source_table}"
         ON CONFLICT ({CHUNK_ID_COLUMN_NAME}) DO NOTHING
@@ -346,137 +348,262 @@ async def _merge_collections(
     NOTE: This function migrates data but does NOT delete old collections.
     Old collections will be deleted in a subsequent migration/PR.
     """
-    # Use get_sanitize_names to get the correct collection name
-    _, _, new_collection_name = get_sanitize_names(
-        organization_id=organization_id,
-        embedding_model_reference=embedding_model,
-    )
-
-    if not source_collections:
-        LOGGER.warning(f"No source collections provided for organization {organization_id}, skipping collection merge")
-        return False
-
-    LOGGER.info(f"Merging {len(source_collections)} collections into {new_collection_name}")
-
-    # Check if target collection already exists and has data
-    if await qdrant_service.collection_exists_async(new_collection_name):
-        point_count = await qdrant_service.count_points_async(new_collection_name)
-        if point_count > 0:
-            LOGGER.info(f"Collection {new_collection_name} already exists with {point_count} points, skipping merge")
-            return False
-        else:
-            LOGGER.info(f"Collection {new_collection_name} exists but is empty, continuing migration")
-
-    # Get collection config from first source collection
-    first_collection_name = source_collections[0][1]
-    if not await qdrant_service.collection_exists_async(first_collection_name):
-        LOGGER.warning(f"Source collection {first_collection_name} does not exist, skipping")
-        return False
-
-    collection_info = await qdrant_service._send_request_async(
-        method="GET", endpoint=f"collections/{first_collection_name}"
-    )
-
-    if not collection_info or "result" not in collection_info:
-        LOGGER.error(f"Could not get collection info for {first_collection_name}")
-        return
-
-    collection_config = collection_info["result"]["config"]
-    vector_size = collection_config["params"]["vectors"]["size"]
-    distance = collection_config["params"]["vectors"]["distance"]
-    await qdrant_service.create_collection_async(new_collection_name, vector_size=vector_size, distance=distance)
-
-    await qdrant_service.create_index_if_needed_async(
-        collection_name=new_collection_name,
-        field_name=SOURCE_ID_COLUMN_NAME,
-        field_schema_type=FieldSchema.KEYWORD,
-    )
-    LOGGER.info(f"Created index on {SOURCE_ID_COLUMN_NAME} for collection {new_collection_name}")
-
-    # Copy all points from source collections to new collection, adding source_id
-    all_points = []
-    for source_id, collection_name in source_collections:
-        if not await qdrant_service.collection_exists_async(collection_name):
-            LOGGER.warning(f"Collection {collection_name} does not exist, skipping")
-            continue
-
-        offset = None
-        batch_size = 1000
-
-        while True:
-            scroll_payload = {
-                "limit": batch_size,
-                "with_payload": True,
-                "with_vector": True,
-            }
-            if offset:
-                scroll_payload["offset"] = offset
-
-            scroll_response = await qdrant_service._send_request_async(
-                method="POST",
-                endpoint=f"collections/{collection_name}/points/scroll",
-                payload=scroll_payload,
-            )
-
-            if not scroll_response or "result" not in scroll_response:
-                LOGGER.error(
-                    f"Failed to scroll points from collection {collection_name} for source {source_id}. "
-                    f"Response: {scroll_response}"
-                )
-                break
-
-            result = scroll_response["result"]
-            batch_points = result.get("points", [])
-
-            if not batch_points:
-                break
-
-            for point in batch_points:
-                if "payload" not in point:
-                    point["payload"] = {}
-                point["payload"][SOURCE_ID_COLUMN_NAME] = source_id
-
-            all_points.extend(batch_points)
-            offset = result.get("next_page_offset")
-
-            if not offset:
-                break
-
-    if all_points:
-        LOGGER.info(f"Inserting {len(all_points)} points into collection {new_collection_name}")
-        batch_size = 100
-        inserted_count = 0
-        for i in range(0, len(all_points), batch_size):
-            batch = all_points[i : i + batch_size]
-            try:
-                await qdrant_service._send_request_async(
-                    method="PUT",
-                    endpoint=f"collections/{new_collection_name}/points",
-                    payload={"points": batch},
-                )
-                inserted_count += len(batch)
-            except Exception as e:
-                LOGGER.error(
-                    f"Error inserting batch {i//batch_size + 1} into collection {new_collection_name}: {str(e)}. "
-                    f"Batch size: {len(batch)}"
-                )
-                raise
-        LOGGER.info(f"Successfully migrated {inserted_count} points to {new_collection_name}")
-    else:
-        LOGGER.warning(
-            f"No points to migrate to {new_collection_name} from {len(source_collections)} source collections. "
-            "This may indicate that all source collections were empty or did not exist."
+    try:
+        # Use get_sanitize_names to get the correct collection name
+        _, _, new_collection_name = get_sanitize_names(
+            organization_id=organization_id,
+            embedding_model_reference=embedding_model,
         )
 
-    # NOTE: Old collections are NOT deleted here to allow for rollback.
-    # They will be deleted in a subsequent migration/PR after verifying the migration was successful.
-    LOGGER.info(
-        f"Migration completed for {new_collection_name}. "
-        f"Old collections ({len(source_collections)} collections) are preserved for now "
-        "and will be deleted in a subsequent PR."
-    )
+        if not source_collections:
+            LOGGER.warning(
+                f"No source collections provided for organization {organization_id}, skipping collection merge"
+            )
+            return False
 
-    return True
+        LOGGER.info(f"Merging {len(source_collections)} collections into {new_collection_name}")
+
+        # Check if target collection already exists and has data
+        try:
+            if await qdrant_service.collection_exists_async(new_collection_name):
+                point_count = await qdrant_service.count_points_async(new_collection_name)
+                if point_count > 0:
+                    LOGGER.info(
+                        f"Collection {new_collection_name} already exists with {point_count} points, skipping merge"
+                    )
+                    return False
+                else:
+                    LOGGER.info(f"Collection {new_collection_name} exists but is empty, continuing migration")
+        except Exception as e:
+            LOGGER.warning(
+                f"Error checking if target collection {new_collection_name} exists: {str(e)}, continuing..."
+            )
+
+        # Find first valid source collection to get config from
+        first_valid_collection = None
+        first_valid_collection_name = None
+        skipped_collections = []
+        for source_id, collection_name in source_collections:
+            try:
+                if await qdrant_service.collection_exists_async(collection_name):
+                    first_valid_collection = (source_id, collection_name)
+                    first_valid_collection_name = collection_name
+                    LOGGER.info(f"Found first valid collection: {collection_name} (source_id: {source_id})")
+                    break
+                else:
+                    skipped_collections.append((source_id, collection_name))
+                    LOGGER.warning(
+                        f"Source collection {collection_name} does not exist in Qdrant (source_id: {source_id}), skipping"
+                    )
+            except Exception as e:
+                skipped_collections.append((source_id, collection_name))
+                LOGGER.warning(
+                    f"Error checking if collection {collection_name} exists (source_id: {source_id}): {str(e)}, trying next..."
+                )
+                continue
+
+        if not first_valid_collection:
+            LOGGER.warning(
+                f"No valid source collections found for organization {organization_id} with embedding model {embedding_model}. "
+                f"Skipped {len(skipped_collections)} collection(s): {[c[1] for c in skipped_collections]}. "
+                f"Skipping collection merge"
+            )
+            return False
+
+        if skipped_collections:
+            LOGGER.info(
+                f"Skipped {len(skipped_collections)} collection(s) while finding first valid collection: "
+                f"{[(sid, cname) for sid, cname in skipped_collections]}"
+            )
+
+        # Get collection config from first valid source collection
+        try:
+            collection_info = await qdrant_service._send_request_async(
+                method="GET", endpoint=f"collections/{first_valid_collection_name}"
+            )
+
+            if not collection_info or "result" not in collection_info:
+                LOGGER.error(
+                    f"Could not get collection info for {first_valid_collection_name}, skipping collection merge"
+                )
+                return False
+
+            collection_config = collection_info["result"]["config"]
+            vector_size = collection_config["params"]["vectors"]["size"]
+            distance = collection_config["params"]["vectors"]["distance"]
+
+            # Create target collection if it doesn't exist
+            if not await qdrant_service.collection_exists_async(new_collection_name):
+                await qdrant_service.create_collection_async(
+                    new_collection_name, vector_size=vector_size, distance=distance
+                )
+                LOGGER.info(f"Created collection {new_collection_name}")
+
+            await qdrant_service.create_index_if_needed_async(
+                collection_name=new_collection_name,
+                field_name=SOURCE_ID_COLUMN_NAME,
+                field_schema_type=FieldSchema.KEYWORD,
+            )
+            LOGGER.info(f"Created index on {SOURCE_ID_COLUMN_NAME} for collection {new_collection_name}")
+        except Exception as e:
+            LOGGER.error(
+                f"Error setting up target collection {new_collection_name}: {str(e)}, skipping collection merge"
+            )
+            return False
+
+        # Copy all points from source collections to new collection, adding source_id
+        all_points = []
+        collections_processed = 0
+        collections_failed = 0
+        skipped_collections_list = []  # Track which collections were skipped
+
+        for source_id, collection_name in source_collections:
+            try:
+                if not await qdrant_service.collection_exists_async(collection_name):
+                    LOGGER.warning(
+                        f"Source collection {collection_name} does not exist in Qdrant (source_id: {source_id}), skipping"
+                    )
+                    collections_failed += 1
+                    skipped_collections_list.append((source_id, collection_name, "does not exist"))
+                    continue
+
+                offset = None
+                batch_size = 1000
+                collection_points = 0
+
+                while True:
+                    try:
+                        scroll_payload = {
+                            "limit": batch_size,
+                            "with_payload": True,
+                            "with_vector": True,
+                        }
+                        if offset:
+                            scroll_payload["offset"] = offset
+
+                        scroll_response = await qdrant_service._send_request_async(
+                            method="POST",
+                            endpoint=f"collections/{collection_name}/points/scroll",
+                            payload=scroll_payload,
+                        )
+
+                        if not scroll_response or "result" not in scroll_response:
+                            LOGGER.error(
+                                f"Failed to scroll points from collection {collection_name} for source {source_id}. "
+                                f"Response: {scroll_response}"
+                            )
+                            break
+
+                        result = scroll_response["result"]
+                        batch_points = result.get("points", [])
+
+                        if not batch_points:
+                            break
+
+                        for point in batch_points:
+                            if "payload" not in point:
+                                point["payload"] = {}
+                            point["payload"][SOURCE_ID_COLUMN_NAME] = source_id
+
+                        all_points.extend(batch_points)
+                        collection_points += len(batch_points)
+                        offset = result.get("next_page_offset")
+
+                        if not offset:
+                            break
+                    except Exception as e:
+                        LOGGER.error(
+                            f"Error scrolling points from collection {collection_name} for source {source_id}: {str(e)}. "
+                            f"Continuing with next collection..."
+                        )
+                        break
+
+                if collection_points > 0:
+                    LOGGER.info(
+                        f"Collected {collection_points} points from collection {collection_name} (source_id: {source_id})"
+                    )
+                    collections_processed += 1
+                else:
+                    LOGGER.warning(
+                        f"No points collected from collection {collection_name} (source_id: {source_id}), skipping"
+                    )
+                    collections_failed += 1
+                    skipped_collections_list.append((source_id, collection_name, "no points"))
+            except Exception as e:
+                LOGGER.error(
+                    f"Error processing collection {collection_name} for source {source_id}: {str(e)}. "
+                    f"Continuing with next collection..."
+                )
+                collections_failed += 1
+                skipped_collections_list.append((source_id, collection_name, f"error: {str(e)}"))
+                continue
+
+        if all_points:
+            LOGGER.info(f"Inserting {len(all_points)} points into collection {new_collection_name}")
+            batch_size = 100
+            inserted_count = 0
+            failed_batches = 0
+
+            for i in range(0, len(all_points), batch_size):
+                batch = all_points[i : i + batch_size]
+                try:
+                    await qdrant_service._send_request_async(
+                        method="PUT",
+                        endpoint=f"collections/{new_collection_name}/points",
+                        payload={"points": batch},
+                    )
+                    inserted_count += len(batch)
+                except Exception as e:
+                    LOGGER.error(
+                        f"Error inserting batch {i//batch_size + 1} into collection {new_collection_name}: {str(e)}. "
+                        f"Batch size: {len(batch)}. Continuing with next batch..."
+                    )
+                    failed_batches += 1
+                    # Continue with next batch instead of raising
+                    continue
+
+            if inserted_count > 0:
+                LOGGER.info(f"Successfully migrated {inserted_count} points to {new_collection_name}")
+            if failed_batches > 0:
+                LOGGER.warning(f"Failed to insert {failed_batches} batch(es) into {new_collection_name}")
+        else:
+            warning_msg = (
+                f"No points to migrate to {new_collection_name} from {len(source_collections)} source collections. "
+                f"Processed: {collections_processed}, Skipped: {collections_failed}"
+            )
+            if skipped_collections_list:
+                skipped_details = ", ".join(
+                    [
+                        f"{cname} (source_id: {sid}, reason: {reason})"
+                        for sid, cname, reason in skipped_collections_list
+                    ]
+                )
+                warning_msg += f". Skipped collections: {skipped_details}"
+            LOGGER.warning(warning_msg)
+            return False
+
+        # NOTE: Old collections are NOT deleted here to allow for rollback.
+        # They will be deleted in a subsequent migration/PR after verifying the migration was successful.
+        summary_msg = (
+            f"Migration completed for {new_collection_name}. "
+            f"Processed {collections_processed} collection(s), skipped {collections_failed} collection(s). "
+            f"Total collections: {len(source_collections)}. "
+            f"Old collections are preserved for now and will be deleted in a subsequent PR."
+        )
+        if skipped_collections_list:
+            skipped_details = ", ".join(
+                [f"{cname} (source_id: {sid}, reason: {reason})" for sid, cname, reason in skipped_collections_list]
+            )
+            summary_msg += f" Skipped collections: {skipped_details}"
+        LOGGER.info(summary_msg)
+
+        return True
+    except Exception as e:
+        LOGGER.error(
+            f"Unexpected error in _merge_collections for organization {organization_id} "
+            f"with embedding model {embedding_model}: {str(e)}. Continuing with next organization..."
+        )
+        return False
 
 
 def _merge_tables(
@@ -585,7 +712,7 @@ def _merge_tables(
         insert_sql = f"""
             INSERT INTO "{schema_name}"."{new_table_name}"
             ({PROCESSED_DATETIME_FIELD}, {SOURCE_ID_COLUMN_NAME}, {CHUNK_ID_COLUMN_NAME},
-            {SOURCE_IDENTIFIER_COLUMN_NAME}, {CHUNK_COLUMN_NAME}, {TIMESTAMP_COLUMN_NAME}, {METADATA_COLUMN_NAME})
+            {DOCUMENT_ID_COLUMN_NAME}, {CHUNK_COLUMN_NAME}, {TIMESTAMP_COLUMN_NAME}, {METADATA_COLUMN_NAME})
             SELECT {', '.join(select_parts)}
             FROM "{schema}"."{table_name}"
             ON CONFLICT ({CHUNK_ID_COLUMN_NAME}) DO NOTHING
@@ -806,12 +933,20 @@ def upgrade() -> None:
             # Use the QdrantService for this specific embedding model
             collections_migrated = False
             if source_collections:
-                qdrant_service = qdrant_services[embedding_model]
-                collections_migrated = asyncio.run(
-                    _merge_collections(qdrant_service, str(org_id), source_collections, embedding_model)
-                )
-                if collections_migrated:
-                    orgs_with_collection_migrations += 1
+                try:
+                    qdrant_service = qdrant_services[embedding_model]
+                    collections_migrated = asyncio.run(
+                        _merge_collections(qdrant_service, str(org_id), source_collections, embedding_model)
+                    )
+                    if collections_migrated:
+                        orgs_with_collection_migrations += 1
+                except Exception as e:
+                    LOGGER.error(
+                        f"Error merging collections for organization {org_id} with embedding model {embedding_model}: {str(e)}. "
+                        f"Continuing with next organization..."
+                    )
+                    # Continue with next organization instead of stopping
+                    continue
             else:
                 LOGGER.warning(
                     f"No source collections found for organization {org_id} with "

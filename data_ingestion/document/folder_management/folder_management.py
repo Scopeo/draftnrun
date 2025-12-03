@@ -54,7 +54,7 @@ class BaseDocument(BaseModel):
     id: str
     type: FileDocumentType
     last_edited_ts: Optional[str] = None
-    file_name: str
+    title: str
     folder_name: str
     metadata: dict[str, Any] = Field(default_factory=dict)
 
