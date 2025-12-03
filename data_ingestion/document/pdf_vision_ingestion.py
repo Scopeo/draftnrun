@@ -266,7 +266,7 @@ async def _process_pdf_page_by_page(
             openai_llm_service=openai_llm_service,
             image_content_list=[img_base64],
         )
-        chunk = _create_chunk_from_text(document, extracted_text, i + 1, order=i)
+        chunk = _create_chunk_from_text(document, extracted_text, page_number=i + 1, order=i)
         chunks.append(chunk)
     return chunks
 

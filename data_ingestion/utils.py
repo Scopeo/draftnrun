@@ -12,7 +12,6 @@ from pydantic import BaseModel, Field
 
 from engine.storage_service.db_service import DBService
 
-
 IMAGE_DESCRIPTION_INITIAL_PROMPT = (
     "You will be provided with both the text and the image, "
     "as well as the specific location of the image within that section. "
