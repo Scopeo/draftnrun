@@ -54,7 +54,7 @@ def get_projects_by_organization_endpoint(
         SupabaseUser,
         Depends(
             user_has_access_to_organization_dependency(
-                allowed_roles=UserRights.MEMBER.value,
+                allowed_roles=UserRights.USER.value,
             )
         ),
     ],

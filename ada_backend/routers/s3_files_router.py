@@ -31,7 +31,7 @@ async def generate_s3_upload_presigned_urls(
     upload_file_requests: list[UploadFileRequest],
     auth_ids: Annotated[
         tuple[UUID | None, UUID | None],
-        Depends(user_has_access_to_organization_xor_verify_api_key(allowed_roles=UserRights.MEMBER.value)),
+        Depends(user_has_access_to_organization_xor_verify_api_key(allowed_roles=UserRights.DEVELOPER.value)),
     ],
 ) -> list[S3UploadURL]:
     """
