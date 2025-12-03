@@ -12,8 +12,7 @@ from sqlalchemy import text, inspect
 from sqlalchemy.exc import SQLAlchemyError
 
 from engine.storage_service.local_service import SQLLocalService
-from data_ingestion.utils import ORDER_COLUMN_NAME
-from ingestion_script.utils import CHUNK_ID_COLUMN_NAME
+from ingestion_script.utils import CHUNK_ID_COLUMN_NAME, ORDER_COLUMN_NAME
 from settings import settings
 
 
@@ -88,8 +87,8 @@ def add_order_column_to_table(db_service: SQLLocalService, table_name: str, sche
                 f"""
                 UPDATE "{schema_name}"."{table_name}"
                 SET "{ORDER_COLUMN_NAME}" = (
-                    CASE 
-                        WHEN "{CHUNK_ID_COLUMN_NAME}" LIKE '%_%' 
+                    CASE
+                        WHEN "{CHUNK_ID_COLUMN_NAME}" LIKE '%_%'
                              AND SPLIT_PART("{CHUNK_ID_COLUMN_NAME}", '_', -1) ~ '^[0-9]+$'
                         THEN GREATEST(
                             0,
@@ -127,7 +126,7 @@ def upgrade() -> None:
         return False
 
     try:
-        LOGGER.info(f"Connecting to ingestion database...")
+        LOGGER.info("Connecting to ingestion database...")
         db_service = SQLLocalService(engine_url=settings.INGESTION_DB_URL)
         LOGGER.info(f"Connected to database: {db_service.database_name}\n")
 
@@ -173,7 +172,6 @@ def upgrade() -> None:
                 failed_count += 1
                 LOGGER.error(f"  ✗ Failed to migrate {schema}.{table}\n")
 
-        # Summary
         LOGGER.info("=" * 60)
         LOGGER.info("Migration Summary:")
         LOGGER.info(f"  Successfully migrated: {success_count} table(s)")

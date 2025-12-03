@@ -18,7 +18,7 @@ from data_ingestion.document.folder_management.folder_management import (
     FileDocument,
     FileDocumentType,
 )
-from data_ingestion.utils import ORDER_COLUMN_NAME
+from ingestion_script.utils import ORDER_COLUMN_NAME
 from engine.llm_services.llm_service import CompletionService, VisionService
 
 LOGGER = logging.getLogger(__name__)

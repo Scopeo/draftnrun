@@ -19,12 +19,11 @@ from settings import settings
 
 LOGGER = logging.getLogger(__name__)
 
-from data_ingestion.utils import ORDER_COLUMN_NAME
-
 # Default column names used across database ingestion
 CHUNK_ID_COLUMN_NAME = "chunk_id"
 CHUNK_COLUMN_NAME = "content"
 FILE_ID_COLUMN_NAME = "source_identifier"
+ORDER_COLUMN_NAME = "order"
 URL_COLUMN_NAME = "url"
 
 

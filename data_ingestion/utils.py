@@ -12,8 +12,6 @@ from pydantic import BaseModel, Field
 
 from engine.storage_service.db_service import DBService
 
-# Column name constants
-ORDER_COLUMN_NAME = "order"
 
 IMAGE_DESCRIPTION_INITIAL_PROMPT = (
     "You will be provided with both the text and the image, "
