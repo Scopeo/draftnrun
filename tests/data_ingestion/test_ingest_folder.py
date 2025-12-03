@@ -21,7 +21,7 @@ def mock_file_document():
 def mock_file_chunk():
     return FileChunk(
         chunk_id="chunk_1",
-        document_id="dummy_id",
+        file_id="dummy_id",
         content="dummy content",
         bounding_boxes=[{"xmin": 1, "ymin": 2, "xmax": 3, "ymax": 4, "page": 1}],
         last_edited_ts="2023-01-01T00:00:00Z",

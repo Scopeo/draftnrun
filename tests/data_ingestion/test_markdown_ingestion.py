@@ -19,11 +19,11 @@ def mock_file_document():
 
 
 def test_get_chunks_from_md(mock_file_document):
-    def get_file_content_func(document_id) -> bytes:
+    def get_file_content_func(file_id) -> bytes:
         from io import BytesIO
         from pathlib import Path
 
-        return BytesIO(Path(document_id).read_bytes()).getvalue()
+        return BytesIO(Path(file_id).read_bytes()).getvalue()
 
     chunks = get_chunks_from_markdown(
         md_doc_to_process=mock_file_document, get_file_content_func=get_file_content_func
@@ -31,6 +31,6 @@ def test_get_chunks_from_md(mock_file_document):
     assert len(chunks) == 1
     assert chunks[0].content == "\n# Test\nOk content"
     assert chunks[0].chunk_id == "tests/resources/documents/test_markdown.md_0"
-    assert chunks[0].document_id == "tests/resources/documents/test_markdown.md"
+    assert chunks[0].file_id == "tests/resources/documents/test_markdown.md"
     assert chunks[0].document_title == "test_file"
     assert chunks[0].last_edited_ts == "2024-11-26 10:40:40"

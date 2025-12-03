@@ -26,7 +26,7 @@ def list_documents_for_source(
             func.max(table.c.last_edited_ts).label("last_edited_ts"),
         )
         .group_by(table.c.file_id)
-        .order_by(func.max(table.c.order).desc())
+        .order_by(func.max(table.c.last_edited_ts).desc())
     )
     with sql_local_service.execute_query(stmt) as (result, _):
         rows = result.all()
@@ -41,12 +41,12 @@ def get_chunk_rows_for_document(
     limit: int = None,
     offset: int = None,
 ) -> Tuple[List[Row], Table, int]:
-    """Get all chunk rows for a given document_id, sorted by chunk_id. Returns (rows, table, total_count)."""
+    """Get all chunk rows for a given document_id, sorted by order. Returns (rows, table, total_count)."""
     table = sql_local_service.get_table(table_name=table_name, schema_name=schema_name)
     # TODO: Change file_id to document_id
     count_stmt = select(func.count()).select_from(table).where(table.c.file_id == document_id)
 
-    stmt = select(table).where(table.c.file_id == document_id).order_by(table.c.chunk_id)
+    stmt = select(table).where(table.c.file_id == document_id).order_by(table.c.order.asc().nullslast())
 
     if limit is not None:
         stmt = stmt.limit(limit)

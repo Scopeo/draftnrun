@@ -18,8 +18,8 @@ EXPECTED_CONTENT = (
 )
 
 
-def get_file_content_func(document_id: str) -> bytes:
-    with open(document_id, "rb") as f:
+def get_file_content_func(file_id: str) -> bytes:
+    with open(file_id, "rb") as f:
         return f.read()
 
 
@@ -36,7 +36,7 @@ def test_ingest_excel_file():
     print(result[0].content)
     assert len(result) == 1
     assert result[0].content == EXPECTED_CONTENT
-    assert result[0].document_id == FILE_PATH
+    assert result[0].file_id == FILE_PATH
     assert result[0].chunk_id == f"{FILE_PATH}_test_0"
     assert result[0].document_title == "test_excel.xlsx"
     assert result[0].last_edited_ts == "2025-07-10T00:00:00Z"

@@ -31,7 +31,7 @@ def get_chunks_from_markdown(
 def build_chunk(document: BaseDocument, content: str, order: int) -> FileChunk:
     return FileChunk(
         chunk_id=str(uuid.uuid4()),
-        document_id=str(document.id),
+        file_id=str(document.id),
         order=order,
         content=content,
         url=document.url,
