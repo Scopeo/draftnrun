@@ -3,6 +3,8 @@ from uuid import UUID
 from typing import Optional
 import uuid
 
+import pandas as pd
+
 from ada_backend.database import models as db
 from ada_backend.schemas.ingestion_task_schema import IngestionTaskUpdate
 from ada_backend.schemas.source_schema import DataSourceSchema
@@ -398,6 +400,9 @@ async def _ingest_folder_source(
             else:
                 LOGGER.info("[EMPTY_FOLDER] No files to add to existing source - returning")
             return
+
+        file_chunks_dfs = []
+
         for document in files_info:
             chunks_df = await get_chunks_dataframe_from_doc(
                 document,
@@ -408,19 +413,42 @@ async def _ingest_folder_source(
                 add_summary_in_chunks_func=add_summary_in_chunks_func,
                 default_chunk_size=chunk_size,
             )
-            LOGGER.info(f"Sync chunks to db table {db_table_name}")
-            db_service.update_table(
-                new_df=chunks_df,
-                table_name=db_table_name,
-                table_definition=FILE_TABLE_DEFINITION,
-                id_column_name=CHUNK_ID_COLUMN_NAME,
-                timestamp_column_name=TIMESTAMP_COLUMN_NAME,
-                append_mode=True,
-                schema_name=db_table_schema,
-            )
-            await sync_chunks_to_qdrant(
-                db_table_schema, db_table_name, qdrant_collection_name, db_service, qdrant_service
-            )
+
+            if chunks_df.empty:
+                LOGGER.warning(f"No chunks created for {document.file_name} - skipping")
+                continue
+
+            file_chunks_dfs.append(chunks_df)
+            LOGGER.info(f"Created {len(chunks_df)} chunks for {document.file_name}")
+
+        if not file_chunks_dfs:
+            LOGGER.warning("No chunks created from any file - nothing to sync")
+            return
+
+        all_chunks_df = pd.concat(file_chunks_dfs, ignore_index=True)
+
+        initial_count = len(all_chunks_df)
+        all_chunks_df = all_chunks_df[all_chunks_df["content"].notna() & (all_chunks_df["content"].str.strip() != "")]
+        filtered_count = initial_count - len(all_chunks_df)
+        if filtered_count > 0:
+            LOGGER.info(f"Filtered out {filtered_count} chunks with empty content")
+
+        if all_chunks_df.empty:
+            LOGGER.warning("No valid chunks remaining after filtering - nothing to sync")
+            return
+
+        LOGGER.info(f"Syncing {len(all_chunks_df)} total chunks to db table {db_table_name}")
+        db_service.update_table(
+            new_df=all_chunks_df,
+            table_name=db_table_name,
+            table_definition=FILE_TABLE_DEFINITION,
+            id_column_name=CHUNK_ID_COLUMN_NAME,
+            timestamp_column_name=TIMESTAMP_COLUMN_NAME,
+            append_mode=True,
+            schema_name=db_table_schema,
+        )
+
+        await sync_chunks_to_qdrant(db_table_schema, db_table_name, qdrant_collection_name, db_service, qdrant_service)
     except Exception as e:
         LOGGER.error(f"Failed to ingest folder source: {str(e)}")
         ingestion_task.status = db.TaskStatus.FAILED
