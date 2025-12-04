@@ -1588,7 +1588,7 @@ class Cost(Base):
 
     id = mapped_column(UUID(as_uuid=True), primary_key=True, index=True, default=uuid.uuid4)
     entity_type = mapped_column(make_pg_enum(EntityType), nullable=True)
-    credits_per_second = mapped_column(Float, nullable=True)
+    credits_per_unit = mapped_column(Float, nullable=True)
     credits_per_call = mapped_column(Float, nullable=True)
     credits_per_input_token = mapped_column(Float, nullable=True)
     credits_per_output_token = mapped_column(Float, nullable=True)
@@ -1671,13 +1671,13 @@ class SpanUsage(Base):
     credits_input_token = mapped_column(Float, nullable=True)
     credits_output_token = mapped_column(Float, nullable=True)
     credits_per_call = mapped_column(Float, nullable=True)
-    credits_per_second = mapped_column(Float, nullable=True)
+    credits_per_unit = mapped_column(Float, nullable=True)
 
     def __str__(self):
         return (
             f"SpanUsage(span_id={self.span_id}, credits_input_token={self.credits_input_token}, "
             f"credits_output_token={self.credits_output_token}, credits_per_call={self.credits_per_call}, "
-            f"credits_per_second={self.credits_per_second})"
+            f"credits_per_unit={self.credits_per_unit})"
         )
 
 

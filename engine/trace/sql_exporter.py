@@ -133,7 +133,7 @@ class SQLSpanExporter(SpanExporter):
         credits_input_token = None
         credits_output_token = None
         credits_per_call = None
-        credits_per_second = None
+        credits_per_unit = None
         has_billable_usage = False
 
         if model_id:
@@ -155,7 +155,7 @@ class SQLSpanExporter(SpanExporter):
 
         if component_instance_id:
             cost_info = self.session.execute(
-                select(Cost.credits_per_second, Cost.credits_per_call)
+                select(Cost.credits_per_unit, Cost.credits_per_call)
                 .join(ComponentCost, ComponentCost.id == Cost.id)
                 .join(
                     ComponentInstance,
@@ -164,13 +164,13 @@ class SQLSpanExporter(SpanExporter):
                 .where(ComponentInstance.id == component_instance_id)
             ).first()
 
-            if cost_info and (cost_info.credits_per_second or cost_info.credits_per_call):
-                duration_seconds = (span.end_time - span.start_time) / 1e9
-                credits_per_second = duration_seconds * (cost_info.credits_per_second or 0)
+            if cost_info and (cost_info.credits_per_unit or cost_info.credits_per_call):
+                # TODO: Add calculation for units
+                credits_per_unit = 0
                 credits_per_call = cost_info.credits_per_call or 0
                 has_billable_usage = True
 
-        return credits_input_token, credits_output_token, credits_per_call, credits_per_second, has_billable_usage
+        return credits_input_token, credits_output_token, credits_per_call, credits_per_unit, has_billable_usage
 
     def _store_span_credits(
         self,
@@ -179,7 +179,7 @@ class SQLSpanExporter(SpanExporter):
         credits_input_token: float | None,
         credits_output_token: float | None,
         credits_per_call: float | None,
-        credits_per_second: float | None,
+        credits_per_unit: float | None,
     ) -> None:
 
         span_usage = SpanUsage(
@@ -187,7 +187,7 @@ class SQLSpanExporter(SpanExporter):
             credits_input_token=credits_input_token,
             credits_output_token=credits_output_token,
             credits_per_call=credits_per_call,
-            credits_per_second=credits_per_second,
+            credits_per_unit=credits_per_unit,
         )
         self.session.add(span_usage)
 
@@ -196,7 +196,7 @@ class SQLSpanExporter(SpanExporter):
                 (credits_input_token or 0)
                 + (credits_output_token or 0)
                 + (credits_per_call or 0)
-                + (credits_per_second or 0)
+                + (credits_per_unit or 0)
             )
 
             current_date = datetime.now(tz=timezone.utc)
@@ -299,7 +299,7 @@ class SQLSpanExporter(SpanExporter):
             )
             self.session.add(span_row)
 
-            credits_input_token, credits_output_token, credits_per_call, credits_per_second, has_billable_usage = (
+            credits_input_token, credits_output_token, credits_per_call, credits_per_unit, has_billable_usage = (
                 self._calculate_span_credits(span, model_id, component_instance_id)
             )
 
@@ -310,7 +310,7 @@ class SQLSpanExporter(SpanExporter):
                     credits_input_token,
                     credits_output_token,
                     credits_per_call,
-                    credits_per_second,
+                    credits_per_unit,
                 )
 
             self.session.add(

@@ -75,10 +75,8 @@ def create_component_version_cost_in_db(session, component_version_id: UUID, **k
     return create_component_version_cost(
         session,
         component_version_id,
-        credits_per_input_token=kwargs.get("credits_per_input_token"),
-        credits_per_output_token=kwargs.get("credits_per_output_token"),
         credits_per_call=kwargs.get("credits_per_call"),
-        credits_per_second=kwargs.get("credits_per_second"),
+        credits_per_unit=kwargs.get("credits_per_unit"),
     )
 
 
@@ -351,10 +349,8 @@ def test_upsert_component_version_cost_create(db_session, ensure_component_versi
     component_version_id = ensure_component_version
 
     payload = {
-        "credits_per_input_token": 0.001,
-        "credits_per_output_token": 0.002,
         "credits_per_call": 0.1,
-        "credits_per_second": 0.05,
+        "credits_per_unit": 0.05,
     }
 
     response = client.patch(
@@ -366,10 +362,8 @@ def test_upsert_component_version_cost_create(db_session, ensure_component_versi
     assert response.status_code == 200
     data = response.json()
     assert data["component_version_id"] == str(component_version_id)
-    assert data["credits_per_input_token"] == 0.001
-    assert data["credits_per_output_token"] == 0.002
     assert data["credits_per_call"] == 0.1
-    assert data["credits_per_second"] == 0.05
+    assert data["credits_per_unit"] == 0.05
     assert "id" in data
 
     delete_component_version_cost(db_session, component_version_id)
@@ -382,13 +376,9 @@ def test_upsert_component_version_cost_update(db_session, ensure_component_versi
     create_component_version_cost_in_db(
         db_session,
         component_version_id,
-        credits_per_input_token=0.001,
-        credits_per_output_token=0.002,
     )
 
     payload = {
-        "credits_per_input_token": 0.002,
-        "credits_per_output_token": 0.003,
         "credits_per_call": 0.2,
     }
 
@@ -401,10 +391,8 @@ def test_upsert_component_version_cost_update(db_session, ensure_component_versi
     assert response.status_code == 200
     data = response.json()
     assert data["component_version_id"] == str(component_version_id)
-    assert data["credits_per_input_token"] == 0.002
-    assert data["credits_per_output_token"] == 0.003
     assert data["credits_per_call"] == 0.2
-    assert data["credits_per_second"] is None
+    assert data["credits_per_unit"] is None
 
     delete_component_version_cost(db_session, component_version_id)
 
@@ -416,17 +404,13 @@ def test_upsert_component_version_cost_partial_update(db_session, ensure_compone
     create_component_version_cost_in_db(
         db_session,
         component_version_id,
-        credits_per_input_token=0.001,
-        credits_per_output_token=0.002,
         credits_per_call=0.1,
-        credits_per_second=0.05,
+        credits_per_unit=0.05,
     )
 
     payload = {
-        "credits_per_input_token": 0.005,
-        "credits_per_output_token": 0.002,
         "credits_per_call": 0.1,
-        "credits_per_second": 0.05,
+        "credits_per_unit": 0.05,
     }
 
     response = client.patch(
@@ -437,11 +421,8 @@ def test_upsert_component_version_cost_partial_update(db_session, ensure_compone
 
     assert response.status_code == 200
     data = response.json()
-    assert data["credits_per_input_token"] == 0.005
-
-    assert data["credits_per_output_token"] == 0.002
     assert data["credits_per_call"] == 0.1
-    assert data["credits_per_second"] == 0.05
+    assert data["credits_per_unit"] == 0.05
 
     delete_component_version_cost(db_session, component_version_id)
 
@@ -456,7 +437,6 @@ def test_delete_component_version_cost_success(db_session, ensure_component_vers
     create_component_version_cost_in_db(
         db_session,
         component_version_id,
-        credits_per_input_token=0.001,
     )
 
     response = client.delete(
@@ -493,9 +473,7 @@ def test_upsert_component_version_cost_empty_payload(db_session, ensure_componen
     assert response.status_code == 200
     data = response.json()
     assert data["component_version_id"] == str(component_version_id)
-    assert data["credits_per_input_token"] is None
-    assert data["credits_per_output_token"] is None
     assert data["credits_per_call"] is None
-    assert data["credits_per_second"] is None
+    assert data["credits_per_unit"] is None
 
     delete_component_version_cost(db_session, component_version_id)
