@@ -133,10 +133,8 @@ def upsert_component_version_cost_endpoint(
         return upsert_component_version_cost_service(
             session,
             component_version_id,
-            component_version_cost_update.credits_per_input_token,
-            component_version_cost_update.credits_per_output_token,
             component_version_cost_update.credits_per_call,
-            component_version_cost_update.credits_per_second,
+            component_version_cost_update.credits_per_unit,
         )
     except ComponentVersionCostNotFound as e:
         raise HTTPException(status_code=404, detail=str(e)) from e

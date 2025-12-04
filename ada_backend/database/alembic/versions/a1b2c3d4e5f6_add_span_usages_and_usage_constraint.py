@@ -28,7 +28,7 @@ def upgrade() -> None:
         sa.Column("credits_input_token", sa.Float(), nullable=True),
         sa.Column("credits_output_token", sa.Float(), nullable=True),
         sa.Column("credits_per_call", sa.Float(), nullable=True),
-        sa.Column("credits_per_second", sa.Float(), nullable=True),
+        sa.Column("credits_per_unit", sa.Float(), nullable=True),
         sa.ForeignKeyConstraint(
             ["span_id"],
             ["traces.spans.span_id"],
@@ -48,8 +48,24 @@ def upgrade() -> None:
         schema="credits",
     )
 
+    # Rename credits_per_second to credits_per_unit in the costs table
+    op.alter_column(
+        "costs",
+        "credits_per_second",
+        new_column_name="credits_per_unit",
+        schema="credits",
+    )
+
 
 def downgrade() -> None:
+    # Rename credits_per_unit back to credits_per_second in the costs table
+    op.alter_column(
+        "costs",
+        "credits_per_unit",
+        new_column_name="credits_per_second",
+        schema="credits",
+    )
+
     # Drop unique constraint from usages
     op.drop_constraint("uq_usage_project_year_month", "usages", schema="credits", type_="unique")
 

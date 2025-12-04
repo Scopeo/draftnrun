@@ -22,18 +22,14 @@ from ada_backend.services.errors import (
 def upsert_component_version_cost_service(
     session: Session,
     component_version_id: UUID,
-    credits_per_input_token: Optional[float] = None,
-    credits_per_output_token: Optional[float] = None,
     credits_per_call: Optional[float] = None,
-    credits_per_second: Optional[float] = None,
+    credits_per_unit: Optional[float] = None,
 ) -> ComponentVersionCostResponse:
     component_cost = upsert_component_version_cost(
         session,
         component_version_id,
-        credits_per_input_token,
-        credits_per_output_token,
         credits_per_call,
-        credits_per_second,
+        credits_per_unit,
     )
     if component_cost is None:
         raise ComponentVersionCostNotFound(component_version_id)
