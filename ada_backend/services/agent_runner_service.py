@@ -18,8 +18,8 @@ from ada_backend.repositories.credits_repository import get_organization_total_c
 from engine.graph_runner.graph_runner import GraphRunner
 from engine.llm_services.utils import LLMKeyLimitExceededError
 from engine.agent.errors import (
-    MissingKeyFromPromptTemplateError,
-    WrongKeyTypeInjectionFromPromptTemplateError,
+    KeyTypePromptTemplateError,
+    MissingKeyPromptTemplateError,
 )
 from ada_backend.repositories.graph_runner_repository import (
     get_component_nodes,
@@ -256,7 +256,7 @@ async def run_agent(
         params = get_tracing_span()
     except LLMKeyLimitExceededError:
         raise
-    except (MissingKeyFromPromptTemplateError, WrongKeyTypeInjectionFromPromptTemplateError):
+    except (MissingKeyPromptTemplateError, KeyTypePromptTemplateError):
         raise
     except Exception as e:
         tb = traceback.format_exc()

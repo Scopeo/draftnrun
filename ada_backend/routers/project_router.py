@@ -44,8 +44,8 @@ from ada_backend.services.project_service import (
 from ada_backend.repositories.env_repository import get_env_relationship_by_graph_runner_id
 from engine.llm_services.utils import LLMKeyLimitExceededError
 from engine.agent.errors import (
-    MissingKeyFromPromptTemplateError,
-    WrongKeyTypeInjectionFromPromptTemplateError,
+    KeyTypePromptTemplateError,
+    MissingKeyPromptTemplateError,
 )
 from ada_backend.services.tag_service import compose_tag_name
 
@@ -211,14 +211,14 @@ async def run_env_agent_endpoint(
     except MissingDataSourceError as e:
         LOGGER.error(f"Data source not found for project {project_id} in environment {env}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=400, detail=str(e)) from e
-    except MissingKeyFromPromptTemplateError as e:
+    except MissingKeyPromptTemplateError as e:
         LOGGER.error(
             f"Missing key from prompt template for project {project_id} in environment {env}: {str(e)}", exc_info=True
         )
         raise HTTPException(status_code=400, detail=str(e)) from e
-    except WrongKeyTypeInjectionFromPromptTemplateError as e:
+    except KeyTypePromptTemplateError as e:
         LOGGER.error(
-            f"Wrong key type injection from prompt template for project {project_id} in environment {env}: {str(e)}",
+            f"Key type error in prompt template for project {project_id} in environment {env}: {str(e)}",
             exc_info=True,
         )
         raise HTTPException(status_code=400, detail=str(e)) from e
@@ -342,16 +342,16 @@ async def chat(
             exc_info=True,
         )
         raise HTTPException(status_code=400, detail=str(e)) from e
-    except MissingKeyFromPromptTemplateError as e:
+    except MissingKeyPromptTemplateError as e:
         LOGGER.error(
             f"Missing key from prompt template for project {project_id} for graph runner "
             f"{graph_runner_id}: {str(e)}",
             exc_info=True,
         )
         raise HTTPException(status_code=400, detail=str(e)) from e
-    except WrongKeyTypeInjectionFromPromptTemplateError as e:
+    except KeyTypePromptTemplateError as e:
         LOGGER.error(
-            f"Wrong key type injection from prompt template for project {project_id} for graph runner "
+            f"Key type error in prompt template for project {project_id} for graph runner "
             f"{graph_runner_id}: {str(e)}",
             exc_info=True,
         )
@@ -423,16 +423,15 @@ async def chat_env(
     except MissingDataSourceError as e:
         LOGGER.error(f"Data source not found for project {project_id} in environment {env}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=400, detail=str(e)) from e
-    except MissingKeyFromPromptTemplateError as e:
+    except MissingKeyPromptTemplateError as e:
         LOGGER.error(
             f"Missing key from prompt template for project {project_id} in environment " f"{env}: {str(e)}",
             exc_info=True,
         )
         raise HTTPException(status_code=400, detail=str(e)) from e
-    except WrongKeyTypeInjectionFromPromptTemplateError as e:
+    except KeyTypePromptTemplateError as e:
         LOGGER.error(
-            f"Wrong key type injection from prompt template for project {project_id} in environment "
-            f"{env}: {str(e)}",
+            f"Key type error in prompt template for project {project_id} in environment " f"{env}: {str(e)}",
             exc_info=True,
         )
         raise HTTPException(status_code=400, detail=str(e)) from e
