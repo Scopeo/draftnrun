@@ -373,7 +373,9 @@ async def super_admin_or_limit_api_key_dependency(
 
     if limit_api_key:
         hashed_key = verify_ingestion_api_key(private_key=limit_api_key)
-        if hashed_key != settings.LIMIT_API_KEY_HASHED:
+        if hashed_key == settings.LIMIT_API_KEY_HASHED:
+            return None
+        else:
             raise HTTPException(status_code=401, detail="Invalid limit API key")
 
     if authorization and authorization.credentials:
@@ -382,7 +384,9 @@ async def super_admin_or_limit_api_key_dependency(
             raise HTTPException(status_code=401, detail="Invalid super admin token")
 
         is_super = await is_user_super_admin(user)
-        if not is_super:
+        if is_super:
+            return None
+        else:
             raise HTTPException(status_code=403, detail="You are not a super admin")
 
     raise HTTPException(
