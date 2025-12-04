@@ -27,6 +27,7 @@ class TraceSpan(BaseModel):
     tag_name: str | None = None
     conversation_id: str | None = None
     trace_id: str | None = None
+    trace_total_credits: float | None = None
 
     @classmethod
     def from_dict(cls, data: dict) -> "TraceSpan":
@@ -53,6 +54,7 @@ class TraceSpan(BaseModel):
             tag_name=data.get("tag_name"),
             conversation_id=attributes.get("conversation_id"),
             trace_id=data.get("trace_id"),
+            trace_total_credits=data.get("trace_total_credits"),
         )
 
 

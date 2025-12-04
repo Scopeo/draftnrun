@@ -69,8 +69,12 @@ def query_root_trace_duration(project_id: UUID, duration_days: int) -> pd.DataFr
 
 def query_trace_by_trace_id(trace_id: UUID) -> pd.DataFrame:
     query = (
-        "SELECT s.*, m.input_content,m.output_content FROM traces.spans s "
-        f"LEFT JOIN traces.span_messages m ON m.span_id = s.span_id WHERE s.trace_rowid = '{trace_id}' "
+        "SELECT s.*, m.input_content, m.output_content, "
+        "su.credits_input_token, su.credits_output_token, su.credits_per_call, su.credits_per_unit "
+        "FROM traces.spans s "
+        "LEFT JOIN traces.span_messages m ON m.span_id = s.span_id "
+        "LEFT JOIN credits.span_usages su ON su.span_id = s.span_id "
+        f"WHERE s.trace_rowid = '{trace_id}' "
         "ORDER BY s.start_time ASC;"
     )
     session = get_session_trace()

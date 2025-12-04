@@ -69,6 +69,7 @@ def get_attributes_with_messages(span_kind: str, row: pd.Series, filter_to_last_
 def build_span_trees(df: pd.DataFrame) -> List[TraceSpan]:
     """Convert a Pandas DataFrame containing multiple OpenTelemetry spans into a list of hierarchical JSON trees."""
     traces = defaultdict(dict)  # {trace_id: {span_id: span}}
+    trace_credits = defaultdict(float)  # {trace_id: total_credits}
 
     for _, row in df.iterrows():
         LOGGER.debug(f"Processing row: {row}")
@@ -80,6 +81,20 @@ def build_span_trees(df: pd.DataFrame) -> List[TraceSpan]:
             span_kind, row, filter_to_last_message=False
         )
         attributes = row.get("attributes", {})
+
+        credits_input_token = row.get("credits_input_token")
+        credits_output_token = row.get("credits_output_token")
+        credits_per_call = row.get("credits_per_call")
+        credits_per_unit = row.get("credits_per_unit")
+
+        if any(x is not None for x in [credits_input_token, credits_output_token, credits_per_call, credits_per_unit]):
+            span_total = (
+                (credits_input_token or 0)
+                + (credits_output_token or 0)
+                + (credits_per_call or 0)
+                + (credits_per_unit or 0)
+            )
+            trace_credits[trace_id] += span_total
 
         traces[trace_id][span_id] = TraceSpan(
             span_id=span_id,
@@ -104,6 +119,7 @@ def build_span_trees(df: pd.DataFrame) -> List[TraceSpan]:
             tag_name=row.get("tag_name", None),
             conversation_id=attributes.get("conversation_id"),
             trace_id=row.get("trace_rowid"),
+            trace_total_credits=None,
         )
 
     trace_trees = []
@@ -116,6 +132,10 @@ def build_span_trees(df: pd.DataFrame) -> List[TraceSpan]:
                 span_dict[parent_id].children.append(span)
             else:  # Root span
                 root_spans.append(span)
+
+        trace_total_credits = trace_credits.get(trace_id) if trace_credits.get(trace_id, 0) > 0 else None
+        for root_span in root_spans:
+            root_span.trace_total_credits = trace_total_credits
 
         trace_trees.extend(root_spans)
 
