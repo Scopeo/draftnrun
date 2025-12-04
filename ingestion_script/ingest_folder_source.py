@@ -21,17 +21,18 @@ from engine.storage_service.db_utils import PROCESSED_DATETIME_FIELD, DBColumn, 
 from engine.storage_service.local_service import SQLLocalService
 from engine.trace.trace_manager import TraceManager
 from ingestion_script.utils import (
+    CHUNK_ID_COLUMN_NAME,
     create_source,
     get_sanitize_names,
     update_ingestion_task,
     get_first_available_embeddings_custom_llm,
     get_first_available_multimodal_custom_llm,
+    ORDER_COLUMN_NAME,
 )
 from settings import settings
 
 LOGGER = logging.getLogger(__name__)
 
-ID_COLUMN_NAME = "chunk_id"
 TIMESTAMP_COLUMN_NAME = "last_edited_ts"
 META_DATA_TO_KEEP = [
     "folder_name",
@@ -41,8 +42,9 @@ META_DATA_TO_KEEP = [
 FILE_TABLE_DEFINITION = DBDefinition(
     columns=[
         DBColumn(name=PROCESSED_DATETIME_FIELD, type="DATETIME", default="CURRENT_TIMESTAMP"),
-        DBColumn(name=ID_COLUMN_NAME, type="VARCHAR", is_primary_key=True),
+        DBColumn(name=CHUNK_ID_COLUMN_NAME, type="VARCHAR", is_primary_key=True),
         DBColumn(name="file_id", type="VARCHAR"),
+        DBColumn(name=ORDER_COLUMN_NAME, type="INTEGER", is_nullable=True),
         DBColumn(name="content", type="VARCHAR"),
         DBColumn(name="document_title", type="VARCHAR"),
         DBColumn(name="url", type="VARCHAR"),
@@ -53,7 +55,7 @@ FILE_TABLE_DEFINITION = DBDefinition(
 )
 
 QDRANT_SCHEMA = QdrantCollectionSchema(
-    chunk_id_field=ID_COLUMN_NAME,
+    chunk_id_field=CHUNK_ID_COLUMN_NAME,
     content_field="content",
     url_id_field="url",
     file_id_field="file_id",
@@ -365,7 +367,7 @@ async def _ingest_folder_source(
                 new_df=chunks_df,
                 table_name=db_table_name,
                 table_definition=FILE_TABLE_DEFINITION,
-                id_column_name=ID_COLUMN_NAME,
+                id_column_name=CHUNK_ID_COLUMN_NAME,
                 timestamp_column_name=TIMESTAMP_COLUMN_NAME,
                 append_mode=True,
                 schema_name=db_table_schema,

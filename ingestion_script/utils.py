@@ -23,6 +23,7 @@ LOGGER = logging.getLogger(__name__)
 CHUNK_ID_COLUMN_NAME = "chunk_id"
 CHUNK_COLUMN_NAME = "content"
 FILE_ID_COLUMN_NAME = "source_identifier"
+ORDER_COLUMN_NAME = "order"
 URL_COLUMN_NAME = "url"
 
 

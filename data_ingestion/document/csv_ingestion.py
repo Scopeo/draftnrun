@@ -1,6 +1,7 @@
 from io import StringIO
 import pandas as pd
 import logging
+import uuid
 from typing import Callable, Optional
 
 from data_ingestion.document.folder_management.folder_management import FileChunk, FileDocument
@@ -41,8 +42,9 @@ def ingest_csv_file(
         markdown_content = chunk_df.to_markdown(index=False)
         result_chunks.append(
             FileChunk(
-                chunk_id=f"{document.id}_{idx}",
+                chunk_id=str(uuid.uuid4()),
                 file_id=document.id,
+                order=idx,
                 content=markdown_content,
                 last_edited_ts=document.last_edited_ts,
                 document_title=document.file_name,

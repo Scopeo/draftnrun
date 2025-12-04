@@ -1,7 +1,8 @@
 import asyncio
 import pytest
-import pandas as pd
+import uuid
 from unittest.mock import Mock, patch
+
 from data_ingestion.document.document_chunking import get_chunks_dataframe_from_doc
 from data_ingestion.document.folder_management.folder_management import FileDocument, FileDocumentType, FileChunk
 
@@ -20,8 +21,9 @@ def mock_file_document():
 @pytest.fixture
 def mock_file_chunk():
     return FileChunk(
-        chunk_id="chunk_1",
+        chunk_id=str(uuid.uuid4()),
         file_id="dummy_id",
+        order=0,
         content="dummy content",
         bounding_boxes=[{"xmin": 1, "ymin": 2, "xmax": 3, "ymax": 4, "page": 1}],
         last_edited_ts="2023-01-01T00:00:00Z",
@@ -54,15 +56,29 @@ def test_get_chunks_dataframe_from_docs(mock_file_document, mock_file_chunk):
         for call in mock_logger.info.call_args_list
     )
 
-    expected_data = {
-        "chunk_id": ["chunk_1"],
-        "file_id": ["dummy_id"],
-        "content": ["dummy content"],
-        "last_edited_ts": ["2023-01-01T00:00:00Z"],
-        "metadata": ["{}"],
-        "document_title": ["dummy_title"],
-        "bounding_boxes": ['[{"xmin": 1, "ymin": 2, "xmax": 3, "ymax": 4, "page": 1}]'],
-        "url": ["None"],
-    }
-    expected_df = pd.DataFrame(expected_data)
-    pd.testing.assert_frame_equal(result_df, expected_df)
+    # Verify the dataframe has the expected structure
+    assert len(result_df) == 1
+    assert "chunk_id" in result_df.columns
+    assert "file_id" in result_df.columns
+    assert "content" in result_df.columns
+    assert "last_edited_ts" in result_df.columns
+    assert "metadata" in result_df.columns
+    assert "document_title" in result_df.columns
+    assert "bounding_boxes" in result_df.columns
+    assert "url" in result_df.columns
+    assert "order" in result_df.columns
+
+    # Verify chunk_id is a valid UUID format and matches the fixture
+    chunk_id_value = result_df["chunk_id"].iloc[0]
+    uuid.UUID(chunk_id_value)  # Will raise ValueError if not a valid UUID
+    assert chunk_id_value == mock_file_chunk.chunk_id
+
+    # Verify other fields match expected values
+    assert result_df["file_id"].iloc[0] == "dummy_id"
+    assert result_df["content"].iloc[0] == "dummy content"
+    assert result_df["last_edited_ts"].iloc[0] == "2023-01-01T00:00:00Z"
+    assert result_df["metadata"].iloc[0] == "{}"
+    assert result_df["document_title"].iloc[0] == "dummy_title"
+    assert result_df["bounding_boxes"].iloc[0] == '[{"xmin": 1, "ymin": 2, "xmax": 3, "ymax": 4, "page": 1}]'
+    assert result_df["url"].iloc[0] == "None"
+    assert result_df["order"].iloc[0] == 0

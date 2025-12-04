@@ -1,6 +1,7 @@
 import fitz
 import io
 import logging
+import uuid
 from typing import Callable, List, Any, Dict, Optional
 from enum import Enum
 from pydantic import BaseModel
@@ -213,8 +214,9 @@ def _create_chunks_from_markdown(
                 page_numbers.add(section.page_number)
         document.metadata["page_number"] = sorted(list(page_numbers))
         chunk = FileChunk(
-            chunk_id=f"{document.file_name}_{i + 1}",
+            chunk_id=str(uuid.uuid4()),
             file_id=document.file_name,
+            order=i,
             content=chunk.content,
             last_edited_ts=document.last_edited_ts,
             document_title=document.file_name,
@@ -230,18 +232,20 @@ def _create_chunk_from_text(
     document: FileDocument,
     extracted_text: str,
     page_number: int,
+    order: int,
 ) -> FileChunk:
     """Helper function to create a single chunk from extracted text."""
     document.metadata["page_number"] = page_number
     return FileChunk(
-        chunk_id=f"{document.file_name}_{page_number}",
+        chunk_id=str(uuid.uuid4()),
         file_id=document.file_name,
+        order=order,
         content=extracted_text,
         last_edited_ts=document.last_edited_ts,
         document_title=document.file_name,
         bounding_boxes=None,
         url=document.url,
-        metadata=document.metadata,
+        metadata={"page_number": page_number, **document.metadata},
     )
 
 
@@ -262,7 +266,7 @@ async def _process_pdf_page_by_page(
             openai_llm_service=openai_llm_service,
             image_content_list=[img_base64],
         )
-        chunk = _create_chunk_from_text(document, extracted_text, i + 1)
+        chunk = _create_chunk_from_text(document, extracted_text, page_number=i + 1, order=i)
         chunks.append(chunk)
     return chunks
 

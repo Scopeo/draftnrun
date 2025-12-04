@@ -1,6 +1,7 @@
 from io import BytesIO
 import pandas as pd
 import logging
+import uuid
 from typing import Callable, Optional
 
 
@@ -45,14 +46,15 @@ def ingest_excel_file(
             markdown_content = chunk_df.to_markdown(index=False)
             result_chunks.append(
                 FileChunk(
-                    chunk_id=f"{document.id}_{sheet_name}_{idx}",
+                    chunk_id=str(uuid.uuid4()),
+                    order=idx,
                     file_id=document.id,
                     content=markdown_content,
                     last_edited_ts=document.last_edited_ts,
                     document_title=document.file_name,
                     bounding_boxes=None,
                     url=document.url,
-                    metadata={**document.metadata},
+                    metadata={"sheet_name": sheet_name, **document.metadata},
                 )
             )
 

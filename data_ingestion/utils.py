@@ -33,6 +33,7 @@ IMAGE_DESCRIPTION_INTRODUCTION_PROMPT_TEMPLATE = (
 class Chunk(BaseModel):
     chunk_id: str
     file_id: str
+    order: Optional[int] = None
     content: str
     last_edited_ts: Optional[str] = None
     metadata: dict[str, Any] = Field(default_factory=dict)

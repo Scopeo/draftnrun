@@ -18,12 +18,11 @@ from engine.qdrant_service import QdrantService
 from engine.storage_service.db_service import DBService
 from ingestion_script.ingest_folder_source import (
     FILE_TABLE_DEFINITION,
-    ID_COLUMN_NAME,
     QDRANT_SCHEMA,
     TIMESTAMP_COLUMN_NAME,
     sync_chunks_to_qdrant,
 )
-from ingestion_script.utils import upload_source
+from ingestion_script.utils import CHUNK_ID_COLUMN_NAME, upload_source
 from settings import settings
 
 LOGGER = logging.getLogger(__name__)
@@ -248,7 +247,7 @@ async def upload_website_source(
         new_df=all_chunks_df,
         table_name=storage_table_name,
         table_definition=FILE_TABLE_DEFINITION,
-        id_column_name=ID_COLUMN_NAME,
+        id_column_name=CHUNK_ID_COLUMN_NAME,
         timestamp_column_name=TIMESTAMP_COLUMN_NAME,
         append_mode=True,
         schema_name=storage_schema_name,
