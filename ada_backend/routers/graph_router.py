@@ -27,6 +27,10 @@ from ada_backend.services.graph.update_graph_service import update_graph_service
 from ada_backend.services.graph.get_graph_service import get_graph_service
 from ada_backend.services.graph.delete_graph_service import delete_graph_runner_service
 from engine.field_expressions.errors import FieldExpressionError
+from engine.agent.errors import (
+    KeyTypePromptTemplateError,
+    MissingKeyPromptTemplateError,
+)
 
 router = APIRouter(
     prefix="/projects/{project_id}/graph",
@@ -114,6 +118,18 @@ async def update_project_pipeline(
     except MissingDataSourceError as e:
         LOGGER.warning(
             f"Graph saved with missing data source for project {project_id} runner {graph_runner_id}: {str(e)}"
+        )
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except MissingKeyPromptTemplateError as e:
+        LOGGER.error(
+            f"Missing key from prompt template for project {project_id} runner {graph_runner_id}: {str(e)}",
+            exc_info=True,
+        )
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except KeyTypePromptTemplateError as e:
+        LOGGER.error(
+            f"Key type error in prompt template for project {project_id} runner {graph_runner_id}: {str(e)}",
+            exc_info=True,
         )
         raise HTTPException(status_code=400, detail=str(e)) from e
     except ValueError as e:

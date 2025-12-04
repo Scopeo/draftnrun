@@ -1,7 +1,7 @@
 """Unit tests for fill_prompt_template function."""
 
 import pytest
-from engine.agent.errors import MissingKeyFromPromptTemplateError
+from engine.agent.errors import MissingKeyPromptTemplateError
 from engine.agent.utils_prompt import fill_prompt_template
 
 
@@ -36,24 +36,25 @@ class TestFillPromptTemplate:
         assert result == template
 
     def test_missing_required_variable(self):
-        """Test that missing required variable raises MissingKeyFromPromptTemplateError."""
+        """Test that missing required variable raises MissingKeyPromptTemplateError."""
         template = "Hello {{name}}, welcome to {{place}}!"
         variables = {"name": "Alice"}
-        with pytest.raises(MissingKeyFromPromptTemplateError) as exc_info:
+        with pytest.raises(MissingKeyPromptTemplateError) as exc_info:
             fill_prompt_template(template, component_name="test_component", variables=variables)
         assert "Missing template variable(s)" in str(exc_info.value)
         assert "place" in str(exc_info.value)
-        assert "test_component" in str(exc_info.value)
+        assert exc_info.value.missing_keys == ["place"]
 
     def test_multiple_missing_variables(self):
         """Test that multiple missing variables are reported."""
         template = "Hello {{name}}, from {{city}}, in {{country}}!"
         variables = {"name": "Alice"}
-        with pytest.raises(MissingKeyFromPromptTemplateError) as exc_info:
+        with pytest.raises(MissingKeyPromptTemplateError) as exc_info:
             fill_prompt_template(template, component_name="test", variables=variables)
         error_msg = str(exc_info.value)
         assert "Missing template variable(s)" in error_msg
         assert "city" in error_msg or "country" in error_msg
+        assert set(exc_info.value.missing_keys) == {"city", "country"}
 
     def test_extra_variables_ignored(self):
         """Test that extra variables in dict are ignored (not an error)."""
@@ -133,21 +134,22 @@ class TestFillPromptTemplate:
         assert result == "Hello Alice!"
 
     def test_component_name_in_error_message(self):
-        """Test that component_name appears in error messages."""
+        """Test that error message is generated correctly."""
         template = "Hello {{missing}}!"
         variables = {}
-        with pytest.raises(MissingKeyFromPromptTemplateError) as exc_info:
+        with pytest.raises(MissingKeyPromptTemplateError) as exc_info:
             fill_prompt_template(template, component_name="MyComponent", variables=variables)
-        assert "MyComponent" in str(exc_info.value)
+        assert "Missing template variable(s)" in str(exc_info.value)
+        assert exc_info.value.missing_keys == ["missing"]
 
     def test_available_vars_in_error_message(self):
-        """Test that available variables are listed in error message."""
+        """Test that missing keys are correctly identified."""
         template = "Hello {{missing}}!"
         variables = {"available1": "value1", "available2": "value2"}
-        with pytest.raises(MissingKeyFromPromptTemplateError) as exc_info:
+        with pytest.raises(MissingKeyPromptTemplateError) as exc_info:
             fill_prompt_template(template, component_name="test", variables=variables)
-        error_msg = str(exc_info.value)
-        assert "available1" in error_msg or "available2" in error_msg
+        assert "Missing template variable(s)" in str(exc_info.value)
+        assert exc_info.value.missing_keys == ["missing"]
 
     def test_unicode_characters(self):
         """Test template with unicode characters."""

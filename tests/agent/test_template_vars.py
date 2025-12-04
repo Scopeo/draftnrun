@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from engine.agent.inputs_outputs.start import Start
-from engine.agent.errors import MissingKeyFromPromptTemplateError, WrongKeyTypeInjectionFromPromptTemplateError
+from engine.agent.errors import KeyTypePromptTemplateError, MissingKeyPromptTemplateError
 from engine.agent.llm_call_agent import LLMCallAgent
 from engine.agent.react_function_calling import ReActAgent
 from engine.agent.types import NodeData, ComponentAttributes, ToolDescription, AgentPayload, ChatMessage
@@ -147,7 +147,7 @@ def test_llm_call_missing_template_var(get_span_mock, agent_calls_mock, mock_llm
         ctx={"yes": "LOL"},  # missing_var not provided
     )
 
-    with pytest.raises(MissingKeyFromPromptTemplateError, match="Missing template variable\\(s\\).*missing_var"):
+    with pytest.raises(MissingKeyPromptTemplateError, match="Missing template variable\\(s\\).*missing_var"):
         asyncio.run(agent.run(input_node_data))
 
 
@@ -178,9 +178,7 @@ def test_llm_call_wrong_type_template_var(get_span_mock, agent_calls_mock, mock_
         ctx={"bad_var": UnstringableValue()},
     )
 
-    with pytest.raises(
-        WrongKeyTypeInjectionFromPromptTemplateError, match="Value for key 'bad_var' cannot be cast to string"
-    ):
+    with pytest.raises(KeyTypePromptTemplateError, match="Value for key 'bad_var' cannot be cast to string"):
         asyncio.run(agent.run(input_node_data))
 
 
@@ -259,9 +257,7 @@ def test_react_agent_wrong_type_template_var(get_span_mock, agent_calls_mock, mo
         ctx={"name": "Alice", "bad_var": UnstringableValue()},
     )
 
-    with pytest.raises(
-        WrongKeyTypeInjectionFromPromptTemplateError, match="Value for key 'bad_var' cannot be cast to string"
-    ):
+    with pytest.raises(KeyTypePromptTemplateError, match="Value for key 'bad_var' cannot be cast to string"):
         asyncio.run(react_agent.run(input_node_data))
 
 

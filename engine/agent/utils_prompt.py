@@ -2,8 +2,8 @@ import logging
 import re
 
 from engine.agent.errors import (
-    MissingKeyFromPromptTemplateError,
-    WrongKeyTypeInjectionFromPromptTemplateError,
+    KeyTypePromptTemplateError,
+    MissingKeyPromptTemplateError,
 )
 
 LOGGER = logging.getLogger(__name__)
@@ -13,8 +13,8 @@ def fill_prompt_template(prompt_template: str, component_name: str = "", variabl
     """
     Fills the system prompt with only the keys required from variables.
     Ensures all values used can be converted to string.
-    Raises MissingKeyFromPromptTemplateError for missing keys or
-    WrongKeyTypeInjectionFromPromptTemplateError for uncastable stringvalues.
+    Raises MissingKeyPromptTemplateError for missing keys or
+    KeyTypePromptTemplateError for uncastable string values.
 
     Note: Only double braces {{variable}} are supported for template variables.
     Field expressions use @{{expression}} format. Single braces { and } that are not
@@ -44,13 +44,12 @@ def fill_prompt_template(prompt_template: str, component_name: str = "", variabl
 
     missing_keys = all_detected_vars - variables.keys()
     if missing_keys:
-        error_message = (
+        LOGGER.error(
             f"Missing template variable(s) {list(missing_keys)} needed in prompt template "
             f"of component '{component_name}'. "
             f"Available template vars: {list(variables.keys())}"
         )
-        LOGGER.error(error_message)
-        raise MissingKeyFromPromptTemplateError(error_message)
+        raise MissingKeyPromptTemplateError(missing_keys=list(missing_keys))
 
     for var_name in template_vars:
         if var_name in variables:
@@ -70,9 +69,11 @@ def fill_prompt_template(prompt_template: str, component_name: str = "", variabl
         try:
             str_value = str(value)
         except Exception as e:
-            error_message = f"Value for key '{key}' cannot be cast to string: {e}"
-            LOGGER.error(error_message)
-            raise WrongKeyTypeInjectionFromPromptTemplateError(error_message)
+            LOGGER.error(
+                f"Value for key '{key}' cannot be cast to string in prompt template "
+                f"of component '{component_name}': {e}"
+            )
+            raise KeyTypePromptTemplateError(key=key, error=e)
         filtered_input[key] = str_value
 
     return escaped_template.format(**filtered_input)
