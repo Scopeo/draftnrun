@@ -148,8 +148,9 @@ class SQLSpanExporter(SpanExporter):
                 token_completion = span.attributes.get(SpanAttributes.LLM_TOKEN_COUNT_COMPLETION, 0)
 
                 if token_prompt or token_completion:
-                    credits_input_token = token_prompt * (cost_info.credits_per_input_token or 0)
-                    credits_output_token = token_completion * (cost_info.credits_per_output_token or 0)
+                    # Token credits are stored for 1M tokens
+                    credits_input_token = token_prompt * (cost_info.credits_per_input_token or 0) / 1_000_000
+                    credits_output_token = token_completion * (cost_info.credits_per_output_token or 0) / 1_000_000
                     has_billable_usage = True
 
         if component_instance_id:
