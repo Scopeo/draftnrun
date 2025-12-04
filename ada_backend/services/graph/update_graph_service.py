@@ -161,10 +161,10 @@ async def update_graph_service(
     current_hash = _calculate_graph_hash(graph_project)
     previous_hash = get_latest_modification_hash(session, graph_runner_id)
 
-    if track_history and current_hash != previous_hash:
+    if track_history and (previous_hash is None or current_hash != previous_hash):
         insert_modification_history(session, graph_runner_id, user_id, current_hash)
         LOGGER.info(f"Logged modification history for graph {graph_runner_id} by user {user_id or 'unknown'}")
-    elif current_hash != previous_hash:
+    elif previous_hash is not None and current_hash != previous_hash:
         LOGGER.debug(f"Graph {graph_runner_id} modified but history tracking skipped (track_history={track_history})")
 
     # TODO: Add the get_graph_runner_nodes function when we will handle nested graphs
