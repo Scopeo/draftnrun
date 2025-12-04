@@ -32,3 +32,10 @@ class LLMJudgeUpdate(BaseModel):
     llm_model_reference: Optional[str] = None
     prompt_template: Optional[str] = None
     temperature: Optional[float] = None
+
+
+class LLMJudgeTemplate(BaseModel):
+    evaluation_type: EvaluationType
+    llm_model_reference: Optional[str] = None
+    prompt_template: str
+    temperature: Optional[float] = None

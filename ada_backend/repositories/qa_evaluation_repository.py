@@ -6,6 +6,20 @@ from sqlalchemy.orm import Session
 from ada_backend.database.models import LLMJudge, EvaluationType
 
 
+def get_llm_judges_by_project(
+    session: Session,
+    project_id: UUID,
+) -> List[LLMJudge]:
+    return session.query(LLMJudge).filter(LLMJudge.project_id == project_id).order_by(LLMJudge.created_at.desc()).all()
+
+
+def get_llm_judge_by_id(
+    session: Session,
+    judge_id: UUID,
+) -> Optional[LLMJudge]:
+    return session.query(LLMJudge).filter(LLMJudge.id == judge_id).first()
+
+
 def create_llm_judge(
     session: Session,
     project_id: UUID,
@@ -30,13 +44,6 @@ def create_llm_judge(
     session.commit()
     session.refresh(llm_judge)
     return llm_judge
-
-
-def get_llm_judges_by_project(
-    session: Session,
-    project_id: UUID,
-) -> List[LLMJudge]:
-    return session.query(LLMJudge).filter(LLMJudge.project_id == project_id).order_by(LLMJudge.created_at.desc()).all()
 
 
 def update_llm_judge(

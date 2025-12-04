@@ -2,23 +2,27 @@ import logging
 from uuid import UUID
 from typing import Annotated, List
 
-from fastapi import APIRouter, Body, Depends, HTTPException
+from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from ada_backend.schemas.auth_schema import SupabaseUser
+from ada_backend.database.models import EvaluationType
 from ada_backend.schemas.qa_evaluation_schema import (
     LLMJudgeCreate,
     LLMJudgeResponse,
+    LLMJudgeTemplate,
     LLMJudgeUpdate,
 )
 from ada_backend.services.errors import LLMJudgeNotFound
 from ada_backend.routers.auth_router import (
     user_has_access_to_project_dependency,
     UserRights,
+    get_user_from_supabase_token,
 )
 from ada_backend.database.setup_db import get_db
 from ada_backend.services.qa_evaluation_service import (
     create_llm_judge_service,
+    get_llm_judge_defaults_service,
     get_llm_judges_by_project_service,
     update_llm_judge_service,
     delete_llm_judges_service,
@@ -46,12 +50,24 @@ def get_llm_judges_by_project_endpoint(
 
     try:
         return get_llm_judges_by_project_service(session=session, project_id=project_id)
-    except ValueError as e:
-        LOGGER.error(f"Failed to get LLM judges for project {project_id}: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=400, detail="Bad request") from e
     except Exception as e:
         LOGGER.error(f"Failed to get LLM judges for project {project_id}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error") from e
+
+
+@router.get(
+    "/qa/llm-judges/defaults",
+    response_model=LLMJudgeTemplate,
+    summary="Get template with default values for LLM Judge creation",
+)
+def get_llm_judge_defaults(
+    user: Annotated[SupabaseUser, Depends(get_user_from_supabase_token)],
+    evaluation_type: EvaluationType = Query(default=EvaluationType.BOOLEAN, description="Evaluation type"),
+) -> LLMJudgeTemplate:
+    if not user.id:
+        raise HTTPException(status_code=400, detail="User ID not found")
+
+    return get_llm_judge_defaults_service(evaluation_type=evaluation_type)
 
 
 @router.post(

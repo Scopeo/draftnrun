@@ -1,5 +1,5 @@
 import logging
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Dict
 from uuid import UUID
 
 from sqlalchemy.orm import Session
@@ -183,6 +183,42 @@ def get_outputs_by_graph_runner(
     )
 
     return results
+
+
+def get_version_output_ids_by_input_ids_and_graph_runner(
+    session: Session,
+    input_ids: List[UUID],
+    graph_runner_id: UUID,
+) -> Dict[UUID, Optional[UUID]]:
+    results = (
+        session.query(VersionOutput.input_id, VersionOutput.id)
+        .filter(
+            VersionOutput.input_id.in_(input_ids),
+            VersionOutput.graph_runner_id == graph_runner_id,
+        )
+        .all()
+    )
+
+    return {input_id: version_output_id for input_id, version_output_id in results}
+
+
+def get_version_output(
+    session: Session,
+    version_output_id: UUID,
+) -> Tuple[UUID, dict, Optional[str], str]:
+    result = (
+        session.query(
+            VersionOutput.id,
+            InputGroundtruth.input,
+            InputGroundtruth.groundtruth,
+            VersionOutput.output,
+        )
+        .join(InputGroundtruth, InputGroundtruth.id == VersionOutput.input_id)
+        .filter(VersionOutput.id == version_output_id)
+        .first()
+    )
+
+    return result
 
 
 def clear_version_outputs_for_input_ids(

@@ -35,3 +35,15 @@ class CSVExportError(Exception):
     def __init__(self, dataset_id: UUID, message: str):
         self.dataset_id = dataset_id
         super().__init__(f"Failed to export CSV for dataset {dataset_id}: {message}")
+
+
+class UnknownEvaluationTypeError(Exception):
+    def __init__(self, evaluation_type: str):
+        self.evaluation_type = evaluation_type
+        super().__init__(f"Unknown evaluation_type: {evaluation_type}")
+
+
+class VersionOutputEmptyError(Exception):
+    def __init__(self, version_output_id: UUID):
+        self.version_output_id = version_output_id
+        super().__init__(f"Version output {version_output_id} has no output to evaluate")

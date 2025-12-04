@@ -1,4 +1,4 @@
-from typing import Annotated, Dict, List
+from typing import Annotated, Dict, List, Optional
 from uuid import UUID
 import logging
 from datetime import datetime, timezone
@@ -34,6 +34,7 @@ from ada_backend.services.qa.quality_assurance_service import (
     delete_inputs_groundtruths_service,
     get_inputs_groundtruths_with_version_outputs_service,
     get_outputs_by_graph_runner_service,
+    get_version_output_ids_by_input_ids_and_graph_runner_service,
     run_qa_service,
     create_datasets_service,
     update_dataset_service,
@@ -264,6 +265,36 @@ def get_outputs_endpoint(
     except Exception as e:
         LOGGER.error(
             f"Failed to get outputs for graph runner {graph_runner_id} and dataset {dataset_id}: {str(e)}",
+            exc_info=True,
+        )
+        raise HTTPException(status_code=500, detail="Internal server error") from e
+
+
+@router.get(
+    "/projects/{project_id}/qa/version-outputs",
+    summary="Get Version Output IDs by Input IDs and Graph Runner",
+    tags=["Quality Assurance"],
+)
+def get_version_output_ids_endpoint(
+    graph_runner_id: UUID,
+    project_id: UUID,
+    user: Annotated[
+        SupabaseUser,
+        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.USER.value)),
+    ],
+    session: Session = Depends(get_db),
+    input_ids: List[UUID] = Query(..., description="List of Input IDs"),
+) -> Dict[UUID, Optional[UUID]]:
+    if not user.id:
+        raise HTTPException(status_code=400, detail="User ID not found")
+
+    try:
+        return get_version_output_ids_by_input_ids_and_graph_runner_service(
+            session=session, input_ids=input_ids, graph_runner_id=graph_runner_id
+        )
+    except Exception as e:
+        LOGGER.error(
+            f"Failed to get version output IDs for inputs {input_ids} and graph runner {graph_runner_id}: {str(e)}",
             exc_info=True,
         )
         raise HTTPException(status_code=500, detail="Internal server error") from e
