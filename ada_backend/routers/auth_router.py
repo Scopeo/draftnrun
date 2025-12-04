@@ -31,6 +31,7 @@ from ada_backend.schemas.auth_schema import (
     ApiKeyDeleteResponse,
     VerifiedApiKey,
 )
+from ada_backend.services.user_roles_service import is_user_super_admin
 
 LOGGER = logging.getLogger(__name__)
 
@@ -369,29 +370,21 @@ async def super_admin_or_limit_api_key_dependency(
     Dependency that allows either super admin user authentication OR limit API key.
     Used for endpoints that require super admin access or limit key authentication (e.g., setting organization limits).
     """
-    # Check limit API key first (if provided)
+
     if limit_api_key:
-        try:
-            hashed_key = verify_ingestion_api_key(private_key=limit_api_key)
-            if hashed_key == settings.LIMIT_API_KEY_HASHED:
-                return None  # Valid limit API key
-        except (ValueError, HTTPException):
-            pass  # Will check user auth below
+        hashed_key = verify_ingestion_api_key(private_key=limit_api_key)
+        if hashed_key != settings.LIMIT_API_KEY_HASHED:
+            raise HTTPException(status_code=401, detail="Invalid limit API key")
 
-    # Check super admin user authentication (if provided)
     if authorization and authorization.credentials:
-        try:
-            user = await get_user_from_supabase_token(authorization)
-            if user.id:
-                from ada_backend.services.user_roles_service import is_user_super_admin
+        user = await get_user_from_supabase_token(authorization)
+        if not user.id:
+            raise HTTPException(status_code=401, detail="Invalid super admin token")
 
-                is_super = await is_user_super_admin(user)
-                if is_super:
-                    return None  # Valid super admin
-        except (HTTPException, Exception):
-            pass  # Will raise error below
+        is_super = await is_user_super_admin(user)
+        if not is_super:
+            raise HTTPException(status_code=403, detail="You are not a super admin")
 
-    # If neither check passed, raise error
     raise HTTPException(
         status_code=403,
         detail="Access denied: requires super admin authentication or valid limit API key",
