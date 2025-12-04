@@ -361,6 +361,43 @@ async def verify_ingestion_api_key_dependency(
         raise HTTPException(status_code=401, detail="Invalid ingestion API key")
 
 
+async def super_admin_or_limit_api_key_dependency(
+    authorization: HTTPAuthorizationCredentials | None = Depends(HTTPBearer(auto_error=False)),
+    limit_api_key: str | None = Header(None, alias="X-Limit-API-Key"),
+) -> None:
+    """
+    Dependency that allows either super admin user authentication OR limit API key.
+    Used for endpoints that require super admin access or limit key authentication (e.g., setting organization limits).
+    """
+    # Check limit API key first (if provided)
+    if limit_api_key:
+        try:
+            hashed_key = verify_ingestion_api_key(private_key=limit_api_key)
+            if hashed_key == settings.LIMIT_API_KEY_HASHED:
+                return None  # Valid limit API key
+        except (ValueError, HTTPException):
+            pass  # Will check user auth below
+
+    # Check super admin user authentication (if provided)
+    if authorization and authorization.credentials:
+        try:
+            user = await get_user_from_supabase_token(authorization)
+            if user.id:
+                from ada_backend.services.user_roles_service import is_user_super_admin
+
+                is_super = await is_user_super_admin(user)
+                if is_super:
+                    return None  # Valid super admin
+        except (HTTPException, Exception):
+            pass  # Will raise error below
+
+    # If neither check passed, raise error
+    raise HTTPException(
+        status_code=403,
+        detail="Access denied: requires super admin authentication or valid limit API key",
+    )
+
+
 def user_has_access_to_organization_xor_verify_api_key(allowed_roles: set[str]):
     """
     Factory function that returns a flexible authentication dependency.
