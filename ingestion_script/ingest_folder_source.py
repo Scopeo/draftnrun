@@ -211,14 +211,18 @@ async def _ingest_folder_source(
     chunk_overlap: Optional[int] = 0,
     source_id: Optional[UUID] = None,
 ) -> None:
-    if source_id is None:
-        source_id = uuid.uuid4()
+    if source_id:
+        result_source_id = source_id
+        add_file = True
+    else:
+        result_source_id = uuid.uuid4()
+        add_file = False
     ingestion_task = IngestionTaskUpdate(
         id=task_id,
         source_name=source_name,
         source_type=source_type,
         status=db.TaskStatus.FAILED,
-        source_id=source_id,
+        source_id=result_source_id,
     )
     if settings.USE_LLM_FOR_PDF_PARSING:
         try:
@@ -244,14 +248,14 @@ async def _ingest_folder_source(
         )
         return
     db_table_schema, db_table_name, qdrant_collection_name = get_sanitize_names(
-        source_id=str(source_id),
+        source_id=str(result_source_id),
         organization_id=organization_id,
     )
 
     LOGGER.info(f"Table schema in ingestion : {db_table_schema}")
     LOGGER.info(f"Table name in ingestion : {db_table_name}")
     source_data = DataSourceSchema(
-        id=source_id,
+        id=result_source_id,
         name=source_name,
         type=source_type,
         database_schema=db_table_schema,
@@ -270,23 +274,61 @@ async def _ingest_folder_source(
     )
 
     # Check if source already exists in either database or Qdrant
-    if db_service.schema_exists(schema_name=db_table_schema) and db_service.table_exists(
-        table_name=db_table_name, schema_name=db_table_schema
-    ):
-        LOGGER.error(f"Source {source_id} already exists in Database")
-        update_ingestion_task(
-            organization_id=organization_id,
-            ingestion_task=ingestion_task,
-        )
-        raise ValueError(f"Source '{source_id}' already exists in database table '{db_table_schema}.{db_table_name}'")
+    if add_file:
+        # When adding files to existing source, verify that the source exists
+        if not (
+            db_service.schema_exists(schema_name=db_table_schema)
+            and db_service.table_exists(table_name=db_table_name, schema_name=db_table_schema)
+        ):
+            LOGGER.error(
+                f"Source {result_source_id} does not exist in Database. Cannot add files to non-existent source."
+            )
+            update_ingestion_task(
+                organization_id=organization_id,
+                ingestion_task=ingestion_task,
+            )
+            raise ValueError(
+                f"Source '{result_source_id}' does not exist in database table '{db_table_schema}.{db_table_name}'. "
+                "Cannot add files to non-existent source."
+            )
 
-    if await qdrant_service.collection_exists_async(qdrant_collection_name):
-        LOGGER.error(f"Source {source_id} already exists in Qdrant")
-        update_ingestion_task(
-            organization_id=organization_id,
-            ingestion_task=ingestion_task,
-        )
-        raise ValueError(f"Source '{source_id}' already exists in Qdrant collection '{qdrant_collection_name}'")
+        if not await qdrant_service.collection_exists_async(qdrant_collection_name):
+            LOGGER.error(
+                f"Source {result_source_id} does not exist in Qdrant. Cannot add files to non-existent source."
+            )
+            update_ingestion_task(
+                organization_id=organization_id,
+                ingestion_task=ingestion_task,
+            )
+            raise ValueError(
+                f"Source '{result_source_id}' does not exist in Qdrant collection '{qdrant_collection_name}'. "
+                "Cannot add files to non-existent source."
+            )
+
+        LOGGER.info(f"Adding files to existing source {result_source_id}")
+    else:
+        # When creating a new source, check that it doesn't already exist
+        if db_service.schema_exists(schema_name=db_table_schema) and db_service.table_exists(
+            table_name=db_table_name, schema_name=db_table_schema
+        ):
+            LOGGER.error(f"Source {result_source_id} already exists in Database")
+            update_ingestion_task(
+                organization_id=organization_id,
+                ingestion_task=ingestion_task,
+            )
+            raise ValueError(
+                f"Source '{result_source_id}' already exists in database table '{db_table_schema}.{db_table_name}'"
+            )
+
+        if await qdrant_service.collection_exists_async(qdrant_collection_name):
+            LOGGER.error(f"Source {result_source_id} already exists in Qdrant")
+            update_ingestion_task(
+                organization_id=organization_id,
+                ingestion_task=ingestion_task,
+            )
+            raise ValueError(
+                f"Source '{result_source_id}' already exists in Qdrant collection '{qdrant_collection_name}'"
+            )
 
     LOGGER.info("Starting ingestion process")
     files_info = folder_manager.list_all_files_info()
@@ -333,6 +375,7 @@ async def _ingest_folder_source(
             # Update task status to COMPLETED for empty folders
             ingestion_task_completed = IngestionTaskUpdate(
                 id=task_id,
+                source_id=result_source_id,
                 source_name=source_name,
                 source_type=source_type,
                 status=db.TaskStatus.COMPLETED,
@@ -343,14 +386,17 @@ async def _ingest_folder_source(
                 ingestion_task=ingestion_task_completed,
             )
             LOGGER.info("[EMPTY_FOLDER] Task status update completed")
-            # Still create the empty source in the database for consistency
-            LOGGER.info("[EMPTY_FOLDER] About to create empty source in database")
-            LOGGER.info("[EMPTY_FOLDER] Calling create_source for empty folder")
-            create_source(
-                organization_id=organization_id,
-                source_data=source_data,
-            )
-            LOGGER.info("[EMPTY_FOLDER] Empty source created successfully - returning")
+            # Only create the empty source if we're not adding files to an existing one
+            if not add_file:
+                LOGGER.info("[EMPTY_FOLDER] About to create empty source in database")
+                LOGGER.info("[EMPTY_FOLDER] Calling create_source for empty folder")
+                create_source(
+                    organization_id=organization_id,
+                    source_data=source_data,
+                )
+                LOGGER.info("[EMPTY_FOLDER] Empty source created successfully - returning")
+            else:
+                LOGGER.info("[EMPTY_FOLDER] No files to add to existing source - returning")
             return
         for document in files_info:
             chunks_df = await get_chunks_dataframe_from_doc(
@@ -383,23 +429,37 @@ async def _ingest_folder_source(
             ingestion_task=ingestion_task,
         )
         raise  # Re-raise the exception to ensure subprocess exits with non-zero code
-    LOGGER.info(f"Creating source {source_id} for organization {organization_id} in database")
-    source_id = create_source(
-        organization_id=organization_id,
-        source_data=source_data,
-    )
+    if not add_file:
+        # Only create source if we're not adding files to an existing one
+        LOGGER.info(f"Creating source {result_source_id} for organization {organization_id} in database")
+        create_source(
+            organization_id=organization_id,
+            source_data=source_data,
+        )
+    else:
+        # When adding files, attributes are already updated in the database before ingestion starts
+        LOGGER.info(f"Adding files to existing source {result_source_id} for organization {organization_id}")
 
     ingestion_task = IngestionTaskUpdate(
         id=task_id,
-        source_id=source_id,
+        source_id=result_source_id,
         source_name=source_name,
         source_type=source_type,
         status=db.TaskStatus.COMPLETED,
     )
 
-    LOGGER.info(f" Update status {str(source_id)} source for organization {organization_id} in database")
+    LOGGER.info(f" Update status {str(result_source_id)} source for organization {organization_id} in database")
     update_ingestion_task(
         organization_id=organization_id,
         ingestion_task=ingestion_task,
     )
-    LOGGER.info(f"Successfully ingested {str(source_id)} source for organization {organization_id}")
+    if add_file:
+        LOGGER.info(
+            f"Successfully added {len(files_info)} files to "
+            f"{str(result_source_id)} source for organization {organization_id}"
+        )
+    else:
+        LOGGER.info(
+            f"Successfully ingested {len(files_info)} files to "
+            f"{str(result_source_id)} source for organization {organization_id}"
+        )
