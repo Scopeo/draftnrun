@@ -18,8 +18,7 @@ from ada_backend.services.components_service import (
     delete_component_service,
 )
 from ada_backend.services.errors import EntityInUseDeletionError
-from ada_backend.services.user_roles_service import is_user_super_admin
-from ada_backend.routers.auth_router import get_user_from_supabase_token
+from ada_backend.routers.auth_router import ensure_super_admin_dependency
 
 router = APIRouter(prefix="/components", tags=["Components"])
 LOGGER = logging.getLogger(__name__)
@@ -63,15 +62,11 @@ def get_all_components(
 
 @router.get("/", response_model=ComponentsResponse)
 async def get_all_components_global(
-    user: Annotated[SupabaseUser, Depends(get_user_from_supabase_token)],
+    user: Annotated[SupabaseUser, Depends(ensure_super_admin_dependency())],
     release_stage: Optional[ReleaseStage] = None,
     session: Session = Depends(get_db),
 ):
     """Return all components regardless of organization. Super admin only."""
-    _ensure_user_has_id(user)
-    is_super = await is_user_super_admin(user)
-    if not is_super:
-        raise HTTPException(status_code=403, detail="Access denied")
     return _get_all_components_with_error_handling(
         session,
         release_stage,
@@ -83,16 +78,11 @@ async def get_all_components_global(
 @router.delete("/{component_id}", status_code=204)
 async def delete_component(
     component_id: UUID,
-    user: Annotated[SupabaseUser, Depends(get_user_from_supabase_token)],
+    user: Annotated[SupabaseUser, Depends(ensure_super_admin_dependency())],
     session: Session = Depends(get_db),
 ):
     """Delete a component definition. Super admin only."""
-    if not user.id:
-        raise HTTPException(status_code=400, detail="User ID not found")
     try:
-        is_super = await is_user_super_admin(user)
-        if not is_super:
-            raise HTTPException(status_code=403, detail="Access denied")
         delete_component_service(session, component_id)
         return None
     except HTTPException:

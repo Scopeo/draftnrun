@@ -312,7 +312,7 @@ def create_input_groundtruth_endpoint(
     input_groundtruth_data: InputGroundtruthCreateList,
     user: Annotated[
         SupabaseUser,
-        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.DEVELOPER.value)),
+        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.MEMBER.value)),
     ],
     session: Session = Depends(get_db),
 ) -> InputGroundtruthResponseList:
@@ -347,7 +347,7 @@ def update_input_groundtruth_endpoint(
     input_groundtruth_data: InputGroundtruthUpdateList,
     user: Annotated[
         SupabaseUser,
-        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.DEVELOPER.value)),
+        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.MEMBER.value)),
     ],
     session: Session = Depends(get_db),
 ) -> InputGroundtruthResponseList:
@@ -381,7 +381,7 @@ def delete_input_groundtruth_endpoint(
     delete_data: InputGroundtruthDeleteList,
     user: Annotated[
         SupabaseUser,
-        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.DEVELOPER.value)),
+        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.MEMBER.value)),
     ],
     session: Session = Depends(get_db),
 ) -> dict:
@@ -472,7 +472,7 @@ async def create_entry_from_history(
     trace_id: str,
     user: Annotated[
         SupabaseUser,
-        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.DEVELOPER.value)),
+        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.MEMBER.value)),
     ],
     session: Session = Depends(get_db),
 ) -> List[InputGroundtruthResponse]:
@@ -537,7 +537,7 @@ async def import_qa_data_from_csv_endpoint(
     file: Annotated[UploadFile, File(..., description="CSV file to import")],
     user: Annotated[
         SupabaseUser,
-        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.DEVELOPER.value)),
+        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.MEMBER.value)),
     ],
     session: Session = Depends(get_db),
 ) -> InputGroundtruthResponseList:

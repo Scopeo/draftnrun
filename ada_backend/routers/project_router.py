@@ -109,7 +109,7 @@ def delete_project_endpoint(
     project_id: UUID,
     user: Annotated[
         SupabaseUser,
-        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.ADMIN.value)),
+        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.DEVELOPER.value)),
     ],
     session: Session = Depends(get_db),
 ) -> ProjectDeleteResponse:
@@ -131,7 +131,7 @@ def update_project_endpoint(
     project: ProjectUpdateSchema,
     user: Annotated[
         SupabaseUser,
-        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.ADMIN.value)),
+        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.DEVELOPER.value)),
     ],
     session: Session = Depends(get_db),
 ) -> ProjectSchema:
@@ -154,7 +154,7 @@ def create_workflow_endpoint(
     project: ProjectCreateSchema,
     user: Annotated[
         SupabaseUser,
-        Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.ADMIN.value)),
+        Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.DEVELOPER.value)),
     ],
     session: Session = Depends(get_db),
 ) -> ProjectWithGraphRunnersSchema:

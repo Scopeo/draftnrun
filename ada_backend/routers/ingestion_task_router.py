@@ -115,7 +115,7 @@ def delete_organization_task(
     organization_id: UUID,
     source_id: UUID,
     user: Annotated[
-        SupabaseUser, Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.ADMIN.value))
+        SupabaseUser, Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.DEVELOPER.value))
     ],
     session: Session = Depends(get_db),
 ):

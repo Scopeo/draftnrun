@@ -158,7 +158,7 @@ def delete_organization_cron_job(
     cron_id: UUID,
     user: Annotated[
         SupabaseUser,
-        Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.ADMIN.value)),
+        Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.DEVELOPER.value)),
     ],
     session: Session = Depends(get_db),
 ):
