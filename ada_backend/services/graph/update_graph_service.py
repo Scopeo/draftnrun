@@ -56,16 +56,7 @@ LOGGER = logging.getLogger(__name__)
 
 
 def _calculate_graph_hash(graph_project: GraphUpdateSchema) -> str:
-    """
-    Calculate SHA256 hash of the graph structure (including port_mappings).
-
-    Args:
-        graph_project: The graph update schema to hash
-
-    Returns:
-        Hex digest of the SHA256 hash
-    """
-    graph_dict = graph_project.model_dump()
+    graph_dict = graph_project.model_dump(mode="json")
     json_str = json.dumps(graph_dict, sort_keys=True, separators=(",", ":"))
     hash_obj = hashlib.sha256(json_str.encode("utf-8"))
     return hash_obj.hexdigest()
