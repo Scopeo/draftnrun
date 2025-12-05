@@ -738,8 +738,10 @@ def process_components_with_versions(
                         for subcomponent_param, param_child_def in subcomponent_params
                     ],
                     categories=fetch_associated_category_names(session, component_with_version.component_id),
+                    credits_per_input_token=component_cost.credits_per_input_token if component_cost else None,
+                    credits_per_output_token=component_cost.credits_per_output_token if component_cost else None,
                     credits_per_call=component_cost.credits_per_call if component_cost else None,
-                    credits_per_unit=component_cost.credits_per_unit if component_cost else None,
+                    credits_per_second=component_cost.credits_per_second if component_cost else None,
                 )
             )
         except Exception as e:

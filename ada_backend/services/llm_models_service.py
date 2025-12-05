@@ -65,6 +65,8 @@ def get_all_llm_models_service(session: Session) -> list[LLMModelResponse]:
             ],
             credits_per_input_token=model.llm_cost.credits_per_input_token if model.llm_cost else None,
             credits_per_output_token=model.llm_cost.credits_per_output_token if model.llm_cost else None,
+            credits_per_call=model.llm_cost.credits_per_call if model.llm_cost else None,
+            credits_per_second=model.llm_cost.credits_per_second if model.llm_cost else None,
             created_at=model.created_at,
             updated_at=model.updated_at,
         )
@@ -89,6 +91,8 @@ def get_llm_models_by_capability_service(session: Session, capabilities: list[st
             ],
             credits_per_input_token=model.llm_cost.credits_per_input_token if model.llm_cost else None,
             credits_per_output_token=model.llm_cost.credits_per_output_token if model.llm_cost else None,
+            credits_per_call=model.llm_cost.credits_per_call if model.llm_cost else None,
+            credits_per_second=model.llm_cost.credits_per_second if model.llm_cost else None,
             created_at=model.created_at,
             updated_at=model.updated_at,
         )
@@ -131,6 +135,8 @@ def create_llm_model_service(
         llm_model_id=created_llm_model.id,
         credits_per_input_token=llm_model_data.credits_per_input_token,
         credits_per_output_token=llm_model_data.credits_per_output_token,
+        credits_per_call=llm_model_data.credits_per_call,
+        credits_per_second=llm_model_data.credits_per_second,
     )
 
     return LLMModelResponse.model_validate(created_llm_model)
@@ -164,6 +170,8 @@ def update_llm_model_service(
         llm_model_id=llm_model_id,
         credits_per_input_token=llm_model_data.credits_per_input_token,
         credits_per_output_token=llm_model_data.credits_per_output_token,
+        credits_per_call=llm_model_data.credits_per_call,
+        credits_per_second=llm_model_data.credits_per_second,
     )
 
     return LLMModelResponse.model_validate(updated_llm_model)

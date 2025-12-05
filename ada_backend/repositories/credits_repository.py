@@ -11,14 +11,14 @@ def _update_cost_fields(
     credits_per_input_token: Optional[float] = None,
     credits_per_output_token: Optional[float] = None,
     credits_per_call: Optional[float] = None,
-    credits_per_unit: Optional[float] = None,
+    credits_per_second: Optional[float] = None,
 ) -> None:
     """Helper function to update cost fields on a Cost object."""
 
     cost_obj.credits_per_input_token = credits_per_input_token
     cost_obj.credits_per_output_token = credits_per_output_token
     cost_obj.credits_per_call = credits_per_call
-    cost_obj.credits_per_unit = credits_per_unit
+    cost_obj.credits_per_second = credits_per_second
 
 
 def create_llm_cost(
@@ -26,14 +26,16 @@ def create_llm_cost(
     llm_model_id: UUID,
     credits_per_input_token: Optional[float] = None,
     credits_per_output_token: Optional[float] = None,
+    credits_per_call: Optional[float] = None,
+    credits_per_second: Optional[float] = None,
 ) -> db.LLMCost:
 
     llm_cost = db.LLMCost(
         llm_model_id=llm_model_id,
         credits_per_input_token=credits_per_input_token,
         credits_per_output_token=credits_per_output_token,
-        credits_per_call=None,
-        credits_per_unit=None,
+        credits_per_call=credits_per_call,
+        credits_per_second=credits_per_second,
     )
     session.add(llm_cost)
     session.commit()
@@ -46,10 +48,14 @@ def update_llm_cost(
     llm_model_id: UUID,
     credits_per_input_token: Optional[float] = None,
     credits_per_output_token: Optional[float] = None,
+    credits_per_call: Optional[float] = None,
+    credits_per_second: Optional[float] = None,
 ) -> db.LLMCost:
     llm_cost = session.query(db.LLMCost).filter(db.LLMCost.llm_model_id == llm_model_id).first()
 
-    _update_cost_fields(llm_cost, credits_per_input_token, credits_per_output_token, None, None)
+    _update_cost_fields(
+        llm_cost, credits_per_input_token, credits_per_output_token, credits_per_call, credits_per_second
+    )
     session.commit()
     session.refresh(llm_cost)
     return llm_cost
@@ -67,6 +73,8 @@ def upsert_llm_cost(
     llm_model_id: UUID,
     credits_per_input_token: Optional[float] = None,
     credits_per_output_token: Optional[float] = None,
+    credits_per_call: Optional[float] = None,
+    credits_per_second: Optional[float] = None,
 ) -> db.LLMCost:
     llm_cost = session.query(db.LLMCost).filter(db.LLMCost.llm_model_id == llm_model_id).first()
 
@@ -76,9 +84,13 @@ def upsert_llm_cost(
             llm_model_id,
             credits_per_input_token,
             credits_per_output_token,
+            credits_per_call,
+            credits_per_second,
         )
     else:
-        _update_cost_fields(llm_cost, credits_per_input_token, credits_per_output_token, None, None)
+        _update_cost_fields(
+            llm_cost, credits_per_input_token, credits_per_output_token, credits_per_call, credits_per_second
+        )
         session.commit()
         session.refresh(llm_cost)
 
@@ -88,16 +100,18 @@ def upsert_llm_cost(
 def create_component_version_cost(
     session: Session,
     component_version_id: UUID,
+    credits_per_input_token: Optional[float] = None,
+    credits_per_output_token: Optional[float] = None,
     credits_per_call: Optional[float] = None,
-    credits_per_unit: Optional[float] = None,
+    credits_per_second: Optional[float] = None,
 ) -> db.ComponentCost:
 
     component_cost = db.ComponentCost(
         component_version_id=component_version_id,
-        credits_per_input_token=None,
-        credits_per_output_token=None,
+        credits_per_input_token=credits_per_input_token,
+        credits_per_output_token=credits_per_output_token,
         credits_per_call=credits_per_call,
-        credits_per_unit=credits_per_unit,
+        credits_per_second=credits_per_second,
     )
     session.add(component_cost)
     session.commit()
@@ -108,8 +122,10 @@ def create_component_version_cost(
 def upsert_component_version_cost(
     session: Session,
     component_version_id: UUID,
+    credits_per_input_token: Optional[float] = None,
+    credits_per_output_token: Optional[float] = None,
     credits_per_call: Optional[float] = None,
-    credits_per_unit: Optional[float] = None,
+    credits_per_second: Optional[float] = None,
 ) -> db.ComponentCost:
 
     component_cost = (
@@ -120,11 +136,15 @@ def upsert_component_version_cost(
         component_cost = create_component_version_cost(
             session,
             component_version_id,
+            credits_per_input_token,
+            credits_per_output_token,
             credits_per_call,
-            credits_per_unit,
+            credits_per_second,
         )
     else:
-        _update_cost_fields(component_cost, None, None, credits_per_call, credits_per_unit)
+        _update_cost_fields(
+            component_cost, credits_per_input_token, credits_per_output_token, credits_per_call, credits_per_second
+        )
         session.commit()
         session.refresh(component_cost)
 

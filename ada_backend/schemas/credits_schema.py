@@ -21,8 +21,10 @@ class OrganizationLimitResponse(OrganizationLimit):
 
 
 class ComponentVersionCost(BaseModel):
-    credits_per_unit: Optional[float] = None
+    credits_per_second: Optional[float] = None
     credits_per_call: Optional[float] = None
+    credits_per_input_token: Optional[float] = None
+    credits_per_output_token: Optional[float] = None
 
 
 class ComponentVersionCostResponse(ComponentVersionCost):

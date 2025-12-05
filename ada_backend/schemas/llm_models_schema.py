@@ -43,6 +43,8 @@ class LLMModelCreate(BaseModel):
     )
     credits_per_input_token: Optional[float] = None
     credits_per_output_token: Optional[float] = None
+    credits_per_call: Optional[float] = None
+    credits_per_second: Optional[float] = None
 
     model_config = ConfigDict(from_attributes=True)
 
