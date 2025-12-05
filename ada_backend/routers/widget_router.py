@@ -19,11 +19,9 @@ from ada_backend.routers.auth_router import (
 from ada_backend.schemas.auth_schema import SupabaseUser
 from ada_backend.schemas.widget_schema import (
     WidgetSchema,
-    WidgetPublicConfigSchema,
     WidgetCreateSchema,
     WidgetUpdateSchema,
     WidgetChatRequest,
-    WidgetChatResponse,
 )
 from ada_backend.services.widget_service import (
     get_widget_public_config_service,
