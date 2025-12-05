@@ -2,7 +2,7 @@ from typing import Optional
 from uuid import UUID
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from ada_backend.schemas.pipeline.base import ComponentRelationshipSchema, ComponentInstanceSchema
 from ada_backend.schemas.pipeline.get_pipeline_schema import ComponentInstanceReadSchema
@@ -74,3 +74,16 @@ class GraphDeployResponse(BaseModel):
     draft_graph_runner_id: UUID
     prod_graph_runner_id: UUID
     previous_prod_graph_runner_id: Optional[UUID] = None
+
+
+class ModificationHistoryItem(BaseModel):
+    """Represents a single modification history entry"""
+
+    time: datetime
+    user_id: Optional[UUID] = None
+
+
+class GraphModificationHistoryResponse(BaseModel):
+    """Response model for graph modification history"""
+
+    history: list[ModificationHistoryItem]
