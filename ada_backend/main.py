@@ -36,6 +36,7 @@ from logger import setup_logging
 from ada_backend.routers.ingestion_database_router import router as ingestion_database_router
 from ada_backend.routers.llm_models_router import router as llm_models_router
 from ada_backend.routers.credits_router import router as credits_router
+from ada_backend.routers.widget_router import router as widget_router
 
 setup_logging()
 
@@ -134,6 +135,10 @@ app = FastAPI(
             "name": "Credits",
             "description": "Endpoints for managing credits",
         },
+        {
+            "name": "Widget",
+            "description": "Endpoints for embeddable chat widgets",
+        },
     ],
 )
 
@@ -170,6 +175,7 @@ app.include_router(knowledge_router)
 app.include_router(ingestion_database_router)
 app.include_router(llm_models_router)
 app.include_router(credits_router)
+app.include_router(widget_router)
 
 app.add_middleware(RequestContextMiddleware)
 app.add_middleware(
