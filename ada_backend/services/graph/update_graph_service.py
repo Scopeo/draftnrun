@@ -1,3 +1,5 @@
+import hashlib
+import json
 import logging
 from collections import defaultdict
 from typing import Optional, Iterator
@@ -18,8 +20,11 @@ from ada_backend.repositories.env_repository import get_env_relationship_by_grap
 from ada_backend.repositories.graph_runner_repository import (
     delete_node,
     get_component_nodes,
+    get_latest_modification_hash,
+    get_latest_modification_history,
     graph_runner_exists,
     insert_graph_runner_and_bind_to_project,
+    insert_modification_history,
     upsert_component_node,
 )
 from ada_backend.repositories.port_mapping_repository import (
@@ -49,6 +54,13 @@ from engine.field_expressions.traversal import select_nodes, get_pure_ref
 
 
 LOGGER = logging.getLogger(__name__)
+
+
+def _calculate_graph_hash(graph_project: GraphUpdateSchema) -> str:
+    graph_dict = graph_project.model_dump(mode="json")
+    json_str = json.dumps(graph_dict, sort_keys=True, separators=(",", ":"))
+    hash_obj = hashlib.sha256(json_str.encode("utf-8"))
+    return hash_obj.hexdigest()
 
 
 def resolve_component_version_id_from_instance_id(session: Session, instance_id: UUID) -> UUID:
@@ -116,6 +128,7 @@ async def update_graph_service(
     env: Optional[EnvType] = None,
     user_id: UUID = None,
     bypass_validation: bool = False,
+    track_history: bool = True,
 ) -> GraphUpdateResponse:
     """
     Creates or updates a complete graph runner including all component instances,
@@ -123,6 +136,7 @@ async def update_graph_service(
 
     Args:
         bypass_validation: If True, skip draft mode validation (use for seeding/migrations only)
+        track_history: If True, record modification history. Set to False for automatic/system updates.
     """
     if not graph_runner_exists(session, graph_runner_id):
         LOGGER.info("Creating new graph")
@@ -135,6 +149,22 @@ async def update_graph_service(
             LOGGER.info(f"Updating existing graph {graph_runner_id} (validated as draft)")
         else:
             LOGGER.warning(f"Updating graph {graph_runner_id} with validation bypassed (seeding/migration mode)")
+
+    current_hash = _calculate_graph_hash(graph_project)
+    previous_hash = get_latest_modification_hash(session, graph_runner_id)
+
+    if previous_hash is not None and current_hash == previous_hash:
+        LOGGER.info(f"Graph {graph_runner_id} hash unchanged, skipping updates")
+        return GraphUpdateResponse(
+            graph_id=graph_runner_id,
+        )
+
+    modification_history = None
+    if track_history and (previous_hash is None or current_hash != previous_hash):
+        modification_history = insert_modification_history(session, graph_runner_id, user_id, current_hash)
+        LOGGER.info(f"Logged modification history for graph {graph_runner_id} by user {user_id or 'unknown'}")
+    elif previous_hash is not None and current_hash != previous_hash:
+        LOGGER.debug(f"Graph {graph_runner_id} modified but history tracking skipped (track_history={track_history})")
 
     # TODO: Add the get_graph_runner_nodes function when we will handle nested graphs
     previous_graph_nodes = set(node.id for node in get_component_nodes(session, graph_runner_id))
@@ -271,7 +301,12 @@ async def update_graph_service(
     )
     if user_id:
         track_project_saved(user_id, project_id)
-    return GraphUpdateResponse(graph_id=graph_runner_id)
+
+    return GraphUpdateResponse(
+        graph_id=graph_runner_id,
+        last_edited_time=modification_history.created_at if modification_history else None,
+        last_edited_user_id=modification_history.user_id if modification_history else None,
+    )
 
 
 def _ensure_port_mappings_for_edges(
