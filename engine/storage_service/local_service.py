@@ -7,6 +7,7 @@ import sqlalchemy
 from sqlalchemy import MetaData, text, create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.sql.type_api import TypeEngine
+from sqlalchemy.dialects.postgresql import insert
 import pandas as pd
 from func_timeout import func_timeout, FunctionTimedOut
 
@@ -518,3 +519,58 @@ class SQLLocalService(DBService):
                 row_dict[column.name] = getattr(result, column.name)
 
             return row_dict
+
+    def get_rows_by_ids(
+        self,
+        table_name: str,
+        chunk_ids: list[str],
+        schema_name: Optional[str] = None,
+        id_column_name: str = CHUNK_ID_COLUMN,
+    ) -> list[dict]:
+        """Get multiple rows by their chunk IDs. Returns a list of dictionaries."""
+        if not chunk_ids:
+            return []
+
+        table = self.get_table(table_name, schema_name)
+        with self.Session() as session:
+            stmt = sqlalchemy.select(table).where(table.c[id_column_name].in_(chunk_ids))
+            results = session.execute(stmt).fetchall()
+
+            # Convert SQLAlchemy Rows to dictionaries
+            rows = []
+            for result in results:
+                row_dict = {}
+                for column in table.columns:
+                    row_dict[column.name] = getattr(result, column.name)
+                rows.append(row_dict)
+
+            return rows
+
+    def upsert_rows(
+        self,
+        table_name: str,
+        rows: list[dict],
+        schema_name: Optional[str] = None,
+        id_column_name: str = CHUNK_ID_COLUMN,
+    ) -> None:
+        if not rows:
+            return
+
+        table = self.get_table(table_name, schema_name)
+        if id_column_name not in table.c:
+            raise ValueError(f"Column '{id_column_name}' not found in table '{table_name}'.")
+
+        row_keys: set[str] = set().union(*(r.keys() for r in rows))
+        updatable_cols = [k for k in row_keys if k != id_column_name and k in table.c]
+
+        insert_stmt = insert(table).values(rows)
+
+        with self.Session() as session:
+            with session.begin():
+                update_dict = {col: insert_stmt.excluded[col] for col in updatable_cols}
+                stmt = insert_stmt.on_conflict_do_update(
+                    index_elements=[table.c[id_column_name]],
+                    set_=update_dict,
+                )
+                session.execute(stmt)
+            LOGGER.info(f"Successfully upserted {len(rows)} rows in table {table_name}")

@@ -77,7 +77,7 @@ def get_db_source_definition(
 ) -> tuple[DBDefinition, dict[str, str]]:
     columns = [
         DBColumn(name=PROCESSED_DATETIME_FIELD, type="DATETIME", default="CURRENT_TIMESTAMP"),
-        DBColumn(name=CHUNK_ID_COLUMN_NAME, type="VARCHAR", is_primary_key=True),
+        DBColumn(name=CHUNK_ID_COLUMN_NAME, type="VARCHAR", is_primary=True),
         DBColumn(name=FILE_ID_COLUMN_NAME, type="VARCHAR"),
         DBColumn(name=ORDER_COLUMN_NAME, type="INTEGER", is_nullable=True),
         DBColumn(name=CHUNK_COLUMN_NAME, type="VARCHAR"),
