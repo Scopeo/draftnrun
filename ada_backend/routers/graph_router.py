@@ -15,6 +15,7 @@ from ada_backend.schemas.pipeline.graph_schema import (
     GraphDeployResponse,
     GraphGetResponse,
     GraphLoadResponse,
+    GraphModificationHistoryResponse,
     GraphUpdateResponse,
     GraphUpdateSchema,
 )
@@ -25,6 +26,9 @@ from ada_backend.services.graph.deploy_graph_service import deploy_graph_service
 from ada_backend.services.graph.load_copy_graph_service import load_copy_graph_service
 from ada_backend.services.graph.update_graph_service import update_graph_service
 from ada_backend.services.graph.get_graph_service import get_graph_service
+from ada_backend.services.graph.get_graph_modification_history_service import (
+    get_graph_modification_history_service,
+)
 from ada_backend.services.graph.delete_graph_service import delete_graph_runner_service
 from engine.field_expressions.errors import FieldExpressionError
 from engine.agent.errors import (
@@ -69,6 +73,52 @@ def get_project_graph(
     except Exception as e:
         LOGGER.error(
             f"Failed to get graph for project {project_id} and runner {graph_runner_id}: {str(e)}", exc_info=True
+        )
+        raise HTTPException(status_code=500, detail="Internal server error") from e
+
+
+@router.get(
+    "/{graph_runner_id}/modification-history",
+    summary="Get Graph Modification History",
+    response_model=GraphModificationHistoryResponse,
+    tags=["Graph"],
+)
+def get_graph_modification_history(
+    project_id: UUID,
+    graph_runner_id: UUID,
+    user: Annotated[
+        SupabaseUser, Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.READER.value))
+    ],
+    session: Session = Depends(get_db),
+) -> GraphModificationHistoryResponse:
+    """
+    Get the modification history for a graph runner.
+    Returns a list of all modifications with timestamp and user_id.
+    """
+    if not user.id:
+        raise HTTPException(status_code=400, detail="User ID not found")
+    try:
+        return get_graph_modification_history_service(session, project_id, graph_runner_id)
+    except ProjectNotFound as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    except GraphNotFound as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    except ConnectionError as e:
+        LOGGER.error(
+            f"Database connection failed for project {project_id} and runner {graph_runner_id}: {str(e)}",
+            exc_info=True,
+        )
+        raise HTTPException(status_code=503, detail=f"Database connection error: {str(e)}") from e
+    except ValueError as e:
+        LOGGER.error(
+            f"Failed to get modification history for project {project_id} and runner {graph_runner_id}: {str(e)}",
+            exc_info=True,
+        )
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except Exception as e:
+        LOGGER.error(
+            f"Failed to get modification history for project {project_id} and runner {graph_runner_id}: {str(e)}",
+            exc_info=True,
         )
         raise HTTPException(status_code=500, detail="Internal server error") from e
 

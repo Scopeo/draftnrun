@@ -291,8 +291,7 @@ def get_latest_modification_history(
 
 def insert_modification_history(
     session: Session, graph_runner_id: UUID, user_id: Optional[UUID], modification_hash: str
-) -> None:
-    """Insert a new modification history record."""
+) -> db.GraphRunnerModificationHistory:
     history = db.GraphRunnerModificationHistory(
         graph_runner_id=graph_runner_id,
         user_id=user_id,
@@ -300,3 +299,14 @@ def insert_modification_history(
     )
     session.add(history)
     session.commit()
+    session.refresh(history)
+    return history
+
+
+def get_modification_history(session: Session, graph_runner_id: UUID) -> list[db.GraphRunnerModificationHistory]:
+    return (
+        session.query(db.GraphRunnerModificationHistory)
+        .filter(db.GraphRunnerModificationHistory.graph_runner_id == graph_runner_id)
+        .order_by(db.GraphRunnerModificationHistory.created_at.desc())
+        .all()
+    )
