@@ -90,6 +90,7 @@ jobs:
             echo "🔀 Resetting staging branch to main"
             git checkout staging
             git reset --hard origin/main
+            git push --force
             
             echo "📦 Installing dependencies"
             pip install --upgrade uv
