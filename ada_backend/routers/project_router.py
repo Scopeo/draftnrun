@@ -28,7 +28,12 @@ from ada_backend.routers.auth_router import (
     UserRights,
 )
 from ada_backend.services.charts_service import get_charts_by_project
-from ada_backend.services.errors import MissingDataSourceError, ProjectNotFound, EnvironmentNotFound
+from ada_backend.services.errors import (
+    MissingDataSourceError,
+    ProjectNotFound,
+    EnvironmentNotFound,
+    OrganizationLimitExceededError,
+)
 from ada_backend.services.metrics.monitor_kpis_service import get_monitoring_kpis_by_project
 from ada_backend.services.project_service import (
     create_workflow,
@@ -224,11 +229,17 @@ async def get_project_charts(
     duration: int,
     user: Annotated[SupabaseUser, Depends(get_user_from_supabase_token)],
     call_type: CallType | None = None,
+    session: Session = Depends(get_db),
 ):
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
     try:
-        response = await get_charts_by_project(project_id, duration, call_type)
+        response = await get_charts_by_project(
+            session=session,
+            project_id=project_id,
+            duration_days=duration,
+            call_type=call_type,
+        )
         return response
     except ValueError as e:
         LOGGER.error(
@@ -303,6 +314,12 @@ async def chat(
                 project_env_binding.graph_runner.version_name,
             ),
         )
+    except OrganizationLimitExceededError as e:
+        LOGGER.warning(
+            f"Organization limit exceeded for project {project_id}, graph runner {graph_runner_id}: {str(e)}",
+            exc_info=True,
+        )
+        raise HTTPException(status_code=402, detail=str(e)) from e
     except LLMKeyLimitExceededError as e:
         LOGGER.error(
             f"LLM key limit exceeded for project {project_id} for graph runner {graph_runner_id}: {str(e)}",
@@ -367,6 +384,12 @@ async def chat_env(
             env=env,
             call_type=CallType.SANDBOX,
         )
+    except OrganizationLimitExceededError as e:
+        LOGGER.warning(
+            f"Organization limit exceeded for project {project_id} in environment {env}: {str(e)}",
+            exc_info=True,
+        )
+        raise HTTPException(status_code=402, detail=str(e)) from e
     except LLMKeyLimitExceededError as e:
         LOGGER.error(f"LLM key limit exceeded for project {project_id} in environment {env}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=400, detail=str(e)) from e

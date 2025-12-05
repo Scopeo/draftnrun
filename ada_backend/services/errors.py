@@ -111,6 +111,19 @@ class OrganizationLimitNotFound(Exception):
         super().__init__(f"Organization limit not found: {id} for organization {organization_id}")
 
 
+class OrganizationLimitExceededError(Exception):
+    """Raised when an organization has reached or exceeded its monthly credit limit."""
+
+    def __init__(self, organization_id: UUID, limit: float, current_usage: float):
+        self.organization_id = organization_id
+        self.limit = limit
+        self.current_usage = current_usage
+        super().__init__(
+            f"Organization has reached its monthly credit limit. "
+            f"Limit: {limit} credits, Current usage: {current_usage} credits"
+        )
+
+
 class MissingDataSourceError(Exception):
     """Raised when a component requires a data source but none is configured."""
 
