@@ -87,7 +87,10 @@ def build_span_trees(df: pd.DataFrame) -> List[TraceSpan]:
         credits_per_call = row.get("credits_per_call")
         credits_per_unit = row.get("credits_per_unit")
 
-        if any(x is not None for x in [credits_input_token, credits_output_token, credits_per_call, credits_per_unit]):
+        if any(
+            credit_value is not None
+            for credit_value in [credits_input_token, credits_output_token, credits_per_call, credits_per_unit]
+        ):
             span_total = (
                 (credits_input_token or 0)
                 + (credits_output_token or 0)
