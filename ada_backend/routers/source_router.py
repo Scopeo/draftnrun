@@ -29,7 +29,7 @@ LOGGER = logging.getLogger(__name__)
 def get_organization_sources(
     organization_id: UUID,
     user: Annotated[
-        SupabaseUser, Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.READER.value))
+        SupabaseUser, Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.MEMBER.value))
     ],
     session: Session = Depends(get_db),
 ):
@@ -73,7 +73,7 @@ def update_organization_source(
     source_id: UUID,
     auth_ids: Annotated[
         tuple[UUID | None, UUID | None],
-        Depends(user_has_access_to_organization_xor_verify_api_key(allowed_roles=UserRights.ADMIN.value)),
+        Depends(user_has_access_to_organization_xor_verify_api_key(allowed_roles=UserRights.DEVELOPER.value)),
     ],
     session: Session = Depends(get_db),
 ):
@@ -106,7 +106,7 @@ def update_organization_source_api_key(
     source_id: UUID,
     auth_ids: Annotated[
         tuple[UUID | None, UUID | None],
-        Depends(user_has_access_to_organization_xor_verify_api_key(allowed_roles=UserRights.ADMIN.value)),
+        Depends(user_has_access_to_organization_xor_verify_api_key(allowed_roles=UserRights.DEVELOPER.value)),
     ],
     session: Session = Depends(get_db),
 ):
@@ -133,7 +133,7 @@ def delete_organization_source(
     organization_id: UUID,
     source_id: UUID,
     user: Annotated[
-        SupabaseUser, Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.ADMIN.value))
+        SupabaseUser, Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.DEVELOPER.value))
     ],
     session: Session = Depends(get_db),
 ):

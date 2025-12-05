@@ -113,7 +113,10 @@ def test_get_all_organization_limits(db_session):
     other_month = test_month + 1 if test_month < 12 else 1
     limit_3 = create_organization_limit_in_db(db_session, org_id_1, test_year, other_month, 1500.0)
 
-    response = client.get(f"/organizations-limits?year={test_year}&month={test_month}")
+    response = client.get(
+        f"/organizations-limits?year={test_year}&month={test_month}",
+        headers=HEADERS_JWT,
+    )
 
     assert response.status_code == 200
     data = response.json()
@@ -330,13 +333,19 @@ def test_get_all_organization_limits_with_filters(db_session):
     limit_2 = create_organization_limit_in_db(db_session, org_id, test_year, month_2, 2000.0)
     limit_3 = create_organization_limit_in_db(db_session, org_id, test_year, month_3, 3000.0)
 
-    response = client.get(f"/organizations-limits?year={test_year}&month={month_1}")
+    response = client.get(
+        f"/organizations-limits?year={test_year}&month={month_1}",
+        headers=HEADERS_JWT,
+    )
     assert response.status_code == 200
     data = response.json()
     assert isinstance(data, list)
     assert any(limit["id"] == str(limit_1.id) for limit in data)
 
-    response = client.get(f"/organizations-limits?year={test_year}&month={month_2}")
+    response = client.get(
+        f"/organizations-limits?year={test_year}&month={month_2}",
+        headers=HEADERS_JWT,
+    )
     assert response.status_code == 200
     data = response.json()
     assert any(limit["id"] == str(limit_2.id) for limit in data)

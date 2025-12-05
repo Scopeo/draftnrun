@@ -51,7 +51,7 @@ def update_chunk_info_in_database(
     chunk_id: str,
     update_request: UpdateChunk,
     user: Annotated[
-        SupabaseUser, Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.WRITER.value))
+        SupabaseUser, Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.DEVELOPER.value))
     ],
 ) -> ChunkData:
     if not user.id:

@@ -28,7 +28,7 @@ LOGGER = logging.getLogger(__name__)
 @router.get(path="/categories", response_model=list[CategoryResponse])
 def get_all_categories(
     user: Annotated[
-        SupabaseUser, Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.READER.value))
+        SupabaseUser, Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.MEMBER.value))
     ],
     session: Session = Depends(get_db),
 ) -> list[CategoryResponse]:
@@ -45,7 +45,7 @@ def get_all_categories(
 def get_category_by_id(
     category_id: UUID,
     user: Annotated[
-        SupabaseUser, Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.READER.value))
+        SupabaseUser, Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.MEMBER.value))
     ],
     session: Session = Depends(get_db),
 ) -> CategoryResponse:
@@ -64,7 +64,7 @@ def get_category_by_id(
 def create_category(
     category: CategoryCreateSchema,
     user: Annotated[
-        SupabaseUser, Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.WRITER.value))
+        SupabaseUser, Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.DEVELOPER.value))
     ],
     session: Session = Depends(get_db),
 ) -> CategoryResponse:
@@ -83,7 +83,7 @@ def create_category(
 def update_category(
     category: CategoryUpdateSchema,
     user: Annotated[
-        SupabaseUser, Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.WRITER.value))
+        SupabaseUser, Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.DEVELOPER.value))
     ],
     category_id: UUID = None,
     session: Session = Depends(get_db),
@@ -107,7 +107,7 @@ def update_category(
 def delete_category(
     category_id: UUID,
     user: Annotated[
-        SupabaseUser, Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.WRITER.value))
+        SupabaseUser, Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.DEVELOPER.value))
     ],
     session: Session = Depends(get_db),
 ) -> None:

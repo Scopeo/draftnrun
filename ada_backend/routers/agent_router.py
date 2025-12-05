@@ -37,7 +37,7 @@ LOGGER = logging.getLogger(__name__)
 def get_all_agents(
     organization_id: UUID,
     user: Annotated[
-        SupabaseUser, Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.READER.value))
+        SupabaseUser, Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.USER.value))
     ],
     session: Session = Depends(get_db),
 ) -> list[AgentWithGraphRunnersSchema]:
@@ -54,9 +54,7 @@ def get_all_agents(
 def get_agent_by_id(
     project_id: UUID,
     graph_runner_id: UUID,
-    user: Annotated[
-        SupabaseUser, Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.READER.value))
-    ],
+    user: Annotated[SupabaseUser, Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.USER.value))],
     session: Session = Depends(get_db),
 ) -> AgentInfoSchema:
     if not user.id:
@@ -79,7 +77,7 @@ def get_agent_by_id(
 def create_agent(
     organization_id: UUID,
     user: Annotated[
-        SupabaseUser, Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.WRITER.value))
+        SupabaseUser, Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.DEVELOPER.value))
     ],
     agent_data: ProjectAgentSchema,
     session: Session = Depends(get_db),
@@ -101,7 +99,7 @@ async def update_agent(
     graph_runner_id: UUID,
     agent_data: AgentUpdateSchema,
     user: Annotated[
-        SupabaseUser, Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.WRITER.value))
+        SupabaseUser, Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.DEVELOPER.value))
     ],
     session: Session = Depends(get_db),
 ) -> GraphUpdateResponse:
