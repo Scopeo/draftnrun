@@ -1,7 +1,7 @@
 """add graph runner modification history
 
 Revision ID: 62d077615136
-Revises: 27792da190ff
+Revises: a1b2c3d4e5f6
 Create Date: 2025-12-04 14:58:12.773840
 
 """
@@ -14,7 +14,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision: str = "62d077615136"
-down_revision: Union[str, None] = "27792da190ff"
+down_revision: Union[str, None] = "a1b2c3d4e5f6"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
