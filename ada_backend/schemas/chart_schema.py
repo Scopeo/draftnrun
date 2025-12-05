@@ -5,7 +5,7 @@ from pydantic import BaseModel
 
 class Dataset(BaseModel):
     label: str
-    data: List[Union[int, float, None]]
+    data: List[Union[int, float, str, None]]
     borderColor: str | None = None
     backgroundColor: str | List[str] | None = None
     fill: bool | None = None
@@ -27,6 +27,7 @@ class ChartType(Enum):
     AREA = "area"
     CANDLESTICK = "candlestick"
     BOXPLOT = "boxplot"
+    TABLE = "table"
 
 
 class Chart(BaseModel):
@@ -36,6 +37,7 @@ class Chart(BaseModel):
     data: ChartData
     x_axis_type: str | None = None
     y_axis_type: str | None = None
+    progress_percentage: float | None = None
 
 
 class ChartsResponse(BaseModel):

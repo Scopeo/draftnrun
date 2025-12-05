@@ -6,12 +6,15 @@ import traceback
 from sqlalchemy.orm import Session
 import networkx as nx
 
+from datetime import datetime
+
 from ada_backend.database.models import EnvType, OrgSecretType, CallType
 from ada_backend.services.tag_service import compose_tag_name
 from ada_backend.repositories.edge_repository import get_edges
 from ada_backend.schemas.project_schema import ChatResponse
 from ada_backend.services.agent_builder_service import instantiate_component
-from ada_backend.services.errors import ProjectNotFound, EnvironmentNotFound
+from ada_backend.services.errors import ProjectNotFound, EnvironmentNotFound, OrganizationLimitExceededError
+from ada_backend.repositories.credits_repository import get_organization_total_credits, get_organization_limit
 from engine.graph_runner.graph_runner import GraphRunner
 from engine.llm_services.utils import LLMKeyLimitExceededError
 from ada_backend.repositories.graph_runner_repository import (
@@ -185,6 +188,35 @@ async def run_agent(
     call_type: CallType,
     tag_name: Optional[str] = None,
 ) -> ChatResponse:
+
+    project_details = get_project_with_details(session, project_id=project_id)
+    if not project_details:
+        raise ProjectNotFound(project_id)
+
+    today = datetime.now()
+    organization_limit = get_organization_limit(
+        session=session,
+        organization_id=project_details.organization_id,
+        year=today.year,
+        month=today.month,
+    )
+    if organization_limit and organization_limit.limit is not None:
+        current_usage = get_organization_total_credits(
+            session,
+            project_details.organization_id,
+            today.year,
+            today.month,
+        )
+        if current_usage >= organization_limit.limit:
+            raise OrganizationLimitExceededError(
+                project_details.organization_id, organization_limit.limit, current_usage
+            )
+    agent = await get_agent_for_project(
+        session,
+        project_id=project_id,
+        graph_runner_id=graph_runner_id,
+    )
+
     # TODO : Add again the monitoring for frequently asked questions after parallelization of agent run
     # db_service = SQLLocalService(engine_url="sqlite:///ada_backend/database/monitor.db", dialect="sqlite")
     # asyncio.create_task(monitor_questions(db_service, project_id, input_data))

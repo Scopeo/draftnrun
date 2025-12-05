@@ -108,7 +108,10 @@ def get_trace_metrics(project_id: UUID, duration_days: int, call_type: CallType 
 
 
 def get_monitoring_kpis_by_project(
-    user_id: UUID, project_id: UUID, duration_days: int, call_type: CallType | None = None
+    user_id: UUID,
+    project_id: UUID,
+    duration_days: int,
+    call_type: CallType | None = None,
 ) -> KPISResponse:
     trace_kpis = get_trace_metrics(project_id, duration_days, call_type)
     LOGGER.info(f"Trace metrics for project {project_id} and duration {duration_days} days retrieved successfully.")

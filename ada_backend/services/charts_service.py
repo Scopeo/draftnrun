@@ -1,10 +1,12 @@
 from collections import OrderedDict
 from uuid import UUID
 from datetime import datetime, timedelta, timezone
+from calendar import monthrange
 import requests
 
 import numpy as np
 import pandas as pd
+from sqlalchemy.orm import Session
 
 from ada_backend.database.models import CallType
 from ada_backend.schemas.chart_schema import Chart, ChartData, ChartType, ChartsResponse, Dataset
@@ -13,6 +15,8 @@ from ada_backend.services.metrics.utils import (
     calculate_calls_per_day,
     count_conversations_per_day,
 )
+from ada_backend.repositories.credits_repository import get_organization_total_credits, get_organization_limit
+from ada_backend.repositories.project_repository import get_project
 from settings import settings
 
 
@@ -212,12 +216,60 @@ def get_tokens_distribution_chart(project_id: UUID, duration_days: int, call_typ
     )
 
 
+def get_credit_usage_table_chart(session: Session, project_id: UUID) -> Chart:
+    """Get organization credit usage as a table chart."""
+    today = datetime.now()
+    project = get_project(session, project_id=project_id)
+
+    credits_used = get_organization_total_credits(session, project.organization_id, today.year, today.month)
+    org_limit = get_organization_limit(session, project.organization_id, today.year, today.month)
+    credits_limit = org_limit.limit if org_limit else None
+    percentage_used = round((credits_used / credits_limit) * 100, 1) if credits_limit and credits_limit > 0 else None
+
+    last_day = monthrange(today.year, today.month)[1]
+    reset_datetime = datetime(today.year, today.month, last_day, 23, 59, 59)
+
+    credits_used_formatted = f"{credits_used:,.0f}".replace(",", " ")
+    credits_limit_formatted = f"{credits_limit:,.0f}".replace(",", " ") if credits_limit is not None else "N/A"
+
+    labels = ["Organization Credit Usage", "Reset Date"]
+
+    credits_display = (
+        f"{credits_used_formatted} / {credits_limit_formatted} credits"
+        if credits_limit is not None
+        else f"{credits_used_formatted} credits"
+    )
+
+    reset_display = reset_datetime.strftime("%d/%m/%Y")
+
+    data_values = [
+        credits_display,
+        reset_display,
+    ]
+
+    return Chart(
+        id=f"credit_usage_{project_id}",
+        type=ChartType.TABLE,
+        title="Organization Credit Usage",
+        data=ChartData(
+            labels=labels,
+            datasets=[Dataset(label="Value", data=data_values)],
+        ),
+        progress_percentage=percentage_used if percentage_used is not None else None,
+    )
+
+
 async def get_charts_by_project(
-    project_id: UUID, duration_days: int, call_type: CallType | None = None
+    session: Session,
+    project_id: UUID,
+    duration_days: int,
+    call_type: CallType | None = None,
 ) -> ChartsResponse:
     response = ChartsResponse(
         charts=(
-            get_agent_usage_chart(project_id, duration_days, call_type)
+            # TODO: Move credit charts to organization level
+            [get_credit_usage_table_chart(session=session, project_id=project_id)]
+            + get_agent_usage_chart(project_id, duration_days, call_type)
             + [
                 get_latence_chart(project_id, duration_days, call_type),
                 # get_prometheus_agent_calls_chart(project_id, duration_days),
