@@ -21,6 +21,7 @@ from ada_backend.repositories.graph_runner_repository import (
     delete_node,
     get_component_nodes,
     get_latest_modification_hash,
+    get_latest_modification_history,
     graph_runner_exists,
     insert_graph_runner_and_bind_to_project,
     insert_modification_history,
@@ -151,6 +152,12 @@ async def update_graph_service(
 
     current_hash = _calculate_graph_hash(graph_project)
     previous_hash = get_latest_modification_hash(session, graph_runner_id)
+
+    if previous_hash is not None and current_hash == previous_hash:
+        LOGGER.info(f"Graph {graph_runner_id} hash unchanged, skipping updates")
+        return GraphUpdateResponse(
+            graph_id=graph_runner_id,
+        )
 
     modification_history = None
     if track_history and (previous_hash is None or current_hash != previous_hash):
