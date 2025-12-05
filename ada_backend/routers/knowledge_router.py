@@ -2,7 +2,7 @@ from typing import Annotated, List
 from uuid import UUID
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status, Query
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.orm import Session
 
 from ada_backend.database.setup_db import get_db
