@@ -35,11 +35,9 @@ from ada_backend.services.widget_service import (
     update_widget_service,
     regenerate_widget_key_service,
     delete_widget_service,
-    WidgetNotFound,
-    WidgetDisabled,
 )
 from ada_backend.repositories.widget_repository import get_widget_by_key
-from ada_backend.services.errors import ProjectNotFound, EnvironmentNotFound
+from ada_backend.services.errors import ProjectNotFound, EnvironmentNotFound, WidgetNotFound, WidgetDisabled
 from ada_backend.services.user_roles_service import get_user_access_to_organization
 from engine.llm_services.utils import LLMKeyLimitExceededError
 
@@ -63,10 +61,8 @@ RATE_LIMIT_WINDOW = 60  # seconds
 
 
 def _check_rate_limit(key: str, limit: int, window: int = RATE_LIMIT_WINDOW) -> bool:
-    """Check if request is within rate limit. Returns True if allowed. Thread-safe."""
     now = time.time()
     with _rate_limit_lock:
-        # Clean old entries
         _rate_limit_store[key] = [t for t in _rate_limit_store[key] if now - t < window]
         if len(_rate_limit_store[key]) >= limit:
             return False
@@ -75,7 +71,6 @@ def _check_rate_limit(key: str, limit: int, window: int = RATE_LIMIT_WINDOW) -> 
 
 
 def get_client_ip(request: Request) -> str:
-    """Get client IP from request, considering proxies."""
     forwarded = request.headers.get("X-Forwarded-For")
     if forwarded:
         return forwarded.split(",")[0].strip()
@@ -83,30 +78,24 @@ def get_client_ip(request: Request) -> str:
 
 
 def _check_origin_allowed(request: Request, allowed_origins: list[str]) -> bool:
-    """Check if request origin is in the allowed list. Empty list = allow all."""
     if not allowed_origins:
         LOGGER.debug("No allowed_origins configured, allowing all")
-        return True  # No restrictions
+        return True
 
-    # Get origin from headers (only trust Origin, not Referer which is spoofable)
     origin = request.headers.get("Origin")
     LOGGER.debug(f"Origin check: origin={origin}, allowed_origins={allowed_origins}")
     if not origin:
         LOGGER.debug("No origin header, blocking request")
-        return False  # No origin header = block (could be direct API call)
+        return False
 
-    # Parse to get just the host (without port)
     parsed = urlparse(origin)
     netloc = parsed.netloc or parsed.path.split("/")[0]
-    # Remove port if present (e.g., "localhost:5173" -> "localhost")
     request_host = netloc.split(":")[0]
     LOGGER.debug(f"Parsed request_host: {request_host}")
 
     for pattern in allowed_origins:
-        # Support wildcard patterns like *.example.com
         if pattern.startswith("*."):
-            # Match exact domain or any subdomain
-            base_domain = pattern[2:]  # Remove "*."
+            base_domain = pattern[2:]
             if request_host == base_domain or request_host.endswith("." + base_domain):
                 LOGGER.debug(f"Origin {request_host} matched wildcard pattern {pattern}")
                 return True
@@ -119,12 +108,10 @@ def _check_origin_allowed(request: Request, allowed_origins: list[str]) -> bool:
 
 
 def _get_cors_headers(request: Request, allowed_origins: list[str]) -> dict[str, str]:
-    """Generate CORS headers based on request origin and allowed origins."""
     origin = request.headers.get("Origin")
     if not origin:
         return {}
 
-    # If no allowed origins, allow any origin
     if not allowed_origins:
         return {
             "Access-Control-Allow-Origin": origin,
@@ -133,7 +120,6 @@ def _get_cors_headers(request: Request, allowed_origins: list[str]) -> dict[str,
             "Access-Control-Allow-Headers": "Content-Type",
         }
 
-    # Check if this origin is allowed
     parsed = urlparse(origin)
     netloc = parsed.netloc or parsed.path.split("/")[0]
     request_host = netloc.split(":")[0]
@@ -159,11 +145,6 @@ def _get_cors_headers(request: Request, allowed_origins: list[str]) -> dict[str,
     return {}
 
 
-# ============================================
-# PUBLIC ENDPOINTS (for widget iframe - no auth, but rate limited)
-# ============================================
-
-
 @router.options("/widget/{widget_key}/config")
 @router.options("/widget/{widget_key}/chat")
 async def widget_preflight(
@@ -171,7 +152,6 @@ async def widget_preflight(
     request: Request,
     session: Session = Depends(get_db),
 ) -> JSONResponse:
-    """Handle CORS preflight requests for widget endpoints."""
     widget = get_widget_by_key(session, widget_key)
     allowed_origins = []
     if widget and widget.config:
@@ -187,28 +167,18 @@ def get_widget_config(
     request: Request,
     session: Session = Depends(get_db),
 ) -> JSONResponse:
-    """
-    Get public widget configuration by widget_key.
-    This is called by the widget iframe to load theme and settings.
-    No authentication required, but rate limited.
-    """
     try:
-        # First get widget to read config
         widget = get_widget_by_key(session, widget_key)
         if not widget:
             raise WidgetNotFound(widget_key=widget_key)
 
         config = widget.config or {}
 
-        # Check origin is allowed
         allowed_origins = config.get("allowed_origins", [])
         if not _check_origin_allowed(request, allowed_origins):
             raise HTTPException(status_code=403, detail="Origin not allowed")
 
-        # Use widget's rate limit (from config) or default
         rate_limit = config.get("rate_limit_config", RATE_LIMIT_CONFIG)
-
-        # Rate limit by IP + widget_key
         client_ip = get_client_ip(request)
         rate_key = f"config:{client_ip}:{widget_key}"
         if not _check_rate_limit(rate_key, rate_limit):
@@ -235,14 +205,8 @@ async def widget_chat(
     request: Request,
     session: Session = Depends(get_db),
 ) -> JSONResponse:
-    """
-    Send a chat message to a widget's associated workflow.
-    No authentication required - uses widget_key for identification.
-    Rate limited to prevent abuse.
-    """
     try:
         LOGGER.debug(f"Widget chat endpoint hit for {widget_key}")
-        # First get widget to read config
         widget = get_widget_by_key(session, widget_key)
         if not widget:
             raise WidgetNotFound(widget_key=widget_key)
@@ -250,15 +214,11 @@ async def widget_chat(
         config = widget.config or {}
         LOGGER.debug(f"Widget config from DB: {config}")
 
-        # Check origin is allowed
         allowed_origins = config.get("allowed_origins", [])
         if not _check_origin_allowed(request, allowed_origins):
             raise HTTPException(status_code=403, detail="Origin not allowed")
 
-        # Use widget's rate limit (from config) or default
         rate_limit = config.get("rate_limit_chat", RATE_LIMIT_CHAT)
-
-        # Rate limit by IP + widget_key (stricter for chat since it costs money)
         client_ip = get_client_ip(request)
         rate_key = f"chat:{client_ip}:{widget_key}"
         if not _check_rate_limit(rate_key, rate_limit):
@@ -296,11 +256,6 @@ async def widget_chat(
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
-# ============================================
-# ADMIN ENDPOINTS (for dashboard - requires auth)
-# ============================================
-
-
 @router.get("/org/{organization_id}/widgets", response_model=list[WidgetSchema])
 def list_widgets(
     organization_id: UUID,
@@ -309,7 +264,6 @@ def list_widgets(
     ],
     session: Session = Depends(get_db),
 ) -> list[WidgetSchema]:
-    """List all widgets for an organization."""
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
     try:
@@ -325,10 +279,8 @@ async def get_widget(
     user: Annotated[SupabaseUser, Depends(get_user_from_supabase_token)],
     session: Session = Depends(get_db),
 ) -> WidgetSchema:
-    """Get a widget by ID. Requires auth and access to the widget's organization."""
     try:
         widget = get_widget_service(session, widget_id)
-        # Verify user has access to the widget's organization
         access = await get_user_access_to_organization(user=user, organization_id=widget.organization_id)
         if access.role not in UserRights.READER.value:
             raise HTTPException(status_code=403, detail="You don't have access to this widget")
@@ -348,11 +300,9 @@ async def get_widget_by_project(
     user: Annotated[SupabaseUser, Depends(get_user_from_supabase_token)],
     session: Session = Depends(get_db),
 ) -> WidgetSchema | None:
-    """Get the widget for a specific project (if exists). Requires auth."""
     try:
         widget = get_widget_by_project_service(session, project_id)
         if widget:
-            # Verify user has access to the widget's organization
             access = await get_user_access_to_organization(user=user, organization_id=widget.organization_id)
             if access.role not in UserRights.READER.value:
                 raise HTTPException(status_code=403, detail="You don't have access to this widget")
@@ -373,7 +323,6 @@ def create_widget(
     ],
     session: Session = Depends(get_db),
 ) -> WidgetSchema:
-    """Create a new widget for a project."""
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
     try:
@@ -392,9 +341,7 @@ async def update_widget(
     user: Annotated[SupabaseUser, Depends(get_user_from_supabase_token)],
     session: Session = Depends(get_db),
 ) -> WidgetSchema:
-    """Update a widget's configuration. Requires auth and WRITER access."""
     try:
-        # First get widget to check organization access
         widget = get_widget_service(session, widget_id)
         access = await get_user_access_to_organization(user=user, organization_id=widget.organization_id)
         if access.role not in UserRights.WRITER.value:
@@ -415,9 +362,7 @@ async def regenerate_widget_key(
     user: Annotated[SupabaseUser, Depends(get_user_from_supabase_token)],
     session: Session = Depends(get_db),
 ) -> WidgetSchema:
-    """Regenerate a widget's public key. Requires auth and ADMIN access. Invalidates existing embeds."""
     try:
-        # First get widget to check organization access
         widget = get_widget_service(session, widget_id)
         access = await get_user_access_to_organization(user=user, organization_id=widget.organization_id)
         if access.role not in UserRights.ADMIN.value:
@@ -438,9 +383,7 @@ async def delete_widget(
     user: Annotated[SupabaseUser, Depends(get_user_from_supabase_token)],
     session: Session = Depends(get_db),
 ) -> dict:
-    """Delete a widget. Requires auth and ADMIN access."""
     try:
-        # First get widget to check organization access
         widget = get_widget_service(session, widget_id)
         access = await get_user_access_to_organization(user=user, organization_id=widget.organization_id)
         if access.role not in UserRights.ADMIN.value:

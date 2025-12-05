@@ -5,8 +5,6 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 class WidgetTheme(BaseModel):
-    """Theme configuration for the widget."""
-
     primary_color: str = Field(default="#6366F1", pattern=r"^#[0-9A-Fa-f]{6}$")
     secondary_color: str = Field(default="#4F46E5", pattern=r"^#[0-9A-Fa-f]{6}$")
     background_color: str = Field(default="#FFFFFF", pattern=r"^#[0-9A-Fa-f]{6}$")
@@ -17,30 +15,24 @@ class WidgetTheme(BaseModel):
 
 
 class WidgetConfig(BaseModel):
-    """Full configuration for a widget."""
-
     theme: WidgetTheme = Field(default_factory=WidgetTheme)
-    header_message: Optional[str] = None  # Fixed header message (e.g., terms & conditions)
+    header_message: Optional[str] = None
     first_messages: list[str] = Field(default_factory=list, max_length=20)
     suggestions: list[str] = Field(default_factory=list, max_length=20)
     placeholder_text: str = "Type a message..."
     powered_by_visible: bool = True
-    rate_limit_config: int = 10  # requests per minute for /config endpoint
-    rate_limit_chat: int = 5  # requests per minute for /chat endpoint
-    allowed_origins: list[str] = Field(default_factory=list, max_length=50)  # Empty = allow all
+    rate_limit_config: int = 10
+    rate_limit_chat: int = 5
+    allowed_origins: list[str] = Field(default_factory=list, max_length=50)
 
 
 class WidgetCreateSchema(BaseModel):
-    """Schema for creating a new widget."""
-
     name: str
     project_id: UUID
     config: Optional[WidgetConfig] = Field(default_factory=WidgetConfig)
 
 
 class WidgetUpdateSchema(BaseModel):
-    """Schema for updating a widget."""
-
     model_config = ConfigDict(extra="ignore")
 
     name: Optional[str] = None
@@ -49,8 +41,6 @@ class WidgetUpdateSchema(BaseModel):
 
 
 class WidgetSchema(BaseModel):
-    """Full widget schema for responses."""
-
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
@@ -65,8 +55,6 @@ class WidgetSchema(BaseModel):
 
 
 class WidgetPublicConfigSchema(BaseModel):
-    """Public config returned to widget iframe (no sensitive data)."""
-
     widget_key: str
     name: str
     theme: WidgetTheme
@@ -78,16 +66,12 @@ class WidgetPublicConfigSchema(BaseModel):
 
 
 class WidgetChatRequest(BaseModel):
-    """Request body for widget chat endpoint."""
-
     message: str = Field(max_length=10000)
     history: list[dict] = Field(default_factory=list)
     conversation_id: Optional[str] = None
 
 
 class WidgetChatResponse(BaseModel):
-    """Response body for widget chat endpoint."""
-
     response: str
     conversation_id: str
     trace_id: Optional[str] = None

@@ -27,32 +27,12 @@ from ada_backend.schemas.widget_schema import (
     WidgetChatResponse,
 )
 from ada_backend.services.agent_runner_service import run_env_agent
-from ada_backend.services.errors import ProjectNotFound
+from ada_backend.services.errors import ProjectNotFound, WidgetNotFound, WidgetDisabled
 
 LOGGER = logging.getLogger(__name__)
 
 
-class WidgetNotFound(Exception):
-    """Raised when a widget is not found."""
-
-    def __init__(self, widget_id: Optional[UUID] = None, widget_key: Optional[str] = None):
-        if widget_id:
-            super().__init__(f"Widget with id {widget_id} not found")
-        elif widget_key:
-            super().__init__(f"Widget with key {widget_key} not found")
-        else:
-            super().__init__("Widget not found")
-
-
-class WidgetDisabled(Exception):
-    """Raised when trying to use a disabled widget."""
-
-    def __init__(self, widget_key: str):
-        super().__init__(f"Widget {widget_key} is disabled")
-
-
 def _widget_to_schema(widget: db.Widget) -> WidgetSchema:
-    """Convert a Widget model to a WidgetSchema."""
     config_dict = widget.config or {}
     theme_dict = config_dict.get("theme", {})
 
@@ -80,7 +60,6 @@ def _widget_to_schema(widget: db.Widget) -> WidgetSchema:
 
 
 def _widget_to_public_config(widget: db.Widget) -> WidgetPublicConfigSchema:
-    """Convert a Widget model to a public config schema (for iframe)."""
     config_dict = widget.config or {}
     theme_dict = config_dict.get("theme", {})
 
@@ -96,9 +75,7 @@ def _widget_to_public_config(widget: db.Widget) -> WidgetPublicConfigSchema:
     )
 
 
-# --- Public endpoints (for widget iframe) ---
 def get_widget_public_config_service(session: Session, widget_key: str) -> WidgetPublicConfigSchema:
-    """Get public widget configuration by widget_key (for iframe)."""
     widget = get_widget_by_key(session, widget_key)
     if not widget:
         raise WidgetNotFound(widget_key=widget_key)
@@ -114,10 +91,6 @@ async def widget_chat_service(
     history: list[dict],
     conversation_id: Optional[str] = None,
 ) -> WidgetChatResponse:
-    """
-    Handle chat message for a widget.
-    Runs the associated project's workflow with the message.
-    """
     widget = get_widget_by_key(session, widget_key)
     if not widget:
         raise WidgetNotFound(widget_key=widget_key)
@@ -156,15 +129,12 @@ async def widget_chat_service(
     )
 
 
-# --- Admin endpoints (for dashboard) ---
 def list_widgets_service(session: Session, organization_id: UUID) -> list[WidgetSchema]:
-    """List all widgets for an organization."""
     widgets = get_widgets_by_organization(session, organization_id)
     return [_widget_to_schema(w) for w in widgets]
 
 
 def get_widget_service(session: Session, widget_id: UUID) -> WidgetSchema:
-    """Get a widget by ID."""
     widget = get_widget_by_id(session, widget_id)
     if not widget:
         raise WidgetNotFound(widget_id=widget_id)
@@ -172,11 +142,9 @@ def get_widget_service(session: Session, widget_id: UUID) -> WidgetSchema:
 
 
 def get_widget_by_project_service(session: Session, project_id: UUID) -> Optional[WidgetSchema]:
-    """Get the widget for a specific project (if exists)."""
     widgets = get_widgets_by_project(session, project_id)
     if not widgets:
         return None
-    # Return the first widget (typically there's only one per project)
     return _widget_to_schema(widgets[0])
 
 
@@ -185,15 +153,12 @@ def create_widget_service(
     organization_id: UUID,
     data: WidgetCreateSchema,
 ) -> WidgetSchema:
-    """Create a new widget for a project."""
-    # Verify project exists and belongs to organization
     project = get_project(session, project_id=data.project_id)
     if not project:
         raise ProjectNotFound(data.project_id)
     if project.organization_id != organization_id:
         raise ProjectNotFound(data.project_id)
 
-    # Convert WidgetConfig to dict for storage
     config_dict = {}
     if data.config:
         config_dict = {
@@ -223,12 +188,10 @@ def update_widget_service(
     widget_id: UUID,
     data: WidgetUpdateSchema,
 ) -> WidgetSchema:
-    """Update a widget."""
     widget = get_widget_by_id(session, widget_id)
     if not widget:
         raise WidgetNotFound(widget_id=widget_id)
 
-    # Convert WidgetConfig to dict if provided
     config_dict = None
     if data.config:
         config_dict = {
@@ -254,7 +217,6 @@ def update_widget_service(
 
 
 def regenerate_widget_key_service(session: Session, widget_id: UUID) -> WidgetSchema:
-    """Regenerate a widget's public key."""
     widget = repo_regenerate_widget_key(session, widget_id)
     if not widget:
         raise WidgetNotFound(widget_id=widget_id)
@@ -262,7 +224,6 @@ def regenerate_widget_key_service(session: Session, widget_id: UUID) -> WidgetSc
 
 
 def delete_widget_service(session: Session, widget_id: UUID) -> bool:
-    """Delete a widget."""
     success = repo_delete_widget(session, widget_id)
     if not success:
         raise WidgetNotFound(widget_id=widget_id)

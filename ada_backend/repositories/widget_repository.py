@@ -11,23 +11,18 @@ LOGGER = logging.getLogger(__name__)
 
 
 def generate_widget_key() -> str:
-    """Generate a unique widget key."""
     return secrets.token_urlsafe(32)
 
 
-# --- READ operations ---
 def get_widget_by_id(session: Session, widget_id: UUID) -> Optional[db.Widget]:
-    """Get a widget by its ID."""
     return session.query(db.Widget).filter(db.Widget.id == widget_id).first()
 
 
 def get_widget_by_key(session: Session, widget_key: str) -> Optional[db.Widget]:
-    """Get a widget by its public widget_key."""
     return session.query(db.Widget).filter(db.Widget.widget_key == widget_key).first()
 
 
 def get_widgets_by_organization(session: Session, organization_id: UUID) -> list[db.Widget]:
-    """Get all widgets for an organization."""
     return (
         session.query(db.Widget)
         .filter(db.Widget.organization_id == organization_id)
@@ -37,13 +32,11 @@ def get_widgets_by_organization(session: Session, organization_id: UUID) -> list
 
 
 def get_widgets_by_project(session: Session, project_id: UUID) -> list[db.Widget]:
-    """Get all widgets for a specific project."""
     return (
         session.query(db.Widget).filter(db.Widget.project_id == project_id).order_by(db.Widget.created_at.desc()).all()
     )
 
 
-# --- CREATE operations ---
 def create_widget(
     session: Session,
     project_id: UUID,
@@ -51,7 +44,6 @@ def create_widget(
     name: str,
     config: Optional[dict] = None,
 ) -> db.Widget:
-    """Create a new widget."""
     widget = db.Widget(
         widget_key=generate_widget_key(),
         project_id=project_id,
@@ -66,7 +58,6 @@ def create_widget(
     return widget
 
 
-# --- UPDATE operations ---
 def update_widget(
     session: Session,
     widget_id: UUID,
@@ -74,7 +65,6 @@ def update_widget(
     is_enabled: Optional[bool] = None,
     config: Optional[dict] = None,
 ) -> Optional[db.Widget]:
-    """Update a widget's fields."""
     widget = get_widget_by_id(session, widget_id)
     if not widget:
         return None
@@ -92,7 +82,6 @@ def update_widget(
 
 
 def regenerate_widget_key(session: Session, widget_id: UUID) -> Optional[db.Widget]:
-    """Regenerate a widget's public key (invalidates existing embeds)."""
     widget = get_widget_by_id(session, widget_id)
     if not widget:
         return None
@@ -103,9 +92,7 @@ def regenerate_widget_key(session: Session, widget_id: UUID) -> Optional[db.Widg
     return widget
 
 
-# --- DELETE operations ---
 def delete_widget(session: Session, widget_id: UUID) -> bool:
-    """Delete a widget by ID."""
     widget = get_widget_by_id(session, widget_id)
     if not widget:
         return False
