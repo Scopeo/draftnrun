@@ -14,9 +14,7 @@ class KnowledgeDocumentMetadata(BaseModel):
     document_id: str
     document_title: Optional[str] = None
     url: Optional[str] = None
-    metadata: Dict[str, Any] = Field(default_factory=dict)
     last_edited_ts: Optional[str] = None
-    folder_name: Optional[str] = None
 
 
 class KnowledgeChunk(BaseModel):
@@ -30,15 +28,11 @@ class KnowledgeChunk(BaseModel):
     content: str
     last_edited_ts: str
     document_id: str
-
-    class Config:
-        extra = "allow"
-
-
-class KnowledgeChunkUpdate(KnowledgeChunk):
     document_title: Optional[str] = None
     url: Optional[str] = None
-    metadata: Optional[Dict[str, Any]] = Field(default_factory=dict)
+
+    class Config:
+        extra = "ignore"
 
 
 class KnowledgeDocumentWithChunks(BaseModel):

@@ -1,8 +1,6 @@
-import datetime
 import logging
 from typing import Any, Dict, List
 from uuid import UUID
-import json
 
 import pandas as pd
 from pydantic import ValidationError
@@ -18,7 +16,6 @@ from ada_backend.repositories.knowledge_repository import (
 from ada_backend.repositories.source_repository import get_data_source_by_org_id
 from ada_backend.schemas.knowledge_schema import (
     KnowledgeChunk,
-    KnowledgeChunkUpdate,
     KnowledgeDocumentWithChunks,
     KnowledgeDocumentsListResponse,
     KnowledgeDocumentMetadata,
@@ -27,6 +24,7 @@ from ada_backend.schemas.knowledge_schema import (
 from ada_backend.services.ingestion_database_service import (
     get_sql_local_service_for_ingestion,
 )
+from engine.storage_service.db_utils import CHUNK_ID_COLUMN
 from ada_backend.services.knowledge.errors import (
     KnowledgeServiceDocumentNotFoundError,
     KnowledgeServiceInvalidEmbeddingModelReferenceError,
@@ -40,7 +38,6 @@ from ada_backend.services.knowledge.errors import (
     KnowledgeSourceNotFoundError,
     KnowledgeServiceDBSourceConfigError,
     KnowledgeServiceDBChunkDeletionError,
-    KnowledgeServicePageOutOfRangeError,
 )
 from engine.llm_services.llm_service import EmbeddingService
 from engine.qdrant_service import QdrantService, QdrantCollectionSchema
@@ -48,15 +45,6 @@ from engine.trace.trace_context import get_trace_manager
 from ada_backend.services.entity_factory import get_llm_provider_and_model
 
 LOGGER = logging.getLogger(__name__)
-
-
-def _deserialize_json_field(value: Any) -> Any:
-    if isinstance(value, str):
-        try:
-            return json.loads(value)
-        except ValueError:
-            return value
-    return value
 
 
 def _get_source_for_organization(
@@ -217,33 +205,27 @@ def get_document_with_chunks_service(
     chunks: List[KnowledgeChunk] = []
     for row in rows:
         row_dict = {column.name: getattr(row, column.name) for column in table.columns}
-        row_dict["metadata"] = _deserialize_json_field(row_dict.get("metadata"))
-        row_dict["bounding_boxes"] = _deserialize_json_field(row_dict.get("bounding_boxes"))
-        if row_dict["metadata"] is None:
-            row_dict["metadata"] = {}
         if "document_id" not in row_dict:
             row_dict["document_id"] = document_id
         chunks.append(KnowledgeChunk(**row_dict))
 
     first_chunk = chunks[0]
-    metadata = first_chunk.metadata or {}
     document_metadata = KnowledgeDocumentMetadata(
         document_id=first_chunk.document_id,
         document_title=getattr(first_chunk, "document_title", None),
         url=getattr(first_chunk, "url", None),
-        metadata=metadata,
         last_edited_ts=first_chunk.last_edited_ts,
-        folder_name=metadata.get("folder_name") if isinstance(metadata, dict) else None,
     )
 
     return KnowledgeDocumentWithChunks(document=document_metadata, chunks=chunks, total_chunks=len(chunks))
 
 
-def _updated_chunk_to_dict(chunk: KnowledgeChunkUpdate) -> dict:
+def _updated_chunk_to_dict(chunk: KnowledgeChunk) -> dict:
     """Convert a KnowledgeChunkUpdate to a dictionary format suitable for Qdrant / SQL."""
     chunk_dict = chunk.model_dump()
     if "document_id" in chunk_dict:
         chunk_dict["file_id"] = chunk_dict.pop("document_id")
+
     return chunk_dict
 
 
@@ -251,7 +233,7 @@ async def update_document_chunks_service(
     session: Session,
     organization_id: UUID,
     source_id: UUID,
-    chunks: List[KnowledgeChunkUpdate],
+    chunks: List[KnowledgeChunk],
 ) -> List[KnowledgeChunk]:
     source, qdrant_service, sql_local_service = await _get_source_and_services(session, organization_id, source_id)
 
@@ -284,16 +266,12 @@ async def update_document_chunks_service(
 
     all_rows = sql_local_service.get_rows_by_ids(
         table_name=source.database_table_name,
-        schema_name=source.database_schema,
         chunk_ids=[chunk.chunk_id for chunk in chunks],
+        schema_name=source.database_schema,
     )
 
     updated_chunks: List[KnowledgeChunk] = []
     for row in all_rows:
-        row["metadata"] = _deserialize_json_field(row.get("metadata"))
-        row["bounding_boxes"] = _deserialize_json_field(row.get("bounding_boxes"))
-        if row.get("metadata") is None:
-            row["metadata"] = {}
         if "document_id" not in row:
             row["document_id"] = row.get("file_id")
         updated_chunks.append(KnowledgeChunk(**row))

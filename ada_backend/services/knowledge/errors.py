@@ -153,14 +153,3 @@ class KnowledgeServiceDBChunkDeletionError(KnowledgeServiceDBError):
             f"from Table {self.table_name} "
             f"in Schema {self.schema_name}: {self.reason}"
         )
-
-
-@dataclass
-class KnowledgeServicePageOutOfRangeError(KnowledgeServiceError):
-    page: int
-    total_count: int
-
-    code = "page_out_of_range"
-
-    def __post_init__(self):
-        super().__init__(f"Page {self.page} is out of range. Total items: {self.total_count}")

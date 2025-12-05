@@ -12,7 +12,7 @@ from ada_backend.routers.auth_router import (
 )
 from ada_backend.schemas.auth_schema import SupabaseUser
 from ada_backend.schemas.knowledge_schema import (
-    KnowledgeChunkUpdate,
+    KnowledgeChunk,
     KnowledgeDocumentWithChunks,
     KnowledgeDocumentsListResponse,
 )
@@ -29,7 +29,6 @@ from ada_backend.services.knowledge.errors import (
     KnowledgeSourceNotFoundError,
     KnowledgeServiceDocumentNotFoundError,
     KnowledgeServiceDBSourceConfigError,
-    KnowledgeServicePageOutOfRangeError,
 )
 
 LOGGER = logging.getLogger(__name__)
@@ -96,8 +95,6 @@ def get_document(
         raise HTTPException(status_code=400, detail=str(e)) from e
     except KnowledgeServiceQdrantConfigurationError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
-    except KnowledgeServicePageOutOfRangeError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
         LOGGER.error(
             (
@@ -111,22 +108,22 @@ def get_document(
 
 @router.put(
     "/organizations/{organization_id}/sources/{source_id}/documents/{document_id}",
-    response_model=KnowledgeDocumentWithChunks,
+    response_model=List[KnowledgeChunk],
 )
-def update_document(
+async def update_document(
     organization_id: UUID,
     source_id: UUID,
     document_id: str,
-    chunks: List[KnowledgeChunkUpdate],
+    chunks: List[KnowledgeChunk],
     user: Annotated[
         SupabaseUser, Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.WRITER.value))
     ],
     session: Session = Depends(get_db),
-) -> KnowledgeDocumentWithChunks:
+) -> List[KnowledgeChunk]:
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
     try:
-        return update_document_chunks_service(session, organization_id, source_id, chunks)
+        return await update_document_chunks_service(session, organization_id, source_id, chunks)
     except KnowledgeSourceNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
     except KnowledgeServiceDocumentNotFoundError as e:
