@@ -51,7 +51,7 @@ def get_all_organization_limits_endpoint(
 async def create_organization_limit_endpoint(
     organization_id: UUID,
     organization_limit_create: OrganizationLimit,
-    _: Annotated[None, Depends(super_admin_or_limit_api_key_dependency)],
+    verified_limit_api_key_or_super_admin: Annotated[None, Depends(super_admin_or_limit_api_key_dependency)],
     session: Session = Depends(get_db),
 ) -> OrganizationLimitResponse:
     try:
