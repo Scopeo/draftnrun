@@ -52,6 +52,8 @@ class GraphUpdateSchema(BaseModel):
 
 class GraphUpdateResponse(BaseModel):
     graph_id: UUID
+    last_edited_time: Optional[datetime] = None
+    last_edited_user_id: Optional[UUID] = None
 
 
 class ComponentNodeDTO(BaseModel):
