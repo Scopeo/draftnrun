@@ -1,8 +1,10 @@
+import datetime
 import logging
 from typing import Any, Dict, List
 from uuid import UUID
 import json
 
+import pandas as pd
 from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
@@ -16,12 +18,16 @@ from ada_backend.repositories.knowledge_repository import (
 from ada_backend.repositories.source_repository import get_data_source_by_org_id
 from ada_backend.schemas.knowledge_schema import (
     KnowledgeChunk,
+    KnowledgeChunkUpdate,
     KnowledgeDocumentWithChunks,
     KnowledgeDocumentsListResponse,
     KnowledgeDocumentMetadata,
     KnowledgeDocumentOverview,
 )
-from ada_backend.services.ingestion_database_service import get_sql_local_service_for_ingestion
+from ada_backend.services.ingestion_database_service import (
+    get_sql_local_service_for_ingestion,
+    update_chunk_info_in_ingestion_db,
+)
 from ada_backend.services.knowledge.errors import (
     KnowledgeServiceDocumentNotFoundError,
     KnowledgeServiceInvalidEmbeddingModelReferenceError,
@@ -29,6 +35,7 @@ from ada_backend.services.knowledge.errors import (
     KnowledgeServiceQdrantCollectionCheckError,
     KnowledgeServiceQdrantCollectionNotFoundError,
     KnowledgeServiceQdrantMissingFieldsError,
+    KnowledgeServiceQdrantOperationError,
     KnowledgeServiceQdrantServiceCreationError,
     KnowledgeServiceQdrantChunkDeletionError,
     KnowledgeSourceNotFoundError,
@@ -185,24 +192,18 @@ def get_document_with_chunks_service(
     organization_id: UUID,
     source_id: UUID,
     document_id: str,
-    page: int = 1,
-    page_size: int = 50,
 ) -> KnowledgeDocumentWithChunks:
     source = _get_source_for_organization(session, organization_id, source_id)
     sql_local_service = get_sql_local_service_for_ingestion()
 
-    offset = (page - 1) * page_size
-
-    rows, table, total_count = get_chunk_rows_for_document(
+    rows, table = get_chunk_rows_for_document(
         sql_local_service,
         source.database_schema,
         source.database_table_name,
         document_id,
-        limit=page_size,
-        offset=offset,
     )
 
-    if total_count == 0:
+    if len(rows) == 0:
         LOGGER.error(
             (
                 f"Document with id='{document_id}' not found for "
@@ -213,9 +214,6 @@ def get_document_with_chunks_service(
             document_id=document_id,
             source_id=source_id,
         )
-
-    if not rows:
-        raise KnowledgeServicePageOutOfRangeError(page=page, total_count=total_count)
 
     chunks: List[KnowledgeChunk] = []
     for row in rows:
@@ -239,7 +237,69 @@ def get_document_with_chunks_service(
         folder_name=metadata.get("folder_name") if isinstance(metadata, dict) else None,
     )
 
-    return KnowledgeDocumentWithChunks(document=document_metadata, chunks=chunks, total_chunks=total_count)
+    return KnowledgeDocumentWithChunks(document=document_metadata, chunks=chunks, total_chunks=len(chunks))
+
+
+def _updated_chunk_to_dict(chunk: KnowledgeChunkUpdate) -> dict:
+    """Convert a KnowledgeChunkUpdate to a dictionary format suitable for Qdrant / SQL."""
+    chunk_dict = chunk.model_dump()
+    if "document_id" in chunk_dict:
+        chunk_dict["file_id"] = chunk_dict.pop("document_id")
+    return chunk_dict
+
+
+async def update_document_chunks_service(
+    session: Session,
+    organization_id: UUID,
+    source_id: UUID,
+    chunks: List[KnowledgeChunkUpdate],
+) -> List[KnowledgeChunk]:
+    source, qdrant_service, sql_local_service = await _get_source_and_services(session, organization_id, source_id)
+
+    if not chunks:
+        return []
+
+    chunks_dict = [_updated_chunk_to_dict(chunk) for chunk in chunks]
+    sql_local_service.upsert_rows(
+        table_name=source.database_table_name,
+        schema_name=source.database_schema,
+        rows=chunks_dict,
+    )
+
+    try:
+        chunks_df = pd.DataFrame(chunks_dict)
+
+        await qdrant_service.sync_df_with_collection_async(
+            df=chunks_df,
+            collection_name=source.qdrant_collection_name,
+        )
+        LOGGER.info(f"Upserted {len(chunks)} chunks to Qdrant collection {source.qdrant_collection_name}")
+    except Exception as e:
+        LOGGER.error(
+            f"Failed to upsert chunks to Qdrant collection {source.qdrant_collection_name}: {str(e)}",
+            exc_info=True,
+        )
+        raise KnowledgeServiceQdrantOperationError(
+            f"Failed to upsert chunks to Qdrant collection {source.qdrant_collection_name}: {str(e)}"
+        ) from e
+
+    all_rows = sql_local_service.get_rows_by_ids(
+        table_name=source.database_table_name,
+        schema_name=source.database_schema,
+        chunk_ids=[chunk.chunk_id for chunk in chunks],
+    )
+
+    updated_chunks: List[KnowledgeChunk] = []
+    for row in all_rows:
+        row["metadata"] = _deserialize_json_field(row.get("metadata"))
+        row["bounding_boxes"] = _deserialize_json_field(row.get("bounding_boxes"))
+        if row.get("metadata") is None:
+            row["metadata"] = {}
+        if "document_id" not in row:
+            row["document_id"] = row.get("file_id")
+        updated_chunks.append(KnowledgeChunk(**row))
+
+    return updated_chunks
 
 
 def delete_document_service(

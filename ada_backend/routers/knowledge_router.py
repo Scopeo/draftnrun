@@ -1,4 +1,4 @@
-from typing import Annotated
+from typing import Annotated, List
 from uuid import UUID
 import logging
 
@@ -12,6 +12,7 @@ from ada_backend.routers.auth_router import (
 )
 from ada_backend.schemas.auth_schema import SupabaseUser
 from ada_backend.schemas.knowledge_schema import (
+    KnowledgeChunkUpdate,
     KnowledgeDocumentWithChunks,
     KnowledgeDocumentsListResponse,
 )
@@ -20,6 +21,7 @@ from ada_backend.services.knowledge_service import (
     delete_chunk_service,
     get_document_with_chunks_service,
     list_documents_service,
+    update_document_chunks_service,
 )
 from ada_backend.services.knowledge.errors import (
     KnowledgeServiceQdrantConfigurationError,
@@ -75,15 +77,16 @@ def get_document(
     user: Annotated[
         SupabaseUser, Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.READER.value))
     ],
-    page: int = Query(1, ge=1, description="Page number"),
-    page_size: int = Query(50, ge=1, le=100, description="Items per page"),
     session: Session = Depends(get_db),
 ) -> KnowledgeDocumentWithChunks:
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
     try:
         return get_document_with_chunks_service(
-            session, organization_id, source_id, document_id, page=page, page_size=page_size
+            session,
+            organization_id,
+            source_id,
+            document_id,
         )
     except KnowledgeSourceNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
@@ -104,6 +107,32 @@ def get_document(
             exc_info=True,
         )
         raise HTTPException(status_code=500, detail="Internal server error") from e
+
+
+@router.put(
+    "/organizations/{organization_id}/sources/{source_id}/documents/{document_id}",
+    response_model=KnowledgeDocumentWithChunks,
+)
+def update_document(
+    organization_id: UUID,
+    source_id: UUID,
+    document_id: str,
+    chunks: List[KnowledgeChunkUpdate],
+    user: Annotated[
+        SupabaseUser, Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.WRITER.value))
+    ],
+    session: Session = Depends(get_db),
+) -> KnowledgeDocumentWithChunks:
+    if not user.id:
+        raise HTTPException(status_code=400, detail="User ID not found")
+    try:
+        return update_document_chunks_service(session, organization_id, source_id, chunks)
+    except KnowledgeSourceNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    except KnowledgeServiceDocumentNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    except KnowledgeServiceDBSourceConfigError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
 
 @router.delete("/organizations/{organization_id}/sources/{source_id}/documents/{document_id}")
