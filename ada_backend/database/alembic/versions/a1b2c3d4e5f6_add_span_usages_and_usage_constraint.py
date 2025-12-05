@@ -1,7 +1,7 @@
 """add span_usages table and usage constraint
 
 Revision ID: a1b2c3d4e5f6
-Revises: 6deaee79f30a
+Revises: 7f2bae4dea37
 Create Date: 2025-12-01 12:00:00.000000
 
 """
@@ -14,7 +14,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision: str = "a1b2c3d4e5f6"
-down_revision: Union[str, None] = "6deaee79f30a"
+down_revision: Union[str, None] = "7f2bae4dea37"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
