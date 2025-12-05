@@ -26,12 +26,19 @@ class KnowledgeChunk(BaseModel):
     """
 
     chunk_id: str
-    document_id: str
+    order: int
     content: str
     last_edited_ts: str
+    document_id: str
 
     class Config:
         extra = "allow"
+
+
+class KnowledgeChunkUpdate(KnowledgeChunk):
+    document_title: Optional[str] = None
+    url: Optional[str] = None
+    metadata: Optional[Dict[str, Any]] = Field(default_factory=dict)
 
 
 class KnowledgeDocumentWithChunks(BaseModel):

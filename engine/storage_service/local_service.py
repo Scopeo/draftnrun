@@ -7,6 +7,7 @@ import sqlalchemy
 from sqlalchemy import MetaData, text, create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.sql.type_api import TypeEngine
+from sqlalchemy.dialects.postgresql import insert
 import pandas as pd
 from func_timeout import func_timeout, FunctionTimedOut
 
@@ -518,3 +519,34 @@ class SQLLocalService(DBService):
                 row_dict[column.name] = getattr(result, column.name)
 
             return row_dict
+
+
+def upsert_rows(
+    self,
+    table_name: str,
+    rows: list[dict],
+    schema_name: Optional[str] = None,
+    id_column_name: str = CHUNK_ID_COLUMN,
+) -> None:
+    if not rows:
+        return
+
+    table = self.get_table(table_name, schema_name)
+    if id_column_name not in table.c:
+        raise ValueError(f"Column '{id_column_name}' not found in table '{table_name}'.")
+
+    row_keys: set[str] = set().union(*(r.keys() for r in rows))
+    updatable_cols = [k for k in row_keys if k != id_column_name and k in table.c]
+
+    update_dict = {k: v for k, v in rows[0].items() if k != id_column_name and k in updatable_cols}
+
+    insert_stmt = insert(table).values(rows)
+
+    with self.Session() as session:
+        with session.begin():
+            stmt = insert_stmt.on_conflict_do_update(
+                index_elements=[table.c[id_column_name]],
+                set_=update_dict,
+            )
+            session.execute(stmt)
+        LOGGER.info(f"Successfully upserted {len(rows)} rows in table {table_name}")
