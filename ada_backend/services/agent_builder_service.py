@@ -24,6 +24,10 @@ from ada_backend.repositories.component_repository import (
 )
 from ada_backend.services.registry import FACTORY_REGISTRY
 from ada_backend.services.errors import MissingDataSourceError
+from engine.agent.errors import (
+    KeyTypePromptTemplateError,
+    MissingKeyPromptTemplateError,
+)
 from ada_backend.utils.secret_resolver import replace_secret_placeholders
 from ada_backend.database.seed.utils import COMPONENT_VERSION_UUIDS
 
@@ -161,7 +165,7 @@ def instantiate_component(
             if param_name not in grouped_sub_components:
                 grouped_sub_components[param_name] = []
             grouped_sub_components[param_name].append((sub_component.order, instantiated_sub_component))
-        except MissingDataSourceError:
+        except (MissingDataSourceError, MissingKeyPromptTemplateError, KeyTypePromptTemplateError):
             raise
         except Exception as e:
             raise ValueError(

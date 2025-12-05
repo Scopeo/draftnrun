@@ -6,6 +6,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from engine.agent.inputs_outputs.start import Start
+from engine.agent.errors import KeyTypePromptTemplateError, MissingKeyPromptTemplateError
 from engine.agent.llm_call_agent import LLMCallAgent
 from engine.agent.react_function_calling import ReActAgent
 from engine.agent.types import NodeData, ComponentAttributes, ToolDescription, AgentPayload, ChatMessage
@@ -14,6 +15,13 @@ from tests.agent.test_llm_call_agent import make_capability_resolver
 
 
 # Mock services are available as fixtures from conftest.py
+
+
+class UnstringableValue:
+    """A class that raises an exception when str() is called on it."""
+
+    def __str__(self):
+        raise TypeError("Cannot convert this object to string")
 
 
 @pytest.fixture
@@ -139,7 +147,38 @@ def test_llm_call_missing_template_var(get_span_mock, agent_calls_mock, mock_llm
         ctx={"yes": "LOL"},  # missing_var not provided
     )
 
-    with pytest.raises(ValueError, match="Missing template variable\\(s\\) \\['missing_var'\\]"):
+    with pytest.raises(MissingKeyPromptTemplateError, match="Missing template variable\\(s\\).*missing_var"):
+        asyncio.run(agent.run(input_node_data))
+
+
+@patch("engine.prometheus_metric.agent_calls")
+@patch("engine.prometheus_metric.get_tracing_span")
+def test_llm_call_wrong_type_template_var(get_span_mock, agent_calls_mock, mock_llm_service):  # noqa: F811
+    """Test LLMCallAgent raises error for template var that cannot be cast to string."""
+    get_span_mock.return_value = MagicMock(project_id="test_project")
+    counter_mock = MagicMock()
+    agent_calls_mock.labels.return_value = counter_mock
+
+    tm = MagicMock(spec=TraceManager)
+
+    mock_llm_service._provider = "test_provider"
+    agent = LLMCallAgent(
+        trace_manager=tm,
+        completion_service=mock_llm_service,
+        tool_description=ToolDescription(
+            name="llm_call", description="llm_call", tool_properties={}, required_tool_properties=[]
+        ),
+        component_attributes=ComponentAttributes(component_instance_name="Test LLM"),
+        prompt_template="Say {{bad_var}}",
+        capability_resolver=make_capability_resolver(mock_llm_service),
+    )
+
+    input_node_data = NodeData(
+        data={"messages": [{"role": "user", "content": "hi"}]},
+        ctx={"bad_var": UnstringableValue()},
+    )
+
+    with pytest.raises(KeyTypePromptTemplateError, match="Value for key 'bad_var' cannot be cast to string"):
         asyncio.run(agent.run(input_node_data))
 
 
@@ -192,6 +231,34 @@ def test_react_agent_with_template_vars(get_span_mock, agent_calls_mock, react_a
     # Verify template vars were used in system prompt
     assert result.data["output"] == "Test response"  # From mock_llm_service_with_tool_calls
     react_agent._completion_service.function_call_async.assert_called_once()
+
+
+@patch("engine.prometheus_metric.agent_calls")
+@patch("engine.prometheus_metric.get_tracing_span")
+def test_react_agent_wrong_type_template_var(get_span_mock, agent_calls_mock, mock_llm_service, mock_trace_manager):
+    """Test ReActAgent raises error for template var that cannot be cast to string."""
+    get_span_mock.return_value = MagicMock(project_id="test_project")
+    counter_mock = MagicMock()
+    agent_calls_mock.labels.return_value = counter_mock
+
+    react_agent = ReActAgent(
+        completion_service=mock_llm_service,
+        component_attributes=ComponentAttributes(component_instance_name="Test React"),
+        trace_manager=mock_trace_manager,
+        tool_description=ToolDescription(
+            name="react", description="react", tool_properties={}, required_tool_properties=[]
+        ),
+        initial_prompt="You are {{name}}, say {{bad_var}}",
+        agent_tools=[],
+    )
+
+    input_node_data = NodeData(
+        data={"messages": [{"role": "user", "content": "hi"}]},
+        ctx={"name": "Alice", "bad_var": UnstringableValue()},
+    )
+
+    with pytest.raises(KeyTypePromptTemplateError, match="Value for key 'bad_var' cannot be cast to string"):
+        asyncio.run(react_agent.run(input_node_data))
 
 
 @patch("engine.prometheus_metric.agent_calls")

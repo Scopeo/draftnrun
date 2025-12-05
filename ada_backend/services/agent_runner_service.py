@@ -14,6 +14,10 @@ from ada_backend.services.agent_builder_service import instantiate_component
 from ada_backend.services.errors import ProjectNotFound, EnvironmentNotFound
 from engine.graph_runner.graph_runner import GraphRunner
 from engine.llm_services.utils import LLMKeyLimitExceededError
+from engine.agent.errors import (
+    KeyTypePromptTemplateError,
+    MissingKeyPromptTemplateError,
+)
 from ada_backend.repositories.graph_runner_repository import (
     get_component_nodes,
     get_graph_runner_for_env,
@@ -219,6 +223,8 @@ async def run_agent(
         )
         params = get_tracing_span()
     except LLMKeyLimitExceededError:
+        raise
+    except (MissingKeyPromptTemplateError, KeyTypePromptTemplateError):
         raise
     except Exception as e:
         tb = traceback.format_exc()
