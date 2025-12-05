@@ -167,6 +167,7 @@ class EmbeddingService(LLMService):
                     {
                         SpanAttributes.LLM_TOKEN_COUNT_PROMPT: response.usage.prompt_tokens,
                         SpanAttributes.LLM_TOKEN_COUNT_TOTAL: response.usage.total_tokens,
+                        SpanAttributes.LLM_PROVIDER: self._provider,
                     }
                 )
                 return response.data
@@ -186,6 +187,7 @@ class EmbeddingService(LLMService):
                     {
                         SpanAttributes.LLM_TOKEN_COUNT_PROMPT: response.usage.prompt_tokens,
                         SpanAttributes.LLM_TOKEN_COUNT_TOTAL: response.usage.total_tokens,
+                        SpanAttributes.LLM_PROVIDER: self._provider,
                     }
                 )
                 return response.data
@@ -248,6 +250,7 @@ class CompletionService(LLMService):
                         SpanAttributes.LLM_TOKEN_COUNT_COMPLETION: response.usage.output_tokens,
                         SpanAttributes.LLM_TOKEN_COUNT_PROMPT: response.usage.input_tokens,
                         SpanAttributes.LLM_TOKEN_COUNT_TOTAL: response.usage.total_tokens,
+                        SpanAttributes.LLM_PROVIDER: self._provider,
                     }
                 )
                 return response.output_text
@@ -269,6 +272,7 @@ class CompletionService(LLMService):
                         SpanAttributes.LLM_TOKEN_COUNT_COMPLETION: response.usage.completion_tokens,
                         SpanAttributes.LLM_TOKEN_COUNT_PROMPT: response.usage.prompt_tokens,
                         SpanAttributes.LLM_TOKEN_COUNT_TOTAL: response.usage.total_tokens,
+                        SpanAttributes.LLM_PROVIDER: self._provider,
                     }
                 )
                 return response.choices[0].message.content
@@ -360,6 +364,7 @@ class CompletionService(LLMService):
                         SpanAttributes.LLM_TOKEN_COUNT_COMPLETION: response.usage.output_tokens,
                         SpanAttributes.LLM_TOKEN_COUNT_PROMPT: response.usage.input_tokens,
                         SpanAttributes.LLM_TOKEN_COUNT_TOTAL: response.usage.total_tokens,
+                        SpanAttributes.LLM_PROVIDER: self._provider,
                     }
                 )
                 return response.output_parsed
@@ -382,6 +387,7 @@ class CompletionService(LLMService):
                         SpanAttributes.LLM_TOKEN_COUNT_COMPLETION: response.usage.completion_tokens,
                         SpanAttributes.LLM_TOKEN_COUNT_PROMPT: response.usage.prompt_tokens,
                         SpanAttributes.LLM_TOKEN_COUNT_TOTAL: response.usage.total_tokens,
+                        SpanAttributes.LLM_PROVIDER: self._provider,
                     }
                 )
                 return response.choices[0].message.parsed
@@ -410,6 +416,7 @@ class CompletionService(LLMService):
                         SpanAttributes.LLM_TOKEN_COUNT_COMPLETION: usage_completion_tokens,
                         SpanAttributes.LLM_TOKEN_COUNT_PROMPT: usage_prompt_tokens,
                         SpanAttributes.LLM_TOKEN_COUNT_TOTAL: usage_total_tokens,
+                        SpanAttributes.LLM_PROVIDER: self._provider,
                     }
                 )
                 return answer
@@ -514,6 +521,7 @@ class CompletionService(LLMService):
                         SpanAttributes.LLM_TOKEN_COUNT_COMPLETION: response.usage.output_tokens,
                         SpanAttributes.LLM_TOKEN_COUNT_PROMPT: response.usage.input_tokens,
                         SpanAttributes.LLM_TOKEN_COUNT_TOTAL: response.usage.total_tokens,
+                        SpanAttributes.LLM_PROVIDER: self._provider,
                     }
                 )
                 return response.output_text
@@ -559,6 +567,7 @@ class CompletionService(LLMService):
                         SpanAttributes.LLM_TOKEN_COUNT_COMPLETION: response.usage.completion_tokens,
                         SpanAttributes.LLM_TOKEN_COUNT_PROMPT: response.usage.prompt_tokens,
                         SpanAttributes.LLM_TOKEN_COUNT_TOTAL: response.usage.total_tokens,
+                        SpanAttributes.LLM_PROVIDER: self._provider,
                     }
                 )
                 return processed_content
@@ -584,6 +593,7 @@ class CompletionService(LLMService):
                         SpanAttributes.LLM_TOKEN_COUNT_COMPLETION: usage_completion_tokens,
                         SpanAttributes.LLM_TOKEN_COUNT_PROMPT: usage_prompt_tokens,
                         SpanAttributes.LLM_TOKEN_COUNT_TOTAL: usage_total_tokens,
+                        SpanAttributes.LLM_PROVIDER: self._provider,
                     }
                 )
                 return processed_content
@@ -677,6 +687,7 @@ class CompletionService(LLMService):
                         SpanAttributes.LLM_TOKEN_COUNT_COMPLETION: usage_completion_tokens,
                         SpanAttributes.LLM_TOKEN_COUNT_PROMPT: usage_prompt_tokens,
                         SpanAttributes.LLM_TOKEN_COUNT_TOTAL: usage_total_tokens,
+                        SpanAttributes.LLM_PROVIDER: self._provider,
                     }
                 )
                 return response
@@ -705,6 +716,7 @@ class CompletionService(LLMService):
                             SpanAttributes.LLM_TOKEN_COUNT_COMPLETION: usage_completion_tokens,
                             SpanAttributes.LLM_TOKEN_COUNT_PROMPT: usage_prompt_tokens,
                             SpanAttributes.LLM_TOKEN_COUNT_TOTAL: usage_total_tokens,
+                            SpanAttributes.LLM_PROVIDER: self._provider,
                         }
                     )
                     return response
@@ -730,6 +742,7 @@ class CompletionService(LLMService):
                         SpanAttributes.LLM_TOKEN_COUNT_COMPLETION: response.usage.completion_tokens,
                         SpanAttributes.LLM_TOKEN_COUNT_PROMPT: response.usage.prompt_tokens,
                         SpanAttributes.LLM_TOKEN_COUNT_TOTAL: response.usage.total_tokens,
+                        SpanAttributes.LLM_PROVIDER: self._provider,
                     }
                 )
                 return response
@@ -754,6 +767,7 @@ class CompletionService(LLMService):
                         SpanAttributes.LLM_TOKEN_COUNT_COMPLETION: response.usage.completion_tokens,
                         SpanAttributes.LLM_TOKEN_COUNT_PROMPT: response.usage.prompt_tokens,
                         SpanAttributes.LLM_TOKEN_COUNT_TOTAL: response.usage.total_tokens,
+                        SpanAttributes.LLM_PROVIDER: self._provider,
                     }
                 )
                 return response
@@ -830,6 +844,7 @@ class CompletionService(LLMService):
                 SpanAttributes.LLM_TOKEN_COUNT_COMPLETION: response.usage.completion_tokens,
                 SpanAttributes.LLM_TOKEN_COUNT_PROMPT: response.usage.prompt_tokens,
                 SpanAttributes.LLM_TOKEN_COUNT_TOTAL: response.usage.total_tokens,
+                SpanAttributes.LLM_PROVIDER: self._provider,
             }
         )
         return response
@@ -952,6 +967,7 @@ class WebSearchService(LLMService):
                         SpanAttributes.LLM_TOKEN_COUNT_COMPLETION: response.usage.output_tokens,
                         SpanAttributes.LLM_TOKEN_COUNT_PROMPT: response.usage.input_tokens,
                         SpanAttributes.LLM_TOKEN_COUNT_TOTAL: response.usage.total_tokens,
+                        SpanAttributes.LLM_PROVIDER: self._provider,
                     }
                 )
                 return response.output_text
@@ -1055,6 +1071,7 @@ class VisionService(LLMService):
                             SpanAttributes.LLM_TOKEN_COUNT_COMPLETION: chat_response.usage.completion_tokens,
                             SpanAttributes.LLM_TOKEN_COUNT_PROMPT: chat_response.usage.prompt_tokens,
                             SpanAttributes.LLM_TOKEN_COUNT_TOTAL: chat_response.usage.total_tokens,
+                            SpanAttributes.LLM_PROVIDER: self._provider,
                         }
                     )
                     return chat_response.choices[0].message.parsed
@@ -1069,6 +1086,7 @@ class VisionService(LLMService):
                             SpanAttributes.LLM_TOKEN_COUNT_COMPLETION: chat_response.usage.completion_tokens,
                             SpanAttributes.LLM_TOKEN_COUNT_PROMPT: chat_response.usage.prompt_tokens,
                             SpanAttributes.LLM_TOKEN_COUNT_TOTAL: chat_response.usage.total_tokens,
+                            SpanAttributes.LLM_PROVIDER: self._provider,
                         }
                     )
                     return convert_json_str_to_pydantic(
@@ -1086,6 +1104,7 @@ class VisionService(LLMService):
                     SpanAttributes.LLM_TOKEN_COUNT_COMPLETION: chat_response.usage.completion_tokens,
                     SpanAttributes.LLM_TOKEN_COUNT_PROMPT: chat_response.usage.prompt_tokens,
                     SpanAttributes.LLM_TOKEN_COUNT_TOTAL: chat_response.usage.total_tokens,
+                    SpanAttributes.LLM_PROVIDER: self._provider,
                 }
             )
             return chat_response.choices[0].message.content

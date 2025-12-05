@@ -3,6 +3,7 @@ from collections import defaultdict
 from datetime import datetime, timezone
 import logging
 from typing import Any, cast
+from uuid import UUID
 import json
 
 from opentelemetry.sdk.trace import ReadableSpan, Event, BoundedAttributes
@@ -14,6 +15,7 @@ from sqlalchemy.orm import sessionmaker
 
 from engine.trace.nested_utils import split_nested_keys
 from ada_backend.database.trace_models import Span, SpanMessage, OrganizationUsage
+from ada_backend.database.models import LLMCost, Cost, ComponentCost, ComponentInstance, Usage, SpanUsage
 from ada_backend.database.setup_db import get_db_url
 
 LOGGER = logging.getLogger(__name__)
@@ -43,6 +45,8 @@ def event_to_dict(event: Event) -> dict:
 def convert_to_list(obj: Any) -> list[str] | None:
     if isinstance(obj, list):
         return obj
+    if isinstance(obj, tuple):
+        return list(obj)
     if obj is None:
         return None
     if isinstance(obj, str):
@@ -50,6 +54,8 @@ def convert_to_list(obj: Any) -> list[str] | None:
             result = ast.literal_eval(obj)
             if isinstance(result, list):
                 return result
+            if isinstance(result, tuple):
+                return list(result)
         except (ValueError, SyntaxError):
             pass
     return None
@@ -123,6 +129,106 @@ class SQLSpanExporter(SpanExporter):
                 if org_id:
                     return org_id, org_llm_providers
         return None, None
+
+    def _calculate_span_credits(
+        self, span: ReadableSpan, model_id: UUID | None, component_instance_id: UUID | None
+    ) -> tuple[float | None, float | None, float | None, float | None, bool]:
+
+        credits_input_token = None
+        credits_output_token = None
+        credits_per_call = None
+        credits_per_second = None
+        has_billable_usage = False
+
+        if model_id:
+            org_id = span.attributes.get("organization_id")
+            org_llm_providers = convert_to_list(span.attributes.get("organization_llm_providers"))
+
+            if not org_id:
+                org_id, org_llm_providers = self.get_org_info_from_ancestors(json.loads(span.to_json()).parent_id)
+
+            provider = span.attributes.get(SpanAttributes.LLM_PROVIDER)
+            if provider is None and provider not in org_llm_providers:
+                cost_info = self.session.execute(
+                    select(Cost.credits_per_input_token, Cost.credits_per_output_token)
+                    .join(LLMCost, LLMCost.id == Cost.id)
+                    .where(LLMCost.llm_model_id == model_id)
+                ).first()
+
+                if cost_info and (cost_info.credits_per_input_token or cost_info.credits_per_output_token):
+                    token_prompt = span.attributes.get(SpanAttributes.LLM_TOKEN_COUNT_PROMPT, 0)
+                    token_completion = span.attributes.get(SpanAttributes.LLM_TOKEN_COUNT_COMPLETION, 0)
+
+                    if token_prompt or token_completion:
+                        # Token credits are stored for 1M tokens
+                        credits_input_token = token_prompt * (cost_info.credits_per_input_token or 0) / 1_000_000
+                        credits_output_token = token_completion * (cost_info.credits_per_output_token or 0) / 1_000_000
+                        has_billable_usage = True
+
+        if component_instance_id:
+            cost_info = self.session.execute(
+                select(Cost.credits_per_second, Cost.credits_per_call)
+                .join(ComponentCost, ComponentCost.id == Cost.id)
+                .join(
+                    ComponentInstance,
+                    ComponentInstance.component_version_id == ComponentCost.component_version_id,
+                )
+                .where(ComponentInstance.id == component_instance_id)
+            ).first()
+
+            if cost_info and (cost_info.credits_per_second or cost_info.credits_per_call):
+                duration_seconds = (span.end_time - span.start_time) / 1e9
+                credits_per_second = duration_seconds * (cost_info.credits_per_second or 0)
+                credits_per_call = cost_info.credits_per_call or 0
+                has_billable_usage = True
+
+        return credits_input_token, credits_output_token, credits_per_call, credits_per_second, has_billable_usage
+
+    def _store_span_credits(
+        self,
+        span_id: str,
+        project_id: str | None,
+        credits_input_token: float | None,
+        credits_output_token: float | None,
+        credits_per_call: float | None,
+        credits_per_second: float | None,
+    ) -> None:
+
+        span_usage = SpanUsage(
+            span_id=span_id,
+            credits_input_token=credits_input_token,
+            credits_output_token=credits_output_token,
+            credits_per_call=credits_per_call,
+            credits_per_second=credits_per_second,
+        )
+        self.session.add(span_usage)
+
+        if project_id:
+            total_span_credits = (
+                (credits_input_token or 0)
+                + (credits_output_token or 0)
+                + (credits_per_call or 0)
+                + (credits_per_second or 0)
+            )
+
+            current_date = datetime.now(tz=timezone.utc)
+            year = current_date.year
+            month = current_date.month
+
+            usage_record = self.session.execute(
+                select(Usage).where(Usage.project_id == project_id, Usage.year == year, Usage.month == month)
+            ).scalar_one_or_none()
+
+            if usage_record:
+                usage_record.credits_used += total_span_credits
+            else:
+                new_usage = Usage(
+                    project_id=project_id,
+                    year=year,
+                    month=month,
+                    credits_used=total_span_credits,
+                )
+                self.session.add(new_usage)
 
     def export(self, spans: list[ReadableSpan]) -> SpanExportResult:
         LOGGER.info(f"Exporting {len(spans)} spans to SQL database")
@@ -204,6 +310,20 @@ class SQLSpanExporter(SpanExporter):
                 )
             )
             self.session.add(span_row)
+
+            credits_input_token, credits_output_token, credits_per_call, credits_per_second, has_billable_usage = (
+                self._calculate_span_credits(span, model_id, component_instance_id)
+            )
+
+            if has_billable_usage:
+                self._store_span_credits(
+                    span_row.span_id,
+                    project_id,
+                    credits_input_token,
+                    credits_output_token,
+                    credits_per_call,
+                    credits_per_second,
+                )
 
             self.session.add(
                 SpanMessage(

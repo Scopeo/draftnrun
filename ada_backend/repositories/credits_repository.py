@@ -1,4 +1,5 @@
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from uuid import UUID
 from typing import Optional, List
 
@@ -221,3 +222,32 @@ def delete_organization_limit(session: Session, id: UUID, organization_id: UUID)
     )
     session.delete(organization_limit)
     session.commit()
+
+
+def get_organization_limit(
+    session: Session, organization_id: UUID, year: int, month: int
+) -> Optional[db.OrganizationLimit]:
+    """Get organization limit for a specific year and month."""
+    organization_limit = (
+        session.query(db.OrganizationLimit)
+        .filter(
+            db.OrganizationLimit.organization_id == organization_id,
+            db.OrganizationLimit.year == year,
+            db.OrganizationLimit.month == month,
+        )
+        .first()
+    )
+    if organization_limit is None:
+        return None
+    return organization_limit
+
+
+def get_organization_total_credits(session: Session, organization_id: UUID, year: int, month: int) -> float:
+    """Get total credits for all projects in an organization for a specific year and month."""
+    total = (
+        session.query(func.sum(db.Usage.credits_used))
+        .join(db.Project, db.Project.id == db.Usage.project_id)
+        .filter(db.Project.organization_id == organization_id, db.Usage.year == year, db.Usage.month == month)
+        .scalar()
+    )
+    return round(float(total) if total else 0.0, 2)
