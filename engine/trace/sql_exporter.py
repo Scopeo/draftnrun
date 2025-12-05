@@ -148,7 +148,6 @@ class SQLSpanExporter(SpanExporter):
                 org_id, org_llm_providers = self.get_org_info_from_ancestors(json.loads(span.to_json()).parent_id)
 
             provider = span.attributes.get(SpanAttributes.LLM_PROVIDER)
-
             if provider is None or provider not in org_llm_providers:
                 cost_info = self.session.execute(
                     select(Cost.credits_per_input_token, Cost.credits_per_output_token)
