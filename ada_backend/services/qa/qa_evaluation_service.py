@@ -4,16 +4,16 @@ from uuid import UUID
 
 from sqlalchemy.orm import Session
 
-from ada_backend.repositories.qa_evaluation_temporary_repository import (
+from ada_backend.repositories.qa_evaluation_repository import (
     get_evaluations_by_version_output,
     upsert_judge_evaluation,
     delete_judge_evaluations,
 )
-from ada_backend.repositories.qa_evaluation_repository import get_llm_judge_by_id
+from ada_backend.repositories.llm_judges_repository import get_llm_judge_by_id
 from ada_backend.repositories.quality_assurance_repository import get_version_output
 from ada_backend.database.models import LLMJudge
 from ada_backend.services.agent_runner_service import setup_tracing_context
-from ada_backend.schemas.qa_evaluation_temporary_schema import (
+from ada_backend.schemas.qa_evaluation_schema import (
     BooleanEvaluationResult,
     ErrorEvaluationResult,
     FreeTextEvaluationResult,

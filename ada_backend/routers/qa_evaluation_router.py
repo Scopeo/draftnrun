@@ -2,30 +2,23 @@ import logging
 from uuid import UUID
 from typing import Annotated, List
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Query
+from fastapi import APIRouter, Body, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from ada_backend.schemas.auth_schema import SupabaseUser
-from ada_backend.database.models import EvaluationType
 from ada_backend.schemas.qa_evaluation_schema import (
-    LLMJudgeCreate,
-    LLMJudgeResponse,
-    LLMJudgeTemplate,
-    LLMJudgeUpdate,
+    JudgeEvaluationResponse,
 )
-from ada_backend.services.errors import LLMJudgeNotFound
+from ada_backend.services.errors import ProjectNotFound, LLMJudgeNotFound
 from ada_backend.routers.auth_router import (
     user_has_access_to_project_dependency,
     UserRights,
-    get_user_from_supabase_token,
 )
 from ada_backend.database.setup_db import get_db
-from ada_backend.services.qa_evaluation_service import (
-    create_llm_judge_service,
-    get_llm_judge_defaults_service,
-    get_llm_judges_by_project_service,
-    update_llm_judge_service,
-    delete_llm_judges_service,
+from ada_backend.services.qa.qa_evaluation_service import (
+    get_evaluations_by_version_output_service,
+    run_judge_evaluation_service,
+    delete_judge_evaluations_service,
 )
 
 router = APIRouter(tags=["QA Evaluation"])
@@ -33,128 +26,97 @@ LOGGER = logging.getLogger(__name__)
 
 
 @router.get(
-    "/projects/{project_id}/qa/llm-judges",
-    response_model=List[LLMJudgeResponse],
-    summary="Get LLM Judges by Project",
+    "/projects/{project_id}/qa/version-outputs/{version_output_id}/evaluations",
+    response_model=List[JudgeEvaluationResponse],
+    summary="Get Evaluations by Version Output",
 )
-def get_llm_judges_by_project_endpoint(
+def get_evaluations_by_version_output_endpoint(
     project_id: UUID,
+    version_output_id: UUID,
     user: Annotated[
         SupabaseUser,
         Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.USER.value)),
     ],
     session: Session = Depends(get_db),
-) -> List[LLMJudgeResponse]:
+) -> List[JudgeEvaluationResponse]:
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
 
     try:
-        return get_llm_judges_by_project_service(session=session, project_id=project_id)
+        return get_evaluations_by_version_output_service(session=session, version_output_id=version_output_id)
     except Exception as e:
-        LOGGER.error(f"Failed to get LLM judges for project {project_id}: {str(e)}", exc_info=True)
+        LOGGER.error(
+            f"Failed to get judge evaluations for "
+            f"version_output {version_output_id} in project {project_id}: {str(e)}",
+            exc_info=True,
+        )
         raise HTTPException(status_code=500, detail="Internal server error") from e
-
-
-@router.get(
-    "/qa/llm-judges/defaults",
-    response_model=LLMJudgeTemplate,
-    summary="Get template with default values for LLM Judge creation",
-)
-def get_llm_judge_defaults(
-    user: Annotated[SupabaseUser, Depends(get_user_from_supabase_token)],
-    evaluation_type: EvaluationType = Query(default=EvaluationType.BOOLEAN, description="Evaluation type"),
-) -> LLMJudgeTemplate:
-    if not user.id:
-        raise HTTPException(status_code=400, detail="User ID not found")
-
-    return get_llm_judge_defaults_service(evaluation_type=evaluation_type)
 
 
 @router.post(
-    "/projects/{project_id}/qa/llm-judges",
-    response_model=LLMJudgeResponse,
-    summary="Create LLM Judge",
+    "/projects/{project_id}/qa/llm-judges/{judge_id}/evaluations/run",
+    response_model=JudgeEvaluationResponse,
+    summary="Run Judge Evaluation on Version Output",
 )
-def create_llm_judge_endpoint(
-    project_id: UUID,
-    judge_data: LLMJudgeCreate,
-    user: Annotated[
-        SupabaseUser,
-        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.READER.value)),
-    ],
-    session: Session = Depends(get_db),
-) -> LLMJudgeResponse:
-    if not user.id:
-        raise HTTPException(status_code=400, detail="User ID not found")
-
-    try:
-        return create_llm_judge_service(session=session, project_id=project_id, judge_data=judge_data)
-    except ValueError as e:
-        LOGGER.error(f"Failed to create LLM judge for project {project_id}: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=400, detail="Bad request") from e
-    except Exception as e:
-        LOGGER.error(f"Failed to create LLM judge for project {project_id}: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Internal server error") from e
-
-
-@router.patch(
-    "/projects/{project_id}/qa/llm-judges/{judge_id}",
-    response_model=LLMJudgeResponse,
-    summary="Update LLM Judge",
-)
-def update_llm_judge_endpoint(
+async def run_judge_evaluation_endpoint(
     project_id: UUID,
     judge_id: UUID,
-    judge_data: LLMJudgeUpdate,
     user: Annotated[
         SupabaseUser,
-        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.READER.value)),
+        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.USER.value)),
     ],
     session: Session = Depends(get_db),
-) -> LLMJudgeResponse:
+    version_output_id: UUID = Body(..., embed=True, description="Version output ID to evaluate"),
+) -> JudgeEvaluationResponse:
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
 
     try:
-        return update_llm_judge_service(
+        return await run_judge_evaluation_service(
             session=session,
             project_id=project_id,
             judge_id=judge_id,
-            judge_data=judge_data,
+            version_output_id=version_output_id,
         )
+    except ProjectNotFound as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
     except LLMJudgeNotFound as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
     except ValueError as e:
-        LOGGER.error(f"Failed to update LLM judge {judge_id} for project {project_id}: {str(e)}", exc_info=True)
+        LOGGER.error(
+            f"Failed to run judge evaluation for judge {judge_id} in project {project_id}: {str(e)}", exc_info=True
+        )
         raise HTTPException(status_code=400, detail="Bad request") from e
     except Exception as e:
-        LOGGER.error(f"Failed to update LLM judge {judge_id} for project {project_id}: {str(e)}", exc_info=True)
+        LOGGER.error(
+            f"Failed to run judge evaluation for judge {judge_id} in project {project_id}: {str(e)}", exc_info=True
+        )
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @router.delete(
-    "/projects/{project_id}/qa/llm-judges",
+    "/projects/{project_id}/qa/evaluations",
     status_code=204,
-    summary="Delete LLM Judges",
+    summary="Delete Judge Evaluations",
 )
-def delete_llm_judges_endpoint(
+def delete_judge_evaluations_endpoint(
     project_id: UUID,
     user: Annotated[
         SupabaseUser,
         Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.READER.value)),
     ],
     session: Session = Depends(get_db),
-    judge_ids: List[UUID] = Body(...),
+    evaluation_ids: List[UUID] = Body(...),
 ):
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
 
     try:
-        delete_llm_judges_service(session=session, project_id=project_id, judge_ids=judge_ids)
+        delete_judge_evaluations_service(session=session, evaluation_ids=evaluation_ids)
         return None
     except ValueError as e:
-        LOGGER.error(f"Failed to delete LLM judges for project {project_id}: {str(e)}", exc_info=True)
+        LOGGER.error(f"Failed to delete judge evaluations for project {project_id}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=400, detail="Bad request") from e
     except Exception as e:
-        LOGGER.error(f"Failed to delete LLM judges for project {project_id}: {str(e)}", exc_info=True)
+        LOGGER.error(f"Failed to delete judge evaluations for project {project_id}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error") from e

@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 from ada_backend.main import app
 from ada_backend.scripts.get_supabase_token import get_user_jwt
 from ada_backend.database.models import EvaluationType
-from ada_backend.schemas.qa_evaluation_temporary_schema import (
+from ada_backend.schemas.qa_evaluation_schema import (
     BooleanEvaluationResult,
     ScoreEvaluationResult,
     FreeTextEvaluationResult,
@@ -22,8 +22,7 @@ HEADERS_JWT = {
 }
 
 MOCK_LLM_SERVICE_PATH = (
-    "ada_backend.services.qa.qa_evaluation_temporary_service."
-    "CompletionService.constrained_complete_with_pydantic_async"
+    "ada_backend.services.qa.qa_evaluation_service." "CompletionService.constrained_complete_with_pydantic_async"
 )
 
 

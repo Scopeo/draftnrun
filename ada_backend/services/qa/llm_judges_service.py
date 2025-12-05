@@ -4,13 +4,13 @@ from uuid import UUID
 
 from sqlalchemy.orm import Session
 
-from ada_backend.repositories.qa_evaluation_repository import (
+from ada_backend.repositories.llm_judges_repository import (
     create_llm_judge,
     get_llm_judges_by_project,
     update_llm_judge,
     delete_llm_judges,
 )
-from ada_backend.schemas.qa_evaluation_schema import (
+from ada_backend.schemas.llm_judges_schema import (
     LLMJudgeCreate,
     LLMJudgeResponse,
     LLMJudgeTemplate,
