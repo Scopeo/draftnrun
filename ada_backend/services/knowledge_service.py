@@ -26,7 +26,6 @@ from ada_backend.schemas.knowledge_schema import (
 )
 from ada_backend.services.ingestion_database_service import (
     get_sql_local_service_for_ingestion,
-    update_chunk_info_in_ingestion_db,
 )
 from ada_backend.services.knowledge.errors import (
     KnowledgeServiceDocumentNotFoundError,
