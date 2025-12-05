@@ -45,6 +45,8 @@ def event_to_dict(event: Event) -> dict:
 def convert_to_list(obj: Any) -> list[str] | None:
     if isinstance(obj, list):
         return obj
+    if isinstance(obj, tuple):
+        return list(obj)
     if obj is None:
         return None
     if isinstance(obj, str):
@@ -52,6 +54,8 @@ def convert_to_list(obj: Any) -> list[str] | None:
             result = ast.literal_eval(obj)
             if isinstance(result, list):
                 return result
+            if isinstance(result, tuple):
+                return list(result)
         except (ValueError, SyntaxError):
             pass
     return None
@@ -137,21 +141,29 @@ class SQLSpanExporter(SpanExporter):
         has_billable_usage = False
 
         if model_id:
-            cost_info = self.session.execute(
-                select(Cost.credits_per_input_token, Cost.credits_per_output_token)
-                .join(LLMCost, LLMCost.id == Cost.id)
-                .where(LLMCost.llm_model_id == model_id)
-            ).first()
+            org_id = span.attributes.get("organization_id")
+            org_llm_providers = convert_to_list(span.attributes.get("organization_llm_providers"))
 
-            if cost_info and (cost_info.credits_per_input_token or cost_info.credits_per_output_token):
-                token_prompt = span.attributes.get(SpanAttributes.LLM_TOKEN_COUNT_PROMPT, 0)
-                token_completion = span.attributes.get(SpanAttributes.LLM_TOKEN_COUNT_COMPLETION, 0)
+            if not org_id:
+                org_id, org_llm_providers = self.get_org_info_from_ancestors(json.loads(span.to_json()).parent_id)
 
-                if token_prompt or token_completion:
-                    # Token credits are stored for 1M tokens
-                    credits_input_token = token_prompt * (cost_info.credits_per_input_token or 0) / 1_000_000
-                    credits_output_token = token_completion * (cost_info.credits_per_output_token or 0) / 1_000_000
-                    has_billable_usage = True
+            provider = span.attributes.get(SpanAttributes.LLM_PROVIDER)
+            if provider is not None and provider in org_llm_providers:
+                cost_info = self.session.execute(
+                    select(Cost.credits_per_input_token, Cost.credits_per_output_token)
+                    .join(LLMCost, LLMCost.id == Cost.id)
+                    .where(LLMCost.llm_model_id == model_id)
+                ).first()
+
+                if cost_info and (cost_info.credits_per_input_token or cost_info.credits_per_output_token):
+                    token_prompt = span.attributes.get(SpanAttributes.LLM_TOKEN_COUNT_PROMPT, 0)
+                    token_completion = span.attributes.get(SpanAttributes.LLM_TOKEN_COUNT_COMPLETION, 0)
+
+                    if token_prompt or token_completion:
+                        # Token credits are stored for 1M tokens
+                        credits_input_token = token_prompt * (cost_info.credits_per_input_token or 0) / 1_000_000
+                        credits_output_token = token_completion * (cost_info.credits_per_output_token or 0) / 1_000_000
+                        has_billable_usage = True
 
         if component_instance_id:
             cost_info = self.session.execute(
