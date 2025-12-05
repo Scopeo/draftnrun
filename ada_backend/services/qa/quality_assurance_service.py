@@ -2,7 +2,7 @@ import logging
 import json
 import csv
 import io
-from typing import BinaryIO, Dict, List
+from typing import BinaryIO, Dict, List, Optional
 from uuid import UUID
 
 from sqlalchemy.orm import Session
@@ -21,6 +21,7 @@ from ada_backend.repositories.quality_assurance_repository import (
     get_datasets_by_project,
     clear_version_outputs_for_input_ids,
     get_outputs_by_graph_runner,
+    get_version_output_ids_by_input_ids_and_graph_runner,
 )
 from ada_backend.schemas.input_groundtruth_schema import (
     InputGroundtruthResponse,
@@ -122,6 +123,16 @@ def get_outputs_by_graph_runner_service(
     except Exception as e:
         LOGGER.error(f"Error in get_outputs_by_graph_runner_service: {str(e)}")
         raise ValueError(f"Failed to get outputs for graph runner: {str(e)}") from e
+
+
+def get_version_output_ids_by_input_ids_and_graph_runner_service(
+    session: Session,
+    input_ids: List[UUID],
+    graph_runner_id: UUID,
+) -> Dict[UUID, Optional[UUID]]:
+    return get_version_output_ids_by_input_ids_and_graph_runner(
+        session=session, input_ids=input_ids, graph_runner_id=graph_runner_id
+    )
 
 
 async def run_qa_service(

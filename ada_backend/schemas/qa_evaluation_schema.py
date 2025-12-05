@@ -1,34 +1,51 @@
 from datetime import datetime
-from typing import Optional
+from typing import Annotated, Literal, Union
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict
-
-from ada_backend.database.models import EvaluationType
+from pydantic import BaseModel, ConfigDict, Discriminator, Field
 
 
-class LLMJudgeCreate(BaseModel):
-    name: str
-    description: Optional[str] = None
-    evaluation_type: EvaluationType
-    llm_model_reference: str = "openai:gpt-5-mini"
-    prompt_template: str
-    temperature: Optional[float] = 1.0
+class BooleanEvaluationResult(BaseModel):
+    type: Literal["boolean"] = "boolean"
+    result: bool
+    justification: str
 
 
-class LLMJudgeResponse(LLMJudgeCreate):
+class ScoreEvaluationResult(BaseModel):
+    type: Literal["score"] = "score"
+    score: int = Field(ge=0)
+    max_score: int = Field(ge=1)
+    justification: str
+
+
+class FreeTextEvaluationResult(BaseModel):
+    type: Literal["free_text"] = "free_text"
+    result: str
+    justification: str
+
+
+class ErrorEvaluationResult(BaseModel):
+    type: Literal["error"] = "error"
+    justification: str
+
+
+EvaluationResult = Annotated[
+    Union[
+        BooleanEvaluationResult,
+        ScoreEvaluationResult,
+        FreeTextEvaluationResult,
+        ErrorEvaluationResult,
+    ],
+    Discriminator("type"),
+]
+
+
+class JudgeEvaluationResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
-    project_id: UUID
+    judge_id: UUID
+    version_output_id: UUID
+    evaluation_result: "EvaluationResult"
     created_at: datetime
     updated_at: datetime
-
-
-class LLMJudgeUpdate(BaseModel):
-    name: Optional[str] = None
-    description: Optional[str] = None
-    evaluation_type: Optional[EvaluationType] = None
-    llm_model_reference: Optional[str] = None
-    prompt_template: Optional[str] = None
-    temperature: Optional[float] = None

@@ -20,6 +20,7 @@ from ada_backend.routers.component_version_router import router as component_ver
 from ada_backend.routers.graph_router import router as graph_router
 from ada_backend.routers.s3_files_router import router as s3_files_router
 from ada_backend.routers.quality_assurance_router import router as quality_assurance_router
+from ada_backend.routers.llm_judges_router import router as llm_judges_router
 from ada_backend.routers.qa_evaluation_router import router as qa_evaluation_router
 from ada_backend.graphql.schema import graphql_router
 from ada_backend.routers.organization_router import router as org_router
@@ -158,6 +159,7 @@ app.include_router(component_version_router)
 app.include_router(categories_router)
 app.include_router(graph_router)
 app.include_router(quality_assurance_router)
+app.include_router(llm_judges_router)
 app.include_router(qa_evaluation_router)
 app.include_router(graphql_router, prefix="/graphql")
 app.include_router(trace_router)

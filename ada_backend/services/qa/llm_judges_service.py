@@ -4,20 +4,57 @@ from uuid import UUID
 
 from sqlalchemy.orm import Session
 
-from ada_backend.repositories.qa_evaluation_repository import (
+from ada_backend.repositories.llm_judges_repository import (
     create_llm_judge,
     get_llm_judges_by_project,
     update_llm_judge,
     delete_llm_judges,
 )
-from ada_backend.schemas.qa_evaluation_schema import (
+from ada_backend.schemas.llm_judges_schema import (
     LLMJudgeCreate,
     LLMJudgeResponse,
+    LLMJudgeTemplate,
     LLMJudgeUpdate,
 )
 from ada_backend.services.errors import LLMJudgeNotFound
+from ada_backend.database.models import EvaluationType
+from ada_backend.services.qa.utils import (
+    DEFAULT_BOOLEAN_PROMPT,
+    DEFAULT_FREE_TEXT_PROMPT,
+    DEFAULT_SCORE_PROMPT,
+)
 
 LOGGER = logging.getLogger(__name__)
+
+
+def get_llm_judges_by_project_service(
+    session: Session,
+    project_id: UUID,
+) -> List[LLMJudgeResponse]:
+    try:
+        judges = get_llm_judges_by_project(session=session, project_id=project_id)
+        return [LLMJudgeResponse.model_validate(judge) for judge in judges]
+    except Exception as e:
+        LOGGER.error(f"Error in get_llm_judges_by_project_service for project {project_id}: {str(e)}")
+        raise ValueError(f"Failed to list LLM judges: {str(e)}") from e
+
+
+def get_llm_judge_defaults_service(
+    evaluation_type: EvaluationType,
+) -> LLMJudgeTemplate:
+    if evaluation_type == EvaluationType.BOOLEAN:
+        prompt_template = DEFAULT_BOOLEAN_PROMPT
+    elif evaluation_type == EvaluationType.SCORE:
+        prompt_template = DEFAULT_SCORE_PROMPT
+    elif evaluation_type == EvaluationType.FREE_TEXT:
+        prompt_template = DEFAULT_FREE_TEXT_PROMPT
+
+    return LLMJudgeTemplate(
+        evaluation_type=evaluation_type,
+        llm_model_reference=None,
+        prompt_template=prompt_template,
+        temperature=None,
+    )
 
 
 def create_llm_judge_service(
@@ -43,18 +80,6 @@ def create_llm_judge_service(
         raise ValueError(f"Failed to create LLM judge: {str(e)}") from e
 
 
-def get_llm_judges_by_project_service(
-    session: Session,
-    project_id: UUID,
-) -> List[LLMJudgeResponse]:
-    try:
-        judges = get_llm_judges_by_project(session=session, project_id=project_id)
-        return [LLMJudgeResponse.model_validate(judge) for judge in judges]
-    except Exception as e:
-        LOGGER.error(f"Error in get_llm_judges_by_project_service for project {project_id}: {str(e)}")
-        raise ValueError(f"Failed to list LLM judges: {str(e)}") from e
-
-
 def update_llm_judge_service(
     session: Session,
     project_id: UUID,
@@ -77,8 +102,6 @@ def update_llm_judge_service(
             raise LLMJudgeNotFound(judge_id=judge_id, project_id=project_id)
         LOGGER.info(f"Updated LLM judge {judge_id} for project {project_id}")
         return LLMJudgeResponse.model_validate(updated_judge)
-    except LLMJudgeNotFound:
-        raise
     except Exception as e:
         LOGGER.error(f"Error in update_llm_judge_service for judge {judge_id}: {str(e)}")
         raise ValueError(f"Failed to update LLM judge: {str(e)}") from e
