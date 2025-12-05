@@ -1,7 +1,7 @@
 """remove_duplicates_add_pk_chunk_id
 
-Revision ID: a1b2c3d4e5f6
-Revises: 27792da190ff
+Revision ID: a7c91f2e4b0d
+Revises: a1b2c3d4e5f6
 Create Date: 2025-12-05 15:00:00.000000
 
 """
@@ -16,8 +16,8 @@ from settings import settings
 
 
 # revision identifiers, used by Alembic.
-revision: str = "a1b2c3d4e5f6"
-down_revision: Union[str, None] = "27792da190ff"
+revision: str = "a7c91f2e4b0d"
+down_revision: Union[str, None] = "a1b2c3d4e5f6"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
