@@ -260,6 +260,8 @@ def cast_value(
         raise ValueError("Parameter type COMPONENT or TOOL is not supported for BasicParameters")
     elif parameter_type == ParameterType.LLM_MODEL:
         return unresolved_value
+    elif parameter_type == ParameterType.SECRETS:
+        return unresolved_value
     else:
         raise ValueError(f"Unsupported value type: {parameter_type}")
 
