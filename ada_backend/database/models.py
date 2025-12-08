@@ -1086,7 +1086,7 @@ class Project(Base):
     # Quality Assurance relationships
     datasets = relationship("DatasetProject", back_populates="project", cascade="all, delete-orphan")
 
-    usage = relationship("Usage", back_populates="project")
+    usage = relationship("Usage", back_populates="project", cascade="all, delete-orphan")
 
     __mapper_args__ = {"polymorphic_on": type, "polymorphic_identity": "base"}
 
@@ -1643,7 +1643,9 @@ class Usage(Base):
     )
 
     id = mapped_column(UUID(as_uuid=True), primary_key=True, index=True, default=uuid.uuid4)
-    project_id = mapped_column(UUID(as_uuid=True), ForeignKey("projects.id"), nullable=False, index=True)
+    project_id = mapped_column(
+        UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True
+    )
     year = mapped_column(Integer, nullable=False)
     month = mapped_column(Integer, nullable=False)
     credits_used = mapped_column(Float, nullable=False, default=0.0)
