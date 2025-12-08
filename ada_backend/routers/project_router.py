@@ -229,13 +229,11 @@ async def get_project_charts(
     duration: int,
     user: Annotated[SupabaseUser, Depends(get_user_from_supabase_token)],
     call_type: CallType | None = None,
-    session: Session = Depends(get_db),
 ):
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
     try:
         response = await get_charts_by_project(
-            session=session,
             project_id=project_id,
             duration_days=duration,
             call_type=call_type,

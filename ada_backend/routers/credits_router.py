@@ -13,6 +13,8 @@ from ada_backend.schemas.credits_schema import (
     OrganizationLimitResponse,
     OrganizationLimit,
 )
+from ada_backend.schemas.chart_schema import ChartsResponse
+from ada_backend.services.charts_service import get_credit_usage_table_chart
 from ada_backend.services.credits_service import (
     upsert_component_version_cost_service,
     create_organization_limit_service,
@@ -161,4 +163,17 @@ def delete_component_version_cost_endpoint(
         return delete_component_version_cost_service(session, component_version_id)
     except Exception as e:
         LOGGER.error(f"Failed to delete component version cost: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error") from e
+
+
+@router.get("/organizations/{organization_id}/credit-usage", response_model=ChartsResponse)
+async def get_organization_credit_usage_endpoint(
+    organization_id: UUID,
+    user: Annotated[SupabaseUser, Depends(get_user_from_supabase_token)],
+    session: Session = Depends(get_db),
+) -> ChartsResponse:
+    try:
+        return await get_credit_usage_table_chart(session, organization_id)
+    except Exception as e:
+        LOGGER.error(f"Failed to get organization credit usage: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error") from e
