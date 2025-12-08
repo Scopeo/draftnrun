@@ -118,6 +118,36 @@ def validate_graph_is_draft(session: Session, graph_runner_id: UUID) -> None:
         )
 
 
+def _ensure_graph_exists_and_validate(
+    session: Session,
+    graph_runner_id: UUID,
+    project_id: UUID,
+    env: Optional[EnvType] = None,
+    bypass_validation: bool = False,
+) -> None:
+    """
+    Ensure the graph runner exists (create if needed) and validate it's in draft mode.
+
+    Args:
+        session: Database session
+        graph_runner_id: ID of the graph runner
+        project_id: ID of the project
+        env: Environment type (defaults to DRAFT if not provided)
+        bypass_validation: If True, skip draft mode validation (use for seeding/migrations only)
+    """
+    if not graph_runner_exists(session, graph_runner_id):
+        LOGGER.info("Creating new graph")
+        env = env if env else EnvType.DRAFT
+        insert_graph_runner_and_bind_to_project(session, graph_runner_id, project_id=project_id, env=env)
+    else:
+        # Validate that the graph runner is in draft mode before allowing modifications
+        if not bypass_validation:
+            validate_graph_is_draft(session, graph_runner_id)
+            LOGGER.info(f"Updating existing graph {graph_runner_id} (validated as draft)")
+        else:
+            LOGGER.warning(f"Updating graph {graph_runner_id} with validation bypassed (seeding/migration mode)")
+
+
 async def update_graph_with_history_service(
     session: Session,
     graph_runner_id: UUID,
@@ -127,6 +157,9 @@ async def update_graph_with_history_service(
     user_id: UUID = None,
     bypass_validation: bool = False,
 ) -> GraphUpdateResponse:
+    # Check if graph exists and validate draft mode BEFORE history modification check
+    _ensure_graph_exists_and_validate(session, graph_runner_id, project_id, env, bypass_validation)
+
     current_hash = _calculate_graph_hash(graph_project)
     previous_hash = get_latest_modification_history(session, graph_runner_id).modification_hash
 
@@ -142,7 +175,7 @@ async def update_graph_with_history_service(
         LOGGER.info(f"Logged modification history for graph {graph_runner_id} by user {user_id or 'unknown'}")
 
     graph_update_response = await update_graph_service(
-        session, graph_runner_id, project_id, graph_project, env, user_id, bypass_validation
+        session, graph_runner_id, project_id, graph_project, env, user_id, bypass_validation, skip_validation=True
     )
 
     if modification_history:
@@ -162,6 +195,7 @@ async def update_graph_service(
     env: Optional[EnvType] = None,
     user_id: UUID = None,
     bypass_validation: bool = False,
+    skip_validation: bool = False,
 ) -> GraphUpdateResponse:
     """
     Creates or updates a complete graph runner including all component instances,
@@ -169,18 +203,10 @@ async def update_graph_service(
 
     Args:
         bypass_validation: If True, skip draft mode validation (use for seeding/migrations only)
+        skip_validation: If True, skip the validation check entirely (use when validation already done)
     """
-    if not graph_runner_exists(session, graph_runner_id):
-        LOGGER.info("Creating new graph")
-        env = env if env else EnvType.DRAFT
-        insert_graph_runner_and_bind_to_project(session, graph_runner_id, project_id=project_id, env=env)
-    else:
-        # Validate that the graph runner is in draft mode before allowing modifications
-        if not bypass_validation:
-            validate_graph_is_draft(session, graph_runner_id)
-            LOGGER.info(f"Updating existing graph {graph_runner_id} (validated as draft)")
-        else:
-            LOGGER.warning(f"Updating graph {graph_runner_id} with validation bypassed (seeding/migration mode)")
+    if not skip_validation:
+        _ensure_graph_exists_and_validate(session, graph_runner_id, project_id, env, bypass_validation)
 
     # TODO: Add the get_graph_runner_nodes function when we will handle nested graphs
     previous_graph_nodes = set(node.id for node in get_component_nodes(session, graph_runner_id))
