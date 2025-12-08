@@ -1383,6 +1383,40 @@ class TestCalculateGraphHashEdgeCases:
 
         assert hash1 == hash2
 
+    def test_dict_key_order_does_not_affect_hash(self):
+        """Dictionary parameter values with the same content but different key orders should produce the same hash."""
+        instance_id = uuid.uuid4()
+        component_id = uuid.uuid4()
+        component_version_id = uuid.uuid4()
+
+        graph1 = GraphUpdateSchema(
+            component_instances=[
+                create_component_instance(
+                    instance_id=instance_id,
+                    component_id=component_id,
+                    component_version_id=component_version_id,
+                    parameters=[PipelineParameterSchema(name="param", value={"a": 1, "b": 2})],
+                )
+            ],
+            relationships=[],
+            edges=[],
+        )
+
+        graph2 = GraphUpdateSchema(
+            component_instances=[
+                create_component_instance(
+                    instance_id=instance_id,
+                    component_id=component_id,
+                    component_version_id=component_version_id,
+                    parameters=[PipelineParameterSchema(name="param", value={"b": 2, "a": 1})],
+                )
+            ],
+            relationships=[],
+            edges=[],
+        )
+
+        assert _calculate_graph_hash(graph1) == _calculate_graph_hash(graph2)
+
     def test_dict_parameter_values_with_different_content_produce_different_hashes(self):
         """Dictionary parameter values with different content should produce different hashes."""
         instance_id = uuid.uuid4()

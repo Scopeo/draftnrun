@@ -5,19 +5,17 @@ import logging
 from sqlalchemy.orm import Session
 
 from ada_backend.repositories.edge_repository import get_edges
-from ada_backend.repositories.env_repository import get_env_relationship_by_graph_runner_id
 from ada_backend.repositories.graph_runner_repository import (
     get_component_nodes,
-    graph_runner_exists,
     get_latest_modification_history,
 )
 from ada_backend.repositories.port_mapping_repository import list_port_mappings_for_graph
 from ada_backend.repositories.field_expression_repository import get_field_expressions_for_instances
 from ada_backend.schemas.pipeline.graph_schema import GraphGetResponse, EdgeSchema
 from ada_backend.schemas.pipeline.field_expression_schema import FieldExpressionReadSchema
-from ada_backend.services.errors import GraphNotFound
 from ada_backend.schemas.pipeline.port_mapping_schema import PortMappingSchema
 from ada_backend.services.pipeline.get_pipeline_service import get_component_instance, get_relationships
+from ada_backend.services.graph.graph_validation_utils import validate_graph_runner_belongs_to_project
 from ada_backend.services.tag_service import compose_tag_name
 from engine.field_expressions.parser import unparse_expression
 from engine.field_expressions.serializer import from_json as expr_from_json
@@ -30,16 +28,7 @@ def get_graph_service(
     project_id: UUID,
     graph_runner_id: UUID,
 ) -> GraphGetResponse:
-    if not graph_runner_exists(session, graph_runner_id):
-        raise GraphNotFound(graph_runner_id)
-
-    project_env_binding = get_env_relationship_by_graph_runner_id(session, graph_runner_id)
-    if not project_env_binding:
-        raise ValueError(f"Graph with ID {graph_runner_id} is not bound to any project.")
-    if project_env_binding.project_id != project_id:
-        raise ValueError(
-            f"Graph with ID {graph_runner_id} is bound to project {project_env_binding.project_id}, not {project_id}."
-        )
+    project_env_binding = validate_graph_runner_belongs_to_project(session, graph_runner_id, project_id)
 
     # TODO: Add the get_graph_runner_nodes function when we will handle nested graphs
     component_nodes = get_component_nodes(session, graph_runner_id)

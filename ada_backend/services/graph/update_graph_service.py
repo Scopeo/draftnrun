@@ -55,9 +55,24 @@ from engine.field_expressions.traversal import select_nodes, get_pure_ref
 LOGGER = logging.getLogger(__name__)
 
 
+def _sort_dict_keys_recursively(obj):
+    """
+    Recursively sort dictionary keys in a data structure.
+    This ensures that dictionaries with the same content but different key orders
+    produce the same JSON representation.
+    """
+    if isinstance(obj, dict):
+        return {k: _sort_dict_keys_recursively(v) for k, v in sorted(obj.items())}
+    elif isinstance(obj, list):
+        return [_sort_dict_keys_recursively(item) for item in obj]
+    else:
+        return obj
+
+
 def _calculate_graph_hash(graph_project: GraphUpdateSchema) -> str:
     graph_dict = graph_project.model_dump(mode="json")
-    json_str = json.dumps(graph_dict, sort_keys=True, separators=(",", ":"))
+    sorted_dict = _sort_dict_keys_recursively(graph_dict)
+    json_str = json.dumps(sorted_dict, sort_keys=True, separators=(",", ":"))
     hash_obj = hashlib.sha256(json_str.encode("utf-8"))
     return hash_obj.hexdigest()
 
