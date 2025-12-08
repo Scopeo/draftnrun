@@ -394,6 +394,13 @@ async def _ingest_folder_source(
         )
         raise  # Re-raise the exception to ensure subprocess exits with non-zero code
 
+    # Create the source in the database before updating task status
+    LOGGER.info(f"Creating source {source_name} for organization {organization_id} in database")
+    create_source(
+        organization_id=organization_id,
+        source_data=source_data,
+    )
+
     ingestion_task = IngestionTaskUpdate(
         id=task_id,
         source_id=source_id,
