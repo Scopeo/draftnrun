@@ -7,6 +7,7 @@ from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttribu
 
 from engine.agent.types import SourceChunk, ComponentAttributes
 from engine.trace.trace_manager import TraceManager
+from engine.trace.serializer import serialize_to_json
 
 
 class Reranker(ABC):
@@ -29,10 +30,14 @@ class Reranker(ABC):
 
     async def rerank(self, query, chunks: list[SourceChunk]):
         with self.trace_manager.start_span(self.component_attributes.component_instance_name) as span:
+            input_documents = [{"content": chunk.content, "id": chunk.name} for chunk in chunks]
+            input_data = {"input_documents": input_documents}
+
             reranker_chunks = await self._rerank_without_trace(query, chunks)
             span.set_attributes(
                 {
                     SpanAttributes.OPENINFERENCE_SPAN_KIND: OpenInferenceSpanKindValues.RERANKER.value,
+                    SpanAttributes.INPUT_VALUE: serialize_to_json(input_data, shorten_string=False),
                     RerankerAttributes.RERANKER_QUERY: query,
                     RerankerAttributes.RERANKER_MODEL_NAME: self._model,
                     "component_instance_id": (

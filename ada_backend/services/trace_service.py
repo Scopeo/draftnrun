@@ -55,6 +55,15 @@ def get_attributes_with_messages(span_kind: str, row: pd.Series, filter_to_last_
                 documents = row["attributes"]["retrieval"]["documents"]
             elif len(events) > 0:
                 documents = [{"document": event["attributes"]} for event in events]
+        elif span_kind == "RERANKER":
+            events = json.loads(row["events"])
+            if "reranker" in row["attributes"]:
+                if "input_documents" in row["attributes"]["reranker"]:
+                    documents = row["attributes"]["reranker"]["input_documents"]
+                elif "output_documents" in row["attributes"]["reranker"]:
+                    documents = row["attributes"]["reranker"]["output_documents"]
+            elif len(events) > 0:
+                documents = [{"document": event["attributes"]} for event in events]
         elif span_kind == "EMBEDDING":
             model_name = "embedding:" + row["attributes"]["embedding"]["model_name"]
         elif span_kind == "TOOL":

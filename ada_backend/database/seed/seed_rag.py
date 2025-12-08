@@ -588,7 +588,7 @@ def seed_rag_components(session: Session):
         id=UUID("e866ac4a-06b2-46ec-8733-da6dcd15e8e7"),
         component_version_id=rag_agent_v3_version.id,
         name="cohere_api_key",
-        type=ParameterType.LLM_API_KEY,
+        type=ParameterType.SECRETS,
         nullable=True,
     )
 

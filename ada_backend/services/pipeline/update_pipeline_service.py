@@ -135,7 +135,17 @@ def create_or_update_component_instance(
                     param_secret = secret
                     break
             if param_secret is None:
-                raise ValueError(f"Secret '{param.name}' not found in organization secrets for project '{project_id}'")
+                # If parameter is nullable, skip creation and allow fallback to settings/defaults
+                if param_def.nullable:
+                    LOGGER.info(
+                        f"Secret '{param.name}' not found in organization secrets for project '{project_id}'. "
+                        f"Skipping parameter creation (parameter is nullable)."
+                    )
+                    continue
+                else:
+                    raise ValueError(
+                        f"Secret '{param.name}' not found in organization secrets for project '{project_id}'"
+                    )
 
             upsert_basic_parameter(
                 session=session,
