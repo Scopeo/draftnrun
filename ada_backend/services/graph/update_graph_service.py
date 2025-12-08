@@ -20,7 +20,6 @@ from ada_backend.repositories.env_repository import get_env_relationship_by_grap
 from ada_backend.repositories.graph_runner_repository import (
     delete_node,
     get_component_nodes,
-    get_latest_modification_hash,
     get_latest_modification_history,
     graph_runner_exists,
     insert_graph_runner_and_bind_to_project,
@@ -151,7 +150,7 @@ async def update_graph_service(
             LOGGER.warning(f"Updating graph {graph_runner_id} with validation bypassed (seeding/migration mode)")
 
     current_hash = _calculate_graph_hash(graph_project)
-    previous_hash = get_latest_modification_hash(session, graph_runner_id)
+    previous_hash = get_latest_modification_history(session, graph_runner_id).modification_hash
 
     if previous_hash is not None and current_hash == previous_hash:
         LOGGER.info(f"Graph {graph_runner_id} hash unchanged, skipping updates")

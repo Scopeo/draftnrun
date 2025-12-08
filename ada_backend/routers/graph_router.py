@@ -99,9 +99,7 @@ def get_graph_modification_history(
         raise HTTPException(status_code=400, detail="User ID not found")
     try:
         return get_graph_modification_history_service(session, project_id, graph_runner_id)
-    except ProjectNotFound as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
-    except GraphNotFound as e:
+    except (ProjectNotFound, GraphNotFound) as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
     except ConnectionError as e:
         LOGGER.error(

@@ -266,17 +266,6 @@ def delete_temp_folder(uuid_for_temp_folder: str) -> None:
         LOGGER.info(f"Deleted temp folder: {temp_folder}")
 
 
-def get_latest_modification_hash(session: Session, graph_runner_id: UUID) -> Optional[str]:
-    """Get the most recent modification hash for a graph runner."""
-    latest_history = (
-        session.query(db.GraphRunnerModificationHistory)
-        .filter(db.GraphRunnerModificationHistory.graph_runner_id == graph_runner_id)
-        .order_by(db.GraphRunnerModificationHistory.created_at.desc())
-        .first()
-    )
-    return latest_history.modification_hash if latest_history else None
-
-
 def get_latest_modification_history(
     session: Session, graph_runner_id: UUID
 ) -> Optional[db.GraphRunnerModificationHistory]:
@@ -304,6 +293,7 @@ def insert_modification_history(
 
 
 def get_modification_history(session: Session, graph_runner_id: UUID) -> list[db.GraphRunnerModificationHistory]:
+    """Get the modification history for a graph runner in descending order of creation time."""
     return (
         session.query(db.GraphRunnerModificationHistory)
         .filter(db.GraphRunnerModificationHistory.graph_runner_id == graph_runner_id)
