@@ -170,7 +170,6 @@ def seed_projects_db(session: Session):
                 graph_runner_id=GRAPH_RUNNER_UUIDS["graph_runner_prod"],
                 project_id=PROJECT_UUIDS["graph_test_project"],
                 bypass_validation=True,
-                track_history=False,
             )
         )
         LOGGER.info("Starting to build draft graph test project")
@@ -186,7 +185,6 @@ def seed_projects_db(session: Session):
                 graph_runner_id=GRAPH_RUNNER_UUIDS["graph_runner_draft"],
                 project_id=PROJECT_UUIDS["graph_test_project"],
                 bypass_validation=True,
-                track_history=False,
             )
         )
 
@@ -201,7 +199,6 @@ def seed_projects_db(session: Session):
                 project_id=PROJECT_UUIDS["react_sql_agent_chatbot"],
                 graph_runner_id=GRAPH_RUNNER_UUIDS["react_sql_agent_prod"],
                 bypass_validation=True,
-                track_history=False,
             )
         )
         LOGGER.info("Starting to build ReAct SQL Agent draft project")
@@ -215,7 +212,6 @@ def seed_projects_db(session: Session):
                 project_id=PROJECT_UUIDS["react_sql_agent_chatbot"],
                 graph_runner_id=GRAPH_RUNNER_UUIDS["react_sql_agent_draft"],
                 bypass_validation=True,
-                track_history=False,
             )
         )
 

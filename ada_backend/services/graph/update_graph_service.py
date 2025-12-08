@@ -118,6 +118,41 @@ def validate_graph_is_draft(session: Session, graph_runner_id: UUID) -> None:
         )
 
 
+async def update_graph_with_history_service(
+    session: Session,
+    graph_runner_id: UUID,
+    project_id: UUID,
+    graph_project: GraphUpdateSchema,
+    env: Optional[EnvType] = None,
+    user_id: UUID = None,
+    bypass_validation: bool = False,
+) -> GraphUpdateResponse:
+    current_hash = _calculate_graph_hash(graph_project)
+    previous_hash = get_latest_modification_history(session, graph_runner_id).modification_hash
+
+    if previous_hash is not None and current_hash == previous_hash:
+        LOGGER.info(f"Graph {graph_runner_id} hash unchanged, skipping updates")
+        return GraphUpdateResponse(
+            graph_id=graph_runner_id,
+        )
+
+    modification_history = None
+    if previous_hash is None or current_hash != previous_hash:
+        modification_history = insert_modification_history(session, graph_runner_id, user_id, current_hash)
+        LOGGER.info(f"Logged modification history for graph {graph_runner_id} by user {user_id or 'unknown'}")
+
+    graph_update_response = await update_graph_service(
+        session, graph_runner_id, project_id, graph_project, env, user_id, bypass_validation
+    )
+
+    if modification_history:
+        graph_update_response.last_edited_time = modification_history.created_at
+        graph_update_response.last_edited_user_id = modification_history.user_id
+        return graph_update_response
+    else:
+        return graph_update_response
+
+
 # TODO: Refactor to rollback if instantiation failed.
 async def update_graph_service(
     session: Session,
@@ -127,7 +162,6 @@ async def update_graph_service(
     env: Optional[EnvType] = None,
     user_id: UUID = None,
     bypass_validation: bool = False,
-    track_history: bool = True,
 ) -> GraphUpdateResponse:
     """
     Creates or updates a complete graph runner including all component instances,
@@ -135,7 +169,6 @@ async def update_graph_service(
 
     Args:
         bypass_validation: If True, skip draft mode validation (use for seeding/migrations only)
-        track_history: If True, record modification history. Set to False for automatic/system updates.
     """
     if not graph_runner_exists(session, graph_runner_id):
         LOGGER.info("Creating new graph")
@@ -148,22 +181,6 @@ async def update_graph_service(
             LOGGER.info(f"Updating existing graph {graph_runner_id} (validated as draft)")
         else:
             LOGGER.warning(f"Updating graph {graph_runner_id} with validation bypassed (seeding/migration mode)")
-
-    current_hash = _calculate_graph_hash(graph_project)
-    previous_hash = get_latest_modification_history(session, graph_runner_id).modification_hash
-
-    if previous_hash is not None and current_hash == previous_hash:
-        LOGGER.info(f"Graph {graph_runner_id} hash unchanged, skipping updates")
-        return GraphUpdateResponse(
-            graph_id=graph_runner_id,
-        )
-
-    modification_history = None
-    if track_history and (previous_hash is None or current_hash != previous_hash):
-        modification_history = insert_modification_history(session, graph_runner_id, user_id, current_hash)
-        LOGGER.info(f"Logged modification history for graph {graph_runner_id} by user {user_id or 'unknown'}")
-    elif previous_hash is not None and current_hash != previous_hash:
-        LOGGER.debug(f"Graph {graph_runner_id} modified but history tracking skipped (track_history={track_history})")
 
     # TODO: Add the get_graph_runner_nodes function when we will handle nested graphs
     previous_graph_nodes = set(node.id for node in get_component_nodes(session, graph_runner_id))
@@ -303,8 +320,6 @@ async def update_graph_service(
 
     return GraphUpdateResponse(
         graph_id=graph_runner_id,
-        last_edited_time=modification_history.created_at if modification_history else None,
-        last_edited_user_id=modification_history.user_id if modification_history else None,
     )
 
 

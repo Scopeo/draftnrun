@@ -24,7 +24,7 @@ from ada_backend.database.setup_db import get_db
 from ada_backend.services.errors import GraphNotFound, MissingDataSourceError, ProjectNotFound
 from ada_backend.services.graph.deploy_graph_service import deploy_graph_service
 from ada_backend.services.graph.load_copy_graph_service import load_copy_graph_service
-from ada_backend.services.graph.update_graph_service import update_graph_service
+from ada_backend.services.graph.update_graph_service import update_graph_service, update_graph_with_history_service
 from ada_backend.services.graph.get_graph_service import get_graph_service
 from ada_backend.services.graph.get_graph_modification_history_service import (
     get_graph_modification_history_service,
@@ -145,7 +145,7 @@ async def update_project_pipeline(
         raise HTTPException(status_code=404, detail="Project not found")
 
     try:
-        return await update_graph_service(
+        return await update_graph_with_history_service(
             session=session,
             graph_project=project_graph,
             graph_runner_id=graph_runner_id,
