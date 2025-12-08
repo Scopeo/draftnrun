@@ -73,6 +73,12 @@ def create_source(
 ) -> UUID:
     if source_id is None:
         source_id = uuid.uuid4()
+
+    existing_source = get_data_source_by_org_id(session, organization_id, source_id)
+    if existing_source is not None:
+        LOGGER.info(f"Source with id {source_id} already exists for organization {organization_id}, skipping creation")
+        return existing_source.id
+
     source_data_create = db.DataSource(
         id=source_id,
         name=source_name,
