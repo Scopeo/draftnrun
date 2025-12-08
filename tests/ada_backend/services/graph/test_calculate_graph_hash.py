@@ -6,7 +6,6 @@ to ensure it correctly identifies when graphs are identical or different.
 """
 
 import uuid
-import pytest
 from uuid import UUID
 
 from ada_backend.services.graph.update_graph_service import _calculate_graph_hash
