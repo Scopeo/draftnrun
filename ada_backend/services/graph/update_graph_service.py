@@ -176,7 +176,8 @@ async def update_graph_with_history_service(
     _ensure_graph_exists_and_validate(session, graph_runner_id, project_id, env, bypass_validation)
 
     current_hash = _calculate_graph_hash(graph_project)
-    previous_hash = get_latest_modification_history(session, graph_runner_id).modification_hash
+    latest_history = get_latest_modification_history(session, graph_runner_id)
+    previous_hash = latest_history.modification_hash if latest_history else None
 
     if previous_hash is not None and current_hash == previous_hash:
         LOGGER.info(f"Graph {graph_runner_id} hash unchanged, skipping updates")
