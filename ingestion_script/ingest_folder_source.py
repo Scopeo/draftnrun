@@ -359,6 +359,19 @@ async def _ingest_folder_source(
 
         if not file_chunks_dfs:
             LOGGER.warning("No chunks created from any file - nothing to sync")
+            ingestion_task_completed = IngestionTaskUpdate(
+                id=task_id,
+                source_id=source_id,
+                source_name=source_name,
+                source_type=source_type,
+                status=db.TaskStatus.COMPLETED,
+            )
+            LOGGER.info(f"[EMPTY_FOLDER] Calling update_ingestion_task with status: {ingestion_task_completed.status}")
+            update_ingestion_task(
+                organization_id=organization_id,
+                ingestion_task=ingestion_task_completed,
+            )
+            LOGGER.info("[EMPTY_FOLDER] Task status update completed")
             return
 
         all_chunks_df = pd.concat(file_chunks_dfs, ignore_index=True)
