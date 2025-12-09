@@ -50,7 +50,8 @@ from ada_backend.services.entity_factory import get_llm_provider_and_model
 LOGGER = logging.getLogger(__name__)
 
 MAX_CHUNK_TOKENS = 8000
-_TOKEN_ENCODING = tiktoken.encoding_for_model("gpt-4o-mini")
+DEFAULT_TOKEN_ENCODING_MODEL = "gpt-4o-mini"
+_TOKEN_ENCODING = tiktoken.encoding_for_model(DEFAULT_TOKEN_ENCODING_MODEL)
 
 
 def _count_tokens(text: str) -> int:
