@@ -146,7 +146,7 @@ class KnowledgeEmptyChunkError(KnowledgeServiceError):
     """Raised when a chunk content is empty."""
 
     def __init__(self):
-        super().__init__(f"Chunk content cannot be empty.")
+        super().__init__("Chunk content cannot be empty.")
 
 
 class KnowledgeServiceDBError(KnowledgeServiceError):
