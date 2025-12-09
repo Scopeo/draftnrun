@@ -376,7 +376,7 @@ async def super_admin_or_admin_api_key_dependency(
         if hashed_key == settings.ADMIN_KEY_HASHED:
             return None
         else:
-            raise HTTPException(status_code=401, detail="Invalid limit API key")
+            raise HTTPException(status_code=401, detail="Invalid admin API key")
 
     if authorization and authorization.credentials:
         user = await get_user_from_supabase_token(authorization)
@@ -391,7 +391,7 @@ async def super_admin_or_admin_api_key_dependency(
 
     raise HTTPException(
         status_code=403,
-        detail="Access denied: requires super admin authentication or valid limit API key",
+        detail="Access denied: requires super admin authentication or valid admin API key",
     )
 
 
