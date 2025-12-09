@@ -16,7 +16,6 @@ from ada_backend.services.metrics.utils import (
     count_conversations_per_day,
 )
 from ada_backend.repositories.credits_repository import get_organization_total_credits, get_organization_limit
-from ada_backend.repositories.project_repository import get_project
 from settings import settings
 
 
@@ -216,13 +215,12 @@ def get_tokens_distribution_chart(project_id: UUID, duration_days: int, call_typ
     )
 
 
-def get_credit_usage_table_chart(session: Session, project_id: UUID) -> Chart:
+async def get_credit_usage_table_chart(session: Session, organization_id: UUID) -> Chart:
     """Get organization credit usage as a table chart."""
     today = datetime.now()
-    project = get_project(session, project_id=project_id)
 
-    credits_used = get_organization_total_credits(session, project.organization_id, today.year, today.month)
-    org_limit = get_organization_limit(session, project.organization_id, today.year, today.month)
+    credits_used = get_organization_total_credits(session, organization_id, today.year, today.month)
+    org_limit = get_organization_limit(session, organization_id, today.year, today.month)
     credits_limit = org_limit.limit if org_limit else None
     percentage_used = round((credits_used / credits_limit) * 100, 1) if credits_limit and credits_limit > 0 else None
 
@@ -247,8 +245,8 @@ def get_credit_usage_table_chart(session: Session, project_id: UUID) -> Chart:
         reset_display,
     ]
 
-    return Chart(
-        id=f"credit_usage_{project_id}",
+    chart = Chart(
+        id=f"credit_usage_{organization_id}",
         type=ChartType.TABLE,
         title="Organization Credit Usage",
         data=ChartData(
@@ -258,18 +256,17 @@ def get_credit_usage_table_chart(session: Session, project_id: UUID) -> Chart:
         progress_percentage=percentage_used if percentage_used is not None else None,
     )
 
+    return ChartsResponse(charts=[chart])
+
 
 async def get_charts_by_project(
-    session: Session,
     project_id: UUID,
     duration_days: int,
     call_type: CallType | None = None,
 ) -> ChartsResponse:
     response = ChartsResponse(
         charts=(
-            # TODO: Move credit charts to organization level
-            [get_credit_usage_table_chart(session=session, project_id=project_id)]
-            + get_agent_usage_chart(project_id, duration_days, call_type)
+            get_agent_usage_chart(project_id, duration_days, call_type)
             + [
                 get_latence_chart(project_id, duration_days, call_type),
                 # get_prometheus_agent_calls_chart(project_id, duration_days),
