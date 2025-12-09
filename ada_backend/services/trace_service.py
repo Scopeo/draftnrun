@@ -104,6 +104,7 @@ def build_span_trees(df: pd.DataFrame) -> List[TraceSpan]:
             tag_name=row.get("tag_name", None),
             conversation_id=attributes.get("conversation_id"),
             trace_id=row.get("trace_rowid"),
+            total_credits=row.get("total_credits", None),
         )
 
     trace_trees = []
