@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 import logging
 from typing import Any, Dict, List
 from uuid import UUID
@@ -257,8 +258,9 @@ def get_document_with_chunks_service(
 
 def _updated_chunk_to_dict(chunk: KnowledgeChunk) -> dict:
     """Convert a KnowledgeChunkUpdate to a dictionary format suitable for Qdrant / SQL."""
+    _check_token_size_chunk(chunk.content)
+    chunk.last_edited_ts = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
     chunk_dict = chunk.model_dump()
-    _check_token_size_chunk(chunk_dict["content"])
     if "document_id" in chunk_dict:
         chunk_dict["file_id"] = chunk_dict.pop("document_id")
     chunk_dict["metadata"] = json.dumps(chunk_dict["metadata"]) if chunk_dict["metadata"] else {}
