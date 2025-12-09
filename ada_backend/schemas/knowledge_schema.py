@@ -15,6 +15,7 @@ class KnowledgeDocumentMetadata(BaseModel):
     document_title: Optional[str] = None
     url: Optional[str] = None
     last_edited_ts: Optional[str] = None
+    metadata: Optional[dict] = None
 
 
 class KnowledgeChunk(BaseModel):
@@ -30,6 +31,7 @@ class KnowledgeChunk(BaseModel):
     document_id: str
     document_title: Optional[str] = None
     url: Optional[str] = None
+    metadata: Optional[dict] = None
 
     class Config:
         extra = "ignore"
