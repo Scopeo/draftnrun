@@ -69,8 +69,25 @@ def query_root_trace_duration(project_id: UUID, duration_days: int) -> pd.DataFr
 
 def query_trace_by_trace_id(trace_id: UUID) -> pd.DataFrame:
     query = (
-        "SELECT s.*, m.input_content,m.output_content FROM traces.spans s "
-        f"LEFT JOIN traces.span_messages m ON m.span_id = s.span_id WHERE s.trace_rowid = '{trace_id}' "
+        "WITH span_credits AS ("
+        "  SELECT "
+        "    su.span_id, "
+        "    ROUND(SUM(COALESCE(su.credits_input_token, 0) + COALESCE(su.credits_output_token, 0) + "
+        "        COALESCE(su.credits_per_call, 0) + COALESCE(su.credits_per_second, 0))::numeric, 0) as credits "
+        "  FROM credits.span_usages su "
+        "  JOIN traces.spans s ON s.span_id = su.span_id "
+        f"  WHERE s.trace_rowid = '{trace_id}' "
+        "  GROUP BY su.span_id "
+        ") "
+        "SELECT s.*, m.input_content, m.output_content, "
+        "CASE "
+        "  WHEN s.parent_id IS NULL THEN ROUND(COALESCE(SUM(sc.credits) OVER (), 0)::numeric, 0) "
+        "  ELSE ROUND(COALESCE(sc.credits, 0)::numeric, 0) "
+        "END as total_credits "
+        "FROM traces.spans s "
+        "LEFT JOIN traces.span_messages m ON m.span_id = s.span_id "
+        "LEFT JOIN span_credits sc ON sc.span_id = s.span_id "
+        f"WHERE s.trace_rowid = '{trace_id}' "
         "ORDER BY s.start_time ASC;"
     )
     session = get_session_trace()
