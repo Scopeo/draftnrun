@@ -186,13 +186,14 @@ async def update_graph_with_history_service(
         )
 
     modification_history = None
-    if previous_hash is None or current_hash != previous_hash:
-        modification_history = insert_modification_history(session, graph_runner_id, user_id, current_hash)
-        LOGGER.info(f"Logged modification history for graph {graph_runner_id} by user {user_id or 'unknown'}")
 
     graph_update_response = await update_graph_service(
         session, graph_runner_id, project_id, graph_project, env, user_id, bypass_validation, skip_validation=True
     )
+
+    if latest_history is None or latest_history.modification_hash != current_hash:
+        modification_history = insert_modification_history(session, graph_runner_id, user_id, current_hash)
+        LOGGER.info(f"Logged modification history for graph {graph_runner_id} by user {user_id or 'unknown'}")
 
     if modification_history:
         graph_update_response.last_edited_time = modification_history.created_at
