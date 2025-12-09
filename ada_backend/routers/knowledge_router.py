@@ -24,6 +24,8 @@ from ada_backend.services.knowledge_service import (
     update_document_chunks_service,
 )
 from ada_backend.services.knowledge.errors import (
+    KnowledgeEmptyChunkError,
+    KnowledgeMaxChunkSizeError,
     KnowledgeServiceQdrantConfigurationError,
     KnowledgeServiceQdrantOperationError,
     KnowledgeSourceNotFoundError,
@@ -128,6 +130,8 @@ async def update_document(
         raise HTTPException(status_code=404, detail=str(e)) from e
     except KnowledgeServiceDocumentNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
+    except (KnowledgeEmptyChunkError, KnowledgeMaxChunkSizeError) as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except KnowledgeServiceDBSourceConfigError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
 
