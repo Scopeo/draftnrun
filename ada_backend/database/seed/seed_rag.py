@@ -584,14 +584,6 @@ def seed_rag_components(session: Session):
         is_advanced=True,
     )
 
-    rag_v3_cohere_api_key_param = db.ComponentParameterDefinition(
-        id=UUID("e866ac4a-06b2-46ec-8733-da6dcd15e8e7"),
-        component_version_id=rag_agent_v3_version.id,
-        name="cohere_api_key",
-        type=ParameterType.LLM_API_KEY,
-        nullable=True,
-    )
-
     rag_v3_use_vocabulary_search_param = db.ComponentParameterDefinition(
         id=UUID("0c1b699c-20d6-4464-95d7-edeb51f936cd"),
         component_version_id=rag_agent_v3_version.id,
@@ -741,7 +733,6 @@ def seed_rag_components(session: Session):
             rag_v3_cohere_model_param,
             rag_v3_score_threshold_param,
             rag_v3_num_doc_reranked_param,
-            rag_v3_cohere_api_key_param,
             # Advanced Vocabulary search parameters
             rag_v3_use_vocabulary_search_param,
             rag_v3_vocabulary_context_data_param,
