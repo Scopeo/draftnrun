@@ -371,6 +371,14 @@ async def super_admin_or_admin_api_key_dependency(
     Used for endpoints that require super admin access or admin key authentication (e.g., setting organization limits).
     """
 
+    if authorization and authorization.credentials and admin_api_key:
+        LOGGER.exception(
+            "User has entered two authenticators :\n"
+            f"  - User token (JWT) : {authorization.credentials}\n"
+            f"  - Admin API Key : {admin_api_key}"
+        )
+        raise HTTPException(status_code=400, detail="Provide either Authorization token OR X-Admin-API-Key, not both")
+
     if admin_api_key:
         hashed_key = verify_ingestion_api_key(private_key=admin_api_key)
         if hashed_key == settings.ADMIN_KEY_HASHED:
