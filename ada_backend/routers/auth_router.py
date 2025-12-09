@@ -373,7 +373,7 @@ async def super_admin_or_limit_api_key_dependency(
 
     if limit_api_key:
         hashed_key = verify_ingestion_api_key(private_key=limit_api_key)
-        if hashed_key == settings.LIMIT_API_KEY_HASHED:
+        if hashed_key == settings.ADMIN_KEY_HASHED:
             return None
         else:
             raise HTTPException(status_code=401, detail="Invalid limit API key")
