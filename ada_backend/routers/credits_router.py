@@ -28,7 +28,7 @@ from ada_backend.services.errors import (
     OrganizationLimitNotFound,
 )
 from ada_backend.services.user_roles_service import is_user_super_admin
-from ada_backend.routers.auth_router import get_user_from_supabase_token, super_admin_or_limit_api_key_dependency
+from ada_backend.routers.auth_router import get_user_from_supabase_token, super_admin_or_admin_api_key_dependency
 
 router = APIRouter(tags=["Credits"])
 LOGGER = logging.getLogger(__name__)
@@ -51,7 +51,7 @@ def get_all_organization_limits_endpoint(
 async def create_organization_limit_endpoint(
     organization_id: UUID,
     organization_limit_create: OrganizationLimit,
-    verified_limit_api_key_or_super_admin: Annotated[None, Depends(super_admin_or_limit_api_key_dependency)],
+    verified_admin_api_key_or_super_admin: Annotated[None, Depends(super_admin_or_admin_api_key_dependency)],
     session: Session = Depends(get_db),
 ) -> OrganizationLimitResponse:
     try:

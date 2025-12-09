@@ -362,17 +362,17 @@ async def verify_ingestion_api_key_dependency(
         raise HTTPException(status_code=401, detail="Invalid ingestion API key")
 
 
-async def super_admin_or_limit_api_key_dependency(
+async def super_admin_or_admin_api_key_dependency(
     authorization: HTTPAuthorizationCredentials | None = Depends(HTTPBearer(auto_error=False)),
-    limit_api_key: str | None = Header(None, alias="X-Limit-API-Key"),
+    admin_api_key: str | None = Header(None, alias="X-Admin-API-Key"),
 ) -> None:
     """
-    Dependency that allows either super admin user authentication OR limit API key.
-    Used for endpoints that require super admin access or limit key authentication (e.g., setting organization limits).
+    Dependency that allows either super admin user authentication OR admin API key.
+    Used for endpoints that require super admin access or admin key authentication (e.g., setting organization limits).
     """
 
-    if limit_api_key:
-        hashed_key = verify_ingestion_api_key(private_key=limit_api_key)
+    if admin_api_key:
+        hashed_key = verify_ingestion_api_key(private_key=admin_api_key)
         if hashed_key == settings.ADMIN_KEY_HASHED:
             return None
         else:
