@@ -149,7 +149,8 @@ async def get_chunks_dataframe_from_doc(
         )
     except Exception as e:
         LOGGER.error(
-            f"[PROCESSOR_EXECUTION] FAILED - Error processing '{document.file_name}' with '{processor_name}': {str(e)}",
+            f"[PROCESSOR_EXECUTION] FAILED - Error processing '{document.file_name}' "
+            f"with '{processor_name}' - {str(e)}",
             exc_info=True,
         )
         return pd.DataFrame()
