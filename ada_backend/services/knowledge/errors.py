@@ -130,6 +130,25 @@ class KnowledgeServiceDocumentNotFoundError(KnowledgeServiceError):
         super().__init__(f"Document with id='{document_id}' not found for source '{source_id}'")
 
 
+class KnowledgeMaxChunkSizeError(KnowledgeServiceError):
+    """Raised when a chunk size is too large."""
+
+    def __init__(self, token_count: int, max_chunk_tokens: int):
+        self.token_count = token_count
+        self.max_chunk_tokens = max_chunk_tokens
+        super().__init__(
+            f"Chunk content exceeds maximum allowed token count: {self.max_chunk_tokens}"
+            f"Token count: {self.token_count}"
+        )
+
+
+class KnowledgeEmptyChunkError(KnowledgeServiceError):
+    """Raised when a chunk content is empty."""
+
+    def __init__(self):
+        super().__init__(f"Chunk content cannot be empty.")
+
+
 class KnowledgeServiceDBError(KnowledgeServiceError):
     """Base exception for database-related errors in the knowledge service."""
 

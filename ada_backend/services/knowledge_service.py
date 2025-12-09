@@ -4,6 +4,7 @@ from uuid import UUID
 import json
 
 import pandas as pd
+import tiktoken
 from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
@@ -26,6 +27,8 @@ from ada_backend.services.ingestion_database_service import (
     get_sql_local_service_for_ingestion,
 )
 from ada_backend.services.knowledge.errors import (
+    KnowledgeEmptyChunkError,
+    KnowledgeMaxChunkSizeError,
     KnowledgeServiceDocumentNotFoundError,
     KnowledgeServiceInvalidEmbeddingModelReferenceError,
     KnowledgeServiceInvalidQdrantSchemaError,
@@ -45,6 +48,24 @@ from engine.trace.trace_context import get_trace_manager
 from ada_backend.services.entity_factory import get_llm_provider_and_model
 
 LOGGER = logging.getLogger(__name__)
+
+MAX_CHUNK_TOKENS = 8000
+_TOKEN_ENCODING = tiktoken.encoding_for_model("gpt-4o-mini")
+
+
+def _count_tokens(text: str) -> int:
+    return len(_TOKEN_ENCODING.encode(text))
+
+
+def _check_token_size_chunk(chunk_content: str):
+    token_count = _count_tokens(chunk_content)
+    if token_count == 0:
+        raise KnowledgeEmptyChunkError()
+    if token_count > MAX_CHUNK_TOKENS:
+        raise KnowledgeMaxChunkSizeError(
+            token_count=token_count,
+            max_chunk_tokens=MAX_CHUNK_TOKENS,
+        )
 
 
 def _deserialize_json_field(value: Any) -> Any:
@@ -236,6 +257,7 @@ def get_document_with_chunks_service(
 def _updated_chunk_to_dict(chunk: KnowledgeChunk) -> dict:
     """Convert a KnowledgeChunkUpdate to a dictionary format suitable for Qdrant / SQL."""
     chunk_dict = chunk.model_dump()
+    _check_token_size_chunk(chunk_dict["content"])
     if "document_id" in chunk_dict:
         chunk_dict["file_id"] = chunk_dict.pop("document_id")
     chunk_dict["metadata"] = json.dumps(chunk_dict["metadata"]) if chunk_dict["metadata"] else {}
