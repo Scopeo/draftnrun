@@ -136,6 +136,7 @@ def create_or_update_component_instance(
                     break
             if param_secret is None:
                 raise ValueError(f"Secret '{param.name}' not found in organization secrets for project '{project_id}'")
+
             upsert_basic_parameter(
                 session=session,
                 component_instance_id=instance_id,
