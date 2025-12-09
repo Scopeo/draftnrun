@@ -179,7 +179,9 @@ async def update_graph_with_history_service(
     latest_history = get_latest_modification_history(session, graph_runner_id)
     previous_hash = latest_history.modification_hash if latest_history else None
 
-    if previous_hash is not None and current_hash == previous_hash:
+    has_changed = previous_hash is None or current_hash != previous_hash
+
+    if not has_changed:
         LOGGER.info(f"Graph {graph_runner_id} hash unchanged, skipping updates")
         return GraphUpdateResponse(
             graph_id=graph_runner_id,
@@ -191,7 +193,7 @@ async def update_graph_with_history_service(
         session, graph_runner_id, project_id, graph_project, env, user_id, bypass_validation, skip_validation=True
     )
 
-    if latest_history is None or latest_history.modification_hash != current_hash:
+    if has_changed:
         modification_history = insert_modification_history(session, graph_runner_id, user_id, current_hash)
         LOGGER.info(f"Logged modification history for graph {graph_runner_id} by user {user_id or 'unknown'}")
 
