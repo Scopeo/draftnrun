@@ -1616,7 +1616,7 @@ class Cost(Base):
 
     id = mapped_column(UUID(as_uuid=True), primary_key=True, index=True, default=uuid.uuid4)
     entity_type = mapped_column(make_pg_enum(EntityType), nullable=True)
-    credits_per_second = mapped_column(Float, nullable=True)
+    credits_per_unit = mapped_column(JSONB, nullable=True)
     credits_per_call = mapped_column(Float, nullable=True)
     credits_per_input_token = mapped_column(Float, nullable=True)
     credits_per_output_token = mapped_column(Float, nullable=True)
@@ -1701,13 +1701,13 @@ class SpanUsage(Base):
     credits_input_token = mapped_column(Float, nullable=True)
     credits_output_token = mapped_column(Float, nullable=True)
     credits_per_call = mapped_column(Float, nullable=True)
-    credits_per_second = mapped_column(Float, nullable=True)
+    credits_per_unit = mapped_column(JSONB, nullable=True)
 
     def __str__(self):
         return (
             f"SpanUsage(span_id={self.span_id}, credits_input_token={self.credits_input_token}, "
             f"credits_output_token={self.credits_output_token}, credits_per_call={self.credits_per_call}, "
-            f"credits_per_second={self.credits_per_second})"
+            f"credits_per_unit={self.credits_per_unit})"
         )
 
 
@@ -1719,20 +1719,18 @@ class OrganizationLimit(Base):
 
     __tablename__ = "organization_limits"
     __table_args__ = (
-        UniqueConstraint("organization_id", "year", "month", name="uq_organization_limit_year_month"),
+        UniqueConstraint("organization_id", name="uq_organization_limit"),
         {"schema": "credits"},
     )
 
     id = mapped_column(UUID(as_uuid=True), primary_key=True, index=True, default=uuid.uuid4)
     organization_id = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
-    year = mapped_column(Integer, nullable=False)
-    month = mapped_column(Integer, nullable=False)
     limit = mapped_column(Float, nullable=True)
     created_at = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     def __str__(self):
-        return f"OrganizationLimit(org={self.organization_id}, " f"{self.year}-{self.month:02d}, limit={self.limit})"
+        return f"OrganizationLimit(org={self.organization_id}, limit={self.limit})"
 
 
 class Widget(Base):

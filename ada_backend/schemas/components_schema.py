@@ -50,10 +50,8 @@ class ComponentWithParametersDTO(ComponentVersionUseInfoSchema, ComponentSchema)
     parameters: List[ComponentParamDefDTO]
     port_definitions: List[PortDefinitionSchema] = []
     parameter_groups: List[ParameterGroupSchema] = []
-    credits_per_input_token: Optional[float] = None
-    credits_per_output_token: Optional[float] = None
     credits_per_call: Optional[float] = None
-    credits_per_second: Optional[float] = None
+    credits_per_unit: Optional[dict] = None
 
 
 class ComponentsResponse(BaseModel):

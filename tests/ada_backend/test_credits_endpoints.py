@@ -76,10 +76,8 @@ def create_component_version_cost_in_db(session, component_version_id: UUID, **k
     return create_component_version_cost(
         session,
         component_version_id,
-        credits_per_input_token=kwargs.get("credits_per_input_token"),
-        credits_per_output_token=kwargs.get("credits_per_output_token"),
         credits_per_call=kwargs.get("credits_per_call"),
-        credits_per_second=kwargs.get("credits_per_second"),
+        credits_per_unit=kwargs.get("credits_per_unit"),
     )
 
 
@@ -382,7 +380,7 @@ def test_upsert_component_version_cost_create(mock_is_super_admin, db_session, e
         "credits_per_input_token": 0.001,
         "credits_per_output_token": 0.002,
         "credits_per_call": 0.1,
-        "credits_per_second": 0.05,
+        "credits_per_unit": {"unit": "second", "value": 0.05},
     }
 
     response = client.patch(
@@ -397,7 +395,7 @@ def test_upsert_component_version_cost_create(mock_is_super_admin, db_session, e
     assert data["credits_per_input_token"] == 0.001
     assert data["credits_per_output_token"] == 0.002
     assert data["credits_per_call"] == 0.1
-    assert data["credits_per_second"] == 0.05
+    assert data["credits_per_unit"] == {"unit": "second", "value": 0.05}
     assert "id" in data
 
     delete_component_version_cost(db_session, component_version_id)
@@ -434,7 +432,7 @@ def test_upsert_component_version_cost_update(mock_is_super_admin, db_session, e
     assert data["credits_per_input_token"] == 0.002
     assert data["credits_per_output_token"] == 0.003
     assert data["credits_per_call"] == 0.2
-    assert data["credits_per_second"] is None
+    assert data["credits_per_unit"] is None
 
     delete_component_version_cost(db_session, component_version_id)
 
@@ -451,14 +449,14 @@ def test_upsert_component_version_cost_partial_update(mock_is_super_admin, db_se
         credits_per_input_token=0.001,
         credits_per_output_token=0.002,
         credits_per_call=0.1,
-        credits_per_second=0.05,
+        credits_per_unit={"unit": "second", "value": 0.05},
     )
 
     payload = {
         "credits_per_input_token": 0.005,
         "credits_per_output_token": 0.002,
         "credits_per_call": 0.1,
-        "credits_per_second": 0.05,
+        "credits_per_unit": {"unit": "second", "value": 0.05},
     }
 
     response = client.patch(
@@ -473,7 +471,7 @@ def test_upsert_component_version_cost_partial_update(mock_is_super_admin, db_se
 
     assert data["credits_per_output_token"] == 0.002
     assert data["credits_per_call"] == 0.1
-    assert data["credits_per_second"] == 0.05
+    assert data["credits_per_unit"] == {"unit": "second", "value": 0.05}
 
     delete_component_version_cost(db_session, component_version_id)
 
@@ -534,6 +532,6 @@ def test_upsert_component_version_cost_empty_payload(mock_is_super_admin, db_ses
     assert data["credits_per_input_token"] is None
     assert data["credits_per_output_token"] is None
     assert data["credits_per_call"] is None
-    assert data["credits_per_second"] is None
+    assert data["credits_per_unit"] is None
 
     delete_component_version_cost(db_session, component_version_id)

@@ -6,8 +6,6 @@ from typing import Optional
 
 class OrganizationLimit(BaseModel):
     limit: Optional[float] = 0.0
-    year: int
-    month: int
 
 
 class OrganizationLimitResponse(OrganizationLimit):
@@ -21,10 +19,8 @@ class OrganizationLimitResponse(OrganizationLimit):
 
 
 class ComponentVersionCost(BaseModel):
-    credits_per_second: Optional[float] = None
+    credits_per_unit: Optional[dict] = None
     credits_per_call: Optional[float] = None
-    credits_per_input_token: Optional[float] = None
-    credits_per_output_token: Optional[float] = None
 
 
 class ComponentVersionCostResponse(ComponentVersionCost):
