@@ -198,14 +198,13 @@ def test_update_agent_service_builds_graph_and_calls_update(monkeypatch):
         # no-op, just validates arguments are passed
         pass
 
-    monkeypatch.setattr(agents_service, "update_graph_service", fake_update_graph_service)
+    monkeypatch.setattr(agents_service, "update_graph_with_history_service", fake_update_graph_service)
     monkeypatch.setattr(
         agents_service, "create_or_update_component_instance", fake_create_or_update_component_instance
     )
 
     res = asyncio.run(agents_service.update_agent_service(session, user_id, agent_id, graph_runner_id, agent_data))
 
-    # verify update_graph_service was called with expected values
     assert called["session"] is session
     assert called["graph_runner_id"] == graph_runner_id
     assert called["project_id"] == agent_id
