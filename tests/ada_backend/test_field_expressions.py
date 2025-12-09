@@ -11,6 +11,7 @@ from ada_backend.main import app
 from ada_backend.database.seed.utils import COMPONENT_UUIDS
 from ada_backend.scripts.get_supabase_token import get_user_jwt
 from settings import settings
+from ada_backend.schemas.parameter_schema import ParameterKind
 
 # Test constants
 ORGANIZATION_ID = "37b7d67f-8f29-4fce-8085-19dea582f605"  # umbrella organization
@@ -25,18 +26,49 @@ HEADERS_JWT = {
 }
 
 
+def _get_field_expressions_from_instance(instance: dict) -> list[dict]:
+    """
+    Helper to get field_expressions from a component instance.
+    Reads ONLY from parameters[kind="input"] (new unified format).
+    Returns list with field_name and expression_text.
+    """
+    input_params = [p for p in instance.get("parameters", []) if p.get("kind") == ParameterKind.INPUT]
+
+    field_expressions = []
+    for param in input_params:
+        if param.get("value"):
+            field_expressions.append(
+                {
+                    "field_name": param["name"],
+                    "expression_text": str(param["value"]),
+                }
+            )
+
+    return field_expressions
+
+
 def _create_component_instance(
     instance_id: str,
     name: str,
     is_start_node: bool,
     prompt_template_value: str,
-    field_expressions: list | None = None,
+    input_expression: dict | None = None,
 ) -> dict:
     params = [
         {"value": prompt_template_value, "name": "prompt_template", "order": None},
         {"value": "openai:gpt-4o-mini", "name": "completion_model", "order": None},
         {"value": 0.2, "name": "default_temperature", "order": None},
     ]
+
+    if input_expression:
+        params.append(
+            {
+                "name": input_expression["field_name"],
+                "value": input_expression["expression_text"],
+                "kind": ParameterKind.INPUT,
+                "order": None,
+            }
+        )
 
     instance = {
         "is_agent": True,
@@ -61,8 +93,6 @@ def _create_component_instance(
         "component_name": "LLM Call",
         "component_description": "Templated LLM Call",
     }
-    if field_expressions:
-        instance["field_expressions"] = field_expressions
     return instance
 
 
@@ -85,7 +115,7 @@ def _create_graph_payload_with_field_expressions(
                 name="Target Agent",
                 is_start_node=False,
                 prompt_template_value="Process: {input}",
-                field_expressions=[{"field_name": "prompt_template", "expression_text": expression_text}],
+                input_expression={"field_name": "messages", "expression_text": expression_text},
             ),
         ],
         "relationships": [],
@@ -243,6 +273,14 @@ def test_field_expressions_e2e():
                 "is_start_node": False,
                 "component_id": COMPONENT_ID,
                 "component_version_id": COMPONENT_VERSION_ID,
+                "tool_description": {
+                    "name": "Test Tool",
+                    "description": "Test Description",
+                    "tool_properties": {},
+                    "required_tool_properties": [],
+                },
+                "component_name": "LLM Call",
+                "component_description": "Templated LLM Call",
                 "parameters": [
                     {
                         "value": "Process this: {input}",
@@ -266,20 +304,12 @@ def test_field_expressions_e2e():
                         "ui_component_properties": {},
                         "is_advanced": False,
                     },
-                ],
-                "tool_description": {
-                    "name": "Test Tool",
-                    "description": "Test Description",
-                    "tool_properties": {},
-                    "required_tool_properties": [],
-                },
-                "component_name": "LLM Call",
-                "component_description": "Templated LLM Call",
-                "field_expressions": [
                     {
-                        "field_name": "prompt_template",
-                        "expression_text": expression_text,
-                    }
+                        "name": "messages",
+                        "value": expression_text,
+                        "kind": ParameterKind.INPUT,
+                        "order": None,
+                    },
                 ],
             },
         ],
@@ -317,14 +347,18 @@ def test_field_expressions_e2e():
 
     # Verify field expressions were processed and nested
     dst = next(ci for ci in graph_data["component_instances"] if ci["id"] == dst_instance_id)
+    field_expressions = _get_field_expressions_from_instance(dst)
+    assert len(field_expressions) == 1
+    stored_expression = field_expressions[0]
+    assert stored_expression["field_name"] == "messages"
+
+    # Get expression_json from GET response (still includes field_expressions array)
     assert "field_expressions" in dst
     assert len(dst["field_expressions"]) == 1
-    stored_expression = dst["field_expressions"][0]
-    assert stored_expression["field_name"] == "prompt_template"
-    assert "expression_json" in stored_expression
+    expression_json = dst["field_expressions"][0]["expression_json"]
+    assert expression_json is not None
 
     # Verify the expression JSON structure
-    expression_json = stored_expression["expression_json"]
     assert expression_json["type"] == "concat"
     assert "parts" in expression_json
     assert len(expression_json["parts"]) == 4  # "Task: ", ref, " - Style: ", ref
@@ -414,7 +448,6 @@ def test_invalid_reference_uuid_returns_400():
                 "is_start_node": False,
                 "component_id": COMPONENT_ID,
                 "component_version_id": COMPONENT_VERSION_ID,
-                "parameters": [],
                 "tool_description": {
                     "name": "Test Tool",
                     "description": "d",
@@ -423,10 +456,12 @@ def test_invalid_reference_uuid_returns_400():
                 },
                 "component_name": "LLM Call",
                 "component_description": "Templated LLM Call",
-                "field_expressions": [
+                "parameters": [
                     {
-                        "field_name": "prompt_template",
-                        "expression_text": expression_text,
+                        "name": "prompt_template",
+                        "value": expression_text,
+                        "kind": ParameterKind.INPUT,
+                        "order": None,
                     }
                 ],
             },
@@ -472,11 +507,15 @@ def test_deploy_remaps_field_expression_instance_ids():
     new_graph = get_resp.json()
 
     target_instance = next(ci for ci in new_graph["component_instances"] if ci["name"] == "Target Agent")
+    field_expressions = _get_field_expressions_from_instance(target_instance)
+    assert len(field_expressions) == 1
+
+    expr_text = field_expressions[0]["expression_text"]
+    # Get expression_json from GET response (still includes field_expressions array)
     assert "field_expressions" in target_instance
     assert len(target_instance["field_expressions"]) == 1
-
     expr_json = target_instance["field_expressions"][0]["expression_json"]
-    expr_text = target_instance["field_expressions"][0]["expression_text"]
+    assert expr_json is not None
 
     src_instance_new = next(ci for ci in new_graph["component_instances"] if ci["name"] == "Source Agent")
     new_src_id = src_instance_new["id"]
@@ -518,9 +557,9 @@ def test_load_copy_includes_field_expressions_and_roundtrip():
     assert new_dst["id"] != dst_instance_id
 
     # Field expressions should be present on new_dst and reference new_src
-    assert "field_expressions" in new_dst
-    assert len(new_dst["field_expressions"]) == 1
-    expr_text_new = new_dst["field_expressions"][0]["expression_text"]
+    field_expressions = _get_field_expressions_from_instance(new_dst)
+    assert len(field_expressions) == 1
+    expr_text_new = field_expressions[0]["expression_text"]
     assert str(src_instance_id) not in expr_text_new
     assert str(new_src["id"]) in expr_text_new
 
@@ -533,8 +572,8 @@ def test_load_copy_includes_field_expressions_and_roundtrip():
     assert clone_get.status_code == 200
     cloned = clone_get.json()
     cloned_dst = next(ci for ci in cloned["component_instances"] if ci["name"] == "Target Agent")
-    assert "field_expressions" in cloned_dst
-    assert len(cloned_dst["field_expressions"]) == 1
+    field_expressions = _get_field_expressions_from_instance(cloned_dst)
+    assert len(field_expressions) == 1
 
     # Cleanup
     client.delete(f"/projects/{project_id}", headers=HEADERS_JWT)
@@ -576,11 +615,15 @@ def test_load_copy_cloned_graph_has_remapped_field_expressions():
     cloned_dst = next(ci for ci in cloned_graph["component_instances"] if ci["name"] == "Target Agent")
     cloned_src_id = cloned_src["id"]
 
+    field_expressions = _get_field_expressions_from_instance(cloned_dst)
+    assert len(field_expressions) == 1
+
+    cloned_expr_text = field_expressions[0]["expression_text"]
+    # Get expression_json from GET response (still includes field_expressions array)
     assert "field_expressions" in cloned_dst
     assert len(cloned_dst["field_expressions"]) == 1
-
     cloned_expr_json = cloned_dst["field_expressions"][0]["expression_json"]
-    cloned_expr_text = cloned_dst["field_expressions"][0]["expression_text"]
+    assert cloned_expr_json is not None
 
     _assert_expression_remapped(
         cloned_expr_json, cloned_expr_text, src_instance_id, cloned_src_id, context="Cloned graph: "
@@ -648,7 +691,6 @@ def test_invalid_reference_unknown_port_returns_400():
                 "is_start_node": False,
                 "component_id": COMPONENT_ID,
                 "component_version_id": COMPONENT_VERSION_ID,
-                "parameters": [],
                 "tool_description": {
                     "name": "Test Tool",
                     "description": "d",
@@ -657,10 +699,12 @@ def test_invalid_reference_unknown_port_returns_400():
                 },
                 "component_name": "LLM Call",
                 "component_description": "Templated LLM Call",
-                "field_expressions": [
+                "parameters": [
                     {
-                        "field_name": "prompt_template",
-                        "expression_text": expression_text,
+                        "name": "prompt_template",
+                        "value": expression_text,
+                        "kind": ParameterKind.INPUT,
+                        "order": None,
                     }
                 ],
             },
