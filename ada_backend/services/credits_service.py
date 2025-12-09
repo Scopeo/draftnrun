@@ -40,8 +40,8 @@ def delete_component_version_cost_service(session: Session, component_version_id
     return delete_component_version_cost(session, component_version_id)
 
 
-def get_all_organization_limits_service(session: Session, year: int, month: int) -> List[OrganizationLimitResponse]:
-    organization_limits = get_all_organization_limits(session, year, month)
+def get_all_organization_limits_service(session: Session) -> List[OrganizationLimitResponse]:
+    organization_limits = get_all_organization_limits(session)
     return [
         OrganizationLimitResponse.model_validate(organization_limit, from_attributes=True)
         for organization_limit in organization_limits

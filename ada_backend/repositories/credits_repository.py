@@ -48,9 +48,9 @@ def update_llm_cost(
     llm_cost = session.query(db.LLMCost).filter(db.LLMCost.llm_model_id == llm_model_id).first()
 
     _update_cost_fields(
-        llm_cost,
-        credits_per_input_token,
-        credits_per_output_token,
+        cost_obj=llm_cost,
+        credits_per_input_token=credits_per_input_token,
+        credits_per_output_token=credits_per_output_token,
     )
     session.commit()
     session.refresh(llm_cost)
@@ -81,9 +81,9 @@ def upsert_llm_cost(
         )
     else:
         _update_cost_fields(
-            llm_cost,
-            credits_per_input_token,
-            credits_per_output_token,
+            cost_obj=llm_cost,
+            credits_per_input_token=credits_per_input_token,
+            credits_per_output_token=credits_per_output_token,
         )
         session.commit()
         session.refresh(llm_cost)
@@ -129,9 +129,9 @@ def upsert_component_version_cost(
         )
     else:
         _update_cost_fields(
-            component_cost,
-            credits_per_call,
-            credits_per_unit,
+            cost_obj=component_cost,
+            credits_per_call=credits_per_call,
+            credits_per_unit=credits_per_unit,
         )
         session.commit()
         session.refresh(component_cost)
