@@ -4,7 +4,6 @@ from fastapi import APIRouter, Depends, HTTPException, Body
 from sqlalchemy.orm import Session
 import logging
 
-
 from ada_backend.database.models import EnvType, CallType, ProjectType
 from ada_backend.database.setup_db import get_db
 from ada_backend.schemas.auth_schema import SupabaseUser
@@ -44,11 +43,13 @@ from ada_backend.services.project_service import (
 )
 from ada_backend.repositories.env_repository import get_env_relationship_by_graph_runner_id
 from engine.llm_services.utils import LLMKeyLimitExceededError
+from engine.agent.errors import (
+    KeyTypePromptTemplateError,
+    MissingKeyPromptTemplateError,
+)
 from ada_backend.services.tag_service import compose_tag_name
 
-
 LOGGER = logging.getLogger(__name__)
-
 
 router = APIRouter(prefix="/projects")
 
@@ -210,6 +211,17 @@ async def run_env_agent_endpoint(
     except MissingDataSourceError as e:
         LOGGER.error(f"Data source not found for project {project_id} in environment {env}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=400, detail=str(e)) from e
+    except MissingKeyPromptTemplateError as e:
+        LOGGER.error(
+            f"Missing key from prompt template for project {project_id} in environment {env}: {str(e)}", exc_info=True
+        )
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except KeyTypePromptTemplateError as e:
+        LOGGER.error(
+            f"Key type error in prompt template for project {project_id} in environment {env}: {str(e)}",
+            exc_info=True,
+        )
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except ConnectionError as e:
         LOGGER.error(
             f"Database connection failed for project {project_id} in environment {env}: {str(e)}", exc_info=True
@@ -330,6 +342,20 @@ async def chat(
             exc_info=True,
         )
         raise HTTPException(status_code=400, detail=str(e)) from e
+    except MissingKeyPromptTemplateError as e:
+        LOGGER.error(
+            f"Missing key from prompt template for project {project_id} for graph runner "
+            f"{graph_runner_id}: {str(e)}",
+            exc_info=True,
+        )
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except KeyTypePromptTemplateError as e:
+        LOGGER.error(
+            f"Key type error in prompt template for project {project_id} for graph runner "
+            f"{graph_runner_id}: {str(e)}",
+            exc_info=True,
+        )
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except ConnectionError as e:
         LOGGER.error(
             f"Database connection failed for project {project_id}, graph_runner {graph_runner_id}: {str(e)}",
@@ -397,6 +423,19 @@ async def chat_env(
     except MissingDataSourceError as e:
         LOGGER.error(f"Data source not found for project {project_id} in environment {env}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=400, detail=str(e)) from e
+    except MissingKeyPromptTemplateError as e:
+        LOGGER.error(
+            f"Missing key from prompt template for project {project_id} in environment " f"{env}: {str(e)}",
+            exc_info=True,
+        )
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except KeyTypePromptTemplateError as e:
+        LOGGER.error(
+            f"Key type error in prompt template for project {project_id} in environment " f"{env}: {str(e)}",
+            exc_info=True,
+        )
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
     except ConnectionError as e:
         LOGGER.error(
             f"Database connection failed for project {project_id} in environment {env}: {str(e)}", exc_info=True
