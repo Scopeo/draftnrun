@@ -3,7 +3,7 @@ from typing import Optional
 
 from sqlalchemy.orm import Session
 
-from ada_backend.database.models import ReleaseStage
+from ada_backend.database.models import ReleaseStage, ParameterType, PortType
 from ada_backend.repositories.component_repository import (
     count_component_instances,
     delete_component_by_id,
@@ -15,7 +15,9 @@ from ada_backend.repositories.component_repository import (
 )
 from ada_backend.repositories.release_stage_repository import _STAGE_ORDER, STAGE_HIERARCHY
 from ada_backend.schemas.components_schema import ComponentsResponse, PortDefinitionSchema
+from ada_backend.schemas.parameter_schema import ComponentParamDefDTO, ParameterKind
 from ada_backend.services.errors import EntityInUseDeletionError
+from ada_backend.services.parameter_synthesis_utils import filter_conflicting_parameters
 
 LOGGER = logging.getLogger(__name__)
 
@@ -27,6 +29,7 @@ def _process_components_with_ports(
     component_version_ids = [component.component_version_id for component in components]
     ports = get_port_definitions_for_component_version_ids(session, component_version_ids)
     comp_id_to_ports: dict[str, list[PortDefinitionSchema]] = {}
+    input_ports_by_component_version: dict = {}
     for port in ports:
         comp_id_to_ports.setdefault(str(port.component_version_id), []).append(
             PortDefinitionSchema(
@@ -36,8 +39,44 @@ def _process_components_with_ports(
                 description=port.description,
             )
         )
+        # Track input ports per component_version for input-parameter synthesis
+        if port.port_type == PortType.INPUT:
+            input_ports_by_component_version.setdefault(port.component_version_id, []).append(port)
     for component in components:
         component.port_definitions = comp_id_to_ports.get(str(component.component_version_id), [])
+
+        input_ports = input_ports_by_component_version.get(component.component_version_id, [])
+
+        # Hide config parameters whose names collide with enabled input ports
+        component.parameters = filter_conflicting_parameters(component.parameters or [], input_ports)
+
+        for input_port in input_ports:
+            component.parameters.append(
+                ComponentParamDefDTO(
+                    id=input_port.id,
+                    component_version_id=input_port.component_version_id,
+                    name=input_port.name,
+                    type=ParameterType.STRING,
+                    nullable=True,
+                    default=None,
+                    ui_component=input_port.ui_component,
+                    ui_component_properties=input_port.ui_component_properties,
+                    is_advanced=False,
+                    parameter_group_id=None,
+                    parameter_order_within_group=None,
+                    parameter_group_name=None,
+                    kind=ParameterKind.INPUT,
+                )
+            )
+
+        # TODO: Temporary patch to ensure 'messages' appears first. Clean later.
+        component.parameters.sort(
+            key=lambda p: (
+                0 if p.name == "messages" else 1,
+                p.order if p.order is not None else 999,
+                p.name,
+            )
+        )
 
     return ComponentsResponse(components=components)
 

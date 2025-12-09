@@ -5,12 +5,13 @@ from sqlalchemy.orm import Session
 from ada_backend.schemas.pipeline.base import ComponentRelationshipSchema
 from ada_backend.schemas.pipeline.graph_schema import EdgeSchema, GraphLoadResponse
 from ada_backend.schemas.pipeline.get_pipeline_schema import ComponentInstanceReadSchema
-from ada_backend.schemas.pipeline.field_expression_schema import FieldExpressionReadSchema
+from ada_backend.schemas.parameter_schema import ParameterKind
 from ada_backend.services.graph.get_graph_service import get_graph_service
 from ada_backend.services.pipeline.get_pipeline_service import get_component_instance
-from ada_backend.services.field_expression_remap_service import remap_field_expressions_for_cloning
-from engine.field_expressions.parser import parse_expression
-from engine.field_expressions.serializer import to_json as expr_to_json
+from ada_backend.services.field_expression_remap_service import (
+    remap_instance_ids_in_expression,
+)
+from engine.field_expressions.parser import parse_expression, unparse_expression
 
 
 def instanciate_copy_component_instance(
@@ -52,21 +53,20 @@ def load_copy_graph_service(
             if target_id is None:
                 raise ValueError("Target component instance missing id during load-copy")
             id_mapping[source_id] = target_id
-        remapped_expressions_by_source_id = remap_field_expressions_for_cloning(
-            session=session,
-            source_instance_ids=source_instance_ids,
-            id_mapping=id_mapping,
-        )
+
+        id_mapping_str: dict[str, str] = {str(src): str(dst) for src, dst in id_mapping.items()}
         for source_instance_id, target_instance in component_instance_map.items():
-            if source_instance_id in remapped_expressions_by_source_id:
-                target_instance.field_expressions = [
-                    FieldExpressionReadSchema(
-                        field_name=expr.field_name,
-                        expression_json=expr_to_json(parse_expression(expr.expression_text)),
-                        expression_text=expr.expression_text,
-                    )
-                    for expr in remapped_expressions_by_source_id[source_instance_id]
-                ]
+            # Update parameters[kind='input'] expression texts to use remapped instance IDs
+            updated_params = []
+            for param in target_instance.parameters:
+                if getattr(param, "kind", None) == ParameterKind.INPUT and param.value is not None:
+                    expression_text = str(param.value)
+                    ast = parse_expression(expression_text)
+                    remapped_ast = remap_instance_ids_in_expression(ast, id_mapping_str)
+                    remapped_text = unparse_expression(remapped_ast)
+                    param = param.model_copy(update={"value": remapped_text})
+                updated_params.append(param)
+            target_instance.parameters = updated_params
 
     load_copy_relationships: list[ComponentRelationshipSchema] = []
     for old_relation in graph_get_response.relationships:

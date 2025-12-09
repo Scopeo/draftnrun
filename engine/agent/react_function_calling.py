@@ -43,9 +43,19 @@ OUTPUT_TOOL_DESCRIPTION = (
 
 
 class ReActAgentInputs(BaseModel):
-    messages: list[ChatMessage] = Field(description="The history of messages in the conversation.")
-    initial_prompt: Optional[str] = Field(default=None, description="Initial prompt to use for the agent.")
-    output_format: Optional[str | dict] = Field(default=None, description="Structured output format.")
+    messages: list[ChatMessage] = Field(
+        description="The history of messages in the conversation.",
+    )
+    initial_prompt: Optional[str] = Field(
+        default=None,
+        description="Initial prompt to use for the agent.",
+        json_schema_extra={"disabled_as_input": True},
+    )
+    output_format: Optional[str | dict] = Field(
+        default=None,
+        description="Structured output format.",
+        json_schema_extra={"disabled_as_input": True},
+    )
     # Allow any other fields to be passed through
     model_config = {"extra": "allow"}
 

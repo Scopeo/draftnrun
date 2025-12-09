@@ -66,14 +66,18 @@ DEFAULT_LLM_CALL_TOOL_DESCRIPTION = ToolDescription(
 
 
 class LLMCallInputs(BaseModel):
-    messages: list[ChatMessage] = Field(description="The input messages")
+    messages: list[ChatMessage] = Field(
+        description="The input messages",
+    )
     prompt_template: Optional[str] = Field(
         default=None,
         description="Prompt template to use for the LLM call.",
+        json_schema_extra={"disabled_as_input": True},
     )
     output_format: Optional[dict[str, Any]] = Field(
         default=None,
         description="Structured output format.",
+        json_schema_extra={"disabled_as_input": True},
     )
     # Allow extra fields for backward compatibility
     model_config = {"extra": "allow"}

@@ -30,7 +30,10 @@ class ComponentInstanceSchema(BaseModel):
     parameters: list[PipelineParameterSchema]
     tool_description: Optional[ToolDescriptionSchema] = None
     integration: Optional[GraphIntegrationSchema] = None
-    field_expressions: list[FieldExpressionUpdateSchema] = Field(default_factory=list)
+    field_expressions: list[FieldExpressionUpdateSchema] = Field(
+        default_factory=list,
+        deprecated=True,
+    )
 
 
 class ComponentRelationshipSchema(BaseModel):
