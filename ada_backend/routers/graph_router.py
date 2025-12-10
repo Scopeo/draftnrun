@@ -21,7 +21,12 @@ from ada_backend.schemas.pipeline.graph_schema import (
 )
 from ada_backend.database.setup_db import get_db
 
-from ada_backend.services.errors import GraphNotFound, MissingDataSourceError, ProjectNotFound
+from ada_backend.services.errors import (
+    GraphNotFound,
+    GraphNotBoundToProjectError,
+    MissingDataSourceError,
+    ProjectNotFound,
+)
 from ada_backend.services.graph.deploy_graph_service import deploy_graph_service
 from ada_backend.services.graph.load_copy_graph_service import load_copy_graph_service
 from ada_backend.services.graph.update_graph_service import update_graph_with_history_service
@@ -59,6 +64,8 @@ def get_project_graph(
         raise HTTPException(status_code=404, detail=str(e)) from e
     except GraphNotFound as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
+    except GraphNotBoundToProjectError as e:
+        raise HTTPException(status_code=403, detail=str(e)) from e
     except ConnectionError as e:
         LOGGER.error(
             f"Database connection failed for project {project_id} and runner {graph_runner_id}: {str(e)}",
@@ -101,6 +108,8 @@ def get_graph_modification_history(
         return get_graph_modification_history_service(session, project_id, graph_runner_id)
     except (ProjectNotFound, GraphNotFound) as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
+    except GraphNotBoundToProjectError as e:
+        raise HTTPException(status_code=403, detail=str(e)) from e
     except ConnectionError as e:
         LOGGER.error(
             f"Database connection failed for project {project_id} and runner {graph_runner_id}: {str(e)}",

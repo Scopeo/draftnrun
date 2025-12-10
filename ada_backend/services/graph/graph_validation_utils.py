@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from ada_backend.database import models as db
 from ada_backend.repositories.env_repository import get_env_relationship_by_graph_runner_id
 from ada_backend.repositories.graph_runner_repository import graph_runner_exists
-from ada_backend.services.errors import GraphNotFound
+from ada_backend.services.errors import GraphNotFound, GraphNotBoundToProjectError
 
 
 def validate_graph_runner_belongs_to_project(
@@ -18,10 +18,8 @@ def validate_graph_runner_belongs_to_project(
 
     project_env_binding = get_env_relationship_by_graph_runner_id(session, graph_runner_id)
     if not project_env_binding:
-        raise ValueError(f"Graph with ID {graph_runner_id} is not bound to any project.")
+        raise GraphNotBoundToProjectError(graph_runner_id)
     if project_env_binding.project_id != project_id:
-        raise ValueError(
-            f"Graph with ID {graph_runner_id} is bound to project {project_env_binding.project_id}, not {project_id}."
-        )
+        raise GraphNotBoundToProjectError(graph_runner_id, project_env_binding.project_id, project_id)
 
     return project_env_binding
