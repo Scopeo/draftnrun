@@ -1,6 +1,6 @@
-from typing import Any, Dict, List, Optional
+from typing import List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 
 class KnowledgeDocumentOverview(BaseModel):
@@ -14,9 +14,8 @@ class KnowledgeDocumentMetadata(BaseModel):
     document_id: str
     document_title: Optional[str] = None
     url: Optional[str] = None
-    metadata: Dict[str, Any] = Field(default_factory=dict)
     last_edited_ts: Optional[str] = None
-    folder_name: Optional[str] = None
+    metadata: Optional[dict] = None
 
 
 class KnowledgeChunk(BaseModel):
@@ -26,12 +25,16 @@ class KnowledgeChunk(BaseModel):
     """
 
     chunk_id: str
-    document_id: str
+    order: int
     content: str
     last_edited_ts: str
+    document_id: str
+    document_title: Optional[str] = None
+    url: Optional[str] = None
+    metadata: Optional[dict] = None
 
     class Config:
-        extra = "allow"
+        extra = "ignore"
 
 
 class KnowledgeDocumentWithChunks(BaseModel):

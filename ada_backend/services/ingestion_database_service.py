@@ -1,10 +1,6 @@
 from uuid import UUID
 
 from engine.storage_service.local_service import SQLLocalService
-from ada_backend.schemas.ingestion_database_schema import (
-    ChunkData,
-    UpdateChunk,
-)
 from ingestion_script.utils import get_sanitize_names
 from engine.storage_service.db_utils import DBDefinition
 from settings import settings
@@ -30,28 +26,3 @@ def create_table_in_ingestion_db(
         schema_name=schema_name,
     )
     return table_name, table_definition
-
-
-def update_chunk_info_in_ingestion_db(
-    organization_id: UUID,
-    source_name: str,
-    chunk_id: str,
-    update_request: UpdateChunk,
-) -> ChunkData:
-    sql_local_service = get_sql_local_service_for_ingestion()
-    schema_name, table_name, qdrant_collection_name = get_sanitize_names(
-        source_name=source_name,
-        organization_id=str(organization_id),
-    )
-    sql_local_service.update_row(
-        table_name=table_name,
-        schema_name=schema_name,
-        chunk_id=chunk_id,
-        update_data=update_request.update_data,
-    )
-    updated_row = sql_local_service.get_row_by_id(
-        table_name=table_name,
-        schema_name=schema_name,
-        chunk_id=chunk_id,
-    )
-    return ChunkData(data=updated_row)

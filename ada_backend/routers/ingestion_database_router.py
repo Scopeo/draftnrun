@@ -5,20 +5,8 @@ from fastapi import Depends, HTTPException
 from uuid import UUID
 
 from engine.storage_service.db_utils import DBDefinition
-from ada_backend.routers.auth_router import (
-    verify_ingestion_api_key_dependency,
-    user_has_access_to_organization_dependency,
-    UserRights,
-    SupabaseUser,
-)
-from ada_backend.schemas.ingestion_database_schema import (
-    ChunkData,
-    UpdateChunk,
-)
-from ada_backend.services.ingestion_database_service import (
-    create_table_in_ingestion_db,
-    update_chunk_info_in_ingestion_db,
-)
+from ada_backend.routers.auth_router import verify_ingestion_api_key_dependency
+from ada_backend.services.ingestion_database_service import create_table_in_ingestion_db
 
 
 router = APIRouter(tags=["Ingestion Database"])
@@ -40,31 +28,5 @@ def create_table_in_database(
             "Failed to create table in database for organization %s, source %s",
             organization_id,
             source_name,
-        )
-        raise HTTPException(status_code=500, detail=str(e)) from e
-
-
-@router.put("/organizations/{organization_id}/ingestion_database/sources/{source_name}/chunks/{chunk_id}")
-def update_chunk_info_in_database(
-    organization_id: UUID,
-    source_name: str,
-    chunk_id: str,
-    update_request: UpdateChunk,
-    user: Annotated[
-        SupabaseUser, Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.WRITER.value))
-    ],
-) -> ChunkData:
-    if not user.id:
-        raise HTTPException(status_code=400, detail="User ID not found")
-    try:
-        return update_chunk_info_in_ingestion_db(organization_id, source_name, chunk_id, update_request)
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
-    except Exception as e:
-        LOGGER.exception(
-            "Failed to update chunk info in database for organization %s, source %s, chunk %s",
-            organization_id,
-            source_name,
-            chunk_id,
         )
         raise HTTPException(status_code=500, detail=str(e)) from e
