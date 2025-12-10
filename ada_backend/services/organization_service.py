@@ -19,6 +19,10 @@ LOGGER = logging.getLogger(__name__)
 
 
 async def update_api_key_in_organization(session: Session, organization_id: UUID):
+    """
+    Updates all graphs in an organization after an API key change.
+    History tracking is disabled to avoid polluting modification history with automatic updates.
+    """
     org_projects = get_workflows_by_organization(session, organization_id)
     for project in org_projects:
         graph_runners = get_graph_runners_by_project(session, project.id)

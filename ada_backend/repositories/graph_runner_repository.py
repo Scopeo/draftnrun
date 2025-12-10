@@ -264,3 +264,39 @@ def delete_temp_folder(uuid_for_temp_folder: str) -> None:
     if temp_folder.exists():
         shutil.rmtree(temp_folder)
         LOGGER.info(f"Deleted temp folder: {temp_folder}")
+
+
+def get_latest_modification_history(
+    session: Session, graph_runner_id: UUID
+) -> Optional[db.GraphRunnerModificationHistory]:
+    """Get the most recent modification history record for a graph runner."""
+    return (
+        session.query(db.GraphRunnerModificationHistory)
+        .filter(db.GraphRunnerModificationHistory.graph_runner_id == graph_runner_id)
+        .order_by(db.GraphRunnerModificationHistory.created_at.desc())
+        .first()
+    )
+
+
+def insert_modification_history(
+    session: Session, graph_runner_id: UUID, user_id: Optional[UUID], modification_hash: str
+) -> db.GraphRunnerModificationHistory:
+    history = db.GraphRunnerModificationHistory(
+        graph_runner_id=graph_runner_id,
+        user_id=user_id,
+        modification_hash=modification_hash,
+    )
+    session.add(history)
+    session.commit()
+    session.refresh(history)
+    return history
+
+
+def get_modification_history(session: Session, graph_runner_id: UUID) -> list[db.GraphRunnerModificationHistory]:
+    """Get the modification history for a graph runner in descending order of creation time."""
+    return (
+        session.query(db.GraphRunnerModificationHistory)
+        .filter(db.GraphRunnerModificationHistory.graph_runner_id == graph_runner_id)
+        .order_by(db.GraphRunnerModificationHistory.created_at.desc())
+        .all()
+    )

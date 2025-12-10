@@ -30,7 +30,7 @@ from ada_backend.segment_analytics import track_agent_created
 from ada_backend.services.errors import ProjectNotFound, InvalidAgentTemplate
 from ada_backend.database import models as db
 from ada_backend.services.graph.get_graph_service import get_graph_service
-from ada_backend.services.graph.update_graph_service import update_graph_service
+from ada_backend.services.graph.update_graph_service import update_graph_with_history_service
 from ada_backend.services.project_service import create_project_with_graph_runner
 from ada_backend.services.tag_service import compose_tag_name
 from ada_backend.services.pipeline.update_pipeline_service import create_or_update_component_instance
@@ -275,7 +275,7 @@ async def update_agent_service(
         relationships=tool_relationships, component_instances=all_component_instances, edges=[]
     )
 
-    return await update_graph_service(
+    return await update_graph_with_history_service(
         session=session,
         graph_runner_id=graph_runner_id,
         project_id=agent_id,

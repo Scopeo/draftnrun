@@ -140,3 +140,21 @@ class MissingDataSourceError(Exception):
                 "Please select a data source in the component settings before running the agent."
             )
         super().__init__(message)
+
+
+class GraphNotBoundToProjectError(Exception):
+    """Raised when a graph is not bound to the expected project."""
+
+    def __init__(
+        self, graph_runner_id: UUID, bound_project_id: UUID | None = None, expected_project_id: UUID | None = None
+    ):
+        self.graph_runner_id = graph_runner_id
+        self.bound_project_id = bound_project_id
+        self.expected_project_id = expected_project_id
+        if bound_project_id is None:
+            message = f"Graph with ID {graph_runner_id} is not bound to any project."
+        else:
+            message = (
+                f"Graph with ID {graph_runner_id} is bound to project {bound_project_id}, not {expected_project_id}."
+            )
+        super().__init__(message)
