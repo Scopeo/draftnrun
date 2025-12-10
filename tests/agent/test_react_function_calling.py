@@ -309,7 +309,6 @@ def test_date_in_system_prompt_disabled(
 
 @patch("engine.prometheus_metric.get_tracing_span")
 @patch("engine.prometheus_metric.agent_calls")
-@patch("engine.llm_services.utils.check_usage")
 @patch("engine.llm_services.utils.get_tracing_span")
 def test_structured_output_in_function_call_async(
     utils_get_span_mock, agent_calls_mock, get_span_mock, mock_trace_manager, mock_tool_description, agent_input
