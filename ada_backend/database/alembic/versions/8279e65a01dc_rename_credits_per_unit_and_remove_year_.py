@@ -50,12 +50,32 @@ def downgrade() -> None:
         schema="credits",
     )
     op.drop_column("span_usages", "credits_per_unit", schema="credits")
+
+    # Add year and month columns as nullable first
     op.add_column(
-        "organization_limits", sa.Column("year", sa.INTEGER(), autoincrement=False, nullable=False), schema="credits"
+        "organization_limits", sa.Column("year", sa.INTEGER(), autoincrement=False, nullable=True), schema="credits"
     )
     op.add_column(
-        "organization_limits", sa.Column("month", sa.INTEGER(), autoincrement=False, nullable=False), schema="credits"
+        "organization_limits", sa.Column("month", sa.INTEGER(), autoincrement=False, nullable=True), schema="credits"
     )
+
+    # Populate year and month with current year/month for existing rows
+    conn = op.get_bind()
+    conn.execute(
+        sa.text(
+            """
+            UPDATE credits.organization_limits
+            SET year = EXTRACT(YEAR FROM CURRENT_DATE)::INTEGER,
+                month = EXTRACT(MONTH FROM CURRENT_DATE)::INTEGER
+            WHERE year IS NULL OR month IS NULL
+            """
+        )
+    )
+
+    # Now make them NOT NULL
+    op.alter_column("organization_limits", "year", nullable=False, schema="credits")
+    op.alter_column("organization_limits", "month", nullable=False, schema="credits")
+
     op.drop_constraint("uq_organization_limit", "organization_limits", schema="credits", type_="unique")
     op.create_unique_constraint(
         op.f("uq_organization_limit_year_month"),
