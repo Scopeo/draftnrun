@@ -10,6 +10,7 @@ from ada_backend.schemas.auth_schema import SupabaseUser
 from ada_backend.schemas.category_schema import CategoryCreateSchema, CategoryResponse, CategoryUpdateSchema
 from ada_backend.routers.auth_router import (
     user_has_access_to_organization_dependency,
+    ensure_super_admin_dependency,
     UserRights,
 )
 from ada_backend.services.category_service import (
@@ -28,7 +29,7 @@ LOGGER = logging.getLogger(__name__)
 @router.get(path="/categories", response_model=list[CategoryResponse])
 def get_all_categories(
     user: Annotated[
-        SupabaseUser, Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.READER.value))
+        SupabaseUser, Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.MEMBER.value))
     ],
     session: Session = Depends(get_db),
 ) -> list[CategoryResponse]:
@@ -45,7 +46,7 @@ def get_all_categories(
 def get_category_by_id(
     category_id: UUID,
     user: Annotated[
-        SupabaseUser, Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.READER.value))
+        SupabaseUser, Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.MEMBER.value))
     ],
     session: Session = Depends(get_db),
 ) -> CategoryResponse:
@@ -63,13 +64,9 @@ def get_category_by_id(
 @router.post("/categories", response_model=CategoryResponse, summary="Create a new category")
 def create_category(
     category: CategoryCreateSchema,
-    user: Annotated[
-        SupabaseUser, Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.WRITER.value))
-    ],
+    user: Annotated[SupabaseUser, Depends(ensure_super_admin_dependency())],
     session: Session = Depends(get_db),
 ) -> CategoryResponse:
-    if not user.id:
-        raise HTTPException(status_code=400, detail="User ID not found")
     try:
         return create_category_service(session, category)
     except DuplicateCategoryName as e:
@@ -82,14 +79,10 @@ def create_category(
 @router.patch("/categories/{category_id}", response_model=CategoryResponse, summary="Update a category")
 def update_category(
     category: CategoryUpdateSchema,
-    user: Annotated[
-        SupabaseUser, Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.WRITER.value))
-    ],
+    user: Annotated[SupabaseUser, Depends(ensure_super_admin_dependency())],
     category_id: UUID = None,
     session: Session = Depends(get_db),
 ) -> CategoryResponse:
-    if not user.id:
-        raise HTTPException(status_code=400, detail="User ID not found")
     try:
         return update_category_service(session, category_id, category)
     except CategoryNotFound:
@@ -106,13 +99,9 @@ def update_category(
 @router.delete("/categories/{category_id}")
 def delete_category(
     category_id: UUID,
-    user: Annotated[
-        SupabaseUser, Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.WRITER.value))
-    ],
+    user: Annotated[SupabaseUser, Depends(ensure_super_admin_dependency())],
     session: Session = Depends(get_db),
 ) -> None:
-    if not user.id:
-        raise HTTPException(status_code=400, detail="User ID not found")
     try:
         delete_category_service(session, category_id)
     except Exception as e:

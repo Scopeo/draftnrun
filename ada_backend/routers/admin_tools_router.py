@@ -4,7 +4,7 @@ import logging
 from sqlalchemy.orm import Session
 
 from ada_backend.database.setup_db import get_db
-from ada_backend.routers.auth_router import get_user_from_supabase_token
+from ada_backend.routers.auth_router import ensure_super_admin_dependency
 from ada_backend.schemas.auth_schema import SupabaseUser
 from ada_backend.schemas.admin_tools_schema import (
     CreateSpecificApiToolRequest,
@@ -13,7 +13,6 @@ from ada_backend.schemas.admin_tools_schema import (
 from ada_backend.services.admin_tools_service import (
     create_specific_api_tool_service,
 )
-from ada_backend.services.user_roles_service import is_user_super_admin
 
 LOGGER = logging.getLogger(__name__)
 
@@ -30,14 +29,10 @@ router = APIRouter(
 )
 async def create_specific_api_tool(
     payload: CreateSpecificApiToolRequest,
-    user: Annotated[SupabaseUser, Depends(get_user_from_supabase_token)],
+    user: Annotated[SupabaseUser, Depends(ensure_super_admin_dependency())],
     session: Session = Depends(get_db),
 ):
-    # Enforce global super-admin (user-level) using the same Edge Function
     try:
-        is_super = await is_user_super_admin(user)
-        if not is_super:
-            raise HTTPException(status_code=403, detail="Super admin required")
         return create_specific_api_tool_service(
             session=session,
             payload=payload,

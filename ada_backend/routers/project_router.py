@@ -19,7 +19,6 @@ from ada_backend.schemas.project_schema import (
 )
 from ada_backend.services.agent_runner_service import run_agent, run_env_agent
 from ada_backend.routers.auth_router import (
-    get_user_from_supabase_token,
     verify_api_key_dependency,
     VerifiedApiKey,
     user_has_access_to_organization_dependency,
@@ -61,7 +60,7 @@ def get_projects_by_organization_endpoint(
         SupabaseUser,
         Depends(
             user_has_access_to_organization_dependency(
-                allowed_roles=UserRights.USER.value,
+                allowed_roles=UserRights.MEMBER.value,
             )
         ),
     ],
@@ -93,7 +92,7 @@ def get_workflow_endpoint(
     project_id: UUID,
     user: Annotated[
         SupabaseUser,
-        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.USER.value)),
+        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.MEMBER.value)),
     ],
     session: Session = Depends(get_db),
 ):
@@ -116,7 +115,7 @@ def delete_project_endpoint(
     project_id: UUID,
     user: Annotated[
         SupabaseUser,
-        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.ADMIN.value)),
+        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.DEVELOPER.value)),
     ],
     session: Session = Depends(get_db),
 ) -> ProjectDeleteResponse:
@@ -138,7 +137,7 @@ def update_project_endpoint(
     project: ProjectUpdateSchema,
     user: Annotated[
         SupabaseUser,
-        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.ADMIN.value)),
+        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.DEVELOPER.value)),
     ],
     session: Session = Depends(get_db),
 ) -> ProjectSchema:
@@ -161,7 +160,7 @@ def create_workflow_endpoint(
     project: ProjectCreateSchema,
     user: Annotated[
         SupabaseUser,
-        Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.ADMIN.value)),
+        Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.DEVELOPER.value)),
     ],
     session: Session = Depends(get_db),
 ) -> ProjectWithGraphRunnersSchema:
@@ -239,7 +238,10 @@ async def run_env_agent_endpoint(
 async def get_project_charts(
     project_id: UUID,
     duration: int,
-    user: Annotated[SupabaseUser, Depends(get_user_from_supabase_token)],
+    user: Annotated[
+        SupabaseUser,
+        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.MEMBER.value)),
+    ],
     call_type: CallType | None = None,
 ):
     if not user.id:
@@ -267,7 +269,10 @@ async def get_project_charts(
 async def get_project_monitoring_kpi(
     project_id: UUID,
     duration: int,
-    user: Annotated[SupabaseUser, Depends(get_user_from_supabase_token)],
+    user: Annotated[
+        SupabaseUser,
+        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.MEMBER.value)),
+    ],
     call_type: CallType | None = None,
 ):
     if not user.id:
@@ -291,7 +296,7 @@ async def chat(
         SupabaseUser,
         Depends(
             user_has_access_to_project_dependency(
-                allowed_roles=UserRights.USER.value,
+                allowed_roles=UserRights.MEMBER.value,
             )
         ),
     ],
@@ -384,7 +389,7 @@ async def chat_env(
         SupabaseUser,
         Depends(
             user_has_access_to_project_dependency(
-                allowed_roles=UserRights.USER.value,
+                allowed_roles=UserRights.MEMBER.value,
             )
         ),
     ],

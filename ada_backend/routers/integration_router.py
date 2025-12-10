@@ -28,7 +28,7 @@ async def add_integration_secrets(
     integration_id: UUID,
     create_project_integration: CreateProjectIntegrationSchema,
     user: Annotated[
-        SupabaseUser, Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.WRITER.value))
+        SupabaseUser, Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.DEVELOPER.value))
     ],
     sqlalchemy_db_session: Session = Depends(get_db),
 ) -> IntegrationSecretResponse:

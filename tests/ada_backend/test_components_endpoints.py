@@ -117,7 +117,7 @@ def assert_entities_deleted(session, component_id, version_id, param_def_id):
     assert session.query(db.ComponentCategory).filter_by(component_id=component_id).first() is None
 
 
-@patch("ada_backend.routers.components_router.is_user_super_admin")
+@patch("ada_backend.routers.auth_router.is_user_super_admin")
 def test_delete_component(mock_is_super_admin, test_session):
     mock_is_super_admin.return_value = True
 
@@ -135,7 +135,7 @@ def test_delete_component(mock_is_super_admin, test_session):
         raise
 
 
-@patch("ada_backend.routers.components_router.is_user_super_admin")
+@patch("ada_backend.routers.auth_router.is_user_super_admin")
 def test_delete_component_with_instances(mock_is_super_admin, test_session):
     mock_is_super_admin.return_value = True
     instance_id = UUID("e7f8a9b0-c1d2-4345-a6b7-c8d9e0f1a2b3")
@@ -165,7 +165,7 @@ def test_delete_component_with_instances(mock_is_super_admin, test_session):
         cleanup_test_entities(test_session, **TEST_IDS)
 
 
-@patch("ada_backend.routers.components_router.is_user_super_admin")
+@patch("ada_backend.routers.auth_router.is_user_super_admin")
 def test_delete_nonexistent_component(mock_is_super_admin):
     mock_is_super_admin.return_value = True
     nonexistent_id = UUID("00000000-0000-0000-0000-000000000000")
@@ -224,7 +224,7 @@ def create_component_with_multiple_versions(session, component_id, version_ids, 
     session.commit()
 
 
-@patch("ada_backend.routers.component_version_router.is_user_super_admin")
+@patch("ada_backend.routers.auth_router.is_user_super_admin")
 def test_delete_component_version_one_of_many(mock_is_super_admin, test_session):
     """Test deleting one component version when there are multiple versions."""
     mock_is_super_admin.return_value = True
@@ -268,7 +268,7 @@ def test_delete_component_version_one_of_many(mock_is_super_admin, test_session)
         cleanup_test_entities(test_session, None, version_id_1, param_def_id_1)
 
 
-@patch("ada_backend.routers.component_version_router.is_user_super_admin")
+@patch("ada_backend.routers.auth_router.is_user_super_admin")
 def test_delete_component_version_last_one(mock_is_super_admin, test_session):
     """Test deleting the last component version should delete the component (cascade)."""
     mock_is_super_admin.return_value = True
@@ -301,7 +301,7 @@ def test_delete_component_version_last_one(mock_is_super_admin, test_session):
         raise
 
 
-@patch("ada_backend.routers.component_version_router.is_user_super_admin")
+@patch("ada_backend.routers.auth_router.is_user_super_admin")
 def test_delete_component_version_with_instances(mock_is_super_admin, test_session):
     """Test deleting component version with instances should fail with 409."""
     mock_is_super_admin.return_value = True
@@ -345,7 +345,7 @@ def test_delete_component_version_with_instances(mock_is_super_admin, test_sessi
         cleanup_test_entities(test_session, component_id, version_id, param_def_id)
 
 
-@patch("ada_backend.routers.component_version_router.is_user_super_admin")
+@patch("ada_backend.routers.auth_router.is_user_super_admin")
 def test_delete_nonexistent_component_version(mock_is_super_admin):
     """Test deleting nonexistent component version should be idempotent (return 204)."""
     mock_is_super_admin.return_value = True
@@ -360,7 +360,7 @@ def test_delete_nonexistent_component_version(mock_is_super_admin):
     assert response.status_code == 204  # DELETE is idempotent
 
 
-@patch("ada_backend.routers.component_version_router.is_user_super_admin")
+@patch("ada_backend.routers.auth_router.is_user_super_admin")
 def test_delete_component_version_mismatched_component_id(mock_is_super_admin, test_session):
     """Test deleting component version with wrong component_id should fail with 400."""
     mock_is_super_admin.return_value = True

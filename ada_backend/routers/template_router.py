@@ -21,7 +21,7 @@ LOGGER = logging.getLogger(__name__)
 def get_production_templates(
     organization_id: UUID,
     session: Session = Depends(get_db),
-    user: SupabaseUser = Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.READER.value)),
+    user: SupabaseUser = Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.MEMBER.value)),
 ) -> list[TemplateResponse]:
     """
     Retrieve production templates for a given organization.

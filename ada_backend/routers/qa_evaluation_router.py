@@ -35,7 +35,7 @@ def get_evaluations_by_version_output_endpoint(
     version_output_id: UUID,
     user: Annotated[
         SupabaseUser,
-        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.USER.value)),
+        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.MEMBER.value)),
     ],
     session: Session = Depends(get_db),
 ) -> List[JudgeEvaluationResponse]:
@@ -63,7 +63,7 @@ async def run_judge_evaluation_endpoint(
     judge_id: UUID,
     user: Annotated[
         SupabaseUser,
-        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.USER.value)),
+        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.MEMBER.value)),
     ],
     session: Session = Depends(get_db),
     version_output_id: UUID = Body(..., embed=True, description="Version output ID to evaluate"),
@@ -103,7 +103,7 @@ def delete_judge_evaluations_endpoint(
     project_id: UUID,
     user: Annotated[
         SupabaseUser,
-        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.READER.value)),
+        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.DEVELOPER.value)),
     ],
     session: Session = Depends(get_db),
     evaluation_ids: List[UUID] = Body(...),

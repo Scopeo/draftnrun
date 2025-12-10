@@ -67,7 +67,7 @@ def get_datasets_by_project_endpoint(
     project_id: UUID,
     user: Annotated[
         SupabaseUser,
-        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.USER.value)),
+        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.MEMBER.value)),
     ],
     session: Session = Depends(get_db),
 ) -> List[DatasetResponse]:
@@ -101,7 +101,7 @@ def create_dataset_endpoint(
     dataset_data: DatasetCreateList,
     user: Annotated[
         SupabaseUser,
-        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.READER.value)),
+        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.DEVELOPER.value)),
     ],
     session: Session = Depends(get_db),
 ) -> DatasetListResponse:
@@ -136,7 +136,7 @@ def update_dataset_endpoint(
     dataset_name: str,
     user: Annotated[
         SupabaseUser,
-        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.READER.value)),
+        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.DEVELOPER.value)),
     ],
     session: Session = Depends(get_db),
 ) -> DatasetResponse:
@@ -169,7 +169,7 @@ def delete_dataset_endpoint(
     delete_data: DatasetDeleteList,
     user: Annotated[
         SupabaseUser,
-        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.READER.value)),
+        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.DEVELOPER.value)),
     ],
     session: Session = Depends(get_db),
 ) -> dict:
@@ -205,7 +205,7 @@ def get_inputs_groundtruths_by_dataset_endpoint(
     dataset_id: UUID,
     user: Annotated[
         SupabaseUser,
-        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.USER.value)),
+        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.MEMBER.value)),
     ],
     session: Session = Depends(get_db),
     page: int = Query(1, ge=1, description="Page number (1-based)"),
@@ -241,7 +241,7 @@ def get_outputs_endpoint(
     dataset_id: UUID,
     user: Annotated[
         SupabaseUser,
-        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.USER.value)),
+        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.MEMBER.value)),
     ],
     session: Session = Depends(get_db),
     graph_runner_id: UUID = Query(..., description="Graph runner ID to get outputs for"),
@@ -280,7 +280,7 @@ def get_version_output_ids_endpoint(
     project_id: UUID,
     user: Annotated[
         SupabaseUser,
-        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.USER.value)),
+        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.MEMBER.value)),
     ],
     session: Session = Depends(get_db),
     input_ids: List[UUID] = Query(..., description="List of Input IDs"),
@@ -312,7 +312,7 @@ def create_input_groundtruth_endpoint(
     input_groundtruth_data: InputGroundtruthCreateList,
     user: Annotated[
         SupabaseUser,
-        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.READER.value)),
+        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.DEVELOPER.value)),
     ],
     session: Session = Depends(get_db),
 ) -> InputGroundtruthResponseList:
@@ -347,7 +347,7 @@ def update_input_groundtruth_endpoint(
     input_groundtruth_data: InputGroundtruthUpdateList,
     user: Annotated[
         SupabaseUser,
-        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.READER.value)),
+        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.DEVELOPER.value)),
     ],
     session: Session = Depends(get_db),
 ) -> InputGroundtruthResponseList:
@@ -381,7 +381,7 @@ def delete_input_groundtruth_endpoint(
     delete_data: InputGroundtruthDeleteList,
     user: Annotated[
         SupabaseUser,
-        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.READER.value)),
+        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.DEVELOPER.value)),
     ],
     session: Session = Depends(get_db),
 ) -> dict:
@@ -418,7 +418,7 @@ async def run_qa_endpoint(
     run_request: QARunRequest,
     user: Annotated[
         SupabaseUser,
-        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.USER.value)),
+        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.MEMBER.value)),
     ],
     session: Session = Depends(get_db),
 ) -> QARunResponse:
@@ -470,6 +470,10 @@ async def create_entry_from_history(
     project_id: UUID,
     dataset_id: UUID,
     trace_id: str,
+    user: Annotated[
+        SupabaseUser,
+        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.DEVELOPER.value)),
+    ],
     session: Session = Depends(get_db),
 ) -> List[InputGroundtruthResponse]:
     try:
@@ -496,7 +500,7 @@ def export_qa_data_to_csv_endpoint(
     dataset_id: UUID,
     user: Annotated[
         SupabaseUser,
-        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.USER.value)),
+        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.MEMBER.value)),
     ],
     session: Session = Depends(get_db),
     graph_runner_id: UUID = Query(..., description="Graph runner ID to filter outputs"),
@@ -533,7 +537,7 @@ async def import_qa_data_from_csv_endpoint(
     file: Annotated[UploadFile, File(..., description="CSV file to import")],
     user: Annotated[
         SupabaseUser,
-        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.USER.value)),
+        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.DEVELOPER.value)),
     ],
     session: Session = Depends(get_db),
 ) -> InputGroundtruthResponseList:
