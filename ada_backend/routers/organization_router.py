@@ -31,7 +31,7 @@ LOGGER = logging.getLogger(__name__)
 def get_secret_keys(
     organization_id: UUID,
     user: Annotated[
-        SupabaseUser, Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.READER.value))
+        SupabaseUser, Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.MEMBER.value))
     ],
     sqlaclhemy_db_session: Session = Depends(get_db),
 ) -> OrganizationGetSecretKeysResponse:
@@ -58,7 +58,7 @@ async def add_or_update_secret_to_organization(
     secret_key: str,
     secret: str,
     user: Annotated[
-        SupabaseUser, Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.WRITER.value))
+        SupabaseUser, Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.ADMIN.value))
     ],
     sqlaclhemy_db_session: Session = Depends(get_db),
 ) -> OrganizationSecretResponse:
@@ -88,7 +88,7 @@ def delete_secret_from_organization(
     organization_id: UUID,
     secret_key: str,
     user: Annotated[
-        SupabaseUser, Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.WRITER.value))
+        SupabaseUser, Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.ADMIN.value))
     ],
     sqlaclhemy_db_session: Session = Depends(get_db),
 ) -> OrganizationSecretResponse:

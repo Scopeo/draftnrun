@@ -20,7 +20,7 @@ from ada_backend.services.api_key_service import (
     verify_api_key,
     verify_ingestion_api_key,
 )
-from ada_backend.services.user_roles_service import get_user_access_to_organization
+from ada_backend.services.user_roles_service import get_user_access_to_organization, is_user_super_admin
 from ada_backend.schemas.auth_schema import (
     OrgApiKeyCreateRequest,
     SupabaseUser,
@@ -31,7 +31,6 @@ from ada_backend.schemas.auth_schema import (
     ApiKeyDeleteResponse,
     VerifiedApiKey,
 )
-from ada_backend.services.user_roles_service import is_user_super_admin
 
 LOGGER = logging.getLogger(__name__)
 
@@ -39,9 +38,8 @@ LOGGER = logging.getLogger(__name__)
 class UserRights(Enum):
     SUPER_ADMIN = ("super-admin",)
     ADMIN = ("super-admin", "admin")
-    WRITER = ("super-admin", "admin", "developer")
-    READER = ("super-admin", "admin", "developer", "member")
-    USER = ("super-admin", "admin", "developer", "member", "user")
+    DEVELOPER = ("super-admin", "admin", "developer")
+    MEMBER = ("super-admin", "admin", "developer", "member")
 
 
 if not settings.SUPABASE_PROJECT_URL or not settings.SUPABASE_PROJECT_KEY:
@@ -52,6 +50,7 @@ bearer = HTTPBearer()
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
 
+# TODO : move to a utils file
 async def get_user_from_supabase_token(
     authorization: HTTPAuthorizationCredentials = Depends(bearer),
 ) -> SupabaseUser:
@@ -98,6 +97,7 @@ async def get_user_from_supabase_token(
         raise HTTPException(status_code=401, detail="Failed to validate Supabase token") from e
 
 
+# TODO : move to a utils file
 def user_has_access_to_project_dependency(allowed_roles: set[str]):
     """
     Dependency that checks if a user has access to a project and returns the user if they do.
@@ -135,6 +135,7 @@ def user_has_access_to_project_dependency(allowed_roles: set[str]):
     return wrapper
 
 
+# TODO : move to a utils file
 def user_has_access_to_organization_dependency(allowed_roles: set[str]):
     """
     Dependency that checks if a user has access to a project and returns the user if they do.
@@ -170,11 +171,27 @@ def user_has_access_to_organization_dependency(allowed_roles: set[str]):
     return wrapper
 
 
+# TODO : move to a utils file
+def ensure_super_admin_dependency():
+
+    async def wrapper(
+        user: Annotated[SupabaseUser, Depends(get_user_from_supabase_token)],
+    ) -> SupabaseUser:
+        if not user.id:
+            raise HTTPException(status_code=400, detail="User ID not found")
+        is_super = await is_user_super_admin(user)
+        if not is_super:
+            raise HTTPException(status_code=403, detail="Super admin required")
+        return user
+
+    return wrapper
+
+
 @router.get("/api-key", summary="Get API Keys")
 async def get_api_keys(
     user: Annotated[
         SupabaseUser,
-        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.USER.value)),
+        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.MEMBER.value)),
     ],
     session: Session = Depends(get_db),
     project_id: UUID = Query(..., description="The ID of the project to retrieve API keys for"),
@@ -216,7 +233,7 @@ async def create_api_key(
         raise HTTPException(status_code=400, detail="User ID not found")
 
     _is_user = user_has_access_to_project_dependency(
-        allowed_roles=set(UserRights.USER.value),
+        allowed_roles=set(UserRights.DEVELOPER.value),
     )
     # Check if user has access to project. If not, a 403 is raised
     user = await _is_user(project_id=api_key_create.project_id, user=user, session=session)
@@ -237,7 +254,7 @@ async def create_api_key(
 async def get_org_api_keys(
     user: Annotated[
         SupabaseUser,
-        Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.USER.value)),
+        Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.MEMBER.value)),
     ],
     session: Session = Depends(get_db),
     organization_id: UUID = Query(..., description="The ID of the organization to retrieve API keys for"),
@@ -279,7 +296,7 @@ async def create_org_api_key(
         raise HTTPException(status_code=400, detail="User ID not found")
 
     _is_user = user_has_access_to_organization_dependency(
-        allowed_roles=set(UserRights.USER.value),
+        allowed_roles=set(UserRights.ADMIN.value),
     )
     user = await _is_user(organization_id=org_api_key_create.org_id, user=user)
 

@@ -1,5 +1,6 @@
 from uuid import UUID, uuid4
 import pytest
+from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
@@ -113,7 +114,10 @@ def test_get_all_organization_limits(db_session):
     other_month = test_month + 1 if test_month < 12 else 1
     limit_3 = create_organization_limit_in_db(db_session, org_id_1, test_year, other_month, 1500.0)
 
-    response = client.get(f"/organizations-limits?year={test_year}&month={test_month}")
+    response = client.get(
+        f"/organizations-limits?year={test_year}&month={test_month}",
+        headers=HEADERS_JWT,
+    )
 
     assert response.status_code == 200
     data = response.json()
@@ -136,8 +140,10 @@ def test_get_all_organization_limits(db_session):
     delete_organization_limit(db_session, limit_3.id, limit_3.organization_id)
 
 
-def test_create_organization_limit_success(db_session, unique_year_month):
+@patch("ada_backend.services.user_roles_service.is_user_super_admin")
+def test_create_organization_limit_success(mock_is_super_admin, db_session, unique_year_month):
     """Test creating an organization limit as super admin."""
+    mock_is_super_admin.return_value = True
     org_id = UUID(ORGANIZATION_ID)
     unique_year, unique_month = unique_year_month
 
@@ -177,8 +183,10 @@ def test_create_organization_limit_success(db_session, unique_year_month):
     delete_organization_limit(db_session, limit_id, org_id)
 
 
-def test_update_organization_limit_success(db_session):
+@patch("ada_backend.services.user_roles_service.is_user_super_admin")
+def test_update_organization_limit_success(mock_is_super_admin, db_session):
     """Test updating an organization limit as super admin."""
+    mock_is_super_admin.return_value = True
     org_id = UUID(ORGANIZATION_ID)
     org_limit = create_organization_limit_in_db(db_session, org_id, 2025, 2, 3000.0)
     limit_id = org_limit.id
@@ -200,8 +208,10 @@ def test_update_organization_limit_success(db_session):
     delete_organization_limit(db_session, limit_id, org_id)
 
 
-def test_update_organization_limit_not_found():
+@patch("ada_backend.services.user_roles_service.is_user_super_admin")
+def test_update_organization_limit_not_found(mock_is_super_admin):
     """Test updating a non-existent organization limit."""
+    mock_is_super_admin.return_value = True
     org_id = UUID(ORGANIZATION_ID)
     fake_limit_id = uuid4()
     new_limit = 6000.0
@@ -214,8 +224,10 @@ def test_update_organization_limit_not_found():
     assert response.status_code == 404
 
 
-def test_delete_organization_limit_success(db_session):
+@patch("ada_backend.services.user_roles_service.is_user_super_admin")
+def test_delete_organization_limit_success(mock_is_super_admin, db_session):
     """Test deleting an organization limit as super admin."""
+    mock_is_super_admin.return_value = True
     org_id = UUID(ORGANIZATION_ID)
     org_limit = create_organization_limit_in_db(db_session, org_id, 2025, 3, 4000.0)
     limit_id = org_limit.id
@@ -233,8 +245,10 @@ def test_delete_organization_limit_success(db_session):
     assert limit_id not in limit_ids
 
 
-def test_create_organization_limit_duplicate(db_session, unique_year_month):
+@patch("ada_backend.services.user_roles_service.is_user_super_admin")
+def test_create_organization_limit_duplicate(mock_is_super_admin, db_session, unique_year_month):
     """Test creating a duplicate organization limit (same org, year, month) should fail."""
+    mock_is_super_admin.return_value = True
     org_id = UUID(ORGANIZATION_ID)
     unique_year, unique_month = unique_year_month
 
@@ -258,8 +272,10 @@ def test_create_organization_limit_duplicate(db_session, unique_year_month):
     delete_organization_limit(db_session, org_limit.id, org_id)
 
 
-def test_create_organization_limit_missing_fields():
+@patch("ada_backend.services.user_roles_service.is_user_super_admin")
+def test_create_organization_limit_missing_fields(mock_is_super_admin):
     """Test creating an organization limit with missing required fields."""
+    mock_is_super_admin.return_value = True
     org_id = UUID(ORGANIZATION_ID)
     payload = {
         "year": 2025,
@@ -274,8 +290,10 @@ def test_create_organization_limit_missing_fields():
     assert response.status_code in [400, 422]
 
 
-def test_update_organization_limit_same_value(db_session):
+@patch("ada_backend.services.user_roles_service.is_user_super_admin")
+def test_update_organization_limit_same_value(mock_is_super_admin, db_session):
     """Test updating an organization limit with the same value."""
+    mock_is_super_admin.return_value = True
     org_id = UUID(ORGANIZATION_ID)
     org_limit = create_organization_limit_in_db(db_session, org_id, 2025, 4, 5000.0)
     limit_id = org_limit.id
@@ -292,8 +310,10 @@ def test_update_organization_limit_same_value(db_session):
     delete_organization_limit(db_session, limit_id, org_id)
 
 
-def test_update_organization_limit_zero_limit(db_session):
+@patch("ada_backend.services.user_roles_service.is_user_super_admin")
+def test_update_organization_limit_zero_limit(mock_is_super_admin, db_session):
     """Test updating an organization limit with zero limit."""
+    mock_is_super_admin.return_value = True
     org_id = UUID(ORGANIZATION_ID)
     org_limit = create_organization_limit_in_db(db_session, org_id, 2025, 5, 1000.0)
     limit_id = org_limit.id
@@ -330,13 +350,19 @@ def test_get_all_organization_limits_with_filters(db_session):
     limit_2 = create_organization_limit_in_db(db_session, org_id, test_year, month_2, 2000.0)
     limit_3 = create_organization_limit_in_db(db_session, org_id, test_year, month_3, 3000.0)
 
-    response = client.get(f"/organizations-limits?year={test_year}&month={month_1}")
+    response = client.get(
+        f"/organizations-limits?year={test_year}&month={month_1}",
+        headers=HEADERS_JWT,
+    )
     assert response.status_code == 200
     data = response.json()
     assert isinstance(data, list)
     assert any(limit["id"] == str(limit_1.id) for limit in data)
 
-    response = client.get(f"/organizations-limits?year={test_year}&month={month_2}")
+    response = client.get(
+        f"/organizations-limits?year={test_year}&month={month_2}",
+        headers=HEADERS_JWT,
+    )
     assert response.status_code == 200
     data = response.json()
     assert any(limit["id"] == str(limit_2.id) for limit in data)
@@ -346,8 +372,10 @@ def test_get_all_organization_limits_with_filters(db_session):
     delete_organization_limit(db_session, limit_3.id, limit_3.organization_id)
 
 
-def test_upsert_component_version_cost_create(db_session, ensure_component_version):
+@patch("ada_backend.services.user_roles_service.is_user_super_admin")
+def test_upsert_component_version_cost_create(mock_is_super_admin, db_session, ensure_component_version):
     """Test creating a new component version cost."""
+    mock_is_super_admin.return_value = True
     component_version_id = ensure_component_version
 
     payload = {
@@ -375,8 +403,10 @@ def test_upsert_component_version_cost_create(db_session, ensure_component_versi
     delete_component_version_cost(db_session, component_version_id)
 
 
-def test_upsert_component_version_cost_update(db_session, ensure_component_version):
+@patch("ada_backend.services.user_roles_service.is_user_super_admin")
+def test_upsert_component_version_cost_update(mock_is_super_admin, db_session, ensure_component_version):
     """Test updating an existing component version cost."""
+    mock_is_super_admin.return_value = True
     component_version_id = ensure_component_version
 
     create_component_version_cost_in_db(
@@ -409,8 +439,10 @@ def test_upsert_component_version_cost_update(db_session, ensure_component_versi
     delete_component_version_cost(db_session, component_version_id)
 
 
-def test_upsert_component_version_cost_partial_update(db_session, ensure_component_version):
+@patch("ada_backend.services.user_roles_service.is_user_super_admin")
+def test_upsert_component_version_cost_partial_update(mock_is_super_admin, db_session, ensure_component_version):
     """Test partial update of component version cost (only some fields)."""
+    mock_is_super_admin.return_value = True
     component_version_id = ensure_component_version
 
     create_component_version_cost_in_db(
@@ -446,8 +478,10 @@ def test_upsert_component_version_cost_partial_update(db_session, ensure_compone
     delete_component_version_cost(db_session, component_version_id)
 
 
-def test_delete_component_version_cost_success(db_session, ensure_component_version):
+@patch("ada_backend.services.user_roles_service.is_user_super_admin")
+def test_delete_component_version_cost_success(mock_is_super_admin, db_session, ensure_component_version):
     """Test deleting a component version cost."""
+    mock_is_super_admin.return_value = True
     component_version_id = ensure_component_version
 
     # Clean up any existing cost first
@@ -467,8 +501,10 @@ def test_delete_component_version_cost_success(db_session, ensure_component_vers
     assert response.status_code == 204
 
 
-def test_delete_component_version_cost_not_exists():
+@patch("ada_backend.services.user_roles_service.is_user_super_admin")
+def test_delete_component_version_cost_not_exists(mock_is_super_admin):
     """Test deleting a component version cost that doesn't exist (should succeed)."""
+    mock_is_super_admin.return_value = True
     component_version_id = uuid4()  # Use a non-existent ID
 
     response = client.delete(
@@ -478,8 +514,10 @@ def test_delete_component_version_cost_not_exists():
     assert response.status_code == 204
 
 
-def test_upsert_component_version_cost_empty_payload(db_session, ensure_component_version):
+@patch("ada_backend.services.user_roles_service.is_user_super_admin")
+def test_upsert_component_version_cost_empty_payload(mock_is_super_admin, db_session, ensure_component_version):
     """Test upserting with an empty payload (all None values)."""
+    mock_is_super_admin.return_value = True
     component_version_id = ensure_component_version
 
     payload = {}

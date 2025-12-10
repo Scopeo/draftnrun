@@ -5,7 +5,11 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from ada_backend.database.models import CallType, EnvType
-from ada_backend.routers.auth_router import get_user_from_supabase_token
+from ada_backend.routers.auth_router import (
+    get_user_from_supabase_token,
+    user_has_access_to_project_dependency,
+    UserRights,
+)
 from ada_backend.schemas.auth_schema import SupabaseUser
 from ada_backend.schemas.trace_schema import TraceSpan, PaginatedRootTracesResponse
 from ada_backend.services.trace_service import (
@@ -23,7 +27,10 @@ router = APIRouter()
 async def get_root_traces(
     project_id: UUID,
     duration: int,
-    user: Annotated[SupabaseUser, Depends(get_user_from_supabase_token)],
+    user: Annotated[
+        SupabaseUser,
+        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.MEMBER.value)),
+    ],
     environment: Optional[EnvType] = None,
     call_type: Optional[CallType] = None,
     page: int = Query(1, ge=1, description="Page number (1-based)"),
@@ -57,6 +64,8 @@ async def get_root_traces(
         raise HTTPException(status_code=500, detail="Internal Server Error") from e
 
 
+# TODO: use user_has_access_to_project_dependency :
+# needs a change in frontend to give project_id in body or as url param
 @router.get("/traces/{trace_id}/tree", response_model=TraceSpan, tags=["Metrics"])
 async def get_span_trace(
     trace_id: str,
