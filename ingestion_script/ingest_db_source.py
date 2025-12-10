@@ -1,6 +1,5 @@
 from functools import partial
 import logging
-import uuid
 from typing import Optional
 
 import pandas as pd
@@ -162,7 +161,10 @@ def get_db_source(
     df_chunks = df.explode("chunks", ignore_index=True).rename(columns={"chunks": CHUNK_COLUMN_NAME})
     df_chunks["chunk_index"] = df_chunks.groupby(id_column_name).cumcount() + 1
     df_chunks[ORDER_COLUMN_NAME] = df_chunks["chunk_index"] - 1
-    df_chunks[CHUNK_ID_COLUMN_NAME] = df_chunks.apply(lambda _: str(uuid.uuid4()), axis=1)
+    df_chunks[CHUNK_ID_COLUMN_NAME] = (
+        df_chunks[id_column_name].astype(str) + "_" + df_chunks["chunk_index"].astype(str)
+    )
+
     df_chunks[FILE_ID_COLUMN_NAME] = table_name + "_" + df_chunks[id_column_name].astype(str)
 
     columns = [CHUNK_ID_COLUMN_NAME, CHUNK_COLUMN_NAME, FILE_ID_COLUMN_NAME, ORDER_COLUMN_NAME]
