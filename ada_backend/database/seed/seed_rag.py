@@ -1477,10 +1477,6 @@ def seed_rag_v3_parameter_groups(session: Session):
             "parameter_group_id": RAG_V3_PARAMETER_GROUP_UUIDS["reranker_parameters"],
             "parameter_order_within_group": 4,
         },
-        UUID("e866ac4a-06b2-46ec-8733-da6dcd15e8e7"): {  # cohere_api_key
-            "parameter_group_id": RAG_V3_PARAMETER_GROUP_UUIDS["reranker_parameters"],
-            "parameter_order_within_group": 5,
-        },
         # Vocabulary Search Parameters Group
         UUID("0c1b699c-20d6-4464-95d7-edeb51f936cd"): {  # use_vocabulary_search
             "parameter_group_id": RAG_V3_PARAMETER_GROUP_UUIDS["vocabulary_search_parameters"],

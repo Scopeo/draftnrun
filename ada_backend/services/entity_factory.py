@@ -756,7 +756,7 @@ def build_reranker_processor(target_name: str = "reranker") -> ParameterProcesso
         if not use_reranker:
             return _remove_parameters_from_optional_subcomponents(
                 params,
-                parameters_name=["cohere_model", "score_threshold", "num_doc_reranked", "cohere_api_key"],
+                parameters_name=["cohere_model", "score_threshold", "num_doc_reranked",],
                 target_name=target_name,
             )
 
@@ -767,9 +767,7 @@ def build_reranker_processor(target_name: str = "reranker") -> ParameterProcesso
         ]
         validated_params = _pop_and_validate_parameters(list_of_params_to_pop, params)
 
-        cohere_api_key = params.pop("cohere_api_key", None)
-
-        reranker_params = {"cohere_api_key": cohere_api_key, **validated_params}
+        reranker_params = {**validated_params}
 
         reranker = CohereReranker(
             trace_manager=get_trace_manager(),
