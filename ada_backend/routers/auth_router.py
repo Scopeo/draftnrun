@@ -31,6 +31,7 @@ from ada_backend.schemas.auth_schema import (
     ApiKeyDeleteResponse,
     VerifiedApiKey,
 )
+from ada_backend.services.user_roles_service import is_user_super_admin
 
 LOGGER = logging.getLogger(__name__)
 
@@ -359,6 +360,47 @@ async def verify_ingestion_api_key_dependency(
     hashed_key = verify_ingestion_api_key(private_key=ingestion_api_key)
     if hashed_key != settings.INGESTION_API_KEY_HASHED:
         raise HTTPException(status_code=401, detail="Invalid ingestion API key")
+
+
+async def super_admin_or_admin_api_key_dependency(
+    authorization: HTTPAuthorizationCredentials | None = Depends(HTTPBearer(auto_error=False)),
+    admin_api_key: str | None = Header(None, alias="X-Admin-API-Key"),
+) -> None:
+    """
+    Dependency that allows either super admin user authentication OR admin API key.
+    Used for endpoints that require super admin access or admin key authentication (e.g., setting organization limits).
+    """
+
+    if authorization and authorization.credentials and admin_api_key:
+        LOGGER.exception(
+            "User has entered two authenticators :\n"
+            f"  - User token (JWT) : {authorization.credentials}\n"
+            f"  - Admin API Key : {admin_api_key}"
+        )
+        raise HTTPException(status_code=400, detail="Provide either Authorization token OR X-Admin-API-Key, not both")
+
+    if admin_api_key:
+        hashed_key = verify_ingestion_api_key(private_key=admin_api_key)
+        if hashed_key == settings.ADMIN_KEY_HASHED:
+            return None
+        else:
+            raise HTTPException(status_code=401, detail="Invalid admin API key")
+
+    if authorization and authorization.credentials:
+        user = await get_user_from_supabase_token(authorization)
+        if not user.id:
+            raise HTTPException(status_code=401, detail="Invalid super admin token")
+
+        is_super = await is_user_super_admin(user)
+        if is_super:
+            return None
+        else:
+            raise HTTPException(status_code=403, detail="You are not a super admin")
+
+    raise HTTPException(
+        status_code=403,
+        detail="Access denied: requires super admin authentication or valid admin API key",
+    )
 
 
 def user_has_access_to_organization_xor_verify_api_key(allowed_roles: set[str]):

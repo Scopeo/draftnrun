@@ -143,6 +143,8 @@ class BaseConfig(BaseSettings):
     OFFLINE_MODE: bool = False
     OFFLINE_DEFAULT_ROLE: str = "admin"
 
+    ADMIN_KEY_HASHED: Optional[str] = None
+
     @model_validator(mode="after")
     @classmethod
     def sync_db_settings(cls, values):
