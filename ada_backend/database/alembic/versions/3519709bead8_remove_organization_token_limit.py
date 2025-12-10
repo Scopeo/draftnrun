@@ -1,7 +1,7 @@
 """remove organization token limit
 
 Revision ID: 3519709bead8
-Revises: a7c91f2e4b0d
+Revises: 62d077615136
 Create Date: 2025-12-10 16:16:32.560376
 
 """
@@ -14,7 +14,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision: str = "3519709bead8"
-down_revision: Union[str, None] = "a7c91f2e4b0d"
+down_revision: Union[str, None] = "62d077615136"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
