@@ -44,6 +44,3 @@ jobs:
 
           echo "Reload Gunicorn with zero downtime"
           sudo systemctl restart gunicorn
-
-          echo "Reload APScheduler with zero downtime"
-          sudo systemctl restart apscheduler.service
