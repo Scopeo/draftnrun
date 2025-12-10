@@ -309,19 +309,13 @@ def test_date_in_system_prompt_disabled(
 
 @patch("engine.prometheus_metric.get_tracing_span")
 @patch("engine.prometheus_metric.agent_calls")
-@patch("engine.llm_services.utils.get_tracing_span")
 def test_structured_output_in_function_call_async(
-    utils_get_span_mock, agent_calls_mock, get_span_mock, mock_trace_manager, mock_tool_description, agent_input
+    agent_calls_mock, get_span_mock, mock_trace_manager, mock_tool_description, agent_input
 ):
     """Test structured output functionality in function_call_async method."""
     get_span_mock.return_value.project_id = "1234"
     counter_mock = MagicMock()
     agent_calls_mock.labels.return_value = counter_mock
-
-    # Mock the tracing span for utils
-    mock_tracing_span = MagicMock()
-    mock_tracing_span.organization_llm_providers = ["openai"]
-    utils_get_span_mock.return_value = mock_tracing_span
 
     # Create structured output tool
     output_tool_properties = {
