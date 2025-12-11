@@ -15,7 +15,7 @@ def mock_file_document():
     file_path = "/path/to/mock/file.docx"
     return FileDocument(
         id=file_path,
-        title="file.docx",
+        file_name="file.docx",
         type=FileDocumentType.DOCX,
         last_edited_ts="2024-11-26 10:40:40",
         folder_name="/path/to/mock",

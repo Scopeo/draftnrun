@@ -13,7 +13,7 @@ def mock_file_document():
         id="dummy_id",
         last_edited_ts="2023-01-01T00:00:00Z",
         type=FileDocumentType.PDF,
-        title="dummy_file",
+        file_name="dummy_file",
         folder_name="dummy_folder_ids",
     )
 

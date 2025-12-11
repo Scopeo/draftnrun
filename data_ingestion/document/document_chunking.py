@@ -95,7 +95,7 @@ async def get_chunks_dataframe_from_doc(
     all_chunks = []
 
     # Comprehensive logging for document processing
-    LOGGER.info(f"[DOCUMENT_PROCESSING] Starting processing for document '{document.title}'")
+    LOGGER.info(f"[DOCUMENT_PROCESSING] Starting processing for document '{document.file_name}'")
     LOGGER.info(
         f"[DOCUMENT_PROCESSING] Document details - ID: '{document.id}', "
         f"Type: '{document.type.value}', Folder: '{document.folder_name}'"
@@ -110,12 +110,12 @@ async def get_chunks_dataframe_from_doc(
             processor_name = str(processor_func)
         LOGGER.info(
             f"[PROCESSOR_ROUTING] Using processor '{processor_name}' for file type "
-            f"'{document.type.value}' on file '{document.title}'"
+            f"'{document.type.value}' on file '{document.file_name}'"
         )
     else:
         LOGGER.error(
             f"[PROCESSOR_ROUTING] FAILED - No processor found for file type "
-            f"'{document.type.value}' on file '{document.title}'"
+            f"'{document.type.value}' on file '{document.file_name}'"
         )
         return pd.DataFrame()
 
@@ -127,7 +127,7 @@ async def get_chunks_dataframe_from_doc(
     #     description_doc = documents_summary_func(document)
 
     chunk_size_doc = default_chunk_size
-    LOGGER.info(f"[DOCUMENT_PROCESSING] Using chunk size: {chunk_size_doc} for '{document.title}'")
+    LOGGER.info(f"[DOCUMENT_PROCESSING] Using chunk size: {chunk_size_doc} for '{document.file_name}'")
 
     # if description_doc is not None:
     #     summary_token_size = llm_service.get_token_size(
@@ -140,16 +140,16 @@ async def get_chunks_dataframe_from_doc(
     #     chunk_size_doc = default_chunk_size
 
     try:
-        LOGGER.info(f"[PROCESSOR_EXECUTION] Starting '{processor_name}' processing for '{document.title}'")
+        LOGGER.info(f"[PROCESSOR_EXECUTION] Starting '{processor_name}' processing for '{document.file_name}'")
         chunks = document_chunk_mapping[document.type.value](document, chunk_size=chunk_size_doc)
         if inspect.isawaitable(chunks):  # await if necessary
             chunks = await chunks
         LOGGER.info(
-            f"[PROCESSOR_EXECUTION] Successfully processed '{document.title}' - Generated {len(chunks)} chunks"
+            f"[PROCESSOR_EXECUTION] Successfully processed '{document.file_name}' - Generated {len(chunks)} chunks"
         )
     except Exception as e:
         LOGGER.error(
-            f"[PROCESSOR_EXECUTION] FAILED - Error processing '{document.title}' "
+            f"[PROCESSOR_EXECUTION] FAILED - Error processing '{document.file_name}' "
             f"with '{processor_name}' - {str(e)}",
             exc_info=True,
         )

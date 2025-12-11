@@ -205,7 +205,7 @@ async def upload_website_source(
 
         document = WebsiteDocument(
             id=document_id,
-            title=page_data.title if page_data.title else page_data.url,
+            file_name=page_data.title if page_data.title else page_data.url,
             folder_name=page_data.url,
             metadata={
                 "title": page_data.title,

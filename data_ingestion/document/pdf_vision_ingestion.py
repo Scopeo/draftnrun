@@ -205,7 +205,7 @@ def _create_chunks_from_markdown(
     extracted_table_of_content: TableOfContent,
     document: FileDocument,
 ) -> list[FileChunk]:
-    markdown_chunks = parse_markdown_to_chunks(file_content=extracted_text, file_name=document.title)
+    markdown_chunks = parse_markdown_to_chunks(file_content=extracted_text, file_name=document.file_name)
     page_numbers = set()
     chunks = []
     for i, chunk in enumerate(markdown_chunks):
@@ -216,10 +216,10 @@ def _create_chunks_from_markdown(
         chunk = FileChunk(
             chunk_id=str(uuid.uuid4()),
             order=i,
-            document_id=document.title,
+            document_id=document.file_name,
             content=chunk.content,
             last_edited_ts=document.last_edited_ts,
-            document_title=document.title,
+            document_title=document.file_name,
             bounding_boxes=[],
             url=document.url,
             metadata=document.metadata,
@@ -238,11 +238,11 @@ def _create_chunk_from_text(
     document.metadata["page_number"] = page_number
     return FileChunk(
         chunk_id=str(uuid.uuid4()),
-        document_id=document.title,
+        document_id=document.file_name,
         order=order,
         content=extracted_text,
         last_edited_ts=document.last_edited_ts,
-        document_title=document.title,
+        document_title=document.file_name,
         bounding_boxes=None,
         url=document.url,
         metadata={"page_number": page_number, **document.metadata},
