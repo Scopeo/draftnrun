@@ -41,7 +41,6 @@ from ada_backend.services.project_service import (
     update_project_service,
 )
 from ada_backend.repositories.env_repository import get_env_relationship_by_graph_runner_id
-from engine.llm_services.utils import LLMKeyLimitExceededError
 from engine.agent.errors import (
     KeyTypePromptTemplateError,
     MissingKeyPromptTemplateError,
@@ -201,9 +200,6 @@ async def run_env_agent_endpoint(
             env=env,
             call_type=CallType.API,
         )
-    except LLMKeyLimitExceededError as e:
-        LOGGER.error(f"LLM key limit exceeded for project {project_id} in environment {env}: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=400, detail=str(e)) from e
     except EnvironmentNotFound as e:
         LOGGER.error(f"Environment not found for project {project_id} in environment {env}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=404, detail=str(e)) from e
@@ -335,12 +331,6 @@ async def chat(
             exc_info=True,
         )
         raise HTTPException(status_code=402, detail=str(e)) from e
-    except LLMKeyLimitExceededError as e:
-        LOGGER.error(
-            f"LLM key limit exceeded for project {project_id} for graph runner {graph_runner_id}: {str(e)}",
-            exc_info=True,
-        )
-        raise HTTPException(status_code=400, detail=str(e)) from e
     except MissingDataSourceError as e:
         LOGGER.error(
             f"Data source not found for project {project_id} for graph runner {graph_runner_id}: {str(e)}",
@@ -419,9 +409,6 @@ async def chat_env(
             exc_info=True,
         )
         raise HTTPException(status_code=402, detail=str(e)) from e
-    except LLMKeyLimitExceededError as e:
-        LOGGER.error(f"LLM key limit exceeded for project {project_id} in environment {env}: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=400, detail=str(e)) from e
     except EnvironmentNotFound as e:
         LOGGER.error(f"Environment not found for project {project_id} in environment {env}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=404, detail=str(e)) from e

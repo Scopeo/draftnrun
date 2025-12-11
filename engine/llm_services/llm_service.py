@@ -1,7 +1,6 @@
 import json
 import logging
 import asyncio
-from functools import wraps
 from typing import Optional
 from abc import ABC
 from pydantic import BaseModel
@@ -12,7 +11,6 @@ from opentelemetry.trace import get_current_span
 from openinference.semconv.trace import SpanAttributes
 
 from engine.llm_services.utils import (
-    check_usage,
     validate_and_extract_json_response,
     make_messages_compatible_for_mistral,
     make_mistral_ocr_compatible,
@@ -34,32 +32,6 @@ from openai.types.chat import ChatCompletion
 LOGGER = logging.getLogger(__name__)
 
 DEFAULT_TEMPERATURE = 1
-
-
-def with_usage_check(func):
-    @wraps(func)
-    def wrapper(self, *args, **kwargs):
-        provider = getattr(self, "_provider", None)
-        if provider is None:
-            raise ValueError("Instance must have a 'provider' attribute to perform usage check.")
-
-        check_usage(provider)
-        return func(self, *args, **kwargs)
-
-    return wrapper
-
-
-def with_async_usage_check(func):
-    @wraps(func)
-    async def wrapper(self, *args, **kwargs):
-        provider = getattr(self, "_provider", None)
-        if provider is None:
-            raise ValueError("Instance must have a 'provider' attribute to perform usage check.")
-
-        check_usage(provider)
-        return await func(self, *args, **kwargs)
-
-    return wrapper
 
 
 class LLMService(ABC):
@@ -213,7 +185,6 @@ class CompletionService(LLMService):
         if reasoning is not None:
             self._invocation_parameters["reasoning"] = reasoning
 
-    @with_usage_check
     def complete(
         self,
         messages: list[dict] | str,
@@ -221,7 +192,6 @@ class CompletionService(LLMService):
     ) -> str:
         return asyncio.run(self.complete_async(messages, stream))
 
-    @with_async_usage_check
     async def complete_async(
         self,
         messages: list[dict] | str,
@@ -277,7 +247,6 @@ class CompletionService(LLMService):
                 )
                 return response.choices[0].message.content
 
-    @with_usage_check
     def constrained_complete_with_pydantic(
         self,
         messages: list[dict] | str,
@@ -332,7 +301,6 @@ class CompletionService(LLMService):
             response.usage.total_tokens,
         )
 
-    @with_async_usage_check
     async def constrained_complete_with_pydantic_async(
         self,
         messages: list[dict] | str,
@@ -464,7 +432,6 @@ class CompletionService(LLMService):
             response.usage.total_tokens,
         )
 
-    @with_usage_check
     def constrained_complete_with_json_schema(
         self,
         messages: list[dict] | str,
@@ -479,7 +446,6 @@ class CompletionService(LLMService):
             )
         )
 
-    @with_async_usage_check
     async def constrained_complete_with_json_schema_async(
         self,
         messages: list[dict] | str,
@@ -598,7 +564,6 @@ class CompletionService(LLMService):
                 )
                 return processed_content
 
-    @with_usage_check
     def function_call(
         self,
         messages: list[dict] | str,
@@ -608,7 +573,6 @@ class CompletionService(LLMService):
     ) -> ChatCompletion:
         return asyncio.run(self.function_call_async(messages, stream, tools, tool_choice))
 
-    @with_async_usage_check
     async def function_call_async(
         self,
         messages: list[dict] | str,
@@ -656,7 +620,6 @@ class CompletionService(LLMService):
         )
         return response, response.usage.completion_tokens, response.usage.prompt_tokens, response.usage.total_tokens
 
-    @with_async_usage_check
     async def function_call_without_structured_output_async(
         self,
         messages: list[dict] | str,
@@ -772,7 +735,6 @@ class CompletionService(LLMService):
                 )
                 return response
 
-    @with_async_usage_check
     async def function_call_with_structured_output_async(
         self,
         messages: list[dict] | str,
@@ -941,11 +903,9 @@ class WebSearchService(LLMService):
     ):
         super().__init__(trace_manager, provider, model_name, api_key, base_url, model_id)
 
-    @with_usage_check
     def web_search(self, query: str, allowed_domains: Optional[list[str]] = None) -> str:
         return asyncio.run(self.web_search_async(query, allowed_domains))
 
-    @with_async_usage_check
     async def web_search_async(self, query: str, allowed_domains: Optional[list[str]] = None) -> str:
         span = get_current_span()
         match self._provider:
@@ -1018,7 +978,6 @@ class VisionService(LLMService):
             for image_content in image_content_list
         ]
 
-    @with_usage_check
     def get_image_description(
         self,
         image_content_list: list[bytes],
@@ -1027,7 +986,6 @@ class VisionService(LLMService):
     ) -> str | BaseModel:
         return asyncio.run(self.get_image_description_async(image_content_list, text_prompt, response_format))
 
-    @with_async_usage_check
     async def get_image_description_async(
         self,
         image_content_list: list[bytes],

@@ -64,20 +64,6 @@ class Span(Base):
         return f"Span(span_id={self.span_id}, name={self.name})"
 
 
-class OrganizationUsage(Base):
-    """Represents organization token usage in the traces schema."""
-
-    __tablename__ = "organization_usage"
-    __table_args__ = {"schema": "traces"}
-
-    id = mapped_column(Integer, primary_key=True, autoincrement=True)
-    organization_id = mapped_column(String, nullable=False, index=True)
-    total_tokens = mapped_column(Integer, nullable=False, default=0)
-
-    def __str__(self):
-        return f"OrganizationUsage(organization_id={self.organization_id}, total_tokens={self.total_tokens})"
-
-
 class SpanMessage(Base):
     """Represents span messages in the traces schema."""
 

@@ -1,5 +1,4 @@
 import ast
-from collections import defaultdict
 from datetime import datetime, timezone
 import logging
 from typing import Any, cast
@@ -14,7 +13,7 @@ from sqlalchemy import func, select, create_engine, update
 from sqlalchemy.orm import sessionmaker
 
 from engine.trace.nested_utils import split_nested_keys
-from ada_backend.database.trace_models import Span, SpanMessage, OrganizationUsage
+from ada_backend.database.trace_models import Span, SpanMessage
 from ada_backend.database.models import LLMCost, Cost, ComponentCost, ComponentInstance, Usage, SpanUsage
 from ada_backend.database.setup_db import get_db_url
 
@@ -332,39 +331,6 @@ class SQLSpanExporter(SpanExporter):
                     output_content=json.dumps(output) if output is not None else None,
                 )
             )
-        self.session.commit()
-
-        org_token_counts = defaultdict(int)
-        for span in spans:
-            total_tokens = 0
-            json_span = json.loads(span.to_json())
-            org_id = span.attributes.get("organization_id")
-            org_llm_providers = convert_to_list(span.attributes.get("organization_llm_providers"))
-
-            if not org_id:
-                org_id, org_llm_providers = self.get_org_info_from_ancestors(json_span["parent_id"])
-            token_prompt = int(span.attributes.get(SpanAttributes.LLM_TOKEN_COUNT_PROMPT) or 0)
-            token_completion = int(span.attributes.get(SpanAttributes.LLM_TOKEN_COUNT_COMPLETION) or 0)
-            total_tokens = token_prompt + token_completion
-
-            provider = span.attributes.get(SpanAttributes.LLM_PROVIDER)
-
-            if total_tokens > 0 and org_id and (provider is None or provider not in org_llm_providers):
-                org_token_counts[org_id] += total_tokens
-
-        for org_id, tokens in org_token_counts.items():
-            result = self.session.execute(
-                select(OrganizationUsage).where(OrganizationUsage.organization_id == org_id)
-            ).first()
-
-            if result:
-                self.session.execute(
-                    update(OrganizationUsage)
-                    .where(OrganizationUsage.organization_id == org_id)
-                    .values(total_tokens=OrganizationUsage.total_tokens + tokens)
-                )
-            else:
-                self.session.add(OrganizationUsage(organization_id=org_id, total_tokens=tokens))
         self.session.commit()
         return SpanExportResult.SUCCESS
 
