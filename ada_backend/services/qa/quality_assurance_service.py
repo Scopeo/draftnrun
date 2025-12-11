@@ -4,6 +4,7 @@ import csv
 import io
 from typing import BinaryIO, Dict, List, Optional
 from uuid import UUID
+from collections import Counter
 
 from sqlalchemy.orm import Session
 
@@ -53,6 +54,7 @@ from ada_backend.services.qa.qa_error import (
     CSVInvalidJSONError,
     CSVEmptyFileError,
     CSVExportError,
+    CSVNonUniqueIndexError,
 )
 from ada_backend.services.qa.csv_processing import process_csv
 
@@ -571,12 +573,16 @@ def import_qa_data_from_csv_service(
                 InputGroundtruthCreate(
                     input=row_data["input"],
                     groundtruth=row_data["expected_output"] if row_data["expected_output"] else None,
-                    index=row_data["index"] if "index" in row_data else None,
+                    index=row_data["index"],
                 )
             )
 
         if not inputs_groundtruths_data_to_create:
             raise CSVEmptyFileError()
+        indexes = [ig.index for ig in inputs_groundtruths_data_to_create if ig.index is not None]
+        duplicated_indexes = [item for item, count in Counter(indexes).items() if count > 1]
+        if duplicated_indexes:
+            raise CSVNonUniqueIndexError(duplicate_indexes=duplicated_indexes)
 
         created_inputs_groundtruths = create_inputs_groundtruths(
             session=session,
