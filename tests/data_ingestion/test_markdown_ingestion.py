@@ -11,7 +11,7 @@ def mock_file_document():
     file_path = "tests/resources/documents/test_markdown.md"
     return FileDocument(
         id=file_path,
-        title="test_file",
+        file_name="test_file",
         type=FileDocumentType.MARKDOWN,
         last_edited_ts="2024-11-26 10:40:40",
         folder_name="/path/to/mock",

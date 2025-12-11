@@ -20,7 +20,7 @@ def ingest_excel_file(
     result_chunks = []
     content_to_process = BytesIO(get_file_content_func(document.id))
     xls = pd.ExcelFile(content_to_process)
-    LOGGER.info(f"File {document.title} loaded.")
+    LOGGER.info(f"File {document.file_name} loaded.")
     sheet_names = xls.sheet_names
     for sheet_name in sheet_names:
         df = pd.read_excel(content_to_process, sheet_name=sheet_name, header=None)
@@ -51,7 +51,7 @@ def ingest_excel_file(
                     document_id=document.id,
                     content=markdown_content,
                     last_edited_ts=document.last_edited_ts,
-                    document_title=document.title,
+                    document_title=document.file_name,
                     bounding_boxes=None,
                     url=document.url,
                     metadata={"sheet_name": sheet_name, **document.metadata},

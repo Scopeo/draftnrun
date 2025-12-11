@@ -65,7 +65,7 @@ class S3FolderManager(FolderManager):
             id=file_path,
             last_edited_ts=file_data["last_edited_ts"],
             type=file_type,
-            title=file_name,
+            file_name=file_name,
             folder_name=str(Path(file_path).parent),
             metadata=file_data["metadata"],
         )

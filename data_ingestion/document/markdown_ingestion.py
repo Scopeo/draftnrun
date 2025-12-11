@@ -36,7 +36,7 @@ def build_chunk(document: BaseDocument, content: str, order: int) -> FileChunk:
         content=content,
         url=document.url,
         last_edited_ts=document.last_edited_ts if document.last_edited_ts else None,
-        document_title=document.title if document.title else None,
+        document_title=document.file_name if document.file_name else None,
         bounding_boxes=[],
         metadata=document.metadata if document.metadata else {},
     )
@@ -50,7 +50,7 @@ def chunk_markdown(
 ) -> list[FileChunk]:
     tree_chunks = parse_markdown_to_chunks(
         file_content=content,
-        file_name=document_to_process.title,
+        file_name=document_to_process.file_name,
         chunk_size=chunk_size,
         chunk_overlap=chunk_overlap,
     )

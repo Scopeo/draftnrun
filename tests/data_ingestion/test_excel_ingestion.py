@@ -27,7 +27,7 @@ def test_ingest_excel_file():
     document = FileDocument(
         id=FILE_PATH,
         type=FileDocumentType.EXCEL,
-        title="test_excel.xlsx",
+        file_name="test_excel.xlsx",
         folder_name="test_folder",
         last_edited_ts="2025-07-10T00:00:00Z",
         metadata={},

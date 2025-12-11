@@ -48,7 +48,7 @@ def sync_files_to_supabase(
 
     for doc in list_of_documents:
         doc.metadata["supabase_url"] = get_supabase_url_for_file(
-            f"{doc.folder_name}/{doc.title}",
+            f"{doc.folder_name}/{doc.file_name}",
             organization_id=organization_id,
             source_name=source_name,
         )
