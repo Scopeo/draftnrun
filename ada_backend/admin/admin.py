@@ -638,14 +638,14 @@ class CreditAdmin(EnhancedModelView, model=db.Cost):
     column_list = [
         "id",
         "entity_type",
-        "credits_per_second",
+        "credits_per",
         "credits_per_call",
         "credits_per_input_token",
         "credits_per_output_token",
     ]
     form_columns = [
         "entity_type",
-        "credits_per_second",
+        "credits_per",
         "credits_per_call",
         "credits_per_input_token",
         "credits_per_output_token",

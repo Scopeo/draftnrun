@@ -39,13 +39,11 @@ LOGGER = logging.getLogger(__name__)
 
 @router.get("/organizations-limits", response_model=List[OrganizationLimitResponse])
 def get_all_organization_limits_endpoint(
-    year: int,
-    month: int,
     user: Annotated[SupabaseUser, Depends(ensure_super_admin_dependency())],
     session: Session = Depends(get_db),
 ) -> List[OrganizationLimitResponse]:
     try:
-        return get_all_organization_limits_service(session, year, month)
+        return get_all_organization_limits_service(session)
     except Exception as e:
         LOGGER.error(f"Failed to get organization limit: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error") from e
@@ -62,8 +60,6 @@ async def create_organization_limit_endpoint(
         return create_organization_limit_service(
             session,
             organization_id,
-            organization_limit_create.year,
-            organization_limit_create.month,
             organization_limit_create.limit,
         )
     except Exception as e:
@@ -122,10 +118,8 @@ def upsert_component_version_cost_endpoint(
         return upsert_component_version_cost_service(
             session,
             component_version_id,
-            component_version_cost_update.credits_per_input_token,
-            component_version_cost_update.credits_per_output_token,
             component_version_cost_update.credits_per_call,
-            component_version_cost_update.credits_per_second,
+            component_version_cost_update.credits_per,
         )
     except ComponentVersionCostNotFound as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
