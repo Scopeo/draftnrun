@@ -136,7 +136,7 @@ class SQLSpanExporter(SpanExporter):
         credits_input_token = None
         credits_output_token = None
         credits_per_call = None
-        credits_per_unit = None
+        credits_per_unit: float | None = None
         has_billable_usage = False
 
         if model_id:
@@ -189,7 +189,7 @@ class SQLSpanExporter(SpanExporter):
         credits_input_token: float | None,
         credits_output_token: float | None,
         credits_per_call: float | None,
-        credits_per_unit: dict | None,
+        credits_per_unit: float | None,
     ) -> None:
 
         span_usage = SpanUsage(

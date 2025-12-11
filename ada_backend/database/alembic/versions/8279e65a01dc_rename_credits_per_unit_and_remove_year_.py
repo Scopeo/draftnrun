@@ -35,7 +35,7 @@ def upgrade() -> None:
     op.drop_column("organization_limits", "year", schema="credits")
     op.add_column(
         "span_usages",
-        sa.Column("credits_per_unit", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
+        sa.Column("credits_per_unit", sa.DOUBLE_PRECISION(precision=53), nullable=True),
         schema="credits",
     )
     op.drop_column("span_usages", "credits_per_second", schema="credits")

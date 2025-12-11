@@ -1701,7 +1701,7 @@ class SpanUsage(Base):
     credits_input_token = mapped_column(Float, nullable=True)
     credits_output_token = mapped_column(Float, nullable=True)
     credits_per_call = mapped_column(Float, nullable=True)
-    credits_per_unit = mapped_column(JSONB, nullable=True)
+    credits_per_unit = mapped_column(Float, nullable=True)
 
     def __str__(self):
         return (

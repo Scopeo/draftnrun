@@ -68,13 +68,12 @@ def query_root_trace_duration(project_id: UUID, duration_days: int) -> pd.DataFr
 
 
 def query_trace_by_trace_id(trace_id: UUID) -> pd.DataFrame:
-    # TODO: Add credits_per_unit
     query = (
         "WITH span_credits AS ("
         "  SELECT "
         "    su.span_id, "
         "    ROUND(SUM(COALESCE(su.credits_input_token, 0) + COALESCE(su.credits_output_token, 0) + "
-        "        COALESCE(su.credits_per_call, 0))::numeric, 0) as credits "
+        "        COALESCE(su.credits_per_call, 0) + COALESCE(su.credits_per_unit, 0))::numeric, 0) as credits "
         "  FROM credits.span_usages su "
         "  JOIN traces.spans s ON s.span_id = su.span_id "
         f"  WHERE s.trace_rowid = '{trace_id}' "
