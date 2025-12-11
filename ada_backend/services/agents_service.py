@@ -120,6 +120,8 @@ def get_agent_by_id_service(session: Session, agent_id: UUID, graph_runner_id: U
         system_prompt=system_prompt,
         model_parameters=model_parameters,
         tools=agent_tools,
+        last_edited_time=graph_data.last_edited_time,
+        last_edited_user_id=graph_data.last_edited_user_id,
     )
 
 
