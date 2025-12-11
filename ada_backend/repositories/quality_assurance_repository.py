@@ -22,7 +22,7 @@ def get_inputs_groundtruths_by_dataset(
     return (
         session.query(InputGroundtruth)
         .filter(InputGroundtruth.dataset_id == dataset_id)
-        .order_by(InputGroundtruth.created_at.desc())
+        .order_by(InputGroundtruth.index.asc())
         .offset(skip)
         .limit(limit)
         .all()
@@ -45,6 +45,20 @@ def get_inputs_groundtruths_count_by_dataset(
     return session.query(func.count(InputGroundtruth.id)).filter(InputGroundtruth.dataset_id == dataset_id).scalar()
 
 
+def get_max_index_of_dataset(
+    session: Session,
+    dataset_id: UUID,
+) -> Optional[int]:
+    """Get the maximum index for input-groundtruth entries in a dataset.
+
+    Returns None if no entries exist for the dataset.
+    """
+    max_index = (
+        session.query(func.max(InputGroundtruth.index)).filter(InputGroundtruth.dataset_id == dataset_id).scalar()
+    )
+    return max_index
+
+
 def create_inputs_groundtruths(
     session: Session,
     dataset_id: UUID,
@@ -55,12 +69,18 @@ def create_inputs_groundtruths(
     Creates records one by one to ensure distinct timestamps and preserve CSV order.
     """
     inputs_groundtruths = []
+    max_index = get_max_index_of_dataset(session, dataset_id)
+    starting_index = (max_index + 1) if max_index is not None else 1
 
-    for input_groundtruth_data in inputs_groundtruths_data:
+    for i, input_groundtruth_data in enumerate(inputs_groundtruths_data):
+        index = input_groundtruth_data.index
+        if not index:
+            index = starting_index + i
         input_groundtruth = InputGroundtruth(
             dataset_id=dataset_id,
             input=input_groundtruth_data.input,
             groundtruth=input_groundtruth_data.groundtruth,
+            index=index,
         )
         session.add(input_groundtruth)
         session.flush()
