@@ -1,10 +1,11 @@
 import logging
 from uuid import UUID, uuid4
 
-from fastapi import HTTPException
+from typing import Optional, Tuple
 from sqlalchemy.orm import Session
 
 from ada_backend.database.models import EnvType
+from ada_backend.database import models as db
 from ada_backend.repositories.component_repository import (
     get_component_instance_by_id,
     get_component_parameter_definition_by_component_version,
@@ -214,28 +215,62 @@ def clone_graph_runner(
     return new_graph_runner_id
 
 
+def _deploy_graph_to_env_helper(
+    session: Session,
+    graph_runner_id: UUID,
+    project_id: UUID,
+    target_env: EnvType,
+) -> Tuple[db.GraphRunner, db.ProjectEnvironmentBinding, Optional[db.GraphRunner]]:
+    graph_runner = get_graph_runner_by_id(session, graph_runner_id)
+    if not graph_runner:
+        raise GraphNotFound(graph_runner_id)
+
+    env_relationship = get_env_relationship_by_graph_runner_id(session=session, graph_runner_id=graph_runner_id)
+
+    if env_relationship.project_id != project_id:
+        raise GraphNotBoundToProjectError(
+            graph_runner_id=graph_runner_id,
+            bound_project_id=env_relationship.project_id,
+            expected_project_id=project_id,
+        )
+
+    current_environment = env_relationship.environment
+    if current_environment == target_env:
+        raise GraphRunnerAlreadyInEnvironmentError(graph_runner_id, target_env.value)
+
+    previous_env_graph = get_graph_runner_for_env(
+        session=session,
+        project_id=project_id,
+        env=target_env,
+    )
+
+    if previous_env_graph:
+        update_graph_runner_env(session, previous_env_graph.id, env=None)
+        LOGGER.info(
+            f"Removed previous {target_env.value} graph runner {previous_env_graph.id} from {target_env.value}"
+        )
+
+    bind_graph_runner_to_project(
+        session=session,
+        graph_runner_id=graph_runner_id,
+        project_id=project_id,
+        env=target_env,
+    )
+
+    return previous_env_graph
+
+
 def deploy_graph_service(
     session: Session,
     graph_runner_id: UUID,
     project_id: UUID,
 ):
-    if not graph_runner_exists(session, graph_id=graph_runner_id):
-        raise HTTPException(status_code=404, detail="Graph runner not found")
-
-    env_relationship = get_env_relationship_by_graph_runner_id(session=session, graph_runner_id=graph_runner_id)
-    if not env_relationship:
-        raise HTTPException(status_code=404, detail="Graph runner not bound to any project")
-    if env_relationship.environment == EnvType.PRODUCTION:
-        raise HTTPException(status_code=400, detail="Graph runner already in production")
-
-    previous_production_graph = get_graph_runner_for_env(
+    previous_production_graph = _deploy_graph_to_env_helper(
         session=session,
+        graph_runner_id=graph_runner_id,
         project_id=project_id,
-        env=EnvType.PRODUCTION,
+        target_env=EnvType.PRODUCTION,
     )
-    if previous_production_graph:
-        update_graph_runner_env(session, previous_production_graph.id, env=None)
-        LOGGER.info(f"Updated previous production graph runner {previous_production_graph.id} to None")
 
     new_graph_runner_id = clone_graph_runner(
         session=session,
@@ -244,9 +279,6 @@ def deploy_graph_service(
     )
     new_tag = compute_next_tag_version(session, project_id)
     update_graph_runner_tag_fields(session, graph_runner_id, tag_version=new_tag)
-    bind_graph_runner_to_project(
-        session, graph_runner_id=graph_runner_id, project_id=project_id, env=EnvType.PRODUCTION
-    )
     LOGGER.info(f"Updated graph runner {graph_runner_id} to production")
 
     bind_graph_runner_to_project(
@@ -267,32 +299,11 @@ def deploy_graph_to_env_service(
     project_id: UUID,
     env: EnvType,
 ) -> None:
-    graph_runner = get_graph_runner_by_id(session, graph_runner_id)
-    if not graph_runner:
-        raise GraphNotFound(graph_runner_id)
-
-    env_relationship = get_env_relationship_by_graph_runner_id(session=session, graph_runner_id=graph_runner_id)
-
-    if env_relationship.project_id != project_id:
-        raise GraphNotBoundToProjectError(
-            graph_runner_id=graph_runner_id,
-            bound_project_id=env_relationship.project_id,
-            expected_project_id=project_id,
-        )
-
-    current_environment = env_relationship.environment
-    if current_environment == env:
-        raise GraphRunnerAlreadyInEnvironmentError(graph_runner_id, env.value)
-
-    previous_env_graph = get_graph_runner_for_env(
+    _deploy_graph_to_env_helper(
         session=session,
+        graph_runner_id=graph_runner_id,
         project_id=project_id,
-        env=env,
+        target_env=env,
     )
 
-    if previous_env_graph:
-        update_graph_runner_env(session, previous_env_graph.id, env=None)
-        LOGGER.info(f"Removed previous {env.value} graph runner {previous_env_graph.id} from {env.value}")
-
-    update_graph_runner_env(session, graph_runner_id, env=env)
     LOGGER.info(f"Deployed graph runner {graph_runner_id} to {env.value}")

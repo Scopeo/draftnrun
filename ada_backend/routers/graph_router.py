@@ -225,6 +225,24 @@ def deploy_graph(
             graph_runner_id=graph_runner_id,
             project_id=project_id,
         )
+    except GraphNotFound as e:
+        LOGGER.error(
+            f"Graph runner {graph_runner_id} not found when deploying to production for project {project_id}",
+            exc_info=True,
+        )
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    except GraphNotBoundToProjectError as e:
+        LOGGER.error(
+            f"Graph runner {graph_runner_id} is not bound to project {project_id} when deploying to production: {str(e)}",
+            exc_info=True,
+        )
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except GraphRunnerAlreadyInEnvironmentError as e:
+        LOGGER.error(
+            f"Graph runner {graph_runner_id} is already in production for project {project_id}",
+            exc_info=True,
+        )
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except FieldExpressionError as e:
         error_msg = str(e)
         LOGGER.error(
@@ -315,12 +333,6 @@ def deploy_graph_to_env(
     except GraphRunnerAlreadyInEnvironmentError as e:
         LOGGER.error(
             f"Graph runner {graph_runner_id} is already in {env.value} for project {project_id}",
-            exc_info=True,
-        )
-        raise HTTPException(status_code=400, detail=str(e)) from e
-    except ValueError as e:
-        LOGGER.error(
-            f"Invalid value when deploying graph {graph_runner_id} to {env.value} for project {project_id}: {str(e)}",
             exc_info=True,
         )
         raise HTTPException(status_code=400, detail=str(e)) from e
