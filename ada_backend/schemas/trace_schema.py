@@ -79,11 +79,6 @@ class RootTraceSpan(BaseModel):
     conversation_id: str | None = None
 
 
-class TokenUsage(BaseModel):
-    organization_id: str
-    total_tokens: int
-
-
 class Pagination(BaseModel):
     page: int
     size: int

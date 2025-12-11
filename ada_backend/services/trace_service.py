@@ -9,7 +9,6 @@ import pandas as pd
 from ada_backend.schemas.trace_schema import (
     RootTraceSpan,
     TraceSpan,
-    TokenUsage,
     PaginatedRootTracesResponse,
     Pagination,
 )
@@ -17,15 +16,11 @@ from ada_backend.services.metrics.utils import (
     query_root_trace_duration,
     query_trace_by_trace_id,
 )
-from ada_backend.repositories.trace_repository import get_organization_token_usage
 from ada_backend.segment_analytics import track_project_observability_loaded, track_span_observability_loaded
 from ada_backend.database.models import EnvType, CallType
 
 
 LOGGER = logging.getLogger(__name__)
-
-
-TOKEN_LIMIT = 2000000
 
 
 def get_attributes_with_messages(span_kind: str, row: pd.Series, filter_to_last_message: bool = False) -> dict:
@@ -164,13 +159,6 @@ def build_root_spans(df: pd.DataFrame) -> List[RootTraceSpan]:
         )
 
     return root_spans
-
-
-def get_token_usage(organization_id: UUID) -> TokenUsage:
-    token_usage = get_organization_token_usage(organization_id)
-    if not token_usage:
-        return TokenUsage(organization_id=str(organization_id), total_tokens=0)
-    return TokenUsage(organization_id=token_usage.organization_id, total_tokens=token_usage.total_tokens)
 
 
 def get_span_trace_service(user_id: UUID, trace_id: UUID) -> TraceSpan:
