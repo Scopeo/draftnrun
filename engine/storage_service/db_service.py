@@ -155,15 +155,19 @@ class DBService(ABC):
 
             LOGGER.info(f"Found {len(ids_to_update)} rows to update in the table")
             updated_data = new_df[new_df[id_column_name].isin(ids_to_update)].copy()
-            for col in updated_data.select_dtypes(include=["datetime64[ns]", "datetimetz"]):
-                updated_data[col] = updated_data[col].astype(object).where(updated_data[col].notna(), None)
-            self._refresh_table_from_df(
-                df=updated_data,
-                table_name=table_name,
-                id_column=id_column_name,
-                table_definition=table_definition,
-                schema_name=schema_name,
-            )
+
+            if not updated_data.empty:
+                for col in updated_data.select_dtypes(include=["datetime64[ns]", "datetimetz"]):
+                    updated_data[col] = updated_data[col].astype(object).where(updated_data[col].notna(), None)
+                self._refresh_table_from_df(
+                    df=updated_data,
+                    table_name=table_name,
+                    id_column=id_column_name,
+                    table_definition=table_definition,
+                    schema_name=schema_name,
+                )
+            else:
+                LOGGER.info("No rows to update, skipping update operation")
 
             new_df["exists"] = new_df[id_column_name].isin(all_existing_ids)
             LOGGER.info(f"Found {new_df['exists'][new_df['exists']].sum()} existing rows in the table")
