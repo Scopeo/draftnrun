@@ -5,6 +5,7 @@
 .pytest_cache
 .idea
 .cursor
+.claude/*
 
 # virtual-env
 venv
