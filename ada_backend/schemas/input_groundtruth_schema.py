@@ -18,6 +18,7 @@ class InputGroundtruthCreate(BaseModel):
 
     input: dict
     groundtruth: Optional[str] = None
+    index: Optional[int] = None
 
 
 class InputGroundtruthWithVersionResponse(BaseModel):

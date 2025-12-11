@@ -529,14 +529,15 @@ def export_qa_data_to_csv_service(
 
         output = io.StringIO()
         writer = csv.writer(output)
-        writer.writerow(["input", "expected_output", "actual_output"])
+        writer.writerow(["input", "expected_output", "actual_output", "index"])
 
         for entry in input_entries:
             input_str = json.dumps(entry.input) if entry.input else ""
             groundtruth_str = entry.groundtruth if entry.groundtruth is not None else ""
             output_str = outputs_dict.get(entry.id, "") if entry.id in outputs_dict else ""
+            index_str = str(entry.index) if entry.index is not None else ""
 
-            writer.writerow([input_str, groundtruth_str, output_str])
+            writer.writerow([input_str, groundtruth_str, output_str, index_str])
 
         csv_content = output.getvalue()
         output.close()
@@ -570,6 +571,7 @@ def import_qa_data_from_csv_service(
                 InputGroundtruthCreate(
                     input=row_data["input"],
                     groundtruth=row_data["expected_output"] if row_data["expected_output"] else None,
+                    index=row_data["index"] if "index" in row_data else None,
                 )
             )
 
