@@ -1,5 +1,6 @@
 from typing import Optional
 from uuid import UUID
+from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict
 
@@ -24,6 +25,8 @@ class AgentInfoSchema(BaseModel):
     system_prompt: str
     model_parameters: list[PipelineParameterReadSchema] = []
     tools: list[ComponentInstanceReadSchema] = []
+    last_edited_time: Optional[datetime] = None
+    last_edited_user_id: Optional[UUID] = None
 
 
 class AgentUpdateSchema(BaseModel):
