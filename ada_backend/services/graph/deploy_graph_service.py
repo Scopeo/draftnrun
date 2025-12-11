@@ -250,13 +250,6 @@ def _deploy_graph_to_env_helper(
             f"Removed previous {target_env.value} graph runner {previous_env_graph.id} from {target_env.value}"
         )
 
-    bind_graph_runner_to_project(
-        session=session,
-        graph_runner_id=graph_runner_id,
-        project_id=project_id,
-        env=target_env,
-    )
-
     return previous_env_graph
 
 
@@ -279,6 +272,9 @@ def deploy_graph_service(
     )
     new_tag = compute_next_tag_version(session, project_id)
     update_graph_runner_tag_fields(session, graph_runner_id, tag_version=new_tag)
+    bind_graph_runner_to_project(
+        session, graph_runner_id=graph_runner_id, project_id=project_id, env=EnvType.PRODUCTION
+    )
     LOGGER.info(f"Updated graph runner {graph_runner_id} to production")
 
     bind_graph_runner_to_project(
@@ -306,4 +302,5 @@ def deploy_graph_to_env_service(
         target_env=env,
     )
 
+    update_graph_runner_env(session, graph_runner_id, env=env)
     LOGGER.info(f"Deployed graph runner {graph_runner_id} to {env.value}")
