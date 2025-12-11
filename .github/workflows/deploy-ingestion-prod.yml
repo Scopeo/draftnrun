@@ -12,6 +12,19 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Check if ada_ingestion_system files changed
+        id: check_changes
+        run: |
+          if git diff --name-only HEAD~1 HEAD | grep -q "^ada_ingestion_system/"; then
+            echo "should_restart=true" >> $GITHUB_OUTPUT
+            echo "✅ ada_ingestion_system files changed - service will be restarted"
+          else
+            echo "should_restart=false" >> $GITHUB_OUTPUT
+            echo "ℹ️  No changes to ada_ingestion_system - service will not be restarted"
+          fi
 
       - name: Setup, CD to App Directory, and Fetch Latest Code
         uses: appleboy/ssh-action@v1.0.3
@@ -38,6 +51,7 @@ jobs:
 
 
       - name: Restart ada-worker Service
+        if: steps.check_changes.outputs.should_restart == 'true'
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.EC2_HOST_INGESTION_PROD }}
@@ -54,6 +68,7 @@ jobs:
             sleep 30
 
       - name: Check ada-worker Service Status
+        if: steps.check_changes.outputs.should_restart == 'true'
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.EC2_HOST_INGESTION_PROD }}
