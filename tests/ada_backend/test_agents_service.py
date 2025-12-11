@@ -27,8 +27,10 @@ class DummyProject:
 
 
 class DummyGraphResponse:
-    def __init__(self, component_instances):
+    def __init__(self, component_instances, last_edited_time=None, last_edited_user_id=None):
         self.component_instances = component_instances
+        self.last_edited_time = last_edited_time
+        self.last_edited_user_id = last_edited_user_id
 
 
 class DummyComponentInstance:
