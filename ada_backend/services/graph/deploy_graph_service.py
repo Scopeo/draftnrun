@@ -26,7 +26,6 @@ from ada_backend.services.tag_service import compute_next_tag_version
 from ada_backend.repositories.tag_repository import update_graph_runner_tag_fields
 from ada_backend.repositories.graph_runner_repository import (
     get_component_nodes,
-    get_graph_runner_by_id,
     get_graph_runner_for_env,
     graph_runner_exists,
     insert_graph_runner,
@@ -219,10 +218,9 @@ def _deploy_graph_to_env_helper(
     session: Session,
     graph_runner_id: UUID,
     project_id: UUID,
-    target_env: EnvType,
+    env: EnvType,
 ) -> Tuple[db.GraphRunner, db.ProjectEnvironmentBinding, Optional[db.GraphRunner]]:
-    graph_runner = get_graph_runner_by_id(session, graph_runner_id)
-    if not graph_runner:
+    if not graph_runner_exists(session, graph_runner_id):
         raise GraphNotFound(graph_runner_id)
 
     env_relationship = get_env_relationship_by_graph_runner_id(session=session, graph_runner_id=graph_runner_id)
@@ -235,20 +233,18 @@ def _deploy_graph_to_env_helper(
         )
 
     current_environment = env_relationship.environment
-    if current_environment == target_env:
-        raise GraphRunnerAlreadyInEnvironmentError(graph_runner_id, target_env.value)
+    if current_environment == env:
+        raise GraphRunnerAlreadyInEnvironmentError(graph_runner_id, env.value)
 
     previous_env_graph = get_graph_runner_for_env(
         session=session,
         project_id=project_id,
-        env=target_env,
+        env=env,
     )
 
     if previous_env_graph:
         update_graph_runner_env(session, previous_env_graph.id, env=None)
-        LOGGER.info(
-            f"Removed previous {target_env.value} graph runner {previous_env_graph.id} from {target_env.value}"
-        )
+        LOGGER.info(f"Removed previous {env.value} graph runner {previous_env_graph.id} from {env.value}")
 
     return previous_env_graph
 
@@ -262,7 +258,7 @@ def deploy_graph_service(
         session=session,
         graph_runner_id=graph_runner_id,
         project_id=project_id,
-        target_env=EnvType.PRODUCTION,
+        env=EnvType.PRODUCTION,
     )
 
     new_graph_runner_id = clone_graph_runner(
@@ -299,7 +295,7 @@ def deploy_graph_to_env_service(
         session=session,
         graph_runner_id=graph_runner_id,
         project_id=project_id,
-        target_env=env,
+        env=env,
     )
 
     update_graph_runner_env(session, graph_runner_id, env=env)

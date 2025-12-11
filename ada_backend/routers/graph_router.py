@@ -233,7 +233,7 @@ def deploy_graph(
         raise HTTPException(status_code=404, detail=str(e)) from e
     except GraphNotBoundToProjectError as e:
         LOGGER.error(
-            f"Graph runner {graph_runner_id} is not bound to project {project_id} when deploying to production: {str(e)}",
+            f"Graph runner {graph_runner_id} is not bound to project {project_id} when deploying to production",
             exc_info=True,
         )
         raise HTTPException(status_code=400, detail=str(e)) from e
@@ -326,7 +326,7 @@ def deploy_graph_to_env(
         raise HTTPException(status_code=404, detail=str(e)) from e
     except GraphNotBoundToProjectError as e:
         LOGGER.error(
-            f"Graph runner {graph_runner_id} is not bound to project {project_id} when deploying to {env.value}: {str(e)}",
+            f"Graph runner {graph_runner_id} is not bound to project {project_id} when deploying to {env.value}",
             exc_info=True,
         )
         raise HTTPException(status_code=400, detail=str(e)) from e
