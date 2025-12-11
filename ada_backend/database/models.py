@@ -1733,3 +1733,53 @@ class OrganizationLimit(Base):
 
     def __str__(self):
         return f"OrganizationLimit(org={self.organization_id}, " f"{self.year}-{self.month:02d}, limit={self.limit})"
+
+
+class Widget(Base):
+    """
+    Widget configuration for embeddable chat widgets.
+    Each widget maps to a project and stores UI configuration.
+    """
+
+    __tablename__ = "widgets"
+    __table_args__ = {"schema": "widget"}
+
+    id = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    widget_key = mapped_column(String(64), unique=True, nullable=False, index=True)
+    project_id = mapped_column(
+        UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    organization_id = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
+    name = mapped_column(String(255), nullable=False)
+    is_enabled = mapped_column(Boolean, default=True, nullable=False)
+    config = mapped_column(
+        JSONB,
+        nullable=False,
+        default={
+            "theme": {
+                "primary_color": "#6366F1",
+                "secondary_color": "#4F46E5",
+                "background_color": "#FFFFFF",
+                "text_color": "#1F2937",
+                "border_radius": 12,
+                "font_family": "Inter, system-ui, sans-serif",
+                "logo_url": None,
+            },
+            "first_messages": [],
+            "suggestions": [],
+            "placeholder_text": "Type a message...",
+            "powered_by_visible": True,
+        },
+    )
+    created_at = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    project = relationship(
+        "Project",
+        backref="widgets",
+        primaryjoin="Widget.project_id == Project.id",
+        foreign_keys="[Widget.project_id]",
+    )
+
+    def __str__(self):
+        return f"Widget(id={self.id}, name={self.name}, project_id={self.project_id})"

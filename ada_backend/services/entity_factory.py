@@ -756,7 +756,11 @@ def build_reranker_processor(target_name: str = "reranker") -> ParameterProcesso
         if not use_reranker:
             return _remove_parameters_from_optional_subcomponents(
                 params,
-                parameters_name=["cohere_model", "score_threshold", "num_doc_reranked",],
+                parameters_name=[
+                    "cohere_model",
+                    "score_threshold",
+                    "num_doc_reranked",
+                ],
                 target_name=target_name,
             )
 
