@@ -158,3 +158,18 @@ class GraphNotBoundToProjectError(Exception):
                 f"Graph with ID {graph_runner_id} is bound to project {bound_project_id}, not {expected_project_id}."
             )
         super().__init__(message)
+
+
+class WidgetNotFound(Exception):
+    def __init__(self, widget_id: UUID | None = None, widget_key: str | None = None):
+        if widget_id:
+            super().__init__(f"Widget with id {widget_id} not found")
+        elif widget_key:
+            super().__init__(f"Widget with key {widget_key} not found")
+        else:
+            super().__init__("Widget not found")
+
+
+class WidgetDisabled(Exception):
+    def __init__(self, widget_key: str):
+        super().__init__(f"Widget {widget_key} is disabled")
