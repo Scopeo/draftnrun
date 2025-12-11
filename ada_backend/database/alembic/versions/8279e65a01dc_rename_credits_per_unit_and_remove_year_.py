@@ -1,7 +1,7 @@
 """rename credits per unit and remove year month from limit
 
 Revision ID: 8279e65a01dc
-Revises: a7c91f2e4b0d
+Revises: 62d077615136
 Create Date: 2025-12-09 16:35:11.738388
 
 """
@@ -14,7 +14,7 @@ from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
 revision: str = "8279e65a01dc"
-down_revision: Union[str, None] = "a7c91f2e4b0d"
+down_revision: Union[str, None] = "62d077615136"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
