@@ -136,7 +136,7 @@ class SQLSpanExporter(SpanExporter):
         credits_input_token = None
         credits_output_token = None
         credits_per_call = None
-        credits_per_unit: float | None = None
+        credits_per: dict | None = None
         has_billable_usage = False
 
         if model_id:
@@ -180,7 +180,7 @@ class SQLSpanExporter(SpanExporter):
                 has_billable_usage = True
             # TODO: add credits per unit
 
-        return credits_input_token, credits_output_token, credits_per_call, credits_per_unit, has_billable_usage
+        return credits_input_token, credits_output_token, credits_per_call, credits_per, has_billable_usage
 
     def _store_span_credits(
         self,
@@ -189,7 +189,7 @@ class SQLSpanExporter(SpanExporter):
         credits_input_token: float | None,
         credits_output_token: float | None,
         credits_per_call: float | None,
-        credits_per_unit: float | None,
+        credits_per: dict | None,
     ) -> None:
 
         span_usage = SpanUsage(
@@ -197,16 +197,13 @@ class SQLSpanExporter(SpanExporter):
             credits_input_token=credits_input_token,
             credits_output_token=credits_output_token,
             credits_per_call=credits_per_call,
-            credits_per_unit=credits_per_unit,
+            credits_per=credits_per,
         )
         self.session.add(span_usage)
 
         if project_id:
             total_span_credits = (
-                (credits_input_token or 0)
-                + (credits_output_token or 0)
-                + (credits_per_call or 0)
-                + (credits_per_unit or 0)
+                (credits_input_token or 0) + (credits_output_token or 0) + (credits_per_call or 0) + (credits_per or 0)
             )
 
             current_date = datetime.now(tz=timezone.utc)
@@ -309,7 +306,7 @@ class SQLSpanExporter(SpanExporter):
             )
             self.session.add(span_row)
 
-            credits_input_token, credits_output_token, credits_per_call, credits_per_unit, has_billable_usage = (
+            credits_input_token, credits_output_token, credits_per_call, credits_per, has_billable_usage = (
                 self._calculate_span_credits(span, model_id, component_instance_id)
             )
 
@@ -320,7 +317,7 @@ class SQLSpanExporter(SpanExporter):
                     credits_input_token,
                     credits_output_token,
                     credits_per_call,
-                    credits_per_unit,
+                    credits_per,
                 )
 
             self.session.add(

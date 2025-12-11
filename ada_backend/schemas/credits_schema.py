@@ -19,7 +19,7 @@ class OrganizationLimitResponse(OrganizationLimit):
 
 
 class ComponentVersionCost(BaseModel):
-    credits_per_unit: Optional[dict] = None
+    credits_per: Optional[dict] = None
     credits_per_call: Optional[float] = None
 
 

@@ -23,13 +23,13 @@ def upsert_component_version_cost_service(
     session: Session,
     component_version_id: UUID,
     credits_per_call: Optional[float] = None,
-    credits_per_unit: Optional[dict] = None,
+    credits_per: Optional[dict] = None,
 ) -> ComponentVersionCostResponse:
     component_cost = upsert_component_version_cost(
         session,
         component_version_id,
         credits_per_call,
-        credits_per_unit,
+        credits_per,
     )
     if component_cost is None:
         raise ComponentVersionCostNotFound(component_version_id)

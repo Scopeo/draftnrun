@@ -11,14 +11,14 @@ def _update_cost_fields(
     credits_per_input_token: Optional[float] = None,
     credits_per_output_token: Optional[float] = None,
     credits_per_call: Optional[float] = None,
-    credits_per_unit: Optional[dict] = None,
+    credits_per: Optional[dict] = None,
 ) -> None:
     """Helper function to update cost fields on a Cost object."""
 
     cost_obj.credits_per_input_token = credits_per_input_token
     cost_obj.credits_per_output_token = credits_per_output_token
     cost_obj.credits_per_call = credits_per_call
-    cost_obj.credits_per_unit = credits_per_unit
+    cost_obj.credits_per = credits_per
 
 
 def create_llm_cost(
@@ -95,13 +95,13 @@ def create_component_version_cost(
     session: Session,
     component_version_id: UUID,
     credits_per_call: Optional[float] = None,
-    credits_per_unit: Optional[dict] = None,
+    credits_per: Optional[dict] = None,
 ) -> db.ComponentCost:
 
     component_cost = db.ComponentCost(
         component_version_id=component_version_id,
         credits_per_call=credits_per_call,
-        credits_per_unit=credits_per_unit,
+        credits_per=credits_per,
     )
     session.add(component_cost)
     session.commit()
@@ -113,7 +113,7 @@ def upsert_component_version_cost(
     session: Session,
     component_version_id: UUID,
     credits_per_call: Optional[float] = None,
-    credits_per_unit: Optional[dict] = None,
+    credits_per: Optional[dict] = None,
 ) -> db.ComponentCost:
 
     component_cost = (
@@ -125,13 +125,13 @@ def upsert_component_version_cost(
             session,
             component_version_id,
             credits_per_call,
-            credits_per_unit,
+            credits_per,
         )
     else:
         _update_cost_fields(
             cost_obj=component_cost,
             credits_per_call=credits_per_call,
-            credits_per_unit=credits_per_unit,
+            credits_per=credits_per,
         )
         session.commit()
         session.refresh(component_cost)
@@ -149,10 +149,7 @@ def delete_component_version_cost(session: Session, component_version_id: UUID) 
 
 
 def get_all_organization_limits(session: Session) -> List[db.OrganizationLimit]:
-    return (
-        session.query(db.OrganizationLimit)
-        .all()
-    )
+    return session.query(db.OrganizationLimit).all()
 
 
 def create_organization_limit(

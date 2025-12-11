@@ -739,7 +739,7 @@ def process_components_with_versions(
                     ],
                     categories=fetch_associated_category_names(session, component_with_version.component_id),
                     credits_per_call=component_cost.credits_per_call if component_cost else None,
-                    credits_per_unit=component_cost.credits_per_unit if component_cost else None,
+                    credits_per=component_cost.credits_per if component_cost else None,
                 )
             )
         except Exception as e:

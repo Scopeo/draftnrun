@@ -51,7 +51,7 @@ class ComponentWithParametersDTO(ComponentVersionUseInfoSchema, ComponentSchema)
     port_definitions: List[PortDefinitionSchema] = []
     parameter_groups: List[ParameterGroupSchema] = []
     credits_per_call: Optional[float] = None
-    credits_per_unit: Optional[dict] = None
+    credits_per: Optional[dict] = None
 
 
 class ComponentsResponse(BaseModel):

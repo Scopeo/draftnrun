@@ -69,7 +69,7 @@ def create_component_version_cost_in_db(session, component_version_id: UUID, **k
         session,
         component_version_id,
         credits_per_call=kwargs.get("credits_per_call"),
-        credits_per_unit=kwargs.get("credits_per_unit"),
+        credits_per=kwargs.get("credits_per"),
     )
 
 
@@ -373,7 +373,7 @@ def test_upsert_component_version_cost_create(mock_is_super_admin, db_session, e
 
     payload = {
         "credits_per_call": 0.1,
-        "credits_per_unit": {"unit": "second", "value": 0.05},
+        "credits_per": {"unit": "second", "value": 0.05},
     }
 
     response = client.patch(
@@ -386,7 +386,7 @@ def test_upsert_component_version_cost_create(mock_is_super_admin, db_session, e
     data = response.json()
     assert data["component_version_id"] == str(component_version_id)
     assert data["credits_per_call"] == 0.1
-    assert data["credits_per_unit"] == {"unit": "second", "value": 0.05}
+    assert data["credits_per"] == {"unit": "second", "value": 0.05}
     assert "id" in data
 
     delete_component_version_cost(db_session, component_version_id)
@@ -418,7 +418,7 @@ def test_upsert_component_version_cost_update(mock_is_super_admin, db_session, e
     data = response.json()
     assert data["component_version_id"] == str(component_version_id)
     assert data["credits_per_call"] == 0.2
-    assert data["credits_per_unit"] is None
+    assert data["credits_per"] is None
 
     delete_component_version_cost(db_session, component_version_id)
 
@@ -433,12 +433,12 @@ def test_upsert_component_version_cost_partial_update(mock_is_super_admin, db_se
         db_session,
         component_version_id,
         credits_per_call=0.1,
-        credits_per_unit={"unit": "second", "value": 0.05},
+        credits_per={"unit": "second", "value": 0.05},
     )
 
     payload = {
         "credits_per_call": 0.15,
-        "credits_per_unit": {"unit": "second", "value": 0.05},
+        "credits_per": {"unit": "second", "value": 0.05},
     }
 
     response = client.patch(
@@ -450,7 +450,7 @@ def test_upsert_component_version_cost_partial_update(mock_is_super_admin, db_se
     assert response.status_code == 200
     data = response.json()
     assert data["credits_per_call"] == 0.15
-    assert data["credits_per_unit"] == {"unit": "second", "value": 0.05}
+    assert data["credits_per"] == {"unit": "second", "value": 0.05}
 
     delete_component_version_cost(db_session, component_version_id)
 
@@ -509,6 +509,6 @@ def test_upsert_component_version_cost_empty_payload(mock_is_super_admin, db_ses
     data = response.json()
     assert data["component_version_id"] == str(component_version_id)
     assert data["credits_per_call"] is None
-    assert data["credits_per_unit"] is None
+    assert data["credits_per"] is None
 
     delete_component_version_cost(db_session, component_version_id)
