@@ -22,18 +22,14 @@ from ada_backend.services.errors import (
 def upsert_component_version_cost_service(
     session: Session,
     component_version_id: UUID,
-    credits_per_input_token: Optional[float] = None,
-    credits_per_output_token: Optional[float] = None,
     credits_per_call: Optional[float] = None,
-    credits_per_second: Optional[float] = None,
+    credits_per: Optional[dict] = None,
 ) -> ComponentVersionCostResponse:
     component_cost = upsert_component_version_cost(
         session,
         component_version_id,
-        credits_per_input_token,
-        credits_per_output_token,
         credits_per_call,
-        credits_per_second,
+        credits_per,
     )
     if component_cost is None:
         raise ComponentVersionCostNotFound(component_version_id)
@@ -44,8 +40,8 @@ def delete_component_version_cost_service(session: Session, component_version_id
     return delete_component_version_cost(session, component_version_id)
 
 
-def get_all_organization_limits_service(session: Session, year: int, month: int) -> List[OrganizationLimitResponse]:
-    organization_limits = get_all_organization_limits(session, year, month)
+def get_all_organization_limits_service(session: Session) -> List[OrganizationLimitResponse]:
+    organization_limits = get_all_organization_limits(session)
     return [
         OrganizationLimitResponse.model_validate(organization_limit, from_attributes=True)
         for organization_limit in organization_limits
@@ -55,15 +51,11 @@ def get_all_organization_limits_service(session: Session, year: int, month: int)
 def create_organization_limit_service(
     session: Session,
     organization_id: UUID,
-    year: int,
-    month: int,
     limit: float,
 ) -> OrganizationLimitResponse:
     organization_limit = create_organization_limit(
         session,
         organization_id,
-        year,
-        month,
         limit,
     )
     return OrganizationLimitResponse.model_validate(organization_limit, from_attributes=True)

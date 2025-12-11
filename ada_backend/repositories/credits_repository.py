@@ -11,14 +11,14 @@ def _update_cost_fields(
     credits_per_input_token: Optional[float] = None,
     credits_per_output_token: Optional[float] = None,
     credits_per_call: Optional[float] = None,
-    credits_per_second: Optional[float] = None,
+    credits_per: Optional[dict] = None,
 ) -> None:
     """Helper function to update cost fields on a Cost object."""
 
     cost_obj.credits_per_input_token = credits_per_input_token
     cost_obj.credits_per_output_token = credits_per_output_token
     cost_obj.credits_per_call = credits_per_call
-    cost_obj.credits_per_second = credits_per_second
+    cost_obj.credits_per = credits_per
 
 
 def create_llm_cost(
@@ -26,16 +26,12 @@ def create_llm_cost(
     llm_model_id: UUID,
     credits_per_input_token: Optional[float] = None,
     credits_per_output_token: Optional[float] = None,
-    credits_per_call: Optional[float] = None,
-    credits_per_second: Optional[float] = None,
 ) -> db.LLMCost:
 
     llm_cost = db.LLMCost(
         llm_model_id=llm_model_id,
         credits_per_input_token=credits_per_input_token,
         credits_per_output_token=credits_per_output_token,
-        credits_per_call=credits_per_call,
-        credits_per_second=credits_per_second,
     )
     session.add(llm_cost)
     session.commit()
@@ -48,13 +44,13 @@ def update_llm_cost(
     llm_model_id: UUID,
     credits_per_input_token: Optional[float] = None,
     credits_per_output_token: Optional[float] = None,
-    credits_per_call: Optional[float] = None,
-    credits_per_second: Optional[float] = None,
 ) -> db.LLMCost:
     llm_cost = session.query(db.LLMCost).filter(db.LLMCost.llm_model_id == llm_model_id).first()
 
     _update_cost_fields(
-        llm_cost, credits_per_input_token, credits_per_output_token, credits_per_call, credits_per_second
+        cost_obj=llm_cost,
+        credits_per_input_token=credits_per_input_token,
+        credits_per_output_token=credits_per_output_token,
     )
     session.commit()
     session.refresh(llm_cost)
@@ -73,8 +69,6 @@ def upsert_llm_cost(
     llm_model_id: UUID,
     credits_per_input_token: Optional[float] = None,
     credits_per_output_token: Optional[float] = None,
-    credits_per_call: Optional[float] = None,
-    credits_per_second: Optional[float] = None,
 ) -> db.LLMCost:
     llm_cost = session.query(db.LLMCost).filter(db.LLMCost.llm_model_id == llm_model_id).first()
 
@@ -84,12 +78,12 @@ def upsert_llm_cost(
             llm_model_id,
             credits_per_input_token,
             credits_per_output_token,
-            credits_per_call,
-            credits_per_second,
         )
     else:
         _update_cost_fields(
-            llm_cost, credits_per_input_token, credits_per_output_token, credits_per_call, credits_per_second
+            cost_obj=llm_cost,
+            credits_per_input_token=credits_per_input_token,
+            credits_per_output_token=credits_per_output_token,
         )
         session.commit()
         session.refresh(llm_cost)
@@ -100,18 +94,14 @@ def upsert_llm_cost(
 def create_component_version_cost(
     session: Session,
     component_version_id: UUID,
-    credits_per_input_token: Optional[float] = None,
-    credits_per_output_token: Optional[float] = None,
     credits_per_call: Optional[float] = None,
-    credits_per_second: Optional[float] = None,
+    credits_per: Optional[dict] = None,
 ) -> db.ComponentCost:
 
     component_cost = db.ComponentCost(
         component_version_id=component_version_id,
-        credits_per_input_token=credits_per_input_token,
-        credits_per_output_token=credits_per_output_token,
         credits_per_call=credits_per_call,
-        credits_per_second=credits_per_second,
+        credits_per=credits_per,
     )
     session.add(component_cost)
     session.commit()
@@ -122,10 +112,8 @@ def create_component_version_cost(
 def upsert_component_version_cost(
     session: Session,
     component_version_id: UUID,
-    credits_per_input_token: Optional[float] = None,
-    credits_per_output_token: Optional[float] = None,
     credits_per_call: Optional[float] = None,
-    credits_per_second: Optional[float] = None,
+    credits_per: Optional[dict] = None,
 ) -> db.ComponentCost:
 
     component_cost = (
@@ -136,14 +124,14 @@ def upsert_component_version_cost(
         component_cost = create_component_version_cost(
             session,
             component_version_id,
-            credits_per_input_token,
-            credits_per_output_token,
             credits_per_call,
-            credits_per_second,
+            credits_per,
         )
     else:
         _update_cost_fields(
-            component_cost, credits_per_input_token, credits_per_output_token, credits_per_call, credits_per_second
+            cost_obj=component_cost,
+            credits_per_call=credits_per_call,
+            credits_per=credits_per,
         )
         session.commit()
         session.refresh(component_cost)
@@ -160,25 +148,17 @@ def delete_component_version_cost(session: Session, component_version_id: UUID) 
         session.commit()
 
 
-def get_all_organization_limits(session: Session, year: int, month: int) -> List[db.OrganizationLimit]:
-    return (
-        session.query(db.OrganizationLimit)
-        .filter(db.OrganizationLimit.year == year, db.OrganizationLimit.month == month)
-        .all()
-    )
+def get_all_organization_limits(session: Session) -> List[db.OrganizationLimit]:
+    return session.query(db.OrganizationLimit).all()
 
 
 def create_organization_limit(
     session: Session,
     organization_id: UUID,
-    year: int,
-    month: int,
     limit: float,
 ) -> db.OrganizationLimit:
     organization_limit = db.OrganizationLimit(
         organization_id=organization_id,
-        year=year,
-        month=month,
         limit=limit,
     )
     session.add(organization_limit)
@@ -232,8 +212,6 @@ def get_organization_limit(
         session.query(db.OrganizationLimit)
         .filter(
             db.OrganizationLimit.organization_id == organization_id,
-            db.OrganizationLimit.year == year,
-            db.OrganizationLimit.month == month,
         )
         .first()
     )
