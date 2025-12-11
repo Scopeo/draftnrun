@@ -130,6 +130,7 @@ class InputGroundtruthResponse(BaseModel):
 
     id: UUID
     dataset_id: UUID
+    index: int
     input: dict
     groundtruth: Optional[str] = None
     created_at: datetime

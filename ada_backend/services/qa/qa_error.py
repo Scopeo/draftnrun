@@ -22,6 +22,20 @@ class CSVInvalidJSONError(Exception):
         super().__init__(f"Invalid JSON in 'input' column. Expected a JSON object at row {row_number}")
 
 
+class CSVInvalidIndexError(Exception):
+    """Raised when index column contains invalid integer."""
+
+    def __init__(self, row_number: Optional[int] = None):
+        super().__init__(f"Invalid integer in 'index' column at row {row_number}")
+
+
+class CSVNonUniqueIndexError(Exception):
+    """Raised when index column contains non-unique values."""
+
+    def __init__(self, duplicate_indexes: list[int]):
+        super().__init__(f"Non-unique values found in 'index' column: {duplicate_indexes}")
+
+
 class CSVEmptyFileError(Exception):
     """Raised when CSV file is empty."""
 
