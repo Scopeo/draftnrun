@@ -16,9 +16,6 @@ from ada_backend.routers.auth_router import (
     get_user_from_supabase_token,
     UserRights,
 )
-# Use MEMBER/DEVELOPER (matching main branch)
-_READER_RIGHT = UserRights.MEMBER
-_WRITER_RIGHT = UserRights.DEVELOPER
 from ada_backend.schemas.auth_schema import SupabaseUser
 from ada_backend.schemas.widget_schema import (
     WidgetSchema,
@@ -40,6 +37,10 @@ from ada_backend.services.widget_service import (
 from ada_backend.repositories.widget_repository import get_widget_by_key
 from ada_backend.services.errors import ProjectNotFound, EnvironmentNotFound, WidgetNotFound, WidgetDisabled
 from ada_backend.services.user_roles_service import get_user_access_to_organization
+
+# Use MEMBER/DEVELOPER (matching main branch)
+_READER_RIGHT = UserRights.MEMBER
+_WRITER_RIGHT = UserRights.DEVELOPER
 
 router = APIRouter(tags=["Widget"])
 
