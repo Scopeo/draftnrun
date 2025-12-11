@@ -173,3 +173,10 @@ class WidgetNotFound(Exception):
 class WidgetDisabled(Exception):
     def __init__(self, widget_key: str):
         super().__init__(f"Widget {widget_key} is disabled")
+
+
+class GraphRunnerAlreadyInEnvironmentError(Exception):
+    def __init__(self, graph_runner_id: UUID, environment: str):
+        self.graph_runner_id = graph_runner_id
+        self.environment = environment
+        super().__init__(f"Graph runner {graph_runner_id} is already in {environment}")

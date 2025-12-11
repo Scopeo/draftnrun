@@ -114,6 +114,10 @@ def graph_runner_exists(session: Session, graph_id: UUID) -> bool:
     return session.execute(stmt).scalar()
 
 
+def get_graph_runner_by_id(session: Session, graph_runner_id: UUID) -> Optional[db.GraphRunner]:
+    return session.query(db.GraphRunner).filter(db.GraphRunner.id == graph_runner_id).first()
+
+
 def get_component_nodes(session: Session, graph_runner_id: UUID) -> list[ComponentNodeDTO]:
     """
     Retrieves the component nodes associated with a graph.

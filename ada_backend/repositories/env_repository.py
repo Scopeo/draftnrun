@@ -1,3 +1,4 @@
+from typing import Optional
 from uuid import UUID
 
 from sqlalchemy.orm import Session
@@ -43,7 +44,7 @@ def get_env_relationship_by_graph_runner_id(session: Session, graph_runner_id: U
     return env_relationship
 
 
-def update_graph_runner_env(session: Session, graph_runner_id: UUID, env: EnvType):
+def update_graph_runner_env(session: Session, graph_runner_id: UUID, env: Optional[EnvType]):
     env_relationship = (
         session.query(db.ProjectEnvironmentBinding)
         .filter(db.ProjectEnvironmentBinding.graph_runner_id == graph_runner_id)
