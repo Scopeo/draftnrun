@@ -17,7 +17,6 @@ from ada_backend.repositories.component_repository import (
 )
 from ada_backend.repositories.edge_repository import delete_edge, get_edges, upsert_edge
 from ada_backend.repositories.env_repository import get_env_relationship_by_graph_runner_id
-from ada_backend.services.errors import GraphNotBoundToProjectError
 from ada_backend.repositories.graph_runner_repository import (
     delete_node,
     get_component_nodes,
