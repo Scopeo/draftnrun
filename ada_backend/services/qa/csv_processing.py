@@ -3,11 +3,15 @@ import io
 import json
 from typing import BinaryIO
 
-from ada_backend.services.qa.qa_error import CSVEmptyFileError, CSVMissingColumnError, CSVInvalidJSONError
+from ada_backend.services.qa.qa_error import (
+    CSVEmptyFileError,
+    CSVMissingColumnError,
+    CSVInvalidJSONError,
+    CSVInvalidIndexError,
+)
 
 
 def process_csv(csv_file: BinaryIO):
-
     text_file = io.TextIOWrapper(csv_file, encoding="utf-8", newline="")
 
     try:
@@ -32,11 +36,14 @@ def process_csv(csv_file: BinaryIO):
                 parsed_json = json.loads(raw_json)
             except json.JSONDecodeError:
                 raise CSVInvalidJSONError(row_number=row_number)
-
-            yield {
-                "input": parsed_json,
-                "expected_output": row["expected_output"],
-            }
+            index = None
+            if "index" in row:
+                raw_index = row["index"]
+                try:
+                    index = int(raw_index)
+                except (TypeError, ValueError):
+                    raise CSVInvalidIndexError(row_number=row_number)
+            yield {"input": parsed_json, "expected_output": row["expected_output"], "index": index}
 
         if row_count == 0:
             raise CSVEmptyFileError()

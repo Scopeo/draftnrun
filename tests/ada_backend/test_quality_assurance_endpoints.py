@@ -1,3 +1,6 @@
+import csv
+import io
+import json
 from uuid import uuid4
 from fastapi.testclient import TestClient
 
@@ -84,6 +87,70 @@ def test_version_management():
     assert versions_response.status_code == 404  # Not Found - endpoint doesn't exist
 
     # Cleanup
+    client.delete(f"/projects/{project_uuid}", headers=HEADERS_JWT)
+
+
+def test_pagination():
+    """Test pagination for GET entries endpoint with 10 rows, 5 per page."""
+    project_uuid = str(uuid4())
+    project_payload = {
+        "project_id": project_uuid,
+        "project_name": f"pagination_test_{project_uuid}",
+        "description": "Test project for pagination",
+    }
+    client.post(f"/projects/{ORGANIZATION_ID}", headers=HEADERS_JWT, json=project_payload)
+
+    dataset_payload = {"datasets_name": [f"pagination_dataset_{project_uuid}"]}
+    dataset_response = client.post(f"/projects/{project_uuid}/qa/datasets", headers=HEADERS_JWT, json=dataset_payload)
+    dataset_id = dataset_response.json()["datasets"][0]["id"]
+
+    input_endpoint = f"/projects/{project_uuid}/qa/datasets/{dataset_id}/entries"
+
+    # Create 10 entries
+    create_payload = {
+        "inputs_groundtruths": [
+            {"input": {"messages": [{"role": "user", "content": f"Test {i}"}]}, "groundtruth": f"GT {i}"}
+            for i in range(1, 11)
+        ]
+    }
+    create_response = client.post(input_endpoint, headers=HEADERS_JWT, json=create_payload)
+    assert create_response.status_code == 200
+    created = create_response.json()["inputs_groundtruths"]
+    assert len(created) == 10
+
+    # Get page 1 with 5 items per page
+    page1_response = client.get(f"{input_endpoint}?page=1&page_size=5", headers=HEADERS_JWT)
+    assert page1_response.status_code == 200
+    page1_data = page1_response.json()
+    page1_entries = page1_data["inputs_groundtruths"]
+    assert len(page1_entries) == 5
+    assert page1_data["pagination"]["total_items"] == 10
+    assert page1_data["pagination"]["page"] == 1
+    assert page1_data["pagination"]["size"] == 5
+
+    # Verify order of page 1 (indexes 1-5)
+    page1_indexes = [entry["index"] for entry in page1_entries]
+    assert page1_indexes == [1, 2, 3, 4, 5]
+
+    # Get page 2 with 5 items per page
+    page2_response = client.get(f"{input_endpoint}?page=2&page_size=5", headers=HEADERS_JWT)
+    assert page2_response.status_code == 200
+    page2_data = page2_response.json()
+    page2_entries = page2_data["inputs_groundtruths"]
+    assert len(page2_entries) == 5
+    assert page2_data["pagination"]["total_items"] == 10
+    assert page2_data["pagination"]["page"] == 2
+    assert page2_data["pagination"]["size"] == 5
+
+    # Verify order of page 2 (indexes 6-10)
+    page2_indexes = [entry["index"] for entry in page2_entries]
+    assert page2_indexes == [6, 7, 8, 9, 10]
+
+    # Verify no overlap between pages
+    page1_ids = {entry["id"] for entry in page1_entries}
+    page2_ids = {entry["id"] for entry in page2_entries}
+    assert page1_ids.isdisjoint(page2_ids)
+
     client.delete(f"/projects/{project_uuid}", headers=HEADERS_JWT)
 
 
@@ -602,4 +669,264 @@ def test_quality_assurance_complete_workflow():
     assert draft_outputs_after_run[first_input_id] is not None, "Output should not be None"
 
     # Cleanup
+    client.delete(f"/projects/{project_uuid}", headers=HEADERS_JWT)
+
+
+def test_index_field_in_responses():
+    """Test that index field is included and persists correctly after deletions."""
+    project_uuid = str(uuid4())
+    project_payload = {
+        "project_id": project_uuid,
+        "project_name": f"index_test_{project_uuid}",
+        "description": "Test project for index field",
+    }
+    client.post(f"/projects/{ORGANIZATION_ID}", headers=HEADERS_JWT, json=project_payload)
+
+    dataset_payload = {"datasets_name": [f"index_dataset_{project_uuid}"]}
+    dataset_response = client.post(f"/projects/{project_uuid}/qa/datasets", headers=HEADERS_JWT, json=dataset_payload)
+    dataset_id = dataset_response.json()["datasets"][0]["id"]
+
+    input_endpoint = f"/projects/{project_uuid}/qa/datasets/{dataset_id}/entries"
+
+    # Add 5 entries - should get indexes 1 to 5
+    create_payload = {
+        "inputs_groundtruths": [
+            {"input": {"messages": [{"role": "user", "content": f"Test {i}"}]}, "groundtruth": f"GT {i}"}
+            for i in range(5)
+        ]
+    }
+    create_response = client.post(input_endpoint, headers=HEADERS_JWT, json=create_payload)
+    assert create_response.status_code == 200
+    created = create_response.json()["inputs_groundtruths"]
+    assert len(created) == 5
+    indexes = [entry["index"] for entry in created]
+    assert indexes == [1, 2, 3, 4, 5]
+
+    # Delete entry with index 3
+    entry_to_delete = next(entry["id"] for entry in created if entry["index"] == 3)
+    delete_payload = {"input_groundtruth_ids": [entry_to_delete]}
+    client.request(method="DELETE", url=input_endpoint, headers=HEADERS_JWT, json=delete_payload)
+
+    # Verify remaining entries still have their original indexes
+    get_response = client.get(input_endpoint, headers=HEADERS_JWT)
+    assert get_response.status_code == 200
+    remaining = get_response.json()["inputs_groundtruths"]
+    remaining_indexes = [entry["index"] for entry in remaining]
+    assert remaining_indexes == [1, 2, 4, 5]
+
+    # Add one new entry
+    new_entry_payload = {
+        "inputs_groundtruths": [
+            {"input": {"messages": [{"role": "user", "content": "New entry"}]}, "groundtruth": "New GT"}
+        ]
+    }
+    new_entry_response = client.post(input_endpoint, headers=HEADERS_JWT, json=new_entry_payload)
+    assert new_entry_response.status_code == 200
+    new_entry = new_entry_response.json()["inputs_groundtruths"][0]
+    assert new_entry["index"] == 6
+
+    # Verify final state
+    final_response = client.get(input_endpoint, headers=HEADERS_JWT)
+    final_entries = final_response.json()["inputs_groundtruths"]
+    final_indexes = [entry["index"] for entry in final_entries]
+    assert sorted(final_indexes) == [1, 2, 4, 5, 6]
+
+    client.delete(f"/projects/{project_uuid}", headers=HEADERS_JWT)
+
+
+def test_duplicate_index_validation():
+    """Test duplicate index validation."""
+    project_uuid = str(uuid4())
+    project_payload = {
+        "project_id": project_uuid,
+        "project_name": f"duplicate_test_{project_uuid}",
+        "description": "Test project for duplicate indexes",
+    }
+    client.post(f"/projects/{ORGANIZATION_ID}", headers=HEADERS_JWT, json=project_payload)
+
+    dataset_payload = {"datasets_name": [f"duplicate_dataset_{project_uuid}"]}
+    dataset_response = client.post(f"/projects/{project_uuid}/qa/datasets", headers=HEADERS_JWT, json=dataset_payload)
+    dataset_id = dataset_response.json()["datasets"][0]["id"]
+
+    input_endpoint = f"/projects/{project_uuid}/qa/datasets/{dataset_id}/entries"
+    create_payload = {
+        "inputs_groundtruths": [
+            {"input": {"messages": [{"role": "user", "content": "Test 1"}]}, "groundtruth": "GT 1", "index": 1},
+            {"input": {"messages": [{"role": "user", "content": "Test 2"}]}, "groundtruth": "GT 2", "index": 1},
+        ]
+    }
+
+    response = client.post(input_endpoint, headers=HEADERS_JWT, json=create_payload)
+    assert response.status_code == 400
+    assert "Duplicate indexes" in response.json()["detail"]
+
+    client.delete(f"/projects/{project_uuid}", headers=HEADERS_JWT)
+
+
+def test_partial_index_validation():
+    """Test partial index validation."""
+    project_uuid = str(uuid4())
+    project_payload = {
+        "project_id": project_uuid,
+        "project_name": f"partial_test_{project_uuid}",
+        "description": "Test project for partial indexes",
+    }
+    client.post(f"/projects/{ORGANIZATION_ID}", headers=HEADERS_JWT, json=project_payload)
+
+    dataset_payload = {"datasets_name": [f"partial_dataset_{project_uuid}"]}
+    dataset_response = client.post(f"/projects/{project_uuid}/qa/datasets", headers=HEADERS_JWT, json=dataset_payload)
+    dataset_id = dataset_response.json()["datasets"][0]["id"]
+
+    input_endpoint = f"/projects/{project_uuid}/qa/datasets/{dataset_id}/entries"
+    create_payload = {
+        "inputs_groundtruths": [
+            {"input": {"messages": [{"role": "user", "content": "Test 1"}]}, "groundtruth": "GT 1", "index": 1},
+            {"input": {"messages": [{"role": "user", "content": "Test 2"}]}, "groundtruth": "GT 2"},
+        ]
+    }
+
+    response = client.post(input_endpoint, headers=HEADERS_JWT, json=create_payload)
+    assert response.status_code == 400
+    assert "Partial indexing" in response.json()["detail"]
+
+    client.delete(f"/projects/{project_uuid}", headers=HEADERS_JWT)
+
+
+def test_index_auto_generation():
+    """Test that indexes are auto-generated when not provided."""
+    project_uuid = str(uuid4())
+    project_payload = {
+        "project_id": project_uuid,
+        "project_name": f"auto_index_test_{project_uuid}",
+        "description": "Test project for auto-generated indexes",
+    }
+    client.post(f"/projects/{ORGANIZATION_ID}", headers=HEADERS_JWT, json=project_payload)
+
+    dataset_payload = {"datasets_name": [f"auto_index_dataset_{project_uuid}"]}
+    dataset_response = client.post(f"/projects/{project_uuid}/qa/datasets", headers=HEADERS_JWT, json=dataset_payload)
+    dataset_id = dataset_response.json()["datasets"][0]["id"]
+
+    input_endpoint = f"/projects/{project_uuid}/qa/datasets/{dataset_id}/entries"
+    create_payload = {
+        "inputs_groundtruths": [
+            {"input": {"messages": [{"role": "user", "content": "Test 1"}]}, "groundtruth": "GT 1"},
+            {"input": {"messages": [{"role": "user", "content": "Test 2"}]}, "groundtruth": "GT 2"},
+        ]
+    }
+
+    response = client.post(input_endpoint, headers=HEADERS_JWT, json=create_payload)
+    assert response.status_code == 200
+    created = response.json()["inputs_groundtruths"]
+    assert created[0]["index"] == 1
+    assert created[1]["index"] == 2
+
+    client.delete(f"/projects/{project_uuid}", headers=HEADERS_JWT)
+
+
+def test_csv_import_duplicate_indexes_inside_csv():
+    """Test CSV import with duplicate indexes within CSV."""
+    project_uuid = str(uuid4())
+    project_payload = {
+        "project_id": project_uuid,
+        "project_name": f"csv_duplicate_test_{project_uuid}",
+        "description": "Test project for CSV duplicate indexes",
+    }
+    client.post(f"/projects/{ORGANIZATION_ID}", headers=HEADERS_JWT, json=project_payload)
+
+    dataset_payload = {"datasets_name": [f"csv_duplicate_dataset_{project_uuid}"]}
+    dataset_response = client.post(f"/projects/{project_uuid}/qa/datasets", headers=HEADERS_JWT, json=dataset_payload)
+    dataset_id = dataset_response.json()["datasets"][0]["id"]
+
+    # CSV with duplicate indexes
+    input1 = json.dumps({"messages": [{"role": "user", "content": "Test 1"}]})
+    input2 = json.dumps({"messages": [{"role": "user", "content": "Test 2"}]})
+    csv_buffer = io.StringIO()
+    writer = csv.writer(csv_buffer)
+    writer.writerow(["index", "input", "expected_output"])
+    writer.writerow([1, input1, "GT 1"])
+    writer.writerow([1, input2, "GT 2"])
+    csv_content = csv_buffer.getvalue()
+    csv_file = ("test.csv", csv_content.encode("utf-8"), "text/csv")
+
+    import_endpoint = f"/projects/{project_uuid}/qa/datasets/{dataset_id}/import"
+    response = client.post(import_endpoint, headers=HEADERS_JWT, files={"file": csv_file})
+    assert response.status_code == 400
+    error_detail = response.json()["detail"]
+    assert "Duplicate indexes found in CSV import: [1]" in error_detail
+    assert "CSV import" in error_detail
+
+    client.delete(f"/projects/{project_uuid}", headers=HEADERS_JWT)
+
+
+def test_csv_import_conflicting_with_existing_indexes():
+    """Test CSV import with indexes conflicting with existing dataset entries."""
+    project_uuid = str(uuid4())
+    project_payload = {
+        "project_id": project_uuid,
+        "project_name": f"csv_conflict_test_{project_uuid}",
+        "description": "Test project for CSV index conflicts",
+    }
+    client.post(f"/projects/{ORGANIZATION_ID}", headers=HEADERS_JWT, json=project_payload)
+
+    dataset_payload = {"datasets_name": [f"csv_conflict_dataset_{project_uuid}"]}
+    dataset_response = client.post(f"/projects/{project_uuid}/qa/datasets", headers=HEADERS_JWT, json=dataset_payload)
+    dataset_id = dataset_response.json()["datasets"][0]["id"]
+
+    # Create existing entry with index 1
+    input_endpoint = f"/projects/{project_uuid}/qa/datasets/{dataset_id}/entries"
+    create_payload = {
+        "inputs_groundtruths": [
+            {"input": {"messages": [{"role": "user", "content": "Existing"}]}, "groundtruth": "GT", "index": 1}
+        ]
+    }
+    client.post(input_endpoint, headers=HEADERS_JWT, json=create_payload)
+
+    # CSV with index 1 (conflicts with existing)
+    input_json = json.dumps({"messages": [{"role": "user", "content": "New"}]})
+    csv_buffer = io.StringIO()
+    writer = csv.writer(csv_buffer)
+    writer.writerow(["index", "input", "expected_output"])
+    writer.writerow([1, input_json, "New GT"])
+    csv_content = csv_buffer.getvalue()
+    csv_file = ("test.csv", csv_content.encode("utf-8"), "text/csv")
+
+    import_endpoint = f"/projects/{project_uuid}/qa/datasets/{dataset_id}/import"
+    response = client.post(import_endpoint, headers=HEADERS_JWT, files={"file": csv_file})
+    assert response.status_code == 400
+    error_detail = response.json()["detail"]
+    assert "Duplicate indexes found in CSV import: [1]" in error_detail
+    assert "CSV import" in error_detail
+
+    client.delete(f"/projects/{project_uuid}", headers=HEADERS_JWT)
+
+
+def test_csv_import_invalid_index_values():
+    """Test CSV import with invalid index values (non-integer)."""
+    project_uuid = str(uuid4())
+    project_payload = {
+        "project_id": project_uuid,
+        "project_name": f"csv_invalid_index_test_{project_uuid}",
+        "description": "Test project for CSV invalid index values",
+    }
+    client.post(f"/projects/{ORGANIZATION_ID}", headers=HEADERS_JWT, json=project_payload)
+
+    dataset_payload = {"datasets_name": [f"csv_invalid_index_dataset_{project_uuid}"]}
+    dataset_response = client.post(f"/projects/{project_uuid}/qa/datasets", headers=HEADERS_JWT, json=dataset_payload)
+    dataset_id = dataset_response.json()["datasets"][0]["id"]
+
+    # CSV with invalid index value (non-integer)
+    input_json = json.dumps({"messages": [{"role": "user", "content": "Test"}]})
+    csv_buffer = io.StringIO()
+    writer = csv.writer(csv_buffer)
+    writer.writerow(["index", "input", "expected_output"])
+    writer.writerow(["abc", input_json, "GT"])
+    csv_content = csv_buffer.getvalue()
+    csv_file = ("test.csv", csv_content.encode("utf-8"), "text/csv")
+
+    import_endpoint = f"/projects/{project_uuid}/qa/datasets/{dataset_id}/import"
+    response = client.post(import_endpoint, headers=HEADERS_JWT, files={"file": csv_file})
+    assert response.status_code == 400
+    assert "Invalid integer in 'index' column" in response.json()["detail"]
+    assert "row" in response.json()["detail"]
+
     client.delete(f"/projects/{project_uuid}", headers=HEADERS_JWT)
