@@ -11,11 +11,15 @@ from ada_backend.repositories.graph_runner_repository import (
 )
 from ada_backend.repositories.port_mapping_repository import list_port_mappings_for_graph
 from ada_backend.repositories.field_expression_repository import get_field_expressions_for_instances
+from ada_backend.repositories.component_repository import get_port_definitions_for_component_version_ids
+from ada_backend.database.models import ParameterType, PortType
 from ada_backend.schemas.pipeline.graph_schema import GraphGetResponse, EdgeSchema
 from ada_backend.schemas.pipeline.field_expression_schema import FieldExpressionReadSchema
+from ada_backend.schemas.parameter_schema import PipelineParameterReadSchema, ParameterKind
 from ada_backend.schemas.pipeline.port_mapping_schema import PortMappingSchema
 from ada_backend.services.pipeline.get_pipeline_service import get_component_instance, get_relationships
 from ada_backend.services.graph.graph_validation_utils import validate_graph_runner_belongs_to_project
+from ada_backend.services.parameter_synthesis_utils import filter_conflicting_parameters
 from ada_backend.services.tag_service import compose_tag_name
 from engine.field_expressions.parser import unparse_expression
 from engine.field_expressions.serializer import from_json as expr_from_json
@@ -94,8 +98,47 @@ def get_graph_service(
                 ),
             )
         )
-    for ci in component_instances_with_definitions:
-        ci.field_expressions = field_expressions_by_instance.get(ci.id, [])
+    for comp_instance in component_instances_with_definitions:
+        comp_instance.field_expressions = field_expressions_by_instance.get(comp_instance.id, [])
+
+    # Synthesize input ports as parameters
+    component_version_ids = list({ci.component_version_id for ci in component_instances_with_definitions})
+    all_port_definitions = get_port_definitions_for_component_version_ids(session, component_version_ids)
+    input_ports_by_component_version: dict[UUID, list] = defaultdict(list)
+    for port in all_port_definitions:
+        if port.port_type == PortType.INPUT:
+            input_ports_by_component_version[port.component_version_id].append(port)
+
+    for comp_instance in component_instances_with_definitions:
+        field_expression_by_name = {fe.field_name: fe.expression_text for fe in comp_instance.field_expressions}
+        input_ports = input_ports_by_component_version.get(comp_instance.component_version_id, [])
+
+        comp_instance.parameters = filter_conflicting_parameters(comp_instance.parameters or [], input_ports)
+
+        for input_port in input_ports:
+            comp_instance.parameters.append(
+                PipelineParameterReadSchema(
+                    kind=ParameterKind.INPUT,
+                    id=input_port.id,
+                    name=input_port.name,
+                    type=ParameterType.STRING,
+                    nullable=True,
+                    default=None,
+                    ui_component=input_port.ui_component,
+                    ui_component_properties=input_port.ui_component_properties,
+                    is_advanced=False,
+                    value=field_expression_by_name.get(input_port.name),
+                )
+            )
+
+        # TODO: Temporary patch to ensure 'messages' appears first. Clean later.
+        comp_instance.parameters.sort(
+            key=lambda p: (
+                0 if p.name == "messages" else 1,
+                p.order if p.order is not None else 999,
+                p.name,
+            )
+        )
 
     latest_modification_history = get_latest_modification_history(session, graph_runner_id)
 

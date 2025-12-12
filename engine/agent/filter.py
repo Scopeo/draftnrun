@@ -34,7 +34,11 @@ class FilterInputs(BaseModel):
     error: Optional[str] = Field(default=None, description="Error message if any.")
     artifacts: dict[str, Any] = Field(default_factory=dict, description="Artifacts to filter.")
     is_final: bool = Field(default=False, description="Whether this is a final output.")
-    filtering_json_schema: Optional[str] = Field(default=None, description="JSON schema for filtering data.")
+    filtering_json_schema: Optional[str] = Field(
+        default=None,
+        description="JSON schema for filtering data.",
+        json_schema_extra={"disabled_as_input": True},
+    )
     # Allow any other fields to be passed through
     model_config = {"extra": "allow"}
 

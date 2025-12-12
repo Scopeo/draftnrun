@@ -1,13 +1,20 @@
 from typing import Optional
 from uuid import UUID
+from enum import StrEnum
 from pydantic import BaseModel
 
 from ada_backend.database.models import ParameterType, UIComponent
 
 
+class ParameterKind(StrEnum):
+    PARAMETER = "parameter"
+    INPUT = "input"
+
+
 class ParameterBase(BaseModel):
     name: str
     order: Optional[int] = None
+    kind: ParameterKind = ParameterKind.PARAMETER
 
 
 class ParameterDefinition(ParameterBase):

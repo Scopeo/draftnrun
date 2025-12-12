@@ -36,6 +36,7 @@ from ada_backend.repositories.port_mapping_repository import (
 )
 from ada_backend.database import models as db
 from ada_backend.schemas.pipeline.graph_schema import GraphUpdateResponse, GraphUpdateSchema
+from ada_backend.schemas.parameter_schema import ParameterKind
 from ada_backend.services.agent_runner_service import get_agent_for_project
 from ada_backend.services.graph.delete_graph_service import delete_component_instances_from_nodes
 from ada_backend.services.pipeline.update_pipeline_service import create_or_update_component_instance
@@ -233,7 +234,21 @@ async def update_graph_service(
 
     # Create/update all component instances
     instance_ids = set()
+    input_params_by_instance: dict[UUID, list] = defaultdict(list)
     for instance in graph_project.component_instances:
+        parameter_params = []
+        for param in instance.parameters:
+            kind = getattr(param, "kind", ParameterKind.PARAMETER)
+            if kind == ParameterKind.INPUT:
+                if not instance.id:
+                    raise ValueError(
+                        f"Component instance ID is required for input parameters. Instance: {instance}, param: {param}"
+                    )
+                input_params_by_instance[instance.id].append(param)
+            else:
+                parameter_params.append(param)
+        instance.parameters = parameter_params
+
         instance_id = create_or_update_component_instance(session, instance, project_id)
         upsert_component_node(
             session,
@@ -305,19 +320,38 @@ async def update_graph_service(
     incoming_field_expressions_by_instance: dict[UUID, set[str]] = defaultdict(set)
     for instance in graph_project.component_instances:
         incoming_field_expressions_by_instance[instance.id] = set()
-        for expression in instance.field_expressions:
+
+        # Convert Inputs from parameters[kind="input"] to field expressions.
+        # TODO: this mixes API-level `kind="input"` with service-level types; needs decoupling.
+        for param in input_params_by_instance.get(instance.id, []):
             if not instance.id:
-                raise ValueError(f"Component instance ID is required for field expressions. Instance: {instance}")
-
+                raise ValueError(
+                    f"Component instance ID is required for input parameters. Instance: {instance}, param: {param}"
+                )
             if instance.id not in instance_ids:
-                raise ValueError("Invalid field expression target: component instance " f"{instance.id} not in update")
+                raise ValueError(f"Invalid field expression target: component instance {instance.id} not in update")
 
-            incoming_field_expressions_by_instance[instance.id].add(expression.field_name)
+            field_name = param.name
+            expression_text = "" if param.value is None else str(param.value)
+
+            if expression_text == "":
+                LOGGER.warning(
+                    f"No expression text for input parameter {field_name} on instance {instance.id}, skipping"
+                )
+                continue
+
+            if field_name in incoming_field_expressions_by_instance[instance.id]:
+                LOGGER.warning(
+                    f"Field expression {field_name} already exists for instance {instance.id}, skipping update"
+                )
+                continue
+
+            incoming_field_expressions_by_instance[instance.id].add(field_name)
 
             try:
-                ast = parse_expression(expression.expression_text)
+                ast = parse_expression(expression_text)
             except FieldExpressionParseError:
-                LOGGER.error(f"Failed to parse field expression: {expression.expression_text}")
+                LOGGER.error(f"Failed to parse field expression from parameter input: {expression_text}")
                 raise
 
             _validate_expression_references(session, ast)
@@ -325,18 +359,17 @@ async def update_graph_service(
             upsert_field_expression(
                 session=session,
                 component_instance_id=instance.id,
-                field_name=expression.field_name,
+                field_name=field_name,
                 expression_json=expr_to_json(ast),
             )
 
             ref_node = get_pure_ref(ast)
-            is_pure_ref = ref_node is not None
-            if is_pure_ref:
+            if ref_node is not None:
                 _create_port_mappings_for_pure_ref_expressions(
                     session=session,
                     graph_runner_id=graph_runner_id,
                     component_instance_id=instance.id,
-                    field_name=expression.field_name,
+                    field_name=field_name,
                     ref_node=ref_node,
                 )
 
