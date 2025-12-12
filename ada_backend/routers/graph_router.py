@@ -338,7 +338,8 @@ def deploy_graph_to_env(
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
         LOGGER.error(
-            f"Unexpected error when deploying graph {graph_runner_id} to {env.value} for project {project_id}: {str(e)}",
+            f"Unexpected error deploying graph {graph_runner_id} to {env.value} "
+            f"for project {project_id}, Error: {str(e)}",
             exc_info=True,
         )
         raise HTTPException(status_code=500, detail="Internal server error") from e
