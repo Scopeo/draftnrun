@@ -349,44 +349,19 @@ def test_structured_output_in_function_call_async(
         mock_client = MagicMock()
         mock_openai_client.return_value = mock_client
 
-        # Create the tool call response
-        mock_structured_tool_call = MagicMock()
-        mock_structured_tool_call.id = "2"
-        mock_structured_tool_call.function.name = "chat_formatting_output_tool"
-        mock_structured_tool_call.function.arguments = {"answer": "Final answer", "is_final": True}
-
-        mock_message_structured = MagicMock()
-        mock_message_structured.content = None
-        mock_message_structured.tool_calls = [mock_structured_tool_call]
-        mock_message_structured.model_dump = lambda: {
-            "role": "assistant",
-            "content": None,
-            "tool_calls": [
-                {
-                    "id": "2",
-                    "function": {
-                        "name": "chat_formatting_output_tool",
-                        "arguments": {"answer": "Final answer", "is_final": True},
-                    },
-                }
-            ],
-        }
-
-        # Mock the chat completions response
-        mock_response = MagicMock()
-        mock_response.choices = [MagicMock(message=mock_message_structured)]
-        mock_response.usage = MagicMock(completion_tokens=10, prompt_tokens=5, total_tokens=15)
-        mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
+        # With no non-structured tools available, CompletionService should fall back to constrained structured output,
+        # which calls the Responses API (responses.parse) rather than chat.completions.create.
+        mock_parse_response = MagicMock()
+        mock_parse_response.output_text = json.dumps({"answer": "Final answer", "is_final": True})
+        mock_parse_response.usage = MagicMock(output_tokens=10, input_tokens=5, total_tokens=15)
+        mock_client.responses.parse = AsyncMock(return_value=mock_parse_response)
 
         output = react_agent.run_sync(agent_input)
-        # The ensure_tools_or_structured_output_response should extract the arguments and return them as JSON
+        # The constrained completion returns the structured JSON directly as message content
         assert output.last_message.content == json.dumps({"answer": "Final answer", "is_final": True})
         assert output.is_final
 
-        # Verify that tool_choice was changed to "required" when structured_output_tool is provided
-        mock_client.chat.completions.create.assert_called_once()
-        call_args = mock_client.chat.completions.create.call_args
-        assert call_args.kwargs.get("tool_choice") == "required"
+        mock_client.responses.parse.assert_called_once()
 
     # Test 3: Full iteration flow - regular tool call -> structured output call
     # First, add a mock agent tool to the ReActAgent

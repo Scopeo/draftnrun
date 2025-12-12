@@ -45,6 +45,8 @@ class BaseConfig(BaseSettings):
     CEREBRAS_API_KEY: Optional[str] = None
     CEREBRAS_BASE_URL: Optional[str] = None
     COHERE_API_KEY: Optional[str] = None
+    ANTHROPIC_API_KEY: Optional[str] = None
+    ANTHROPIC_BASE_URL: Optional[str] = "https://api.anthropic.com/v1"
 
     SNOWFLAKE_ACCOUNT: Optional[str] = None
     SNOWFLAKE_USER: Optional[str] = None
