@@ -33,7 +33,10 @@ class CSVNonUniqueIndexError(Exception):
     """Raised when index column contains non-unique values."""
 
     def __init__(self, duplicate_indexes: list[int]):
-        super().__init__(f"Non-unique values found in 'index' column: {duplicate_indexes}")
+        super().__init__(
+            f"Duplicate indexes found in CSV import: {duplicate_indexes}. "
+            f"Indexes may be duplicated within the CSV file or conflict with existing indexes in the dataset."
+        )
 
 
 class CSVEmptyFileError(Exception):
@@ -61,3 +64,18 @@ class VersionOutputEmptyError(Exception):
     def __init__(self, version_output_id: UUID):
         self.version_output_id = version_output_id
         super().__init__(f"Version output {version_output_id} has no output to evaluate")
+
+
+class QADuplicateIndexError(Exception):
+    """Raised when duplicate indexes are found in QA dataset entries."""
+
+    def __init__(self, duplicate_indexes: list[int]):
+        self.duplicate_indexes = duplicate_indexes
+        super().__init__(f"Duplicate indexes found in QA dataset: {duplicate_indexes}")
+
+
+class QAPartialIndexError(Exception):
+    """Raised when partial indexing is detected (some entries have index, some don't)."""
+
+    def __init__(self):
+        super().__init__("Partial indexing is not allowed. Either provide indexes for all entries or none.")

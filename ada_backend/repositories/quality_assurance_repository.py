@@ -59,6 +59,20 @@ def get_max_index_of_dataset(
     return max_index
 
 
+def get_indexes_of_dataset(
+    session: Session,
+    dataset_id: UUID,
+) -> List[int]:
+    """Return all indexes for input-groundtruth entries in a dataset."""
+    results = (
+        session.query(InputGroundtruth.index)
+        .filter(InputGroundtruth.dataset_id == dataset_id)
+        .order_by(InputGroundtruth.index.asc())
+        .all()
+    )
+    return [index for (index,) in results]
+
+
 def create_inputs_groundtruths(
     session: Session,
     dataset_id: UUID,
