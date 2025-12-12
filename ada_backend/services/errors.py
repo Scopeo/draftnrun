@@ -180,3 +180,12 @@ class GraphRunnerAlreadyInEnvironmentError(Exception):
         self.graph_runner_id = graph_runner_id
         self.environment = environment
         super().__init__(f"Graph runner {graph_runner_id} is already in {environment}")
+
+
+class CannotDeployToDraftError(Exception):
+    def __init__(self, graph_runner_id: UUID):
+        self.graph_runner_id = graph_runner_id
+        super().__init__(
+            f"Cannot deploy graph runner {graph_runner_id} to draft environment. "
+            f"Use the draft deployment endpoint instead."
+        )

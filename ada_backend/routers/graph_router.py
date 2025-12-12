@@ -28,6 +28,7 @@ from ada_backend.services.errors import (
     GraphRunnerAlreadyInEnvironmentError,
     MissingDataSourceError,
     ProjectNotFound,
+    CannotDeployToDraftError,
 )
 from ada_backend.services.graph.deploy_graph_service import deploy_graph_service, deploy_graph_to_env_service
 from ada_backend.services.graph.load_copy_graph_service import load_copy_graph_service
@@ -318,6 +319,12 @@ def deploy_graph_to_env(
             project_id=project_id,
             env=env,
         )
+    except CannotDeployToDraftError as e:
+        LOGGER.error(
+            f"Cannot deploy graph runner {graph_runner_id} to draft environment for project {project_id}",
+            exc_info=True,
+        )
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except GraphNotFound as e:
         LOGGER.error(
             f"Graph runner {graph_runner_id} not found when deploying to {env.value} for project {project_id}",

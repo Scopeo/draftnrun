@@ -38,6 +38,7 @@ from ada_backend.services.errors import (
     GraphNotFound,
     GraphNotBoundToProjectError,
     GraphRunnerAlreadyInEnvironmentError,
+    CannotDeployToDraftError,
 )
 from ada_backend.services.pipeline.get_pipeline_service import get_component_instance, get_relationships
 from ada_backend.services.pipeline.update_pipeline_service import create_or_update_component_instance
@@ -224,6 +225,8 @@ def _deploy_graph_to_env_helper(
         raise GraphNotFound(graph_runner_id)
 
     env_relationship = get_env_relationship_by_graph_runner_id(session=session, graph_runner_id=graph_runner_id)
+    if not env_relationship:
+        raise GraphNotBoundToProjectError(graph_runner_id)
 
     if env_relationship.project_id != project_id:
         raise GraphNotBoundToProjectError(
@@ -291,6 +294,9 @@ def deploy_graph_to_env_service(
     project_id: UUID,
     env: EnvType,
 ) -> None:
+    if env == EnvType.DRAFT:
+        raise CannotDeployToDraftError(graph_runner_id)
+
     _deploy_graph_to_env_helper(
         session=session,
         graph_runner_id=graph_runner_id,
