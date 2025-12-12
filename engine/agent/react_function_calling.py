@@ -25,6 +25,7 @@ from engine.llm_services.llm_service import CompletionService
 from engine.agent.utils_prompt import fill_prompt_template
 from engine.agent.tools.python_code_runner import PYTHON_CODE_RUNNER_TOOL_DESCRIPTION
 from engine.agent.tools.terminal_command_runner import TERMINAL_COMMAND_RUNNER_TOOL_DESCRIPTION
+from engine.agent.tools.mcp_client_tool import MCPClientTool
 from settings import settings
 
 LOGGER = logging.getLogger(__name__)
@@ -234,6 +235,29 @@ class ReActAgent(Agent):
             finally:
                 self._shared_sandbox = None
 
+    async def _ensure_mcp_tools_initialized(self) -> None:
+        """Initialize all MCP tools if they haven't been initialized yet."""
+        for tool in self.agent_tools:
+            if isinstance(tool, MCPClientTool) and tool.session is None:
+                try:
+                    await tool.initialize()
+                except Exception as e:
+                    LOGGER.error(f"Failed to initialize MCP tool {tool.tool_description.name}: {e}")
+
+    async def _cleanup_mcp_tools(self) -> None:
+        """Safely clean up MCP tools."""
+        for tool in self.agent_tools:
+            if isinstance(tool, MCPClientTool) and tool.session:
+                try:
+                    await tool.close()
+                except Exception as e:
+                    LOGGER.error(f"Failed to close MCP tool {tool.tool_description.name}: {e}")
+
+    async def _cleanup_resources(self) -> None:
+        """Clean up all resources including sandbox and MCP tools."""
+        await self._cleanup_shared_sandbox()
+        await self._cleanup_mcp_tools()
+
     # --- ORIGINAL CORE LOGIC (unchanged) ---
     async def _run_tool_call(
         self,
@@ -356,6 +380,9 @@ class ReActAgent(Agent):
         agent_input = original_agent_input.model_copy(deep=True)
         history_messages_handled = self._memory_handling.get_truncated_messages_history(agent_input.messages)
         tool_choice = "auto" if self._current_iteration < self._max_iterations else "none"
+        
+        await self._ensure_mcp_tools_initialized()
+        
         with self.trace_manager.start_span("Agentic reflexion") as span:
             llm_input_messages = [msg.model_dump() for msg in history_messages_handled]
             span.set_attributes(
@@ -394,7 +421,7 @@ class ReActAgent(Agent):
                     artifacts["images"] = imgs
                 else:
                     LOGGER.debug("No images found in the response.")
-                await self._cleanup_shared_sandbox()
+                await self._cleanup_resources()
                 return AgentPayload(
                     messages=[ChatMessage(role="assistant", content=chat_response.choices[0].message.content)],
                     is_final=True,
@@ -435,7 +462,7 @@ class ReActAgent(Agent):
             final_output: AgentPayload = next(
                 agent_output for agent_output in agent_outputs.values() if agent_output.is_final
             )
-            await self._cleanup_shared_sandbox()
+            await self._cleanup_resources()
             return final_output
 
         elif self._current_iteration < self._max_iterations:
@@ -457,7 +484,7 @@ class ReActAgent(Agent):
                 " This should not happen."
             )
 
-            await self._cleanup_shared_sandbox()
+            await self._cleanup_resources()
             return AgentPayload(
                 messages=[ChatMessage(role="assistant", content=DEFAULT_FALLBACK_REACT_ANSWER)],
                 is_final=False,

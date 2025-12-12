@@ -33,6 +33,7 @@ from engine.agent.graph_runner_block import GraphRunnerBlock
 from engine.agent.chunk_processor import ChunkProcessor
 from engine.integrations.gmail_sender import GmailSender
 from engine.agent.tools.linkup_tool import LinkupSearchTool
+from engine.agent.tools.mcp_client_tool import MCPClientTool
 from engine.storage_service.local_service import SQLLocalService
 from engine.storage_service.snowflake_service.snowflake_service import SnowflakeService
 from ada_backend.services.entity_factory import (
@@ -529,6 +530,16 @@ def create_factory_registry() -> FactoryRegistry:
             entity_class=DocxTemplateAgent,
             parameter_processors=[
                 completion_service_processor,
+            ],
+        ),
+    )
+
+    registry.register(
+        component_version_id=COMPONENT_VERSION_UUIDS["mcp_client_tool"],
+        factory=AgentFactory(
+            entity_class=MCPClientTool,
+            parameter_processors=[
+                trace_manager_processor,
             ],
         ),
     )

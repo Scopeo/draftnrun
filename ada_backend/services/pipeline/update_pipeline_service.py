@@ -157,7 +157,9 @@ def create_or_update_component_instance(
                     component_instance_id=instance_id,
                     parameter_definition_id=param_def.id,
                     value=(
-                        json.dumps(param.value) if isinstance(param.value, dict) else str(param.value)
+                        json.dumps(param.value)
+                        if isinstance(param.value, (dict, list))
+                        else str(param.value)
                     ),  # Convert to string for storage
                     order=param.order,
                 )
