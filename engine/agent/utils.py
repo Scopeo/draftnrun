@@ -1,4 +1,5 @@
 import json
+import re
 import string
 from typing import Union, Any
 from typing import Callable, Optional, Tuple
@@ -17,27 +18,21 @@ MIN_LENGTH = 500
 
 
 def _is_likely_base64(s: str) -> bool:
-    """Lightning fast base64 detection using set operations."""
     length = len(s)
 
-    # Quick length checks
     if length < MIN_LENGTH or length % 4 != 0:
         return False
 
-    # Check for valid base64 characters (fast set lookup)
-    # Handle padding separately
     content = s.rstrip("=")
     if not content or not all(c in BASE64_CHARS for c in content):
         return False
 
-    # Check padding is only at the end (max 2 '=' chars)
     padding_count = length - len(content)
     return padding_count <= 2
 
 
 def shorten_base64_string(obj: Any) -> Any:
     if isinstance(obj, str):
-        # Check for data URL format first
         if obj.startswith("data:") and ";base64," in obj:
             prefix, base64_content = obj.split(";base64,", 1)
             if _is_likely_base64(base64_content) and len(base64_content) > MAX_DISPLAY_CHARS * 2:
@@ -45,7 +40,6 @@ def shorten_base64_string(obj: Any) -> Any:
                 return f"{prefix};base64,{shortened_base64}"
             return obj
 
-        # Handle raw base64 strings
         elif _is_likely_base64(obj) and len(obj) > MAX_DISPLAY_CHARS * 2:
             return f"{obj[:MAX_DISPLAY_CHARS]}...{obj[-MAX_DISPLAY_CHARS:]}"
 
@@ -66,7 +60,7 @@ def extract_vars_in_text_template(prompt_template: str) -> list[str]:
     return [fname for _, fname, _, _ in string.Formatter().parse(prompt_template) if fname]
 
 
-def parse_openai_message_format(message: Union[str, list], provider: str) -> tuple[str, list[dict], list[dict]]:
+def parse_openai_message_format(message: Union[str, list]) -> tuple[str, list[dict], list[dict]]:
     if isinstance(message, str):
         return message, [], []
 
@@ -87,20 +81,12 @@ def parse_openai_message_format(message: Union[str, list], provider: str) -> tup
                         }
                     )
                 if "image_url" in item:
-                    if provider == "openai":
-                        images_content.append(
-                            {
-                                "type": "image_url",
-                                "image_url": item["image_url"]["url"],
-                            }
-                        )
-                    else:
-                        images_content.append(
-                            {
-                                "type": "image_url",
-                                "image_url": item["image_url"],
-                            }
-                        )
+                    images_content.append(
+                        {
+                            "type": "image_url",
+                            "image_url": item["image_url"],
+                        }
+                    )
 
     return text_content, files_content, images_content
 
@@ -108,9 +94,24 @@ def parse_openai_message_format(message: Union[str, list], provider: str) -> tup
 def load_str_to_json(str_to_parse: str) -> dict:
     try:
         parsed_string = json.loads(str_to_parse)
+    except json.JSONDecodeError:
+        fixed_string = re.sub(r",(\s*[}\]])", r"\1", str_to_parse)
+        try:
+            parsed_string = json.loads(fixed_string)
+            LOGGER.warning(f"JSON had trailing commas, auto-fixed: {str_to_parse[:100]}...")
+        except json.JSONDecodeError as e:
+            error_msg = (
+                f"Invalid JSON format. Common issues: trailing commas, missing quotes, or unclosed brackets. "
+                f"Error details: {e.msg} at line {e.lineno}, column {e.colno}"
+            )
+            LOGGER.error(f"{error_msg}\nJSON content: {str_to_parse[:200]}")
+            raise ValueError(error_msg) from e
+        except Exception as e:
+            LOGGER.error(f"Failed to parse JSON: {str_to_parse[:200]} with error {e}")
+            raise ValueError(f"Error: {e}") from e
     except Exception as e:
-        LOGGER.error(f"Failed to parse data: {str_to_parse} with error {e}")
-        raise ValueError(f"Failed to parse data {str_to_parse}")
+        LOGGER.error(f"Failed to parse JSON: {str_to_parse[:200]} with error {e}")
+        raise ValueError(f"Error: {e}") from e
     return parsed_string
 
 

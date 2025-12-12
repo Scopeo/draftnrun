@@ -81,7 +81,10 @@ class Filter(Agent):
 
     async def _run_without_io_trace(self, inputs: FilterInputs, ctx: dict) -> FilterOutputs:
         filtering_json_schema = inputs.filtering_json_schema or self.filtering_json_schema
-        filtering_json_schema_dict = load_str_to_json(filtering_json_schema)
+        try:
+            filtering_json_schema_dict = load_str_to_json(filtering_json_schema)
+        except ValueError as e:
+            raise ValueError(f"Invalid 'filtering_json_schema' parameter: {e}") from e
         output_model = jsonschema_to_pydantic(filtering_json_schema_dict)
 
         # Convert inputs to dict for filtering

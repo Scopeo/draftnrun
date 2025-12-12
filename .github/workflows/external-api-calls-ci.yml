@@ -1,0 +1,160 @@
+name: external-api-calls-ci
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "engine/llm_services/**"
+
+concurrency:
+  group: ec2-runner-tests
+  cancel-in-progress: false
+
+jobs:
+  ci-pipeline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    strategy:
+      matrix:
+        python-version: [3.11]
+
+    env:
+      EC2_USER: ec2-user
+      EC2_PATH_BASE: /home/ec2-user/pr-tests
+      EC2_FOLDER_NAME: pr_
+
+    steps:
+      - name: Generate unique ID
+        run: |
+          RUN_ID=$(uuidgen)
+          echo "RUN_ID=$RUN_ID" >> $GITHUB_ENV
+
+      - name: Checkout repository
+        uses: actions/checkout@v2
+        with:
+          lfs: true
+
+      - name: Set up SSH key
+        uses: webfactory/ssh-agent@v0.5.3
+        with:
+          ssh-private-key: ${{ secrets.DEPLOY_KEY }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Copy files to EC2
+        uses: appleboy/scp-action@master
+        with:
+          host: ${{ secrets.EC2_HOST_TEST }}
+          username: ${{ env.EC2_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          source: "."
+          target: "${{ env.EC2_PATH_BASE }}/${{env.EC2_FOLDER_NAME}}${{env.RUN_ID}}"
+
+      - name: Install ci dependencies
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.EC2_HOST_TEST }}
+          username: ${{ env.EC2_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          script: |
+            set -e
+            echo "===> Changing directory to ${{ env.EC2_PATH_BASE }}/${{env.EC2_FOLDER_NAME}}${{ env.RUN_ID }}"
+            cd ${{ env.EC2_PATH_BASE }}/${{env.EC2_FOLDER_NAME}}${{env.RUN_ID}}
+            pip install uv
+            uv sync
+
+      - name: Create credentials.env file
+        run: |
+          echo "OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}" >> credentials.env
+          echo "COHERE_API_KEY=${{ secrets.COHERE_API_KEY }}" >> credentials.env
+          echo "MISTRAL_API_KEY=${{ secrets.MISTRAL_API_KEY }}" >> credentials.env
+          echo "GOOGLE_API_KEY=${{ secrets.GOOGLE_API_KEY }}" >> credentials.env
+          echo "GOOGLE_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai/" >> credentials.env
+          echo "CEREBRAS_API_KEY=${{ secrets.CEREBRAS_API_KEY }}" >> credentials.env
+          echo "CEREBRAS_BASE_URL=https://api.cerebras.ai/v1" >> credentials.env
+          echo "ANTHROPIC_API_KEY=${{ secrets.ANTHROPIC_API_KEY }}" >> credentials.env
+          echo "ANTHROPIC_BASE_URL=https://api.anthropic.com/v1/messages" >> credentials.env
+          echo "ADA_DB_DRIVER=postgres" >> credentials.env
+          echo "ADA_DB_URL=postgresql://postgres:ada_password@localhost:5432/ada_backend" >> credentials.env
+          echo "FERNET_KEY=${{ secrets.FERNET_KEY }}" >> credentials.env
+          echo "EXTERNAL_TEST_MISTRAL_OCR_IMAGE_URL=https://ssl.gstatic.com/ui/v1/icons/mail/rfr/logo_gmail_lockup_default_1x_r5.png" >> credentials.env
+
+      - name: Upload credentials.env to EC2
+        uses: appleboy/scp-action@master
+        with:
+          host: ${{ secrets.EC2_HOST_TEST }}
+          username: ${{ env.EC2_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          source: "credentials.env"
+          target: "${{ env.EC2_PATH_BASE }}/${{ env.EC2_FOLDER_NAME }}${{ env.RUN_ID }}"
+
+      - name: Check OS
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.EC2_HOST_TEST }}
+          username: ${{ env.EC2_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          script: |
+            set -e
+            cat /etc/os-release
+
+
+      - name: Run external API call tests
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.EC2_HOST_TEST }}
+          username: ${{ env.EC2_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          script: |
+            set -e
+            echo "===> Changing directory to ${{ env.EC2_PATH_BASE }}/${{env.EC2_FOLDER_NAME}}${{ env.RUN_ID }}"
+            cd ${{ env.EC2_PATH_BASE }}/${{env.EC2_FOLDER_NAME}}${{env.RUN_ID}}
+            echo "===> Running tests for RUN_ID: ${{ env.RUN_ID }}"
+            set -e
+            uv run pytest -q tests/external_api_calls
+
+      - name: Download external API calls report from EC2
+        if: always()
+        run: |
+          mkdir -p external_api_calls_report
+          scp -o StrictHostKeyChecking=no ${{ env.EC2_USER }}@${{ secrets.EC2_HOST_TEST }}:${{ env.EC2_PATH_BASE }}/${{ env.EC2_FOLDER_NAME }}${{ env.RUN_ID }}/tests/external_api_calls/external_api_calls_matrix.md external_api_calls_report/
+
+      - name: Upload external API calls report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: external-api-calls-matrix
+          path: external_api_calls_report/external_api_calls_matrix.md
+
+
+      - name: Cleanup EC2 folder
+        if: always()
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.EC2_HOST_TEST }}
+          username: ${{ env.EC2_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          script: |
+            EC2_TEST_DIR="${{ env.EC2_PATH_BASE }}/${{env.EC2_FOLDER_NAME}}${{ env.RUN_ID }}"
+            echo "===> Changing directory to $EC2_TEST_DIR for cleanup"
+            cd "$EC2_TEST_DIR" || { echo "Directory not found, skipping Docker cleanup."; }
+
+            # Kill process using specific port
+            echo "===> Stopping ada_backend server on port 8000"
+            lsof -ti:8000 | xargs kill -TERM 2>/dev/null && echo "Server stopped" || echo "No server on port 8000"
+            sleep 1
+            lsof -ti:8000 | xargs kill -9 2>/dev/null || true  # Force kill if still running
+
+            echo "===> Cleaning up project directory: $EC2_TEST_DIR"
+            rm -rf "$EC2_TEST_DIR"

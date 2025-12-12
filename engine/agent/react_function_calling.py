@@ -118,8 +118,10 @@ def get_default_output_tool_description() -> ToolDescription:
             },
             "is_ending_conversation": {
                 "type": "boolean",
-                "description": "Whether this response should end the conversation (true) or "
-                "allow for follow-up questions (false).",
+                "description": (
+                    "Whether this response should end the conversation (true) or "
+                    "allow for follow-up questions (false)."
+                ),
             },
         },
         required_properties=["answer", "is_ending_conversation"],
@@ -201,7 +203,10 @@ class ReActAgent(Agent):
 
         # Parse JSON strings to appropriate data types
         if isinstance(output_format, str):
-            parsed_output_tool_properies = load_str_to_json(output_format)
+            try:
+                parsed_output_tool_properies = load_str_to_json(output_format)
+            except ValueError as e:
+                raise ValueError(f"Invalid 'output_format' parameter: {e}") from e
         else:
             parsed_output_tool_properies = output_format
         if parsed_output_tool_properies is None:

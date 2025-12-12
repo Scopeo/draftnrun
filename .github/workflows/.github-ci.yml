@@ -6,7 +6,7 @@ on:
   pull_request:
     branches:
       - main
-      - Dev
+      - noel25
 
 concurrency:
   group: ec2-runner-tests
@@ -92,6 +92,9 @@ jobs:
           echo "GOOGLE_API_KEY=${{ secrets.GOOGLE_API_KEY }}" >> credentials.env
           echo "GOOGLE_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai/" >> credentials.env
           echo "CEREBRAS_API_KEY=${{ secrets.CEREBRAS_API_KEY }}" >> credentials.env
+          echo "CEREBRAS_BASE_URL=https://api.cerebras.ai/v1" >> credentials.env
+          echo "ANTHROPIC_API_KEY=${{ secrets.ANTHROPIC_API_KEY }}" >> credentials.env
+          echo "ANTHROPIC_BASE_URL=https://api.anthropic.com/v1/messages" >> credentials.env
           echo "SNOWFLAKE_USER=${{ secrets.SNOWFLAKE_USER }}" >> credentials.env
           echo "SNOWFLAKE_PASSWORD=${{ secrets.SNOWFLAKE_PASSWORD }}" >> credentials.env
           echo "SNOWFLAKE_ACCOUNT=${{ secrets.SNOWFLAKE_ACCOUNT }}" >> credentials.env
@@ -341,7 +344,7 @@ jobs:
             echo "===> Changing directory to ${{ env.EC2_PATH_BASE }}/${{env.EC2_FOLDER_NAME}}${{ env.RUN_ID }}"
             cd ${{ env.EC2_PATH_BASE }}/${{env.EC2_FOLDER_NAME}}${{env.RUN_ID}}
             echo "===> Running tests for RUN_ID: ${{ env.RUN_ID }}"
-            uv run coverage run -m pytest
+            uv run coverage run -m pytest --ignore=tests/external_api_calls
             uv run coverage report -i
             uv run coverage html -i
             uv run coverage xml -i
