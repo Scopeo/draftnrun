@@ -173,7 +173,7 @@ class LLMCallAgent(Agent):
             last_message = inputs.messages[-1]
             if last_message.content:
                 text_content, payload_files_content, payload_images_content = parse_openai_message_format(
-                    last_message.content, self._completion_service._provider
+                    last_message.content
                 )
                 input_from_messages = text_content
                 files_content.extend(payload_files_content)
