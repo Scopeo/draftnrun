@@ -5,6 +5,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.orm import Session
 
+from ada_backend.database.models import EnvType
 from ada_backend.repositories.project_repository import get_project
 from ada_backend.routers.auth_router import (
     UserRights,
@@ -24,10 +25,12 @@ from ada_backend.database.setup_db import get_db
 from ada_backend.services.errors import (
     GraphNotFound,
     GraphNotBoundToProjectError,
+    GraphRunnerAlreadyInEnvironmentError,
     MissingDataSourceError,
     ProjectNotFound,
+    CannotDeployToDraftError,
 )
-from ada_backend.services.graph.deploy_graph_service import deploy_graph_service
+from ada_backend.services.graph.deploy_graph_service import deploy_graph_service, deploy_graph_to_env_service
 from ada_backend.services.graph.load_copy_graph_service import load_copy_graph_service
 from ada_backend.services.graph.update_graph_service import update_graph_with_history_service
 from ada_backend.services.graph.get_graph_service import get_graph_service
@@ -223,6 +226,24 @@ def deploy_graph(
             graph_runner_id=graph_runner_id,
             project_id=project_id,
         )
+    except GraphNotFound as e:
+        LOGGER.error(
+            f"Graph runner {graph_runner_id} not found when deploying to production for project {project_id}",
+            exc_info=True,
+        )
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    except GraphNotBoundToProjectError as e:
+        LOGGER.error(
+            f"Graph runner {graph_runner_id} is not bound to project {project_id} when deploying to production",
+            exc_info=True,
+        )
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except GraphRunnerAlreadyInEnvironmentError as e:
+        LOGGER.error(
+            f"Graph runner {graph_runner_id} is already in production for project {project_id}",
+            exc_info=True,
+        )
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except FieldExpressionError as e:
         error_msg = str(e)
         LOGGER.error(
@@ -274,6 +295,61 @@ def load_copy_graph_runner(
             f"Failed to load copy of graph for project {project_id} runner {graph_runner_id}: {str(e)}", exc_info=True
         )
         raise HTTPException(status_code=400, detail="Bad request") from e
+
+
+@router.put(
+    "/{graph_runner_id}/env/{env}",
+    summary="Deploy Graph Runner to Environment",
+    status_code=status.HTTP_204_NO_CONTENT,
+    tags=["Graph"],
+)
+def deploy_graph_to_env(
+    project_id: UUID,
+    graph_runner_id: UUID,
+    env: EnvType,
+    user: Annotated[
+        SupabaseUser, Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.DEVELOPER.value))
+    ],
+    session: Session = Depends(get_db),
+) -> None:
+    try:
+        deploy_graph_to_env_service(
+            session=session,
+            graph_runner_id=graph_runner_id,
+            project_id=project_id,
+            env=env,
+        )
+    except CannotDeployToDraftError as e:
+        LOGGER.error(
+            f"Cannot deploy graph runner {graph_runner_id} to draft environment for project {project_id}",
+            exc_info=True,
+        )
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except GraphNotFound as e:
+        LOGGER.error(
+            f"Graph runner {graph_runner_id} not found when deploying to {env.value} for project {project_id}",
+            exc_info=True,
+        )
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    except GraphNotBoundToProjectError as e:
+        LOGGER.error(
+            f"Graph runner {graph_runner_id} is not bound to project {project_id} when deploying to {env.value}",
+            exc_info=True,
+        )
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except GraphRunnerAlreadyInEnvironmentError as e:
+        LOGGER.error(
+            f"Graph runner {graph_runner_id} is already in {env.value} for project {project_id}",
+            exc_info=True,
+        )
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except Exception as e:
+        LOGGER.error(
+            f"Unexpected error deploying graph {graph_runner_id} to {env.value} "
+            f"for project {project_id}, Error: {str(e)}",
+            exc_info=True,
+        )
+        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @router.delete("/{graph_runner_id}", summary="Delete Graph Runner", tags=["Graph"])

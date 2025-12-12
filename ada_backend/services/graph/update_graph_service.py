@@ -110,9 +110,8 @@ def validate_graph_is_draft(session: Session, graph_runner_id: UUID) -> None:
     Raises:
         ValueError: If the graph runner is not in draft mode
     """
-    try:
-        env_relationship = get_env_relationship_by_graph_runner_id(session, graph_runner_id)
-    except ValueError:
+    env_relationship = get_env_relationship_by_graph_runner_id(session, graph_runner_id)
+    if not env_relationship:
         return
 
     # Get the graph runner to check tag_version

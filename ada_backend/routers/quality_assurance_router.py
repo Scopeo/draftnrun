@@ -44,6 +44,7 @@ from ada_backend.services.qa.quality_assurance_service import (
     export_qa_data_to_csv_service,
     import_qa_data_from_csv_service,
 )
+from ada_backend.services.errors import GraphNotBoundToProjectError
 from ada_backend.services.qa.qa_error import (
     CSVEmptyFileError,
     CSVInvalidJSONError,
@@ -448,6 +449,12 @@ async def run_qa_endpoint(
 
     try:
         return await run_qa_service(session, project_id, dataset_id, run_request)
+    except GraphNotBoundToProjectError as e:
+        LOGGER.error(
+            f"Graph runner {run_request.graph_runner_id} is not bound to project {project_id} when running QA",
+            exc_info=True,
+        )
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except ValueError as e:
         LOGGER.error(
             f"Failed to run QA process on dataset {dataset_id} for project {project_id}: {str(e)}", exc_info=True
