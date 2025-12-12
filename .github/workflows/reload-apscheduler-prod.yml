@@ -1,0 +1,46 @@
+name: Reload APScheduler Prod
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'ada_backend/run_scheduler.py'
+      - 'ada_backend/scheduler/**'
+      - 'ada_backend/services/cron/**'
+      - 'ada_backend/database/setup_db.py'
+      - 'ada_backend/repositories/cron_repository.py'
+  workflow_dispatch:
+
+jobs:
+  reload-apscheduler:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Reload APScheduler service
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.EC2_HOST_SCOPEO }}
+          username: ec2-user
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          script: |
+            echo "Reload APScheduler with zero downtime"
+            sudo systemctl restart apscheduler.service
+
+      - name: Healthcheck - Verify APScheduler is running
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.EC2_HOST_SCOPEO }}
+          username: ec2-user
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          script: |
+            echo "Waiting 5s before checking APScheduler..."
+            sleep 5
+            if sudo systemctl is-active --quiet apscheduler.service; then
+              echo "✅ APScheduler service is running"
+            else
+              echo "❌ APScheduler service is not running"
+              sudo systemctl status apscheduler.service
+              exit 1
+            fi
