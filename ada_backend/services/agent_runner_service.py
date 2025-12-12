@@ -2,17 +2,19 @@ from uuid import UUID
 import uuid
 from typing import Optional
 import traceback
+import logging
 
 from sqlalchemy.orm import Session
 import networkx as nx
 
 from datetime import datetime
 
-from ada_backend.database.models import EnvType, OrgSecretType, CallType
+from ada_backend.database.models import EnvType, OrgSecretType, CallType, ResponseFormat
 from ada_backend.services.tag_service import compose_tag_name
 from ada_backend.repositories.edge_repository import get_edges
 from ada_backend.schemas.project_schema import ChatResponse
 from ada_backend.services.agent_builder_service import instantiate_component
+from ada_backend.services.file_response_service import process_files_for_response, temp_folder_exists
 from ada_backend.services.errors import ProjectNotFound, EnvironmentNotFound, OrganizationLimitExceededError
 from ada_backend.repositories.credits_repository import get_organization_total_credits, get_organization_limit
 from engine.graph_runner.graph_runner import GraphRunner
@@ -35,6 +37,8 @@ from engine.graph_runner.runnable import Runnable
 from engine.trace.trace_context import get_trace_manager
 from engine.trace.span_context import get_tracing_span, set_tracing_span
 from engine.field_expressions.serializer import from_json as expression_from_json
+
+LOGGER = logging.getLogger(__name__)
 
 
 def get_organization_llm_providers(session: Session, organization_id: UUID) -> list[str]:
@@ -167,6 +171,7 @@ async def run_env_agent(
     env: EnvType,
     input_data: dict,
     call_type: CallType,
+    response_format: Optional[ResponseFormat] = None,
 ) -> ChatResponse:
     graph_runner = get_graph_runner_for_env(session=session, project_id=project_id, env=env)
     if not graph_runner:
@@ -179,6 +184,7 @@ async def run_env_agent(
         environment=env,
         call_type=call_type,
         tag_name=compose_tag_name(graph_runner.tag_version, graph_runner.version_name),
+        response_format=response_format,
     )
 
 
@@ -190,6 +196,7 @@ async def run_agent(
     environment: EnvType,
     call_type: CallType,
     tag_name: Optional[str] = None,
+    response_format: Optional[ResponseFormat] = None,
 ) -> ChatResponse:
 
     project_details = get_project_with_details(session, project_id=project_id)
@@ -257,10 +264,24 @@ async def run_agent(
         tb = traceback.format_exc()
         raise ValueError(f"Error running agent: {tb}") from e
     finally:
+        files = []
+        if response_format is not None and temp_folder_exists(uuid_for_temp_folder):
+            try:
+                files = process_files_for_response(
+                    temp_folder_path=uuid_for_temp_folder,
+                    conversation_id=conversation_id,
+                    response_format=response_format,
+                )
+            except Exception as e:
+                LOGGER.error(
+                    f"Error processing files for response: {str(e)}",
+                    exc_info=True,
+                )
         delete_temp_folder(uuid_for_temp_folder)
     return ChatResponse(
         message=agent_output.last_message.content,
         artifacts=agent_output.artifacts,
         error=agent_output.error,
         trace_id=params.trace_id,
+        files=files,
     )

@@ -124,6 +124,11 @@ class CallType(StrEnum):
     QA = "qa"
 
 
+class ResponseFormat(StrEnum):
+    BASE64 = "base64"
+    URL = "url"
+
+
 class UIComponent(StrEnum):
     AUTOCOMPLETE = "Autocomplete"
     CHECKBOX = "Checkbox"

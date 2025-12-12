@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Body
 from sqlalchemy.orm import Session
 import logging
 
-from ada_backend.database.models import EnvType, CallType, ProjectType
+from ada_backend.database.models import EnvType, CallType, ProjectType, ResponseFormat
 from ada_backend.database.setup_db import get_db
 from ada_backend.schemas.auth_schema import SupabaseUser
 from ada_backend.schemas.chart_schema import ChartsResponse
@@ -187,6 +187,7 @@ async def run_env_agent_endpoint(
             ]
         },
     ),
+    response_format: Optional[ResponseFormat] = None,
     sqlaclhemy_db_session: Session = Depends(get_db),
     verified_api_key: VerifiedApiKey = Depends(verify_api_key_dependency),
 ) -> ChatResponse:
@@ -199,6 +200,7 @@ async def run_env_agent_endpoint(
             input_data=input_data,
             env=env,
             call_type=CallType.API,
+            response_format=response_format,
         )
     except EnvironmentNotFound as e:
         LOGGER.error(f"Environment not found for project {project_id} in environment {env}: {str(e)}", exc_info=True)
@@ -304,6 +306,7 @@ async def chat(
             ]
         },
     ),
+    response_format: Optional[ResponseFormat] = None,
     session: Session = Depends(get_db),
 ) -> ChatResponse:
     if not user.id:
@@ -327,6 +330,7 @@ async def chat(
                 project_env_binding.graph_runner.tag_version,
                 project_env_binding.graph_runner.version_name,
             ),
+            response_format=response_format,
         )
     except OrganizationLimitExceededError as e:
         LOGGER.warning(
@@ -394,6 +398,7 @@ async def chat_env(
             ]
         },
     ),
+    response_format: Optional[ResponseFormat] = None,
     session: Session = Depends(get_db),
 ) -> ChatResponse:
     if not user.id:
@@ -405,6 +410,7 @@ async def chat_env(
             input_data=input_data,
             env=env,
             call_type=CallType.SANDBOX,
+            response_format=response_format,
         )
     except OrganizationLimitExceededError as e:
         LOGGER.warning(

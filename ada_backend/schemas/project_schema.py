@@ -6,6 +6,14 @@ from ada_backend.database.models import EnvType, ProjectType
 from ada_backend.schemas.template_schema import InputTemplate
 
 
+class FileResponse(BaseModel):
+    filename: str
+    content_type: str
+    size: int
+    data: Optional[str] = None  # base64 if response_format="base64"
+    url: Optional[str] = None  # presigned URL if response_format="url"
+
+
 class ProjectSchema(BaseModel):
     project_id: UUID
     project_name: str
@@ -47,6 +55,7 @@ class ChatResponse(BaseModel):
     error: Optional[str] = None
     artifacts: dict[str, Any] = Field(default_factory=dict)
     trace_id: Optional[str] = None
+    files: List[FileResponse] = Field(default_factory=list)
 
 
 class ProjectDeleteResponse(BaseModel):

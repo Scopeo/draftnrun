@@ -101,6 +101,30 @@ def generate_presigned_upload_url(
         raise ValueError(f"Couldn't get a presigned URL: {str(e)}") from e
 
 
+def generate_presigned_download_url(
+    s3_client: boto3.client,
+    key: str,
+    bucket_name: str = settings.S3_BUCKET_NAME,
+    expiration: int = 3600,
+) -> str:
+    try:
+        url = s3_client.generate_presigned_url(
+            ClientMethod="get_object",
+            Params={
+                "Bucket": bucket_name,
+                "Key": key,
+            },
+            ExpiresIn=expiration,
+        )
+
+        LOGGER.info(f"Generated presigned download URL for {key}")
+        return url
+
+    except Exception as e:
+        LOGGER.error(f"Error generating presigned download URL: {str(e)}")
+        raise ValueError(f"Couldn't get a presigned download URL: {str(e)}") from e
+
+
 def generate_s3_upload_presigned_urls_service(
     organization_id: UUID,
     upload_file_requests: list[UploadFileRequest],
