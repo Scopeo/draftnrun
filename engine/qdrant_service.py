@@ -115,6 +115,7 @@ class QdrantCollectionSchema:
     file_id_field: str
     url_id_field: Optional[str] = None
     last_edited_ts_field: Optional[str] = None  # To keep compatibility with Juno data
+    source_id_field: Optional[str] = None  # Field to track which source a chunk belongs to
     metadata_fields_to_keep: Optional[set[str]] = None  # To keep compatibility with Juno data
     metadata_field_types: Optional[dict[str, str]] = None
 
@@ -601,6 +602,12 @@ class QdrantService:
                 field_name=schema.last_edited_ts_field,
                 field_schema_type=FieldSchema.DATETIME,
             )
+        if schema.source_id_field:
+            await self.create_index_if_needed_async(
+                collection_name=collection_name,
+                field_name=schema.source_id_field,
+                field_schema_type=FieldSchema.KEYWORD,
+            )
 
     def add_chunks(
         self,
@@ -649,12 +656,13 @@ class QdrantService:
             }
             if schema.last_edited_ts_field:
                 payload_fields.add(schema.last_edited_ts_field)
+            if schema.source_id_field:
+                payload_fields.add(schema.source_id_field)
+
             list_payloads = [
                 {
                     "id": self.get_uuid(chunk[schema.chunk_id_field]),
-                    "payload": {
-                        **{field: chunk[field] for field in payload_fields},
-                    },
+                    "payload": {field: chunk[field] for field in chunk.keys()},
                     "vector": vector,
                 }
                 for chunk, vector in zip(current_chunk_batch, list_embeddings)
@@ -691,9 +699,11 @@ class QdrantService:
         """
         filter_on_qdrant_field = {"should": [{"key": id_field, "match": {"any": point_ids}}]}
         points = await self.get_points_async(filter=filter_on_qdrant_field, collection_name=collection_name)
+        if not points:
+            return True
         return await self.delete_points_async(
-            point_ids=[point["id"] for point in points],
             collection_name=collection_name,
+            point_ids=[point["id"] for point in points],
         )
 
     @staticmethod
@@ -883,7 +893,6 @@ class QdrantService:
     ) -> list[dict]:
 
         payload = {
-            "filter": filter,
             "offset": None,
             "limit": max(
                 await self.count_points_async(
@@ -893,6 +902,8 @@ class QdrantService:
                 1,
             ),
         }
+        if filter:
+            payload["filter"] = filter
         response = await self._send_request_async(
             method="POST", endpoint=f"collections/{collection_name}/points/scroll?wait=true", payload=payload
         )
@@ -1001,38 +1012,42 @@ class QdrantService:
 
     def delete_points(
         self,
-        point_ids: list[str],
         collection_name: str,
+        point_ids: Optional[list[str]] = None,
+        filter: Optional[dict] = None,
     ) -> bool:
-        """
-        Delete points from the Qdrant collection.
-
-        Args:
-            point_ids (list[str]): A list of point IDs to delete from the collection.
-            collection_name (str): The name of the collection to delete points from.
-
-        Returns:
-            int: The number of points in the collection.
-        """
-        return asyncio.run(self.delete_points_async(point_ids, collection_name))
+        return asyncio.run(self.delete_points_async(collection_name, point_ids, filter))
 
     async def delete_points_async(
         self,
-        point_ids: list[str],
         collection_name: str,
+        point_ids: Optional[list[str]] = None,
+        filter: Optional[dict] = None,
     ) -> bool:
-        """Async version of delete_points."""
-        payload = {"points": point_ids}
-        if not point_ids:
-            LOGGER.error("No points provided")
+        """
+        Async version of delete_points.
+        Either point_ids or filter must be provided, but not both.
+        """
+        if filter and point_ids:
+            LOGGER.error("Cannot provide both point_ids and filter. Please provide only one.")
             return False
+
+        if filter:
+            payload = {"filter": filter}
+        elif point_ids:
+            payload = {"points": point_ids}
+        else:
+            LOGGER.error("Either point_ids or filter must be provided")
+            return False
+
         response = await self._send_request_async(
             method="POST", endpoint=f"collections/{collection_name}/points/delete?wait=true", payload=payload
         )
         if "result" in response:
-            LOGGER.info(f"Status of points deletion : {response['result']}")
+            deletion_type = "by filter" if filter else "by IDs"
+            LOGGER.info(f"Status of points deletion {deletion_type}: {response['result']}")
             return True
-        LOGGER.error(f"Problem with status of points deletion : {response}")
+        LOGGER.error(f"Problem with status of points deletion: {response}")
         return False
 
     def insert_points_in_collection(
@@ -1132,6 +1147,8 @@ class QdrantService:
                 row[schema.file_id_field] = payload.get(schema.file_id_field)
             if schema.last_edited_ts_field:
                 row[schema.last_edited_ts_field] = payload.get(schema.last_edited_ts_field)
+            if schema.source_id_field:
+                row[schema.source_id_field] = payload.get(schema.source_id_field)
 
             # Add custom metadata fields if any
             metadata_fields = schema.metadata_fields_to_keep or payload.keys()
@@ -1156,11 +1173,16 @@ class QdrantService:
         collection_name: str,
         query_filter_qdrant: Optional[dict] = None,
     ) -> bool:
-        old_df = await self.get_collection_data_async(collection_name, query_filter_qdrant)
-        if old_df.empty:
+        collection_count = await self.count_points_async(
+            collection_name=collection_name,
+            filter=query_filter_qdrant,
+        )
+        if collection_count == 0:
             await self.add_chunks_async(json.loads(df.to_json(orient="records", date_format="iso")), collection_name)
             LOGGER.info(f"Qdrant collection is empty. Added {len(df)} chunks to Qdrant")
             return True
+
+        old_df = await self.get_collection_data_async(collection_name, query_filter_qdrant)
 
         incoming_ids = set(df[self.default_schema.chunk_id_field])
         existing_ids = set(old_df[self.default_schema.chunk_id_field])
