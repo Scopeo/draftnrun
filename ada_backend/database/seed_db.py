@@ -39,6 +39,7 @@ from ada_backend.database.seed.seed_docx_template import seed_docx_template_comp
 from ada_backend.database.seed.seed_project_reference import seed_project_reference_components
 from ada_backend.database.seed.seed_chunk_processor import seed_chunk_processor_components
 from ada_backend.database.seed.seed_static_responder import seed_static_responder_components
+from ada_backend.database.seed.seed_mcp_client_tool import seed_mcp_client_components
 from ada_backend.database.seed.seed_tool_description import seed_tool_description
 from ada_backend.database.seed.seed_ports import seed_port_definitions
 from ada_backend.database.seed.utils import COMPONENT_UUIDS, seed_custom_llm_models
@@ -81,6 +82,7 @@ def seed_db(session: Session):
         seed_chunk_processor_components(session)
         seed_linkup_tool_components(session)
         seed_static_responder_components(session)
+        seed_mcp_client_components(session)
 
         # Seed port definitions from code (with upsert)
         seed_port_definitions(session)

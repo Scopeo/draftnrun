@@ -1,5 +1,6 @@
 import uuid
 import json
+import ast
 from typing import List, Optional, Union, Type
 from enum import StrEnum
 import logging
@@ -240,8 +241,8 @@ class UIComponentProperties(BaseModel):
 
 def cast_value(
     parameter_type: ParameterType,
-    unresolved_value: str,
-) -> str | int | float | bool | dict:
+    unresolved_value: str | None,
+) -> str | int | float | bool | dict | list | None:
     if unresolved_value is None or unresolved_value == "None" or unresolved_value == "null":
         return None
     if parameter_type == ParameterType.STRING:
@@ -253,7 +254,17 @@ def cast_value(
     elif parameter_type == ParameterType.BOOLEAN:
         return unresolved_value.lower() in ("true", "1")
     elif parameter_type == ParameterType.JSON or parameter_type == ParameterType.DATA_SOURCE:
-        return json.loads(unresolved_value)
+        try:
+            return json.loads(unresolved_value)
+        except json.JSONDecodeError:
+            try:
+                # Fallback to ast.literal_eval for python-style list/dict strings (e.g. single quotes)
+                val = ast.literal_eval(unresolved_value)
+                if isinstance(val, (dict, list)):
+                    return val
+            except (ValueError, SyntaxError):
+                pass
+            raise
     elif parameter_type == ParameterType.LLM_API_KEY:
         return unresolved_value
     elif parameter_type == ParameterType.COMPONENT or parameter_type == ParameterType.TOOL:
