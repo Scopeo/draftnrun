@@ -380,9 +380,9 @@ class ReActAgent(Agent):
         agent_input = original_agent_input.model_copy(deep=True)
         history_messages_handled = self._memory_handling.get_truncated_messages_history(agent_input.messages)
         tool_choice = "auto" if self._current_iteration < self._max_iterations else "none"
-        
+
         await self._ensure_mcp_tools_initialized()
-        
+
         with self.trace_manager.start_span("Agentic reflexion") as span:
             llm_input_messages = [msg.model_dump() for msg in history_messages_handled]
             span.set_attributes(

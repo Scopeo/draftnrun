@@ -14,6 +14,7 @@ from ada_backend.database import models as db
 from ada_backend.repositories.component_repository import (
     get_component_by_id,
     get_component_parameter_definition_by_component_version,
+    get_port_definitions_for_component_version_ids,
     upsert_component_instance,
     upsert_basic_parameter,
     get_or_create_tool_description,
@@ -21,6 +22,7 @@ from ada_backend.repositories.component_repository import (
 )
 from ada_backend.services.entity_factory import get_llm_provider_and_model
 from ada_backend.database.seed.constants import COMPLETION_MODEL_IN_DB
+from ada_backend.schemas.parameter_schema import ParameterKind
 
 LOGGER = getLogger(__name__)
 
@@ -77,6 +79,17 @@ def create_or_update_component_instance(
         )
     }
 
+    input_ports = get_port_definitions_for_component_version_ids(session, [instance_data.component_version_id])
+    input_port_names = {p.name for p in input_ports if p.port_type == db.PortType.INPUT}
+
+    # Ignore synthesized input-port parameters (these are handled via field expressions / port mappings)
+    parameters = []
+    for param in instance_data.parameters:
+        kind = getattr(param, "kind", ParameterKind.PARAMETER)
+        if kind == ParameterKind.INPUT:
+            continue
+        parameters.append(param)
+
     for param_name, param_def in param_definitions.items():
         if param_def.type == db.ParameterType.LLM_API_KEY:
             organization_secrets = get_organization_secrets_from_project_id(session, project_id)
@@ -87,7 +100,7 @@ def create_or_update_component_instance(
                 )
                 continue
 
-            model_name_param = next((p for p in instance_data.parameters if p.name == COMPLETION_MODEL_IN_DB), None)
+            model_name_param = next((p for p in parameters if p.name == COMPLETION_MODEL_IN_DB), None)
             if model_name_param is None:
                 raise ValueError(
                     f"LLM Model name parameter not found in component definitions for component {component_name}"
@@ -111,8 +124,10 @@ def create_or_update_component_instance(
             LOGGER.info(f"LLM API key parameter '{param_name}' upsert for component '{component_name}' ")
 
     # Create/update parameters
-    for param in instance_data.parameters:
+    for param in parameters:
         if param.name not in param_definitions:
+            if param.name in input_port_names:
+                continue
             raise ValueError(
                 f"Parameter '{param.name=}' not found in component definitions for component '{component_name}'"
             )
@@ -157,9 +172,7 @@ def create_or_update_component_instance(
                     component_instance_id=instance_id,
                     parameter_definition_id=param_def.id,
                     value=(
-                        json.dumps(param.value)
-                        if isinstance(param.value, (dict, list))
-                        else str(param.value)
+                        json.dumps(param.value) if isinstance(param.value, (dict, list)) else str(param.value)
                     ),  # Convert to string for storage
                     order=param.order,
                 )

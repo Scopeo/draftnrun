@@ -90,8 +90,6 @@ class ParameterType(StrEnum):
     SECRETS = "secrets"
     LLM_API_KEY = "llm_api_key"
     LLM_MODEL = "llm_model"
-    LIST = "list"
-    DICTIONARY = "dictionary"
 
 
 class OrgSecretType(StrEnum):
@@ -243,8 +241,8 @@ class UIComponentProperties(BaseModel):
 
 def cast_value(
     parameter_type: ParameterType,
-    unresolved_value: str,
-) -> str | int | float | bool | dict:
+    unresolved_value: str | None,
+) -> str | int | float | bool | dict | list | None:
     if unresolved_value is None or unresolved_value == "None" or unresolved_value == "null":
         return None
     if parameter_type == ParameterType.STRING:
@@ -273,18 +271,6 @@ def cast_value(
         raise ValueError("Parameter type COMPONENT or TOOL is not supported for BasicParameters")
     elif parameter_type == ParameterType.LLM_MODEL:
         return unresolved_value
-    elif parameter_type == ParameterType.LIST or parameter_type == ParameterType.DICTIONARY:
-        try:
-            return json.loads(unresolved_value)
-        except json.JSONDecodeError:
-            try:
-                # Fallback to ast.literal_eval for python-style list/dict strings
-                val = ast.literal_eval(unresolved_value)
-                if isinstance(val, (dict, list)):
-                    return val
-            except (ValueError, SyntaxError):
-                pass
-            raise
     else:
         raise ValueError(f"Unsupported value type: {parameter_type}")
 

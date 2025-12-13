@@ -52,8 +52,11 @@ def seed_mcp_client_components(session: Session):
             ui_component=UIComponent.TEXTFIELD,
             ui_component_properties=UIComponentProperties(
                 label="Server Command",
-                placeholder="uvx",
-                description="The command to run the MCP server (e.g. 'uvx', 'npx', 'python', 'docker').",
+                placeholder="uvx (local) or https://my-mcp.example.com/sse (remote)",
+                description=(
+                    "Local: the command to run the MCP server (e.g. 'uvx', 'npx', 'python', 'docker'). "
+                    "Remote: an HTTP(S) URL to an MCP SSE endpoint."
+                ),
             ).model_dump(exclude_unset=True, exclude_none=True),
         ),
         ComponentParameterDefinition(
@@ -65,8 +68,12 @@ def seed_mcp_client_components(session: Session):
             ui_component=UIComponent.TEXTAREA,
             ui_component_properties=UIComponentProperties(
                 label="Server Arguments",
-                placeholder='["mcp-server-sqlite", "--db-path", "test.db"]',
-                description="List of arguments for the server command (JSON list).",
+                placeholder='["mcp-server-sqlite", "--db-path", "test.db"]  (local)\n'
+                '{"headers": {"Authorization": "Bearer <token>"}, "timeout": 5, "sse_read_timeout": 300}  (remote)',
+                description=(
+                    "Local: list of arguments for the server command (JSON list). "
+                    "Remote: optional JSON object for transport config (headers/timeout/sse_read_timeout)."
+                ),
             ).model_dump(exclude_unset=True, exclude_none=True),
         ),
         ComponentParameterDefinition(
@@ -79,7 +86,10 @@ def seed_mcp_client_components(session: Session):
             ui_component_properties=UIComponentProperties(
                 label="Environment Variables",
                 placeholder='{"API_KEY": "secret"}',
-                description="Environment variables for the server process (JSON object).",
+                description=(
+                    "Local: environment variables for the server process (JSON object). "
+                    "Remote: optional HTTP headers (JSON object)."
+                ),
             ).model_dump(exclude_unset=True, exclude_none=True),
         ),
     ]
