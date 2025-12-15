@@ -248,7 +248,7 @@ def get_document_with_chunks_service(
     document_metadata = KnowledgeDocumentMetadata(
         document_id=first_chunk.document_id,
         document_title=getattr(first_chunk, "document_title", None),
-        url=getattr(first_chunk, "url", None),
+        url=getattr(first_chunk, "document_title", None),
         last_edited_ts=first_chunk.last_edited_ts,
         metadata=first_chunk.metadata if first_chunk.metadata else None,
     )
