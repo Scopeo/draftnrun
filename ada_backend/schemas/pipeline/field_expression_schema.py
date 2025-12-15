@@ -24,13 +24,6 @@ class FieldExpressionReadSchema(BaseModel):
     expression_text: Optional[str] = None
 
 
-class FieldExpressionAutocompleteTrigger(str, Enum):
-    AT = "@"
-    MANUAL = "manual"
-    DOT = "dot"
-    COLON = "colon"
-
-
 class FieldExpressionSuggestionKind(str, Enum):
     INSTANCE = "instance"
     PORT = "port"
@@ -41,7 +34,6 @@ class FieldExpressionAutocompleteRequest(BaseModel):
     target_instance_id: UUID
     expression_text: str
     cursor_offset: int
-    trigger: FieldExpressionAutocompleteTrigger
 
 
 class FieldExpressionSuggestionDetail(BaseModel):

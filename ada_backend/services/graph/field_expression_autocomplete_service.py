@@ -50,8 +50,7 @@ def autocomplete_field_expression(
 
     # TODO: Restrict suggestions to upstream instances once graph ordering is exposed.
     LOGGER.debug(
-        "Field expression autocomplete: trigger=%s phase=%s count=%d",
-        request.trigger.value,
+        "Field expression autocomplete: phase=%s count=%d",
         context.phase,
         len(suggestions),
     )

@@ -107,7 +107,6 @@ def test_field_expression_autocomplete_instance_and_port_suggestions():
             "target_instance_id": dst_instance_id,
             "expression_text": "@{{" + partial,
             "cursor_offset": len("@{{" + partial),
-            "trigger": "@",
         }
         autocomplete_response = client.post(
             f"{endpoint}/field-expressions/autocomplete",
@@ -123,7 +122,6 @@ def test_field_expression_autocomplete_instance_and_port_suggestions():
             "target_instance_id": dst_instance_id,
             "expression_text": "@{{" + src_instance_id + ".out",
             "cursor_offset": len("@{{" + src_instance_id + ".out"),
-            "trigger": "dot",
         }
         port_response = client.post(
             f"{endpoint}/field-expressions/autocomplete",
@@ -139,7 +137,6 @@ def test_field_expression_autocomplete_instance_and_port_suggestions():
             "target_instance_id": dst_instance_id,
             "expression_text": "Hello world",
             "cursor_offset": 5,
-            "trigger": "manual",
         }
         empty_response = client.post(
             f"{endpoint}/field-expressions/autocomplete",
