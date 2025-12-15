@@ -128,9 +128,9 @@ def test_pagination():
     assert page1_data["pagination"]["page"] == 1
     assert page1_data["pagination"]["size"] == 5
 
-    # Verify order of page 1 (indexes 1-5)
-    page1_indexes = [entry["index"] for entry in page1_entries]
-    assert page1_indexes == [1, 2, 3, 4, 5]
+    # Verify order of page 1 (positions 1-5)
+    page1_positions = [entry["position"] for entry in page1_entries]
+    assert page1_positions == [1, 2, 3, 4, 5]
 
     # Get page 2 with 5 items per page
     page2_response = client.get(f"{input_endpoint}?page=2&page_size=5", headers=HEADERS_JWT)
@@ -142,9 +142,9 @@ def test_pagination():
     assert page2_data["pagination"]["page"] == 2
     assert page2_data["pagination"]["size"] == 5
 
-    # Verify order of page 2 (indexes 6-10)
-    page2_indexes = [entry["index"] for entry in page2_entries]
-    assert page2_indexes == [6, 7, 8, 9, 10]
+    # Verify order of page 2 (positions 6-10)
+    page2_positions = [entry["position"] for entry in page2_entries]
+    assert page2_positions == [6, 7, 8, 9, 10]
 
     # Verify no overlap between pages
     page1_ids = {entry["id"] for entry in page1_entries}
@@ -672,7 +672,7 @@ def test_quality_assurance_complete_workflow():
     client.delete(f"/projects/{project_uuid}", headers=HEADERS_JWT)
 
 
-def test_index_field_in_responses():
+def test_position_field_in_responses():
     """Test that index field is included and persists correctly after deletions."""
     project_uuid = str(uuid4())
     project_payload = {
@@ -699,20 +699,20 @@ def test_index_field_in_responses():
     assert create_response.status_code == 200
     created = create_response.json()["inputs_groundtruths"]
     assert len(created) == 5
-    indexes = [entry["index"] for entry in created]
-    assert indexes == [1, 2, 3, 4, 5]
+    positions = [entry["position"] for entry in created]
+    assert positions == [1, 2, 3, 4, 5]
 
-    # Delete entry with index 3
-    entry_to_delete = next(entry["id"] for entry in created if entry["index"] == 3)
+    # Delete entry with position 3
+    entry_to_delete = next(entry["id"] for entry in created if entry["position"] == 3)
     delete_payload = {"input_groundtruth_ids": [entry_to_delete]}
     client.request(method="DELETE", url=input_endpoint, headers=HEADERS_JWT, json=delete_payload)
 
-    # Verify remaining entries still have their original indexes
+    # Verify remaining entries still have their original positions
     get_response = client.get(input_endpoint, headers=HEADERS_JWT)
     assert get_response.status_code == 200
     remaining = get_response.json()["inputs_groundtruths"]
-    remaining_indexes = [entry["index"] for entry in remaining]
-    assert remaining_indexes == [1, 2, 4, 5]
+    remaining_positions = [entry["position"] for entry in remaining]
+    assert remaining_positions == [1, 2, 4, 5]
 
     # Add one new entry
     new_entry_payload = {
@@ -723,24 +723,24 @@ def test_index_field_in_responses():
     new_entry_response = client.post(input_endpoint, headers=HEADERS_JWT, json=new_entry_payload)
     assert new_entry_response.status_code == 200
     new_entry = new_entry_response.json()["inputs_groundtruths"][0]
-    assert new_entry["index"] == 6
+    assert new_entry["position"] == 6
 
     # Verify final state
     final_response = client.get(input_endpoint, headers=HEADERS_JWT)
     final_entries = final_response.json()["inputs_groundtruths"]
-    final_indexes = [entry["index"] for entry in final_entries]
-    assert sorted(final_indexes) == [1, 2, 4, 5, 6]
+    final_positions = [entry["position"] for entry in final_entries]
+    assert sorted(final_positions) == [1, 2, 4, 5, 6]
 
     client.delete(f"/projects/{project_uuid}", headers=HEADERS_JWT)
 
 
-def test_duplicate_index_validation():
-    """Test duplicate index validation."""
+def test_duplicate_positions_validation():
+    """Test duplicate position validation."""
     project_uuid = str(uuid4())
     project_payload = {
         "project_id": project_uuid,
         "project_name": f"duplicate_test_{project_uuid}",
-        "description": "Test project for duplicate indexes",
+        "description": "Test project for duplicate positions",
     }
     client.post(f"/projects/{ORGANIZATION_ID}", headers=HEADERS_JWT, json=project_payload)
 
@@ -751,25 +751,25 @@ def test_duplicate_index_validation():
     input_endpoint = f"/projects/{project_uuid}/qa/datasets/{dataset_id}/entries"
     create_payload = {
         "inputs_groundtruths": [
-            {"input": {"messages": [{"role": "user", "content": "Test 1"}]}, "groundtruth": "GT 1", "index": 1},
-            {"input": {"messages": [{"role": "user", "content": "Test 2"}]}, "groundtruth": "GT 2", "index": 1},
+            {"input": {"messages": [{"role": "user", "content": "Test 1"}]}, "groundtruth": "GT 1", "position": 1},
+            {"input": {"messages": [{"role": "user", "content": "Test 2"}]}, "groundtruth": "GT 2", "position": 1},
         ]
     }
 
     response = client.post(input_endpoint, headers=HEADERS_JWT, json=create_payload)
     assert response.status_code == 400
-    assert "Duplicate indexes" in response.json()["detail"]
+    assert "Duplicate positions" in response.json()["detail"]
 
     client.delete(f"/projects/{project_uuid}", headers=HEADERS_JWT)
 
 
-def test_partial_index_validation():
-    """Test partial index validation."""
+def test_partial_position_validation():
+    """Test partial position validation."""
     project_uuid = str(uuid4())
     project_payload = {
         "project_id": project_uuid,
         "project_name": f"partial_test_{project_uuid}",
-        "description": "Test project for partial indexes",
+        "description": "Test project for partial positions",
     }
     client.post(f"/projects/{ORGANIZATION_ID}", headers=HEADERS_JWT, json=project_payload)
 
@@ -780,25 +780,25 @@ def test_partial_index_validation():
     input_endpoint = f"/projects/{project_uuid}/qa/datasets/{dataset_id}/entries"
     create_payload = {
         "inputs_groundtruths": [
-            {"input": {"messages": [{"role": "user", "content": "Test 1"}]}, "groundtruth": "GT 1", "index": 1},
+            {"input": {"messages": [{"role": "user", "content": "Test 1"}]}, "groundtruth": "GT 1", "position": 1},
             {"input": {"messages": [{"role": "user", "content": "Test 2"}]}, "groundtruth": "GT 2"},
         ]
     }
 
     response = client.post(input_endpoint, headers=HEADERS_JWT, json=create_payload)
     assert response.status_code == 400
-    assert "Partial indexing" in response.json()["detail"]
+    assert "Partial positioning" in response.json()["detail"]
 
     client.delete(f"/projects/{project_uuid}", headers=HEADERS_JWT)
 
 
-def test_index_auto_generation():
-    """Test that indexes are auto-generated when not provided."""
+def test_position_auto_generation():
+    """Test that positions are auto-generated when not provided."""
     project_uuid = str(uuid4())
     project_payload = {
         "project_id": project_uuid,
         "project_name": f"auto_index_test_{project_uuid}",
-        "description": "Test project for auto-generated indexes",
+        "description": "Test project for auto-generated positions",
     }
     client.post(f"/projects/{ORGANIZATION_ID}", headers=HEADERS_JWT, json=project_payload)
 
@@ -817,19 +817,19 @@ def test_index_auto_generation():
     response = client.post(input_endpoint, headers=HEADERS_JWT, json=create_payload)
     assert response.status_code == 200
     created = response.json()["inputs_groundtruths"]
-    assert created[0]["index"] == 1
-    assert created[1]["index"] == 2
+    assert created[0]["position"] == 1
+    assert created[1]["position"] == 2
 
     client.delete(f"/projects/{project_uuid}", headers=HEADERS_JWT)
 
 
-def test_csv_import_duplicate_indexes_inside_csv():
-    """Test CSV import with duplicate indexes within CSV."""
+def test_csv_import_duplicate_positions_inside_csv():
+    """Test CSV import with duplicate positions within CSV."""
     project_uuid = str(uuid4())
     project_payload = {
         "project_id": project_uuid,
         "project_name": f"csv_duplicate_test_{project_uuid}",
-        "description": "Test project for CSV duplicate indexes",
+        "description": "Test project for CSV duplicate positions",
     }
     client.post(f"/projects/{ORGANIZATION_ID}", headers=HEADERS_JWT, json=project_payload)
 
@@ -837,12 +837,12 @@ def test_csv_import_duplicate_indexes_inside_csv():
     dataset_response = client.post(f"/projects/{project_uuid}/qa/datasets", headers=HEADERS_JWT, json=dataset_payload)
     dataset_id = dataset_response.json()["datasets"][0]["id"]
 
-    # CSV with duplicate indexes
+    # CSV with duplicate positions
     input1 = json.dumps({"messages": [{"role": "user", "content": "Test 1"}]})
     input2 = json.dumps({"messages": [{"role": "user", "content": "Test 2"}]})
     csv_buffer = io.StringIO()
     writer = csv.writer(csv_buffer)
-    writer.writerow(["index", "input", "expected_output"])
+    writer.writerow(["position", "input", "expected_output"])
     writer.writerow([1, input1, "GT 1"])
     writer.writerow([1, input2, "GT 2"])
     csv_content = csv_buffer.getvalue()
@@ -852,19 +852,19 @@ def test_csv_import_duplicate_indexes_inside_csv():
     response = client.post(import_endpoint, headers=HEADERS_JWT, files={"file": csv_file})
     assert response.status_code == 400
     error_detail = response.json()["detail"]
-    assert "Duplicate indexes found in CSV import: [1]" in error_detail
+    assert "Duplicate positions found in CSV import: [1]" in error_detail
     assert "CSV import" in error_detail
 
     client.delete(f"/projects/{project_uuid}", headers=HEADERS_JWT)
 
 
-def test_csv_import_conflicting_with_existing_indexes():
-    """Test CSV import with indexes conflicting with existing dataset entries."""
+def test_csv_import_conflicting_with_existing_positions():
+    """Test CSV import with positions conflicting with existing dataset entries."""
     project_uuid = str(uuid4())
     project_payload = {
         "project_id": project_uuid,
         "project_name": f"csv_conflict_test_{project_uuid}",
-        "description": "Test project for CSV index conflicts",
+        "description": "Test project for CSV position conflicts",
     }
     client.post(f"/projects/{ORGANIZATION_ID}", headers=HEADERS_JWT, json=project_payload)
 
@@ -872,20 +872,20 @@ def test_csv_import_conflicting_with_existing_indexes():
     dataset_response = client.post(f"/projects/{project_uuid}/qa/datasets", headers=HEADERS_JWT, json=dataset_payload)
     dataset_id = dataset_response.json()["datasets"][0]["id"]
 
-    # Create existing entry with index 1
+    # Create existing entry with position 1
     input_endpoint = f"/projects/{project_uuid}/qa/datasets/{dataset_id}/entries"
     create_payload = {
         "inputs_groundtruths": [
-            {"input": {"messages": [{"role": "user", "content": "Existing"}]}, "groundtruth": "GT", "index": 1}
+            {"input": {"messages": [{"role": "user", "content": "Existing"}]}, "groundtruth": "GT", "position": 1}
         ]
     }
     client.post(input_endpoint, headers=HEADERS_JWT, json=create_payload)
 
-    # CSV with index 1 (conflicts with existing)
+    # CSV with position 1 (conflicts with existing)
     input_json = json.dumps({"messages": [{"role": "user", "content": "New"}]})
     csv_buffer = io.StringIO()
     writer = csv.writer(csv_buffer)
-    writer.writerow(["index", "input", "expected_output"])
+    writer.writerow(["position", "input", "expected_output"])
     writer.writerow([1, input_json, "New GT"])
     csv_content = csv_buffer.getvalue()
     csv_file = ("test.csv", csv_content.encode("utf-8"), "text/csv")
@@ -894,19 +894,19 @@ def test_csv_import_conflicting_with_existing_indexes():
     response = client.post(import_endpoint, headers=HEADERS_JWT, files={"file": csv_file})
     assert response.status_code == 400
     error_detail = response.json()["detail"]
-    assert "Duplicate indexes found in CSV import: [1]" in error_detail
+    assert "Duplicate positions found in CSV import: [1]" in error_detail
     assert "CSV import" in error_detail
 
     client.delete(f"/projects/{project_uuid}", headers=HEADERS_JWT)
 
 
-def test_csv_import_invalid_index_values():
-    """Test CSV import with invalid index values (non-integer)."""
+def test_csv_import_invalid_positions_values():
+    """Test CSV import with invalid position values (non-integer)."""
     project_uuid = str(uuid4())
     project_payload = {
         "project_id": project_uuid,
         "project_name": f"csv_invalid_index_test_{project_uuid}",
-        "description": "Test project for CSV invalid index values",
+        "description": "Test project for CSV invalid position values",
     }
     client.post(f"/projects/{ORGANIZATION_ID}", headers=HEADERS_JWT, json=project_payload)
 
@@ -914,11 +914,11 @@ def test_csv_import_invalid_index_values():
     dataset_response = client.post(f"/projects/{project_uuid}/qa/datasets", headers=HEADERS_JWT, json=dataset_payload)
     dataset_id = dataset_response.json()["datasets"][0]["id"]
 
-    # CSV with invalid index value (non-integer)
+    # CSV with invalid position value (non-integer)
     input_json = json.dumps({"messages": [{"role": "user", "content": "Test"}]})
     csv_buffer = io.StringIO()
     writer = csv.writer(csv_buffer)
-    writer.writerow(["index", "input", "expected_output"])
+    writer.writerow(["position", "input", "expected_output"])
     writer.writerow(["abc", input_json, "GT"])
     csv_content = csv_buffer.getvalue()
     csv_file = ("test.csv", csv_content.encode("utf-8"), "text/csv")
@@ -926,7 +926,7 @@ def test_csv_import_invalid_index_values():
     import_endpoint = f"/projects/{project_uuid}/qa/datasets/{dataset_id}/import"
     response = client.post(import_endpoint, headers=HEADERS_JWT, files={"file": csv_file})
     assert response.status_code == 400
-    assert "Invalid integer in 'index' column" in response.json()["detail"]
+    assert "Invalid integer in 'position' column" in response.json()["detail"]
     assert "row" in response.json()["detail"]
 
     client.delete(f"/projects/{project_uuid}", headers=HEADERS_JWT)

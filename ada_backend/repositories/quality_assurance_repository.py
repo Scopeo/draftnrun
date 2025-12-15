@@ -9,6 +9,7 @@ from ada_backend.database.models import InputGroundtruth, DatasetProject, Versio
 from ada_backend.schemas.input_groundtruth_schema import InputGroundtruthCreate
 
 LOGGER = logging.getLogger(__name__)
+BATCH_INSERTION_SIZE = 50
 
 
 # Input Groundtruth functions
@@ -22,7 +23,7 @@ def get_inputs_groundtruths_by_dataset(
     return (
         session.query(InputGroundtruth)
         .filter(InputGroundtruth.dataset_id == dataset_id)
-        .order_by(InputGroundtruth.index.asc())
+        .order_by(InputGroundtruth.position.asc())
         .offset(skip)
         .limit(limit)
         .all()
@@ -45,32 +46,32 @@ def get_inputs_groundtruths_count_by_dataset(
     return session.query(func.count(InputGroundtruth.id)).filter(InputGroundtruth.dataset_id == dataset_id).scalar()
 
 
-def get_max_index_of_dataset(
+def get_max_position_of_dataset(
     session: Session,
     dataset_id: UUID,
 ) -> Optional[int]:
-    """Get the maximum index for input-groundtruth entries in a dataset.
+    """Get the maximum position for input-groundtruth entries in a dataset.
 
     Returns None if no entries exist for the dataset.
     """
-    max_index = (
-        session.query(func.max(InputGroundtruth.index)).filter(InputGroundtruth.dataset_id == dataset_id).scalar()
+    max_position = (
+        session.query(func.max(InputGroundtruth.position)).filter(InputGroundtruth.dataset_id == dataset_id).scalar()
     )
-    return max_index
+    return max_position
 
 
-def get_indexes_of_dataset(
+def get_positions_of_dataset(
     session: Session,
     dataset_id: UUID,
 ) -> List[int]:
-    """Return all indexes for input-groundtruth entries in a dataset."""
+    """Return all positions for input-groundtruth entries in a dataset."""
     results = (
-        session.query(InputGroundtruth.index)
+        session.query(InputGroundtruth.position)
         .filter(InputGroundtruth.dataset_id == dataset_id)
-        .order_by(InputGroundtruth.index.asc())
+        .order_by(InputGroundtruth.position.asc())
         .all()
     )
-    return [index for (index,) in results]
+    return [position for (position,) in results]
 
 
 def create_inputs_groundtruths(
@@ -80,25 +81,34 @@ def create_inputs_groundtruths(
 ) -> List[InputGroundtruth]:
     """Create multiple input-groundtruth entries.
 
-    Creates records one by one to ensure distinct timestamps and preserve CSV order.
+    Creates records in batches.
     """
-    inputs_groundtruths = []
-    max_index = get_max_index_of_dataset(session, dataset_id)
-    starting_index = (max_index + 1) if max_index is not None else 1
+    max_position = get_max_position_of_dataset(session, dataset_id)
+    starting_position = (max_position + 1) if max_position is not None else 1
 
-    for i, input_groundtruth_data in enumerate(inputs_groundtruths_data):
-        index = input_groundtruth_data.index
-        if not index:
-            index = starting_index + i
-        input_groundtruth = InputGroundtruth(
-            dataset_id=dataset_id,
-            input=input_groundtruth_data.input,
-            groundtruth=input_groundtruth_data.groundtruth,
-            index=index,
-        )
-        session.add(input_groundtruth)
+    positions = [
+        data.position if data.position is not None else starting_position + i
+        for i, data in enumerate(inputs_groundtruths_data)
+    ]
+
+    inputs_groundtruths = []
+    for i in range(0, len(inputs_groundtruths_data), BATCH_INSERTION_SIZE):
+        batch_data = inputs_groundtruths_data[i : i + BATCH_INSERTION_SIZE]
+        batch_positions = positions[i : i + BATCH_INSERTION_SIZE]
+
+        batch_objects = [
+            InputGroundtruth(
+                dataset_id=dataset_id,
+                input=data.input,
+                groundtruth=data.groundtruth,
+                position=position,
+            )
+            for data, position in zip(batch_data, batch_positions)
+        ]
+
+        session.add_all(batch_objects)
         session.flush()
-        inputs_groundtruths.append(input_groundtruth)
+        inputs_groundtruths.extend(batch_objects)
 
     session.commit()
 

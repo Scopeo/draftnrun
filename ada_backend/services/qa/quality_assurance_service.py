@@ -23,7 +23,7 @@ from ada_backend.repositories.quality_assurance_repository import (
     clear_version_outputs_for_input_ids,
     get_outputs_by_graph_runner,
     get_version_output_ids_by_input_ids_and_graph_runner,
-    get_indexes_of_dataset,
+    get_positions_of_dataset,
 )
 from ada_backend.schemas.input_groundtruth_schema import (
     InputGroundtruthResponse,
@@ -55,10 +55,10 @@ from ada_backend.services.qa.qa_error import (
     CSVInvalidJSONError,
     CSVEmptyFileError,
     CSVExportError,
-    CSVInvalidIndexError,
-    CSVNonUniqueIndexError,
-    QADuplicateIndexError,
-    QAPartialIndexError,
+    CSVInvalidPositionError,
+    CSVNonUniquePositionError,
+    QADuplicatePositionError,
+    QAPartialPositionError,
 )
 from ada_backend.services.qa.csv_processing import process_csv
 
@@ -293,13 +293,15 @@ def create_inputs_groundtruths_service(
         InputGroundtruthResponseList: The created input-groundtruth entries
     """
     try:
-        current_dataset_indexes = get_indexes_of_dataset(session, dataset_id)
-        inputs_indexes = [ig.index for ig in inputs_groundtruths_data.inputs_groundtruths if ig.index is not None]
-        if inputs_indexes and len(inputs_indexes) != len(inputs_groundtruths_data.inputs_groundtruths):
-            raise QAPartialIndexError()
-        duplicated_indexes = _get_duplicate_indexes(current_dataset_indexes + inputs_indexes)
-        if len(duplicated_indexes) > 0:
-            raise QADuplicateIndexError(duplicated_indexes)
+        current_dataset_positions = get_positions_of_dataset(session, dataset_id)
+        inputs_positions = [
+            ig.position for ig in inputs_groundtruths_data.inputs_groundtruths if ig.position is not None
+        ]
+        if inputs_positions and len(inputs_positions) != len(inputs_groundtruths_data.inputs_groundtruths):
+            raise QAPartialPositionError()
+        duplicated_positions = _get_duplicate_positions(current_dataset_positions + inputs_positions)
+        if len(duplicated_positions) > 0:
+            raise QADuplicatePositionError(duplicated_positions)
         created_inputs_groundtruths = create_inputs_groundtruths(
             session,
             dataset_id,
@@ -313,7 +315,7 @@ def create_inputs_groundtruths_service(
         return InputGroundtruthResponseList(
             inputs_groundtruths=[InputGroundtruthResponse.model_validate(ig) for ig in created_inputs_groundtruths]
         )
-    except (QADuplicateIndexError, QAPartialIndexError):
+    except (QADuplicatePositionError, QAPartialPositionError):
         raise
     except Exception as e:
         LOGGER.error(f"Error in create_inputs_groundtruths_service: {str(e)}")
@@ -544,15 +546,15 @@ def export_qa_data_to_csv_service(
 
         output = io.StringIO()
         writer = csv.writer(output)
-        writer.writerow(["index", "input", "expected_output", "actual_output"])
+        writer.writerow(["position", "input", "expected_output", "actual_output"])
 
         for entry in input_entries:
             input_str = json.dumps(entry.input) if entry.input else ""
             groundtruth_str = entry.groundtruth if entry.groundtruth is not None else ""
             output_str = outputs_dict.get(entry.id, "") if entry.id in outputs_dict else ""
-            index_str = str(entry.index) if entry.index is not None else ""
+            position_str = str(entry.position) if entry.position is not None else ""
 
-            writer.writerow([index_str, input_str, groundtruth_str, output_str])
+            writer.writerow([position_str, input_str, groundtruth_str, output_str])
 
         csv_content = output.getvalue()
         output.close()
@@ -585,7 +587,7 @@ def import_qa_data_from_csv_service(
                 InputGroundtruthCreate(
                     input=row_data["input"],
                     groundtruth=row_data["expected_output"] if row_data["expected_output"] else None,
-                    index=row_data["index"],
+                    position=row_data["position"],
                 )
             )
 
@@ -605,19 +607,19 @@ def import_qa_data_from_csv_service(
         )
 
         return result
-    except QADuplicateIndexError as e:
+    except QADuplicatePositionError as e:
         LOGGER.error(f"Error in import_qa_data_from_csv_service: {str(e)}")
-        raise CSVNonUniqueIndexError(duplicate_indexes=e.duplicate_indexes) from e
+        raise CSVNonUniquePositionError(duplicate_positions=e.duplicate_positions) from e
     except (
         CSVEmptyFileError,
         CSVMissingColumnError,
         CSVInvalidJSONError,
-        CSVInvalidIndexError,
+        CSVInvalidPositionError,
     ) as e:
         LOGGER.error(f"Error in import_qa_data_from_csv_service: {str(e)}")
         raise e
 
 
-def _get_duplicate_indexes(indexes: List[int]) -> List[int]:
-    duplicated_indexes = [item for item, count in Counter(indexes).items() if count > 1]
-    return duplicated_indexes
+def _get_duplicate_positions(positions: List[int]) -> List[int]:
+    duplicated_positions = [item for item, count in Counter(positions).items() if count > 1]
+    return duplicated_positions

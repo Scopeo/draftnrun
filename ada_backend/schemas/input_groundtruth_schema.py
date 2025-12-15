@@ -18,7 +18,7 @@ class InputGroundtruthCreate(BaseModel):
 
     input: dict
     groundtruth: Optional[str] = None
-    index: Optional[int] = None
+    position: Optional[int] = None
 
 
 class InputGroundtruthWithVersionResponse(BaseModel):
@@ -130,7 +130,7 @@ class InputGroundtruthResponse(BaseModel):
 
     id: UUID
     dataset_id: UUID
-    index: int
+    position: int
     input: dict
     groundtruth: Optional[str] = None
     created_at: datetime

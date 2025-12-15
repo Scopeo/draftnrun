@@ -7,7 +7,7 @@ from ada_backend.services.qa.qa_error import (
     CSVEmptyFileError,
     CSVMissingColumnError,
     CSVInvalidJSONError,
-    CSVInvalidIndexError,
+    CSVInvalidPositionError,
 )
 
 
@@ -36,14 +36,14 @@ def process_csv(csv_file: BinaryIO):
                 parsed_json = json.loads(raw_json)
             except json.JSONDecodeError:
                 raise CSVInvalidJSONError(row_number=row_number)
-            index = None
-            if "index" in row:
-                raw_index = row["index"]
+            position = None
+            if "position" in row:
+                raw_position = row["position"]
                 try:
-                    index = int(raw_index)
+                    position = int(raw_position)
                 except (TypeError, ValueError):
-                    raise CSVInvalidIndexError(row_number=row_number)
-            yield {"input": parsed_json, "expected_output": row["expected_output"], "index": index}
+                    raise CSVInvalidPositionError(row_number=row_number)
+            yield {"input": parsed_json, "expected_output": row["expected_output"], "position": position}
 
         if row_count == 0:
             raise CSVEmptyFileError()
