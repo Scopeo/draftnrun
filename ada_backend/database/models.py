@@ -239,6 +239,7 @@ class UIComponentProperties(BaseModel):
     label: Optional[str] = None
     placeholder: Optional[str] = None
     description: Optional[str] = None
+    has_autocompletion: bool = False
 
     # Select/Combobox properties
     options: Optional[List[SelectOption]] = None
