@@ -1,6 +1,6 @@
 from typing import Any, List, Optional
 from uuid import UUID
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from ada_backend.database.models import EnvType, ProjectType
 from ada_backend.schemas.template_schema import InputTemplate
@@ -12,6 +12,12 @@ class FileResponse(BaseModel):
     size: int
     data: Optional[str] = None  # base64 if response_format="base64"
     url: Optional[str] = None  # presigned URL if response_format="url"
+
+    @model_validator(mode="after")
+    def validate_data_or_url(self):
+        if (self.data is None) == (self.url is None):
+            raise ValueError("Exactly one of 'data' or 'url' must be provided")
+        return self
 
 
 class ProjectSchema(BaseModel):

@@ -20,10 +20,30 @@ LOGGER = logging.getLogger(__name__)
 # Maximum file size: 10MB
 MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024
 
+MAX_FILES_FOR_BASE64 = 5
+
+WHITELISTED_FILE_EXTENSIONS = [
+    "jpg",
+    "jpeg",
+    "png",
+    "gif",
+    "bmp",
+    "tiff",
+    "pdf",
+    "docx",
+    "xlsx",
+    "csv",
+    "txt",
+    "md",
+    "json",
+    "html",
+    "xml",
+]
+
 
 def temp_folder_exists(temp_folder_path: str) -> bool:
     temp_folder = Path(temp_folder_path)
-    return temp_folder.exists() and temp_folder.is_dir()
+    return temp_folder.is_dir()
 
 
 def get_mime_type(file_path: Path) -> str:
@@ -47,7 +67,7 @@ def collect_file_paths_from_temp_folder(temp_folder_path: str) -> List[Path]:
     file_paths = []
     try:
         for item in temp_folder.rglob("*"):
-            if item.is_file() and not item.name.startswith("."):
+            if item.is_file() and not item.name.startswith(".") and item.suffix.lower() in WHITELISTED_FILE_EXTENSIONS:
                 file_paths.append(item)
     except Exception as e:
         LOGGER.error(f"Error collecting files from temp folder {temp_folder_path}: {str(e)}", exc_info=True)
@@ -72,8 +92,8 @@ def convert_file_to_base64(file_path: Path, max_size: int = MAX_FILE_SIZE_BYTES)
 
         with open(file_path, "rb") as f:
             file_bytes = f.read()
-            base64_data = base64.b64encode(file_bytes).decode("utf-8")
-            return base64_data
+        base64_data = base64.b64encode(file_bytes).decode("utf-8")
+        return base64_data
     except Exception as e:
         LOGGER.error(f"Error converting file {file_path} to base64: {str(e)}", exc_info=True)
         return None
@@ -139,6 +159,7 @@ def process_files_for_response(
         return []
 
     file_responses = []
+    base64_file_count = 0
 
     for file_path in file_paths:
         try:
@@ -152,6 +173,12 @@ def process_files_for_response(
             content_type = get_mime_type(file_path)
 
             if response_format == ResponseFormat.BASE64:
+                if base64_file_count >= MAX_FILES_FOR_BASE64:
+                    LOGGER.warning(
+                        f"Skipping file {file_path.name} - reached max base64 files ({MAX_FILES_FOR_BASE64})"
+                    )
+                    continue
+
                 base64_data = convert_file_to_base64(file_path)
                 if base64_data is not None:
                     file_responses.append(
@@ -163,6 +190,7 @@ def process_files_for_response(
                             url=None,
                         )
                     )
+                    base64_file_count += 1
             elif response_format == ResponseFormat.URL:
                 presigned_url = upload_file_to_s3_and_get_url(file_path, conversation_id)
                 if presigned_url is not None:
@@ -175,6 +203,9 @@ def process_files_for_response(
                             url=presigned_url,
                         )
                     )
+            else:
+                LOGGER.warning(f"Unsupported response format: {response_format}")
+                continue
         except Exception as e:
             LOGGER.error(f"Error processing file {file_path}: {str(e)}", exc_info=True)
             continue

@@ -1,6 +1,6 @@
 from typing import Annotated, List, Optional
 from uuid import UUID
-from fastapi import APIRouter, Depends, HTTPException, Body
+from fastapi import APIRouter, Depends, HTTPException, Body, Query
 from sqlalchemy.orm import Session
 import logging
 
@@ -187,7 +187,10 @@ async def run_env_agent_endpoint(
             ]
         },
     ),
-    response_format: Optional[ResponseFormat] = None,
+    response_format: Optional[ResponseFormat] = Query(
+        None,
+        description="If provided, files generated during execution are returned either as base64 or as presigned URLs",
+    ),
     sqlaclhemy_db_session: Session = Depends(get_db),
     verified_api_key: VerifiedApiKey = Depends(verify_api_key_dependency),
 ) -> ChatResponse:
@@ -306,7 +309,10 @@ async def chat(
             ]
         },
     ),
-    response_format: Optional[ResponseFormat] = None,
+    response_format: Optional[ResponseFormat] = Query(
+        None,
+        description="If provided, files generated during execution are returned either as base64 or as presigned URLs",
+    ),
     session: Session = Depends(get_db),
 ) -> ChatResponse:
     if not user.id:
@@ -398,7 +404,10 @@ async def chat_env(
             ]
         },
     ),
-    response_format: Optional[ResponseFormat] = None,
+    response_format: Optional[ResponseFormat] = Query(
+        None,
+        description="If provided, files generated during execution are returned either as base64 or as presigned URLs",
+    ),
     session: Session = Depends(get_db),
 ) -> ChatResponse:
     if not user.id:
