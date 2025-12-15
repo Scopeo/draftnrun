@@ -67,14 +67,6 @@ def collect_file_paths_from_temp_folder(temp_folder_path: str) -> List[Path]:
     file_paths = []
     try:
         for item in temp_folder.rglob("*"):
-            print(f"Item: {item}")
-            print(f"Item is file: {item.is_file()}")
-            print(f"Item name: {item.name}")
-            print(f"Item suffix: {item.suffix}")
-            print(f"Item suffix lower: {item.suffix.lower()}")
-            print(
-                f"Item suffix lower in WHITELISTED_FILE_EXTENSIONS: {item.suffix.lower() in WHITELISTED_FILE_EXTENSIONS}"
-            )
             if item.is_file() and not item.name.startswith(".") and item.suffix.lower() in WHITELISTED_FILE_EXTENSIONS:
                 file_paths.append(item)
     except Exception as e:
