@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from sqlalchemy.orm import Session, joinedload
 
 from ada_backend.database import models as db
-from ada_backend.database.models import ParameterType, ReleaseStage, UIComponent, UIComponentProperties
+from ada_backend.database.models import ParameterType, ReleaseStage, UIComponent, UIComponentProperties, NodeType
 from ada_backend.repositories.categories_repository import fetch_associated_category_names
 from ada_backend.repositories.integration_repository import (
     delete_linked_integration,
@@ -280,6 +280,21 @@ def get_component_instance_by_id(
             db.ComponentInstance.id == component_instance_id,
         )
         .first()
+    )
+
+
+def get_component_instances_for_graph_runner(session: Session, graph_runner_id: UUID) -> list[db.ComponentInstance]:
+    """
+    Return all component instances attached to a graph runner.
+    """
+    return (
+        session.query(db.ComponentInstance)
+        .join(db.GraphRunnerNode, db.GraphRunnerNode.node_id == db.ComponentInstance.id)
+        .filter(
+            db.GraphRunnerNode.graph_runner_id == graph_runner_id,
+            db.GraphRunnerNode.node_type == NodeType.COMPONENT,
+        )
+        .all()
     )
 
 
@@ -588,6 +603,21 @@ def get_port_definitions_for_component_version_ids(
     return (
         session.query(db.PortDefinition)
         .filter(db.PortDefinition.component_version_id.in_(component_version_ids))
+        .all()
+    )
+
+
+def get_output_ports_for_component_version(
+    session: Session,
+    component_version_id: UUID,
+) -> list[db.PortDefinition]:
+    return (
+        session.query(db.PortDefinition)
+        .filter(
+            db.PortDefinition.component_version_id == component_version_id,
+            db.PortDefinition.port_type == db.PortType.OUTPUT,
+        )
+        .order_by(db.PortDefinition.name)
         .all()
     )
 

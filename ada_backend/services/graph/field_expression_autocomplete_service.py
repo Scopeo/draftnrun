@@ -5,6 +5,10 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from ada_backend.database import models as db
+from ada_backend.repositories.component_repository import (
+    get_component_instances_for_graph_runner,
+    get_output_ports_for_component_version,
+)
 from ada_backend.schemas.pipeline.field_expression_schema import (
     FieldExpressionAutocompleteRequest,
     FieldExpressionAutocompleteResponse,
@@ -30,7 +34,7 @@ def autocomplete_field_expression(
     if not context:
         return FieldExpressionAutocompleteResponse(suggestions=[])
 
-    instances = list(_list_component_instances(session, graph_runner_id))
+    instances = get_component_instances_for_graph_runner(session, graph_runner_id)
     if not instances:
         return FieldExpressionAutocompleteResponse(suggestions=[])
 
@@ -52,15 +56,6 @@ def autocomplete_field_expression(
         len(suggestions),
     )
     return FieldExpressionAutocompleteResponse(suggestions=suggestions)
-
-
-def _list_component_instances(session: Session, graph_runner_id: UUID) -> Iterable[db.ComponentInstance]:
-    return (
-        session.query(db.ComponentInstance)
-        .join(db.GraphRunnerNode, db.GraphRunnerNode.node_id == db.ComponentInstance.id)
-        .filter(db.GraphRunnerNode.graph_runner_id == graph_runner_id)
-        .all()
-    )
 
 
 def _build_instance_suggestions(
@@ -113,15 +108,7 @@ def _build_port_suggestions(
         return []
 
     instance = instance_map[instance_uuid]
-    ports = (
-        session.query(db.PortDefinition)
-        .filter(
-            db.PortDefinition.component_version_id == instance.component_version_id,
-            db.PortDefinition.port_type == db.PortType.OUTPUT,
-        )
-        .order_by(db.PortDefinition.name)
-        .all()
-    )
+    ports = get_output_ports_for_component_version(session, instance.component_version_id)
 
     prefix = (context.port_token or "").lower()
     suggestions: list[FieldExpressionSuggestion] = []
