@@ -14,7 +14,6 @@ from ada_backend.schemas.auth_schema import SupabaseUser
 from ada_backend.schemas.pipeline.field_expression_schema import (
     FieldExpressionAutocompleteRequest,
     FieldExpressionAutocompleteResponse,
-    FieldExpressionReadSchema,
 )
 from ada_backend.schemas.pipeline.graph_schema import (
     GraphDeployResponse,
@@ -40,7 +39,7 @@ from ada_backend.services.graph.get_graph_modification_history_service import (
     get_graph_modification_history_service,
 )
 from ada_backend.services.graph.delete_graph_service import delete_graph_runner_service
-from ada_backend.services.graph.field_expression_autocomplete_service import autocomplete_field_expression as autocomplete_field_expression_service
+from ada_backend.services.graph.field_expression_autocomplete_service import autocomplete_field_expression
 from engine.field_expressions.errors import FieldExpressionError
 from engine.agent.errors import (
     KeyTypePromptTemplateError,
@@ -212,19 +211,19 @@ async def update_project_pipeline(
     response_model=FieldExpressionAutocompleteResponse,
     tags=["Graph"],
 )
-def autocomplete_field_expressions(
+def autocomplete_field_expressions_endpoint(
     project_id: UUID,
     graph_runner_id: UUID,
     payload: FieldExpressionAutocompleteRequest,
     user: Annotated[
-        SupabaseUser, Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.DEVELOPER.value))
+        SupabaseUser, Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.MEMBER.value))
     ],
     session: Session = Depends(get_db),
 ) -> FieldExpressionAutocompleteResponse:
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
     try:
-        return autocomplete_field_expression_service(session, project_id, graph_runner_id, payload)
+        return autocomplete_field_expression(session, project_id, graph_runner_id, payload)
     except GraphNotFound as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
     except GraphNotBoundToProjectError as e:
