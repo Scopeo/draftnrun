@@ -1,3 +1,5 @@
+# TODO: Refactor this to use a more robust parser instead of a regex. Also, it should share logic with the
+# expression parser. Maybe a state machine would be better -> better defined states and transitions.
 from dataclasses import dataclass
 from typing import Literal
 
