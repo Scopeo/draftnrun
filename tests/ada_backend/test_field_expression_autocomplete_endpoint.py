@@ -105,7 +105,6 @@ def test_field_expression_autocomplete_instance_and_port_suggestions():
         partial = src_instance_id[:8]
         instance_request = {
             "target_instance_id": dst_instance_id,
-            "field_name": "messages",
             "expression_text": "@{{" + partial,
             "cursor_offset": len("@{{" + partial),
             "trigger": "@",
@@ -122,7 +121,6 @@ def test_field_expression_autocomplete_instance_and_port_suggestions():
         # Port suggestions
         port_request = {
             "target_instance_id": dst_instance_id,
-            "field_name": "messages",
             "expression_text": "@{{" + src_instance_id + ".out",
             "cursor_offset": len("@{{" + src_instance_id + ".out"),
             "trigger": "dot",
@@ -139,7 +137,6 @@ def test_field_expression_autocomplete_instance_and_port_suggestions():
         # Cursor outside context should return empty suggestions
         empty_request = {
             "target_instance_id": dst_instance_id,
-            "field_name": "messages",
             "expression_text": "Hello world",
             "cursor_offset": 5,
             "trigger": "manual",

@@ -39,7 +39,6 @@ class FieldExpressionSuggestionKind(str, Enum):
 
 class FieldExpressionAutocompleteRequest(BaseModel):
     target_instance_id: UUID
-    field_name: str
     expression_text: str
     cursor_offset: int
     trigger: FieldExpressionAutocompleteTrigger
