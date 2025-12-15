@@ -1466,6 +1466,7 @@ class InputGroundtruth(Base):
     __tablename__ = "input_groundtruth"
     __table_args__ = (
         sa.UniqueConstraint("dataset_id", "position", name="uq_input_groundtruth_dataset_position"),
+        sa.CheckConstraint("position >= 1", name="ck_input_groundtruth_position_positive"),
         {"schema": "quality_assurance"},
     )
 

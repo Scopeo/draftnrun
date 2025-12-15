@@ -26,7 +26,10 @@ class CSVInvalidPositionError(Exception):
     """Raised when position column contains invalid integer."""
 
     def __init__(self, row_number: Optional[int] = None):
-        super().__init__(f"Invalid integer in 'position' column at row {row_number}")
+        super().__init__(
+            f"Invalid integer in 'position' column at row {row_number}. "
+            "Expected an integer greater than or equal to 1."
+        )
 
 
 class CSVNonUniquePositionError(Exception):

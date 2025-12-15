@@ -91,25 +91,17 @@ def create_inputs_groundtruths(
         for i, data in enumerate(inputs_groundtruths_data)
     ]
 
-    inputs_groundtruths = []
-    for i in range(0, len(inputs_groundtruths_data), BATCH_INSERTION_SIZE):
-        batch_data = inputs_groundtruths_data[i : i + BATCH_INSERTION_SIZE]
-        batch_positions = positions[i : i + BATCH_INSERTION_SIZE]
+    inputs_groundtruths = [
+        InputGroundtruth(
+            dataset_id=dataset_id,
+            input=data.input,
+            groundtruth=data.groundtruth,
+            position=position,
+        )
+        for data, position in zip(inputs_groundtruths_data, positions)
+    ]
 
-        batch_objects = [
-            InputGroundtruth(
-                dataset_id=dataset_id,
-                input=data.input,
-                groundtruth=data.groundtruth,
-                position=position,
-            )
-            for data, position in zip(batch_data, batch_positions)
-        ]
-
-        session.add_all(batch_objects)
-        session.flush()
-        inputs_groundtruths.extend(batch_objects)
-
+    session.add_all(inputs_groundtruths)
     session.commit()
 
     for input_groundtruth in inputs_groundtruths:

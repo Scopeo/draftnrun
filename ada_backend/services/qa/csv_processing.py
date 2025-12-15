@@ -41,6 +41,8 @@ def process_csv(csv_file: BinaryIO):
                 raw_position = row["position"]
                 try:
                     position = int(raw_position)
+                    if position < 1:
+                        raise CSVInvalidPositionError(row_number=row_number)
                 except (TypeError, ValueError):
                     raise CSVInvalidPositionError(row_number=row_number)
             yield {"input": parsed_json, "expected_output": row["expected_output"], "position": position}

@@ -20,6 +20,14 @@ class InputGroundtruthCreate(BaseModel):
     groundtruth: Optional[str] = None
     position: Optional[int] = None
 
+    @field_validator("position")
+    @classmethod
+    def validate_position(cls, v: Optional[int]) -> Optional[int]:
+        """Validate that position, if provided, is a positive integer >= 1."""
+        if v is not None and v < 1:
+            raise ValueError("position for a QA example must be a positive integer greater or equal to 1 if provided")
+        return v
+
 
 class InputGroundtruthWithVersionResponse(BaseModel):
     """Schema for input-groundtruth response with version output data."""

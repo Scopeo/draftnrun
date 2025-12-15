@@ -930,3 +930,65 @@ def test_csv_import_invalid_positions_values():
     assert "row" in response.json()["detail"]
 
     client.delete(f"/projects/{project_uuid}", headers=HEADERS_JWT)
+
+
+def test_position_less_than_one():
+    """Test that positions < 1 are rejected."""
+    project_uuid = str(uuid4())
+    project_payload = {
+        "project_id": project_uuid,
+        "project_name": f"position_lt_one_test_{project_uuid}",
+        "description": "Test project for position < 1 validation",
+    }
+    client.post(f"/projects/{ORGANIZATION_ID}", headers=HEADERS_JWT, json=project_payload)
+
+    dataset_payload = {"datasets_name": [f"position_lt_one_dataset_{project_uuid}"]}
+    dataset_response = client.post(f"/projects/{project_uuid}/qa/datasets", headers=HEADERS_JWT, json=dataset_payload)
+    dataset_id = dataset_response.json()["datasets"][0]["id"]
+
+    input_endpoint = f"/projects/{project_uuid}/qa/datasets/{dataset_id}/entries"
+    create_payload = {
+        "inputs_groundtruths": [
+            {"input": {"messages": [{"role": "user", "content": "Test"}]}, "groundtruth": "GT", "position": 0}
+        ]
+    }
+
+    response = client.post(input_endpoint, headers=HEADERS_JWT, json=create_payload)
+    assert response.status_code == 422
+    assert (
+        "position for a QA example must be a positive integer greater or equal to 1 if provided"
+        in response.json()["detail"][0]["msg"]
+    )
+
+    client.delete(f"/projects/{project_uuid}", headers=HEADERS_JWT)
+
+
+def test_csv_import_position_less_than_one():
+    """Test CSV import with position < 1."""
+    project_uuid = str(uuid4())
+    project_payload = {
+        "project_id": project_uuid,
+        "project_name": f"csv_position_lt_one_test_{project_uuid}",
+        "description": "Test project for CSV position < 1",
+    }
+    client.post(f"/projects/{ORGANIZATION_ID}", headers=HEADERS_JWT, json=project_payload)
+
+    dataset_payload = {"datasets_name": [f"csv_position_lt_one_dataset_{project_uuid}"]}
+    dataset_response = client.post(f"/projects/{project_uuid}/qa/datasets", headers=HEADERS_JWT, json=dataset_payload)
+    dataset_id = dataset_response.json()["datasets"][0]["id"]
+
+    input_json = json.dumps({"messages": [{"role": "user", "content": "Test"}]})
+    csv_buffer = io.StringIO()
+    writer = csv.writer(csv_buffer)
+    writer.writerow(["position", "input", "expected_output"])
+    writer.writerow([0, input_json, "GT"])
+    csv_content = csv_buffer.getvalue()
+    csv_file = ("test.csv", csv_content.encode("utf-8"), "text/csv")
+
+    import_endpoint = f"/projects/{project_uuid}/qa/datasets/{dataset_id}/import"
+    response = client.post(import_endpoint, headers=HEADERS_JWT, files={"file": csv_file})
+    assert response.status_code == 400
+    assert "Invalid integer in 'position' column" in response.json()["detail"]
+    assert "greater than or equal to 1" in response.json()["detail"]
+
+    client.delete(f"/projects/{project_uuid}", headers=HEADERS_JWT)
