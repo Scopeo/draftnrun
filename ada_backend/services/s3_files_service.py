@@ -1,6 +1,5 @@
 import logging
 from functools import lru_cache
-from typing import Optional
 from uuid import UUID, uuid4
 
 import boto3

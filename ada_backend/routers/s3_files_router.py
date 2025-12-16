@@ -16,7 +16,6 @@ from ada_backend.services.s3_files_service import (
     delete_file_from_s3,
 )
 from ada_backend.schemas.ingestion_task_schema import S3UploadedInformation
-from settings import settings
 
 router = APIRouter(tags=["S3 File Uploads"])
 LOGGER = logging.getLogger(__name__)
