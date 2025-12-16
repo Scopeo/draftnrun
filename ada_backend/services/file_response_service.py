@@ -17,11 +17,8 @@ from settings import settings
 
 LOGGER = logging.getLogger(__name__)
 
-# Maximum file size: 10MB
 MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024
-
 MAX_FILES_FOR_BASE64 = 5
-
 WHITELISTED_FILE_EXTENSIONS = [
     ".jpg",
     ".jpeg",
@@ -166,7 +163,8 @@ def process_files_for_response(
             file_size = file_path.stat().st_size
             if file_size > MAX_FILE_SIZE_BYTES:
                 LOGGER.warning(
-                    f"Skipping file {file_path.name} - exceeds size limit ({file_size} bytes > {MAX_FILE_SIZE_BYTES} bytes)"
+                    f"Skipping file {file_path.name} - exceeds size limit "
+                    f"({file_size} bytes > {MAX_FILE_SIZE_BYTES} bytes)"
                 )
                 continue
 

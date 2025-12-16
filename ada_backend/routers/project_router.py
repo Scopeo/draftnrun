@@ -189,7 +189,11 @@ async def run_env_agent_endpoint(
     ),
     response_format: Optional[ResponseFormat] = Query(
         None,
-        description="If provided, files generated during execution are returned either as base64 or as presigned S3 URLs. Only 'base64' or 'url' are allowed for this endpoint.",
+        description=(
+            "If provided, files generated during execution are returned "
+            "either as base64 or as presigned S3 URLs. "
+            "Only 'base64' or 'url' are allowed for this endpoint."
+        ),
     ),
     sqlaclhemy_db_session: Session = Depends(get_db),
     verified_api_key: VerifiedApiKey = Depends(verify_api_key_dependency),
@@ -339,7 +343,6 @@ async def chat(
                 project_env_binding.graph_runner.tag_version,
                 project_env_binding.graph_runner.version_name,
             ),
-            # For UI chat endpoint, always return S3 keys (no presigned URL)
             response_format=ResponseFormat.S3_KEY,
         )
     except OrganizationLimitExceededError as e:
@@ -461,67 +464,3 @@ async def chat_env(
             f"Failed to run agent chat for project {project_id} in environment {env}: {str(e)}", exc_info=True
         )
         raise HTTPException(status_code=500, detail="Internal server error") from e
-
-
-@router.get("/{project_id}/files/download", tags=["Files"])
-async def get_file_download_url(
-    project_id: UUID,
-    user: Annotated[
-        SupabaseUser,
-        Depends(
-            user_has_access_to_project_dependency(
-                allowed_roles=UserRights.MEMBER.value,
-            )
-        ),
-    ],
-    s3_key: str = Query(..., description="S3 key of the file to download"),
-    session: Session = Depends(get_db),
-) -> dict:
-    """
-    Generate a presigned S3 download URL after verifying user has access to the project.
-    The s3_key must be in the format: temp-files/{project_id}/{conversation_id}/{filename}
-    """
-    if not user.id:
-        raise HTTPException(status_code=400, detail="User ID not found")
-
-    # Verify s3_key format and extract project_id
-    if not s3_key.startswith("temp-files/"):
-        raise HTTPException(status_code=400, detail="Invalid S3 key format. Must start with 'temp-files/'")
-
-    try:
-        # Extract project_id from s3_key: temp-files/{project_id}/{conversation_id}/{filename}
-        parts = s3_key.split("/")
-        if len(parts) < 4:
-            raise HTTPException(status_code=400, detail="Invalid S3 key format")
-
-        key_project_id = parts[1]  # Extract project_id from key
-
-        # Verify that the project_id in the key matches the endpoint project_id
-        if key_project_id != str(project_id):
-            raise HTTPException(
-                status_code=403,
-                detail=f"S3 key project_id ({key_project_id}) does not match endpoint project_id ({project_id})",
-            )
-
-        # Generate presigned S3 URL (short expiration, e.g., 5 minutes)
-        from ada_backend.services.s3_files_service import (
-            get_s3_client_and_ensure_bucket,
-            generate_presigned_download_url,
-        )
-
-        s3_client = get_s3_client_and_ensure_bucket()
-        presigned_url = generate_presigned_download_url(
-            s3_client=s3_client,
-            key=s3_key,
-            expiration=300,  # 5 minutes
-        )
-
-        return {"url": presigned_url}
-    except HTTPException:
-        raise
-    except Exception as e:
-        LOGGER.error(
-            f"Failed to generate presigned URL for project {project_id}, s3_key {s3_key}: {str(e)}",
-            exc_info=True,
-        )
-        raise HTTPException(status_code=500, detail="Failed to generate download URL") from e
