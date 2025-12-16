@@ -68,7 +68,11 @@ jobs:
             DUMP_PATH="$CACHE_DIR/prod.latest.dump"
 
             # Always force refresh the dump to update cache and TTL
+            # pg_dump -f will overwrite the existing file if it exists (like in CI)
             echo "===> Creating/updating production dump cache at $DUMP_PATH"
+            if [ -f "$DUMP_PATH" ]; then
+              echo "===> Existing dump found, will be overwritten"
+            fi
             pg_dump -Fc "$PROD_DB_URL" -f "$DUMP_PATH"
             
             # Verify dump was created successfully
@@ -91,9 +95,13 @@ jobs:
               exit 1
             fi
             
-            # Show dump file info
+            # Show dump file info with timestamp to confirm it's fresh
             DUMP_SIZE_HUMAN=$(du -h "$DUMP_PATH" | cut -f1)
+            DUMP_TIME=$(stat -c %Y "$DUMP_PATH" 2>/dev/null || stat -f %m "$DUMP_PATH" 2>/dev/null)
+            DUMP_DATE=$(date -d "@$DUMP_TIME" 2>/dev/null || date -r "$DUMP_TIME" 2>/dev/null || echo "unknown")
             echo "===> ✅ Production dump cache updated successfully"
             echo "===> Dump file size: $DUMP_SIZE_HUMAN ($DUMP_SIZE bytes)"
             echo "===> Dump location: $DUMP_PATH"
+            echo "===> Dump created at: $DUMP_DATE (timestamp: $DUMP_TIME)"
             echo "===> Dump integrity: OK"
+            echo "===> Next CI run will use this fresh dump (TTL check will pass)"
