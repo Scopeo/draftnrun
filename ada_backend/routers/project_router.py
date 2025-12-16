@@ -311,6 +311,9 @@ async def chat(
     try:
         # Get the environment for this graph runner
         project_env_binding = get_env_relationship_by_graph_runner_id(session, graph_runner_id)
+        if not project_env_binding:
+            LOGGER.error(f"Graph runner {graph_runner_id} is not bound to any project for project {project_id}")
+            raise HTTPException(status_code=404, detail=f"Graph runner {graph_runner_id} is not bound to any project")
         environment = project_env_binding.environment
         LOGGER.info(f"Determined environment {environment} for graph_runner_id {graph_runner_id}")
         return await run_agent(
