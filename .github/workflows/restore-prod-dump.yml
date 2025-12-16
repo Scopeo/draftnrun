@@ -69,7 +69,7 @@ jobs:
 
             # Always force refresh the dump to update cache and TTL
             echo "===> Creating/updating production dump cache at $DUMP_PATH"
-            /usr/pgsql-16/bin/pg_dump -Fc "$PROD_DB_URL" -f "$DUMP_PATH"
+            pg_dump -Fc "$PROD_DB_URL" -f "$DUMP_PATH"
             
             # Verify dump was created successfully
             if [ ! -f "$DUMP_PATH" ]; then
@@ -86,7 +86,7 @@ jobs:
             
             # Verify dump integrity by listing its contents
             echo "===> Verifying dump integrity..."
-            if ! /usr/pgsql-16/bin/pg_restore --list "$DUMP_PATH" > /dev/null 2>&1; then
+            if ! pg_restore --list "$DUMP_PATH" > /dev/null 2>&1; then
               echo "ERROR: Dump file appears to be corrupted or invalid!" >&2
               exit 1
             fi
