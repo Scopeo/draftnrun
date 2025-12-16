@@ -4,6 +4,7 @@ from typing import Optional, List
 from ada_backend.schemas.credits_schema import (
     ComponentVersionCostResponse,
     OrganizationLimitResponse,
+    OrganizationUsageResponse,
 )
 from ada_backend.repositories.credits_repository import (
     upsert_component_version_cost,
@@ -12,6 +13,7 @@ from ada_backend.repositories.credits_repository import (
     update_organization_limit,
     delete_organization_limit,
     get_all_organization_limits,
+    get_all_aggregated_usage,
 )
 from ada_backend.services.errors import (
     ComponentVersionCostNotFound,
@@ -84,3 +86,9 @@ def delete_organization_limit_service(
     organization_id: UUID,
 ) -> None:
     return delete_organization_limit(session, id, organization_id)
+
+
+def get_all_aggregated_usage_service(session: Session, month: int, year: int) -> List[OrganizationUsageResponse]:
+    """Get aggregated usage for all organizations for a specific month and year."""
+    aggregated_data = get_all_aggregated_usage(session, month, year)
+    return [OrganizationUsageResponse.model_validate(record, from_attributes=True) for record in aggregated_data]

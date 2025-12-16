@@ -26,3 +26,10 @@ class ComponentVersionCost(BaseModel):
 class ComponentVersionCostResponse(ComponentVersionCost):
     id: UUID
     component_version_id: UUID
+
+
+class OrganizationUsageResponse(BaseModel):
+    """Aggregated usage for an organization across all projects."""
+
+    organization_id: UUID
+    total_credits_used: float

@@ -230,3 +230,28 @@ def get_organization_total_credits(session: Session, organization_id: UUID, year
         .scalar()
     )
     return round(float(total) if total else 0.0, 2)
+
+
+def get_all_aggregated_usage(session: Session, month: int, year: int) -> List[dict]:
+    """Get aggregated usage for all organizations, grouped by organization, year and month."""
+    results = (
+        session.query(
+            db.Project.organization_id,
+            db.Usage.year,
+            db.Usage.month,
+            func.sum(db.Usage.credits_used).label("total_credits_used"),
+        )
+        .select_from(db.Usage)
+        .join(db.Project, db.Usage.project_id == db.Project.id)
+        .filter(db.Usage.year == year, db.Usage.month == month)
+        .group_by(db.Project.organization_id, db.Usage.year, db.Usage.month)
+        .order_by(db.Project.organization_id, db.Usage.year.desc(), db.Usage.month.desc())
+        .all()
+    )
+    return [
+        {
+            "organization_id": org_id,
+            "total_credits_used": round(float(total_credits_used), 2),
+        }
+        for org_id, year, month, total_credits_used in results
+    ]
