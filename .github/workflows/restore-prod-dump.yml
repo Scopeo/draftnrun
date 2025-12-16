@@ -1,0 +1,99 @@
+name: Update Production Dump Cache
+
+on:
+  workflow_dispatch:
+
+env:
+  EC2_USER: ec2-user
+
+jobs:
+  update-dump-cache:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Set up SSH key
+        uses: webfactory/ssh-agent@v0.5.3
+        with:
+          ssh-private-key: ${{ secrets.DEPLOY_KEY }}
+
+      - name: Create credentials.env file
+        run: |
+          echo "PROD_DB_URL=${{ secrets.PROD_DB_URL }}" > credentials.env
+
+      - name: Upload credentials.env to EC2
+        uses: appleboy/scp-action@master
+        with:
+          host: ${{ secrets.EC2_HOST_TEST }}
+          username: ${{ env.EC2_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          source: "credentials.env"
+          target: "/tmp/credentials.env"
+
+      - name: Update production dump cache
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.EC2_HOST_TEST }}
+          username: ${{ env.EC2_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          script: |
+            set -e
+
+            # Check and install pg_dump 16 if needed
+            if ! command -v /usr/pgsql-16/bin/pg_dump &> /dev/null; then
+              echo "===> Installing PostgreSQL 16 client tools"
+              sudo dnf remove -y postgresql15* || true
+              sudo dnf install -y postgresql16
+            else
+              echo "===> PostgreSQL 16 client tools already installed"
+            fi
+
+            # Load PROD_DB_URL from credentials file
+            if [ -f /tmp/credentials.env ]; then
+              set -a; source /tmp/credentials.env; set +a
+            elif [ -f ~/credentials.env ]; then
+              set -a; source ~/credentials.env; set +a
+            fi
+
+            # Require PROD_DB_URL to be set
+            if [ -z "${PROD_DB_URL:-}" ]; then
+              echo "ERROR: PROD_DB_URL is not set." >&2
+              exit 1
+            fi
+
+            # Cache directory for prod dumps
+            CACHE_DIR="/home/ec2-user/ci-cache/db-dumps"
+            mkdir -p "$CACHE_DIR"
+            DUMP_PATH="$CACHE_DIR/prod.latest.dump"
+
+            # Always force refresh the dump to update cache and TTL
+            echo "===> Creating/updating production dump cache at $DUMP_PATH"
+            /usr/pgsql-16/bin/pg_dump -Fc "$PROD_DB_URL" -f "$DUMP_PATH"
+            
+            # Verify dump was created successfully
+            if [ ! -f "$DUMP_PATH" ]; then
+              echo "ERROR: Dump file was not created!" >&2
+              exit 1
+            fi
+            
+            # Check dump file is not empty
+            DUMP_SIZE=$(stat -c%s "$DUMP_PATH" 2>/dev/null || stat -f%z "$DUMP_PATH" 2>/dev/null || echo "0")
+            if [ "$DUMP_SIZE" -eq 0 ]; then
+              echo "ERROR: Dump file is empty!" >&2
+              exit 1
+            fi
+            
+            # Verify dump integrity by listing its contents
+            echo "===> Verifying dump integrity..."
+            if ! /usr/pgsql-16/bin/pg_restore --list "$DUMP_PATH" > /dev/null 2>&1; then
+              echo "ERROR: Dump file appears to be corrupted or invalid!" >&2
+              exit 1
+            fi
+            
+            # Show dump file info
+            DUMP_SIZE_HUMAN=$(du -h "$DUMP_PATH" | cut -f1)
+            echo "===> ✅ Production dump cache updated successfully"
+            echo "===> Dump file size: $DUMP_SIZE_HUMAN ($DUMP_SIZE bytes)"
+            echo "===> Dump location: $DUMP_PATH"
+            echo "===> Dump integrity: OK"
