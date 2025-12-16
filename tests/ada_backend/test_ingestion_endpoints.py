@@ -121,8 +121,8 @@ def test_ingest_local_folder_source():
         response.raise_for_status()
 
     with (
-        patch("ingestion_script.utils.create_source", side_effect=mock_create_source),
-        patch("ingestion_script.utils.update_ingestion_task", side_effect=mock_update_ingestion_task),
+        patch("ingestion_script.ingest_folder_source.create_source", side_effect=mock_create_source),
+        patch("ingestion_script.ingest_folder_source.update_ingestion_task", side_effect=mock_update_ingestion_task),
     ):
         asyncio.run(
             ingest_local_folder_source(
