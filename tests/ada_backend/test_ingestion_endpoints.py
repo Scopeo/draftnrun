@@ -1,5 +1,6 @@
 import asyncio
 import uuid
+from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
@@ -101,17 +102,39 @@ def test_ingest_local_folder_source():
         organization_llm_providers=organization_llm_providers,
     )
 
-    asyncio.run(
-        ingest_local_folder_source(
-            list_of_files_to_ingest=test_source_attributes["list_of_files_from_local_folder"],
-            organization_id=ORGANIZATION_ID,
-            source_id=test_source_id,
-            source_name=test_source_name,
-            task_id=task_id,
-            save_supabase=False,
-            add_doc_description_to_chunks=False,
+    # Mock create_source and update_ingestion_task to use test client instead of making HTTP requests
+    def mock_create_source(organization_id: str, source_data):
+        response = client.post(
+            f"/sources/{organization_id}",
+            json=source_data.model_dump(mode="json"),
+            headers=HEADERS_API_KEY,
         )
-    )
+        response.raise_for_status()
+        return response.json()
+
+    def mock_update_ingestion_task(organization_id: str, ingestion_task):
+        response = client.patch(
+            f"/ingestion_task/{organization_id}",
+            json=ingestion_task.model_dump(mode="json"),
+            headers=HEADERS_API_KEY,
+        )
+        response.raise_for_status()
+
+    with (
+        patch("ingestion_script.utils.create_source", side_effect=mock_create_source),
+        patch("ingestion_script.utils.update_ingestion_task", side_effect=mock_update_ingestion_task),
+    ):
+        asyncio.run(
+            ingest_local_folder_source(
+                list_of_files_to_ingest=test_source_attributes["list_of_files_from_local_folder"],
+                organization_id=ORGANIZATION_ID,
+                source_id=test_source_id,
+                source_name=test_source_name,
+                task_id=task_id,
+                save_supabase=False,
+                add_doc_description_to_chunks=False,
+            )
+        )
 
     get_source_response = client.get(
         f"/sources/{ORGANIZATION_ID}",
