@@ -205,7 +205,8 @@ def delete_organization_limit(session: Session, id: UUID, organization_id: UUID)
 
 
 def get_organization_limit(
-    session: Session, organization_id: UUID, year: int, month: int
+    session: Session,
+    organization_id: UUID,
 ) -> Optional[db.OrganizationLimit]:
     """Get organization limit for a specific year and month."""
     organization_limit = (

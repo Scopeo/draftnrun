@@ -200,8 +200,6 @@ async def run_agent(
     organization_limit = get_organization_limit(
         session=session,
         organization_id=project_details.organization_id,
-        year=today.year,
-        month=today.month,
     )
     if organization_limit and organization_limit.limit is not None:
         current_usage = get_organization_total_credits(

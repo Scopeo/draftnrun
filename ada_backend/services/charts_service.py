@@ -220,7 +220,7 @@ async def get_credit_usage_table_chart(session: Session, organization_id: UUID) 
     today = datetime.now()
 
     credits_used = get_organization_total_credits(session, organization_id, today.year, today.month)
-    org_limit = get_organization_limit(session, organization_id, today.year, today.month)
+    org_limit = get_organization_limit(session, organization_id)
     credits_limit = org_limit.limit if org_limit else None
     percentage_used = round((credits_used / credits_limit) * 100, 1) if credits_limit and credits_limit > 0 else None
 
