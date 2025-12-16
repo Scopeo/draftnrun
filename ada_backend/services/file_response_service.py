@@ -100,11 +100,12 @@ def convert_file_to_base64(file_path: Path, max_size: int = MAX_FILE_SIZE_BYTES)
 
 
 def upload_file_to_s3_and_get_url(
-    file_path: Path, conversation_id: str, max_size: int = MAX_FILE_SIZE_BYTES
-) -> Optional[str]:
+    file_path: Path, project_id: str, conversation_id: str, max_size: int = MAX_FILE_SIZE_BYTES
+) -> Optional[tuple[str, str]]:
     """
     Upload a file to S3 and generate a presigned download URL.
-    Returns None if file exceeds size limit or if upload fails.
+    Returns (presigned_url, s3_key) if successful, or None if file exceeds size
+    limit or if upload fails.
     """
     try:
         file_size = file_path.stat().st_size
@@ -117,10 +118,8 @@ def upload_file_to_s3_and_get_url(
         with open(file_path, "rb") as f:
             file_bytes = f.read()
 
-        # Create S3 key: temp-files/{conversation_id}/{filename}
-        # Sanitize only the filename part, not the path structure
         sanitized_filename = sanitize_filename(file_path.name, remove_extension_dot=False)
-        s3_key = f"temp-files/{conversation_id}/{sanitized_filename}"
+        s3_key = f"temp-files/{project_id}/{conversation_id}/{sanitized_filename}"
 
         s3_client = get_s3_client_and_ensure_bucket()
         upload_file_to_bucket(
@@ -136,7 +135,7 @@ def upload_file_to_s3_and_get_url(
             expiration=3600,
         )
 
-        return presigned_url
+        return presigned_url, s3_key
     except Exception as e:
         LOGGER.error(f"Error uploading file {file_path} to S3: {str(e)}", exc_info=True)
         return None
@@ -144,6 +143,7 @@ def upload_file_to_s3_and_get_url(
 
 def process_files_for_response(
     temp_folder_path: str,
+    project_id: str,
     conversation_id: str,
     response_format: Optional[ResponseFormat],
 ) -> List[FileResponse]:
@@ -192,8 +192,9 @@ def process_files_for_response(
                     )
                     base64_file_count += 1
             elif response_format == ResponseFormat.URL:
-                presigned_url = upload_file_to_s3_and_get_url(file_path, conversation_id)
-                if presigned_url is not None:
+                result = upload_file_to_s3_and_get_url(file_path, project_id, conversation_id)
+                if result is not None:
+                    presigned_url, s3_key = result
                     file_responses.append(
                         FileResponse(
                             filename=file_path.name,
@@ -201,6 +202,21 @@ def process_files_for_response(
                             size=file_size,
                             data=None,
                             url=presigned_url,
+                            s3_key=s3_key,
+                        )
+                    )
+            elif response_format == ResponseFormat.S3_KEY:
+                result = upload_file_to_s3_and_get_url(file_path, project_id, conversation_id)
+                if result is not None:
+                    presigned_url, s3_key = result
+                    file_responses.append(
+                        FileResponse(
+                            filename=file_path.name,
+                            content_type=content_type,
+                            size=file_size,
+                            data=None,
+                            url=None,
+                            s3_key=s3_key,
                         )
                     )
             else:

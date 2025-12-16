@@ -269,6 +269,7 @@ async def run_agent(
             try:
                 files = process_files_for_response(
                     temp_folder_path=uuid_for_temp_folder,
+                    project_id=str(project_id),
                     conversation_id=conversation_id,
                     response_format=response_format,
                 )

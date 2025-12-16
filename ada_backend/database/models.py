@@ -127,6 +127,7 @@ class CallType(StrEnum):
 class ResponseFormat(StrEnum):
     BASE64 = "base64"
     URL = "url"
+    S3_KEY = "s3_key"
 
 
 class UIComponent(StrEnum):
