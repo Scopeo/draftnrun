@@ -1,8 +1,10 @@
 import asyncio
-import requests
 import uuid
 
+from fastapi.testclient import TestClient
+
 from ada_backend.database.setup_db import SessionLocal
+from ada_backend.main import app
 from ada_backend.scripts.get_supabase_token import get_user_jwt
 from ada_backend.schemas.ingestion_task_schema import IngestionTaskQueue
 from ada_backend.database import models as db
@@ -17,7 +19,7 @@ from engine.qdrant_service import QdrantService
 from engine.storage_service.local_service import SQLLocalService
 from settings import settings
 
-BASE_URL = "http://localhost:8000"
+client = TestClient(app)
 ORGANIZATION_ID = "37b7d67f-8f29-4fce-8085-19dea582f605"  # umbrella organization
 JWT_TOKEN = get_user_jwt(settings.TEST_USER_EMAIL, settings.TEST_USER_PASSWORD)
 HEADERS_JWT = {
@@ -63,10 +65,9 @@ def test_ingest_local_folder_source():
         source_id=test_source_id,
     )
 
-    endpoint_upload_file = f"{BASE_URL}/files/{ORGANIZATION_ID}/upload"
     with open("tests/resources/documents/sample.pdf", "rb") as f:
         files_payload = [("files", ("doc1.pdf", f, "application/pdf"))]
-        response = requests.post(endpoint_upload_file, headers=HEADERS_JWT, files=files_payload)
+        response = client.post(f"/files/{ORGANIZATION_ID}/upload", headers=HEADERS_JWT, files=files_payload)
         assert response.status_code == 200
     list_uploaded_files = response.json()
     assert len(list_uploaded_files) == 1
@@ -75,14 +76,13 @@ def test_ingest_local_folder_source():
     assert file_exists_in_bucket(s3_client=S3_CLIENT, bucket_name=settings.S3_BUCKET_NAME, key=sanitized_file_name)
     test_source_attributes["list_of_files_from_local_folder"][0]["s3_path"] = sanitized_file_name
 
-    endpoint = f"{BASE_URL}/ingestion_task/{ORGANIZATION_ID}"
     payload = IngestionTaskQueue(
         source_name=test_source_name,
         source_type=db.SourceType.LOCAL,
         status=db.TaskStatus.PENDING,
         source_attributes=test_source_attributes,
     )
-    response = requests.post(endpoint, headers=HEADERS_JWT, json=payload.model_dump())
+    response = client.post(f"/ingestion_task/{ORGANIZATION_ID}", headers=HEADERS_JWT, json=payload.model_dump())
     task_id = response.json()
 
     assert response.status_code == 201
@@ -113,8 +113,8 @@ def test_ingest_local_folder_source():
         )
     )
 
-    get_source_response = requests.get(
-        f"{BASE_URL}/sources/{ORGANIZATION_ID}",
+    get_source_response = client.get(
+        f"/sources/{ORGANIZATION_ID}",
         headers=HEADERS_JWT,
     )
     assert get_source_response.status_code == 200
@@ -143,12 +143,10 @@ def test_ingest_local_folder_source():
     assert "content" in chunk_df.columns
     assert "file_id" in chunk_df.columns
 
-    delete_endpoint = f"{BASE_URL}/ingestion_task/{ORGANIZATION_ID}/{task_id}"
-    delete_response = requests.delete(delete_endpoint, headers=HEADERS_JWT)
+    delete_response = client.delete(f"/ingestion_task/{ORGANIZATION_ID}/{task_id}", headers=HEADERS_JWT)
     assert delete_response.status_code == 204
 
-    delete_source_endpoint = f"{BASE_URL}/sources/{ORGANIZATION_ID}/{test_source_id}"
-    delete_source_response = requests.delete(delete_source_endpoint, headers=HEADERS_JWT)
+    delete_source_response = client.delete(f"/sources/{ORGANIZATION_ID}/{test_source_id}", headers=HEADERS_JWT)
     assert delete_source_response.status_code == 204
 
     assert not qdrant_service.collection_exists(qdrant_collection_name)
