@@ -1,5 +1,6 @@
 import logging
 from functools import lru_cache
+from typing import Optional
 from uuid import UUID, uuid4
 
 import boto3
@@ -22,20 +23,15 @@ LOGGER = logging.getLogger(__name__)
 
 
 @lru_cache()
-def get_s3_client_and_ensure_bucket() -> boto3.client:
+def get_s3_client_and_ensure_bucket(bucket_name: str) -> boto3.client:
     """
     Lazily create the S3 client and ensure the bucket exists.
     """
     s3_client = get_s3_boto3_client()
-    if settings.S3_BUCKET_NAME is None:
-        raise ValueError(
-            "S3_BUCKET_NAME (bucket to store files for ingestion) is not configured in settings."
-            " Please set it in the credentials.env file."
-        )
 
-    if not is_bucket_existing(s3_client=s3_client, bucket_name=settings.S3_BUCKET_NAME):
-        LOGGER.warning(f"Bucket {settings.S3_BUCKET_NAME} does not exist. Creating it.")
-        create_bucket(s3_client=s3_client, bucket_name=settings.S3_BUCKET_NAME)
+    if not is_bucket_existing(s3_client=s3_client, bucket_name=bucket_name):
+        LOGGER.warning(f"Bucket {bucket_name} does not exist. Creating it.")
+        create_bucket(s3_client=s3_client, bucket_name=bucket_name)
 
     return s3_client
 
@@ -48,7 +44,7 @@ def upload_file_to_s3(
     """Upload a file to an S3 bucket."""
     sanitized_key = sanitize_filename(file_name, remove_extension_dot=False)
     try:
-        s3_client = get_s3_client_and_ensure_bucket()
+        s3_client = get_s3_client_and_ensure_bucket(bucket_name=bucket_name)
         upload_file_to_bucket(
             s3_client=s3_client, bucket_name=bucket_name, key=sanitized_key, byte_content=byte_content
         )
@@ -64,7 +60,7 @@ def delete_file_from_s3(
     bucket_name: str = settings.S3_BUCKET_NAME,
 ) -> None:
     try:
-        s3_client = get_s3_client_and_ensure_bucket()
+        s3_client = get_s3_client_and_ensure_bucket(bucket_name=bucket_name)
         delete_file_from_bucket(s3_client=s3_client, bucket_name=bucket_name, key=key)
         LOGGER.info(f"Successfully deleted file from S3 with {key} key.")
     except Exception as e:
@@ -128,8 +124,9 @@ def generate_presigned_download_url(
 def generate_s3_upload_presigned_urls_service(
     organization_id: UUID,
     upload_file_requests: list[UploadFileRequest],
+    bucket_name: str = settings.S3_BUCKET_NAME,
 ) -> list[S3UploadURL]:
-    s3_client = get_s3_client_and_ensure_bucket()
+    s3_client = get_s3_client_and_ensure_bucket(bucket_name=bucket_name)
     upload_urls = []
     for upload_file_request in upload_file_requests:
         s3_filename = f"{organization_id}/{uuid4()}_{upload_file_request.filename}"
@@ -138,6 +135,7 @@ def generate_s3_upload_presigned_urls_service(
             s3_client=s3_client,
             key=key,
             content_type=upload_file_request.content_type,
+            bucket_name=bucket_name,
         )
         upload_urls.append(
             S3UploadURL(

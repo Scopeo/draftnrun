@@ -75,10 +75,6 @@ def collect_file_paths_from_temp_folder(temp_folder_path: str) -> List[Path]:
 
 
 def convert_file_to_base64(file_path: Path, max_size: int = MAX_FILE_SIZE_BYTES) -> Optional[str]:
-    """
-    Convert a file to base64 string.
-    Returns None if file exceeds size limit or if an error occurs.
-    """
     try:
         file_size = file_path.stat().st_size
         if file_size > max_size:
@@ -99,11 +95,6 @@ def convert_file_to_base64(file_path: Path, max_size: int = MAX_FILE_SIZE_BYTES)
 def upload_file_to_s3_and_get_url(
     file_path: Path, project_id: str, conversation_id: str, max_size: int = MAX_FILE_SIZE_BYTES
 ) -> Optional[tuple[str, str]]:
-    """
-    Upload a file to S3 and generate a presigned download URL.
-    Returns (presigned_url, s3_key) if successful, or None if file exceeds size
-    limit or if upload fails.
-    """
     try:
         file_size = file_path.stat().st_size
         if file_size > max_size:
@@ -118,10 +109,16 @@ def upload_file_to_s3_and_get_url(
         sanitized_filename = sanitize_filename(file_path.name, remove_extension_dot=False)
         s3_key = f"temp-files/{project_id}/{conversation_id}/{sanitized_filename}"
 
-        s3_client = get_s3_client_and_ensure_bucket()
+        playground_bucket_name = settings.PLAYGROUND_S3_BUCKET_NAME
+        if playground_bucket_name is None:
+            LOGGER.error(
+                "Playground bucket name is not configured in settings. Please set it in the credentials.env file."
+            )
+            return None
+        s3_client = get_s3_client_and_ensure_bucket(bucket_name=playground_bucket_name)
         upload_file_to_bucket(
             s3_client=s3_client,
-            bucket_name=settings.S3_BUCKET_NAME,
+            bucket_name=playground_bucket_name,
             key=s3_key,
             byte_content=file_bytes,
         )
@@ -130,6 +127,7 @@ def upload_file_to_s3_and_get_url(
             s3_client=s3_client,
             key=s3_key,
             expiration=3600,
+            bucket_name=playground_bucket_name,
         )
 
         return presigned_url, s3_key
