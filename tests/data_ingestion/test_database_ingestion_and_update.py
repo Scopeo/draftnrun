@@ -1,17 +1,18 @@
 import pytest
-import requests
 import jwt
 from uuid import UUID
 
+from fastapi.testclient import TestClient
+
 from ada_backend.database.setup_db import SessionLocal
+from ada_backend.main import app
 from ada_backend.scripts.get_supabase_token import get_user_jwt
 from ada_backend.schemas.ingestion_task_schema import IngestionTaskQueue
 from ada_backend.database import models as db
 from ada_backend.services.api_key_service import generate_scoped_api_key
 from settings import settings
 
-
-BASE_URL = "http://localhost:8000"
+client = TestClient(app)
 ORGANIZATION_ID = "37b7d67f-8f29-4fce-8085-19dea582f605"
 MOCK_DB_URL = (
     "snowflake://MOCK_USER:MOCK_PASSWORD@mock.region.aws/mock_db/mock_schema?warehouse=MOCK_WH&role=mock_role"
@@ -85,14 +86,12 @@ def create_ingestion_task(source_name, source_attributes, headers):
         status=db.TaskStatus.PENDING,
         source_attributes=source_attributes,
     )
-    response = requests.post(
-        f"{BASE_URL}/ingestion_task/{ORGANIZATION_ID}", headers=headers, json=payload.model_dump()
-    )
+    response = client.post(f"/ingestion_task/{ORGANIZATION_ID}", headers=headers, json=payload.model_dump())
     return response
 
 
 def get_ingestion_task_by_id(task_id, headers_jwt):
-    response = requests.get(f"{BASE_URL}/ingestion_task/{ORGANIZATION_ID}", headers=headers_jwt)
+    response = client.get(f"/ingestion_task/{ORGANIZATION_ID}", headers=headers_jwt)
     if response.status_code != 200:
         return None
     for task in response.json():
@@ -109,7 +108,7 @@ def verify_ingestion_task_data(task, expected_name, expected_type):
 
 def cleanup_ingestion_task(task_id, headers_map):
     if task_id:
-        requests.delete(f"{BASE_URL}/ingestion_task/{ORGANIZATION_ID}/{task_id}", headers=headers_map["jwt_valid"])
+        client.delete(f"/ingestion_task/{ORGANIZATION_ID}/{task_id}", headers=headers_map["jwt_valid"])
 
 
 # Test flexible authentication (JWT and/or API key) for database ingestion endpoints.
@@ -154,17 +153,15 @@ def test_update_source_auth(
         "database_table_name": f"test_table_{auth_type}",
         "attributes": SOURCE_ATTRIBUTES,
     }
-    create_source_response = requests.post(
-        f"{BASE_URL}/sources/{ORGANIZATION_ID}",
+    create_source_response = client.post(
+        f"/sources/{ORGANIZATION_ID}",
         headers={"X-Ingestion-API-Key": settings.INGESTION_API_KEY, "Content-Type": "application/json"},
         json=source_payload,
     )
     assert create_source_response.status_code == 201
     source_id = create_source_response.json()
 
-    update_response = requests.post(
-        f"{BASE_URL}/sources/{ORGANIZATION_ID}/{source_id}", headers=headers_map[auth_type]
-    )
+    update_response = client.post(f"/sources/{ORGANIZATION_ID}/{source_id}", headers=headers_map[auth_type])
 
     if should_succeed:
         assert update_response.status_code == 200
@@ -175,4 +172,4 @@ def test_update_source_auth(
         elif auth_type == "no_auth":
             assert update_response.status_code == 401
 
-    requests.delete(f"{BASE_URL}/sources/{ORGANIZATION_ID}/{source_id}", headers=headers_map["jwt_valid"])
+    client.delete(f"/sources/{ORGANIZATION_ID}/{source_id}", headers=headers_map["jwt_valid"])
