@@ -666,23 +666,23 @@ class CompletionService(LLMService):
                         }
                     )
                     openai_tools = [empty_function_tool.openai_format]
-                    (response, usage_completion_tokens, usage_prompt_tokens, usage_total_tokens) = (
-                        await self._default_function_call_without_structured_output(
-                            messages=messages,
-                            stream=stream,
-                            tools=openai_tools,
-                            tool_choice=tool_choice,
-                        )
+                (response, usage_completion_tokens, usage_prompt_tokens, usage_total_tokens) = (
+                    await self._default_function_call_without_structured_output(
+                        messages=messages,
+                        stream=stream,
+                        tools=openai_tools,
+                        tool_choice=tool_choice,
                     )
-                    span.set_attributes(
-                        {
-                            SpanAttributes.LLM_TOKEN_COUNT_COMPLETION: usage_completion_tokens,
-                            SpanAttributes.LLM_TOKEN_COUNT_PROMPT: usage_prompt_tokens,
-                            SpanAttributes.LLM_TOKEN_COUNT_TOTAL: usage_total_tokens,
-                            SpanAttributes.LLM_PROVIDER: self._provider,
-                        }
-                    )
-                    return response
+                )
+                span.set_attributes(
+                    {
+                        SpanAttributes.LLM_TOKEN_COUNT_COMPLETION: usage_completion_tokens,
+                        SpanAttributes.LLM_TOKEN_COUNT_PROMPT: usage_prompt_tokens,
+                        SpanAttributes.LLM_TOKEN_COUNT_TOTAL: usage_total_tokens,
+                        SpanAttributes.LLM_PROVIDER: self._provider,
+                    }
+                )
+                return response
 
             case "mistral":
                 import openai
