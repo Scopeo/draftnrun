@@ -1,4 +1,4 @@
-name: Update Production Dump Cache
+name: Update Production Dump Cache in Test
 
 on:
   workflow_dispatch:
