@@ -14,7 +14,6 @@ from ada_backend.database import models as db
 from ada_backend.repositories.component_repository import (
     get_component_by_id,
     get_component_parameter_definition_by_component_version,
-    get_port_definitions_for_component_version_ids,
     upsert_component_instance,
     upsert_basic_parameter,
     get_or_create_tool_description,
@@ -78,18 +77,6 @@ def create_or_update_component_instance(
         )
     }
 
-    # Get INPUT port names for this component version so we can gracefully ignore
-    # input-style parameters (parameters[kind='input']) when persisting config
-    # parameters for component instances (agents/tools flows).
-    input_port_names = {
-        port.name
-        for port in get_port_definitions_for_component_version_ids(
-            session,
-            [instance_data.component_version_id],
-        )
-        if port.port_type == db.PortType.INPUT
-    }
-
     for param_name, param_def in param_definitions.items():
         if param_def.type == db.ParameterType.LLM_API_KEY:
             organization_secrets = get_organization_secrets_from_project_id(session, project_id)
@@ -126,18 +113,6 @@ def create_or_update_component_instance(
     # Create/update parameters
     for param in instance_data.parameters:
         if param.name not in param_definitions:
-            # Allow parameters that correspond to INPUT ports to pass through.
-            # These are input-style parameters (parameters[kind='input']) that are
-            # stored as field expressions rather than BasicParameter rows.
-            if param.name in input_port_names:
-                LOGGER.info(
-                    "Skipping input-style parameter '%s' for component '%s' during instance parameter persistence; "
-                    "it will be handled via field expressions.",
-                    param.name,
-                    component_name,
-                )
-                continue
-
             raise ValueError(
                 f"Parameter '{param.name=}' not found in component definitions for component '{component_name}'"
             )
