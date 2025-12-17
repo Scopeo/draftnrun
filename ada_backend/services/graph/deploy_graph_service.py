@@ -29,11 +29,12 @@ from ada_backend.repositories.port_mapping_repository import insert_port_mapping
 from ada_backend.repositories.tag_repository import update_graph_runner_tag_fields
 from ada_backend.schemas.parameter_schema import PipelineParameterSchema
 from ada_backend.schemas.pipeline.base import ComponentInstanceSchema
-from ada_backend.schemas.pipeline.graph_schema import GraphDeployResponse,GraphSaveVersionResponse
+from ada_backend.schemas.pipeline.graph_schema import GraphDeployResponse, GraphSaveVersionResponse
 from ada_backend.services.errors import (
     GraphNotBoundToProjectError,
     GraphNotFound,
     GraphRunnerAlreadyInEnvironmentError,
+    GraphVersionSavingFromNonDraftError,
 )
 from ada_backend.services.field_expression_remap_service import remap_field_expressions_for_cloning
 from ada_backend.services.graph.delete_graph_service import delete_graph_runner_service
@@ -334,17 +335,15 @@ def save_graph_version_service(
         HTTPException: If validation fails
     """
     if not graph_runner_exists(session, graph_id=graph_runner_id):
-        raise HTTPException(status_code=404, detail="Graph runner not found")
+        raise GraphNotFound(graph_runner_id)
 
-    env_relationship = get_env_relationship_by_graph_runner_id(session=session, graph_runner_id=graph_runner_id)
-    if not env_relationship:
-        raise HTTPException(status_code=404, detail="Graph runner not bound to any project")
+    try:
+        env_relationship = get_env_relationship_by_graph_runner_id(session=session, graph_runner_id=graph_runner_id)
+    except ValueError:
+        raise GraphNotBoundToProjectError(graph_runner_id, bound_project_id=None)
 
     if env_relationship.environment != EnvType.DRAFT:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Can only save versions from DRAFT. Current environment: {env_relationship.environment}",
-        )
+        raise GraphVersionSavingFromNonDraftError(graph_runner_id, str(env_relationship.environment))
 
     versioned_graph_runner_id = clone_graph_runner(
         session=session,
