@@ -1,9 +1,10 @@
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import func, literal
 from uuid import UUID
 from typing import Optional, List
 
 import ada_backend.database.models as db
+from ada_backend.schemas.credits_schema import OrganizationLimitAndUsageResponse
 
 
 def _update_cost_fields(
@@ -228,9 +229,10 @@ def get_organization_total_credits(session: Session, organization_id: UUID, year
     return round(float(total) if total else 0.0, 2)
 
 
-def get_all_organization_limits_with_usage(session: Session, month: int, year: int) -> List[dict]:
-    """Get organization limits with aggregated usage in a single query using LEFT JOIN."""
-    # Subquery to calculate aggregated usage per organization
+def get_all_organization_limits_with_usage(
+    session: Session, month: int, year: int
+) -> List[OrganizationLimitAndUsageResponse]:
+
     usage_subquery = (
         session.query(
             db.Project.organization_id.label("org_id"),
@@ -243,55 +245,36 @@ def get_all_organization_limits_with_usage(session: Session, month: int, year: i
         .subquery()
     )
 
-    # Main query: LEFT JOIN organization limits with usage
-    results = (
+    limits_query = session.query(
+        db.OrganizationLimit.organization_id,
+        db.OrganizationLimit.id.label("limit_id"),
+        db.OrganizationLimit.limit,
+        usage_subquery.c.total_credits_used,
+    ).outerjoin(usage_subquery, db.OrganizationLimit.organization_id == usage_subquery.c.org_id)
+
+    usage_only_query = (
         session.query(
-            db.OrganizationLimit.organization_id,
-            db.OrganizationLimit.id.label("limit_id"),
-            db.OrganizationLimit.limit,
-            usage_subquery.c.total_credits_used.label("total_credits_used"),
+            usage_subquery.c.org_id.label("organization_id"),
+            literal(None).label("limit_id"),
+            literal(None).label("limit"),
+            usage_subquery.c.total_credits_used,
         )
-        .outerjoin(usage_subquery, db.OrganizationLimit.organization_id == usage_subquery.c.org_id)
-        .all()
+        .select_from(usage_subquery)
+        .outerjoin(db.OrganizationLimit, usage_subquery.c.org_id == db.OrganizationLimit.organization_id)
+        .filter(db.OrganizationLimit.id.is_(None))
     )
 
-    # Also get organizations with usage but no limit
-    orgs_with_limits = {row.organization_id for row in results}
+    limits_and_usage_query = limits_query.union(usage_only_query)
+    limit_usage_rows = limits_and_usage_query.all()
 
-    usage_without_limits = (
-        session.query(
-            db.Project.organization_id,
-            func.sum(db.Usage.credits_used).label("total_credits_used"),
-        )
-        .select_from(db.Usage)
-        .join(db.Project, db.Usage.project_id == db.Project.id)
-        .filter(db.Usage.year == year, db.Usage.month == month)
-        .group_by(db.Project.organization_id)
-        .all()
-    )
-
-    combined_results = [
-        {
-            "organization_id": row.organization_id,
-            "limit_id": row.limit_id,
-            "limit": row.limit,
-            "total_credits_used": (
+    return [
+        OrganizationLimitAndUsageResponse(
+            organization_id=row.organization_id,
+            limit_id=row.limit_id,
+            limit=row.limit,
+            total_credits_used=(
                 round(float(row.total_credits_used), 2) if row.total_credits_used is not None else None
             ),
-        }
-        for row in results
+        )
+        for row in limit_usage_rows
     ]
-
-    # Add organizations with usage but no limit
-    for org_id, usage in usage_without_limits:
-        if org_id not in orgs_with_limits:
-            combined_results.append(
-                {
-                    "organization_id": org_id,
-                    "limit_id": None,
-                    "limit": None,
-                    "total_credits_used": (round(float(usage), 2) if usage is not None else None),
-                }
-            )
-
-    return combined_results

@@ -1,6 +1,6 @@
 from sqlalchemy.orm import Session
 from uuid import UUID
-from typing import Optional, List
+from typing import Optional
 from ada_backend.schemas.credits_schema import (
     ComponentVersionCostResponse,
     OrganizationLimitResponse,
@@ -81,7 +81,5 @@ def delete_organization_limit_service(
 
 def get_all_organization_limits_and_usage_service(
     session: Session, month: int, year: int
-) -> List[OrganizationLimitAndUsageResponse]:
-    """Get combined organization limits and usage for a specific month and year using a single optimized query."""
-    combined_data = get_all_organization_limits_with_usage(session, month, year)
-    return [OrganizationLimitAndUsageResponse.model_validate(record, from_attributes=True) for record in combined_data]
+) -> list[OrganizationLimitAndUsageResponse]:
+    return get_all_organization_limits_with_usage(session, month, year)
