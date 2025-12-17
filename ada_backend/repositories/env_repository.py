@@ -64,17 +64,14 @@ def bind_graph_runner_to_project(
     project_id: UUID,
     env: Optional[EnvType],
 ) -> db.ProjectEnvironmentBinding:
-    # For None environment (archived versions), always create a new binding
-    # to allow multiple saved versions, similar to how previous production versions work
     if env is None:
         relationship = db.ProjectEnvironmentBinding(
-            graph_runner_id=graph_runner_id, project_id=project_id, environment=env
+            graph_runner_id=graph_runner_id, project_id=project_id, environment=None
         )
         session.add(relationship)
         session.commit()
         return relationship
-    
-    # For DRAFT and PRODUCTION: check if binding exists and replace it
+
     existing_binding = (
         session.query(db.ProjectEnvironmentBinding)
         .filter(
