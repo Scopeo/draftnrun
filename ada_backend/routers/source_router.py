@@ -6,7 +6,11 @@ from sqlalchemy.orm import Session
 
 from ada_backend.database.setup_db import get_db
 from ada_backend.schemas.auth_schema import SupabaseUser
-from ada_backend.schemas.source_schema import DataSourceSchema, DataSourceSchemaResponse
+from ada_backend.schemas.source_schema import (
+    DataSourceSchema,
+    DataSourceSchemaResponse,
+    ProjectUsingSourceSchema,
+)
 
 from ada_backend.routers.auth_router import (
     user_has_access_to_organization_dependency,
@@ -19,6 +23,7 @@ from ada_backend.services.source_service import (
     create_source_by_organization,
     delete_source_service,
     update_source_by_source_id,
+    check_source_id_usage_service,
 )
 
 router = APIRouter(prefix="/sources", tags=["Sources"])
@@ -145,6 +150,33 @@ def delete_organization_source(
     except Exception as e:
         LOGGER.exception(
             "Failed to delete source %s for organization %s",
+            source_id,
+            organization_id,
+        )
+        raise HTTPException(status_code=500, detail="Internal Server Error") from e
+
+
+@router.get(
+    "/{organization_id}/{source_id}/usage",
+    response_model=list[ProjectUsingSourceSchema],
+    summary="Get projects (workflows/agents) using a source",
+)
+def check_source_usage(
+    organization_id: UUID,
+    source_id: UUID,
+    user: Annotated[
+        SupabaseUser, Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.MEMBER.value))
+    ],
+    session: Session = Depends(get_db),
+) -> list[ProjectUsingSourceSchema]:
+
+    if not user.id:
+        raise HTTPException(status_code=400, detail="User ID not found")
+    try:
+        return check_source_id_usage_service(session, organization_id, source_id)
+    except Exception as e:
+        LOGGER.exception(
+            "Failed to get projects using source %s in organization %s",
             source_id,
             organization_id,
         )

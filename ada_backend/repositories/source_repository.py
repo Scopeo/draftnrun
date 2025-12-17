@@ -210,3 +210,50 @@ def get_source_attributes(
         attributes.source_db_url = org_secret.get_secret()
 
     return attributes
+
+
+def get_projects_using_source(
+    session: Session,
+    organization_id: UUID,
+    source_id: UUID,
+) -> list[db.Project]:
+
+    source_id_str = str(source_id)
+
+    projects = (
+        session.query(db.Project)
+        .join(
+            db.ProjectEnvironmentBinding,
+            db.ProjectEnvironmentBinding.project_id == db.Project.id,
+        )
+        .join(
+            db.GraphRunner,
+            db.ProjectEnvironmentBinding.graph_runner_id == db.GraphRunner.id,
+        )
+        .join(
+            db.GraphRunnerNode,
+            db.GraphRunnerNode.graph_runner_id == db.GraphRunner.id,
+        )
+        .join(
+            db.ComponentInstance,
+            db.GraphRunnerNode.node_id == db.ComponentInstance.id,
+        )
+        .join(
+            db.BasicParameter,
+            db.BasicParameter.component_instance_id == db.ComponentInstance.id,
+        )
+        .join(
+            db.ComponentParameterDefinition,
+            db.BasicParameter.parameter_definition_id == db.ComponentParameterDefinition.id,
+        )
+        .filter(
+            db.Project.organization_id == organization_id,
+            db.ComponentParameterDefinition.type == db.ParameterType.DATA_SOURCE,
+            db.BasicParameter.value.isnot(None),
+            db.BasicParameter.value.contains(source_id_str),
+        )
+        .distinct()
+        .all()
+    )
+
+    return projects

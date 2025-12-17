@@ -31,3 +31,10 @@ class DataSourceSchemaResponse(DataSourceUpdateSchema):
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
     last_ingestion_time: Optional[datetime] = None
+
+
+class ProjectUsingSourceSchema(BaseModel):
+    """Schema for a project that uses a source."""
+
+    id: UUID
+    name: str

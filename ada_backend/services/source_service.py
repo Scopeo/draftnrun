@@ -11,10 +11,12 @@ from ada_backend.repositories.source_repository import (
     get_sources,
     update_source_last_edited_time,
     get_source_attributes,
+    get_projects_using_source,
 )
 from ada_backend.schemas.source_schema import (
     DataSourceSchema,
     DataSourceSchemaResponse,
+    ProjectUsingSourceSchema,
 )
 from ada_backend.schemas.ingestion_task_schema import SourceAttributes
 from engine.qdrant_service import QdrantCollectionSchema, QdrantService
@@ -204,3 +206,13 @@ def update_source_by_source_id(
     )
     update_source_last_edited_time_by_organization(session, organization_id, source_id)
     return None
+
+
+def check_source_id_usage_service(
+    session: Session,
+    organization_id: UUID,
+    source_id: UUID,
+) -> list[ProjectUsingSourceSchema]:
+
+    projects = get_projects_using_source(session, organization_id, source_id)
+    return [ProjectUsingSourceSchema(id=project.id, name=project.name) for project in projects]
