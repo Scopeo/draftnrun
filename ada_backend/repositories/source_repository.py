@@ -4,7 +4,7 @@ import logging
 import uuid
 
 from sqlalchemy.orm import Session
-from sqlalchemy import func, and_
+from sqlalchemy import func, and_, exists, select
 
 from ada_backend.database import models as db
 
@@ -222,37 +222,27 @@ def get_projects_using_source(
 
     projects = (
         session.query(db.Project)
-        .join(
-            db.ProjectEnvironmentBinding,
-            db.ProjectEnvironmentBinding.project_id == db.Project.id,
-        )
-        .join(
-            db.GraphRunner,
-            db.ProjectEnvironmentBinding.graph_runner_id == db.GraphRunner.id,
-        )
-        .join(
-            db.GraphRunnerNode,
-            db.GraphRunnerNode.graph_runner_id == db.GraphRunner.id,
-        )
-        .join(
-            db.ComponentInstance,
-            db.GraphRunnerNode.node_id == db.ComponentInstance.id,
-        )
-        .join(
-            db.BasicParameter,
-            db.BasicParameter.component_instance_id == db.ComponentInstance.id,
-        )
-        .join(
-            db.ComponentParameterDefinition,
-            db.BasicParameter.parameter_definition_id == db.ComponentParameterDefinition.id,
-        )
+        .filter(db.Project.organization_id == organization_id)
         .filter(
-            db.Project.organization_id == organization_id,
-            db.ComponentParameterDefinition.type == db.ParameterType.DATA_SOURCE,
-            db.BasicParameter.value.isnot(None),
-            db.BasicParameter.value.contains(source_id_str),
+            exists(
+                select(1)
+                .select_from(db.ProjectEnvironmentBinding)
+                .join(db.GraphRunner, db.ProjectEnvironmentBinding.graph_runner_id == db.GraphRunner.id)
+                .join(db.GraphRunnerNode, db.GraphRunnerNode.graph_runner_id == db.GraphRunner.id)
+                .join(
+                    db.ComponentInstance, db.GraphRunnerNode.node_id == db.ComponentInstance.id
+                )
+                .join(db.BasicParameter, db.BasicParameter.component_instance_id == db.ComponentInstance.id)
+                .join(
+                    db.ComponentParameterDefinition,
+                    db.BasicParameter.parameter_definition_id == db.ComponentParameterDefinition.id,
+                )
+                .where(db.ProjectEnvironmentBinding.project_id == db.Project.id)
+                .where(db.ComponentParameterDefinition.type == db.ParameterType.DATA_SOURCE)
+                .where(db.BasicParameter.value.isnot(None))
+                .where(db.BasicParameter.value.contains(f'"{source_id_str}"'))
+            )
         )
-        .distinct()
         .all()
     )
 
