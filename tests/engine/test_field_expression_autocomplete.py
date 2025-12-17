@@ -12,7 +12,7 @@ def test_get_cursor_context_instance_phase_with_partial_prefix():
     ctx = get_cursor_context(text, len(text))
     assert ctx is not None
     assert ctx.phase == "instance"
-    assert ctx.instance_token == instance_prefix
+    assert ctx.instance_prefix == instance_prefix
 
 
 def test_get_cursor_context_port_phase():
@@ -21,8 +21,8 @@ def test_get_cursor_context_port_phase():
     ctx = get_cursor_context(text, cursor_offset)
     assert ctx is not None
     assert ctx.phase == "port"
-    assert ctx.instance_token == "node-1"
-    assert ctx.port_token == "out"
+    assert ctx.instance_prefix == "node-1"
+    assert ctx.port_prefix == "out"
 
 
 def test_get_cursor_context_key_phase():
@@ -30,8 +30,8 @@ def test_get_cursor_context_key_phase():
     ctx = get_cursor_context(text, len(text))
     assert ctx is not None
     assert ctx.phase == "key"
-    assert ctx.port_token == "port"
-    assert ctx.key_token == "doc"
+    assert ctx.port_prefix == "port"
+    assert ctx.key_prefix == "doc"
 
 
 def test_get_cursor_context_ignores_closed_reference():

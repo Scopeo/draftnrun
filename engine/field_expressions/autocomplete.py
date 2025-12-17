@@ -7,9 +7,9 @@ from typing import Literal
 @dataclass(frozen=True)
 class FieldExpressionCursorContext:
     phase: Literal["instance", "port", "key"]
-    instance_token: str
-    port_token: str | None = None
-    key_token: str | None = None
+    instance_prefix: str
+    port_prefix: str | None = None
+    key_prefix: str | None = None
 
 
 def get_cursor_context(expression_text: str, cursor_offset: int) -> FieldExpressionCursorContext | None:
@@ -31,31 +31,31 @@ def get_cursor_context(expression_text: str, cursor_offset: int) -> FieldExpress
 
     # Empty or whitespace: still suggest instances.
     if stripped == "":
-        return FieldExpressionCursorContext(phase="instance", instance_token="")
+        return FieldExpressionCursorContext(phase="instance", instance_prefix="")
 
     dot_idx = stripped.find(".")
     colon_idx = stripped.find("::") if dot_idx != -1 else -1
 
     if dot_idx == -1:
-        return FieldExpressionCursorContext(phase="instance", instance_token=_clean_token(stripped))
+        return FieldExpressionCursorContext(phase="instance", instance_prefix=_clean_token(stripped))
 
-    instance_token = _clean_token(stripped[:dot_idx])
+    instance_prefix = _clean_token(stripped[:dot_idx])
     port_slice = stripped[dot_idx + 1 :]
 
     if colon_idx == -1 or colon_idx < dot_idx:
         return FieldExpressionCursorContext(
             phase="port",
-            instance_token=instance_token,
-            port_token=_clean_token(port_slice),
+            instance_prefix=instance_prefix,
+            port_prefix=_clean_token(port_slice),
         )
 
-    port_token = _clean_token(stripped[dot_idx + 1 : colon_idx])
-    key_token = _clean_token(stripped[colon_idx + 2 :])
+    port_prefix = _clean_token(stripped[dot_idx + 1 : colon_idx])
+    key_prefix = _clean_token(stripped[colon_idx + 2 :])
     return FieldExpressionCursorContext(
         phase="key",
-        instance_token=instance_token,
-        port_token=port_token,
-        key_token=key_token,
+        instance_prefix=instance_prefix,
+        port_prefix=port_prefix,
+        key_prefix=key_prefix,
     )
 
 

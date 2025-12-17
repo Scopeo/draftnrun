@@ -30,8 +30,8 @@ def autocomplete_field_expression(
 ) -> FieldExpressionAutocompleteResponse:
     validate_graph_runner_belongs_to_project(session, graph_runner_id, project_id)
 
-    context = get_cursor_context(request.expression_text or "", request.cursor_offset)
-    if not context:
+    cursor_context = get_cursor_context(request.expression_text or "", request.cursor_offset)
+    if not cursor_context:
         return FieldExpressionAutocompleteResponse(suggestions=[])
 
     instances = get_component_instances_for_graph_runner(session, graph_runner_id)
@@ -40,18 +40,19 @@ def autocomplete_field_expression(
 
     suggestions: list[FieldExpressionSuggestion]
 
-    if context.phase == "instance":
-        suggestions = _build_instance_suggestions(instances, context.instance_token)
-    elif context.phase == "port":
-        suggestions = _build_port_suggestions(session, instances, context)
+    if cursor_context.phase == "instance":
+        suggestions = _build_instance_suggestions(instances, cursor_context.instance_prefix)
+    elif cursor_context.phase == "port":
+        suggestions = _build_port_suggestions(session, instances, cursor_context)
     else:
-        # TODO: Offer structured key suggestions once metadata is available.
+        # TODO: Offer structured key suggestions once we expose metadata about port output structure
+        # (e.g. known dict keys) from the engine.
         suggestions = []
 
     # TODO: Restrict suggestions to upstream instances once graph ordering is exposed.
     LOGGER.debug(
         "Field expression autocomplete: phase=%s count=%d",
-        context.phase,
+        cursor_context.phase,
         len(suggestions),
     )
     return FieldExpressionAutocompleteResponse(suggestions=suggestions)
@@ -92,9 +93,9 @@ def _build_instance_suggestions(
 def _build_port_suggestions(
     session: Session,
     instances: Iterable[db.ComponentInstance],
-    context: FieldExpressionCursorContext,
+    cursor_context: FieldExpressionCursorContext,
 ) -> list[FieldExpressionSuggestion]:
-    typed_instance = (context.instance_token or "").strip()
+    typed_instance = (cursor_context.instance_prefix or "").strip()
     if not typed_instance:
         return []
     try:
@@ -109,13 +110,13 @@ def _build_port_suggestions(
     instance = instance_map[instance_uuid]
     ports = get_output_ports_for_component_version(session, instance.component_version_id)
 
-    prefix = (context.port_token or "").lower()
+    prefix = (cursor_context.port_prefix or "").lower()
     suggestions: list[FieldExpressionSuggestion] = []
     for port in ports:
         port_name = port.name or ""
         if prefix and not port_name.lower().startswith(prefix):
             continue
-        insert_text = _missing_suffix(port_name, context.port_token or "")
+        insert_text = _missing_suffix(port_name, cursor_context.port_prefix or "")
         suggestions.append(
             FieldExpressionSuggestion(
                 label=f"{instance.name or instance.id}.{port_name}",
