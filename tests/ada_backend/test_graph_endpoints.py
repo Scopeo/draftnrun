@@ -361,3 +361,64 @@ def test_save_version_from_draft():
     assert result2["tag_version"] == "0.0.2"
 
     client.delete(f"/projects/{project_id}", headers=HEADERS_JWT)
+
+
+def test_save_version_graph_runner_not_found():
+    project_id = str(uuid4())
+    project_payload = {
+        "project_id": project_id,
+        "project_name": f"save_version_error_test_{project_id}",
+        "description": "Test project for save version errors",
+    }
+    project_response = client.post(f"/projects/{ORGANIZATION_ID}", headers=HEADERS_JWT, json=project_payload)
+    assert project_response.status_code == 200
+
+    non_existent_graph_runner_id = str(uuid4())
+    save_version_endpoint = f"/projects/{project_id}/graph/{non_existent_graph_runner_id}/save-version"
+    response = client.post(save_version_endpoint, headers=HEADERS_JWT)
+
+    assert response.status_code == 404
+    assert "not found" in response.json()["detail"].lower()
+
+    client.delete(f"/projects/{project_id}", headers=HEADERS_JWT)
+
+
+def test_save_version_from_production():
+    project_id = str(uuid4())
+    project_payload = {
+        "project_id": project_id,
+        "project_name": f"save_version_prod_test_{project_id}",
+        "description": "Test project for save version from production",
+    }
+    project_response = client.post(f"/projects/{ORGANIZATION_ID}", headers=HEADERS_JWT, json=project_payload)
+    assert project_response.status_code == 200
+
+    project_details = client.get(f"/projects/{project_id}", headers=HEADERS_JWT).json()
+    draft_graph_runner_id = None
+    for gr in project_details["graph_runners"]:
+        if gr["env"] == "draft":
+            draft_graph_runner_id = gr["graph_runner_id"]
+            break
+    assert draft_graph_runner_id is not None
+
+    deploy_endpoint = f"/projects/{project_id}/graph/{draft_graph_runner_id}/deploy"
+    deploy_response = client.post(deploy_endpoint, headers=HEADERS_JWT)
+    assert deploy_response.status_code == 200
+
+    project_details_after_deploy = client.get(f"/projects/{project_id}", headers=HEADERS_JWT).json()
+    production_graph_runner_id = None
+    for gr in project_details_after_deploy["graph_runners"]:
+        if gr["env"] == "production":
+            production_graph_runner_id = gr["graph_runner_id"]
+            break
+    assert production_graph_runner_id is not None
+
+    save_version_endpoint = f"/projects/{project_id}/graph/{production_graph_runner_id}/save-version"
+    response = client.post(save_version_endpoint, headers=HEADERS_JWT)
+
+    assert response.status_code == 400
+    detail = response.json()["detail"]
+    assert "can only save versions from draft" in detail.lower()
+    assert "production" in detail.lower()
+
+    client.delete(f"/projects/{project_id}", headers=HEADERS_JWT)

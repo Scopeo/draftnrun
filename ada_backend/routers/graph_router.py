@@ -26,6 +26,7 @@ from ada_backend.services.errors import (
     GraphNotBoundToProjectError,
     GraphNotFound,
     GraphRunnerAlreadyInEnvironmentError,
+    GraphVersionSavingFromNonDraftError,
     MissingDataSourceError,
     ProjectNotFound,
 )
@@ -307,9 +308,21 @@ def save_version(
             graph_runner_id=graph_runner_id,
             project_id=project_id,
         )
-    except HTTPException:
-        # Re-raise HTTPExceptions as-is (they already have proper status codes)
-        raise
+    except GraphNotFound as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    except GraphNotBoundToProjectError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    except GraphVersionSavingFromNonDraftError as e:
+        LOGGER.warning(
+            "Attempted to save version from non-draft graph runner for "
+            f"project {project_id} runner {graph_runner_id}: {str(e)}"
+        )
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except ConnectionError as e:
+        LOGGER.error(
+            f"Database connection failed for project {project_id} runner {graph_runner_id}: {str(e)}", exc_info=True
+        )
+        raise HTTPException(status_code=503, detail=f"Database connection error: {str(e)}") from e
     except ValueError as e:
         LOGGER.error(
             f"Failed to save version for project {project_id} runner {graph_runner_id}: {str(e)}", exc_info=True
