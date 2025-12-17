@@ -1,4 +1,5 @@
 import logging
+from collections import defaultdict, deque
 from typing import Iterable
 from uuid import UUID
 
@@ -9,6 +10,7 @@ from ada_backend.repositories.component_repository import (
     get_component_instances_for_graph_runner,
     get_output_ports_for_component_version,
 )
+from ada_backend.repositories.edge_repository import get_edges
 from ada_backend.schemas.pipeline.field_expression_schema import (
     FieldExpressionAutocompleteRequest,
     FieldExpressionAutocompleteResponse,
@@ -38,18 +40,25 @@ def autocomplete_field_expression(
     if not instances:
         return FieldExpressionAutocompleteResponse(suggestions=[])
 
+    upstream_instance_ids = _get_upstream_instance_ids(session, graph_runner_id, request.target_instance_id)
+    if not upstream_instance_ids:
+        return FieldExpressionAutocompleteResponse(suggestions=[])
+
+    eligible_instances = [instance for instance in instances if instance.id in upstream_instance_ids]
+    if not eligible_instances:
+        return FieldExpressionAutocompleteResponse(suggestions=[])
+
     suggestions: list[FieldExpressionSuggestion]
 
     if cursor_context.phase == FieldExpressionSuggestionKind.INSTANCE:
-        suggestions = _build_instance_suggestions(instances, cursor_context.instance_prefix)
+        suggestions = _build_instance_suggestions(eligible_instances, cursor_context.instance_prefix)
     elif cursor_context.phase == FieldExpressionSuggestionKind.PORT:
-        suggestions = _build_port_suggestions(session, instances, cursor_context)
+        suggestions = _build_port_suggestions(session, eligible_instances, cursor_context)
     else:
         # TODO: Offer structured key suggestions once we expose metadata about port output structure
         # (e.g. known dict keys) from the engine.
         suggestions = []
 
-    # TODO: Restrict suggestions to upstream instances once graph ordering is exposed.
     LOGGER.debug(
         "Field expression autocomplete: phase=%s count=%d",
         cursor_context.phase.value,
@@ -140,3 +149,25 @@ def _missing_suffix(full_value: str, typed_prefix: str) -> str:
     if prefix_len >= len(full_value):
         return ""
     return full_value[prefix_len:]
+
+
+def _get_upstream_instance_ids(session: Session, graph_runner_id: UUID, target_instance_id: UUID) -> set[UUID]:
+    """Return all component instance ids that have a path to the target instance."""
+    edges = get_edges(session, graph_runner_id)
+    predecessors: dict[UUID, set[UUID]] = defaultdict(set)
+    for edge in edges:
+        if edge.source_node_id and edge.target_node_id:
+            predecessors[edge.target_node_id].add(edge.source_node_id)
+
+    visited: set[UUID] = set()
+    queue: deque[UUID] = deque(predecessors.get(target_instance_id, []))
+
+    while queue:
+        node_id = queue.popleft()
+        if node_id in visited:
+            continue
+        visited.add(node_id)
+        for parent in predecessors.get(node_id, []):
+            queue.append(parent)
+
+    return visited
