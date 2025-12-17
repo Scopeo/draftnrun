@@ -147,3 +147,64 @@ def test_field_expression_autocomplete_instance_and_port_suggestions():
         assert empty_response.json()["suggestions"] == []
     finally:
         client.delete(f"/projects/{project_id}", headers=HEADERS_JWT)
+
+
+def test_field_expression_autocomplete_filters_out_downstream_instances_and_ports():
+    project_id, endpoint = _create_project_and_get_endpoint("autocomplete_upstream")
+    upstream_instance_id = str(uuid4())
+    target_instance_id = str(uuid4())
+    downstream_instance_id = str(uuid4())
+
+    edges = [
+        {"id": str(uuid4()), "origin": upstream_instance_id, "destination": target_instance_id, "order": 0},
+        {"id": str(uuid4()), "origin": target_instance_id, "destination": downstream_instance_id, "order": 1},
+    ]
+    payload = {
+        "component_instances": [
+            _create_component_instance(upstream_instance_id, "Upstream Agent", True),
+            _create_component_instance(target_instance_id, "Target Agent", False),
+            _create_component_instance(downstream_instance_id, "Downstream Agent", False),
+        ],
+        "relationships": [],
+        "edges": edges,
+    }
+    response = client.put(endpoint, headers=HEADERS_JWT, json=payload)
+    assert response.status_code == 200
+
+    try:
+        # Only upstream instance should surface in suggestions.
+        request_payload = {
+            "target_instance_id": target_instance_id,
+            "expression_text": "@{{",
+            "cursor_offset": len("@{{"),
+        }
+        autocomplete_response = client.post(
+            f"{endpoint}/field-expressions/autocomplete",
+            headers=HEADERS_JWT,
+            json=request_payload,
+        )
+        assert autocomplete_response.status_code == 200
+        suggestions = autocomplete_response.json()["suggestions"]
+        assert any(s["detail"]["instance_id"] == upstream_instance_id for s in suggestions)
+        assert all(
+            s["detail"]["instance_id"] != downstream_instance_id
+            for s in suggestions
+            if s["detail"]["instance_id"] is not None
+        )
+
+        # Attempting to autocomplete ports for a downstream node should yield no suggestions.
+        downstream_port_expression = "@{{" + downstream_instance_id + ".ou"
+        port_request = {
+            "target_instance_id": target_instance_id,
+            "expression_text": downstream_port_expression,
+            "cursor_offset": len(downstream_port_expression),
+        }
+        port_response = client.post(
+            f"{endpoint}/field-expressions/autocomplete",
+            headers=HEADERS_JWT,
+            json=port_request,
+        )
+        assert port_response.status_code == 200
+        assert port_response.json()["suggestions"] == []
+    finally:
+        client.delete(f"/projects/{project_id}", headers=HEADERS_JWT)
