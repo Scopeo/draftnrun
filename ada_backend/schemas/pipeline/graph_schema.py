@@ -78,6 +78,17 @@ class GraphDeployResponse(BaseModel):
     previous_prod_graph_runner_id: Optional[UUID] = None
 
 
+class GraphSaveVersionResponse(BaseModel):
+    """
+    Response returned after saving a version from a draft graph runner.
+    """
+
+    project_id: UUID
+    saved_graph_runner_id: UUID
+    tag_version: str
+    draft_graph_runner_id: UUID
+
+
 class ModificationHistoryItem(BaseModel):
     """Represents a single modification history entry"""
 

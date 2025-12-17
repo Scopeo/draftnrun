@@ -29,7 +29,7 @@ from ada_backend.repositories.port_mapping_repository import insert_port_mapping
 from ada_backend.repositories.tag_repository import update_graph_runner_tag_fields
 from ada_backend.schemas.parameter_schema import PipelineParameterSchema
 from ada_backend.schemas.pipeline.base import ComponentInstanceSchema
-from ada_backend.schemas.pipeline.graph_schema import GraphDeployResponse
+from ada_backend.schemas.pipeline.graph_schema import GraphDeployResponse,GraphSaveVersionResponse
 from ada_backend.services.errors import (
     GraphNotBoundToProjectError,
     GraphNotFound,
@@ -308,29 +308,72 @@ def bind_graph_to_env_service(
     LOGGER.info(f"Bound graph runner {graph_runner_id} to {env.value}")
 
 
-def load_version_as_draft_service(
+def save_version_service(
     session: Session,
-    project_id: UUID,
     graph_runner_id: UUID,
-) -> None:
-    previous_draft_graph = _bind_graph_to_env_helper(
-        session=session,
-        graph_runner_id=graph_runner_id,
-        project_id=project_id,
-        env=EnvType.DRAFT,
-    )
+    project_id: UUID,
+) -> GraphSaveVersionResponse:
+    """
+    Create a versioned snapshot from a draft graph runner.
 
-    new_draft_graph_runner_id = clone_graph_runner(
+    This function:
+    1. Validates the graph runner exists and is a DRAFT
+    2. Clones the graph runner
+    3. Computes and assigns a new version tag
+    4. Binds the cloned graph runner to the project with VERSIONED environment
+
+    Args:
+        session: Database session
+        graph_runner_id: ID of the draft graph runner to save
+        project_id: ID of the project
+
+    Returns:
+        GraphSaveVersionResponse with the saved version details
+
+    Raises:
+        HTTPException: If validation fails
+    """
+    if not graph_runner_exists(session, graph_id=graph_runner_id):
+        raise HTTPException(status_code=404, detail="Graph runner not found")
+
+    env_relationship = get_env_relationship_by_graph_runner_id(session=session, graph_runner_id=graph_runner_id)
+    if not env_relationship:
+        raise HTTPException(status_code=404, detail="Graph runner not bound to any project")
+
+    # Only allow saving from DRAFT versions
+    if env_relationship.environment != EnvType.DRAFT:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Can only save versions from DRAFT. Current environment: {env_relationship.environment}"
+        )
+
+    # Clone the draft graph runner
+    versioned_graph_runner_id = clone_graph_runner(
         session=session,
         graph_runner_id_to_copy=graph_runner_id,
         project_id=project_id,
     )
 
-    bind_graph_runner_to_project(
-        session, graph_runner_id=new_draft_graph_runner_id, project_id=project_id, env=EnvType.DRAFT
-    )
-    LOGGER.info(f"Created new Draft from graph runner {graph_runner_id}")
+    LOGGER.info(f"Cloned graph runner {graph_runner_id} to {versioned_graph_runner_id}")
 
-    if previous_draft_graph is not None:
-        delete_graph_runner_service(session, previous_draft_graph.id)
-        LOGGER.info(f"Deleted previous draft graph {previous_draft_graph.id}")
+    # Compute and assign version tag
+    new_tag = compute_next_tag_version(session, project_id)
+    update_graph_runner_tag_fields(session, versioned_graph_runner_id, tag_version=new_tag)
+    LOGGER.info(f"Assigned version tag {new_tag} to versioned graph runner {versioned_graph_runner_id}")
+
+    # Bind the cloned graph runner to project with None environment (archived version)
+    # Using None follows the same pattern as previous production versions
+    bind_graph_runner_to_project(
+        session,
+        graph_runner_id=versioned_graph_runner_id,
+        project_id=project_id,
+        env=None,
+    )
+    LOGGER.info(f"Bound versioned graph runner {versioned_graph_runner_id} to project {project_id} with None environment (archived)")
+
+    return GraphSaveVersionResponse(
+        project_id=project_id,
+        saved_graph_runner_id=versioned_graph_runner_id,
+        tag_version=new_tag,
+        draft_graph_runner_id=graph_runner_id,
+    )
