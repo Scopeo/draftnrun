@@ -33,8 +33,7 @@ from ada_backend.services.graph.delete_graph_service import delete_graph_runner_
 from ada_backend.services.graph.deploy_graph_service import (
     bind_graph_to_env_service,
     deploy_graph_service,
-    load_version_as_draft_service,
-    save_version_service,
+    save_graph_version_service
 )
 from ada_backend.services.graph.get_graph_modification_history_service import (
     get_graph_modification_history_service,
@@ -303,7 +302,7 @@ def save_version(
         raise HTTPException(status_code=404, detail="Project not found")
 
     try:
-        return save_version_service(
+        return save_graph_version_service(
             session=session,
             graph_runner_id=graph_runner_id,
             project_id=project_id,
