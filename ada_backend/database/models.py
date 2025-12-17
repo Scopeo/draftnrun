@@ -116,7 +116,6 @@ class NodeType(StrEnum):
 class EnvType(StrEnum):
     DRAFT = "draft"
     PRODUCTION = "production"
-    VERSIONED = "versioned"
 
 
 class CallType(StrEnum):
