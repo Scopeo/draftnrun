@@ -26,11 +26,11 @@ from ada_backend.services.source_service import (
     check_source_id_usage_service,
 )
 
-router = APIRouter(prefix="/sources", tags=["Sources"])
+router = APIRouter(tags=["Sources"])
 LOGGER = logging.getLogger(__name__)
 
 
-@router.get("/{organization_id}", response_model=List[DataSourceSchemaResponse])
+@router.get("/sources/{organization_id}", response_model=List[DataSourceSchemaResponse])
 def get_organization_sources(
     organization_id: UUID,
     user: Annotated[
@@ -50,7 +50,7 @@ def get_organization_sources(
         raise HTTPException(status_code=500, detail="Internal Server Error") from e
 
 
-@router.post("/{organization_id}", status_code=status.HTTP_201_CREATED)
+@router.post("/sources/{organization_id}", status_code=status.HTTP_201_CREATED)
 def create_organization_source(
     verified_ingestion_api_key: Annotated[None, Depends(verify_ingestion_api_key_dependency)],
     organization_id: UUID,
@@ -69,7 +69,7 @@ def create_organization_source(
 
 
 @router.post(
-    "/{organization_id}/{source_id}",
+    "/sources/{organization_id}/{source_id}",
     status_code=status.HTTP_200_OK,
     summary="Update source in organization, authentication via user token or API key",
 )
@@ -101,7 +101,7 @@ def update_organization_source(
 
 
 @router.post(
-    "/{organization_id}/{source_id}/api-key",
+    "/sources/{organization_id}/{source_id}/api-key",
     status_code=status.HTTP_200_OK,
     summary="Update source in organization, authentication via user token or API key",
     deprecated=True,
@@ -133,7 +133,7 @@ def update_organization_source_api_key(
         raise HTTPException(status_code=500, detail="Internal Server Error") from e
 
 
-@router.delete("/{organization_id}/{source_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/sources/{organization_id}/{source_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_organization_source(
     organization_id: UUID,
     source_id: UUID,
@@ -157,7 +157,7 @@ def delete_organization_source(
 
 
 @router.get(
-    "/{organization_id}/{source_id}/usage",
+    "/organizations/{organization_id}/sources/{source_id}/usage",
     response_model=list[ProjectUsingSourceSchema],
     summary="Get projects (workflows/agents) using a source",
 )
