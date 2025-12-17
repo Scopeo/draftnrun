@@ -148,10 +148,11 @@ class SQLSpanExporter(SpanExporter):
 
             provider = span.attributes.get(SpanAttributes.LLM_PROVIDER)
             if provider is None or provider not in org_llm_providers:
+                llm_cost_aliased = aliased(LLMCost, flat=True)
                 cost_info = self.session.execute(
                     select(Cost.credits_per_input_token, Cost.credits_per_output_token)
-                    .join(LLMCost, LLMCost.id == Cost.id)
-                    .where(LLMCost.llm_model_id == model_id)
+                    .join(llm_cost_aliased, llm_cost_aliased.id == Cost.id)
+                    .where(llm_cost_aliased.llm_model_id == model_id)
                 ).first()
 
                 if cost_info and (cost_info.credits_per_input_token or cost_info.credits_per_output_token):
