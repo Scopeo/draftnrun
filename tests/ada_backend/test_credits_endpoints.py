@@ -14,7 +14,6 @@ from ada_backend.repositories.credits_repository import (
     create_component_version_cost,
     delete_organization_limit,
     delete_component_version_cost,
-    get_all_organization_limits,
 )
 from settings import settings
 
@@ -78,22 +77,25 @@ def create_organization_limit_in_db(session, organization_id: UUID, limit: float
     return create_organization_limit(session, organization_id, limit)
 
 
-def test_get_all_organization_limits(db_session):
-    """Test getting all organization limits."""
+def test_get_all_organization_limits_and_usage(db_session):
+    """Test getting all organization limits with usage."""
     org_id_1 = UUID(ORGANIZATION_ID)
     org_id_2 = uuid4()
 
-    # Clean up existing limits using repository function
-    existing_limits = get_all_organization_limits(db_session)
+    # Clean up existing limits using direct query
+    existing_limits = (
+        db_session.query(db.OrganizationLimit)
+        .filter(db.OrganizationLimit.organization_id.in_([org_id_1, org_id_2]))
+        .all()
+    )
     for limit in existing_limits:
-        if limit.organization_id in [org_id_1, org_id_2]:
-            delete_organization_limit(db_session, limit.id, limit.organization_id)
+        delete_organization_limit(db_session, limit.id, limit.organization_id)
 
     limit_1 = create_organization_limit_in_db(db_session, org_id_1, 1000.0)
     limit_2 = create_organization_limit_in_db(db_session, org_id_2, 2000.0)
 
     response = client.get(
-        "/organizations-limits",
+        "/organizations-limits-and-usage?month=12&year=2025",
         headers=HEADERS_JWT,
     )
 
@@ -102,12 +104,10 @@ def test_get_all_organization_limits(db_session):
     assert isinstance(data, list)
     assert len(data) >= 2
 
-    for limit in data:
-        assert "id" in limit
-        assert "organization_id" in limit
-        assert "limit" in limit
-        assert "created_at" in limit
-        assert "updated_at" in limit
+    for item in data:
+        assert "organization_id" in item
+        assert "limit" in item
+        assert "total_credits_used" in item
 
     delete_organization_limit(db_session, limit_1.id, limit_1.organization_id)
     delete_organization_limit(db_session, limit_2.id, limit_2.organization_id)
@@ -120,10 +120,11 @@ def test_create_organization_limit_success(mock_is_super_admin, db_session):
     org_id = UUID(ORGANIZATION_ID)
 
     # Clean up existing limit if it exists
-    existing_limits = get_all_organization_limits(db_session)
+    existing_limits = (
+        db_session.query(db.OrganizationLimit).filter(db.OrganizationLimit.organization_id == org_id).all()
+    )
     for limit in existing_limits:
-        if limit.organization_id == org_id:
-            delete_organization_limit(db_session, limit.id, limit.organization_id)
+        delete_organization_limit(db_session, limit.id, limit.organization_id)
 
     payload = {
         "limit": 5000.0,
@@ -158,10 +159,11 @@ def test_update_organization_limit_success(mock_is_super_admin, db_session):
     org_id = UUID(ORGANIZATION_ID)
 
     # Clean up existing limit if it exists
-    existing_limits = get_all_organization_limits(db_session)
+    existing_limits = (
+        db_session.query(db.OrganizationLimit).filter(db.OrganizationLimit.organization_id == org_id).all()
+    )
     for limit in existing_limits:
-        if limit.organization_id == org_id:
-            delete_organization_limit(db_session, limit.id, limit.organization_id)
+        delete_organization_limit(db_session, limit.id, limit.organization_id)
 
     org_limit = create_organization_limit_in_db(db_session, org_id, 3000.0)
     limit_id = org_limit.id
@@ -203,10 +205,11 @@ def test_delete_organization_limit_success(mock_is_super_admin, db_session):
     mock_is_super_admin.return_value = True
     org_id = UUID(ORGANIZATION_ID)
 
-    existing_limits = get_all_organization_limits(db_session)
+    existing_limits = (
+        db_session.query(db.OrganizationLimit).filter(db.OrganizationLimit.organization_id == org_id).all()
+    )
     for limit in existing_limits:
-        if limit.organization_id == org_id:
-            delete_organization_limit(db_session, limit.id, limit.organization_id)
+        delete_organization_limit(db_session, limit.id, limit.organization_id)
 
     org_limit = create_organization_limit_in_db(db_session, org_id, 4000.0)
     limit_id = org_limit.id
@@ -219,7 +222,7 @@ def test_delete_organization_limit_success(mock_is_super_admin, db_session):
     assert response.status_code == 204
 
     # Verify deletion - query should return empty list or not contain this limit
-    all_limits = get_all_organization_limits(db_session)
+    all_limits = db_session.query(db.OrganizationLimit).all()
     limit_ids = [limit.id for limit in all_limits]
     assert limit_id not in limit_ids
 
@@ -231,10 +234,11 @@ def test_create_organization_limit_duplicate(mock_is_super_admin, db_session):
     org_id = UUID(ORGANIZATION_ID)
 
     # Clean up any existing limit first
-    existing_limits = get_all_organization_limits(db_session)
+    existing_limits = (
+        db_session.query(db.OrganizationLimit).filter(db.OrganizationLimit.organization_id == org_id).all()
+    )
     for limit in existing_limits:
-        if limit.organization_id == org_id:
-            delete_organization_limit(db_session, limit.id, limit.organization_id)
+        delete_organization_limit(db_session, limit.id, limit.organization_id)
 
     org_limit = create_organization_limit_in_db(db_session, org_id, 5000.0)
 
@@ -261,10 +265,11 @@ def test_create_organization_limit_missing_fields(mock_is_super_admin, db_sessio
     org_id = UUID(ORGANIZATION_ID)
 
     # Clean up existing limit if it exists
-    existing_limits = get_all_organization_limits(db_session)
+    existing_limits = (
+        db_session.query(db.OrganizationLimit).filter(db.OrganizationLimit.organization_id == org_id).all()
+    )
     for limit in existing_limits:
-        if limit.organization_id == org_id:
-            delete_organization_limit(db_session, limit.id, limit.organization_id)
+        delete_organization_limit(db_session, limit.id, limit.organization_id)
 
     payload = {}
 
@@ -291,10 +296,11 @@ def test_update_organization_limit_same_value(mock_is_super_admin, db_session):
     org_id = UUID(ORGANIZATION_ID)
 
     # Clean up existing limit if it exists
-    existing_limits = get_all_organization_limits(db_session)
+    existing_limits = (
+        db_session.query(db.OrganizationLimit).filter(db.OrganizationLimit.organization_id == org_id).all()
+    )
     for limit in existing_limits:
-        if limit.organization_id == org_id:
-            delete_organization_limit(db_session, limit.id, limit.organization_id)
+        delete_organization_limit(db_session, limit.id, limit.organization_id)
 
     org_limit = create_organization_limit_in_db(db_session, org_id, 5000.0)
     limit_id = org_limit.id
@@ -318,10 +324,11 @@ def test_update_organization_limit_zero_limit(mock_is_super_admin, db_session):
     org_id = UUID(ORGANIZATION_ID)
 
     # Clean up existing limit if it exists
-    existing_limits = get_all_organization_limits(db_session)
+    existing_limits = (
+        db_session.query(db.OrganizationLimit).filter(db.OrganizationLimit.organization_id == org_id).all()
+    )
     for limit in existing_limits:
-        if limit.organization_id == org_id:
-            delete_organization_limit(db_session, limit.id, limit.organization_id)
+        delete_organization_limit(db_session, limit.id, limit.organization_id)
 
     org_limit = create_organization_limit_in_db(db_session, org_id, 1000.0)
     limit_id = org_limit.id
@@ -338,28 +345,28 @@ def test_update_organization_limit_zero_limit(mock_is_super_admin, db_session):
     delete_organization_limit(db_session, limit_id, org_id)
 
 
-def test_get_all_organization_limits_with_filters(db_session):
-    """Test getting all organization limits."""
+def test_get_all_organization_limits_and_usage_with_filters(db_session):
+    """Test getting all organization limits with usage."""
     org_id = UUID(ORGANIZATION_ID)
 
     # Clean up existing limits
-    existing_limits = get_all_organization_limits(db_session)
+    existing_limits = (
+        db_session.query(db.OrganizationLimit).filter(db.OrganizationLimit.organization_id == org_id).all()
+    )
     for limit in existing_limits:
-        if limit.organization_id == org_id:
-            delete_organization_limit(db_session, limit.id, limit.organization_id)
+        delete_organization_limit(db_session, limit.id, limit.organization_id)
 
     limit_1 = create_organization_limit_in_db(db_session, org_id, 1000.0)
     limit_2 = create_organization_limit_in_db(db_session, uuid4(), 2000.0)
 
     response = client.get(
-        "/organizations-limits",
+        "/organizations-limits-and-usage?month=12&year=2025",
         headers=HEADERS_JWT,
     )
     assert response.status_code == 200
     data = response.json()
     assert isinstance(data, list)
-    assert any(limit["id"] == str(limit_1.id) for limit in data)
-    assert any(limit["id"] == str(limit_2.id) for limit in data)
+    assert any(item["organization_id"] == str(org_id) for item in data)
 
     delete_organization_limit(db_session, limit_1.id, limit_1.organization_id)
     delete_organization_limit(db_session, limit_2.id, limit_2.organization_id)

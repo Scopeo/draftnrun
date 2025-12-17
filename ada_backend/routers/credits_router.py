@@ -16,7 +16,7 @@ from ada_backend.schemas.credits_schema import (
     ComponentVersionCost,
     OrganizationLimitResponse,
     OrganizationLimit,
-    OrganizationUsageResponse,
+    OrganizationLimitAndUsageResponse,
 )
 from ada_backend.schemas.chart_schema import ChartsResponse
 from ada_backend.services.charts_service import get_credit_usage_table_chart
@@ -25,9 +25,8 @@ from ada_backend.services.credits_service import (
     create_organization_limit_service,
     update_organization_limit_service,
     delete_organization_limit_service,
-    get_all_organization_limits_service,
     delete_component_version_cost_service,
-    get_all_aggregated_usage_service,
+    get_all_organization_limits_and_usage_service,
 )
 from ada_backend.services.errors import (
     ComponentVersionCostNotFound,
@@ -39,29 +38,17 @@ router = APIRouter(tags=["Credits"])
 LOGGER = logging.getLogger(__name__)
 
 
-@router.get("/organizations-limits", response_model=List[OrganizationLimitResponse])
-def get_all_organization_limits_endpoint(
-    user: Annotated[SupabaseUser, Depends(ensure_super_admin_dependency())],
-    session: Session = Depends(get_db),
-) -> List[OrganizationLimitResponse]:
-    try:
-        return get_all_organization_limits_service(session)
-    except Exception as e:
-        LOGGER.error(f"Failed to get organization limit: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Internal server error") from e
-
-
-@router.get("/usages", response_model=List[OrganizationUsageResponse])
-def get_all_usage_endpoint(
+@router.get("/organizations-limits-and-usage", response_model=List[OrganizationLimitAndUsageResponse])
+def get_all_organization_limits_and_usage_endpoint(
     user: Annotated[SupabaseUser, Depends(ensure_super_admin_dependency())],
     session: Session = Depends(get_db),
     month: int = Query(..., description="Month (1-12)"),
     year: int = Query(..., description="Year"),
-) -> List[OrganizationUsageResponse]:
+) -> List[OrganizationLimitAndUsageResponse]:
     try:
-        return get_all_aggregated_usage_service(session, month, year)
+        return get_all_organization_limits_and_usage_service(session, month, year)
     except Exception as e:
-        LOGGER.error(f"Failed to get usage: {str(e)}", exc_info=True)
+        LOGGER.error(f"Failed to get organization limits and usage: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 

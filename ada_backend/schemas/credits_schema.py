@@ -28,8 +28,10 @@ class ComponentVersionCostResponse(ComponentVersionCost):
     component_version_id: UUID
 
 
-class OrganizationUsageResponse(BaseModel):
-    """Aggregated usage for an organization across all projects."""
+class OrganizationLimitAndUsageResponse(BaseModel):
+    """Combined organization limit and usage information."""
 
     organization_id: UUID
-    total_credits_used: float
+    limit_id: Optional[UUID] = None
+    limit: Optional[float] = None
+    total_credits_used: Optional[float] = None

@@ -4,7 +4,7 @@ from typing import Optional, List
 from ada_backend.schemas.credits_schema import (
     ComponentVersionCostResponse,
     OrganizationLimitResponse,
-    OrganizationUsageResponse,
+    OrganizationLimitAndUsageResponse,
 )
 from ada_backend.repositories.credits_repository import (
     upsert_component_version_cost,
@@ -12,8 +12,7 @@ from ada_backend.repositories.credits_repository import (
     create_organization_limit,
     update_organization_limit,
     delete_organization_limit,
-    get_all_organization_limits,
-    get_all_aggregated_usage,
+    get_all_organization_limits_with_usage,
 )
 from ada_backend.services.errors import (
     ComponentVersionCostNotFound,
@@ -40,14 +39,6 @@ def upsert_component_version_cost_service(
 
 def delete_component_version_cost_service(session: Session, component_version_id: UUID) -> None:
     return delete_component_version_cost(session, component_version_id)
-
-
-def get_all_organization_limits_service(session: Session) -> List[OrganizationLimitResponse]:
-    organization_limits = get_all_organization_limits(session)
-    return [
-        OrganizationLimitResponse.model_validate(organization_limit, from_attributes=True)
-        for organization_limit in organization_limits
-    ]
 
 
 def create_organization_limit_service(
@@ -88,7 +79,9 @@ def delete_organization_limit_service(
     return delete_organization_limit(session, id, organization_id)
 
 
-def get_all_aggregated_usage_service(session: Session, month: int, year: int) -> List[OrganizationUsageResponse]:
-    """Get aggregated usage for all organizations for a specific month and year."""
-    aggregated_data = get_all_aggregated_usage(session, month, year)
-    return [OrganizationUsageResponse.model_validate(record, from_attributes=True) for record in aggregated_data]
+def get_all_organization_limits_and_usage_service(
+    session: Session, month: int, year: int
+) -> List[OrganizationLimitAndUsageResponse]:
+    """Get combined organization limits and usage for a specific month and year using a single optimized query."""
+    combined_data = get_all_organization_limits_with_usage(session, month, year)
+    return [OrganizationLimitAndUsageResponse.model_validate(record, from_attributes=True) for record in combined_data]
