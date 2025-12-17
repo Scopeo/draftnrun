@@ -10,7 +10,7 @@ from openinference.semconv.trace import SpanAttributes
 from opentelemetry.sdk.trace.export import SpanExporter, SpanExportResult
 from opentelemetry.trace.status import StatusCode
 from sqlalchemy import func, select, create_engine, update
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import sessionmaker, aliased
 
 from engine.trace.nested_utils import split_nested_keys
 from ada_backend.database.trace_models import Span, SpanMessage
@@ -165,12 +165,13 @@ class SQLSpanExporter(SpanExporter):
                         has_billable_usage = True
 
         if component_instance_id:
+            component_cost_aliased = aliased(ComponentCost, flat=True)
             cost_info = self.session.execute(
                 select(Cost.credits_per_call)
-                .join(ComponentCost, ComponentCost.id == Cost.id)
+                .join(component_cost_aliased, component_cost_aliased.id == Cost.id)
                 .join(
                     ComponentInstance,
-                    ComponentInstance.component_version_id == ComponentCost.component_version_id,
+                    ComponentInstance.component_version_id == component_cost_aliased.component_version_id,
                 )
                 .where(ComponentInstance.id == component_instance_id)
             ).first()
