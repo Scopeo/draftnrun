@@ -93,7 +93,7 @@ def convert_file_to_base64(file_path: Path, max_size: int = MAX_FILE_SIZE_BYTES)
 
 
 def upload_file_to_s3_and_get_url(
-    file_path: Path, project_id: str, conversation_id: str, max_size: int = MAX_FILE_SIZE_BYTES
+    file_path: Path, org_id: str, project_id: str, conversation_id: str, max_size: int = MAX_FILE_SIZE_BYTES
 ) -> Optional[tuple[str, str]]:
     try:
         file_size = file_path.stat().st_size
@@ -107,7 +107,7 @@ def upload_file_to_s3_and_get_url(
             file_bytes = f.read()
 
         sanitized_filename = sanitize_filename(file_path.name, remove_extension_dot=False)
-        s3_key = f"temp-files/{project_id}/{conversation_id}/{sanitized_filename}"
+        s3_key = f"temp-files/{org_id}/{project_id}/{conversation_id}/{sanitized_filename}"
 
         playground_bucket_name = settings.PLAYGROUND_S3_BUCKET_NAME
         if playground_bucket_name is None:
@@ -138,6 +138,7 @@ def upload_file_to_s3_and_get_url(
 
 def process_files_for_response(
     temp_folder_path: str,
+    org_id: str,
     project_id: str,
     conversation_id: str,
     response_format: Optional[ResponseFormat],
@@ -188,7 +189,7 @@ def process_files_for_response(
                     )
                     base64_file_count += 1
             elif response_format == ResponseFormat.URL:
-                result = upload_file_to_s3_and_get_url(file_path, project_id, conversation_id)
+                result = upload_file_to_s3_and_get_url(file_path, org_id, project_id, conversation_id)
                 if result is not None:
                     presigned_url, s3_key = result
                     file_responses.append(
@@ -202,7 +203,7 @@ def process_files_for_response(
                         )
                     )
             elif response_format == ResponseFormat.S3_KEY:
-                result = upload_file_to_s3_and_get_url(file_path, project_id, conversation_id)
+                result = upload_file_to_s3_and_get_url(file_path, org_id, project_id, conversation_id)
                 if result is not None:
                     presigned_url, s3_key = result
                     file_responses.append(
