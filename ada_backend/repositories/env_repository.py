@@ -1,3 +1,4 @@
+from typing import Optional
 from uuid import UUID
 from typing import Optional
 
@@ -60,8 +61,19 @@ def bind_graph_runner_to_project(
     session: Session,
     graph_runner_id: UUID,
     project_id: UUID,
-    env: EnvType,
+    env: Optional[EnvType],
 ) -> db.ProjectEnvironmentBinding:
+    # For None environment (archived versions), always create a new binding
+    # to allow multiple saved versions, similar to how previous production versions work
+    if env is None:
+        relationship = db.ProjectEnvironmentBinding(
+            graph_runner_id=graph_runner_id, project_id=project_id, environment=env
+        )
+        session.add(relationship)
+        session.commit()
+        return relationship
+    
+    # For DRAFT and PRODUCTION: check if binding exists and replace it
     existing_binding = (
         session.query(db.ProjectEnvironmentBinding)
         .filter(
