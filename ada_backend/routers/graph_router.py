@@ -311,9 +311,9 @@ def save_version(
     except GraphNotFound as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
     except GraphNotBoundToProjectError as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
+        raise HTTPException(status_code=403, detail=str(e)) from e
     except GraphVersionSavingFromNonDraftError as e:
-        LOGGER.warning(
+        LOGGER.error(
             "Attempted to save version from non-draft graph runner for "
             f"project {project_id} runner {graph_runner_id}: {str(e)}"
         )
