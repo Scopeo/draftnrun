@@ -2,7 +2,6 @@
 # expression parser. Maybe a state machine would be better -> better defined states and transitions.
 from dataclasses import dataclass
 from enum import Enum
-from typing import Literal
 
 
 class FieldExpressionSuggestionKind(str, Enum):
