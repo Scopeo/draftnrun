@@ -40,9 +40,9 @@ def autocomplete_field_expression(
 
     suggestions: list[FieldExpressionSuggestion]
 
-    if cursor_context.phase == "instance":
+    if cursor_context.phase == FieldExpressionSuggestionKind.INSTANCE:
         suggestions = _build_instance_suggestions(instances, cursor_context.instance_prefix)
-    elif cursor_context.phase == "port":
+    elif cursor_context.phase == FieldExpressionSuggestionKind.PORT:
         suggestions = _build_port_suggestions(session, instances, cursor_context)
     else:
         # TODO: Offer structured key suggestions once we expose metadata about port output structure
@@ -52,7 +52,7 @@ def autocomplete_field_expression(
     # TODO: Restrict suggestions to upstream instances once graph ordering is exposed.
     LOGGER.debug(
         "Field expression autocomplete: phase=%s count=%d",
-        cursor_context.phase,
+        cursor_context.phase.value,
         len(suggestions),
     )
     return FieldExpressionAutocompleteResponse(suggestions=suggestions)

@@ -1,12 +1,12 @@
 """Field expression schemas for API requests and responses."""
 
-from enum import Enum
 from typing import Optional
 from uuid import UUID
 
 from pydantic import BaseModel
 
 from ada_backend.database.models import PortType
+from engine.field_expressions.autocomplete import FieldExpressionSuggestionKind
 
 
 class FieldExpressionUpdateSchema(BaseModel):
@@ -22,12 +22,6 @@ class FieldExpressionReadSchema(BaseModel):
     field_name: str
     expression_json: dict
     expression_text: Optional[str] = None
-
-
-class FieldExpressionSuggestionKind(str, Enum):
-    INSTANCE = "instance"
-    PORT = "port"
-    KEY = "key"
 
 
 class FieldExpressionAutocompleteRequest(BaseModel):

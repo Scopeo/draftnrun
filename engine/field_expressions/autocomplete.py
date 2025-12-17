@@ -1,12 +1,19 @@
 # TODO: Refactor this to use a more robust parser instead of a regex. Also, it should share logic with the
 # expression parser. Maybe a state machine would be better -> better defined states and transitions.
 from dataclasses import dataclass
+from enum import Enum
 from typing import Literal
+
+
+class FieldExpressionSuggestionKind(str, Enum):
+    INSTANCE = "instance"
+    PORT = "port"
+    KEY = "key"
 
 
 @dataclass(frozen=True)
 class FieldExpressionCursorContext:
-    phase: Literal["instance", "port", "key"]
+    phase: FieldExpressionSuggestionKind
     instance_prefix: str
     port_prefix: str | None = None
     key_prefix: str | None = None
@@ -31,20 +38,23 @@ def get_cursor_context(expression_text: str, cursor_offset: int) -> FieldExpress
 
     # Empty or whitespace: still suggest instances.
     if stripped == "":
-        return FieldExpressionCursorContext(phase="instance", instance_prefix="")
+        return FieldExpressionCursorContext(phase=FieldExpressionSuggestionKind.INSTANCE, instance_prefix="")
 
     dot_idx = stripped.find(".")
     colon_idx = stripped.find("::") if dot_idx != -1 else -1
 
     if dot_idx == -1:
-        return FieldExpressionCursorContext(phase="instance", instance_prefix=_clean_token(stripped))
+        return FieldExpressionCursorContext(
+            phase=FieldExpressionSuggestionKind.INSTANCE,
+            instance_prefix=_clean_token(stripped),
+        )
 
     instance_prefix = _clean_token(stripped[:dot_idx])
     port_slice = stripped[dot_idx + 1 :]
 
     if colon_idx == -1 or colon_idx < dot_idx:
         return FieldExpressionCursorContext(
-            phase="port",
+            phase=FieldExpressionSuggestionKind.PORT,
             instance_prefix=instance_prefix,
             port_prefix=_clean_token(port_slice),
         )
@@ -52,7 +62,7 @@ def get_cursor_context(expression_text: str, cursor_offset: int) -> FieldExpress
     port_prefix = _clean_token(stripped[dot_idx + 1 : colon_idx])
     key_prefix = _clean_token(stripped[colon_idx + 2 :])
     return FieldExpressionCursorContext(
-        phase="key",
+        phase=FieldExpressionSuggestionKind.KEY,
         instance_prefix=instance_prefix,
         port_prefix=port_prefix,
         key_prefix=key_prefix,
