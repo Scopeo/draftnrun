@@ -3,13 +3,13 @@ from typing import List, Optional, Tuple, Dict
 from uuid import UUID
 
 from sqlalchemy.orm import Session
+from sqlalchemy import select
 from sqlalchemy import func
 
 from ada_backend.database.models import InputGroundtruth, DatasetProject, VersionOutput
 from ada_backend.schemas.input_groundtruth_schema import InputGroundtruthCreate
 
 LOGGER = logging.getLogger(__name__)
-BATCH_INSERTION_SIZE = 50
 
 
 # Input Groundtruth functions
@@ -65,13 +65,13 @@ def get_positions_of_dataset(
     dataset_id: UUID,
 ) -> List[int]:
     """Return all positions for input-groundtruth entries in a dataset."""
-    results = (
-        session.query(InputGroundtruth.position)
-        .filter(InputGroundtruth.dataset_id == dataset_id)
+    stmt = (
+        select(InputGroundtruth.position)
+        .where(InputGroundtruth.dataset_id == dataset_id)
         .order_by(InputGroundtruth.position.asc())
-        .all()
     )
-    return [position for (position,) in results]
+    return session.scalars(stmt).all()
+    # return [position for (position,) in results]
 
 
 def create_inputs_groundtruths(
@@ -79,10 +79,7 @@ def create_inputs_groundtruths(
     dataset_id: UUID,
     inputs_groundtruths_data: List[InputGroundtruthCreate],
 ) -> List[InputGroundtruth]:
-    """Create multiple input-groundtruth entries.
-
-    Creates records in batches.
-    """
+    """Create multiple input-groundtruth entries."""
     max_position = get_max_position_of_dataset(session, dataset_id)
     starting_position = (max_position + 1) if max_position is not None else 1
 

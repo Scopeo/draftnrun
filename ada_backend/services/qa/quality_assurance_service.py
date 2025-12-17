@@ -525,10 +525,10 @@ def save_conversation_to_groundtruth_service(
         )
     input_payload.pop("conversation_id", None)
     input_entry = InputGroundtruthCreate(input=input_payload, groundtruth=output_payload["messages"][-1]["content"])
-    result = create_inputs_groundtruths_service(
+    input_groundtruth_response_list = create_inputs_groundtruths_service(
         session, dataset_id, InputGroundtruthCreateList(inputs_groundtruths=[input_entry])
     )
-    return result.inputs_groundtruths
+    return input_groundtruth_response_list.inputs_groundtruths
 
 
 def export_qa_data_to_csv_service(
@@ -594,7 +594,7 @@ def import_qa_data_from_csv_service(
         if not inputs_groundtruths_data_to_create:
             raise CSVEmptyFileError()
 
-        result = create_inputs_groundtruths_service(
+        input_groundtruth_response_list = create_inputs_groundtruths_service(
             session=session,
             dataset_id=dataset_id,
             inputs_groundtruths_data=InputGroundtruthCreateList(
@@ -603,10 +603,11 @@ def import_qa_data_from_csv_service(
         )
 
         LOGGER.info(
-            f"Imported {len(result.inputs_groundtruths)} input-groundtruth entries from CSV for dataset {dataset_id}"
+            f"Imported {len(input_groundtruth_response_list.inputs_groundtruths)} input-groundtruth "
+            f"entries from CSV for dataset {dataset_id}"
         )
 
-        return result
+        return input_groundtruth_response_list
     except QADuplicatePositionError as e:
         LOGGER.error(f"Error in import_qa_data_from_csv_service: {str(e)}")
         raise CSVNonUniquePositionError(duplicate_positions=e.duplicate_positions) from e
