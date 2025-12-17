@@ -7,7 +7,7 @@ from uuid import uuid4
 from fastapi.testclient import TestClient
 
 from ada_backend.main import app
-from ada_backend.database.seed.utils import COMPONENT_UUIDS
+from ada_backend.database.seed.utils import COMPONENT_UUIDS, COMPONENT_VERSION_UUIDS
 from ada_backend.scripts.get_supabase_token import get_user_jwt
 from settings import settings
 
@@ -18,7 +18,7 @@ HEADERS_JWT = {
     "Authorization": f"Bearer {JWT_TOKEN}",
 }
 COMPONENT_ID = str(COMPONENT_UUIDS["llm_call"])
-COMPONENT_VERSION_ID = str(COMPONENT_UUIDS["llm_call"])
+COMPONENT_VERSION_ID = str(COMPONENT_VERSION_UUIDS["llm_call"])
 ORGANIZATION_ID = "37b7d67f-8f29-4fce-8085-19dea582f605"
 
 
