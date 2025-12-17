@@ -5,12 +5,16 @@ Tests ensure that versions can be saved from draft graph runners with proper val
 
 import uuid
 import pytest
-from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 from ada_backend.database import models as db
 from ada_backend.services.graph.deploy_graph_service import save_graph_version_service
 from ada_backend.repositories.env_repository import get_env_relationship_by_graph_runner_id
+from ada_backend.services.errors import (
+    GraphVersionSavingFromNonDraftError,
+    GraphNotFound,
+    GraphNotBoundToProjectError,
+)
 
 
 @pytest.fixture
@@ -136,15 +140,15 @@ class TestSaveGraphVersionService:
         """
         non_existent_id = uuid.uuid4()
 
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises(GraphNotFound) as exc_info:
             save_graph_version_service(
                 session=ada_backend_mock_session,
                 graph_runner_id=non_existent_id,
                 project_id=test_project.id,
             )
 
-        assert exc_info.value.status_code == 404
-        assert "not found" in exc_info.value.detail.lower()
+        assert exc_info.value.graph_id == non_existent_id
+        assert "not found" in str(exc_info.value).lower()
 
     def test_raises_error_for_unbound_graph_runner(self, ada_backend_mock_session: Session, test_project):
         """
@@ -156,15 +160,16 @@ class TestSaveGraphVersionService:
         ada_backend_mock_session.add(graph_runner)
         ada_backend_mock_session.commit()
 
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises(GraphNotBoundToProjectError) as exc_info:
             save_graph_version_service(
                 session=ada_backend_mock_session,
                 graph_runner_id=unbound_graph_runner_id,
                 project_id=test_project.id,
             )
 
-        assert exc_info.value.status_code == 404
-        assert "not bound" in exc_info.value.detail.lower()
+        assert exc_info.value.graph_runner_id == unbound_graph_runner_id
+        assert exc_info.value.bound_project_id is None
+        assert "not bound" in str(exc_info.value).lower()
 
     def test_raises_error_for_production_graph_runner(
         self, ada_backend_mock_session: Session, test_project, production_graph_runner
@@ -172,16 +177,17 @@ class TestSaveGraphVersionService:
         """
         Test that saving a version from a production graph runner is rejected.
         """
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises(GraphVersionSavingFromNonDraftError) as exc_info:
             save_graph_version_service(
                 session=ada_backend_mock_session,
                 graph_runner_id=production_graph_runner.id,
                 project_id=test_project.id,
             )
 
-        assert exc_info.value.status_code == 400
-        assert "can only save versions from draft" in exc_info.value.detail.lower()
-        assert "production" in exc_info.value.detail.lower()
+        assert exc_info.value.graph_runner_id == production_graph_runner.id
+        assert exc_info.value.current_environment == "production"
+        assert "can only save versions from draft" in str(exc_info.value).lower()
+        assert "production" in str(exc_info.value).lower()
 
     def test_version_tag_increments_correctly(
         self, ada_backend_mock_session: Session, test_project, draft_graph_runner
