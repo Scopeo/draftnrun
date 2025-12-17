@@ -303,7 +303,7 @@ def bind_graph_to_env_service(
     update_graph_runner_env(session, graph_runner_id, env=env)
     LOGGER.info(f"Bound graph runner {graph_runner_id} to {env.value}")
 
-def save_version_service(
+def save_graph_version_service(
     session: Session,
     graph_runner_id: UUID,
     project_id: UUID,

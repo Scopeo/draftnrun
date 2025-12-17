@@ -311,3 +311,53 @@ def test_delete_graph_runner():
 
     # Cleanup project
     client.delete(f"/projects/{project_id}", headers=HEADERS_JWT)
+
+
+def test_save_version_from_draft():
+    project_id = str(uuid4())
+    project_payload = {
+        "project_id": project_id,
+        "project_name": f"save_version_test_{project_id}",
+        "description": "Test project for save version",
+    }
+    project_response = client.post(f"/projects/{ORGANIZATION_ID}", headers=HEADERS_JWT, json=project_payload)
+    assert project_response.status_code == 200
+
+    project_details = client.get(f"/projects/{project_id}", headers=HEADERS_JWT).json()
+    graph_runner_id = None
+    for gr in project_details["graph_runners"]:
+        if gr["env"] == "draft":
+            graph_runner_id = gr["graph_runner_id"]
+            break
+    assert graph_runner_id is not None, "Draft graph runner should be auto-created"
+
+    save_version_endpoint = f"/projects/{project_id}/graph/{graph_runner_id}/save-version"
+    response = client.post(save_version_endpoint, headers=HEADERS_JWT)
+
+    assert response.status_code == 200
+    result = response.json()
+    assert result["project_id"] == project_id
+    assert result["draft_graph_runner_id"] == graph_runner_id
+    assert result["saved_graph_runner_id"] != graph_runner_id
+    assert result["tag_version"] is not None
+    assert result["tag_version"] == "0.0.1"
+
+    project_details_after = client.get(f"/projects/{project_id}", headers=HEADERS_JWT).json()
+    saved_graph_found = False
+    draft_still_exists = False
+    for gr in project_details_after["graph_runners"]:
+        if gr["graph_runner_id"] == result["saved_graph_runner_id"]:
+            saved_graph_found = True
+            assert gr.get("env") is None or gr.get("env") == "null"
+        if gr["graph_runner_id"] == graph_runner_id:
+            draft_still_exists = True
+            assert gr["env"] == "draft"
+    assert saved_graph_found, "Saved graph runner should exist in project"
+    assert draft_still_exists, "Draft graph runner should still exist"
+
+    response2 = client.post(save_version_endpoint, headers=HEADERS_JWT)
+    assert response2.status_code == 200
+    result2 = response2.json()
+    assert result2["tag_version"] == "0.0.2"
+
+    client.delete(f"/projects/{project_id}", headers=HEADERS_JWT)
