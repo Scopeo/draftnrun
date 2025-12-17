@@ -340,14 +340,12 @@ def save_version_service(
     if not env_relationship:
         raise HTTPException(status_code=404, detail="Graph runner not bound to any project")
 
-    # Only allow saving from DRAFT versions
     if env_relationship.environment != EnvType.DRAFT:
         raise HTTPException(
             status_code=400,
-            detail=f"Can only save versions from DRAFT. Current environment: {env_relationship.environment}"
+            detail=f"Can only save versions from DRAFT. Current environment: {env_relationship.environment}",
         )
 
-    # Clone the draft graph runner
     versioned_graph_runner_id = clone_graph_runner(
         session=session,
         graph_runner_id_to_copy=graph_runner_id,
@@ -356,24 +354,23 @@ def save_version_service(
 
     LOGGER.info(f"Cloned graph runner {graph_runner_id} to {versioned_graph_runner_id}")
 
-    # Compute and assign version tag
-    new_tag = compute_next_tag_version(session, project_id)
-    update_graph_runner_tag_fields(session, versioned_graph_runner_id, tag_version=new_tag)
-    LOGGER.info(f"Assigned version tag {new_tag} to versioned graph runner {versioned_graph_runner_id}")
+    version_tag = compute_next_tag_version(session, project_id)
+    update_graph_runner_tag_fields(session, versioned_graph_runner_id, tag_version=version_tag)
+    LOGGER.info(f"Assigned version tag {version_tag} to versioned graph runner {versioned_graph_runner_id}")
 
-    # Bind the cloned graph runner to project with None environment (archived version)
-    # Using None follows the same pattern as previous production versions
     bind_graph_runner_to_project(
         session,
         graph_runner_id=versioned_graph_runner_id,
         project_id=project_id,
         env=None,
     )
-    LOGGER.info(f"Bound versioned graph runner {versioned_graph_runner_id} to project {project_id} with None environment (archived)")
+    LOGGER.info(
+        f"Bound versioned graph runner {versioned_graph_runner_id} to project {project_id} " "with None environment"
+    )
 
     return GraphSaveVersionResponse(
         project_id=project_id,
         saved_graph_runner_id=versioned_graph_runner_id,
-        tag_version=new_tag,
+        tag_version=version_tag,
         draft_graph_runner_id=graph_runner_id,
     )

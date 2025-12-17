@@ -290,11 +290,11 @@ def save_version(
 ) -> GraphSaveVersionResponse:
     """
     Create a saved version from a draft graph runner.
-    
+
     This endpoint:
     - Clones the draft graph runner
     - Assigns a new version tag
-    - Saves it with SAVED environment (does not affect the original draft)
+    - Saves it with None environment
     """
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
