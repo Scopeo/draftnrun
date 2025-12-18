@@ -10,9 +10,9 @@ class FileResponse(BaseModel):
     filename: str
     content_type: str
     size: int
-    data: Optional[str] = None  # base64 if response_format="base64"
-    url: Optional[str] = None  # presigned URL if response_format="url"
-    s3_key: Optional[str] = None  # S3 key if response_format="s3_key"
+    data: Optional[str] = Field(None, description="base64 if response_format='base64'")
+    url: Optional[str] = Field(None, description="presigned URL if response_format='url'")
+    s3_key: Optional[str] = Field(None, description="S3 key if response_format='s3_key'")
 
     @model_validator(mode="after")
     def validate_data_or_url_or_s3_key(self):
