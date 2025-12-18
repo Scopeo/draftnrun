@@ -18,6 +18,7 @@ def list_documents_for_source(
     source_id: str,
 ) -> List[Row]:
     table = sql_local_service.get_table(table_name=table_name, schema_name=schema_name)
+    # TODO: Change file_id to document_id
     stmt = (
         select(
             table.c.file_id.label("document_id"),
