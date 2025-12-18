@@ -192,6 +192,7 @@ def list_documents_service(
         sql_local_service=sql_local_service,
         schema_name=source.database_schema,
         table_name=source.database_table_name,
+        source_id=str(source_id),
     )
     documents: List[KnowledgeDocumentOverview] = []
     for row in rows:

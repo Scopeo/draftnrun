@@ -28,6 +28,8 @@ from ingestion_script.utils import (
     CHUNK_ID_COLUMN_NAME,
     CHUNK_COLUMN_NAME,
     FILE_ID_COLUMN_NAME,
+    ORDER_COLUMN_NAME,
+    URL_COLUMN_NAME,
     get_sanitize_names,
     DEFAULT_EMBEDDING_MODEL,
 )
@@ -186,8 +188,24 @@ def _build_select_parts_for_migration(source_id, mapped_cols, metadata_cols, col
     else:
         select_parts.append(f'NULL AS "{CHUNK_ID_COLUMN_NAME}"')
 
-    # 3-5. Other mapped columns in order: document_id, document_title, content, timestamp
-    other_cols_order = [FILE_ID_COLUMN_NAME, DOCUMENT_TITLE_COLUMN_NAME, CHUNK_COLUMN_NAME, TIMESTAMP_COLUMN_NAME]
+    # 2.5. order
+    if ORDER_COLUMN_NAME in unified_cols_in_mapped:
+        orig_col = unified_cols_in_mapped[ORDER_COLUMN_NAME]
+        if orig_col != ORDER_COLUMN_NAME:
+            select_parts.append(f'"{orig_col}" AS "{ORDER_COLUMN_NAME}"')
+        else:
+            select_parts.append(f'"{ORDER_COLUMN_NAME}"')
+    else:
+        select_parts.append(f'NULL AS "{ORDER_COLUMN_NAME}"')
+
+    # 3-5. Other mapped columns in order: file_id, document_title, url, content, timestamp
+    other_cols_order = [
+        FILE_ID_COLUMN_NAME,
+        DOCUMENT_TITLE_COLUMN_NAME,
+        URL_COLUMN_NAME,
+        CHUNK_COLUMN_NAME,
+        TIMESTAMP_COLUMN_NAME,
+    ]
     for unified_col in other_cols_order:
         if unified_col in unified_cols_in_mapped:
             orig_col = unified_cols_in_mapped[unified_col]
@@ -264,7 +282,9 @@ def _classify_columns(source_columns, column_types):
         "source_identifier": FILE_ID_COLUMN_NAME,  # Alternative name
         PROCESSED_DATETIME_FIELD.lower(): PROCESSED_DATETIME_FIELD,
         TIMESTAMP_COLUMN_NAME.lower(): TIMESTAMP_COLUMN_NAME,
-        # url, metadata, and source_metadata are NOT in normal_columns_map - they go to metadata
+        ORDER_COLUMN_NAME.lower(): ORDER_COLUMN_NAME,
+        URL_COLUMN_NAME.lower(): URL_COLUMN_NAME,
+        # metadata and source_metadata are NOT in normal_columns_map - they go to metadata
     }
     # Identify which columns to map directly vs put in metadata
     mapped_cols = {}  # {source_col_name: unified_col_name}
@@ -315,7 +335,7 @@ def _migrate_table_with_sql_alternative(
     insert_sql = f"""
         INSERT INTO "{target_schema}"."{target_table}"
         ({PROCESSED_DATETIME_FIELD}, {SOURCE_ID_COLUMN_NAME}, {CHUNK_ID_COLUMN_NAME},
-        {FILE_ID_COLUMN_NAME}, {DOCUMENT_TITLE_COLUMN_NAME}, {CHUNK_COLUMN_NAME}, {TIMESTAMP_COLUMN_NAME}, {METADATA_COLUMN_NAME})
+        "{ORDER_COLUMN_NAME}", {FILE_ID_COLUMN_NAME}, {DOCUMENT_TITLE_COLUMN_NAME}, {URL_COLUMN_NAME}, {CHUNK_COLUMN_NAME}, {TIMESTAMP_COLUMN_NAME}, {METADATA_COLUMN_NAME})
         SELECT {', '.join(select_parts)}
         FROM "{source_schema}"."{source_table}"
         ON CONFLICT ({CHUNK_ID_COLUMN_NAME}) DO NOTHING
@@ -712,7 +732,7 @@ def _merge_tables(
         insert_sql = f"""
             INSERT INTO "{schema_name}"."{new_table_name}"
             ({PROCESSED_DATETIME_FIELD}, {SOURCE_ID_COLUMN_NAME}, {CHUNK_ID_COLUMN_NAME},
-            {FILE_ID_COLUMN_NAME}, {DOCUMENT_TITLE_COLUMN_NAME}, {CHUNK_COLUMN_NAME}, {TIMESTAMP_COLUMN_NAME}, {METADATA_COLUMN_NAME})
+            "{ORDER_COLUMN_NAME}", {FILE_ID_COLUMN_NAME}, {DOCUMENT_TITLE_COLUMN_NAME}, {URL_COLUMN_NAME}, {CHUNK_COLUMN_NAME}, {TIMESTAMP_COLUMN_NAME}, {METADATA_COLUMN_NAME})
             SELECT {', '.join(select_parts)}
             FROM "{schema}"."{table_name}"
             ON CONFLICT ({CHUNK_ID_COLUMN_NAME}) DO NOTHING

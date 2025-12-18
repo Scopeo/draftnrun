@@ -71,6 +71,7 @@ def test_list_documents_for_source_returns_grouped_data(sql_local_service: SQLLo
         sql_local_service=sql_local_service,
         schema_name=None,
         table_name="knowledge_chunks",
+        source_id="source-id",
     )
 
     assert len(files) == 2

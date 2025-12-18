@@ -43,7 +43,7 @@ def ingest_csv_file(
         result_chunks.append(
             FileChunk(
                 chunk_id=str(uuid.uuid4()),
-                document_id=document.id,
+                file_id=document.id,
                 order=idx,
                 content=markdown_content,
                 last_edited_ts=document.last_edited_ts,

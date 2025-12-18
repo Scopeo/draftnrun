@@ -48,7 +48,7 @@ def ingest_excel_file(
                 FileChunk(
                     chunk_id=str(uuid.uuid4()),
                     order=idx,
-                    document_id=document.id,
+                    file_id=document.id,
                     content=markdown_content,
                     last_edited_ts=document.last_edited_ts,
                     document_title=document.file_name,

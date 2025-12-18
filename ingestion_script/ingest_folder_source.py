@@ -67,6 +67,7 @@ UNIFIED_TABLE_DEFINITION = DBDefinition(
         DBColumn(name=ORDER_COLUMN_NAME, type="INTEGER", is_nullable=True),
         DBColumn(name=FILE_ID_COLUMN_NAME, type="VARCHAR"),
         DBColumn(name=DOCUMENT_TITLE_COLUMN_NAME, type="VARCHAR"),
+        DBColumn(name=URL_COLUMN_NAME, type="VARCHAR", is_nullable=True),
         DBColumn(name=CHUNK_COLUMN_NAME, type="VARCHAR"),
         DBColumn(name=TIMESTAMP_COLUMN_NAME, type="VARCHAR"),
         DBColumn(name=METADATA_COLUMN_NAME, type="JSONB"),
@@ -522,7 +523,7 @@ async def _ingest_folder_source(
         db_service.update_table(
             new_df=all_chunks_df,
             table_name=db_table_name,
-            table_definition=FILE_TABLE_DEFINITION,
+            table_definition=UNIFIED_TABLE_DEFINITION,
             id_column_name=CHUNK_ID_COLUMN_NAME,
             timestamp_column_name=TIMESTAMP_COLUMN_NAME,
             append_mode=True,

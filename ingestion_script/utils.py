@@ -41,8 +41,10 @@ DEFAULT_EMBEDDING_MODEL = "openai:text-embedding-3-large"
 UNIFIED_TABLE_COLUMNS = [
     CHUNK_ID_COLUMN_NAME,
     SOURCE_ID_COLUMN_NAME,
+    ORDER_COLUMN_NAME,
     FILE_ID_COLUMN_NAME,
     DOCUMENT_TITLE_COLUMN_NAME,
+    URL_COLUMN_NAME,
     CHUNK_COLUMN_NAME,
     TIMESTAMP_COLUMN_NAME,
     METADATA_COLUMN_NAME,
@@ -102,6 +104,7 @@ def transform_chunks_df_for_unified_table(
             "chunk_id": CHUNK_ID_COLUMN_NAME,
             "file_id": FILE_ID_COLUMN_NAME,
             "document_title": DOCUMENT_TITLE_COLUMN_NAME,
+            "url": URL_COLUMN_NAME,
             "content": CHUNK_COLUMN_NAME,
             "last_edited_ts": TIMESTAMP_COLUMN_NAME,
         }

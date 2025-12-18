@@ -36,7 +36,7 @@ def test_ingest_excel_file():
 
     assert len(result) == 1
     assert result[0].content == EXPECTED_CONTENT
-    assert result[0].document_id == FILE_PATH
+    assert result[0].file_id == FILE_PATH
     assert result[0].order == 0
     assert result[0].document_title == "test_excel.xlsx"
     assert result[0].last_edited_ts == "2025-07-10T00:00:00Z"

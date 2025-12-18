@@ -22,7 +22,7 @@ def mock_file_document():
 def mock_file_chunk():
     return FileChunk(
         chunk_id=str(uuid.uuid4()),
-        document_id="dummy_id",
+        file_id="dummy_id",
         order=0,
         content="dummy content",
         bounding_boxes=[{"xmin": 1, "ymin": 2, "xmax": 3, "ymax": 4, "page": 1}],

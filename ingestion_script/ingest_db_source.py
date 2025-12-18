@@ -117,6 +117,11 @@ def get_db_source(
     else:
         unified_df[TIMESTAMP_COLUMN_NAME] = None
 
+    if URL_COLUMN_NAME in df_chunks.columns:
+        unified_df[URL_COLUMN_NAME] = df_chunks[URL_COLUMN_NAME]
+    else:
+        unified_df[URL_COLUMN_NAME] = None
+
     def build_metadata(row):
         metadata = {}
         if timestamp_column_name and timestamp_column_name in df_chunks.columns:
@@ -127,12 +132,7 @@ def get_db_source(
             for col in metadata_column_names:
                 if col != timestamp_column_name and col in df_chunks.columns and not pd.isna(row.get(col)):
                     metadata[col] = row[col]
-        if (
-            URL_COLUMN_NAME in df_chunks.columns
-            and not pd.isna(row.get(URL_COLUMN_NAME))
-            and row.get(URL_COLUMN_NAME) is not None
-        ):
-            metadata[URL_COLUMN_NAME] = row[URL_COLUMN_NAME]
+        # Note: URL is now a direct column, not in metadata
         return json.dumps(metadata) if metadata else json.dumps({})
 
     unified_df[METADATA_COLUMN_NAME] = df_chunks.apply(build_metadata, axis=1)

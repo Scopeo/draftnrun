@@ -15,15 +15,17 @@ def list_documents_for_source(
     sql_local_service: SQLLocalService,
     schema_name: str,
     table_name: str,
+    source_id: str,
 ) -> List[Row]:
     table = sql_local_service.get_table(table_name=table_name, schema_name=schema_name)
     stmt = (
         select(
-            table.c.file_id.label("file_id"),
+            table.c.file_id.label("document_id"),
             func.max(table.c.document_title).label("document_title"),
             func.count().label("chunk_count"),
             func.max(table.c.last_edited_ts).label("last_edited_ts"),
         )
+        .where(table.c.source_id == source_id)
         .group_by(table.c.file_id)
         .order_by(func.max(table.c.last_edited_ts).desc())
     )
