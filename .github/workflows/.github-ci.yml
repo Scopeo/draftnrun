@@ -230,14 +230,9 @@ jobs:
             echo "===> Changing directory to ${{ env.EC2_PATH_BASE }}/${{env.EC2_FOLDER_NAME}}${{ env.RUN_ID }}"
             cd ${{ env.EC2_PATH_BASE }}/${{env.EC2_FOLDER_NAME}}${{ env.RUN_ID }}
 
-            # Check and install pg_dump 16 if needed
-            if ! command -v /usr/pgsql-16/bin/pg_dump &> /dev/null; then
-              echo "===> Installing PostgreSQL 16 client tools"
-              sudo dnf remove -y postgresql15* || true
-              sudo dnf install -y postgresql16
-            else
-              echo "===> PostgreSQL 16 client tools already installed"
-            fi
+            # Source db_utils.sh to use ensure_pg_tools function
+            source "./scripts/copy_data/db_utils.sh"
+            ensure_pg_tools
 
             # Load credentials if present (optional)
             if [ -f credentials.env ]; then
@@ -290,6 +285,9 @@ jobs:
             else
               echo "===> Using cached prod dump"
             fi
+
+            # Validate dump using shared script
+            bash "./scripts/copy_data/validate_dump.sh" "$DUMP_PATH"
 
             echo "===> Copying dumps into postgres container"
             cd services

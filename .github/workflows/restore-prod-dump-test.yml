@@ -12,10 +12,24 @@ jobs:
     timeout-minutes: 15
 
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+        with:
+          lfs: true
+
       - name: Set up SSH key
         uses: webfactory/ssh-agent@v0.5.3
         with:
           ssh-private-key: ${{ secrets.DEPLOY_KEY }}
+
+      - name: Copy repository to EC2
+        uses: appleboy/scp-action@master
+        with:
+          host: ${{ secrets.EC2_HOST_TEST }}
+          username: ${{ env.EC2_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          source: "."
+          target: "/home/ec2-user/draftnrun"
 
       - name: Create credentials.env file
         run: |
@@ -39,15 +53,11 @@ jobs:
           port: 22
           script: |
             set -e
+            cd /home/ec2-user/draftnrun
 
-            # Check and install pg_dump 16 if needed
-            if ! command -v /usr/pgsql-16/bin/pg_dump &> /dev/null; then
-              echo "===> Installing PostgreSQL 16 client tools"
-              sudo dnf remove -y postgresql15* || true
-              sudo dnf install -y postgresql16
-            else
-              echo "===> PostgreSQL 16 client tools already installed"
-            fi
+            # Source db_utils.sh to use ensure_pg_tools function
+            source "./scripts/copy_data/db_utils.sh"
+            ensure_pg_tools
 
             # Load PROD_DB_URL from credentials file
             if [ -f /tmp/credentials.env ]; then
@@ -75,33 +85,8 @@ jobs:
             fi
             pg_dump -Fc "$PROD_DB_URL" -f "$DUMP_PATH"
             
-            # Verify dump was created successfully
-            if [ ! -f "$DUMP_PATH" ]; then
-              echo "ERROR: Dump file was not created!" >&2
-              exit 1
-            fi
+            # Validate dump using shared script
+            bash "./scripts/copy_data/validate_dump.sh" "$DUMP_PATH"
             
-            # Check dump file is not empty
-            DUMP_SIZE=$(stat -c%s "$DUMP_PATH" 2>/dev/null || stat -f%z "$DUMP_PATH" 2>/dev/null || echo "0")
-            if [ "$DUMP_SIZE" -eq 0 ]; then
-              echo "ERROR: Dump file is empty!" >&2
-              exit 1
-            fi
-            
-            # Verify dump integrity by listing its contents
-            echo "===> Verifying dump integrity..."
-            if ! pg_restore --list "$DUMP_PATH" > /dev/null 2>&1; then
-              echo "ERROR: Dump file appears to be corrupted or invalid!" >&2
-              exit 1
-            fi
-            
-            # Show dump file info with timestamp to confirm it's fresh
-            DUMP_SIZE_HUMAN=$(du -h "$DUMP_PATH" | cut -f1)
-            DUMP_TIME=$(stat -c %Y "$DUMP_PATH" 2>/dev/null || stat -f %m "$DUMP_PATH" 2>/dev/null)
-            DUMP_DATE=$(date -d "@$DUMP_TIME" 2>/dev/null || date -r "$DUMP_TIME" 2>/dev/null || echo "unknown")
             echo "===> ✅ Production dump cache updated successfully"
-            echo "===> Dump file size: $DUMP_SIZE_HUMAN ($DUMP_SIZE bytes)"
-            echo "===> Dump location: $DUMP_PATH"
-            echo "===> Dump created at: $DUMP_DATE (timestamp: $DUMP_TIME)"
-            echo "===> Dump integrity: OK"
             echo "===> Next CI run will use this fresh dump (TTL check will pass)"
