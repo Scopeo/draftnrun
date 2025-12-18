@@ -2,6 +2,7 @@ from functools import partial
 import logging
 from typing import Optional
 import json
+from datetime import datetime
 
 import pandas as pd
 from uuid import UUID
@@ -123,16 +124,27 @@ def get_db_source(
         unified_df[URL_COLUMN_NAME] = None
 
     def build_metadata(row):
+        def serialize_value(value):
+            """Convert Timestamp/datetime objects to ISO format strings for JSON serialization."""
+            if pd.isna(value):
+                return None
+            if isinstance(value, pd.Timestamp):
+                return value.isoformat()
+            if isinstance(value, datetime):
+                return value.isoformat()
+            return value
+
         metadata = {}
         if timestamp_column_name and timestamp_column_name in df_chunks.columns:
-            metadata[timestamp_column_name] = (
-                row[timestamp_column_name] if not pd.isna(row.get(timestamp_column_name)) else None
-            )
+            timestamp_value = row.get(timestamp_column_name)
+            if not pd.isna(timestamp_value):
+                metadata[timestamp_column_name] = serialize_value(timestamp_value)
         if metadata_column_names:
             for col in metadata_column_names:
-                if col != timestamp_column_name and col in df_chunks.columns and not pd.isna(row.get(col)):
-                    metadata[col] = row[col]
-        # Note: URL is now a direct column, not in metadata
+                if col != timestamp_column_name and col in df_chunks.columns:
+                    col_value = row.get(col)
+                    if not pd.isna(col_value):
+                        metadata[col] = serialize_value(col_value)
         return json.dumps(metadata) if metadata else json.dumps({})
 
     unified_df[METADATA_COLUMN_NAME] = df_chunks.apply(build_metadata, axis=1)
