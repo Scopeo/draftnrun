@@ -64,14 +64,12 @@ def get_positions_of_dataset(
     session: Session,
     dataset_id: UUID,
 ) -> List[int]:
-    """Return all positions for input-groundtruth entries in a dataset."""
     stmt = (
         select(InputGroundtruth.position)
         .where(InputGroundtruth.dataset_id == dataset_id)
         .order_by(InputGroundtruth.position.asc())
     )
     return session.scalars(stmt).all()
-    # return [position for (position,) in results]
 
 
 def create_inputs_groundtruths(

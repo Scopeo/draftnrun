@@ -295,7 +295,9 @@ def create_inputs_groundtruths_service(
     try:
         current_dataset_positions = get_positions_of_dataset(session, dataset_id)
         inputs_positions = [
-            ig.position for ig in inputs_groundtruths_data.inputs_groundtruths if ig.position is not None
+            input_groundtruth.position
+            for input_groundtruth in inputs_groundtruths_data.inputs_groundtruths
+            if input_groundtruth.position is not None
         ]
         if inputs_positions and len(inputs_positions) != len(inputs_groundtruths_data.inputs_groundtruths):
             raise QAPartialPositionError()
@@ -594,7 +596,7 @@ def import_qa_data_from_csv_service(
         if not inputs_groundtruths_data_to_create:
             raise CSVEmptyFileError()
 
-        input_groundtruth_response_list = create_inputs_groundtruths_service(
+        created_inputs_groundtruths = create_inputs_groundtruths_service(
             session=session,
             dataset_id=dataset_id,
             inputs_groundtruths_data=InputGroundtruthCreateList(
@@ -603,11 +605,11 @@ def import_qa_data_from_csv_service(
         )
 
         LOGGER.info(
-            f"Imported {len(input_groundtruth_response_list.inputs_groundtruths)} input-groundtruth "
+            f"Imported {len(created_inputs_groundtruths.inputs_groundtruths)} input-groundtruth "
             f"entries from CSV for dataset {dataset_id}"
         )
 
-        return input_groundtruth_response_list
+        return created_inputs_groundtruths
     except QADuplicatePositionError as e:
         LOGGER.error(f"Error in import_qa_data_from_csv_service: {str(e)}")
         raise CSVNonUniquePositionError(duplicate_positions=e.duplicate_positions) from e
