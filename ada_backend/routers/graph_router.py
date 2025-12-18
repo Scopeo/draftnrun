@@ -280,7 +280,7 @@ def deploy_graph(
     response_model=GraphSaveVersionResponse,
     tags=["Graph"],
 )
-def save_version(
+def save_graph_version(
     project_id: UUID,
     graph_runner_id: UUID,
     user: Annotated[

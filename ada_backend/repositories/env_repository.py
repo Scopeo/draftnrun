@@ -1,4 +1,3 @@
-from typing import Optional
 from uuid import UUID
 from typing import Optional
 from uuid import UUID
@@ -62,8 +61,9 @@ def bind_graph_runner_to_project(
     session: Session,
     graph_runner_id: UUID,
     project_id: UUID,
-    env: Optional[EnvType],
+    env: EnvType = None,
 ) -> db.ProjectEnvironmentBinding:
+    # Case env is None -> we create a new version, so we need to create the relationship
     if env is None:
         relationship = db.ProjectEnvironmentBinding(
             graph_runner_id=graph_runner_id, project_id=project_id, environment=None
@@ -71,7 +71,8 @@ def bind_graph_runner_to_project(
         session.add(relationship)
         session.commit()
         return relationship
-
+    # We do not create a version but a draft/production one, so we check that we have a single relationship per env
+    # and update it if it exists
     existing_binding = (
         session.query(db.ProjectEnvironmentBinding)
         .filter(
