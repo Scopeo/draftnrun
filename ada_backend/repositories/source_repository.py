@@ -229,9 +229,7 @@ def get_projects_using_source(
                 .select_from(db.ProjectEnvironmentBinding)
                 .join(db.GraphRunner, db.ProjectEnvironmentBinding.graph_runner_id == db.GraphRunner.id)
                 .join(db.GraphRunnerNode, db.GraphRunnerNode.graph_runner_id == db.GraphRunner.id)
-                .join(
-                    db.ComponentInstance, db.GraphRunnerNode.node_id == db.ComponentInstance.id
-                )
+                .join(db.ComponentInstance, db.GraphRunnerNode.node_id == db.ComponentInstance.id)
                 .join(db.BasicParameter, db.BasicParameter.component_instance_id == db.ComponentInstance.id)
                 .join(
                     db.ComponentParameterDefinition,
@@ -240,6 +238,8 @@ def get_projects_using_source(
                 .where(db.ProjectEnvironmentBinding.project_id == db.Project.id)
                 .where(db.ComponentParameterDefinition.type == db.ParameterType.DATA_SOURCE)
                 .where(db.BasicParameter.value.isnot(None))
+                # TODO: Refactor to move source_id to a dedicated DB field (or JSONB with a proper index)
+                # to avoid this inefficient textual search.
                 .where(db.BasicParameter.value.contains(f'"{source_id_str}"'))
             )
         )
