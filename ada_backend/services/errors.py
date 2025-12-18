@@ -105,12 +105,6 @@ class ChunkSourceMismatchError(Exception):
         super().__init__(f"Chunk {chunk_id} does not belong to source {source_id}")
 
 
-class ChunkNotFoundError(Exception):
-    def __init__(self, chunk_id: str):
-        self.chunk_id = chunk_id
-        super().__init__(f"Chunk {chunk_id} not found")
-
-
 class LLMModelNotFound(Exception):
     def __init__(self, llm_model_id: UUID):
         self.llm_model_id = llm_model_id

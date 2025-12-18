@@ -311,52 +311,6 @@ def _classify_columns(source_columns, column_types):
     return mapped_cols, metadata_cols
 
 
-def _migrate_table_with_sql_alternative(
-    ingestion_db_connection, source_schema, source_table, target_schema, target_table, source_id, source_type
-):
-    """Alternative SQL-based migration using different approach."""
-    # Get column info from source table (including data types)
-    source_columns, column_types = _get_table_column_info(ingestion_db_connection, source_schema, source_table)
-
-    LOGGER.info(
-        f"Alternative migration: Source table {source_schema}.{source_table} "
-        f"has {len(source_columns)} columns: {source_columns}"
-    )
-
-    mapped_cols, metadata_cols = _classify_columns(source_columns, column_types)
-
-    LOGGER.info(
-        f"Alternative migration column mapping for {source_schema}.{source_table}: "
-        f"mapped={list(mapped_cols.keys())}, metadata={metadata_cols}"
-    )
-
-    select_parts = _build_select_parts_for_migration(source_id, mapped_cols, metadata_cols, column_types)
-
-    insert_sql = f"""
-        INSERT INTO "{target_schema}"."{target_table}"
-        ({PROCESSED_DATETIME_FIELD}, {SOURCE_ID_COLUMN_NAME}, {CHUNK_ID_COLUMN_NAME},
-        "{ORDER_COLUMN_NAME}", {FILE_ID_COLUMN_NAME}, {DOCUMENT_TITLE_COLUMN_NAME}, {URL_COLUMN_NAME}, {CHUNK_COLUMN_NAME}, {TIMESTAMP_COLUMN_NAME}, {METADATA_COLUMN_NAME})
-        SELECT {', '.join(select_parts)}
-        FROM "{source_schema}"."{source_table}"
-        ON CONFLICT ({CHUNK_ID_COLUMN_NAME}) DO NOTHING
-    """
-
-    LOGGER.debug(f"Alternative SQL INSERT for {source_schema}.{source_table}:\n{insert_sql}")
-
-    try:
-        result = ingestion_db_connection.execute(text(insert_sql))
-        LOGGER.info(
-            f"Successfully migrated {result.rowcount} rows from {source_schema}.{source_table} "
-            f"to {target_schema}.{target_table} using alternative SQL approach"
-        )
-    except Exception as e:
-        LOGGER.error(
-            f"Error migrating {source_schema}.{source_table} to {target_schema}.{target_table} "
-            f"using alternative SQL approach: {str(e)}"
-        )
-        raise
-
-
 async def _merge_collections(
     qdrant_service,
     organization_id: str,
@@ -377,7 +331,7 @@ async def _merge_collections(
 
         if not source_collections:
             LOGGER.warning(
-                f"No source collections provided for organization {organization_id}, skipping collection merge"
+                f"No source collections provided for organization {organization_id}, skipping collection merge."
             )
             return False
 
@@ -413,20 +367,22 @@ async def _merge_collections(
                 else:
                     skipped_collections.append((source_id, collection_name))
                     LOGGER.warning(
-                        f"Source collection {collection_name} does not exist in Qdrant (source_id: {source_id}), skipping"
+                        f"Source collection {collection_name} does not exist in "
+                        f"Qdrant (source_id: {source_id}), skipping."
                     )
             except Exception as e:
                 skipped_collections.append((source_id, collection_name))
                 LOGGER.warning(
-                    f"Error checking if collection {collection_name} exists (source_id: {source_id}): {str(e)}, trying next..."
+                    f"Error checking if collection {collection_name} exists "
+                    f"(source_id: {source_id}): {str(e)}, trying next..."
                 )
                 continue
 
         if not first_valid_collection:
             LOGGER.warning(
-                f"No valid source collections found for organization {organization_id} with embedding model {embedding_model}. "
-                f"Skipped {len(skipped_collections)} collection(s): {[c[1] for c in skipped_collections]}. "
-                f"Skipping collection merge"
+                f"No valid source collections found for organization {organization_id} with "
+                f"embedding model {embedding_model}. Skipped {len(skipped_collections)} collection(s): "
+                f"{[c[1] for c in skipped_collections]}. Skipping collection merge."
             )
             return False
 
@@ -481,7 +437,8 @@ async def _merge_collections(
             try:
                 if not await qdrant_service.collection_exists_async(collection_name):
                     LOGGER.warning(
-                        f"Source collection {collection_name} does not exist in Qdrant (source_id: {source_id}), skipping"
+                        f"Source collection {collection_name} does not exist in Qdrant "
+                        f"(source_id: {source_id}), skipping."
                     )
                     collections_failed += 1
                     skipped_collections_list.append((source_id, collection_name, "does not exist"))
@@ -533,14 +490,15 @@ async def _merge_collections(
                             break
                     except Exception as e:
                         LOGGER.error(
-                            f"Error scrolling points from collection {collection_name} for source {source_id}: {str(e)}. "
-                            f"Continuing with next collection..."
+                            f"Error scrolling points from collection {collection_name} for source "
+                            f"{source_id}: {str(e)}. Continuing with next collection..."
                         )
                         break
 
                 if collection_points > 0:
                     LOGGER.info(
-                        f"Collected {collection_points} points from collection {collection_name} (source_id: {source_id})"
+                        f"Collected {collection_points} points from collection "
+                        f"{collection_name} (source_id: {source_id})."
                     )
                     collections_processed += 1
                 else:
@@ -732,7 +690,8 @@ def _merge_tables(
         insert_sql = f"""
             INSERT INTO "{schema_name}"."{new_table_name}"
             ({PROCESSED_DATETIME_FIELD}, {SOURCE_ID_COLUMN_NAME}, {CHUNK_ID_COLUMN_NAME},
-            "{ORDER_COLUMN_NAME}", {FILE_ID_COLUMN_NAME}, {DOCUMENT_TITLE_COLUMN_NAME}, {URL_COLUMN_NAME}, {CHUNK_COLUMN_NAME}, {TIMESTAMP_COLUMN_NAME}, {METADATA_COLUMN_NAME})
+            "{ORDER_COLUMN_NAME}", {FILE_ID_COLUMN_NAME}, {DOCUMENT_TITLE_COLUMN_NAME}, "
+            "{URL_COLUMN_NAME}, {CHUNK_COLUMN_NAME}, {TIMESTAMP_COLUMN_NAME}, {METADATA_COLUMN_NAME})
             SELECT {', '.join(select_parts)}
             FROM "{schema}"."{table_name}"
             ON CONFLICT ({CHUNK_ID_COLUMN_NAME}) DO NOTHING
@@ -769,21 +728,11 @@ def _merge_tables(
                 f"Error copying data from {schema}.{table_name} to {schema_name}.{new_table_name}: {str(e)}\n"
                 f"SQL: {insert_sql}"
             )
-            # Try alternative SQL approach with different JSON construction
-            LOGGER.info(f"Attempting alternative SQL-based transformation for {schema}.{table_name}")
-            try:
-                _migrate_table_with_sql_alternative(
-                    ingestion_db_connection, schema, table_name, schema_name, new_table_name, source_id, source_type
-                )
-                LOGGER.info(f"Successfully migrated {schema}.{table_name} using alternative SQL approach")
-            except Exception as e2:
-                LOGGER.warning(
-                    f"FAILED to migrate table {schema}.{table_name} for source {source_id}. "
-                    f"Both SQL approaches failed. "
-                    f"Primary SQL error: {str(e)}, Alternative SQL error: {str(e2)}. "
-                    f"Old table {schema}.{table_name} will remain unchanged."
-                )
-                continue
+            LOGGER.warning(
+                f"FAILED to migrate table {schema}.{table_name} for source {source_id}. "
+                f"Old table {schema}.{table_name} will remain unchanged."
+            )
+            continue
 
         # Note: We do NOT drop old tables - they are kept for safety
         LOGGER.info(f"Migration completed for {schema}.{table_name} (old table preserved)")
@@ -962,10 +911,9 @@ def upgrade() -> None:
                         orgs_with_collection_migrations += 1
                 except Exception as e:
                     LOGGER.error(
-                        f"Error merging collections for organization {org_id} with embedding model {embedding_model}: {str(e)}. "
-                        f"Continuing with next organization..."
+                        f"Error merging collections for organization {org_id} with embedding "
+                        f"model {embedding_model}: {str(e)}. Continuing with next organization..."
                     )
-                    # Continue with next organization instead of stopping
                     continue
             else:
                 LOGGER.warning(

@@ -31,7 +31,6 @@ from engine.storage_service.db_utils import (
 from engine.storage_service.local_service import SQLLocalService
 from engine.trace.trace_manager import TraceManager
 from ingestion_script.utils import (
-    CHUNK_ID_COLUMN_NAME,
     DOCUMENT_TITLE_COLUMN_NAME,
     create_source,
     get_sanitize_names,
@@ -52,7 +51,6 @@ from settings import settings
 
 LOGGER = logging.getLogger(__name__)
 
-TIMESTAMP_COLUMN_NAME = "last_edited_ts"
 META_DATA_TO_KEEP = [
     "folder_name",
     "page_number",

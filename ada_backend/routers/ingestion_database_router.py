@@ -4,8 +4,6 @@ from typing import Annotated
 from fastapi import Depends, HTTPException
 from uuid import UUID
 
-from sqlalchemy.orm import Session
-
 from engine.storage_service.db_utils import DBDefinition
 from ada_backend.routers.auth_router import verify_ingestion_api_key_dependency
 from ada_backend.services.ingestion_database_service import create_table_in_ingestion_db

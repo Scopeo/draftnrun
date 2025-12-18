@@ -1,13 +1,9 @@
 from uuid import UUID
 
-from sqlalchemy.orm import Session
-
 from engine.storage_service.local_service import SQLLocalService
 from ingestion_script.utils import get_sanitize_names
 from engine.storage_service.db_utils import DBDefinition
 from settings import settings
-from ada_backend.repositories.source_repository import get_data_source_by_id
-from ada_backend.services.errors import SourceNotFound, ChunkSourceMismatchError, ChunkNotFoundError
 
 
 def get_sql_local_service_for_ingestion() -> SQLLocalService:
