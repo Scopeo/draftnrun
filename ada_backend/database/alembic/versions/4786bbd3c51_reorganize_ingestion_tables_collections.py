@@ -130,6 +130,102 @@ def _check_table_exists(connection, schema_name, table_name):
             return False
 
 
+def _ensure_composite_primary_key(connection, schema_name, table_name):
+    """Ensure table has composite primary key on (chunk_id, source_id).
+
+    If table has old single-column primary key on chunk_id, drop it and add composite key.
+    If table has no primary key, add composite key.
+    If table already has composite key, do nothing.
+    """
+    try:
+        # Check current primary key constraint
+        pk_info = connection.execute(
+            text(
+                """
+                SELECT tc.constraint_name, string_agg(kcu.column_name, ',' ORDER BY kcu.ordinal_position) as columns
+                FROM information_schema.table_constraints tc
+                JOIN information_schema.key_column_usage kcu
+                    ON tc.constraint_name = kcu.constraint_name
+                    AND tc.table_schema = kcu.table_schema
+                WHERE tc.constraint_type = 'PRIMARY KEY'
+                    AND tc.table_schema = :schema_name
+                    AND tc.table_name = :table_name
+                GROUP BY tc.constraint_name
+            """
+            ),
+            {"schema_name": schema_name, "table_name": table_name},
+        ).fetchone()
+
+        if pk_info:
+            constraint_name, columns = pk_info
+            columns_list = [col.strip().lower() for col in columns.split(",")]
+
+            # Check if it's already the composite key
+            has_chunk_id = CHUNK_ID_COLUMN_NAME.lower() in columns_list
+            has_source_id = SOURCE_ID_COLUMN_NAME.lower() in columns_list
+
+            if has_chunk_id and has_source_id and len(columns_list) == 2:
+                LOGGER.info(
+                    f"Table {schema_name}.{table_name} already has composite primary key "
+                    f"on ({CHUNK_ID_COLUMN_NAME}, {SOURCE_ID_COLUMN_NAME})"
+                )
+                return True
+
+            # Drop existing primary key (old single-column or incorrect composite)
+            LOGGER.info(
+                f"Dropping existing primary key constraint '{constraint_name}' "
+                f"from {schema_name}.{table_name} (columns: {columns})"
+            )
+            connection.execute(
+                text(f'ALTER TABLE "{schema_name}"."{table_name}" ' f'DROP CONSTRAINT "{constraint_name}"')
+            )
+
+        # Check for NULL values in chunk_id or source_id
+        null_chunk_count = connection.execute(
+            text(f'SELECT COUNT(*) FROM "{schema_name}"."{table_name}" ' f'WHERE "{CHUNK_ID_COLUMN_NAME}" IS NULL')
+        ).scalar()
+
+        null_source_count = connection.execute(
+            text(f'SELECT COUNT(*) FROM "{schema_name}"."{table_name}" ' f'WHERE "{SOURCE_ID_COLUMN_NAME}" IS NULL')
+        ).scalar()
+
+        if null_chunk_count and null_chunk_count > 0:
+            LOGGER.error(
+                f"Cannot add composite primary key: {null_chunk_count} rows have NULL values "
+                f"in {CHUNK_ID_COLUMN_NAME} for table {schema_name}.{table_name}"
+            )
+            return False
+
+        if null_source_count and null_source_count > 0:
+            LOGGER.error(
+                f"Cannot add composite primary key: {null_source_count} rows have NULL values "
+                f"in {SOURCE_ID_COLUMN_NAME} for table {schema_name}.{table_name}"
+            )
+            return False
+
+        # Add composite primary key
+        constraint_name = f"{table_name}_{CHUNK_ID_COLUMN_NAME}_{SOURCE_ID_COLUMN_NAME}_pk"
+        connection.execute(
+            text(
+                f'ALTER TABLE "{schema_name}"."{table_name}" '
+                f'ADD CONSTRAINT "{constraint_name}" '
+                f'PRIMARY KEY ("{CHUNK_ID_COLUMN_NAME}", "{SOURCE_ID_COLUMN_NAME}")'
+            )
+        )
+        LOGGER.info(
+            f"Added composite primary key constraint on ({CHUNK_ID_COLUMN_NAME}, {SOURCE_ID_COLUMN_NAME}) "
+            f"to table {schema_name}.{table_name}"
+        )
+        return True
+
+    except Exception as e:
+        LOGGER.error(f"Error ensuring composite primary key for {schema_name}.{table_name}: {str(e)}")
+        import traceback
+
+        LOGGER.error(traceback.format_exc())
+        return False
+
+
 def _get_table_column_info(connection, schema_name, table_name):
     """Get column information (name and data type) for a table.
 
@@ -639,6 +735,9 @@ def _merge_tables(
     _create_table_from_definition(ingestion_db_connection, UNIFIED_TABLE_DEFINITION, schema_name, new_table_name)
     LOGGER.info(f"Table {schema_name}.{new_table_name} created/verified in ingestion database")
 
+    # Ensure composite primary key exists (in case table was created before definition update)
+    _ensure_composite_primary_key(ingestion_db_connection, schema_name, new_table_name)
+
     LOGGER.info(f"=== Starting merge of {len(source_tables)} source tables into {schema_name}.{new_table_name} ===")
     sources_processed = 0
     sources_skipped = 0
@@ -690,11 +789,11 @@ def _merge_tables(
         insert_sql = f"""
             INSERT INTO "{schema_name}"."{new_table_name}"
             ({PROCESSED_DATETIME_FIELD}, {SOURCE_ID_COLUMN_NAME}, {CHUNK_ID_COLUMN_NAME},
-            "{ORDER_COLUMN_NAME}", {FILE_ID_COLUMN_NAME}, {DOCUMENT_TITLE_COLUMN_NAME}, "
-            "{URL_COLUMN_NAME}, {CHUNK_COLUMN_NAME}, {TIMESTAMP_COLUMN_NAME}, {METADATA_COLUMN_NAME})
+            "{ORDER_COLUMN_NAME}", {FILE_ID_COLUMN_NAME}, {DOCUMENT_TITLE_COLUMN_NAME},
+            {URL_COLUMN_NAME}, {CHUNK_COLUMN_NAME}, {TIMESTAMP_COLUMN_NAME}, {METADATA_COLUMN_NAME})
             SELECT {', '.join(select_parts)}
             FROM "{schema}"."{table_name}"
-            ON CONFLICT ({CHUNK_ID_COLUMN_NAME}) DO NOTHING
+            ON CONFLICT ({CHUNK_ID_COLUMN_NAME}, {SOURCE_ID_COLUMN_NAME}) DO NOTHING
         """
 
         LOGGER.debug(f"SQL INSERT for {schema}.{table_name}:\n{insert_sql}")

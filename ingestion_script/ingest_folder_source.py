@@ -61,7 +61,7 @@ UNIFIED_TABLE_DEFINITION = DBDefinition(
     columns=[
         DBColumn(name=PROCESSED_DATETIME_FIELD, type="DATETIME", default="CURRENT_TIMESTAMP"),
         DBColumn(name=CHUNK_ID_COLUMN_NAME, type="VARCHAR", is_primary=True),
-        DBColumn(name=SOURCE_ID_COLUMN_NAME, type="UUID"),
+        DBColumn(name=SOURCE_ID_COLUMN_NAME, type="UUID", is_primary=True),
         DBColumn(name=ORDER_COLUMN_NAME, type="INTEGER", is_nullable=True),
         DBColumn(name=FILE_ID_COLUMN_NAME, type="VARCHAR"),
         DBColumn(name=DOCUMENT_TITLE_COLUMN_NAME, type="VARCHAR"),

@@ -296,13 +296,17 @@ class SQLLocalService(DBService):
         table_name: str,
         column_name: str,
         schema_name: Optional[str] = None,
+        source_id: Optional[str] = None,
     ) -> set:
         """
         Fetch all values from a specific column as a set.
+        If source_id is provided, only fetch values for rows matching that source_id.
         """
         table = self.get_table(table_name, schema_name)
         with self.Session() as session:
             stmt = sqlalchemy.select(table.c[column_name])
+            if source_id is not None:
+                stmt = stmt.where(table.c["source_id"] == source_id)
             result = session.execute(stmt)
             return set(result.scalars().all())
 
@@ -562,6 +566,7 @@ class SQLLocalService(DBService):
         chunk_ids: list[str],
         schema_name: Optional[str] = None,
         id_column_name: str = CHUNK_ID_COLUMN,
+        sql_query_filter: Optional[str] = None,
     ) -> list[dict]:
         """Get multiple rows by their chunk IDs. Returns a list of dictionaries."""
         if not chunk_ids:
@@ -570,6 +575,8 @@ class SQLLocalService(DBService):
         table = self.get_table(table_name, schema_name)
         with self.Session() as session:
             stmt = sqlalchemy.select(table).where(table.c[id_column_name].in_(chunk_ids))
+            if sql_query_filter:
+                stmt = stmt.where(text(sql_query_filter))
             results = session.execute(stmt).fetchall()
 
             # Convert SQLAlchemy Rows to dictionaries

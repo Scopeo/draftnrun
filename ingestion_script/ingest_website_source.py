@@ -258,6 +258,7 @@ async def upload_website_source(
         timestamp_column_name=TIMESTAMP_COLUMN_NAME,
         append_mode=True,
         schema_name=storage_schema_name,
+        source_id=str(source_id),  # Pass source_id to filter existing IDs by source
     )
 
     await sync_chunks_to_qdrant(

@@ -24,6 +24,7 @@ from ingestion_script.utils import (
     SOURCE_ID_COLUMN_NAME,
     METADATA_COLUMN_NAME,
     ORDER_COLUMN_NAME,
+    DOCUMENT_TITLE_COLUMN_NAME,
     resolve_sql_timestamp_filter,
 )
 from ingestion_script.ingest_folder_source import UNIFIED_TABLE_DEFINITION
@@ -112,6 +113,9 @@ def get_db_source(
     unified_df[CHUNK_ID_COLUMN_NAME] = df_chunks[CHUNK_ID_COLUMN_NAME]
     unified_df[CHUNK_COLUMN_NAME] = df_chunks[CHUNK_COLUMN_NAME]
     unified_df[FILE_ID_COLUMN_NAME] = df_chunks[FILE_ID_COLUMN_NAME]
+    unified_df[ORDER_COLUMN_NAME] = df_chunks[ORDER_COLUMN_NAME]
+    # Use file_id as document_title for database sources (file_id = table_name + "_" + id_column_value)
+    unified_df[DOCUMENT_TITLE_COLUMN_NAME] = df_chunks[FILE_ID_COLUMN_NAME]
 
     if timestamp_column_name and timestamp_column_name in df_chunks.columns:
         unified_df[TIMESTAMP_COLUMN_NAME] = df_chunks[timestamp_column_name]
@@ -215,7 +219,9 @@ async def upload_db_source(
         append_mode=update_existing,
         schema_name=storage_schema_name,
         sql_query_filter=combined_filter_sql,
+        source_id=str(source_id),  # Pass source_id to filter existing IDs by source
     )
+
     LOGGER.info(f"Updated table '{storage_table_name}' in schema '{storage_schema_name}' with {len(df)} rows.")
     await sync_chunks_to_qdrant(
         storage_schema_name,

@@ -127,6 +127,8 @@ def get_sanitize_names(
     All sources use org-level table and collection in the public schema.
     Collection name includes embedding model to avoid mixing vectors from different models.
     """
+    import json
+    from datetime import datetime
 
     sanitize_organization_id = sanitize_filename(organization_id)
     schema_name = "public"

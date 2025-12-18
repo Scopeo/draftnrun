@@ -681,23 +681,28 @@ class QdrantService:
         point_ids: list[str],
         id_field: str,
         collection_name: str,
+        filter: Optional[dict] = None,
     ) -> bool:
         """Delete chunks from the Qdrant collection based on the list
         of IDs for a given field name."""
-        return asyncio.run(self.delete_chunks_async(point_ids, id_field, collection_name))
+        return asyncio.run(self.delete_chunks_async(point_ids, id_field, collection_name, filter))
 
     async def delete_chunks_async(
         self,
         point_ids: list[str],
         id_field: str,
         collection_name: str,
+        filter: Optional[dict] = None,
     ) -> bool:
         """
         Async version of delete_chunks.
         Delete chunks from the Qdrant collection based on the list
         of IDs for a given field name.
         """
-        filter_on_qdrant_field = {"should": [{"key": id_field, "match": {"any": point_ids}}]}
+        filter_on_qdrant_field = self._combine_filters(
+            base_filter=filter,
+            additional_filters=[{"should": [{"key": id_field, "match": {"any": point_ids}}]}],
+        )
         points = await self.get_points_async(filter=filter_on_qdrant_field, collection_name=collection_name)
         if not points:
             return True
