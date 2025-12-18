@@ -4,7 +4,7 @@ import logging
 import uuid
 
 from sqlalchemy.orm import Session
-from sqlalchemy import func, and_
+from sqlalchemy import func, and_, exists, select
 
 from ada_backend.database import models as db
 
@@ -210,3 +210,40 @@ def get_source_attributes(
         attributes.source_db_url = org_secret.get_secret()
 
     return attributes
+
+
+def get_projects_using_source(
+    session: Session,
+    organization_id: UUID,
+    source_id: UUID,
+) -> list[db.Project]:
+
+    source_id_str = str(source_id)
+
+    projects = (
+        session.query(db.Project)
+        .filter(db.Project.organization_id == organization_id)
+        .filter(
+            exists(
+                select(1)
+                .select_from(db.ProjectEnvironmentBinding)
+                .join(db.GraphRunner, db.ProjectEnvironmentBinding.graph_runner_id == db.GraphRunner.id)
+                .join(db.GraphRunnerNode, db.GraphRunnerNode.graph_runner_id == db.GraphRunner.id)
+                .join(db.ComponentInstance, db.GraphRunnerNode.node_id == db.ComponentInstance.id)
+                .join(db.BasicParameter, db.BasicParameter.component_instance_id == db.ComponentInstance.id)
+                .join(
+                    db.ComponentParameterDefinition,
+                    db.BasicParameter.parameter_definition_id == db.ComponentParameterDefinition.id,
+                )
+                .where(db.ProjectEnvironmentBinding.project_id == db.Project.id)
+                .where(db.ComponentParameterDefinition.type == db.ParameterType.DATA_SOURCE)
+                .where(db.BasicParameter.value.isnot(None))
+                # TODO: Refactor to move source_id to a dedicated DB field (or JSONB with a proper index)
+                # to avoid this inefficient textual search.
+                .where(db.BasicParameter.value.contains(f'"{source_id_str}"'))
+            )
+        )
+        .all()
+    )
+
+    return projects

@@ -6,7 +6,11 @@ from sqlalchemy.orm import Session
 
 from ada_backend.database.setup_db import get_db
 from ada_backend.schemas.auth_schema import SupabaseUser
-from ada_backend.schemas.source_schema import DataSourceSchema, DataSourceSchemaResponse
+from ada_backend.schemas.source_schema import (
+    DataSourceSchema,
+    DataSourceSchemaResponse,
+    ProjectUsingSourceSchema,
+)
 
 from ada_backend.routers.auth_router import (
     user_has_access_to_organization_dependency,
@@ -19,13 +23,14 @@ from ada_backend.services.source_service import (
     create_source_by_organization,
     delete_source_service,
     update_source_by_source_id,
+    check_source_id_usage_service,
 )
 
-router = APIRouter(prefix="/sources", tags=["Sources"])
+router = APIRouter(tags=["Sources"])
 LOGGER = logging.getLogger(__name__)
 
 
-@router.get("/{organization_id}", response_model=List[DataSourceSchemaResponse])
+@router.get("/sources/{organization_id}", response_model=List[DataSourceSchemaResponse])
 def get_organization_sources(
     organization_id: UUID,
     user: Annotated[
@@ -45,7 +50,7 @@ def get_organization_sources(
         raise HTTPException(status_code=500, detail="Internal Server Error") from e
 
 
-@router.post("/{organization_id}", status_code=status.HTTP_201_CREATED)
+@router.post("/sources/{organization_id}", status_code=status.HTTP_201_CREATED)
 def create_organization_source(
     verified_ingestion_api_key: Annotated[None, Depends(verify_ingestion_api_key_dependency)],
     organization_id: UUID,
@@ -64,7 +69,7 @@ def create_organization_source(
 
 
 @router.post(
-    "/{organization_id}/{source_id}",
+    "/sources/{organization_id}/{source_id}",
     status_code=status.HTTP_200_OK,
     summary="Update source in organization, authentication via user token or API key",
 )
@@ -96,7 +101,7 @@ def update_organization_source(
 
 
 @router.post(
-    "/{organization_id}/{source_id}/api-key",
+    "/sources/{organization_id}/{source_id}/api-key",
     status_code=status.HTTP_200_OK,
     summary="Update source in organization, authentication via user token or API key",
     deprecated=True,
@@ -128,7 +133,7 @@ def update_organization_source_api_key(
         raise HTTPException(status_code=500, detail="Internal Server Error") from e
 
 
-@router.delete("/{organization_id}/{source_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/sources/{organization_id}/{source_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_organization_source(
     organization_id: UUID,
     source_id: UUID,
@@ -145,6 +150,33 @@ def delete_organization_source(
     except Exception as e:
         LOGGER.exception(
             "Failed to delete source %s for organization %s",
+            source_id,
+            organization_id,
+        )
+        raise HTTPException(status_code=500, detail="Internal Server Error") from e
+
+
+@router.get(
+    "/organizations/{organization_id}/sources/{source_id}/usage",
+    response_model=list[ProjectUsingSourceSchema],
+    summary="Get projects (workflows/agents) using a source",
+)
+def check_source_usage(
+    organization_id: UUID,
+    source_id: UUID,
+    user: Annotated[
+        SupabaseUser, Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.MEMBER.value))
+    ],
+    session: Session = Depends(get_db),
+) -> list[ProjectUsingSourceSchema]:
+
+    if not user.id:
+        raise HTTPException(status_code=400, detail="User ID not found")
+    try:
+        return check_source_id_usage_service(session, organization_id, source_id)
+    except Exception as e:
+        LOGGER.exception(
+            "Failed to get projects using source %s in organization %s",
             source_id,
             organization_id,
         )
