@@ -309,6 +309,34 @@ def bind_graph_to_env_service(
     LOGGER.info(f"Bound graph runner {graph_runner_id} to {env.value}")
 
 
+def load_version_as_draft_service(
+    session: Session,
+    project_id: UUID,
+    graph_runner_id: UUID,
+) -> None:
+    previous_draft_graph = _bind_graph_to_env_helper(
+        session=session,
+        graph_runner_id=graph_runner_id,
+        project_id=project_id,
+        env=EnvType.DRAFT,
+    )
+
+    new_draft_graph_runner_id = clone_graph_runner(
+        session=session,
+        graph_runner_id_to_copy=graph_runner_id,
+        project_id=project_id,
+    )
+
+    bind_graph_runner_to_project(
+        session, graph_runner_id=new_draft_graph_runner_id, project_id=project_id, env=EnvType.DRAFT
+    )
+    LOGGER.info(f"Created new Draft from graph runner {graph_runner_id}")
+
+    if previous_draft_graph is not None:
+        delete_graph_runner_service(session, previous_draft_graph.id)
+        LOGGER.info(f"Deleted previous draft graph {previous_draft_graph.id}")
+
+
 def save_graph_version_service(
     session: Session,
     graph_runner_id: UUID,
@@ -316,23 +344,6 @@ def save_graph_version_service(
 ) -> GraphSaveVersionResponse:
     """
     Create a versioned snapshot from a draft graph runner.
-
-    This function:
-    1. Validates the graph runner exists and is a DRAFT
-    2. Clones the graph runner
-    3. Computes and assigns a new version tag
-    4. Binds the cloned graph runner to the project with VERSIONED environment
-
-    Args:
-        session: Database session
-        graph_runner_id: ID of the draft graph runner to save
-        project_id: ID of the project
-
-    Returns:
-        GraphSaveVersionResponse with the saved version details
-
-    Raises:
-        HTTPException: If validation fails
     """
     if not graph_runner_exists(session, graph_id=graph_runner_id):
         raise GraphNotFound(graph_runner_id)
@@ -350,7 +361,6 @@ def save_graph_version_service(
         graph_runner_id_to_copy=graph_runner_id,
         project_id=project_id,
     )
-
     LOGGER.info(f"Cloned graph runner {graph_runner_id} to {versioned_graph_runner_id}")
 
     version_tag = compute_next_tag_version(session, project_id)
@@ -364,7 +374,7 @@ def save_graph_version_service(
         env=None,
     )
     LOGGER.info(
-        f"Bound versioned graph runner {versioned_graph_runner_id} to project {project_id} " "with None environment"
+        f"Bound versioned graph runner {versioned_graph_runner_id} to project {project_id} with None environment"
     )
 
     return GraphSaveVersionResponse(
