@@ -17,7 +17,7 @@ from data_ingestion.boto3_client import get_s3_boto3_client, file_exists_in_buck
 from ingestion_script.ingest_folder_source import ingest_local_folder_source
 from ingestion_script.utils import (
     get_sanitize_names,
-    DOCUMENT_ID_COLUMN_NAME,
+    FILE_ID_COLUMN_NAME,
     CHUNK_COLUMN_NAME,
     SOURCE_ID_COLUMN_NAME,
 )
@@ -168,7 +168,7 @@ def test_ingest_local_folder_source():
     )
     assert not chunk_df.empty
     assert CHUNK_COLUMN_NAME in chunk_df.columns
-    assert DOCUMENT_ID_COLUMN_NAME in chunk_df.columns
+    assert FILE_ID_COLUMN_NAME in chunk_df.columns
 
     delete_response = client.delete(f"/ingestion_task/{ORGANIZATION_ID}/{task_id}", headers=HEADERS_JWT)
     assert delete_response.status_code == 204

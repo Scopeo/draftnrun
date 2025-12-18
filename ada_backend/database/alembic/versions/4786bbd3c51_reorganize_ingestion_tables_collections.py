@@ -1,7 +1,7 @@
 """reorganize_ingestion_tables_collections
 
 Revision ID: 4786bbd3c51
-Revises: 8279e65a01dc
+Revises: cfe3267603c1
 Create Date: 2025-01-20 12:00:00.000000
 
 """
@@ -27,7 +27,7 @@ from ingestion_script.utils import (
     METADATA_COLUMN_NAME,
     CHUNK_ID_COLUMN_NAME,
     CHUNK_COLUMN_NAME,
-    DOCUMENT_ID_COLUMN_NAME,
+    FILE_ID_COLUMN_NAME,
     get_sanitize_names,
     DEFAULT_EMBEDDING_MODEL,
 )
@@ -40,7 +40,7 @@ from engine.storage_service.local_service import SQLLocalService
 
 # revision identifiers, used by Alembic.
 revision: str = "4786bbd3c51"
-down_revision: Union[str, None] = "8279e65a01dc"
+down_revision: Union[str, None] = "cfe3267603c1"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
@@ -187,7 +187,7 @@ def _build_select_parts_for_migration(source_id, mapped_cols, metadata_cols, col
         select_parts.append(f'NULL AS "{CHUNK_ID_COLUMN_NAME}"')
 
     # 3-5. Other mapped columns in order: document_id, document_title, content, timestamp
-    other_cols_order = [DOCUMENT_ID_COLUMN_NAME, DOCUMENT_TITLE_COLUMN_NAME, CHUNK_COLUMN_NAME, TIMESTAMP_COLUMN_NAME]
+    other_cols_order = [FILE_ID_COLUMN_NAME, DOCUMENT_TITLE_COLUMN_NAME, CHUNK_COLUMN_NAME, TIMESTAMP_COLUMN_NAME]
     for unified_col in other_cols_order:
         if unified_col in unified_cols_in_mapped:
             orig_col = unified_cols_in_mapped[unified_col]
@@ -258,10 +258,10 @@ def _classify_columns(source_columns, column_types):
     normal_columns_map = {
         CHUNK_ID_COLUMN_NAME.lower(): CHUNK_ID_COLUMN_NAME,
         CHUNK_COLUMN_NAME.lower(): CHUNK_COLUMN_NAME,
-        DOCUMENT_ID_COLUMN_NAME.lower(): DOCUMENT_ID_COLUMN_NAME,
-        "file_id": DOCUMENT_ID_COLUMN_NAME,  # Alternative name
+        FILE_ID_COLUMN_NAME.lower(): FILE_ID_COLUMN_NAME,
+        "file_id": FILE_ID_COLUMN_NAME,  # Alternative name
         DOCUMENT_TITLE_COLUMN_NAME.lower(): DOCUMENT_TITLE_COLUMN_NAME,
-        "source_identifier": DOCUMENT_ID_COLUMN_NAME,  # Alternative name
+        "source_identifier": FILE_ID_COLUMN_NAME,  # Alternative name
         PROCESSED_DATETIME_FIELD.lower(): PROCESSED_DATETIME_FIELD,
         TIMESTAMP_COLUMN_NAME.lower(): TIMESTAMP_COLUMN_NAME,
         # url, metadata, and source_metadata are NOT in normal_columns_map - they go to metadata
@@ -315,7 +315,7 @@ def _migrate_table_with_sql_alternative(
     insert_sql = f"""
         INSERT INTO "{target_schema}"."{target_table}"
         ({PROCESSED_DATETIME_FIELD}, {SOURCE_ID_COLUMN_NAME}, {CHUNK_ID_COLUMN_NAME},
-        {DOCUMENT_ID_COLUMN_NAME}, {CHUNK_COLUMN_NAME}, {TIMESTAMP_COLUMN_NAME}, {METADATA_COLUMN_NAME})
+        {FILE_ID_COLUMN_NAME}, {DOCUMENT_TITLE_COLUMN_NAME}, {CHUNK_COLUMN_NAME}, {TIMESTAMP_COLUMN_NAME}, {METADATA_COLUMN_NAME})
         SELECT {', '.join(select_parts)}
         FROM "{source_schema}"."{source_table}"
         ON CONFLICT ({CHUNK_ID_COLUMN_NAME}) DO NOTHING
@@ -712,7 +712,7 @@ def _merge_tables(
         insert_sql = f"""
             INSERT INTO "{schema_name}"."{new_table_name}"
             ({PROCESSED_DATETIME_FIELD}, {SOURCE_ID_COLUMN_NAME}, {CHUNK_ID_COLUMN_NAME},
-            {DOCUMENT_ID_COLUMN_NAME}, {CHUNK_COLUMN_NAME}, {TIMESTAMP_COLUMN_NAME}, {METADATA_COLUMN_NAME})
+            {FILE_ID_COLUMN_NAME}, {DOCUMENT_TITLE_COLUMN_NAME}, {CHUNK_COLUMN_NAME}, {TIMESTAMP_COLUMN_NAME}, {METADATA_COLUMN_NAME})
             SELECT {', '.join(select_parts)}
             FROM "{schema}"."{table_name}"
             ON CONFLICT ({CHUNK_ID_COLUMN_NAME}) DO NOTHING

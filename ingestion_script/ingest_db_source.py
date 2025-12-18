@@ -14,7 +14,7 @@ from engine.storage_service.local_service import SQLLocalService
 from ingestion_script.ingest_folder_source import TIMESTAMP_COLUMN_NAME, UNIFIED_QDRANT_SCHEMA, sync_chunks_to_qdrant
 from ada_backend.database import models as db
 from ingestion_script.utils import (
-    DOCUMENT_ID_COLUMN_NAME,
+    FILE_ID_COLUMN_NAME,
     upload_source,
     build_combined_sql_filter,
     CHUNK_ID_COLUMN_NAME,
@@ -98,7 +98,7 @@ def get_db_source(
     df_chunks[CHUNK_ID_COLUMN_NAME] = (
         df_chunks[id_column_name].astype(str) + "_" + df_chunks["chunk_index"].astype(str)
     )
-    df_chunks[DOCUMENT_ID_COLUMN_NAME] = table_name + "_" + df_chunks[id_column_name].astype(str)
+    df_chunks[FILE_ID_COLUMN_NAME] = table_name + "_" + df_chunks[id_column_name].astype(str)
 
     if url_pattern:
         df_chunks[URL_COLUMN_NAME] = df_chunks.apply(
@@ -110,7 +110,7 @@ def get_db_source(
     unified_df = pd.DataFrame()
     unified_df[CHUNK_ID_COLUMN_NAME] = df_chunks[CHUNK_ID_COLUMN_NAME]
     unified_df[CHUNK_COLUMN_NAME] = df_chunks[CHUNK_COLUMN_NAME]
-    unified_df[DOCUMENT_ID_COLUMN_NAME] = df_chunks[DOCUMENT_ID_COLUMN_NAME]
+    unified_df[FILE_ID_COLUMN_NAME] = df_chunks[FILE_ID_COLUMN_NAME]
 
     if timestamp_column_name and timestamp_column_name in df_chunks.columns:
         unified_df[TIMESTAMP_COLUMN_NAME] = df_chunks[timestamp_column_name]
