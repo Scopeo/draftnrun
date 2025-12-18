@@ -35,7 +35,7 @@ from ada_backend.services.errors import (
 from ada_backend.services.graph.deploy_graph_service import (
     deploy_graph_service,
     bind_graph_to_env_service,
-    save_graph_version_service
+    save_graph_version_service,
 )
 from ada_backend.services.graph.load_copy_graph_service import load_copy_graph_service
 from ada_backend.services.graph.update_graph_service import update_graph_with_history_service
@@ -283,14 +283,6 @@ def save_graph_version(
     ],
     session: Session = Depends(get_db),
 ) -> GraphSaveVersionResponse:
-    """
-    Create a saved version from a draft graph runner.
-
-    This endpoint:
-    - Clones the draft graph runner
-    - Assigns a new version tag
-    - Saves it with None environment
-    """
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
     project = get_project(session, project_id=project_id)
