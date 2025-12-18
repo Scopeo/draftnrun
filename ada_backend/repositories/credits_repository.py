@@ -1,9 +1,18 @@
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import func, literal
 from uuid import UUID
 from typing import Optional, List
+from dataclasses import dataclass
 
 import ada_backend.database.models as db
+
+
+@dataclass
+class OrganizationLimitAndUsageDTO:
+    organization_id: UUID
+    limit_id: Optional[UUID] = None
+    limit: Optional[float] = None
+    total_credits_used: Optional[float] = None
 
 
 def _update_cost_fields(
@@ -148,10 +157,6 @@ def delete_component_version_cost(session: Session, component_version_id: UUID) 
         session.commit()
 
 
-def get_all_organization_limits(session: Session) -> List[db.OrganizationLimit]:
-    return session.query(db.OrganizationLimit).all()
-
-
 def create_organization_limit(
     session: Session,
     organization_id: UUID,
@@ -230,3 +235,54 @@ def get_organization_total_credits(session: Session, organization_id: UUID, year
         .scalar()
     )
     return round(float(total) if total else 0.0, 2)
+
+
+def get_all_organization_limits_with_usage(
+    session: Session, month: int, year: int
+) -> List[OrganizationLimitAndUsageDTO]:
+
+    usage_subquery = (
+        session.query(
+            db.Project.organization_id.label("org_id"),
+            func.sum(db.Usage.credits_used).label("total_credits_used"),
+        )
+        .select_from(db.Usage)
+        .join(db.Project, db.Usage.project_id == db.Project.id)
+        .filter(db.Usage.year == year, db.Usage.month == month)
+        .group_by(db.Project.organization_id)
+        .subquery()
+    )
+
+    limits_query = session.query(
+        db.OrganizationLimit.organization_id,
+        db.OrganizationLimit.id.label("limit_id"),
+        db.OrganizationLimit.limit,
+        usage_subquery.c.total_credits_used,
+    ).outerjoin(usage_subquery, db.OrganizationLimit.organization_id == usage_subquery.c.org_id)
+
+    usage_only_query = (
+        session.query(
+            usage_subquery.c.org_id.label("organization_id"),
+            literal(None).label("limit_id"),
+            literal(None).label("limit"),
+            usage_subquery.c.total_credits_used,
+        )
+        .select_from(usage_subquery)
+        .outerjoin(db.OrganizationLimit, usage_subquery.c.org_id == db.OrganizationLimit.organization_id)
+        .filter(db.OrganizationLimit.id.is_(None))
+    )
+
+    limits_and_usage_query = limits_query.union(usage_only_query)
+    limit_usage_rows = limits_and_usage_query.all()
+
+    return [
+        OrganizationLimitAndUsageDTO(
+            organization_id=row.organization_id,
+            limit_id=row.limit_id,
+            limit=row.limit,
+            total_credits_used=(
+                round(float(row.total_credits_used), 2) if row.total_credits_used is not None else None
+            ),
+        )
+        for row in limit_usage_rows
+    ]

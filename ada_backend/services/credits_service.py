@@ -1,9 +1,10 @@
 from sqlalchemy.orm import Session
 from uuid import UUID
-from typing import Optional, List
+from typing import Optional
 from ada_backend.schemas.credits_schema import (
     ComponentVersionCostResponse,
     OrganizationLimitResponse,
+    OrganizationLimitAndUsageResponse,
 )
 from ada_backend.repositories.credits_repository import (
     upsert_component_version_cost,
@@ -11,7 +12,7 @@ from ada_backend.repositories.credits_repository import (
     create_organization_limit,
     update_organization_limit,
     delete_organization_limit,
-    get_all_organization_limits,
+    get_all_organization_limits_with_usage,
 )
 from ada_backend.services.errors import (
     ComponentVersionCostNotFound,
@@ -38,14 +39,6 @@ def upsert_component_version_cost_service(
 
 def delete_component_version_cost_service(session: Session, component_version_id: UUID) -> None:
     return delete_component_version_cost(session, component_version_id)
-
-
-def get_all_organization_limits_service(session: Session) -> List[OrganizationLimitResponse]:
-    organization_limits = get_all_organization_limits(session)
-    return [
-        OrganizationLimitResponse.model_validate(organization_limit, from_attributes=True)
-        for organization_limit in organization_limits
-    ]
 
 
 def create_organization_limit_service(
@@ -84,3 +77,13 @@ def delete_organization_limit_service(
     organization_id: UUID,
 ) -> None:
     return delete_organization_limit(session, id, organization_id)
+
+
+def get_all_organization_limits_and_usage_service(
+    session: Session, month: int, year: int
+) -> list[OrganizationLimitAndUsageResponse]:
+    organization_limits_and_usage = get_all_organization_limits_with_usage(session, month, year)
+    return [
+        OrganizationLimitAndUsageResponse.model_validate(organization_limit_and_usage, from_attributes=True)
+        for organization_limit_and_usage in organization_limits_and_usage
+    ]
