@@ -10,7 +10,7 @@ from openinference.semconv.trace import SpanAttributes
 from opentelemetry.sdk.trace.export import SpanExporter, SpanExportResult
 from opentelemetry.trace.status import StatusCode
 from sqlalchemy import func, select, create_engine, update
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import sessionmaker, aliased
 
 from engine.trace.nested_utils import split_nested_keys
 from ada_backend.database.trace_models import Span, SpanMessage
@@ -148,10 +148,11 @@ class SQLSpanExporter(SpanExporter):
 
             provider = span.attributes.get(SpanAttributes.LLM_PROVIDER)
             if provider is None or provider not in org_llm_providers:
+                llm_cost_aliased = aliased(LLMCost, flat=True)
                 cost_info = self.session.execute(
                     select(Cost.credits_per_input_token, Cost.credits_per_output_token)
-                    .join(LLMCost, LLMCost.id == Cost.id)
-                    .where(LLMCost.llm_model_id == model_id)
+                    .join(llm_cost_aliased, llm_cost_aliased.id == Cost.id)
+                    .where(llm_cost_aliased.llm_model_id == model_id)
                 ).first()
 
                 if cost_info and (cost_info.credits_per_input_token or cost_info.credits_per_output_token):
@@ -165,12 +166,13 @@ class SQLSpanExporter(SpanExporter):
                         has_billable_usage = True
 
         if component_instance_id:
+            component_cost_aliased = aliased(ComponentCost, flat=True)
             cost_info = self.session.execute(
                 select(Cost.credits_per_call)
-                .join(ComponentCost, ComponentCost.id == Cost.id)
+                .join(component_cost_aliased, component_cost_aliased.id == Cost.id)
                 .join(
                     ComponentInstance,
-                    ComponentInstance.component_version_id == ComponentCost.component_version_id,
+                    ComponentInstance.component_version_id == component_cost_aliased.component_version_id,
                 )
                 .where(ComponentInstance.id == component_instance_id)
             ).first()
