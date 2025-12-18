@@ -41,6 +41,7 @@ from ada_backend.services.errors import (
 )
 from ada_backend.services.pipeline.get_pipeline_service import get_component_instance, get_relationships
 from ada_backend.services.pipeline.update_pipeline_service import create_or_update_component_instance
+from ada_backend.services.graph.delete_graph_service import delete_graph_runner_service
 
 LOGGER = logging.getLogger(__name__)
 
@@ -302,3 +303,29 @@ def bind_graph_to_env_service(
 
     update_graph_runner_env(session, graph_runner_id, env=env)
     LOGGER.info(f"Bound graph runner {graph_runner_id} to {env.value}")
+
+
+def load_version_as_draft_service(
+    session: Session,
+    project_id: UUID,
+    graph_runner_id: UUID,
+) -> None:
+    previous_draft_graph = _bind_graph_to_env_helper(
+        session=session,
+        graph_runner_id=graph_runner_id,
+        project_id=project_id,
+        env=EnvType.DRAFT,
+    )
+
+    if previous_draft_graph is not None:
+        delete_graph_runner_service(session, previous_draft_graph.id)
+
+    new_graph_runner_id = clone_graph_runner(
+        session=session,
+        graph_runner_id_to_copy=graph_runner_id,
+        project_id=project_id,
+    )
+    bind_graph_runner_to_project(
+        session, graph_runner_id=new_graph_runner_id, project_id=project_id, env=EnvType.DRAFT
+    )
+    LOGGER.info(f"Created new Draft from graph runner {graph_runner_id}")

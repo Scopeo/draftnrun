@@ -29,7 +29,11 @@ from ada_backend.services.errors import (
     MissingDataSourceError,
     ProjectNotFound,
 )
-from ada_backend.services.graph.deploy_graph_service import deploy_graph_service, bind_graph_to_env_service
+from ada_backend.services.graph.deploy_graph_service import (
+    deploy_graph_service,
+    bind_graph_to_env_service,
+    load_version_as_draft_service,
+)
 from ada_backend.services.graph.load_copy_graph_service import load_copy_graph_service
 from ada_backend.services.graph.update_graph_service import update_graph_with_history_service
 from ada_backend.services.graph.get_graph_service import get_graph_service
@@ -346,6 +350,58 @@ def bind_graph_to_env(
         LOGGER.error(
             f"Unexpected error binding graph runner {graph_runner_id} to {env.value} "
             f"for project {project_id}, Error: {str(e)}",
+            exc_info=True,
+        )
+        raise HTTPException(status_code=500, detail="Internal server error") from e
+
+
+@router.post(
+    "/{graph_runner_id}/load-as-draft",
+    summary="Load a version as draft",
+    status_code=status.HTTP_204_NO_CONTENT,
+    tags=["Graph"],
+)
+def load_version_as_draft(
+    project_id: UUID,
+    graph_runner_id: UUID,
+    user: Annotated[
+        SupabaseUser, Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.DEVELOPER.value))
+    ],
+    session: Session = Depends(get_db),
+) -> None:
+    try:
+        load_version_as_draft_service(
+            session=session,
+            project_id=project_id,
+            graph_runner_id=graph_runner_id,
+        )
+    except GraphNotFound as e:
+        LOGGER.error(
+            f"Graph runner {graph_runner_id} not found when loading as draft for project {project_id}",
+            exc_info=True,
+        )
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    except GraphNotBoundToProjectError as e:
+        LOGGER.error(
+            f"Graph runner {graph_runner_id} is not bound to project {project_id} when loading as draft",
+            exc_info=True,
+        )
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except GraphRunnerAlreadyInEnvironmentError as e:
+        LOGGER.error(
+            f"Graph runner {graph_runner_id} is already in draft for project {project_id}",
+            exc_info=True,
+        )
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except ValueError as e:
+        LOGGER.error(
+            f"Failed to load version as draft for project {project_id} runner {graph_runner_id}: {str(e)}",
+            exc_info=True,
+        )
+        raise HTTPException(status_code=400, detail="Bad request") from e
+    except Exception as e:
+        LOGGER.error(
+            f"Unexpected error loading version as draft for project {project_id} runner {graph_runner_id}: {str(e)}",
             exc_info=True,
         )
         raise HTTPException(status_code=500, detail="Internal server error") from e
