@@ -215,8 +215,8 @@ def _create_chunks_from_markdown(
         document.metadata["page_number"] = sorted(list(page_numbers))
         chunk = FileChunk(
             chunk_id=str(uuid.uuid4()),
-            order=i,
             file_id=document.file_name,
+            order=i,
             content=chunk.content,
             last_edited_ts=document.last_edited_ts,
             document_title=document.file_name,
