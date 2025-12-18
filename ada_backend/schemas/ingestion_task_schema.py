@@ -6,11 +6,26 @@ from pydantic import BaseModel, ConfigDict
 from ada_backend.database import models as db
 
 
+class ResultType:
+    """Simple result type categories."""
+
+    PARTIAL_SUCCESS = "partial_success"
+    ERROR = "error"
+
+
+class TaskResultMetadata(BaseModel):
+    """Structured metadata about task execution result."""
+
+    message: str
+    type: str
+
+
 class IngestionTask(BaseModel):
     source_id: Optional[UUID] = None
     source_name: str
     source_type: db.SourceType
     status: db.TaskStatus
+    result_metadata: Optional[TaskResultMetadata] = None
 
 
 class RemoteFile(BaseModel):

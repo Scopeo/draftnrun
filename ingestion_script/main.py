@@ -6,7 +6,7 @@ from uuid import UUID
 from ada_backend.database import models as db
 from ada_backend.database.models import SourceType
 from ada_backend.database.setup_db import SessionLocal
-from ada_backend.schemas.ingestion_task_schema import IngestionTaskUpdate
+from ada_backend.schemas.ingestion_task_schema import IngestionTaskUpdate, ResultType, TaskResultMetadata
 from ada_backend.services.agent_runner_service import get_organization_llm_providers
 from engine.trace.span_context import set_tracing_span
 from engine.trace.trace_context import set_trace_manager
@@ -36,7 +36,12 @@ def check_missing_params(
         param for param in required_params if param not in source_attributes or not source_attributes[param]
     ]
     if missing_params:
-        LOGGER.error(f"Missing required parameters: {', '.join(missing_params)}")
+        error_msg = f"Missing required parameters: {', '.join(missing_params)}"
+        LOGGER.error(error_msg)
+        ingestion_task.result_metadata = TaskResultMetadata(
+            message=error_msg,
+            type=ResultType.ERROR,
+        )
         update_ingestion_task(
             organization_id=organization_id,
             ingestion_task=ingestion_task,
@@ -117,7 +122,12 @@ async def ingestion_main_async(
                 source_id=source_id,
             )
         except Exception as e:
-            LOGGER.error(f"Error during google drive ingestion: {str(e)}")
+            error_msg = f"Error during google drive ingestion: {str(e)}"
+            LOGGER.error(error_msg)
+            failed_ingestion_task.result_metadata = TaskResultMetadata(
+                message=error_msg,
+                type=ResultType.ERROR,
+            )
             update_ingestion_task(
                 organization_id=organization_id,
                 ingestion_task=failed_ingestion_task,
@@ -146,7 +156,12 @@ async def ingestion_main_async(
                 source_id=source_id,
             )
         except Exception as e:
-            LOGGER.error(f"Error during local ingestion: {str(e)}")
+            error_msg = f"Error during local ingestion: {str(e)}"
+            LOGGER.error(error_msg)
+            failed_ingestion_task.result_metadata = TaskResultMetadata(
+                message=error_msg,
+                type=ResultType.ERROR,
+            )
             update_ingestion_task(
                 organization_id=organization_id,
                 ingestion_task=failed_ingestion_task,
@@ -191,7 +206,12 @@ async def ingestion_main_async(
                 source_id=source_id,
             )
         except Exception as e:
-            LOGGER.error(f"Error during database ingestion: {str(e)}")
+            error_msg = f"Error during database ingestion: {str(e)}"
+            LOGGER.error(error_msg)
+            failed_ingestion_task.result_metadata = TaskResultMetadata(
+                message=error_msg,
+                type=ResultType.ERROR,
+            )
             update_ingestion_task(
                 organization_id=organization_id,
                 ingestion_task=failed_ingestion_task,
@@ -200,7 +220,12 @@ async def ingestion_main_async(
 
     elif source_type == SourceType.WEBSITE:
         if not source_attributes.get("url"):
-            LOGGER.error("URL must be provided for website ingestion")
+            error_msg = "URL must be provided for website ingestion"
+            LOGGER.error(error_msg)
+            failed_ingestion_task.result_metadata = TaskResultMetadata(
+                message=error_msg,
+                type=ResultType.ERROR,
+            )
             update_ingestion_task(
                 organization_id=organization_id,
                 ingestion_task=failed_ingestion_task,
@@ -208,7 +233,12 @@ async def ingestion_main_async(
             return
 
         if not settings.FIRECRAWL_API_KEY:
-            LOGGER.error("FIRECRAWL_API_KEY is not set. Please configure it in your settings.")
+            error_msg = "FIRECRAWL_API_KEY is not set. Please configure it in your settings."
+            LOGGER.error(error_msg)
+            failed_ingestion_task.result_metadata = TaskResultMetadata(
+                message=error_msg,
+                type=ResultType.ERROR,
+            )
             update_ingestion_task(
                 organization_id=organization_id,
                 ingestion_task=failed_ingestion_task,
@@ -233,7 +263,12 @@ async def ingestion_main_async(
                 source_id=source_id,
             )
         except Exception as e:
-            LOGGER.error(f"Error during website ingestion: {str(e)}")
+            error_msg = f"Error during website ingestion: {str(e)}"
+            LOGGER.error(error_msg)
+            failed_ingestion_task.result_metadata = TaskResultMetadata(
+                message=error_msg,
+                type=ResultType.ERROR,
+            )
             update_ingestion_task(
                 organization_id=organization_id,
                 ingestion_task=failed_ingestion_task,

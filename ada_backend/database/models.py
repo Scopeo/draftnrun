@@ -1292,6 +1292,7 @@ class IngestionTask(Base):
     source_name = mapped_column(String, nullable=False)
     source_type = mapped_column(make_pg_enum(SourceType), nullable=False)
     status = mapped_column(make_pg_enum(TaskStatus), nullable=False)
+    result_metadata = mapped_column(JSONB, nullable=True)
     created_at = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
