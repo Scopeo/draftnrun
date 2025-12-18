@@ -2,9 +2,17 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func, literal
 from uuid import UUID
 from typing import Optional, List
+from dataclasses import dataclass
 
 import ada_backend.database.models as db
-from ada_backend.schemas.credits_schema import OrganizationLimitAndUsageResponse
+
+
+@dataclass
+class OrganizationLimitAndUsageDTO:
+    organization_id: UUID
+    limit_id: Optional[UUID] = None
+    limit: Optional[float] = None
+    total_credits_used: Optional[float] = None
 
 
 def _update_cost_fields(
@@ -231,7 +239,7 @@ def get_organization_total_credits(session: Session, organization_id: UUID, year
 
 def get_all_organization_limits_with_usage(
     session: Session, month: int, year: int
-) -> List[OrganizationLimitAndUsageResponse]:
+) -> List[OrganizationLimitAndUsageDTO]:
 
     usage_subquery = (
         session.query(
@@ -268,7 +276,7 @@ def get_all_organization_limits_with_usage(
     limit_usage_rows = limits_and_usage_query.all()
 
     return [
-        OrganizationLimitAndUsageResponse(
+        OrganizationLimitAndUsageDTO(
             organization_id=row.organization_id,
             limit_id=row.limit_id,
             limit=row.limit,

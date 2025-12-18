@@ -82,4 +82,8 @@ def delete_organization_limit_service(
 def get_all_organization_limits_and_usage_service(
     session: Session, month: int, year: int
 ) -> list[OrganizationLimitAndUsageResponse]:
-    return get_all_organization_limits_with_usage(session, month, year)
+    organization_limits_and_usage = get_all_organization_limits_with_usage(session, month, year)
+    return [
+        OrganizationLimitAndUsageResponse.model_validate(organization_limit_and_usage, from_attributes=True)
+        for organization_limit_and_usage in organization_limits_and_usage
+    ]
