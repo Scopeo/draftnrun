@@ -46,6 +46,7 @@ from ada_backend.schemas.dataset_schema import (
 from ada_backend.services.agent_runner_service import run_agent
 from ada_backend.database.models import CallType
 from ada_backend.repositories.env_repository import get_env_relationship_by_graph_runner_id
+from ada_backend.services.errors import GraphNotBoundToProjectError
 from ada_backend.services.metrics.utils import query_conversation_messages
 from ada_backend.services.qa.qa_error import (
     CSVMissingColumnError,
@@ -173,13 +174,12 @@ async def run_qa_service(
         successful_runs = 0
         failed_runs = 0
 
-        try:
-            env_relationship = get_env_relationship_by_graph_runner_id(
-                session=session, graph_runner_id=run_request.graph_runner_id
-            )
-            environment = env_relationship.environment
-        except ValueError as e:
-            raise ValueError(f"Graph runner {run_request.graph_runner_id} not found or not bound to project") from e
+        env_relationship = get_env_relationship_by_graph_runner_id(
+            session=session, graph_runner_id=run_request.graph_runner_id
+        )
+        if not env_relationship:
+            raise GraphNotBoundToProjectError(run_request.graph_runner_id)
+        environment = env_relationship.environment
         for input_entry in input_entries:
             try:
 

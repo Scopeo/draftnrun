@@ -1,4 +1,5 @@
 from uuid import UUID
+from typing import Optional
 
 from sqlalchemy.orm import Session
 
@@ -32,15 +33,14 @@ def get_project_env_binding_by_env(
     )
 
 
-def get_env_relationship_by_graph_runner_id(session: Session, graph_runner_id: UUID) -> db.ProjectEnvironmentBinding:
-    env_relationship = (
+def get_env_relationship_by_graph_runner_id(
+    session: Session, graph_runner_id: UUID
+) -> Optional[db.ProjectEnvironmentBinding]:
+    return (
         session.query(db.ProjectEnvironmentBinding)
         .filter(db.ProjectEnvironmentBinding.graph_runner_id == graph_runner_id)
         .first()
     )
-    if not env_relationship:
-        raise ValueError(f"Graph runner with ID {graph_runner_id} not found.")
-    return env_relationship
 
 
 def update_graph_runner_env(session: Session, graph_runner_id: UUID, env: EnvType):
