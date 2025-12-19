@@ -89,6 +89,7 @@ async def test_upload_website_source_syncs_scraped_pages(monkeypatch):
             "document_title": ["Example page"],
             "last_edited_ts": ["2025-01-01T00:00:00Z"],
             "metadata": ["{}"],
+            "order": [0],
         }
     )
     chunks_mock = AsyncMock(return_value=chunk_df)

@@ -1,4 +1,3 @@
-import json
 import logging
 from uuid import UUID
 from typing import Optional
@@ -30,6 +29,7 @@ from engine.storage_service.db_utils import (
 )
 from engine.storage_service.local_service import SQLLocalService
 from engine.trace.trace_manager import TraceManager
+from ingestion_script.folder_utils import prepare_df_for_qdrant, sanitize_for_json
 from ingestion_script.utils import (
     DOCUMENT_TITLE_COLUMN_NAME,
     create_source,
@@ -51,10 +51,6 @@ from settings import settings
 
 LOGGER = logging.getLogger(__name__)
 
-META_DATA_TO_KEEP = [
-    "folder_name",
-    "page_number",
-]
 
 # Unified table definition for all source types
 UNIFIED_TABLE_DEFINITION = DBDefinition(
@@ -120,58 +116,6 @@ def load_embedding_service():
             model_name="text-embedding-3-large",
             trace_manager=TraceManager(project_name="ingestion"),
         )
-
-
-def flatten_metadata_json(metadata_value):
-    """Parse and flatten metadata JSON to a dictionary.
-
-    Args:
-        metadata_value: Can be a JSON string, dict, or None
-
-    Returns:
-        dict: Flattened metadata dictionary
-    """
-    if pd.isna(metadata_value) or metadata_value is None:
-        return {}
-
-    if isinstance(metadata_value, str):
-        try:
-            parsed = json.loads(metadata_value)
-            if isinstance(parsed, dict):
-                return parsed
-        except (json.JSONDecodeError, TypeError):
-            pass
-    elif isinstance(metadata_value, dict):
-        return metadata_value
-
-    return {}
-
-
-def prepare_df_for_qdrant(df):
-    """Prepare DataFrame for Qdrant by flattening metadata JSON column.
-
-    Reads metadata from JSONB column and flattens it into separate columns for Qdrant.
-    """
-    df = df.copy()
-    if SOURCE_ID_COLUMN_NAME in df.columns:
-        df[SOURCE_ID_COLUMN_NAME] = df[SOURCE_ID_COLUMN_NAME].apply(
-            lambda value: str(value) if isinstance(value, UUID) else value
-        )
-    if METADATA_COLUMN_NAME in df.columns:
-
-        def parse_and_flatten_metadata(row):
-            """Parse metadata JSON and return flattened dict."""
-            return flatten_metadata_json(row.get(METADATA_COLUMN_NAME))
-
-        metadata_df = df.apply(parse_and_flatten_metadata, axis=1, result_type="expand")
-        if not metadata_df.empty and len(metadata_df.columns) > 0:
-            for col in metadata_df.columns:
-                if col not in df.columns:
-                    df[col] = metadata_df[col]
-
-        df = df.drop(columns=[METADATA_COLUMN_NAME], errors="ignore")
-
-    return df
 
 
 async def sync_chunks_to_qdrant(
@@ -436,21 +380,6 @@ async def _ingest_folder_source(
             )
 
             unified_chunks_df = chunks_df.copy()
-
-            def sanitize_for_json(value):
-                """Sanitize a value for JSON encoding, handling invalid UTF-8 and already-encoded JSON strings."""
-                if value is None:
-                    return None
-                if isinstance(value, str):
-                    try:
-                        try:
-                            parsed = json.loads(value)
-                            return parsed
-                        except (json.JSONDecodeError, TypeError):
-                            return value.encode("utf-8", errors="replace").decode("utf-8")
-                    except Exception:
-                        return str(value).encode("utf-8", errors="replace").decode("utf-8")
-                return value
 
             if "document_title" in unified_chunks_df.columns:
                 unified_chunks_df["document_title"] = unified_chunks_df["document_title"].apply(sanitize_for_json)

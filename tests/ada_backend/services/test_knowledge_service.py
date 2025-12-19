@@ -68,6 +68,7 @@ def qdrant_service(mock_embedding_service: MagicMock) -> Iterator[QdrantService]
         file_id_field="file_id",
         url_id_field="url",
         last_edited_ts_field="last_edited_ts",
+        source_id_field="source_id",
         metadata_fields_to_keep={"metadata_to_keep_by_qdrant_field"},
     )
     qdrant_service = QdrantService.from_defaults(
@@ -119,24 +120,27 @@ def _setup_test_table_and_collection_with_dummy_chunk(
     with sql_local_service.Session() as session:
         insert_data = {
             "chunk_id": dummy_chunk_id,
+            "source_id": str(source_id),
             "file_id": file_id,
             "content": "Dummy chunk content",
             "last_edited_ts": "2024-01-01T00:00:00",
             "url": "http://example.com/dummy",
             "document_title": "Dummy Document",
-            "metadata_to_keep_by_qdrant_field": "dummy_metadata_value",
-            "not_kept_by_qdrant_chunk_field": {"key": "value"},
+            "metadata": {
+                "metadata_to_keep_by_qdrant_field": "dummy_metadata_value",
+            },
         }
         session.execute(table.insert(), insert_data)
         session.commit()
 
     chunk_dict = {
         "chunk_id": dummy_chunk_id,
+        "source_id": str(source_id),
         "file_id": file_id,
         "content": "Dummy chunk content",
         "last_edited_ts": "2024-01-01T00:00:00",
         "url": "http://example.com/dummy",
-        "metadata_to_keep_by_qdrant_field": "dummy_metadata_value",
+        "metadata": {"metadata_to_keep_by_qdrant_field": "dummy_metadata_value"},
     }
     asyncio.run(qdrant_service.add_chunks_async(list_chunks=[chunk_dict], collection_name=test_collection_name))
 
@@ -151,6 +155,7 @@ def _setup_test_table_and_collection_with_dummy_chunk(
             "file_id_field": "file_id",
             "url_id_field": "url",
             "last_edited_ts_field": "last_edited_ts",
+            "source_id_field": "source_id",
             "metadata_fields_to_keep": ["metadata_to_keep_by_qdrant_field"],
             "metadata_field_types": {"metadata_to_keep_by_qdrant_field": "VARCHAR"},
         },
@@ -261,6 +266,7 @@ def test_validate_qdrant_service_raises_when_collection_not_exists(
             "file_id_field": "file_id",
             "url_id_field": "url",
             "last_edited_ts_field": "last_edited_ts",
+            "source_id_field": "source_id",
         },
         embedding_model_reference="openai:text-embedding-3-large",
     )
@@ -301,6 +307,7 @@ def test_validate_qdrant_service_raises_when_invalid_embedding_model(
             "file_id_field": "file_id",
             "url_id_field": "url",
             "last_edited_ts_field": "last_edited_ts",
+            "source_id_field": "source_id",
         },
         embedding_model_reference="invalid_format",
     )
