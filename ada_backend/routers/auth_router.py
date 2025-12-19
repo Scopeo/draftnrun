@@ -93,8 +93,17 @@ async def get_user_from_supabase_token(
     except HTTPException:
         raise
     except Exception as e:
-        LOGGER.error("Failed to validate Supabase token", exc_info=True)
-        raise HTTPException(status_code=401, detail="Failed to validate Supabase token") from e
+        error_msg = "Failed to validate Supabase token"
+        if "expired" in str(e).lower():
+            error_msg = "Token has expired"
+            LOGGER.error("Supabase token has expired", exc_info=True)
+        elif "invalid" in str(e).lower():
+            error_msg = "Invalid token format"
+            LOGGER.error("Invalid Supabase token format", exc_info=True)
+        else:
+            LOGGER.error("Failed to validate Supabase token", exc_info=True)
+
+        raise HTTPException(status_code=401, detail=error_msg) from e
 
 
 # TODO : move to a utils file
