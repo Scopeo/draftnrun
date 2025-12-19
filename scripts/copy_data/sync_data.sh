@@ -109,6 +109,29 @@ drop_and_create_db "$TARGET_DB_URL" "ada_backend"
 echo "===> Restoring ada_backend"
 pg_restore -d "$TARGET_DB_URL" --no-owner --no-privileges --single-transaction --verbose -Fc "$BACKEND_DUMP_PATH"
 
+# Deactivate all cron jobs in staging database
+echo "===> Deactivating all cron jobs in staging database"
+DEACTIVATED_COUNT=$(psql "$TARGET_DB_URL" -t -A -c "
+  WITH updated AS (
+    UPDATE scheduler.cron_jobs 
+    SET is_enabled = false 
+    WHERE is_enabled = true 
+    RETURNING id
+  )
+  SELECT COUNT(*) FROM updated;
+" 2>/dev/null | tr -d ' ' || echo "0")
+if [ "$DEACTIVATED_COUNT" != "0" ] && [ "$DEACTIVATED_COUNT" != "" ]; then
+  echo "===> Deactivated $DEACTIVATED_COUNT cron job(s) in staging database"
+else
+  # Check if schema exists to provide better error message
+  SCHEMA_EXISTS=$(psql "$TARGET_DB_URL" -t -A -c "SELECT EXISTS(SELECT 1 FROM information_schema.schemata WHERE schema_name = 'scheduler');" 2>/dev/null | tr -d ' ' || echo "f")
+  if [ "$SCHEMA_EXISTS" = "t" ]; then
+    echo "===> No enabled cron jobs found to deactivate"
+  else
+    echo "===> Scheduler schema not found, skipping cron job deactivation"
+  fi
+fi
+
 # Sync ada_ingestion: dump, drop/create, and restore
 echo "===> Dumping ada_ingestion from source"
 pg_dump -Fc "$SOURCE_INGESTION_DB_URL" -f "$INGESTION_DUMP_PATH"
