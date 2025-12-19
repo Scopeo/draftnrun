@@ -1464,7 +1464,11 @@ class EndpointPollingHistory(Base):
 
 class InputGroundtruth(Base):
     __tablename__ = "input_groundtruth"
-    __table_args__ = {"schema": "quality_assurance"}  # Specify the quality_assurance schema
+    __table_args__ = (
+        sa.UniqueConstraint("dataset_id", "position", name="uq_input_groundtruth_dataset_position"),
+        sa.CheckConstraint("position >= 1", name="ck_input_groundtruth_position_positive"),
+        {"schema": "quality_assurance"},
+    )
 
     id = mapped_column(UUID(as_uuid=True), primary_key=True, index=True, server_default=func.gen_random_uuid())
 
@@ -1474,6 +1478,8 @@ class InputGroundtruth(Base):
         nullable=False,
         index=True,
     )
+
+    position = mapped_column(Integer, nullable=False)
 
     created_at = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

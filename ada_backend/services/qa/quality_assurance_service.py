@@ -4,6 +4,7 @@ import csv
 import io
 from typing import BinaryIO, Dict, List, Optional
 from uuid import UUID
+from collections import Counter
 
 from sqlalchemy.orm import Session
 
@@ -22,6 +23,7 @@ from ada_backend.repositories.quality_assurance_repository import (
     clear_version_outputs_for_input_ids,
     get_outputs_by_graph_runner,
     get_version_output_ids_by_input_ids_and_graph_runner,
+    get_positions_of_dataset,
 )
 from ada_backend.schemas.input_groundtruth_schema import (
     InputGroundtruthResponse,
@@ -53,6 +55,10 @@ from ada_backend.services.qa.qa_error import (
     CSVInvalidJSONError,
     CSVEmptyFileError,
     CSVExportError,
+    CSVInvalidPositionError,
+    CSVNonUniquePositionError,
+    QADuplicatePositionError,
+    QAPartialPositionError,
 )
 from ada_backend.services.qa.csv_processing import process_csv
 
@@ -287,6 +293,17 @@ def create_inputs_groundtruths_service(
         InputGroundtruthResponseList: The created input-groundtruth entries
     """
     try:
+        current_dataset_positions = get_positions_of_dataset(session, dataset_id)
+        inputs_positions = [
+            input_groundtruth.position
+            for input_groundtruth in inputs_groundtruths_data.inputs_groundtruths
+            if input_groundtruth.position is not None
+        ]
+        if inputs_positions and len(inputs_positions) != len(inputs_groundtruths_data.inputs_groundtruths):
+            raise QAPartialPositionError()
+        duplicated_positions = _get_duplicate_positions(current_dataset_positions + inputs_positions)
+        if len(duplicated_positions) > 0:
+            raise QADuplicatePositionError(duplicated_positions)
         created_inputs_groundtruths = create_inputs_groundtruths(
             session,
             dataset_id,
@@ -300,6 +317,8 @@ def create_inputs_groundtruths_service(
         return InputGroundtruthResponseList(
             inputs_groundtruths=[InputGroundtruthResponse.model_validate(ig) for ig in created_inputs_groundtruths]
         )
+    except (QADuplicatePositionError, QAPartialPositionError):
+        raise
     except Exception as e:
         LOGGER.error(f"Error in create_inputs_groundtruths_service: {str(e)}")
         raise ValueError(f"Failed to create input-groundtruth entries: {str(e)}") from e
@@ -499,7 +518,6 @@ def save_conversation_to_groundtruth_service(
     trace_id: str,
     dataset_id: UUID,
 ) -> List[InputGroundtruthResponse]:
-
     input_payload, output_payload = query_conversation_messages(trace_id)
     if not input_payload and not output_payload:
         LOGGER.error(
@@ -509,8 +527,10 @@ def save_conversation_to_groundtruth_service(
         )
     input_payload.pop("conversation_id", None)
     input_entry = InputGroundtruthCreate(input=input_payload, groundtruth=output_payload["messages"][-1]["content"])
-    input_entries = create_inputs_groundtruths(session, dataset_id, [input_entry])
-    return [InputGroundtruthResponse.model_validate(entry) for entry in input_entries]
+    input_groundtruth_response_list = create_inputs_groundtruths_service(
+        session, dataset_id, InputGroundtruthCreateList(inputs_groundtruths=[input_entry])
+    )
+    return input_groundtruth_response_list.inputs_groundtruths
 
 
 def export_qa_data_to_csv_service(
@@ -518,7 +538,6 @@ def export_qa_data_to_csv_service(
     dataset_id: UUID,
     graph_runner_id: UUID,
 ) -> str:
-
     try:
         total_count = get_inputs_groundtruths_count_by_dataset(session, dataset_id)
         if total_count == 0:
@@ -529,14 +548,15 @@ def export_qa_data_to_csv_service(
 
         output = io.StringIO()
         writer = csv.writer(output)
-        writer.writerow(["input", "expected_output", "actual_output"])
+        writer.writerow(["position", "input", "expected_output", "actual_output"])
 
         for entry in input_entries:
             input_str = json.dumps(entry.input) if entry.input else ""
             groundtruth_str = entry.groundtruth if entry.groundtruth is not None else ""
             output_str = outputs_dict.get(entry.id, "") if entry.id in outputs_dict else ""
+            position_str = str(entry.position) if entry.position is not None else ""
 
-            writer.writerow([input_str, groundtruth_str, output_str])
+            writer.writerow([position_str, input_str, groundtruth_str, output_str])
 
         csv_content = output.getvalue()
         output.close()
@@ -562,7 +582,6 @@ def import_qa_data_from_csv_service(
     dataset_id: UUID,
     csv_file: BinaryIO,
 ) -> InputGroundtruthResponseList:
-
     try:
         inputs_groundtruths_data_to_create = []
         for row_data in process_csv(csv_file):
@@ -570,30 +589,40 @@ def import_qa_data_from_csv_service(
                 InputGroundtruthCreate(
                     input=row_data["input"],
                     groundtruth=row_data["expected_output"] if row_data["expected_output"] else None,
+                    position=row_data["position"],
                 )
             )
 
         if not inputs_groundtruths_data_to_create:
             raise CSVEmptyFileError()
 
-        created_inputs_groundtruths = create_inputs_groundtruths(
+        created_inputs_groundtruths = create_inputs_groundtruths_service(
             session=session,
             dataset_id=dataset_id,
-            inputs_groundtruths_data=inputs_groundtruths_data_to_create,
+            inputs_groundtruths_data=InputGroundtruthCreateList(
+                inputs_groundtruths=inputs_groundtruths_data_to_create
+            ),
         )
 
         LOGGER.info(
-            f"Imported {len(created_inputs_groundtruths)} input-groundtruth entries from CSV for dataset {dataset_id}"
+            f"Imported {len(created_inputs_groundtruths.inputs_groundtruths)} input-groundtruth "
+            f"entries from CSV for dataset {dataset_id}"
         )
 
-        return InputGroundtruthResponseList(
-            inputs_groundtruths=[InputGroundtruthResponse.model_validate(ig) for ig in created_inputs_groundtruths]
-        )
-
+        return created_inputs_groundtruths
+    except QADuplicatePositionError as e:
+        LOGGER.error(f"Error in import_qa_data_from_csv_service: {str(e)}")
+        raise CSVNonUniquePositionError(duplicate_positions=e.duplicate_positions) from e
     except (
         CSVEmptyFileError,
         CSVMissingColumnError,
         CSVInvalidJSONError,
+        CSVInvalidPositionError,
     ) as e:
         LOGGER.error(f"Error in import_qa_data_from_csv_service: {str(e)}")
         raise e
+
+
+def _get_duplicate_positions(positions: List[int]) -> List[int]:
+    duplicated_positions = [item for item, count in Counter(positions).items() if count > 1]
+    return duplicated_positions

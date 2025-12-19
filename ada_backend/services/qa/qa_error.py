@@ -22,6 +22,26 @@ class CSVInvalidJSONError(Exception):
         super().__init__(f"Invalid JSON in 'input' column. Expected a JSON object at row {row_number}")
 
 
+class CSVInvalidPositionError(Exception):
+    """Raised when position column contains invalid integer."""
+
+    def __init__(self, row_number: Optional[int] = None):
+        super().__init__(
+            f"Invalid integer in 'position' column at row {row_number}. "
+            "Expected an integer greater than or equal to 1."
+        )
+
+
+class CSVNonUniquePositionError(Exception):
+    """Raised when position column contains non-unique values."""
+
+    def __init__(self, duplicate_positions: list[int]):
+        super().__init__(
+            f"Duplicate positions found in CSV import: {duplicate_positions}. "
+            f"Positions may be duplicated within the CSV file or conflict with existing positions in the dataset."
+        )
+
+
 class CSVEmptyFileError(Exception):
     """Raised when CSV file is empty."""
 
@@ -47,3 +67,18 @@ class VersionOutputEmptyError(Exception):
     def __init__(self, version_output_id: UUID):
         self.version_output_id = version_output_id
         super().__init__(f"Version output {version_output_id} has no output to evaluate")
+
+
+class QADuplicatePositionError(Exception):
+    """Raised when duplicate positions are found in QA dataset entries."""
+
+    def __init__(self, duplicate_positions: list[int]):
+        self.duplicate_positions = duplicate_positions
+        super().__init__(f"Duplicate positions found in QA dataset: {duplicate_positions}")
+
+
+class QAPartialPositionError(Exception):
+    """Raised when partial positioning is detected (some entries have position, some don't)."""
+
+    def __init__(self):
+        super().__init__("Partial positioning is not allowed. Either provide positions for all entries or none.")

@@ -3,6 +3,7 @@ from typing import List, Optional, Tuple, Dict
 from uuid import UUID
 
 from sqlalchemy.orm import Session
+from sqlalchemy import select
 from sqlalchemy import func
 
 from ada_backend.database.models import InputGroundtruth, DatasetProject, VersionOutput
@@ -22,7 +23,7 @@ def get_inputs_groundtruths_by_dataset(
     return (
         session.query(InputGroundtruth)
         .filter(InputGroundtruth.dataset_id == dataset_id)
-        .order_by(InputGroundtruth.created_at.desc())
+        .order_by(InputGroundtruth.position.asc())
         .offset(skip)
         .limit(limit)
         .all()
@@ -45,27 +46,57 @@ def get_inputs_groundtruths_count_by_dataset(
     return session.query(func.count(InputGroundtruth.id)).filter(InputGroundtruth.dataset_id == dataset_id).scalar()
 
 
+def get_max_position_of_dataset(
+    session: Session,
+    dataset_id: UUID,
+) -> Optional[int]:
+    """Get the maximum position for input-groundtruth entries in a dataset.
+
+    Returns None if no entries exist for the dataset.
+    """
+    max_position = (
+        session.query(func.max(InputGroundtruth.position)).filter(InputGroundtruth.dataset_id == dataset_id).scalar()
+    )
+    return max_position
+
+
+def get_positions_of_dataset(
+    session: Session,
+    dataset_id: UUID,
+) -> List[int]:
+    stmt = (
+        select(InputGroundtruth.position)
+        .where(InputGroundtruth.dataset_id == dataset_id)
+        .order_by(InputGroundtruth.position.asc())
+    )
+    return session.scalars(stmt).all()
+
+
 def create_inputs_groundtruths(
     session: Session,
     dataset_id: UUID,
     inputs_groundtruths_data: List[InputGroundtruthCreate],
 ) -> List[InputGroundtruth]:
-    """Create multiple input-groundtruth entries.
+    """Create multiple input-groundtruth entries."""
+    max_position = get_max_position_of_dataset(session, dataset_id)
+    starting_position = (max_position + 1) if max_position is not None else 1
 
-    Creates records one by one to ensure distinct timestamps and preserve CSV order.
-    """
-    inputs_groundtruths = []
+    positions = [
+        data.position if data.position is not None else starting_position + i
+        for i, data in enumerate(inputs_groundtruths_data)
+    ]
 
-    for input_groundtruth_data in inputs_groundtruths_data:
-        input_groundtruth = InputGroundtruth(
+    inputs_groundtruths = [
+        InputGroundtruth(
             dataset_id=dataset_id,
-            input=input_groundtruth_data.input,
-            groundtruth=input_groundtruth_data.groundtruth,
+            input=data.input,
+            groundtruth=data.groundtruth,
+            position=position,
         )
-        session.add(input_groundtruth)
-        session.flush()
-        inputs_groundtruths.append(input_groundtruth)
+        for data, position in zip(inputs_groundtruths_data, positions)
+    ]
 
+    session.add_all(inputs_groundtruths)
     session.commit()
 
     for input_groundtruth in inputs_groundtruths:

@@ -50,6 +50,10 @@ from ada_backend.services.qa.qa_error import (
     CSVInvalidJSONError,
     CSVMissingColumnError,
     CSVExportError,
+    CSVNonUniquePositionError,
+    CSVInvalidPositionError,
+    QADuplicatePositionError,
+    QAPartialPositionError,
 )
 from ada_backend.database.setup_db import get_db
 
@@ -328,6 +332,9 @@ def create_input_groundtruth_endpoint(
 
     try:
         return create_inputs_groundtruths_service(session, dataset_id, input_groundtruth_data)
+    except (QADuplicatePositionError, QAPartialPositionError) as e:
+        LOGGER.error(f"Failed to create input-groundtruth entries for dataset {dataset_id}: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except ValueError as e:
         LOGGER.error(f"Failed to create input-groundtruth entries for dataset {dataset_id}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=400, detail="Bad request") from e
@@ -489,6 +496,9 @@ async def create_entry_from_history(
             trace_id=trace_id,
             dataset_id=dataset_id,
         )
+    except (QADuplicatePositionError, QAPartialPositionError) as e:
+        LOGGER.error(f"Failed to save trace {trace_id}: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except ValueError as e:
         LOGGER.error(f"Failed to save trace {trace_id}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=400, detail=str(e)) from e
@@ -565,6 +575,8 @@ async def import_qa_data_from_csv_endpoint(
         CSVEmptyFileError,
         CSVInvalidJSONError,
         CSVMissingColumnError,
+        CSVNonUniquePositionError,
+        CSVInvalidPositionError,
     ) as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
