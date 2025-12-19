@@ -245,10 +245,6 @@ def _bind_graph_to_env_helper(
         env=env,
     )
 
-    if previous_env_graph:
-        update_graph_runner_env(session, previous_env_graph.id, env=None)
-        LOGGER.info(f"Removed previous {env.value} graph runner {previous_env_graph.id} from {env.value}")
-
     return previous_env_graph
 
 
@@ -263,6 +259,10 @@ def deploy_graph_service(
         project_id=project_id,
         env=EnvType.PRODUCTION,
     )
+
+    if previous_production_graph:
+        update_graph_runner_env(session, previous_production_graph.id, env=None)
+        LOGGER.info(f"Removed previous production graph runner {previous_production_graph.id} from production")
 
     new_graph_runner_id = clone_graph_runner(
         session=session,
@@ -294,12 +294,15 @@ def bind_graph_to_env_service(
     project_id: UUID,
     env: EnvType,
 ) -> None:
-    _bind_graph_to_env_helper(
+    previous_env_graph = _bind_graph_to_env_helper(
         session=session,
         graph_runner_id=graph_runner_id,
         project_id=project_id,
         env=env,
     )
+    if previous_env_graph:
+        update_graph_runner_env(session, previous_env_graph.id, env=None)
+        LOGGER.info(f"Removed previous {env.value} graph runner {previous_env_graph.id} from {env.value}")
 
     update_graph_runner_env(session, graph_runner_id, env=env)
     LOGGER.info(f"Bound graph runner {graph_runner_id} to {env.value}")
