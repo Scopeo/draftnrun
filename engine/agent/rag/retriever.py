@@ -108,6 +108,7 @@ class Retriever:
                         if self.component_attributes.component_instance_id is not None
                         else None
                     ),
+                    "source_id": str(self.source_id),
                 }
             )
 
