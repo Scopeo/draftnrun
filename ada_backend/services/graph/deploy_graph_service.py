@@ -215,12 +215,12 @@ def clone_graph_runner(
     return new_graph_runner_id
 
 
-def _bind_graph_to_env_helper(
+def _get_and_unbind_previous_env_graph(
     session: Session,
     graph_runner_id: UUID,
     project_id: UUID,
     env: EnvType,
-) -> Tuple[db.GraphRunner, db.ProjectEnvironmentBinding, Optional[db.GraphRunner]]:
+) -> Optional[db.GraphRunner]:
     if not graph_runner_exists(session, graph_runner_id):
         raise GraphNotFound(graph_runner_id)
 
@@ -257,7 +257,7 @@ def deploy_graph_service(
     graph_runner_id: UUID,
     project_id: UUID,
 ):
-    previous_production_graph = _bind_graph_to_env_helper(
+    previous_production_graph = _get_and_unbind_previous_env_graph(
         session=session,
         graph_runner_id=graph_runner_id,
         project_id=project_id,
@@ -294,7 +294,7 @@ def bind_graph_to_env_service(
     project_id: UUID,
     env: EnvType,
 ) -> None:
-    _bind_graph_to_env_helper(
+    _get_and_unbind_previous_env_graph(
         session=session,
         graph_runner_id=graph_runner_id,
         project_id=project_id,
@@ -310,22 +310,24 @@ def load_version_as_draft_service(
     project_id: UUID,
     graph_runner_id: UUID,
 ) -> None:
-    previous_draft_graph = _bind_graph_to_env_helper(
+    new_draft_graph_runner_id = clone_graph_runner(
+        session=session,
+        graph_runner_id_to_copy=graph_runner_id,
+        project_id=project_id,
+    )
+
+    previous_draft_graph = _get_and_unbind_previous_env_graph(
         session=session,
         graph_runner_id=graph_runner_id,
         project_id=project_id,
         env=EnvType.DRAFT,
     )
 
-    if previous_draft_graph is not None:
-        delete_graph_runner_service(session, previous_draft_graph.id)
-
-    new_graph_runner_id = clone_graph_runner(
-        session=session,
-        graph_runner_id_to_copy=graph_runner_id,
-        project_id=project_id,
-    )
     bind_graph_runner_to_project(
-        session, graph_runner_id=new_graph_runner_id, project_id=project_id, env=EnvType.DRAFT
+        session, graph_runner_id=new_draft_graph_runner_id, project_id=project_id, env=EnvType.DRAFT
     )
     LOGGER.info(f"Created new Draft from graph runner {graph_runner_id}")
+
+    if previous_draft_graph is not None:
+        delete_graph_runner_service(session, previous_draft_graph.id)
+        LOGGER.info(f"Deleted previous draft graph {previous_draft_graph.id}")
