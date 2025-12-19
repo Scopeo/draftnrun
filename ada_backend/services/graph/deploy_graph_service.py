@@ -215,7 +215,7 @@ def clone_graph_runner(
     return new_graph_runner_id
 
 
-def _get_and_unbind_previous_env_graph(
+def _bind_graph_to_env_helper(
     session: Session,
     graph_runner_id: UUID,
     project_id: UUID,
@@ -257,7 +257,7 @@ def deploy_graph_service(
     graph_runner_id: UUID,
     project_id: UUID,
 ):
-    previous_production_graph = _get_and_unbind_previous_env_graph(
+    previous_production_graph = _bind_graph_to_env_helper(
         session=session,
         graph_runner_id=graph_runner_id,
         project_id=project_id,
@@ -294,7 +294,7 @@ def bind_graph_to_env_service(
     project_id: UUID,
     env: EnvType,
 ) -> None:
-    _get_and_unbind_previous_env_graph(
+    _bind_graph_to_env_helper(
         session=session,
         graph_runner_id=graph_runner_id,
         project_id=project_id,
@@ -310,17 +310,17 @@ def load_version_as_draft_service(
     project_id: UUID,
     graph_runner_id: UUID,
 ) -> None:
-    new_draft_graph_runner_id = clone_graph_runner(
-        session=session,
-        graph_runner_id_to_copy=graph_runner_id,
-        project_id=project_id,
-    )
-
-    previous_draft_graph = _get_and_unbind_previous_env_graph(
+    previous_draft_graph = _bind_graph_to_env_helper(
         session=session,
         graph_runner_id=graph_runner_id,
         project_id=project_id,
         env=EnvType.DRAFT,
+    )
+
+    new_draft_graph_runner_id = clone_graph_runner(
+        session=session,
+        graph_runner_id_to_copy=graph_runner_id,
+        project_id=project_id,
     )
 
     bind_graph_runner_to_project(
