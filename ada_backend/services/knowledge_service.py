@@ -47,7 +47,7 @@ from engine.llm_services.llm_service import EmbeddingService
 from engine.qdrant_service import QdrantService, QdrantCollectionSchema
 from engine.trace.trace_context import get_trace_manager
 from ada_backend.services.entity_factory import get_llm_provider_and_model
-from ingestion_script.utils import SOURCE_ID_COLUMN_NAME
+from ingestion_script.utils import CHUNK_ID_COLUMN_NAME, SOURCE_ID_COLUMN_NAME
 
 LOGGER = logging.getLogger(__name__)
 
@@ -288,6 +288,7 @@ async def update_document_chunks_service(
         table_name=source.database_table_name,
         schema_name=source.database_schema,
         rows=chunks_dict,
+        id_column_names=[CHUNK_ID_COLUMN_NAME, SOURCE_ID_COLUMN_NAME],
     )
 
     try:
@@ -296,7 +297,7 @@ async def update_document_chunks_service(
         await qdrant_service.sync_df_with_collection_async(
             df=chunks_df,
             collection_name=source.qdrant_collection_name,
-            filter={"must": [{"key": SOURCE_ID_COLUMN_NAME, "match": {"value": str(source_id)}}]},
+            query_filter_qdrant={"must": [{"key": SOURCE_ID_COLUMN_NAME, "match": {"value": str(source_id)}}]},
         )
         LOGGER.info(f"Upserted {len(chunks)} chunks to Qdrant collection {source.qdrant_collection_name}")
     except Exception as e:

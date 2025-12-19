@@ -594,25 +594,32 @@ class SQLLocalService(DBService):
         table_name: str,
         rows: list[dict],
         schema_name: Optional[str] = None,
-        id_column_name: str = CHUNK_ID_COLUMN,
+        id_column_names: Optional[list[str]] = None,
     ) -> None:
         if not rows:
             return
 
+        if id_column_names is None:
+            id_column_names = [CHUNK_ID_COLUMN]
+
         table = self.get_table(table_name, schema_name)
-        if id_column_name not in table.c:
-            raise ValueError(f"Column '{id_column_name}' not found in table '{table_name}'.")
+
+        for id_column_name in id_column_names:
+            if id_column_name not in table.c:
+                raise ValueError(f"Column '{id_column_name}' not found in table '{table_name}'.")
 
         row_keys: set[str] = set().union(*(r.keys() for r in rows))
-        updatable_cols = [k for k in row_keys if k != id_column_name and k in table.c]
+        excluded_cols = set(id_column_names)
+        updatable_cols = [k for k in row_keys if k not in excluded_cols and k in table.c]
 
         insert_stmt = insert(table).values(rows)
 
         with self.Session() as session:
             with session.begin():
                 update_dict = {col: insert_stmt.excluded[col] for col in updatable_cols}
+                index_elements = [table.c[col_name] for col_name in id_column_names]
                 stmt = insert_stmt.on_conflict_do_update(
-                    index_elements=[table.c[id_column_name]],
+                    index_elements=index_elements,
                     set_=update_dict,
                 )
                 session.execute(stmt)
