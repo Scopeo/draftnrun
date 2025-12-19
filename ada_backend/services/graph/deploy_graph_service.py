@@ -1,7 +1,7 @@
 import logging
 from uuid import UUID, uuid4
 
-from typing import Optional, Tuple
+from typing import Optional
 from sqlalchemy.orm import Session
 
 from ada_backend.database.models import EnvType
