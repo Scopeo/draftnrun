@@ -858,6 +858,99 @@ def _merge_tables(
     return sources_processed > 0
 
 
+async def _verify_table_collection_count_match(
+    ingestion_db_connection,
+    qdrant_service,
+    organization_id: str,
+    embedding_model: str,
+    source_ids: list[str],
+):
+    """Verify that the row count in the unified table matches the point count in the unified Qdrant collection.
+
+    The table contains rows for all sources in an organization, but we need to filter by source_id
+    to compare with the collection which is specific to org+embedding_model.
+
+    Args:
+        ingestion_db_connection: Connection to ingestion database
+        qdrant_service: QdrantService instance for the embedding model
+        organization_id: Organization ID
+        embedding_model: Embedding model reference
+        source_ids: List of source IDs for this org+embedding_model combination
+
+    Returns:
+        tuple: (table_count, collection_count, match) where match is True if counts match
+    """
+    try:
+        # Get unified table and collection names
+        schema_name, table_name, collection_name = get_sanitize_names(
+            organization_id=str(organization_id),
+            embedding_model_reference=embedding_model,
+        )
+
+        # Count rows in table filtered by source_ids for this embedding model
+        try:
+            if source_ids:
+                # Build SQL with IN clause for source_ids using parameterized query
+                # Use tuple with IN clause for safe parameterization
+                # Convert source_ids to tuple of UUIDs for the query
+                placeholders = ", ".join([f":source_id_{i}" for i in range(len(source_ids))])
+                params = {f"source_id_{i}": source_id for i, source_id in enumerate(source_ids)}
+                table_count = ingestion_db_connection.execute(
+                    text(
+                        f'SELECT COUNT(*) FROM "{schema_name}"."{table_name}" '
+                        f'WHERE "{SOURCE_ID_COLUMN_NAME}" IN ({placeholders})'
+                    ),
+                    params,
+                ).scalar()
+            else:
+                LOGGER.warning(
+                    f"No source_ids provided for organization {organization_id} with model {embedding_model}, "
+                    f"skipping table count"
+                )
+                return None, None, False
+        except Exception as e:
+            LOGGER.warning(
+                f"Could not count rows in table {schema_name}.{table_name} for organization {organization_id}: {e}"
+            )
+            return None, None, False
+
+        # Count points in Qdrant collection
+        try:
+            if await qdrant_service.collection_exists_async(collection_name):
+                collection_count = await qdrant_service.count_points_async(collection_name)
+            else:
+                LOGGER.warning(
+                    f"Collection {collection_name} does not exist for organization {organization_id} "
+                    f"with embedding model {embedding_model}"
+                )
+                return table_count, 0, False
+        except Exception as e:
+            LOGGER.warning(
+                f"Could not count points in collection {collection_name} for organization {organization_id}: {e}"
+            )
+            return table_count, None, False
+
+        # Compare counts
+        counts_match = table_count == collection_count
+
+        if counts_match:
+            LOGGER.info(
+                f"✓ Count verification passed for organization {organization_id} with model {embedding_model}: "
+                f"table={table_count}, collection={collection_count}"
+            )
+        else:
+            LOGGER.error(
+                f"✗ Count mismatch for organization {organization_id} with model {embedding_model}: "
+                f"table={table_count}, collection={collection_count}, difference={abs(table_count - collection_count)}"
+            )
+
+        return table_count, collection_count, counts_match
+
+    except Exception as e:
+        LOGGER.error(f"Error verifying counts for organization {organization_id} with model {embedding_model}: {e}")
+        return None, None, False
+
+
 def upgrade() -> None:
     """
     Reorganize ingestion tables and collections (Step 1/2):
@@ -1019,6 +1112,69 @@ def upgrade() -> None:
                     f"No source collections found for organization {org_id} with "
                     f"model {embedding_model}, skipping collection migration"
                 )
+
+        # STEP 2.5: Verify table and collection counts match
+        LOGGER.info("=== STEP 2.5: Verifying table and collection counts match ===")
+        verification_passed = 0
+        verification_failed = 0
+        verification_skipped = 0
+
+        for (org_id, embedding_model), sources in org_model_sources.items():
+            try:
+                # Get source_ids for this org+embedding_model combination
+                source_ids = [str(source_id) for source_id, _, _, _, _, _, _ in sources]
+
+                if not source_ids:
+                    LOGGER.warning(
+                        f"No source_ids found for organization {org_id} with model {embedding_model}, "
+                        f"skipping verification"
+                    )
+                    verification_skipped += 1
+                    continue
+
+                # Get the QdrantService for this embedding model
+                if embedding_model not in qdrant_services:
+                    LOGGER.warning(
+                        f"No QdrantService found for embedding model {embedding_model}, skipping verification"
+                    )
+                    verification_skipped += 1
+                    continue
+
+                qdrant_service = qdrant_services[embedding_model]
+
+                # Verify counts
+                table_count, collection_count, match = asyncio.run(
+                    _verify_table_collection_count_match(
+                        ingestion_db_connection,
+                        qdrant_service,
+                        str(org_id),
+                        embedding_model,
+                        source_ids,
+                    )
+                )
+
+                if match:
+                    verification_passed += 1
+                elif table_count is not None and collection_count is not None:
+                    verification_failed += 1
+                else:
+                    verification_skipped += 1
+
+            except Exception as e:
+                LOGGER.error(f"Error during verification for organization {org_id} with model {embedding_model}: {e}")
+                verification_skipped += 1
+                continue
+
+        LOGGER.info(
+            f"Verification summary: {verification_passed} passed, {verification_failed} failed, "
+            f"{verification_skipped} skipped"
+        )
+
+        if verification_failed > 0:
+            LOGGER.error(
+                f"WARNING: {verification_failed} organization(s) have count mismatches "
+                "between table and Qdrant collection. Please investigate before proceeding."
+            )
 
         # STEP 3: Update data_sources table for all sources
         LOGGER.info("=== STEP 3: Updating data_sources table ===")

@@ -10,7 +10,7 @@ from ada_backend.repositories.knowledge_repository import (
     list_documents_for_source,
 )
 from ingestion_script.ingest_folder_source import UNIFIED_TABLE_DEFINITION
-from tests.mocks.db_service import TEST_SCHEMA_NAME, postgres_service
+from tests.mocks.db_service import TEST_SCHEMA_NAME
 
 
 @pytest.fixture
