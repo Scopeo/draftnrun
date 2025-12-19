@@ -13,7 +13,8 @@ mkdir -p "$CACHE_DIR"
 
 # Check and install PostgreSQL 16 client tools if needed
 ensure_pg_tools() {
-  if ! command -v pg_dump &> /dev/null; then
+  # Check for pg_dump in the specific PostgreSQL 16 path first, then in PATH
+  if ! command -v /usr/pgsql-16/bin/pg_dump &> /dev/null && ! command -v pg_dump &> /dev/null; then
     echo "===> Installing PostgreSQL 16 client tools"
     sudo dnf remove -y postgresql15* || true
     sudo dnf install -y postgresql16

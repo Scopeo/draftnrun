@@ -1,0 +1,92 @@
+name: Update Production Dump Cache in Test
+
+on:
+  workflow_dispatch:
+
+env:
+  EC2_USER: ec2-user
+
+jobs:
+  update-dump-cache:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+        with:
+          lfs: true
+
+      - name: Set up SSH key
+        uses: webfactory/ssh-agent@v0.5.3
+        with:
+          ssh-private-key: ${{ secrets.DEPLOY_KEY }}
+
+      - name: Copy repository to EC2
+        uses: appleboy/scp-action@master
+        with:
+          host: ${{ secrets.EC2_HOST_TEST }}
+          username: ${{ env.EC2_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          source: "."
+          target: "/home/ec2-user/draftnrun"
+
+      - name: Create credentials.env file
+        run: |
+          echo "PROD_DB_URL=${{ secrets.PROD_DB_URL }}" > credentials.env
+
+      - name: Upload credentials.env to EC2
+        uses: appleboy/scp-action@master
+        with:
+          host: ${{ secrets.EC2_HOST_TEST }}
+          username: ${{ env.EC2_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          source: "credentials.env"
+          target: "/tmp/credentials.env"
+
+      - name: Update production dump cache
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.EC2_HOST_TEST }}
+          username: ${{ env.EC2_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          script: |
+            set -e
+            cd /home/ec2-user/draftnrun
+
+            # Source db_utils.sh to use ensure_pg_tools function
+            source "./scripts/copy_data/db_utils.sh"
+            ensure_pg_tools
+
+            # Load PROD_DB_URL from credentials file
+            if [ -f /tmp/credentials.env ]; then
+              set -a; source /tmp/credentials.env; set +a
+            elif [ -f ~/credentials.env ]; then
+              set -a; source ~/credentials.env; set +a
+            fi
+
+            # Require PROD_DB_URL to be set
+            if [ -z "${PROD_DB_URL:-}" ]; then
+              echo "ERROR: PROD_DB_URL is not set." >&2
+              exit 1
+            fi
+
+            # Cache directory for prod dumps
+            CACHE_DIR="/home/ec2-user/ci-cache/db-dumps"
+            mkdir -p "$CACHE_DIR"
+            DUMP_PATH="$CACHE_DIR/prod.latest.dump"
+
+            # Always force refresh the dump to update cache and TTL
+            # pg_dump -f will overwrite the existing file if it exists (like in CI)
+            echo "===> Creating/updating production dump cache at $DUMP_PATH"
+            if [ -f "$DUMP_PATH" ]; then
+              echo "===> Existing dump found, will be overwritten"
+            fi
+            pg_dump -Fc "$PROD_DB_URL" -f "$DUMP_PATH"
+            
+            # Validate dump using shared script
+            bash "./scripts/copy_data/validate_dump.sh" "$DUMP_PATH"
+            
+            echo "===> ✅ Production dump cache updated successfully"
+            echo "===> Next CI run will use this fresh dump (TTL check will pass)"
