@@ -68,7 +68,8 @@ class Retriever:
             else (source_id_filter or filters)
         )
         LOGGER.info(
-            f"Retriever querying collection '{self.collection_name}' with source_id={self.source_id}, filter: {json.dumps(final_filter)}"
+            f"Retriever querying collection '{self.collection_name}' with source_id={self.source_id}, "
+            f"filter: {json.dumps(final_filter)}"
         )
         chunks = await self._vectorestore_service.retrieve_similar_chunks_async(
             query_text=query_text,
@@ -82,7 +83,8 @@ class Retriever:
             max_retrieved_chunks_after_penalty=self.max_retrieved_chunks_after_penalty,
         )
         LOGGER.info(
-            f"Retriever retrieved {len(chunks)} chunks from collection '{self.collection_name}' with source_id={self.source_id}"
+            f"Retriever retrieved {len(chunks)} chunks from collection "
+            f"'{self.collection_name}' with source_id={self.source_id}"
         )
 
         return chunks
