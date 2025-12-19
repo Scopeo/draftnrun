@@ -491,7 +491,22 @@ class QdrantService:
             if schema.metadata_fields_to_keep:
                 metadata = {key: value for key, value in chunk_data.items() if key in schema.metadata_fields_to_keep}
             else:
-                metadata = {}
+                # TODO: refacto our metadata logic
+                standard_fields = set(
+                    field
+                    for field in (
+                        schema.chunk_id_field,
+                        schema.content_field,
+                        schema.file_id_field,
+                        schema.url_id_field,
+                        schema.last_edited_ts_field,
+                        schema.source_id_field,
+                    )
+                    if field is not None
+                )
+
+                metadata = {k: v for k, v in chunk_data.items() if k not in standard_fields}
+
             chunks.append(
                 SourceChunk(
                     name=chunk_data.get(schema.chunk_id_field, ""),
