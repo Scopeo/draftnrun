@@ -80,6 +80,12 @@ class LLMJudgeNotFound(Exception):
         super().__init__(f"LLM judge {judge_id} not found in project {project_id}")
 
 
+class SourceNotFound(Exception):
+    def __init__(self, source_id: UUID):
+        self.source_id = source_id
+        super().__init__(f"Source not found: {source_id}")
+
+
 class InvalidAgentTemplate(Exception):
     def __init__(self, template_project_id: UUID, template_graph_runner_id: UUID):
         self.template_project_id = template_project_id
@@ -90,6 +96,13 @@ class InvalidAgentTemplate(Exception):
                 "does not contain an AI agent component"
             )
         )
+
+
+class ChunkSourceMismatchError(Exception):
+    def __init__(self, chunk_id: str, source_id: UUID):
+        self.chunk_id = chunk_id
+        self.source_id = source_id
+        super().__init__(f"Chunk {chunk_id} does not belong to source {source_id}")
 
 
 class LLMModelNotFound(Exception):
