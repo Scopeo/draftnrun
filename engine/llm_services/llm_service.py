@@ -9,6 +9,9 @@ from uuid import UUID
 
 from opentelemetry.trace import get_current_span
 from openinference.semconv.trace import SpanAttributes
+import openai
+import mistralai
+from openai.types.chat import ChatCompletion
 
 from engine.llm_services.utils import (
     validate_and_extract_json_response,
@@ -27,7 +30,6 @@ from engine.llm_services.constrained_output_models import (
 )
 from settings import settings
 from engine.llm_services.utils import chat_completion_to_response, build_openai_responses_kwargs
-from openai.types.chat import ChatCompletion
 
 LOGGER = logging.getLogger(__name__)
 
@@ -60,6 +62,8 @@ class LLMService(ABC):
                     self._api_key = settings.GOOGLE_API_KEY
                 case "mistral":
                     self._api_key = settings.MISTRAL_API_KEY
+                case "anthropic":
+                    self._api_key = settings.ANTHROPIC_API_KEY
                 case _:
                     custom_models_dict = settings.custom_models.get("custom_models")
                     if custom_models_dict is None:
@@ -87,6 +91,8 @@ class LLMService(ABC):
                     self._base_url = settings.GOOGLE_BASE_URL
                 case "mistral":
                     self._base_url = settings.MISTRAL_BASE_URL
+                case "anthropic":
+                    self._base_url = settings.ANTHROPIC_BASE_URL
                 case _:
                     custom_models_dict = settings.custom_models.get("custom_models")
                     if custom_models_dict is None:
@@ -125,7 +131,6 @@ class EmbeddingService(LLMService):
         span = get_current_span()
         match self._provider:
             case "openai":
-                import openai
 
                 if self._api_key is None:
                     self._api_key = settings.OPENAI_API_KEY
@@ -145,7 +150,6 @@ class EmbeddingService(LLMService):
                 return response.data
 
             case _:
-                import openai
 
                 client = openai.AsyncOpenAI(
                     api_key=self._api_key,
@@ -201,7 +205,6 @@ class CompletionService(LLMService):
         span.set_attributes({SpanAttributes.LLM_INVOCATION_PARAMETERS: json.dumps(self._invocation_parameters)})
         match self._provider:
             case "openai":
-                import openai
 
                 if self._api_key is None:
                     self._api_key = settings.OPENAI_API_KEY
@@ -226,7 +229,6 @@ class CompletionService(LLMService):
                 return response.output_text
 
             case _:
-                import openai
 
                 client = openai.AsyncOpenAI(
                     api_key=self._api_key,
@@ -252,18 +254,8 @@ class CompletionService(LLMService):
         messages: list[dict] | str,
         response_format: BaseModel,
         stream: bool = False,
-        tools: Optional[list[ToolDescription]] = None,
-        tool_choice: str = "auto",
     ) -> BaseModel:
-        return asyncio.run(
-            self.constrained_complete_with_pydantic_async(
-                messages,
-                response_format,
-                stream,
-                tools=tools,
-                tool_choice=tool_choice,
-            )
-        )
+        return asyncio.run(self.constrained_complete_with_pydantic_async(messages, response_format, stream))
 
     async def _fallback_constrained_complete_with_json_format(
         self,
@@ -271,7 +263,6 @@ class CompletionService(LLMService):
         response_format: BaseModel,
         stream: bool = False,
     ) -> tuple[BaseModel, int, int, int]:
-        import openai
 
         client = openai.AsyncOpenAI(api_key=self._api_key, base_url=self._base_url)
 
@@ -306,14 +297,11 @@ class CompletionService(LLMService):
         messages: list[dict] | str,
         response_format: BaseModel,
         stream: bool = False,
-        tools: Optional[list[ToolDescription]] = None,
-        tool_choice: str = "auto",
     ) -> BaseModel:
         span = get_current_span()
         span.set_attributes({SpanAttributes.LLM_INVOCATION_PARAMETERS: json.dumps(self._invocation_parameters)})
         match self._provider:
             case "openai":
-                import openai
 
                 # Transform messages for OpenAI response API
                 messages = chat_completion_to_response(messages)
@@ -338,7 +326,6 @@ class CompletionService(LLMService):
                 return response.output_parsed
 
             case "mistral":
-                import mistralai
 
                 client = mistralai.Mistral(api_key=self._api_key)
                 # Convert messages format if needed
@@ -360,7 +347,7 @@ class CompletionService(LLMService):
                 )
                 return response.choices[0].message.parsed
 
-            case "cerebras" | "google" | _:
+            case _:
                 # TODO: modify to make it work with  models not handling response format
                 try:
                     (
@@ -395,7 +382,6 @@ class CompletionService(LLMService):
         response_format: dict,
         stream: bool = False,
     ) -> tuple[str, int, int, int]:
-        import openai
 
         schema = response_format.get("schema", {})
         name = response_format.get("name", "response")
@@ -437,22 +423,14 @@ class CompletionService(LLMService):
         messages: list[dict] | str,
         response_format: str,
         stream: bool = False,
-        tools: Optional[list[ToolDescription]] = None,
-        tool_choice: str = "auto",
     ) -> str:
-        return asyncio.run(
-            self.constrained_complete_with_json_schema_async(
-                messages, response_format, stream, tools=tools, tool_choice=tool_choice
-            )
-        )
+        return asyncio.run(self.constrained_complete_with_json_schema_async(messages, response_format, stream))
 
     async def constrained_complete_with_json_schema_async(
         self,
         messages: list[dict] | str,
         response_format: str,
         stream: bool = False,
-        tools: Optional[list[ToolDescription]] = None,
-        tool_choice: str = "auto",
     ) -> str:
         response_format = load_str_to_json(response_format)
         # validate with the basemodel OutputFormatModel
@@ -463,7 +441,6 @@ class CompletionService(LLMService):
         span.set_attributes({SpanAttributes.LLM_INVOCATION_PARAMETERS: json.dumps(self._invocation_parameters)})
         match self._provider:
             case "openai":
-                import openai
 
                 # Transform messages for OpenAI response API
                 messages = chat_completion_to_response(messages)
@@ -493,7 +470,6 @@ class CompletionService(LLMService):
                 return response.output_text
 
             case "mistral":
-                import openai
 
                 schema = response_format.get("schema", {})
                 name = response_format.get("name", "response")
@@ -585,7 +561,7 @@ class CompletionService(LLMService):
         Main function calling dispatcher that routes to appropriate implementation.
         """
         if structured_output_tool is not None:
-            return await self.function_call_with_structured_output_async(
+            return await self._function_call_with_structured_output_async(
                 messages=messages,
                 stream=stream,
                 tools=tools,
@@ -593,7 +569,7 @@ class CompletionService(LLMService):
                 structured_output_tool=structured_output_tool,
             )
         else:
-            return await self.function_call_without_structured_output_async(
+            return await self._function_call_without_structured_output_async(
                 messages=messages,
                 stream=stream,
                 tools=tools,
@@ -606,8 +582,10 @@ class CompletionService(LLMService):
         stream: bool,
         tools: list[dict],
         tool_choice: str,
-    ) -> tuple[ChatCompletion, int, int, int]:
-        import openai
+    ) -> ChatCompletion:
+
+        span = get_current_span()
+        span.set_attributes({SpanAttributes.LLM_INVOCATION_PARAMETERS: json.dumps(self._invocation_parameters)})
 
         client = openai.AsyncOpenAI(api_key=self._api_key, base_url=self._base_url)
         response = await client.chat.completions.create(
@@ -618,9 +596,17 @@ class CompletionService(LLMService):
             stream=stream,
             tool_choice=tool_choice,
         )
-        return response, response.usage.completion_tokens, response.usage.prompt_tokens, response.usage.total_tokens
+        span.set_attributes(
+            {
+                SpanAttributes.LLM_TOKEN_COUNT_COMPLETION: response.usage.completion_tokens,
+                SpanAttributes.LLM_TOKEN_COUNT_PROMPT: response.usage.prompt_tokens,
+                SpanAttributes.LLM_TOKEN_COUNT_TOTAL: response.usage.total_tokens,
+                SpanAttributes.LLM_PROVIDER: self._provider,
+            }
+        )
+        return response
 
-    async def function_call_without_structured_output_async(
+    async def _function_call_without_structured_output_async(
         self,
         messages: list[dict] | str,
         stream: bool = False,
@@ -630,112 +616,27 @@ class CompletionService(LLMService):
         if tools is None:
             tools = []
 
-        openai_tools = [tool.openai_format for tool in tools]
-
-        span = get_current_span()
-        span.set_attributes({SpanAttributes.LLM_INVOCATION_PARAMETERS: json.dumps(self._invocation_parameters)})
+        tools_in_openai_format = [tool.openai_format for tool in tools]
+        if not tools_in_openai_format:
+            tools_in_openai_format = None
+            tool_choice = None
 
         match self._provider:
-            case "openai":
-                (response, usage_completion_tokens, usage_prompt_tokens, usage_total_tokens) = (
-                    await self._default_function_call_without_structured_output(
-                        messages=messages,
-                        stream=stream,
-                        tools=openai_tools,
-                        tool_choice=tool_choice,
-                    )
-                )
-                span.set_attributes(
-                    {
-                        SpanAttributes.LLM_TOKEN_COUNT_COMPLETION: usage_completion_tokens,
-                        SpanAttributes.LLM_TOKEN_COUNT_PROMPT: usage_prompt_tokens,
-                        SpanAttributes.LLM_TOKEN_COUNT_TOTAL: usage_total_tokens,
-                        SpanAttributes.LLM_PROVIDER: self._provider,
-                    }
-                )
-                return response
-
-            case "google":
-                if not openai_tools:
-                    empty_function_tool = ToolDescription(
-                        **{
-                            "name": "empty_function_tool",
-                            "description": "This tool does nothing and is to never by used/called.",
-                            "tool_properties": {},
-                            "required_tool_properties": [],
-                        }
-                    )
-                    openai_tools = [empty_function_tool.openai_format]
-                (response, usage_completion_tokens, usage_prompt_tokens, usage_total_tokens) = (
-                    await self._default_function_call_without_structured_output(
-                        messages=messages,
-                        stream=stream,
-                        tools=openai_tools,
-                        tool_choice=tool_choice,
-                    )
-                )
-                span.set_attributes(
-                    {
-                        SpanAttributes.LLM_TOKEN_COUNT_COMPLETION: usage_completion_tokens,
-                        SpanAttributes.LLM_TOKEN_COUNT_PROMPT: usage_prompt_tokens,
-                        SpanAttributes.LLM_TOKEN_COUNT_TOTAL: usage_total_tokens,
-                        SpanAttributes.LLM_PROVIDER: self._provider,
-                    }
-                )
-                return response
-
             case "mistral":
-                import openai
-
-                mistral_compatible_messages = make_messages_compatible_for_mistral(messages)
-                client = openai.AsyncOpenAI(
-                    api_key=self._api_key,
-                    base_url=self._base_url,
-                )
-                response = await client.chat.completions.create(
-                    model=self._model_name,
-                    messages=mistral_compatible_messages,
-                    tools=openai_tools,
-                    temperature=self._invocation_parameters.get("temperature"),
-                    stream=stream,
-                    tool_choice=tool_choice,
-                )
-                span.set_attributes(
-                    {
-                        SpanAttributes.LLM_TOKEN_COUNT_COMPLETION: response.usage.completion_tokens,
-                        SpanAttributes.LLM_TOKEN_COUNT_PROMPT: response.usage.prompt_tokens,
-                        SpanAttributes.LLM_TOKEN_COUNT_TOTAL: response.usage.total_tokens,
-                        SpanAttributes.LLM_PROVIDER: self._provider,
-                    }
-                )
-                return response
-
+                messages = make_messages_compatible_for_mistral(messages)
             case _:
-                import openai
+                pass
 
-                client = openai.AsyncOpenAI(
-                    api_key=self._api_key,
-                    base_url=self._base_url,
-                )
-                response = await client.chat.completions.create(
-                    model=self._model_name,
-                    messages=messages,
-                    tools=openai_tools,
-                    temperature=self._invocation_parameters.get("temperature"),
-                    stream=stream,
-                    tool_choice=tool_choice,
-                )
-                span.set_attributes(
-                    {
-                        SpanAttributes.LLM_TOKEN_COUNT_COMPLETION: response.usage.completion_tokens,
-                        SpanAttributes.LLM_TOKEN_COUNT_PROMPT: response.usage.prompt_tokens,
-                        SpanAttributes.LLM_TOKEN_COUNT_TOTAL: response.usage.total_tokens,
-                        SpanAttributes.LLM_PROVIDER: self._provider,
-                    }
-                )
-                return response
+        response = await self._default_function_call_without_structured_output(
+            messages=messages,
+            stream=stream,
+            tools=tools_in_openai_format,
+            tool_choice=tool_choice,
+        )
 
-    async def function_call_with_structured_output_async(
+        return response
+
+    async def _function_call_with_structured_output_async(
         self,
         messages: list[dict] | str,
         stream: bool = False,
@@ -746,46 +647,33 @@ class CompletionService(LLMService):
         if tools is None:
             tools = []
 
-        openai_tools = [tool.openai_format for tool in tools]
+        tools_in_openai_format = [tool.openai_format for tool in tools]
+        tools_in_openai_format_with_structured = tools_in_openai_format + [structured_output_tool.openai_format]
 
         span = get_current_span()
         span.set_attributes({SpanAttributes.LLM_INVOCATION_PARAMETERS: json.dumps(self._invocation_parameters)})
 
-        # Check for structured output tool early return
-        if tool_choice == "none":
-            response = await self._constrained_complete_structured_response_without_tools(
+        # When explicitly forced to avoid tools, use constrained completion path.
+        if tool_choice == "none" or not tools_in_openai_format:
+            response = await self._constrained_complete_wrapped_into_chat_completion_format(
                 structured_output_tool=structured_output_tool,
                 messages=messages,
                 stream=stream,
             )
-            # Return immediately to avoid duplicated spans in the trace (done in the constrained function)
             return response
 
+        client = openai.AsyncOpenAI(api_key=self._api_key, base_url=self._base_url)
         match self._provider:
-            case "openai" | "google":
-                import openai
-
-                client = openai.AsyncOpenAI(api_key=self._api_key, base_url=self._base_url)
-
             case "mistral":
-                import openai
-
-                mistral_compatible_messages = make_messages_compatible_for_mistral(messages)
-                client = openai.AsyncOpenAI(api_key=self._api_key, base_url=self._base_url)
-                messages = mistral_compatible_messages  # Use formatted messages
-
+                messages = make_messages_compatible_for_mistral(messages)
             case _:
-                import openai
-
-                client = openai.AsyncOpenAI(api_key=self._api_key, base_url=self._base_url)
-
+                pass
         tool_choice = "required"
-        openai_tools.append(structured_output_tool.openai_format)
 
         response = await client.chat.completions.create(
             model=self._model_name,
             messages=messages,
-            tools=openai_tools,
+            tools=tools_in_openai_format_with_structured,
             temperature=self._invocation_parameters.get("temperature"),
             stream=stream,
             tool_choice=tool_choice,
@@ -811,7 +699,7 @@ class CompletionService(LLMService):
         )
         return response
 
-    async def _constrained_complete_structured_response_without_tools(
+    async def _constrained_complete_wrapped_into_chat_completion_format(
         self,
         structured_output_tool: ToolDescription,
         messages: list[dict] | str,
@@ -864,7 +752,7 @@ class CompletionService(LLMService):
                 "content": response.choices[0].message.content,
             }
             messages = original_messages + [assistant_message]
-            return await self._constrained_complete_structured_response_without_tools(
+            return await self._constrained_complete_wrapped_into_chat_completion_format(
                 structured_output_tool=structured_output_tool,
                 messages=messages,
                 stream=stream,
@@ -910,7 +798,6 @@ class WebSearchService(LLMService):
         span = get_current_span()
         match self._provider:
             case "openai":
-                import openai
 
                 client = openai.AsyncOpenAI(api_key=self._api_key)
                 if allowed_domains:
@@ -996,11 +883,9 @@ class VisionService(LLMService):
         span.set_attributes({SpanAttributes.LLM_INVOCATION_PARAMETERS: json.dumps({"temperature": self._temperature})})
         match self._provider:
             case "openai" | "google":
-                import openai
 
                 client = openai.AsyncOpenAI(api_key=self._api_key, base_url=self._base_url)
             case _:
-                import openai
 
                 client = openai.AsyncOpenAI(api_key=self._api_key, base_url=self._base_url)
 
