@@ -39,6 +39,7 @@ from ada_backend.services.graph.update_graph_service import update_graph_with_hi
 from engine.components.errors import (
     KeyTypePromptTemplateError,
     MissingKeyPromptTemplateError,
+    RemoteMCPConnectionError,
 )
 from engine.field_expressions.errors import FieldExpressionError
 
@@ -193,6 +194,12 @@ async def update_project_pipeline(
     except KeyTypePromptTemplateError as e:
         LOGGER.error(
             f"Key type error in prompt template for project {project_id} runner {graph_runner_id}: {str(e)}",
+            exc_info=True,
+        )
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except RemoteMCPConnectionError as e:
+        LOGGER.error(
+            f"MCP connection failed for project {project_id} runner {graph_runner_id}: {str(e)}",
             exc_info=True,
         )
         raise HTTPException(status_code=400, detail=str(e)) from e

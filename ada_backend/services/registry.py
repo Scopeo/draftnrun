@@ -13,6 +13,7 @@ from ada_backend.services.entity_factory import (
     AgentFactory,
     EntityFactory,
     NonToolCallableBlockFactory,
+    RemoteMCPToolFactory,
     build_completion_service_processor,
     build_db_service_processor,
     build_formatter_processor,
@@ -391,6 +392,10 @@ def create_factory_registry() -> FactoryRegistry:
         factory=AgentFactory(
             entity_class=APICallTool,
         ),
+    )
+    registry.register(
+        component_version_id=COMPONENT_VERSION_UUIDS["remote_mcp_tool"],
+        factory=RemoteMCPToolFactory(),
     )
     registry.register(
         component_version_id=COMPONENT_VERSION_UUIDS["python_code_runner"],

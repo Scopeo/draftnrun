@@ -28,6 +28,7 @@ from ada_backend.utils.secret_resolver import replace_secret_placeholders
 from engine.components.errors import (
     KeyTypePromptTemplateError,
     MissingKeyPromptTemplateError,
+    RemoteMCPConnectionError,
 )
 from engine.components.types import ComponentAttributes, ToolDescription
 
@@ -164,7 +165,12 @@ def instantiate_component(
             if param_name not in grouped_sub_components:
                 grouped_sub_components[param_name] = []
             grouped_sub_components[param_name].append((sub_component.order, instantiated_sub_component))
-        except (MissingDataSourceError, MissingKeyPromptTemplateError, KeyTypePromptTemplateError):
+        except (
+            MissingDataSourceError,
+            MissingKeyPromptTemplateError,
+            KeyTypePromptTemplateError,
+            RemoteMCPConnectionError,
+        ):
             raise
         except Exception as e:
             raise ValueError(
@@ -257,7 +263,7 @@ def instantiate_component(
             f"Failed to connect to database for component '{component_name}' "
             f"(instance ID: {component_instance.id}): {str(e)}"
         ) from e
-    except MissingDataSourceError:
+    except (MissingDataSourceError, RemoteMCPConnectionError):
         raise
     except Exception as e:
         raise ValueError(

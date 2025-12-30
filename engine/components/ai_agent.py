@@ -185,9 +185,12 @@ class AIAgent(Component):
         self._date_in_system_prompt = date_in_system_prompt
         self._shared_sandbox: Optional[AsyncSandbox] = None
         self._e2b_api_key = getattr(settings, "E2B_API_KEY", None)
+        self._tool_registry: dict[str, tuple[Runnable, ToolDescription]] = {}
 
         self._output_format = output_format
         self._output_tool_agent_description = self._get_output_tool_description(output_format)
+        # Tool cache is snapshotted at init; provide agent_tools up front.
+        self._build_tool_cache()
 
     @staticmethod
     def _get_output_tool_description(output_format: str | dict | None) -> Optional[ToolDescription]:
@@ -239,6 +242,33 @@ class AIAgent(Component):
             finally:
                 self._shared_sandbox = None
 
+    def _build_tool_cache(self) -> None:
+        """
+        Expand tool descriptions for all agent tools.
+
+        Calls get_tool_descriptions() on each tool to support:
+        - Single-tool components (default): returns [self.tool_description]
+        - Multi-tool components (e.g., RemoteMCPTool): returns multiple ToolDescriptions
+
+        Caches a single mapping for both LLM listing and fast lookup.
+        """
+        self._tool_registry: dict[str, tuple[Runnable, ToolDescription]] = {}
+
+        for tool in self.agent_tools:
+            descriptions = tool.get_tool_descriptions()
+            # Normalize to list if single ToolDescription
+            if not isinstance(descriptions, list):
+                descriptions = [descriptions]
+
+            for desc in descriptions:
+                if desc.name in self._tool_registry:
+                    LOGGER.warning(f"Duplicate tool name '{desc.name}' - overriding previous mapping")
+                self._tool_registry[desc.name] = (tool, desc)
+
+    def _get_tool_descriptions_for_llm(self) -> list[ToolDescription]:
+        """Return tool descriptions for LLM function calling."""
+        return [desc for _, desc in self._tool_registry.values()]
+
     # --- ORIGINAL CORE LOGIC (unchanged) ---
     async def _run_tool_call(
         self,
@@ -251,11 +281,15 @@ class AIAgent(Component):
         tool_arguments = json.loads(tool_call.function.arguments)
         LOGGER.info(f"Tool call: {tool_function_name} with query string: {tool_arguments} and id: {tool_call_id}")
 
-        tool_to_use: Runnable = next(
-            tool for tool in self.agent_tools if tool.tool_description.name == tool_function_name
-        )
+        tool_entry = self._tool_registry.get(tool_function_name)
+        if tool_entry is None:
+            raise ValueError(f"Tool {tool_function_name} not found in agent_tools.")
+        tool_to_use, _ = tool_entry
         if tool_function_name in CODE_RUNNER_TOOLS:
             tool_arguments["shared_sandbox"] = await self._ensure_shared_sandbox()
+        # TODO: replace this flag-based wiring with a proper function-calling→input translation hook
+        if getattr(tool_to_use, "requires_tool_name", False):
+            tool_arguments["tool_name"] = tool_function_name
         try:
             LOGGER.info(f"Calling tool {tool_function_name} with arguments: {tool_arguments}")
             tool_output = await tool_to_use.run(*original_agent_inputs, ctx=ctx, **tool_arguments)
@@ -373,7 +407,7 @@ class AIAgent(Component):
             })
             chat_response = await self._completion_service.function_call_async(
                 messages=llm_input_messages,
-                tools=[agent.tool_description for agent in self.agent_tools],
+                tools=self._get_tool_descriptions_for_llm(),
                 tool_choice=tool_choice,
                 structured_output_tool=output_tool_description,
             )
