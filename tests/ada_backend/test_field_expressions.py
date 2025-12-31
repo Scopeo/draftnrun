@@ -7,11 +7,11 @@ from uuid import uuid4
 
 from fastapi.testclient import TestClient
 
-from ada_backend.main import app
 from ada_backend.database.seed.utils import COMPONENT_UUIDS
+from ada_backend.main import app
+from ada_backend.schemas.parameter_schema import ParameterKind
 from ada_backend.scripts.get_supabase_token import get_user_jwt
 from settings import settings
-from ada_backend.schemas.parameter_schema import ParameterKind
 
 # Test constants
 ORGANIZATION_ID = "37b7d67f-8f29-4fce-8085-19dea582f605"  # umbrella organization
@@ -37,12 +37,10 @@ def _get_field_expressions_from_instance(instance: dict) -> list[dict]:
     field_expressions = []
     for param in input_params:
         if param.get("value"):
-            field_expressions.append(
-                {
-                    "field_name": param["name"],
-                    "expression_text": str(param["value"]),
-                }
-            )
+            field_expressions.append({
+                "field_name": param["name"],
+                "expression_text": str(param["value"]),
+            })
 
     return field_expressions
 
@@ -61,14 +59,12 @@ def _create_component_instance(
     ]
 
     if input_expression:
-        params.append(
-            {
-                "name": input_expression["field_name"],
-                "value": input_expression["expression_text"],
-                "kind": ParameterKind.INPUT,
-                "order": None,
-            }
-        )
+        params.append({
+            "name": input_expression["field_name"],
+            "value": input_expression["expression_text"],
+            "kind": ParameterKind.INPUT,
+            "order": None,
+        })
 
     instance = {
         "is_agent": True,
@@ -150,27 +146,27 @@ def _assert_expression_remapped(
     context: str = "",
 ) -> None:
     """Assert that expression has been remapped from original_instance_id to new_instance_id."""
-    assert (
-        str(original_instance_id) not in expr_text
-    ), f"{context}Old instance ID {original_instance_id} should not be in expression"
+    assert str(original_instance_id) not in expr_text, (
+        f"{context}Old instance ID {original_instance_id} should not be in expression"
+    )
     assert str(new_instance_id) in expr_text, f"{context}New instance ID {new_instance_id} should be in expression"
 
     if expr_json["type"] == "ref":
-        assert expr_json["instance"] == str(
-            new_instance_id
-        ), f"{context}Ref should use new instance ID {new_instance_id}, got {expr_json['instance']}"
-        assert expr_json["instance"] != str(
-            original_instance_id
-        ), f"{context}Ref should not use old instance ID {original_instance_id}"
+        assert expr_json["instance"] == str(new_instance_id), (
+            f"{context}Ref should use new instance ID {new_instance_id}, got {expr_json['instance']}"
+        )
+        assert expr_json["instance"] != str(original_instance_id), (
+            f"{context}Ref should not use old instance ID {original_instance_id}"
+        )
     elif expr_json["type"] == "concat":
         for part in expr_json["parts"]:
             if part["type"] == "ref":
-                assert part["instance"] == str(
-                    new_instance_id
-                ), f"{context}Ref part should use new instance ID {new_instance_id}, got {part['instance']}"
-                assert part["instance"] != str(
-                    original_instance_id
-                ), f"{context}Ref part should not use old instance ID {original_instance_id}"
+                assert part["instance"] == str(new_instance_id), (
+                    f"{context}Ref part should use new instance ID {new_instance_id}, got {part['instance']}"
+                )
+                assert part["instance"] != str(original_instance_id), (
+                    f"{context}Ref part should not use old instance ID {original_instance_id}"
+                )
 
 
 def test_field_expressions_e2e():

@@ -1,8 +1,8 @@
 from uuid import UUID
 
+from engine.storage_service.db_utils import DBDefinition
 from engine.storage_service.local_service import SQLLocalService
 from ingestion_script.utils import get_sanitize_names
-from engine.storage_service.db_utils import DBDefinition
 from settings import settings
 
 

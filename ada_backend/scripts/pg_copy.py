@@ -56,19 +56,17 @@ def copy_database(source_url: str, dest_url: str) -> None:
 
     try:
         print("📤 Step 1: Dumping source database...")
-        run_command(
-            [
-                "pg_dump",
-                "--clean",
-                "--create",
-                "--dbname",
-                source_url,
-                "-f",
-                dump_path,
-                "--no-owner",
-                "--no-privileges",
-            ]
-        )
+        run_command([
+            "pg_dump",
+            "--clean",
+            "--create",
+            "--dbname",
+            source_url,
+            "-f",
+            dump_path,
+            "--no-owner",
+            "--no-privileges",
+        ])
 
         print("📥 Step 2: Restoring into destination database...")
         run_command(["psql", dest_url, "-f", dump_path])

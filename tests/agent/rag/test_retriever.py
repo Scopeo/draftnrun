@@ -1,9 +1,9 @@
-from unittest.mock import Mock, AsyncMock
+from unittest.mock import AsyncMock, Mock
 
 import pytest
 
-from engine.agent.types import SourceChunk
 from engine.agent.rag.retriever import Retriever
+from engine.agent.types import SourceChunk
 from engine.llm_services.llm_service import EmbeddingService
 from engine.qdrant_service import QdrantService
 from tests.mocks.trace_manager import MockTraceManager

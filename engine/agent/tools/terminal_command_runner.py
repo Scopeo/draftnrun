@@ -1,5 +1,5 @@
-import logging
 import json
+import logging
 from typing import Any, Optional
 
 from e2b_code_interpreter import AsyncSandbox
@@ -7,10 +7,9 @@ from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttribu
 from opentelemetry.trace import get_current_span
 
 from engine.agent.agent import Agent
-from engine.agent.types import ComponentAttributes, ToolDescription, AgentPayload, ChatMessage
+from engine.agent.types import AgentPayload, ChatMessage, ComponentAttributes, ToolDescription
 from engine.trace.trace_manager import TraceManager
 from settings import settings
-
 
 LOGGER = logging.getLogger(__name__)
 
@@ -87,12 +86,10 @@ class TerminalCommandRunner(Agent):
     ) -> AgentPayload:
         span = get_current_span()
         trace_input = str(kwargs["command"])
-        span.set_attributes(
-            {
-                SpanAttributes.OPENINFERENCE_SPAN_KIND: self.TRACE_SPAN_KIND,
-                SpanAttributes.INPUT_VALUE: trace_input,
-            }
-        )
+        span.set_attributes({
+            SpanAttributes.OPENINFERENCE_SPAN_KIND: self.TRACE_SPAN_KIND,
+            SpanAttributes.INPUT_VALUE: trace_input,
+        })
 
         # Extract only the parameters that execute_terminal_command accepts
         command = kwargs["command"]

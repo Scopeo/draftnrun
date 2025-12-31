@@ -1,18 +1,18 @@
-from typing import Annotated
 import logging
+from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.orm import Session
 
 from ada_backend.database.setup_db import get_db
+from ada_backend.routers.auth_router import (
+    UserRights,
+    ensure_super_admin_dependency,
+    user_has_access_to_organization_dependency,
+)
 from ada_backend.schemas.auth_schema import SupabaseUser
 from ada_backend.schemas.category_schema import CategoryCreateSchema, CategoryResponse, CategoryUpdateSchema
-from ada_backend.routers.auth_router import (
-    user_has_access_to_organization_dependency,
-    ensure_super_admin_dependency,
-    UserRights,
-)
 from ada_backend.services.category_service import (
     create_category_service,
     delete_category_service,

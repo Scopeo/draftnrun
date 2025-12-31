@@ -6,21 +6,22 @@ TODO: Enable these tests when migrating test suite to PostgreSQL
 """
 
 import uuid
-import pytest
 from unittest.mock import patch
+
+import pytest
 from sqlalchemy.orm import Session
 
 from ada_backend.database import models as db
-from ada_backend.services.project_service import (
-    get_workflows_by_organization_service,
-    get_project_service,
-)
-from ada_backend.services.errors import ProjectNotFound
+from ada_backend.database.setup_db import get_db
 from ada_backend.schemas.project_schema import (
     ProjectSchema,
     ProjectWithGraphRunnersSchema,
 )
-from ada_backend.database.setup_db import get_db
+from ada_backend.services.errors import ProjectNotFound
+from ada_backend.services.project_service import (
+    get_project_service,
+    get_workflows_by_organization_service,
+)
 
 
 @pytest.fixture
@@ -78,13 +79,11 @@ def test_projects_with_versions(db_session: Session, test_organization):
         )
         db_session.add_all([draft_binding, prod_binding])
 
-        projects_data.append(
-            {
-                "project": project,
-                "draft_gr": draft_gr,
-                "prod_gr": prod_gr,
-            }
-        )
+        projects_data.append({
+            "project": project,
+            "draft_gr": draft_gr,
+            "prod_gr": prod_gr,
+        })
 
     db_session.commit()
     return projects_data

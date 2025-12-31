@@ -1,10 +1,12 @@
 import os
-import pytest
 from unittest.mock import MagicMock
+
+import pytest
 import pytest_asyncio
+
 from engine.agent.tools.linkup_tool import (
-    LinkupSearchTool,
     LINKUP_TOOL_DESCRIPTION,
+    LinkupSearchTool,
 )
 from engine.agent.types import ComponentAttributes, SourceChunk
 from engine.trace.trace_manager import TraceManager

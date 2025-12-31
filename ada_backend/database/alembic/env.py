@@ -1,15 +1,14 @@
 from logging.config import fileConfig
 
-from sqlalchemy import engine_from_config
-from sqlalchemy import pool
-from alembic import context
 import sqlalchemy as sa
+from alembic import context
+from sqlalchemy import engine_from_config, pool
 from sqlalchemy.dialects import postgresql
 
-from settings import settings
-from ada_backend.database.models import Base
 from ada_backend.database import trace_models  # noqa: F401  # Import to register trace models with Base.metadata
+from ada_backend.database.models import Base
 from ada_backend.database.setup_db import get_db_url
+from settings import settings
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

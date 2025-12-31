@@ -9,9 +9,9 @@ for the type pairs you need, and the system handles the rest.
 """
 
 import logging
-from typing import Any, Type, Callable, Optional, Union, get_origin, get_args
+from typing import Any, Callable, Optional, Type, Union, get_args, get_origin
 
-from engine.agent.types import ChatMessage, AgentPayload, SourceChunk
+from engine.agent.types import AgentPayload, ChatMessage, SourceChunk
 
 LOGGER = logging.getLogger(__name__)
 
@@ -195,7 +195,7 @@ class CoercionMatrix:
         source_type = self._normalize_dict_type(source_type)
 
         # Handle typing.Any - always pass through (delete after migration)
-        if target_type == type(Any) or str(target_type) == "typing.Any":
+        if target_type is Any or str(target_type) == "typing.Any":
             return value
 
         # 1. Check if already correct type
@@ -241,7 +241,7 @@ class CoercionMatrix:
         source_type = self._normalize_dict_type(source_type)
 
         # Handle typing.Any - always can coerce (delete after migration)
-        if target_type == type(Any) or str(target_type) == "typing.Any":
+        if target_type is Any or str(target_type) == "typing.Any":
             return True
 
         # Check if already correct type

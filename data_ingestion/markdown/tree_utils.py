@@ -3,7 +3,6 @@ from typing import Callable, Optional
 
 from anytree import Node, RenderTree
 
-
 LOGGER = logging.getLogger(__name__)
 
 
@@ -40,7 +39,7 @@ def are_trees_equal(tree1: Node, tree2: Node, node_as_str: Optional[Callable[[No
         LOGGER.debug(f"Number of children is different: {len(tree1.children)=} != {len(tree2.children)=}")
         return False
 
-    for child1, child2 in zip(tree1.children, tree2.children):
+    for child1, child2 in zip(tree1.children, tree2.children, strict=False):
         if not are_trees_equal(child1, child2, node_as_str):
             LOGGER.debug("Child trees are not equal")
             LOGGER.debug(f"{child1=}\n{child2=}")

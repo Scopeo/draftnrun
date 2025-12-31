@@ -1,21 +1,22 @@
-from fastapi import APIRouter, UploadFile, File, HTTPException, status, Depends
 import logging
 from typing import Annotated, Optional
 from uuid import UUID, uuid4
 
-from ada_backend.schemas.auth_schema import SupabaseUser
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+
 from ada_backend.routers.auth_router import (
-    user_has_access_to_organization_dependency,
     UserRights,
+    user_has_access_to_organization_dependency,
     user_has_access_to_organization_xor_verify_api_key,
 )
-from ada_backend.schemas.s3_file_schema import UploadFileRequest, S3UploadURL
+from ada_backend.schemas.auth_schema import SupabaseUser
+from ada_backend.schemas.ingestion_task_schema import S3UploadedInformation
+from ada_backend.schemas.s3_file_schema import S3UploadURL, UploadFileRequest
 from ada_backend.services.s3_files_service import (
+    delete_file_from_s3,
     generate_s3_upload_presigned_urls_service,
     upload_file_to_s3,
-    delete_file_from_s3,
 )
-from ada_backend.schemas.ingestion_task_schema import S3UploadedInformation
 
 router = APIRouter(tags=["S3 File Uploads"])
 LOGGER = logging.getLogger(__name__)

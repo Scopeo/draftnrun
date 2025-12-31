@@ -7,10 +7,10 @@ They are pure and do not depend on engine or backend specifics.
 from typing import Any, Dict, List, Union
 
 from engine.field_expressions.ast import (
+    ConcatNode,
     ExpressionNode,
     LiteralNode,
     RefNode,
-    ConcatNode,
 )
 
 

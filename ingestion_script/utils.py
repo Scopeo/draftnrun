@@ -1,17 +1,17 @@
-import logging
 import inspect
+import logging
+import uuid
+from datetime import datetime, timezone
 from typing import Optional
 from uuid import UUID
-from datetime import datetime, timezone
-import uuid
+
 import requests
 
-from ada_backend.schemas.ingestion_task_schema import IngestionTaskUpdate
 from ada_backend.database import models as db
+from ada_backend.schemas.ingestion_task_schema import IngestionTaskUpdate, SourceAttributes
 from ada_backend.schemas.source_schema import DataSourceSchema
-from ada_backend.schemas.ingestion_task_schema import SourceAttributes
 from data_ingestion.utils import sanitize_filename
-from engine.llm_services.llm_service import VisionService, EmbeddingService
+from engine.llm_services.llm_service import EmbeddingService, VisionService
 from engine.qdrant_service import QdrantCollectionSchema, QdrantService
 from engine.storage_service.local_service import SQLLocalService
 from engine.trace.trace_manager import TraceManager
@@ -132,7 +132,7 @@ def create_source(
         return response.json()
     except requests.exceptions.Timeout as e:
         LOGGER.error(
-            f"[API_CALL] TIMEOUT creating source - Source: {source_data.name}, " f"URL: {api_url}, Error: {str(e)}"
+            f"[API_CALL] TIMEOUT creating source - Source: {source_data.name}, URL: {api_url}, Error: {str(e)}"
         )
         raise requests.exceptions.RequestException(
             f"Timeout creating source for organization {organization_id}: {str(e)}"

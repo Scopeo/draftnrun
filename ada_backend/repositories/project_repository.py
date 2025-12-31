@@ -1,16 +1,16 @@
+import logging
 from typing import Optional
 from uuid import UUID
-import logging
 
+from sqlalchemy import and_, exists, or_
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import or_, and_, exists
 
 from ada_backend.database import models as db
+from ada_backend.repositories.template_repository import TEMPLATE_ORGANIZATION_ID
 from ada_backend.schemas.project_schema import (
     GraphRunnerEnvDTO,
     ProjectWithGraphRunnersSchema,
 )
-from ada_backend.repositories.template_repository import TEMPLATE_ORGANIZATION_ID
 
 LOGGER = logging.getLogger(__name__)
 

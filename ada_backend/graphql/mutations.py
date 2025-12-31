@@ -5,8 +5,8 @@ import strawberry
 from strawberry.types import Info
 
 from ada_backend.graphql.types.project_types import GraphRunnerEnvType, ProjectType
-from ada_backend.services.project_service import create_workflow
 from ada_backend.schemas.project_schema import ProjectSchema
+from ada_backend.services.project_service import create_workflow
 
 
 # TODO: Put mutation resolvers in separate files

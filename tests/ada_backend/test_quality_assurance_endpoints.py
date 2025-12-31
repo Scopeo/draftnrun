@@ -2,6 +2,7 @@ import csv
 import io
 import json
 from uuid import uuid4
+
 from fastapi.testclient import TestClient
 
 from ada_backend.main import app
@@ -505,9 +506,9 @@ def test_run_qa_endpoint():
         f"/projects/{project_uuid}/qa/datasets/{dataset_id}/run", headers=HEADERS_JWT, json=run_qa_payload_selection
     )
 
-    assert (
-        run_qa_response_selection.status_code == 200
-    ), f"Expected status code 200, got {run_qa_response_selection.status_code}"
+    assert run_qa_response_selection.status_code == 200, (
+        f"Expected status code 200, got {run_qa_response_selection.status_code}"
+    )
 
     qa_results_selection = run_qa_response_selection.json()
     assert "results" in qa_results_selection
@@ -518,9 +519,9 @@ def test_run_qa_endpoint():
         # Filter now outputs clean string content directly (not JSON)
         output_content = result["output"]
         input_content = result["input"]["messages"][0]["content"]
-        assert (
-            input_content == output_content
-        ), f"Input and output should be the same for dummy agent. Input: {input_content}, Output: {output_content}"
+        assert input_content == output_content, (
+            f"Input and output should be the same for dummy agent. Input: {input_content}, Output: {output_content}"
+        )
         assert result["success"] is True, f"All results should be successful. Result: {result}"
         assert result["graph_runner_id"] == graph_runner_id, f"graph_runner_id should match. Result: {result}"
 
@@ -555,13 +556,13 @@ def test_run_qa_endpoint():
         # Filter now outputs clean string content directly (not JSON)
         output_content = result["output"]
         input_content = result["input"]["messages"][0]["content"]
-        assert (
-            input_content == output_content
-        ), f"Input and output should be the same for dummy agent. Input: {input_content}, Output: {output_content}"
+        assert input_content == output_content, (
+            f"Input and output should be the same for dummy agent. Input: {input_content}, Output: {output_content}"
+        )
         assert result["success"] is True, f"All results should be successful. Result: {result}"
-        assert (
-            result["graph_runner_id"] == production_graph_runner_id
-        ), f"graph_runner_id should match production. Result: {result}"
+        assert result["graph_runner_id"] == production_graph_runner_id, (
+            f"graph_runner_id should match production. Result: {result}"
+        )
 
     # Verify summary statistics for run_all
     summary_all = qa_results_all["summary"]

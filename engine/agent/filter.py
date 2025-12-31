@@ -1,18 +1,18 @@
 import logging
-from typing import Type, Any, Optional
+from typing import Any, Optional, Type
 
-from openinference.semconv.trace import OpenInferenceSpanKindValues
 from jsonschema_pydantic import jsonschema_to_pydantic
+from openinference.semconv.trace import OpenInferenceSpanKindValues
 from pydantic import BaseModel, Field
 
 from engine.agent.agent import Agent
 from engine.agent.types import (
-    ToolDescription,
     ChatMessage,
     ComponentAttributes,
+    ToolDescription,
 )
-from engine.trace.trace_manager import TraceManager
 from engine.agent.utils import load_str_to_json
+from engine.trace.trace_manager import TraceManager
 
 LOGGER = logging.getLogger(__name__)
 

@@ -1,6 +1,7 @@
-from typing import Dict, List, Optional, Union, Literal
-from pydantic import BaseModel, RootModel
+from typing import Dict, List, Literal, Optional, Union
+
 import dirtyjson
+from pydantic import BaseModel, RootModel
 
 from engine.llm_services.utils_pydantic_generator import build_generic_pydantic_instance_from_pydantic_model
 

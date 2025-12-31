@@ -1,7 +1,7 @@
+from ada_backend.database.seed.utils import COMPONENT_VERSION_UUIDS
+from ada_backend.services.registry import FACTORY_REGISTRY
 from engine.agent.synthesizer import Synthesizer
 from engine.llm_services.llm_service import CompletionService
-from ada_backend.services.registry import FACTORY_REGISTRY
-from ada_backend.database.seed.utils import COMPONENT_VERSION_UUIDS
 from engine.trace.trace_context import set_trace_manager
 from tests.mocks.trace_manager import MockTraceManager
 

@@ -1,8 +1,8 @@
 import json
 
 import snowflake.connector
-from data_ingestion.utils import sanitize_filename
 
+from data_ingestion.utils import sanitize_filename
 from settings import settings
 
 

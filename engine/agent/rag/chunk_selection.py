@@ -1,9 +1,10 @@
 from typing import Optional
+
 from pydantic import BaseModel
 
-from engine.llm_services.llm_service import LLMService
-from engine.agent.types import SourceChunk, SourcedResponse, ComponentAttributes
 from engine.agent.build_context import build_context_from_source_chunks
+from engine.agent.types import ComponentAttributes, SourceChunk, SourcedResponse
+from engine.llm_services.llm_service import LLMService
 
 CHUNK_SELECTION_PROMPT = (
     "You will be given multiple sources of information which will contain image descrptions. "

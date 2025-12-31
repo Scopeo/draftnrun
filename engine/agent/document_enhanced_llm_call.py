@@ -1,21 +1,20 @@
-from typing import Optional
-from pathlib import Path
 from collections import defaultdict
+from pathlib import Path
+from typing import Optional
 
 from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttributes
 
 from engine.agent.agent import Agent
+from engine.agent.rag.document_search import DocumentSearch
+from engine.agent.synthesizer import Synthesizer
 from engine.agent.types import (
     AgentPayload,
     ChatMessage,
     ComponentAttributes,
+    DocumentContent,
     ToolDescription,
 )
-
-from engine.agent.rag.document_search import DocumentSearch
 from engine.trace.trace_manager import TraceManager
-from engine.agent.synthesizer import Synthesizer
-from engine.agent.types import DocumentContent
 
 DEFAULT_DOCUMENT_ENHANCED_LLM_CALL_TOOL_DESCRIPTION = ToolDescription(
     name="Document_enhanced_llm_call",
@@ -118,9 +117,9 @@ class DocumentEnhancedLLMCallAgent(Agent):
         self._update_description_tool(self._document_search)
 
     def _update_description_tool(self, document_search: DocumentSearch) -> ToolDescription:
-        self.tool_description.tool_properties["document_names"]["items"][
-            "enum"
-        ] = document_search.get_documents_names()
+        self.tool_description.tool_properties["document_names"]["items"]["enum"] = (
+            document_search.get_documents_names()
+        )
         self.tool_description.description = (
             self.tool_description.description
             + "\n\n Here is the list of documents available: \n\n"
@@ -149,12 +148,10 @@ class DocumentEnhancedLLMCallAgent(Agent):
         )
 
         for i, document_content in enumerate(documents_chunks):
-            self.log_trace(
-                {
-                    f"{SpanAttributes.RETRIEVAL_DOCUMENTS}.{i}.document.content": document_content.content,
-                    f"{SpanAttributes.RETRIEVAL_DOCUMENTS}.{i}.document.id": document_content.document_name,
-                }
-            )
+            self.log_trace({
+                f"{SpanAttributes.RETRIEVAL_DOCUMENTS}.{i}.document.content": document_content.content,
+                f"{SpanAttributes.RETRIEVAL_DOCUMENTS}.{i}.document.id": document_content.document_name,
+            })
 
         return AgentPayload(
             messages=[ChatMessage(role="assistant", content=response.response)],

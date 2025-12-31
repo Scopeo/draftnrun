@@ -1,18 +1,18 @@
 import json
 from enum import StrEnum
-from typing import Any
 from logging import getLogger
+from typing import Any
+
+from fastapi import FastAPI
 from sqladmin import Admin, ModelView
 from sqladmin.authentication import AuthenticationBackend
-from fastapi import FastAPI
-from wtforms import StringField, Form
-from wtforms.validators import DataRequired, ValidationError
 from starlette.requests import Request
+from wtforms import Form, StringField
+from wtforms.validators import DataRequired, ValidationError
 
-from ada_backend.database.setup_db import engine
 from ada_backend.database import models as db
+from ada_backend.database.setup_db import engine
 from settings import settings
-
 
 LOGGER = getLogger(__name__)
 

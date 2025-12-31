@@ -9,10 +9,11 @@ All functions and classes here are temporary solutions for unmigrated components
 """
 
 import logging
-from typing import Type, Optional, Any
+from typing import Any, Optional, Type
+
 from pydantic import BaseModel
 
-from engine.agent.types import ChatMessage, AgentPayload, NodeData
+from engine.agent.types import AgentPayload, ChatMessage, NodeData
 from engine.trace.serializer import serialize_to_json
 
 LOGGER = logging.getLogger(__name__)

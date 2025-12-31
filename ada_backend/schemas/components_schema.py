@@ -1,12 +1,12 @@
-from typing import Optional, List
+from typing import List, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, field_validator
 
+from ada_backend.database import models as db
 from ada_backend.database.models import ReleaseStage
 from ada_backend.schemas.integration_schema import IntegrationSchema
 from ada_backend.schemas.parameter_schema import ComponentParamDefDTO, ParameterGroupSchema
-from ada_backend.database import models as db
 
 
 class ComponentSchema(BaseModel):

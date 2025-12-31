@@ -15,7 +15,6 @@ from engine.legacy_compatibility import get_unmigrated_output_type
 from engine.trace.trace_manager import TraceManager
 from tests.mocks.dummy_agent import DummyAgent
 
-
 # ============================================================================
 # SHARED MOCK COMPONENTS - Inherit from Agent for consistency
 # ============================================================================
@@ -354,10 +353,10 @@ class TestTypeDiscovery:
         GraphRunner(graph=g, runnables=runnables, start_nodes=["A"], trace_manager=tm)
 
         # Test AgentPayload pattern fields
-        assert get_unmigrated_output_type(dummy_agent, "messages") == list[ChatMessage]
-        assert get_unmigrated_output_type(dummy_agent, "artifacts") == dict
-        assert get_unmigrated_output_type(dummy_agent, "error") == Optional[str]
-        assert get_unmigrated_output_type(dummy_agent, "is_final") == Optional[bool]
+        assert get_unmigrated_output_type(dummy_agent, "messages") is list[ChatMessage]
+        assert get_unmigrated_output_type(dummy_agent, "artifacts") is dict
+        assert get_unmigrated_output_type(dummy_agent, "error") is Optional[str]
+        assert get_unmigrated_output_type(dummy_agent, "is_final") is Optional[bool]
 
         # Test unknown field
         assert get_unmigrated_output_type(dummy_agent, "unknown_field") is None

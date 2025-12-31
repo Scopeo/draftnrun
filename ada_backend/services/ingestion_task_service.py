@@ -1,23 +1,22 @@
-from uuid import UUID
-from typing import List
 import logging
+from typing import List
+from uuid import UUID
 
 from sqlalchemy.orm import Session
 
 from ada_backend.repositories.ingestion_task_repository import (
-    get_ingestion_task,
     create_ingestion_task,
-    update_ingestion_task,
     delete_ingestion_task,
+    get_ingestion_task,
+    update_ingestion_task,
 )
 from ada_backend.schemas.ingestion_task_schema import (
     IngestionTaskQueue,
-    IngestionTaskUpdate,
     IngestionTaskResponse,
+    IngestionTaskUpdate,
 )
-from ada_backend.utils.redis_client import push_ingestion_task
 from ada_backend.segment_analytics import track_ingestion_task_created
-
+from ada_backend.utils.redis_client import push_ingestion_task
 
 LOGGER = logging.getLogger(__name__)
 
@@ -84,7 +83,7 @@ def create_ingestion_task_by_organization(
             LOGGER.warning(f"Task {task_id} created in database but failed to push to Redis queue")
             # Update task status to failed since Redis push failed
             from ada_backend.database import models as db
-            from ada_backend.repositories.ingestion_task_repository import update_ingestion_task, get_ingestion_task
+            from ada_backend.repositories.ingestion_task_repository import get_ingestion_task, update_ingestion_task
 
             # Get the task we just created to preserve its source_id
             tasks = get_ingestion_task(session, organization_id, task_id=task_id)

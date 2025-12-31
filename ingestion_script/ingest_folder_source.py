@@ -1,7 +1,7 @@
 import logging
-from uuid import UUID
-from typing import Optional
 import uuid
+from typing import Optional
+from uuid import UUID
 
 import pandas as pd
 
@@ -24,12 +24,12 @@ from engine.storage_service.local_service import SQLLocalService
 from engine.trace.trace_manager import TraceManager
 from ingestion_script.utils import (
     CHUNK_ID_COLUMN_NAME,
+    ORDER_COLUMN_NAME,
     create_source,
-    get_sanitize_names,
-    update_ingestion_task,
     get_first_available_embeddings_custom_llm,
     get_first_available_multimodal_custom_llm,
-    ORDER_COLUMN_NAME,
+    get_sanitize_names,
+    update_ingestion_task,
 )
 from settings import settings
 
@@ -429,6 +429,5 @@ async def _ingest_folder_source(
     )
 
     LOGGER.info(
-        f"Successfully ingested {len(files_info)} files to "
-        f"{str(source_id)} source for organization {organization_id}"
+        f"Successfully ingested {len(files_info)} files to {str(source_id)} source for organization {organization_id}"
     )

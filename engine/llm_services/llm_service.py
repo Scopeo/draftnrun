@@ -1,20 +1,20 @@
+import asyncio
 import json
 import logging
-import asyncio
-from typing import Optional
 from abc import ABC
-from pydantic import BaseModel
+from typing import Optional
 from uuid import UUID
 
-from opentelemetry.trace import get_current_span
-from openinference.semconv.trace import SpanAttributes
 from openai.types.chat import ChatCompletion
+from openinference.semconv.trace import SpanAttributes
+from opentelemetry.trace import get_current_span
+from pydantic import BaseModel
 
-from engine.trace.trace_manager import TraceManager
 from engine.agent.types import ToolDescription
-from engine.llm_services.providers import create_provider
 from engine.agent.utils import load_str_to_json
 from engine.llm_services.constrained_output_models import OutputFormatModel
+from engine.llm_services.providers import create_provider
+from engine.trace.trace_manager import TraceManager
 
 LOGGER = logging.getLogger(__name__)
 
@@ -182,13 +182,16 @@ class CompletionService(LLMService):
         span = get_current_span()
         self._set_span_invocation_parameters(span)
 
-        result, prompt_tokens, completion_tokens, total_tokens = (
-            await self._provider_instance.constrained_complete_with_pydantic(
-                messages=messages,
-                response_format=response_format,
-                temperature=self._invocation_parameters.get("temperature"),
-                stream=stream,
-            )
+        (
+            result,
+            prompt_tokens,
+            completion_tokens,
+            total_tokens,
+        ) = await self._provider_instance.constrained_complete_with_pydantic(
+            messages=messages,
+            response_format=response_format,
+            temperature=self._invocation_parameters.get("temperature"),
+            stream=stream,
         )
 
         self._set_span_token_counts(span, prompt_tokens, completion_tokens, total_tokens)
@@ -219,13 +222,16 @@ class CompletionService(LLMService):
         span = get_current_span()
         self._set_span_invocation_parameters(span)
 
-        result, prompt_tokens, completion_tokens, total_tokens = (
-            await self._provider_instance.constrained_complete_with_json_schema(
-                messages=messages,
-                response_format=response_format_dict,
-                temperature=self._invocation_parameters.get("temperature"),
-                stream=stream,
-            )
+        (
+            result,
+            prompt_tokens,
+            completion_tokens,
+            total_tokens,
+        ) = await self._provider_instance.constrained_complete_with_json_schema(
+            messages=messages,
+            response_format=response_format_dict,
+            temperature=self._invocation_parameters.get("temperature"),
+            stream=stream,
         )
 
         self._set_span_token_counts(span, prompt_tokens, completion_tokens, total_tokens)
@@ -262,25 +268,31 @@ class CompletionService(LLMService):
 
         # Delegate to provider based on whether structured output is needed
         if structured_output_tool is not None:
-            result, prompt_tokens, completion_tokens, total_tokens = (
-                await self._provider_instance.function_call_with_structured_output(
-                    messages=messages,
-                    tools=tools_openai,
-                    tool_choice=tool_choice,
-                    structured_output_tool=structured_openai,
-                    temperature=self._invocation_parameters.get("temperature"),
-                    stream=stream,
-                )
+            (
+                result,
+                prompt_tokens,
+                completion_tokens,
+                total_tokens,
+            ) = await self._provider_instance.function_call_with_structured_output(
+                messages=messages,
+                tools=tools_openai,
+                tool_choice=tool_choice,
+                structured_output_tool=structured_openai,
+                temperature=self._invocation_parameters.get("temperature"),
+                stream=stream,
             )
         else:
-            result, prompt_tokens, completion_tokens, total_tokens = (
-                await self._provider_instance.function_call_without_structured_output(
-                    messages=messages,
-                    tools=tools_openai,
-                    tool_choice=tool_choice,
-                    temperature=self._invocation_parameters.get("temperature"),
-                    stream=stream,
-                )
+            (
+                result,
+                prompt_tokens,
+                completion_tokens,
+                total_tokens,
+            ) = await self._provider_instance.function_call_without_structured_output(
+                messages=messages,
+                tools=tools_openai,
+                tool_choice=tool_choice,
+                temperature=self._invocation_parameters.get("temperature"),
+                stream=stream,
             )
 
         self._set_span_token_counts(span, prompt_tokens, completion_tokens, total_tokens)

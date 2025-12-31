@@ -79,13 +79,11 @@ async def test_upload_website_source_syncs_scraped_pages(monkeypatch):
     scrape_mock = AsyncMock(return_value=scraped_pages)
     monkeypatch.setattr("ingestion_script.ingest_website_source.scrape_website", scrape_mock)
 
-    chunk_df = pd.DataFrame(
-        {
-            "chunk_id": ["chunk-1"],
-            "content": ["chunk content"],
-            "url": ["https://example.com/page"],
-        }
-    )
+    chunk_df = pd.DataFrame({
+        "chunk_id": ["chunk-1"],
+        "content": ["chunk content"],
+        "url": ["https://example.com/page"],
+    })
     chunks_mock = AsyncMock(return_value=chunk_df)
     monkeypatch.setattr(
         "ingestion_script.ingest_website_source.get_chunks_dataframe_from_doc",

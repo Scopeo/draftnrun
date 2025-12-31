@@ -1,4 +1,5 @@
 import logging
+
 from apscheduler.events import JobExecutionEvent
 
 LOGGER = logging.getLogger(__name__)

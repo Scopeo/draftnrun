@@ -1,23 +1,24 @@
+import base64
 import json
 import logging
 import time
-import base64
 from typing import Optional
-from pydantic import BaseModel
+
 import httpx
 import openai
 from openai.types.chat import ChatCompletion, ChatCompletionMessage
 from openai.types.chat.chat_completion import Choice
 from openai.types.chat.chat_completion_message_tool_call import ChatCompletionMessageToolCall, Function
 from openai.types.completion_usage import CompletionUsage
+from pydantic import BaseModel
 
+from engine.agent.utils import load_str_to_json
 from engine.llm_services.constrained_output_models import (
-    format_prompt_with_pydantic_output,
     convert_json_str_to_pydantic,
+    format_prompt_with_pydantic_output,
 )
 from engine.llm_services.providers.base_provider import BaseProvider
 from engine.llm_services.utils import wrap_str_content_into_chat_completion_message
-from engine.agent.utils import load_str_to_json
 
 LOGGER = logging.getLogger(__name__)
 
@@ -65,9 +66,11 @@ class AnthropicProvider(BaseProvider):
             elif role == "tool":
                 tool_call_id = m.get("tool_call_id")
                 tool_result_content = content if isinstance(content, str) else ""
-                pending_tool_results.append(
-                    {"type": "tool_result", "tool_use_id": tool_call_id, "content": tool_result_content}
-                )
+                pending_tool_results.append({
+                    "type": "tool_result",
+                    "tool_use_id": tool_call_id,
+                    "content": tool_result_content,
+                })
             elif role == "assistant" and m.get("tool_calls"):
                 flush_pending_tool_results()
                 tool_calls = m.get("tool_calls", [])
@@ -106,12 +109,10 @@ class AnthropicProvider(BaseProvider):
                                 try:
                                     header, data = url.split(",", 1)
                                     media_type = header.split(";")[0].replace("data:", "")
-                                    converted_content.append(
-                                        {
-                                            "type": "image",
-                                            "source": {"type": "base64", "media_type": media_type, "data": data},
-                                        }
-                                    )
+                                    converted_content.append({
+                                        "type": "image",
+                                        "source": {"type": "base64", "media_type": media_type, "data": data},
+                                    })
                                 except (ValueError, IndexError):
                                     LOGGER.warning(f"Failed to parse data URL for image: {url[:100]}")
                             elif url.startswith(("http://", "https://")):
@@ -489,20 +490,21 @@ class AnthropicProvider(BaseProvider):
         if len(tools) == 0 or tool_choice == "none":
             LOGGER.info("Getting structured response without tools using LLM constrained method")
 
-            structured_json_output = json.dumps(
-                {
-                    "name": structured_output_tool["function"]["name"],
-                    "schema": structured_output_tool["function"]["parameters"],
-                }
-            )
+            structured_json_output = json.dumps({
+                "name": structured_output_tool["function"]["name"],
+                "schema": structured_output_tool["function"]["parameters"],
+            })
 
-            structured_content, prompt_tokens, completion_tokens, total_tokens = (
-                await self.constrained_complete_with_json_schema(
-                    messages=messages,
-                    response_format=json.loads(structured_json_output),
-                    temperature=temperature,
-                    stream=stream,
-                )
+            (
+                structured_content,
+                prompt_tokens,
+                completion_tokens,
+                total_tokens,
+            ) = await self.constrained_complete_with_json_schema(
+                messages=messages,
+                response_format=json.loads(structured_json_output),
+                temperature=temperature,
+                stream=stream,
             )
             response = wrap_str_content_into_chat_completion_message(structured_content, self._model_name)
             return response, prompt_tokens, completion_tokens, total_tokens
@@ -545,16 +547,14 @@ class AnthropicProvider(BaseProvider):
         # Build content with text prompt followed by all images
         content = [{"type": "text", "text": text_prompt}]
         for img in image_content_list:
-            content.append(
-                {
-                    "type": "image",
-                    "source": {
-                        "type": "base64",
-                        "media_type": "image/png",
-                        "data": base64.b64encode(img).decode("utf-8"),
-                    },
-                }
-            )
+            content.append({
+                "type": "image",
+                "source": {
+                    "type": "base64",
+                    "media_type": "image/png",
+                    "data": base64.b64encode(img).decode("utf-8"),
+                },
+            })
 
         body = {
             "model": self._model_name,

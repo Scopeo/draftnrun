@@ -1,10 +1,9 @@
-import re
-import logging
-from typing import Optional
 import json
+import logging
+import re
+from typing import Optional
 
-from engine.agent.types import SourceChunk, SourcedResponse, ComponentAttributes
-
+from engine.agent.types import ComponentAttributes, SourceChunk, SourcedResponse
 
 LOGGER = logging.getLogger(__name__)
 
@@ -93,7 +92,6 @@ class Formatter:
     def _renumber_sources(
         sourced_response: SourcedResponse,
     ) -> SourcedResponse:
-
         num_sources = len(sourced_response.sources)
         matches = re.findall(CITATION_REGEX, sourced_response.response)
         citations = [re.findall(CITATION_NUMBER_REGEX, match) for match in matches]
@@ -105,7 +103,7 @@ class Formatter:
             for citation_number in citations_group:
                 if citation_number > num_sources:
                     LOGGER.warning(
-                        f"Source number {citation_number} exceeds the number of sources:" f" {num_sources}",
+                        f"Source number {citation_number} exceeds the number of sources: {num_sources}",
                     )
                     citation_mapping[citation_number] = ""
                     continue

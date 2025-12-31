@@ -1,11 +1,12 @@
 import asyncio
-from unittest.mock import MagicMock, patch, AsyncMock
 import json
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
 import pytest_asyncio
 from httpx import HTTPError
 
-from engine.agent.tools.api_call_tool import APICallTool, API_CALL_TOOL_DESCRIPTION
+from engine.agent.tools.api_call_tool import API_CALL_TOOL_DESCRIPTION, APICallTool
 from engine.agent.types import AgentPayload, ChatMessage, ComponentAttributes
 from engine.trace.trace_manager import TraceManager
 

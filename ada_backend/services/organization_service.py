@@ -1,5 +1,5 @@
-from uuid import UUID
 import logging
+from uuid import UUID
 
 from sqlalchemy.orm import Session
 
@@ -10,10 +10,9 @@ from ada_backend.repositories.organization_repository import (
     upsert_organization_secret,
 )
 from ada_backend.repositories.project_repository import get_workflows_by_organization
-from ada_backend.schemas.organization_schema import OrganizationSecretResponse, OrganizationGetSecretKeysResponse
+from ada_backend.schemas.organization_schema import OrganizationGetSecretKeysResponse, OrganizationSecretResponse
 from ada_backend.services.graph.get_graph_service import get_graph_service
 from ada_backend.services.graph.update_graph_service import update_graph_service
-
 
 LOGGER = logging.getLogger(__name__)
 

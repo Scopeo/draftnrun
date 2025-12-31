@@ -1,6 +1,7 @@
+from enum import StrEnum
 from typing import Optional
 from uuid import UUID
-from enum import StrEnum
+
 from pydantic import BaseModel
 
 from ada_backend.database.models import ParameterType, UIComponent

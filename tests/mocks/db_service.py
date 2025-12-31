@@ -4,10 +4,9 @@ from typing import Generator
 import pytest
 from sqlalchemy import text
 
-from engine.storage_service.db_utils import DBColumn, DBDefinition, PROCESSED_DATETIME_FIELD
+from engine.storage_service.db_utils import PROCESSED_DATETIME_FIELD, DBColumn, DBDefinition
 from engine.storage_service.local_service import SQLLocalService
 from settings import settings
-
 
 TEST_SCHEMA_NAME = "test_schema"
 

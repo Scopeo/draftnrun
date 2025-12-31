@@ -1,10 +1,9 @@
-from typing import Optional
 import logging
+from typing import Optional
 
 from sqlalchemy.orm import Session
 
 from ada_backend.database import models as db
-
 
 LOGGER = logging.getLogger(__name__)
 

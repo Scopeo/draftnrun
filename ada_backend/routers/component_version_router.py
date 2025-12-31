@@ -1,12 +1,13 @@
-from typing import Annotated
 import logging
+from typing import Annotated
 from uuid import UUID
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from ada_backend.database.setup_db import get_db
-from ada_backend.schemas.auth_schema import SupabaseUser
 from ada_backend.routers.auth_router import ensure_super_admin_dependency
+from ada_backend.schemas.auth_schema import SupabaseUser
 from ada_backend.schemas.components_schema import UpdateComponentReleaseStageRequest
 from ada_backend.services.component_version_service import (
     delete_component_version_service,
@@ -14,8 +15,8 @@ from ada_backend.services.component_version_service import (
 )
 from ada_backend.services.errors import (
     ComponentNotFound,
-    EntityInUseDeletionError,
     ComponentVersionMismatchError,
+    EntityInUseDeletionError,
 )
 
 router = APIRouter(prefix="/components", tags=["Components"])
@@ -69,8 +70,7 @@ async def delete_component_version(
         raise HTTPException(
             status_code=400,
             detail=(
-                f"Component version {e.component_version_id} does not belong to "
-                f"component {e.expected_component_id}"
+                f"Component version {e.component_version_id} does not belong to component {e.expected_component_id}"
             ),
         ) from e
     except Exception as e:

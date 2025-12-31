@@ -1,14 +1,14 @@
 import logging
 from typing import Type
 
-from opentelemetry import trace as trace_api
 from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttributes
+from opentelemetry import trace as trace_api
 from pydantic import BaseModel
 
-from engine.agent.types import ToolDescription, ComponentAttributes, AgentPayload, NodeData
-from engine.trace.trace_manager import TraceManager
+from engine.agent.types import AgentPayload, ComponentAttributes, NodeData, ToolDescription
 from engine.agent.utils import load_str_to_json
 from engine.trace.serializer import serialize_to_json
+from engine.trace.trace_manager import TraceManager
 
 LOGGER = logging.getLogger(__name__)
 
@@ -89,18 +89,16 @@ class Start:
                 filtered_input[k] = v
 
         with self.trace_manager.start_span(self.component_attributes.component_instance_name) as span:
-            span.set_attributes(
-                {
-                    SpanAttributes.OPENINFERENCE_SPAN_KIND: OpenInferenceSpanKindValues.UNKNOWN.value,
-                    SpanAttributes.INPUT_VALUE: serialize_to_json(base, shorten_string=True),
-                    SpanAttributes.OUTPUT_VALUE: serialize_to_json(filtered_input, shorten_string=True),
-                    "component_instance_id": (
-                        str(self.component_attributes.component_instance_id)
-                        if self.component_attributes.component_instance_id is not None
-                        else None
-                    ),
-                }
-            )
+            span.set_attributes({
+                SpanAttributes.OPENINFERENCE_SPAN_KIND: OpenInferenceSpanKindValues.UNKNOWN.value,
+                SpanAttributes.INPUT_VALUE: serialize_to_json(base, shorten_string=True),
+                SpanAttributes.OUTPUT_VALUE: serialize_to_json(filtered_input, shorten_string=True),
+                "component_instance_id": (
+                    str(self.component_attributes.component_instance_id)
+                    if self.component_attributes.component_instance_id is not None
+                    else None
+                ),
+            })
             span.set_status(trace_api.StatusCode.OK)
 
         # "messages" go in data, all other fields go in ctx

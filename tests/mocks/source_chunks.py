@@ -1,6 +1,7 @@
 import pytest
-from engine.agent.types import SourceChunk
+
 from engine.agent.rag.formatter import PAGE_NUMBER_FIELD
+from engine.agent.types import SourceChunk
 
 
 # Basic mock with metadata and content

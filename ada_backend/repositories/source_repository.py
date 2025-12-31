@@ -1,13 +1,12 @@
-from uuid import UUID
-from typing import Optional
 import logging
 import uuid
+from typing import Optional
+from uuid import UUID
 
+from sqlalchemy import and_, exists, func, select
 from sqlalchemy.orm import Session
-from sqlalchemy import func, and_, exists, select
 
 from ada_backend.database import models as db
-
 from ada_backend.repositories.organization_repository import (
     upsert_organization_secret,
 )
@@ -217,7 +216,6 @@ def get_projects_using_source(
     organization_id: UUID,
     source_id: UUID,
 ) -> list[db.Project]:
-
     source_id_str = str(source_id)
 
     projects = (

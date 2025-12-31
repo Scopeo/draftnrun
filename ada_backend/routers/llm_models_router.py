@@ -1,27 +1,27 @@
+import logging
+from typing import Annotated
+from uuid import UUID
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-import logging
-from uuid import UUID
-from typing import Annotated
 
-from ada_backend.schemas.auth_schema import SupabaseUser
-from ada_backend.routers.auth_router import ensure_super_admin_dependency
 from ada_backend.database.setup_db import get_db
+from ada_backend.routers.auth_router import ensure_super_admin_dependency
+from ada_backend.schemas.auth_schema import SupabaseUser
 from ada_backend.schemas.llm_models_schema import (
-    LLMModelResponse,
     LLMModelCreate,
+    LLMModelResponse,
     LLMModelUpdate,
     ModelCapabilitiesResponse,
 )
+from ada_backend.services.errors import LLMModelNotFound
 from ada_backend.services.llm_models_service import (
-    get_all_llm_models_service,
     create_llm_model_service,
     delete_llm_model_service,
-    update_llm_model_service,
+    get_all_llm_models_service,
     get_model_capabilities_service,
+    update_llm_model_service,
 )
-from ada_backend.services.errors import LLMModelNotFound
-
 
 router = APIRouter(tags=["LLM Models"])
 LOGGER = logging.getLogger(__name__)

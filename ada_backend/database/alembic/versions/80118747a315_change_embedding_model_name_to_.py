@@ -6,8 +6,8 @@ Create Date: 2025-06-24 12:35:43.167536
 """
 
 from typing import Sequence, Union
-from alembic import op
 
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "80118747a315"

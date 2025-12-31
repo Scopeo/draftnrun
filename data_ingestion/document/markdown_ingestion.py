@@ -1,5 +1,5 @@
-from typing import Callable
 import uuid
+from typing import Callable
 
 from data_ingestion.document.folder_management.folder_management import BaseDocument, FileChunk
 from data_ingestion.markdown.tree_chunker import parse_markdown_to_chunks

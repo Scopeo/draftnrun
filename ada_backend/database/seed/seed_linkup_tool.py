@@ -2,10 +2,10 @@ from sqlalchemy.orm import Session
 
 from ada_backend.database import models as db
 from ada_backend.database.component_definition_seeding import (
-    upsert_components,
-    upsert_component_versions,
-    upsert_release_stage_to_current_version_mapping,
     upsert_component_categories,
+    upsert_component_versions,
+    upsert_components,
+    upsert_release_stage_to_current_version_mapping,
 )
 from ada_backend.database.seed.seed_categories import CATEGORY_UUIDS
 from ada_backend.database.seed.seed_tool_description import TOOL_DESCRIPTION_UUIDS

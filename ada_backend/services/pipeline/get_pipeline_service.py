@@ -1,8 +1,21 @@
-from uuid import UUID
 from logging import getLogger
+from uuid import UUID
+
 from sqlalchemy.orm import Session
 
+from ada_backend.database.models import ParameterType
 from ada_backend.repositories.categories_repository import fetch_associated_category_names
+from ada_backend.repositories.component_repository import (
+    get_component_by_id,
+    get_component_instance_by_id,
+    get_component_parameter_definition_by_component_version,
+    get_component_sub_components,
+    get_component_version_by_id,
+    get_global_parameters_by_component_version_id,
+    get_instance_parameters_with_definition,
+    get_subcomponent_param_def_by_component_version,
+    get_tool_parameter_by_component_version,
+)
 from ada_backend.repositories.integration_repository import (
     get_component_instance_integration_relationship,
     get_integration,
@@ -10,21 +23,9 @@ from ada_backend.repositories.integration_repository import (
 from ada_backend.schemas.components_schema import SubComponentParamSchema
 from ada_backend.schemas.integration_schema import GraphIntegrationSchema
 from ada_backend.schemas.parameter_schema import PipelineParameterReadSchema
-from ada_backend.services.agent_builder_service import _get_tool_description
-from ada_backend.repositories.component_repository import (
-    get_component_by_id,
-    get_component_instance_by_id,
-    get_component_version_by_id,
-    get_instance_parameters_with_definition,
-    get_subcomponent_param_def_by_component_version,
-    get_tool_parameter_by_component_version,
-    get_component_sub_components,
-    get_component_parameter_definition_by_component_version,
-    get_global_parameters_by_component_version_id,
-)
-from ada_backend.database.models import ParameterType
 from ada_backend.schemas.pipeline.base import ComponentRelationshipSchema
 from ada_backend.schemas.pipeline.get_pipeline_schema import ComponentInstanceReadSchema
+from ada_backend.services.agent_builder_service import _get_tool_description
 from ada_backend.utils.component_utils import get_ui_component_properties_with_llm_options
 
 LOGGER = getLogger(__name__)
