@@ -82,7 +82,7 @@ jobs:
             set -e
             echo "===> Changing directory to ${{ env.EC2_PATH_BASE }}/${{env.EC2_FOLDER_NAME}}${{ env.RUN_ID }}"
             cd ${{ env.EC2_PATH_BASE }}/${{env.EC2_FOLDER_NAME}}${{env.RUN_ID}}
-            uv run flake8 .
+            uv run ruff check .
 
       - name: Create credentials.env file
         run: |
