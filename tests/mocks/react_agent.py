@@ -4,8 +4,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from engine.agent.react_function_calling import ReActAgent
-from engine.agent.types import AgentPayload, ChatMessage, ToolDescription
+from engine.components.ai_agent import AIAgent
+from engine.components.types import AgentPayload, ChatMessage, ToolDescription
 from engine.trace.trace_manager import TraceManager
 
 
@@ -46,7 +46,7 @@ async def mock_process_tool_calls(*args, **kwargs):
 @pytest.fixture
 def mock_agent():
     """Mock agent fixture for ReAct agent tests."""
-    mock_agent = MagicMock(spec=ReActAgent)
+    mock_agent = MagicMock(spec=AIAgent)
     mock_tool_description = MagicMock(spec=ToolDescription)
     mock_tool_description.name = "test_tool"
     mock_tool_description.description = "Test tool description"
@@ -87,7 +87,7 @@ def agent_input():
 @pytest.fixture
 def react_agent(mock_agent, mock_trace_manager, mock_tool_description, mock_llm_service):
     """ReAct agent fixture with all dependencies."""
-    return ReActAgent(
+    return AIAgent(
         completion_service=mock_llm_service,
         component_instance_name="Test React Agent",
         agent_tools=[mock_agent],
@@ -101,7 +101,7 @@ def react_agent_with_tool_calls(
     mock_agent, mock_trace_manager, mock_tool_description, mock_llm_service_with_tool_calls
 ):
     """ReAct agent fixture configured for tool call testing."""
-    return ReActAgent(
+    return AIAgent(
         completion_service=mock_llm_service_with_tool_calls,
         component_instance_name="Test React Agent With Tool Calls",
         agent_tools=[mock_agent],
@@ -113,7 +113,7 @@ def react_agent_with_tool_calls(
 @pytest.fixture
 def react_agent_sequential(mock_agent, mock_trace_manager, mock_tool_description, mock_llm_service_sequential):
     """ReAct agent fixture configured for sequential response testing."""
-    return ReActAgent(
+    return AIAgent(
         completion_service=mock_llm_service_sequential,
         component_instance_name="Test React Agent Sequential",
         agent_tools=[mock_agent],

@@ -36,7 +36,7 @@ from ada_backend.services.graph.get_graph_modification_history_service import (
 from ada_backend.services.graph.get_graph_service import get_graph_service
 from ada_backend.services.graph.load_copy_graph_service import load_copy_graph_service
 from ada_backend.services.graph.update_graph_service import update_graph_with_history_service
-from engine.agent.errors import (
+from engine.components.errors import (
     KeyTypePromptTemplateError,
     MissingKeyPromptTemplateError,
 )

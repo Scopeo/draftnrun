@@ -24,7 +24,7 @@ from ada_backend.database.seed.utils import (
     ParameterLLMConfig,
     build_function_calling_service_config_definitions,
 )
-from engine.agent.sql.react_sql_tool import DEFAULT_REACT_SQL_TOOL_PROMPT
+from engine.components.sql.react_sql_tool import DEFAULT_REACT_SQL_TOOL_PROMPT
 
 
 def seed_react_sql_components(session: Session):

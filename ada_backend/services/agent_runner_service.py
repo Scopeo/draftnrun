@@ -27,7 +27,7 @@ from ada_backend.services.agent_builder_service import instantiate_component
 from ada_backend.services.errors import EnvironmentNotFound, OrganizationLimitExceededError, ProjectNotFound
 from ada_backend.services.file_response_service import process_files_for_response, temp_folder_exists
 from ada_backend.services.tag_service import compose_tag_name
-from engine.agent.errors import (
+from engine.components.errors import (
     KeyTypePromptTemplateError,
     MissingKeyPromptTemplateError,
 )
@@ -111,11 +111,13 @@ async def build_graph_runner(
         expression_ast = None
         if expression.expression_json:
             expression_ast = expression_from_json(expression.expression_json)
-        expressions.append({
-            "target_instance_id": str(expression.component_instance_id),
-            "field_name": expression.field_name,
-            "expression_ast": expression_ast,
-        })
+        expressions.append(
+            {
+                "target_instance_id": str(expression.component_instance_id),
+                "field_name": expression.field_name,
+                "expression_ast": expression_ast,
+            }
+        )
 
     runnables: dict[str, Runnable] = {}
     graph = nx.DiGraph()

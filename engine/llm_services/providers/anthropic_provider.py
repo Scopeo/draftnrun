@@ -12,7 +12,7 @@ from openai.types.chat.chat_completion_message_tool_call import ChatCompletionMe
 from openai.types.completion_usage import CompletionUsage
 from pydantic import BaseModel
 
-from engine.agent.utils import load_str_to_json
+from engine.components.utils import load_str_to_json
 from engine.llm_services.constrained_output_models import (
     convert_json_str_to_pydantic,
     format_prompt_with_pydantic_output,
@@ -66,11 +66,13 @@ class AnthropicProvider(BaseProvider):
             elif role == "tool":
                 tool_call_id = m.get("tool_call_id")
                 tool_result_content = content if isinstance(content, str) else ""
-                pending_tool_results.append({
-                    "type": "tool_result",
-                    "tool_use_id": tool_call_id,
-                    "content": tool_result_content,
-                })
+                pending_tool_results.append(
+                    {
+                        "type": "tool_result",
+                        "tool_use_id": tool_call_id,
+                        "content": tool_result_content,
+                    }
+                )
             elif role == "assistant" and m.get("tool_calls"):
                 flush_pending_tool_results()
                 tool_calls = m.get("tool_calls", [])
@@ -109,10 +111,12 @@ class AnthropicProvider(BaseProvider):
                                 try:
                                     header, data = url.split(",", 1)
                                     media_type = header.split(";")[0].replace("data:", "")
-                                    converted_content.append({
-                                        "type": "image",
-                                        "source": {"type": "base64", "media_type": media_type, "data": data},
-                                    })
+                                    converted_content.append(
+                                        {
+                                            "type": "image",
+                                            "source": {"type": "base64", "media_type": media_type, "data": data},
+                                        }
+                                    )
                                 except (ValueError, IndexError):
                                     LOGGER.warning(f"Failed to parse data URL for image: {url[:100]}")
                             elif url.startswith(("http://", "https://")):
@@ -490,10 +494,12 @@ class AnthropicProvider(BaseProvider):
         if len(tools) == 0 or tool_choice == "none":
             LOGGER.info("Getting structured response without tools using LLM constrained method")
 
-            structured_json_output = json.dumps({
-                "name": structured_output_tool["function"]["name"],
-                "schema": structured_output_tool["function"]["parameters"],
-            })
+            structured_json_output = json.dumps(
+                {
+                    "name": structured_output_tool["function"]["name"],
+                    "schema": structured_output_tool["function"]["parameters"],
+                }
+            )
 
             (
                 structured_content,
@@ -547,14 +553,16 @@ class AnthropicProvider(BaseProvider):
         # Build content with text prompt followed by all images
         content = [{"type": "text", "text": text_prompt}]
         for img in image_content_list:
-            content.append({
-                "type": "image",
-                "source": {
-                    "type": "base64",
-                    "media_type": "image/png",
-                    "data": base64.b64encode(img).decode("utf-8"),
-                },
-            })
+            content.append(
+                {
+                    "type": "image",
+                    "source": {
+                        "type": "base64",
+                        "media_type": "image/png",
+                        "data": base64.b64encode(img).decode("utf-8"),
+                    },
+                }
+            )
 
         body = {
             "model": self._model_name,

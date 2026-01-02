@@ -36,7 +36,7 @@ from ada_backend.database.seed.utils import (
     build_parameters_group,
     build_parameters_group_definitions,
 )
-from engine.agent.synthesizer_prompts import (
+from engine.components.synthesizer_prompts import (
     get_base_synthetizer_prompt_template,
     get_hybrid_synthetizer_prompt_template,
 )

@@ -5,7 +5,7 @@ import os
 import pytest
 from pydantic import BaseModel
 
-from engine.agent.types import ToolDescription
+from engine.components.types import ToolDescription
 from settings import settings
 
 
