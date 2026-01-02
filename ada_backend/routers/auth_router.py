@@ -1,36 +1,36 @@
 import logging
+from enum import Enum
 from typing import Annotated
 from uuid import UUID
-from enum import Enum
 
-from fastapi import APIRouter, Depends, HTTPException, Header, Body, Query
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from supabase import Client, create_client
+from fastapi import APIRouter, Body, Depends, Header, HTTPException, Query
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
-from ada_backend.database.models import ApiKeyType
-from ada_backend.repositories.project_repository import get_project
 from ada_backend.context import get_request_context
-from settings import settings
+from ada_backend.database.models import ApiKeyType
 from ada_backend.database.setup_db import get_db
+from ada_backend.repositories.project_repository import get_project
+from ada_backend.schemas.auth_schema import (
+    ApiKeyCreatedResponse,
+    ApiKeyCreateRequest,
+    ApiKeyDeleteRequest,
+    ApiKeyDeleteResponse,
+    ApiKeyGetResponse,
+    OrgApiKeyCreateRequest,
+    SupabaseUser,
+    VerifiedApiKey,
+)
 from ada_backend.services.api_key_service import (
+    deactivate_api_key_service,
     generate_scoped_api_key,
     get_api_keys_service,
-    deactivate_api_key_service,
     verify_api_key,
     verify_ingestion_api_key,
 )
 from ada_backend.services.user_roles_service import get_user_access_to_organization, is_user_super_admin
-from ada_backend.schemas.auth_schema import (
-    OrgApiKeyCreateRequest,
-    SupabaseUser,
-    ApiKeyGetResponse,
-    ApiKeyCreateRequest,
-    ApiKeyCreatedResponse,
-    ApiKeyDeleteRequest,
-    ApiKeyDeleteResponse,
-    VerifiedApiKey,
-)
+from settings import settings
+from supabase import Client, create_client
 
 LOGGER = logging.getLogger(__name__)
 
@@ -182,7 +182,6 @@ def user_has_access_to_organization_dependency(allowed_roles: set[str]):
 
 # TODO : move to a utils file
 def ensure_super_admin_dependency():
-
     async def wrapper(
         user: Annotated[SupabaseUser, Depends(get_user_from_supabase_token)],
     ) -> SupabaseUser:

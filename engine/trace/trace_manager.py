@@ -3,13 +3,12 @@ import logging
 from openinference.semconv.resource import ResourceAttributes
 from opentelemetry import trace as trace_api
 from opentelemetry.context import Context
+from opentelemetry.sdk import trace as trace_sdk
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
-from opentelemetry.sdk import trace as trace_sdk
 
-from engine.trace.sql_exporter import SQLSpanExporter
 from engine.trace.span_context import get_tracing_span
-
+from engine.trace.sql_exporter import SQLSpanExporter
 
 LOGGER = logging.getLogger(__name__)
 
@@ -43,7 +42,6 @@ class TraceManager:
         self,
         project_name: str,
     ):
-
         LOGGER.info("Setting up trace manager")
 
         self.tracer, self.tracer_provider = setup_tracer(

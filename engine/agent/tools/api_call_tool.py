@@ -1,15 +1,15 @@
-import logging
 import json
+import logging
 import string
-from typing import Optional, Dict, Any, Union
+from typing import Any, Dict, Optional, Union
 
 import httpx
 from openinference.semconv.trace import OpenInferenceSpanKindValues
 
 from engine.agent.agent import Agent
 from engine.agent.types import (
-    ChatMessage,
     AgentPayload,
+    ChatMessage,
     ComponentAttributes,
     ToolDescription,
 )

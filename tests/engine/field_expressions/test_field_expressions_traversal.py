@@ -1,4 +1,4 @@
-from engine.field_expressions.ast import LiteralNode, RefNode, ConcatNode
+from engine.field_expressions.ast import ConcatNode, LiteralNode, RefNode
 from engine.field_expressions.traversal import map_expression
 
 

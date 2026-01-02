@@ -1,70 +1,70 @@
 from typing import Any
 from uuid import UUID
 
-from engine.agent.inputs_outputs.start import Start
-from engine.agent.filter import Filter
-from engine.agent.llm_call_agent import LLMCallAgent
-from engine.agent.sql.react_sql_tool import ReactSQLAgent
-from engine.agent.sql.run_sql_query_tool import RunSQLQueryTool
-from engine.agent.sql.sql_tool import SQLTool
-from engine.agent.react_function_calling import ReActAgent
-from engine.agent.synthesizer import Synthesizer
-from engine.agent.hybrid_synthesizer import HybridSynthesizer
-from engine.agent.rag.rag import RAG
-from engine.agent.rag.hybrid_rag import HybridRAG
-from engine.agent.rag.chunk_selection import RelevantChunkSelector
-from engine.agent.rag.formatter import Formatter
-from engine.agent.rag.retriever import Retriever
-from engine.agent.rag.cohere_reranker import CohereReranker
-from engine.agent.rag.vocabulary_search import VocabularySearch
-from engine.agent.tools.tavily_search_tool import TavilyApiTool
-from engine.agent.web_search_tool_openai import WebSearchOpenAITool
-from engine.agent.tools.api_call_tool import APICallTool
-from engine.agent.tools.python_code_runner import PythonCodeRunner
-from engine.agent.tools.terminal_command_runner import TerminalCommandRunner
-from engine.agent.pdf_generation_tool import PDFGenerationTool
-from engine.agent.docx_generation_tool import DOCXGenerationTool
-from engine.agent.tools.docx_template import DocxTemplateAgent
-from engine.agent.document_enhanced_llm_call import DocumentEnhancedLLMCallAgent
-from engine.agent.document_react_loader import DocumentReactLoaderAgent
-from engine.agent.ocr_call import OCRCall
-from engine.agent.rag.document_search import DocumentSearch
-from engine.agent.graph_runner_block import GraphRunnerBlock
-from engine.agent.chunk_processor import ChunkProcessor
-from engine.integrations.gmail_sender import GmailSender
-from engine.agent.tools.linkup_tool import LinkupSearchTool
-from engine.storage_service.local_service import SQLLocalService
-from engine.storage_service.snowflake_service.snowflake_service import SnowflakeService
-from ada_backend.services.entity_factory import (
-    EntityFactory,
-    AgentFactory,
-    NonToolCallableBlockFactory,
-    detect_and_convert_dataclasses,
-    build_trace_manager_processor,
-    build_completion_service_processor,
-    build_param_name_translator,
-    build_qdrant_service_processor,
-    compose_processors,
-    build_web_service_processor,
-    build_ocr_service_processor,
-    build_project_reference_processor,
-    build_db_service_processor,
-    build_retriever_processor,
-    build_synthesizer_processor,
-    build_reranker_processor,
-    build_vocabulary_search_processor,
-    build_formatter_processor,
-    build_llm_capability_resolver_processor,
-)
 from ada_backend.database.seed.constants import (
     COMPLETION_MODEL_IN_DB,
     EMBEDDING_MODEL_IN_DB,
+    REASONING_IN_DB,
     TEMPERATURE_IN_DB,
     VERBOSITY_IN_DB,
-    REASONING_IN_DB,
 )
 from ada_backend.database.seed.utils import COMPONENT_VERSION_UUIDS
+from ada_backend.services.entity_factory import (
+    AgentFactory,
+    EntityFactory,
+    NonToolCallableBlockFactory,
+    build_completion_service_processor,
+    build_db_service_processor,
+    build_formatter_processor,
+    build_llm_capability_resolver_processor,
+    build_ocr_service_processor,
+    build_param_name_translator,
+    build_project_reference_processor,
+    build_qdrant_service_processor,
+    build_reranker_processor,
+    build_retriever_processor,
+    build_synthesizer_processor,
+    build_trace_manager_processor,
+    build_vocabulary_search_processor,
+    build_web_service_processor,
+    compose_processors,
+    detect_and_convert_dataclasses,
+)
+from engine.agent.chunk_processor import ChunkProcessor
+from engine.agent.document_enhanced_llm_call import DocumentEnhancedLLMCallAgent
+from engine.agent.document_react_loader import DocumentReactLoaderAgent
+from engine.agent.docx_generation_tool import DOCXGenerationTool
+from engine.agent.filter import Filter
+from engine.agent.graph_runner_block import GraphRunnerBlock
+from engine.agent.hybrid_synthesizer import HybridSynthesizer
+from engine.agent.inputs_outputs.start import Start
+from engine.agent.llm_call_agent import LLMCallAgent
+from engine.agent.ocr_call import OCRCall
+from engine.agent.pdf_generation_tool import PDFGenerationTool
+from engine.agent.rag.chunk_selection import RelevantChunkSelector
+from engine.agent.rag.cohere_reranker import CohereReranker
+from engine.agent.rag.document_search import DocumentSearch
+from engine.agent.rag.formatter import Formatter
+from engine.agent.rag.hybrid_rag import HybridRAG
+from engine.agent.rag.rag import RAG
+from engine.agent.rag.retriever import Retriever
+from engine.agent.rag.vocabulary_search import VocabularySearch
+from engine.agent.react_function_calling import ReActAgent
+from engine.agent.sql.react_sql_tool import ReactSQLAgent
+from engine.agent.sql.run_sql_query_tool import RunSQLQueryTool
+from engine.agent.sql.sql_tool import SQLTool
 from engine.agent.static_responder import StaticResponder
+from engine.agent.synthesizer import Synthesizer
+from engine.agent.tools.api_call_tool import APICallTool
+from engine.agent.tools.docx_template import DocxTemplateAgent
+from engine.agent.tools.linkup_tool import LinkupSearchTool
+from engine.agent.tools.python_code_runner import PythonCodeRunner
+from engine.agent.tools.tavily_search_tool import TavilyApiTool
+from engine.agent.tools.terminal_command_runner import TerminalCommandRunner
+from engine.agent.web_search_tool_openai import WebSearchOpenAITool
+from engine.integrations.gmail_sender import GmailSender
+from engine.storage_service.local_service import SQLLocalService
+from engine.storage_service.snowflake_service.snowflake_service import SnowflakeService
 
 
 class FactoryRegistry:
@@ -149,60 +149,48 @@ def create_factory_registry() -> FactoryRegistry:
     trace_manager_processor = build_trace_manager_processor()
 
     completion_service_processor = compose_processors(
-        build_param_name_translator(
-            {
-                # Name from DB -> Name in processor
-                COMPLETION_MODEL_IN_DB: "completion_model",
-                TEMPERATURE_IN_DB: "temperature",
-                VERBOSITY_IN_DB: "verbosity",
-                REASONING_IN_DB: "reasoning",
-                "api_key": "llm_api_key",
-            }
-        ),
+        build_param_name_translator({
+            # Name from DB -> Name in processor
+            COMPLETION_MODEL_IN_DB: "completion_model",
+            TEMPERATURE_IN_DB: "temperature",
+            VERBOSITY_IN_DB: "verbosity",
+            REASONING_IN_DB: "reasoning",
+            "api_key": "llm_api_key",
+        }),
         build_completion_service_processor(),
     )
     qdrant_service_processor = compose_processors(
-        build_param_name_translator(
-            {
-                "qdrant_collection_schema": "default_collection_schema",
-                EMBEDDING_MODEL_IN_DB: "embedding_model",
-                "api_key": "llm_api_key",
-            }
-        ),
+        build_param_name_translator({
+            "qdrant_collection_schema": "default_collection_schema",
+            EMBEDDING_MODEL_IN_DB: "embedding_model",
+            "api_key": "llm_api_key",
+        }),
         build_qdrant_service_processor(),
     )
     web_service_processor = compose_processors(
-        build_param_name_translator(
-            {
-                COMPLETION_MODEL_IN_DB: "completion_model",
-                "api_key": "llm_api_key",
-            }
-        ),
+        build_param_name_translator({
+            COMPLETION_MODEL_IN_DB: "completion_model",
+            "api_key": "llm_api_key",
+        }),
         build_web_service_processor(),
     )
     ocr_service_processor = compose_processors(
-        build_param_name_translator(
-            {
-                COMPLETION_MODEL_IN_DB: "completion_model",
-                "api_key": "llm_api_key",
-            }
-        ),
+        build_param_name_translator({
+            COMPLETION_MODEL_IN_DB: "completion_model",
+            "api_key": "llm_api_key",
+        }),
         build_ocr_service_processor(),
     )
     synthesizer_processor = compose_processors(
-        build_param_name_translator(
-            {
-                "api_key": "llm_api_key",
-            }
-        ),
+        build_param_name_translator({
+            "api_key": "llm_api_key",
+        }),
         build_synthesizer_processor(),
     )
     retriever_processor = compose_processors(
-        build_param_name_translator(
-            {
-                "api_key": "llm_api_key",
-            }
-        ),
+        build_param_name_translator({
+            "api_key": "llm_api_key",
+        }),
         build_retriever_processor(),
     )
     reranker_processor = build_reranker_processor()

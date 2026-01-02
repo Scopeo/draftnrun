@@ -12,12 +12,12 @@ from typing import Any
 import pytest
 
 from engine.trace.span_context import set_tracing_span
+
 from .capability_matrix import (
     CAPABILITY_MATRIX,
     get_all_providers,
     get_capability_display_name,
 )
-
 
 # Store test results: capability_key -> provider -> model -> status
 _RESULT_STORE: dict[str, dict[str, dict[str, str]]] = defaultdict(lambda: defaultdict(dict))
@@ -154,15 +154,13 @@ def pytest_runtest_logreport(report: pytest.TestReport) -> None:
             exc_msg = getattr(report.longrepr.reprcrash, "message", None)
         if exc_msg:
             exc_msg = str(exc_msg)[:500]
-        _ISSUES.append(
-            {
-                "nodeid": report.nodeid,
-                "capability": capability_key,
-                "provider": provider,
-                "model": model,
-                "reason": exc_msg,
-            }
-        )
+        _ISSUES.append({
+            "nodeid": report.nodeid,
+            "capability": capability_key,
+            "provider": provider,
+            "model": model,
+            "reason": exc_msg,
+        })
         return
 
     if report.outcome == "skipped" and is_applicable:
@@ -175,15 +173,13 @@ def pytest_runtest_logreport(report: pytest.TestReport) -> None:
             reason = str(longrepr)
         if reason:
             reason = str(reason)[:500]
-        _ISSUES.append(
-            {
-                "nodeid": report.nodeid,
-                "capability": capability_key,
-                "provider": provider,
-                "model": model,
-                "reason": reason,
-            }
-        )
+        _ISSUES.append({
+            "nodeid": report.nodeid,
+            "capability": capability_key,
+            "provider": provider,
+            "model": model,
+            "reason": reason,
+        })
         return
 
 
@@ -237,15 +233,13 @@ def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
                 for model, status in provider_results.items():
                     if status == "PENDING":
                         status = "FAIL"
-                        _ISSUES.append(
-                            {
-                                "nodeid": None,
-                                "capability": capability_key,
-                                "provider": provider,
-                                "model": model,
-                                "reason": "Test was expected but no result was recorded.",
-                            }
-                        )
+                        _ISSUES.append({
+                            "nodeid": None,
+                            "capability": capability_key,
+                            "provider": provider,
+                            "model": model,
+                            "reason": "Test was expected but no result was recorded.",
+                        })
 
                     if status == "PASS":
                         model_statuses.append(f"✅ {model}")

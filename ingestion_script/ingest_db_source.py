@@ -1,11 +1,13 @@
-from functools import partial
 import logging
+from functools import partial
 from typing import Optional
 
 import pandas as pd
-from sqlalchemy import UUID
 from llama_index.core.node_parser import SentenceSplitter
+from sqlalchemy import UUID
 
+from ada_backend.database import models as db
+from ada_backend.schemas.ingestion_task_schema import SourceAttributes
 from engine.qdrant_service import QdrantCollectionSchema, QdrantService
 from engine.storage_service.db_service import DBService
 from engine.storage_service.db_utils import (
@@ -15,18 +17,16 @@ from engine.storage_service.db_utils import (
 )
 from engine.storage_service.local_service import SQLLocalService
 from ingestion_script.ingest_folder_source import sync_chunks_to_qdrant
-from ada_backend.database import models as db
 from ingestion_script.utils import (
-    upload_source,
-    build_combined_sql_filter,
-    CHUNK_ID_COLUMN_NAME,
     CHUNK_COLUMN_NAME,
+    CHUNK_ID_COLUMN_NAME,
     FILE_ID_COLUMN_NAME,
-    URL_COLUMN_NAME,
     ORDER_COLUMN_NAME,
+    URL_COLUMN_NAME,
+    build_combined_sql_filter,
     resolve_sql_timestamp_filter,
+    upload_source,
 )
-from ada_backend.schemas.ingestion_task_schema import SourceAttributes
 
 LOGGER = logging.getLogger(__name__)
 
@@ -279,7 +279,6 @@ async def ingestion_database(
     source_attributes: Optional[SourceAttributes] = None,
     source_id: Optional[UUID] = None,
 ) -> None:
-
     db_definition, source_type_map = get_db_source_definition(
         timestamp_column_name=timestamp_column_name,
         url_pattern=url_pattern,

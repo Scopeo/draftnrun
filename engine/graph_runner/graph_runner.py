@@ -1,30 +1,29 @@
-import logging
-from typing import Optional, Any, TypedDict, Iterator
 import json
+import logging
+from typing import Any, Iterator, Optional, TypedDict
 
 import networkx as nx
 from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttributes
 from opentelemetry import trace as trace_api
 
+from engine import legacy_compatibility
 from engine.agent.types import AgentPayload, NodeData
-from engine.coercion_matrix import create_default_coercion_matrix, CoercionMatrix
-from engine.graph_runner.runnable import Runnable
-from engine.graph_runner.types import Task, TaskState, PortMapping
-from engine.graph_runner.port_management import (
-    get_target_field_type,
-    get_source_type_for_mapping,
-    apply_function_call_strategy,
-    validate_port_mappings,
-    synthesize_default_mappings,
-)
-from engine.graph_runner.field_expression_management import evaluate_expression
+from engine.coercion_matrix import CoercionMatrix, create_default_coercion_matrix
 from engine.field_expressions.ast import ExpressionNode, RefNode
 from engine.field_expressions.traversal import select_nodes
-from engine import legacy_compatibility
-from engine.trace.trace_manager import TraceManager
+from engine.graph_runner.field_expression_management import evaluate_expression
+from engine.graph_runner.port_management import (
+    apply_function_call_strategy,
+    get_source_type_for_mapping,
+    get_target_field_type,
+    synthesize_default_mappings,
+    validate_port_mappings,
+)
+from engine.graph_runner.runnable import Runnable
+from engine.graph_runner.types import PortMapping, Task, TaskState
 from engine.trace.serializer import serialize_to_json
 from engine.trace.span_context import get_tracing_span
-
+from engine.trace.trace_manager import TraceManager
 
 LOGGER = logging.getLogger(__name__)
 
@@ -129,12 +128,10 @@ class GraphRunner:
 
         with self.trace_manager.start_span("Workflow", isolate_context=is_root_execution) as span:
             trace_input = serialize_to_json(input_data, shorten_string=True)
-            span.set_attributes(
-                {
-                    SpanAttributes.OPENINFERENCE_SPAN_KIND: self.TRACE_SPAN_KIND,
-                    SpanAttributes.INPUT_VALUE: trace_input,
-                }
-            )
+            span.set_attributes({
+                SpanAttributes.OPENINFERENCE_SPAN_KIND: self.TRACE_SPAN_KIND,
+                SpanAttributes.INPUT_VALUE: trace_input,
+            })
             # Legacy compatibility shim: accept AgentPayload or dict and normalize to dict for internal runner.
             # Long-term target: GraphRunner.run should accept NodeData only; remove when callers stop
             # passing AgentPayload/dict and provide NodeData instead.
@@ -145,11 +142,9 @@ class GraphRunner:
             final_output = await self._run_without_io_trace(normalized_input)
 
             trace_output = serialize_to_json(final_output, shorten_string=True)
-            span.set_attributes(
-                {
-                    SpanAttributes.OUTPUT_VALUE: trace_output,
-                }
-            )
+            span.set_attributes({
+                SpanAttributes.OUTPUT_VALUE: trace_output,
+            })
             span.set_status(trace_api.StatusCode.OK)
 
             params = get_tracing_span()

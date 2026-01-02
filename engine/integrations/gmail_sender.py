@@ -1,9 +1,9 @@
 import base64
 import logging
+import mimetypes
 from email.message import EmailMessage
 from pathlib import Path
-from typing import Optional, Iterable, Type
-import mimetypes
+from typing import Iterable, Optional, Type
 
 from googleapiclient.errors import HttpError
 from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttributes
@@ -202,7 +202,7 @@ class GmailSender(Agent):
                 attachments=attachments,
             )
             draft = self.service.users().drafts().create(userId="me", body={"message": raw_email_message}).execute()
-            LOGGER.debug(f'Draft id: {draft["id"]}\nDraft message: {draft["message"]}')
+            LOGGER.debug(f"Draft id: {draft['id']}\nDraft message: {draft['message']}")
 
         except HttpError as error:
             LOGGER.error(f"An error occurred: {error}")
@@ -239,11 +239,9 @@ class GmailSender(Agent):
         if not inputs.mail_subject or not inputs.mail_body:
             raise ValueError("Both email_subject and email_body must be provided")
         span = get_current_span()
-        span.set_attributes(
-            {
-                SpanAttributes.INPUT_VALUE: f"Subject: {inputs.mail_subject}\n Body: {inputs.mail_body}",
-            }
-        )
+        span.set_attributes({
+            SpanAttributes.INPUT_VALUE: f"Subject: {inputs.mail_subject}\n Body: {inputs.mail_body}",
+        })
         if self.save_as_draft or not inputs.email_recipients:
             LOGGER.info("Creating draft email")
             draft = self.gmail_create_draft(

@@ -7,11 +7,11 @@ validation, and mapping synthesis.
 """
 
 import logging
-from typing import Any, Type, Optional
+from typing import Any, Optional, Type
 
 from engine.coercion_matrix import get_coercion_matrix
-from engine.legacy_compatibility import get_unmigrated_output_type
 from engine.graph_runner.types import PortMapping
+from engine.legacy_compatibility import get_unmigrated_output_type
 
 LOGGER = logging.getLogger(__name__)
 
@@ -168,7 +168,7 @@ def validate_port_mappings(port_mappings: list[PortMapping], runnables: dict):
                 )
         else:
             # Check if types are unknown (both fallback to str)
-            if source_type == str and target_type == str:
+            if source_type is str and target_type is str:
                 # Unknown types - skip build-time validation
                 LOGGER.info(
                     f"Skipping build-time validation for "

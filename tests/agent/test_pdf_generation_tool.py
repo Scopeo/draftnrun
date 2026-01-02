@@ -1,12 +1,12 @@
-import pytest
 import asyncio
-from unittest.mock import MagicMock, patch, Mock
+from unittest.mock import MagicMock, Mock, patch
 
-from engine.agent.pdf_generation_tool import DEFAULT_CSS_FORMATTING, PDFGenerationTool
+import pytest
+
 from engine.agent.agent import ComponentAttributes
+from engine.agent.pdf_generation_tool import DEFAULT_CSS_FORMATTING, PDFGenerationTool
 from engine.temps_folder_utils import get_output_dir
 from engine.trace.trace_manager import TraceManager
-
 
 MARKDOWN_CONTENT = """# Test Document
 This is a test document with **bold** and *italic* text.

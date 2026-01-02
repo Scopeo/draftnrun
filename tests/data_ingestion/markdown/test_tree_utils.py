@@ -1,5 +1,4 @@
 import pytest
-
 from anytree import Node
 
 from data_ingestion.markdown.tree_utils import are_trees_equal, tree_to_string

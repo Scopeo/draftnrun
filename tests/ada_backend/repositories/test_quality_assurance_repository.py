@@ -10,23 +10,24 @@ Specifically tests:
 3. clear_version_outputs_for_input_ids
 """
 
-import pytest
 from uuid import uuid4
+
+import pytest
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ada_backend.database.models import (
-    VersionOutput,
-    InputGroundtruth,
     DatasetProject,
-    Project,
     GraphRunner,
+    InputGroundtruth,
+    Project,
+    VersionOutput,
 )
 from ada_backend.repositories.quality_assurance_repository import (
-    upsert_version_output,
-    get_outputs_by_graph_runner,
-    get_inputs_groundtruths_by_dataset,
     clear_version_outputs_for_input_ids,
+    get_inputs_groundtruths_by_dataset,
+    get_outputs_by_graph_runner,
+    upsert_version_output,
 )
 
 pytestmark = pytest.mark.skip(

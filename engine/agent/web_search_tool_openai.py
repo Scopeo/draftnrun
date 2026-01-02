@@ -1,16 +1,15 @@
 import json
 from typing import Optional, Type
-from pydantic import BaseModel, Field
 
 from openinference.semconv.trace import SpanAttributes
 from opentelemetry.trace import get_current_span
+from pydantic import BaseModel, Field
 
 from engine.agent.agent import Agent
-from engine.agent.types import ToolDescription, ComponentAttributes, ChatMessage
+from engine.agent.types import ChatMessage, ComponentAttributes, ToolDescription
 from engine.llm_services.llm_service import WebSearchService
-from engine.trace.trace_manager import TraceManager
 from engine.trace.serializer import serialize_to_json
-
+from engine.trace.trace_manager import TraceManager
 
 DEFAULT_WEB_SEARCH_OPENAI_TOOL_DESCRIPTION = ToolDescription(
     name="Web_Search_Tool",
@@ -31,8 +30,7 @@ DEFAULT_WEB_SEARCH_OPENAI_TOOL_DESCRIPTION = ToolDescription(
                     "type": "array",
                     "items": {"type": "string"},
                     "description": (
-                        "List of domains to restrict search results to "
-                        "(e.g., ['mydomain.net', 'myotherdomain.com'])."
+                        "List of domains to restrict search results to (e.g., ['mydomain.net', 'myotherdomain.com'])."
                     ),
                 }
             },
@@ -106,14 +104,12 @@ class WebSearchOpenAITool(Agent):
             final_allowed_domains = inputs.filters.allowed_domains
 
         span = get_current_span()
-        span.set_attributes(
-            {
-                SpanAttributes.INPUT_VALUE: serialize_to_json(
-                    {"query": query_str, "allowed_domains": final_allowed_domains}, shorten_string=True
-                ),
-                SpanAttributes.LLM_MODEL_NAME: self._web_service._model_name,
-                "model_id": str(self._web_service._model_id) if self._web_service._model_id is not None else None,
-            }
-        )
+        span.set_attributes({
+            SpanAttributes.INPUT_VALUE: serialize_to_json(
+                {"query": query_str, "allowed_domains": final_allowed_domains}, shorten_string=True
+            ),
+            SpanAttributes.LLM_MODEL_NAME: self._web_service._model_name,
+            "model_id": str(self._web_service._model_id) if self._web_service._model_id is not None else None,
+        })
         output = await self._web_service.web_search_async(query_str, final_allowed_domains)
         return WebSearchOpenAIToolOutputs(output=output)

@@ -3,8 +3,9 @@ from unittest.mock import MagicMock
 import pytest
 
 from engine.llm_services.llm_service import EmbeddingService, OCRService, WebSearchService
+
 from .capability_matrix import get_provider_model_pairs, get_provider_required_settings
-from .test_helpers import skip_if_missing_settings, mistral_ocr_messages
+from .test_helpers import mistral_ocr_messages, skip_if_missing_settings
 
 
 class TestSpecializedServices:

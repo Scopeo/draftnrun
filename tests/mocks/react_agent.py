@@ -1,11 +1,11 @@
 import json
-from unittest.mock import MagicMock, AsyncMock
 from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from engine.agent.react_function_calling import ReActAgent
-from engine.agent.types import AgentPayload, ToolDescription, ChatMessage
+from engine.agent.types import AgentPayload, ChatMessage, ToolDescription
 from engine.trace.trace_manager import TraceManager
 
 

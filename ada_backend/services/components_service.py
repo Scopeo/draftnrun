@@ -3,7 +3,7 @@ from typing import Optional
 
 from sqlalchemy.orm import Session
 
-from ada_backend.database.models import ReleaseStage, ParameterType, PortType
+from ada_backend.database.models import ParameterType, PortType, ReleaseStage
 from ada_backend.repositories.component_repository import (
     count_component_instances,
     delete_component_by_id,

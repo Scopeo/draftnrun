@@ -1,11 +1,10 @@
-from unittest.mock import patch, AsyncMock
+from unittest.mock import AsyncMock, patch
 
 from fastapi.testclient import TestClient
 
 from ada_backend.main import app
-
 from ada_backend.schemas.project_schema import ChatResponse
-from ada_backend.schemas.trace_schema import RootTraceSpan, PaginatedRootTracesResponse
+from ada_backend.schemas.trace_schema import PaginatedRootTracesResponse, RootTraceSpan
 from ada_backend.scripts.get_supabase_token import get_user_jwt
 from engine.trace.trace_context import set_trace_manager
 from engine.trace.trace_manager import TraceManager

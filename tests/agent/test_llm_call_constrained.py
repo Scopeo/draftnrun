@@ -4,11 +4,10 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from engine.agent.llm_call_agent import LLMCallAgent, LLMCallInputs
-from engine.agent.utils import load_str_to_json
 from engine.agent.types import ComponentAttributes
+from engine.agent.utils import load_str_to_json
 from engine.llm_services.utils import chat_completion_to_response
 from tests.agent.test_llm_call_agent import make_capability_resolver
-
 
 base64_string = base64.b64encode(b"dummy pdf content").decode("utf-8")
 QUESTION = "What is the ideal weather for a pool party?"

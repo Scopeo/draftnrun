@@ -4,7 +4,6 @@ from typing import Any, Dict, Optional
 
 from settings import settings
 
-
 LOGGER = logging.getLogger(__name__)
 
 

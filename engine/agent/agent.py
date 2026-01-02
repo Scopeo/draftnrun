@@ -1,25 +1,25 @@
 import asyncio
 import logging
 from abc import ABC, abstractmethod
-from typing import Any, Dict, Type, Optional
+from typing import Any, Dict, Optional, Type
 
 from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttributes
 from opentelemetry import trace as trace_api
 from opentelemetry.util.types import Attributes
-from tenacity import RetryError
 from pydantic import BaseModel
+from tenacity import RetryError
 
+from engine import legacy_compatibility
 from engine.agent.types import (
-    ToolDescription,
-    ComponentAttributes,
-    NodeData,
     AgentPayload,
     ChatMessage,
+    ComponentAttributes,
+    NodeData,
+    ToolDescription,
 )
-from engine import legacy_compatibility
-from engine.trace.trace_manager import TraceManager
-from engine.trace.serializer import serialize_to_json
 from engine.prometheus_metric import track_calls
+from engine.trace.serializer import serialize_to_json
+from engine.trace.trace_manager import TraceManager
 
 LOGGER = logging.getLogger(__name__)
 
@@ -121,27 +121,23 @@ class Agent(ABC):
         with self.trace_manager.start_span(span_name) as span:
             try:
                 if input_node_data is not None:
-                    span.set_attributes(
-                        {
-                            SpanAttributes.OPENINFERENCE_SPAN_KIND: self.TRACE_SPAN_KIND,
-                            SpanAttributes.INPUT_VALUE: serialize_to_json(input_node_data.data, shorten_string=True),
-                            "component_instance_id": (
-                                str(self.component_attributes.component_instance_id)
-                                if self.component_attributes.component_instance_id is not None
-                                else None
-                            ),
-                        }
-                    )
+                    span.set_attributes({
+                        SpanAttributes.OPENINFERENCE_SPAN_KIND: self.TRACE_SPAN_KIND,
+                        SpanAttributes.INPUT_VALUE: serialize_to_json(input_node_data.data, shorten_string=True),
+                        "component_instance_id": (
+                            str(self.component_attributes.component_instance_id)
+                            if self.component_attributes.component_instance_id is not None
+                            else None
+                        ),
+                    })
                     if self.tool_description.is_tool:
-                        span.set_attributes(
-                            {
-                                SpanAttributes.TOOL_NAME: self.tool_description.name,
-                                SpanAttributes.TOOL_DESCRIPTION: self.tool_description.description,
-                                SpanAttributes.TOOL_PARAMETERS: serialize_to_json(
-                                    input_node_data.data, shorten_string=True
-                                ),
-                            }
-                        )
+                        span.set_attributes({
+                            SpanAttributes.TOOL_NAME: self.tool_description.name,
+                            SpanAttributes.TOOL_DESCRIPTION: self.tool_description.description,
+                            SpanAttributes.TOOL_PARAMETERS: serialize_to_json(
+                                input_node_data.data, shorten_string=True
+                            ),
+                        })
 
                     if self.migrated:
                         InputModel = self.get_inputs_schema()
@@ -156,13 +152,9 @@ class Agent(ABC):
                                 f"but expected {OutputModel.__name__}"
                             )
                         output_node_data = NodeData(data=output_model_instance.model_dump(), ctx=input_node_data.ctx)
-                        span.set_attributes(
-                            {
-                                SpanAttributes.OUTPUT_VALUE: serialize_to_json(
-                                    output_node_data.data, shorten_string=True
-                                )
-                            }
-                        )
+                        span.set_attributes({
+                            SpanAttributes.OUTPUT_VALUE: serialize_to_json(output_node_data.data, shorten_string=True)
+                        })
                         self._set_trace_data(span)
                         span.set_status(trace_api.StatusCode.OK)
                         return output_node_data
@@ -182,13 +174,9 @@ class Agent(ABC):
                         output_node_data = legacy_compatibility.convert_legacy_to_node_data(
                             legacy_output, input_node_data.ctx
                         )
-                        span.set_attributes(
-                            {
-                                SpanAttributes.OUTPUT_VALUE: serialize_to_json(
-                                    output_node_data.data, shorten_string=True
-                                )
-                            }
-                        )
+                        span.set_attributes({
+                            SpanAttributes.OUTPUT_VALUE: serialize_to_json(output_node_data.data, shorten_string=True)
+                        })
                         self._set_trace_data(span)
                         span.set_status(trace_api.StatusCode.OK)
                         return output_node_data
@@ -199,24 +187,20 @@ class Agent(ABC):
                     legacy_input_preview = args[0]
                 elif kwargs:
                     legacy_input_preview = kwargs
-                span.set_attributes(
-                    {
-                        SpanAttributes.OPENINFERENCE_SPAN_KIND: self.TRACE_SPAN_KIND,
-                        SpanAttributes.INPUT_VALUE: serialize_to_json(legacy_input_preview, shorten_string=True),
-                        "component_instance_id": (
-                            str(self.component_attributes.component_instance_id)
-                            if self.component_attributes.component_instance_id is not None
-                            else None
-                        ),
-                    }
-                )
+                span.set_attributes({
+                    SpanAttributes.OPENINFERENCE_SPAN_KIND: self.TRACE_SPAN_KIND,
+                    SpanAttributes.INPUT_VALUE: serialize_to_json(legacy_input_preview, shorten_string=True),
+                    "component_instance_id": (
+                        str(self.component_attributes.component_instance_id)
+                        if self.component_attributes.component_instance_id is not None
+                        else None
+                    ),
+                })
                 if self.tool_description.is_tool:
-                    span.set_attributes(
-                        {
-                            SpanAttributes.TOOL_NAME: self.tool_description.name,
-                            SpanAttributes.TOOL_DESCRIPTION: self.tool_description.description,
-                        }
-                    )
+                    span.set_attributes({
+                        SpanAttributes.TOOL_NAME: self.tool_description.name,
+                        SpanAttributes.TOOL_DESCRIPTION: self.tool_description.description,
+                    })
 
                 if self.migrated:
                     InputModel = self.get_inputs_schema()
@@ -253,9 +237,9 @@ class Agent(ABC):
                 else:
                     legacy_output = await self._run_without_io_trace(*args, **kwargs)
 
-                span.set_attributes(
-                    {SpanAttributes.OUTPUT_VALUE: serialize_to_json(legacy_output, shorten_string=True)}
-                )
+                span.set_attributes({
+                    SpanAttributes.OUTPUT_VALUE: serialize_to_json(legacy_output, shorten_string=True)
+                })
                 self._set_trace_data(span)
                 span.set_status(trace_api.StatusCode.OK)
                 return legacy_output

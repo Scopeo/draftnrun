@@ -1,23 +1,23 @@
 import logging
-from pathlib import Path
 from contextlib import contextmanager
-from typing import Optional, Type, Dict, Any
+from pathlib import Path
+from typing import Any, Dict, Optional, Type
 
+import pandas as pd
 import sqlalchemy
-from sqlalchemy import MetaData, text, create_engine
+from func_timeout import FunctionTimedOut, func_timeout
+from sqlalchemy import MetaData, create_engine, text
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.sql.type_api import TypeEngine
-from sqlalchemy.dialects.postgresql import insert
-import pandas as pd
-from func_timeout import func_timeout, FunctionTimedOut
 
 from engine.agent.agent import ComponentAttributes
 from engine.storage_service.db_service import DBService
 from engine.storage_service.db_utils import (
+    CHUNK_ID_COLUMN,
+    PROCESSED_DATETIME_FIELD,
     DBDefinition,
     check_columns_matching_between_data_and_database_table,
-    PROCESSED_DATETIME_FIELD,
-    CHUNK_ID_COLUMN,
 )
 
 LOGGER = logging.getLogger(__name__)
@@ -459,7 +459,6 @@ class SQLLocalService(DBService):
             LOGGER.info(f"Successfully updated row chunk_id='{chunk_id}' in table {table_name}")
 
     def run_query(self, query: str) -> pd.DataFrame:
-
         query = query.strip()
         if query.lower().startswith("insert"):
             LOGGER.info(f"Running insert query: {query}")

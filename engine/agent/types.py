@@ -1,8 +1,9 @@
-from typing import Optional, Any, Dict
 from enum import StrEnum
-from pydantic import BaseModel, Field
-from openai.types.chat import ChatCompletionMessageToolCall
+from typing import Any, Dict, Optional
 from uuid import UUID
+
+from openai.types.chat import ChatCompletionMessageToolCall
+from pydantic import BaseModel, Field
 
 
 class NodeData(BaseModel):

@@ -4,28 +4,28 @@ from engine.agent.build_context import build_context_from_source_chunks
 # 1. Test Basic SourceChunk Formatting
 def test_basic_source_chunk_formatting(mock_source_chunk_basic):
     result = build_context_from_source_chunks([mock_source_chunk_basic])
-    expected = "**Source 1:**\n" "Sample content\n" "Metadata:\nauthor: Jane Doe\nyear: 2021"
+    expected = "**Source 1:**\nSample content\nMetadata:\nauthor: Jane Doe\nyear: 2021"
     assert result == expected
 
 
 # 2. Test SourceChunk Without Metadata
 def test_source_chunk_no_metadata(mock_source_chunk_no_metadata):
     result = build_context_from_source_chunks([mock_source_chunk_no_metadata])
-    expected = "**Source 1:**\n" "Another sample content"
+    expected = "**Source 1:**\nAnother sample content"
     assert result == expected  # No metadata is expected in the output
 
 
 # 3. Test SourceChunk With Empty Content
 def test_source_chunk_empty_content(mock_source_chunk_empty_content):
     result = build_context_from_source_chunks([mock_source_chunk_empty_content])
-    expected = "**Source 1:**\n" "\n" "Metadata:\nauthor: John Smith"  # Empty content
+    expected = "**Source 1:**\n\nMetadata:\nauthor: John Smith"  # Empty content
     assert result == expected
 
 
 # 4. Test SourceChunk Without URL
 def test_source_chunk_no_url(mock_source_chunk_no_url):
     result = build_context_from_source_chunks([mock_source_chunk_no_url])
-    expected = "**Source 1:**\n" "Content without URL\n" "Metadata:\nauthor: Unknown"  # No URL
+    expected = "**Source 1:**\nContent without URL\nMetadata:\nauthor: Unknown"  # No URL
     assert result == expected
 
 
@@ -69,9 +69,7 @@ def test_custom_template_and_content_formatter(mock_source_chunk_basic):
         content_formatter=custom_content_formatter,
     )
 
-    expected = (
-        "Source #1:\n" "Data:\nCustom formatted content: Sample content\n\n" "Metadata:\nauthor: Jane Doe\nyear: 2021"
-    )
+    expected = "Source #1:\nData:\nCustom formatted content: Sample content\n\nMetadata:\nauthor: Jane Doe\nyear: 2021"
 
     assert result == expected
 
@@ -86,7 +84,7 @@ def test_custom_metadata_formatter(mock_source_chunk_basic):
         metadata_formatter=custom_metadata_formatter,
     )
 
-    expected = "**Source 1:**\n" "Sample content\n" "Author is Jane Doe"
+    expected = "**Source 1:**\nSample content\nAuthor is Jane Doe"
     assert result == expected
 
 
@@ -102,6 +100,6 @@ def test_advanced_content_formatting(mock_source_chunk_many_metadata):
         metadata_formatter=lambda source: "",
     )
 
-    expected = "**Source 1:**\n" "Jane Doe wrote: Content with..."
+    expected = "**Source 1:**\nJane Doe wrote: Content with..."
 
     assert result == expected

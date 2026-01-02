@@ -1,7 +1,8 @@
-from typing import Protocol, runtime_checkable, Optional, Dict, Type
+from typing import Dict, Optional, Protocol, Type, runtime_checkable
+
 from pydantic import BaseModel
 
-from engine.agent.types import ToolDescription, AgentPayload, NodeData
+from engine.agent.types import AgentPayload, NodeData, ToolDescription
 
 
 @runtime_checkable

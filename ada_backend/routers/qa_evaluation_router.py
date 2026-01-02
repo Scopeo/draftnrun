@@ -1,24 +1,24 @@
 import logging
-from uuid import UUID
 from typing import Annotated, List
+from uuid import UUID
 
 from fastapi import APIRouter, Body, Depends, HTTPException
 from sqlalchemy.orm import Session
 
+from ada_backend.database.setup_db import get_db
+from ada_backend.routers.auth_router import (
+    UserRights,
+    user_has_access_to_project_dependency,
+)
 from ada_backend.schemas.auth_schema import SupabaseUser
 from ada_backend.schemas.qa_evaluation_schema import (
     JudgeEvaluationResponse,
 )
-from ada_backend.services.errors import ProjectNotFound, LLMJudgeNotFound
-from ada_backend.routers.auth_router import (
-    user_has_access_to_project_dependency,
-    UserRights,
-)
-from ada_backend.database.setup_db import get_db
+from ada_backend.services.errors import LLMJudgeNotFound, ProjectNotFound
 from ada_backend.services.qa.qa_evaluation_service import (
+    delete_judge_evaluations_service,
     get_evaluations_by_version_output_service,
     run_judge_evaluation_service,
-    delete_judge_evaluations_service,
 )
 
 router = APIRouter(tags=["QA Evaluation"])

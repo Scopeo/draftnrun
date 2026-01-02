@@ -5,16 +5,16 @@ This test suite covers all possible GraphRunner scenarios to ensure robust
 build-time validation and runtime execution across different component types.
 """
 
-import pytest
-import networkx as nx
 from typing import List, Type
 
-from engine.graph_runner.graph_runner import GraphRunner
-from engine.agent.types import ChatMessage
-from engine.trace.trace_manager import TraceManager
-from tests.mocks.dummy_agent import DummyAgent
+import networkx as nx
+import pytest
 from pydantic import BaseModel
 
+from engine.agent.types import ChatMessage
+from engine.graph_runner.graph_runner import GraphRunner
+from engine.trace.trace_manager import TraceManager
+from tests.mocks.dummy_agent import DummyAgent
 
 # Note: prometheus_metrics fixture is defined in test_graph_runner_ports.py
 

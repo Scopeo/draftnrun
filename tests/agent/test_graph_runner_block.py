@@ -3,15 +3,15 @@ Test module for GraphRunnerBlock functionality.
 Tests the ability to wrap a GraphRunner as an Agent and use it in another GraphRunner.
 """
 
-import uuid
 import asyncio
-from unittest.mock import patch, MagicMock
+import uuid
+from unittest.mock import MagicMock, patch
 
-import pytest
 import networkx as nx
+import pytest
 
+from engine.agent.graph_runner_block import DEFAULT_GRAPH_RUNNER_BLOCK_TOOL_DESCRIPTION, GraphRunnerBlock
 from engine.agent.types import AgentPayload, ChatMessage, ComponentAttributes
-from engine.agent.graph_runner_block import GraphRunnerBlock, DEFAULT_GRAPH_RUNNER_BLOCK_TOOL_DESCRIPTION
 from engine.graph_runner.graph_runner import GraphRunner
 from tests.mocks.dummy_agent import DummyAgent
 

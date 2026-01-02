@@ -20,8 +20,8 @@ from ada_backend.repositories.release_stage_repository import (
 )
 from ada_backend.services.errors import (
     ComponentNotFound,
-    EntityInUseDeletionError,
     ComponentVersionMismatchError,
+    EntityInUseDeletionError,
 )
 
 LOGGER = logging.getLogger(__name__)

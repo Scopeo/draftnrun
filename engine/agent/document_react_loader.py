@@ -3,12 +3,12 @@ import logging
 from engine.agent.document_enhanced_llm_call import DocumentEnhancedLLMCallAgent
 from engine.agent.react_function_calling import ReActAgent
 from engine.agent.types import (
-    ToolDescription,
     ComponentAttributes,
+    ToolDescription,
 )
 from engine.agent.utils_prompt import fill_prompt_template
-from engine.trace.trace_manager import TraceManager
 from engine.llm_services.llm_service import LLMService
+from engine.trace.trace_manager import TraceManager
 
 LOGGER = logging.getLogger(__name__)
 

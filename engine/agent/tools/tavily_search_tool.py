@@ -1,23 +1,23 @@
-import logging
 import json
+import logging
 from typing import Optional
 
-from tavily import TavilyClient
 from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttributes
+from tavily import TavilyClient
 
 from engine.agent.agent import Agent
+from engine.agent.rag.formatter import Formatter
+from engine.agent.synthesizer import Synthesizer
 from engine.agent.types import (
-    ChatMessage,
     AgentPayload,
+    ChatMessage,
     ComponentAttributes,
-    ToolDescription,
     SourceChunk,
     SourcedResponse,
+    ToolDescription,
 )
-from engine.agent.synthesizer import Synthesizer
-from engine.trace.trace_manager import TraceManager
 from engine.llm_services.llm_service import CompletionService
-from engine.agent.rag.formatter import Formatter
+from engine.trace.trace_manager import TraceManager
 from settings import settings
 
 LOGGER = logging.getLogger(__name__)
@@ -122,14 +122,12 @@ class TavilyApiTool(Agent):
 
         with self.trace_manager.start_span("TavilyApiSearchResults") as span:
             for i, source in enumerate(sources):
-                span.set_attributes(
-                    {
-                        SpanAttributes.OPENINFERENCE_SPAN_KIND: OpenInferenceSpanKindValues.RETRIEVER.value,
-                        f"{SpanAttributes.RETRIEVAL_DOCUMENTS}.{i}.document.content": source.content,
-                        f"{SpanAttributes.RETRIEVAL_DOCUMENTS}.{i}.document.id": source.name,
-                        f"{SpanAttributes.RETRIEVAL_DOCUMENTS}.{i}.document.metadata": json.dumps(source.metadata),
-                    }
-                )
+                span.set_attributes({
+                    SpanAttributes.OPENINFERENCE_SPAN_KIND: OpenInferenceSpanKindValues.RETRIEVER.value,
+                    f"{SpanAttributes.RETRIEVAL_DOCUMENTS}.{i}.document.content": source.content,
+                    f"{SpanAttributes.RETRIEVAL_DOCUMENTS}.{i}.document.id": source.name,
+                    f"{SpanAttributes.RETRIEVAL_DOCUMENTS}.{i}.document.metadata": json.dumps(source.metadata),
+                })
 
         response = await self._synthesizer.get_response(
             chunks=sources,

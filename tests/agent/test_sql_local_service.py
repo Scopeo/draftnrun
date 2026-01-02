@@ -39,20 +39,18 @@ def test_insert_df_to_table(postgres_service, sample_table_definition):
         table_definition=sample_table_definition,
         schema_name=TEST_SCHEMA_NAME,
     )
-    df = pd.DataFrame(
-        [
-            {
-                "chunk_id": 1,
-                "name": "Alice",
-                "created_at": "2021-01-01 11:10:00",
-            },
-            {
-                "chunk_id": 2,
-                "name": "Bob",
-                "created_at": "2021-01-01 11:10:00",
-            },
-        ]
-    )
+    df = pd.DataFrame([
+        {
+            "chunk_id": 1,
+            "name": "Alice",
+            "created_at": "2021-01-01 11:10:00",
+        },
+        {
+            "chunk_id": 2,
+            "name": "Bob",
+            "created_at": "2021-01-01 11:10:00",
+        },
+    ])
     postgres_service.insert_df_to_table(df, "test_table", TEST_SCHEMA_NAME)
     result_df = postgres_service.get_table_df("test_table", TEST_SCHEMA_NAME)
     assert len(result_df) == 2
@@ -65,20 +63,18 @@ def test_delete_rows_from_table(postgres_service, sample_table_definition):
         table_definition=sample_table_definition,
         schema_name=TEST_SCHEMA_NAME,
     )
-    df = pd.DataFrame(
-        [
-            {
-                "chunk_id": 1,
-                "name": "Alice",
-                "created_at": "2021-01-01 11:10:00",
-            },
-            {
-                "chunk_id": 2,
-                "name": "Bob",
-                "created_at": "2021-01-01 11:10:00",
-            },
-        ]
-    )
+    df = pd.DataFrame([
+        {
+            "chunk_id": 1,
+            "name": "Alice",
+            "created_at": "2021-01-01 11:10:00",
+        },
+        {
+            "chunk_id": 2,
+            "name": "Bob",
+            "created_at": "2021-01-01 11:10:00",
+        },
+    ])
     postgres_service.insert_df_to_table(df, "test_table", schema_name=TEST_SCHEMA_NAME)
     postgres_service.delete_rows_from_table(
         table_name="test_table",
@@ -96,31 +92,27 @@ def test_refresh_table(postgres_service, sample_table_definition):
         table_definition=sample_table_definition,
         schema_name=TEST_SCHEMA_NAME,
     )
-    df = pd.DataFrame(
-        [
-            {
-                "chunk_id": 1,
-                "name": "Alice",
-                "created_at": "2021-01-01 11:10:00",
-            },
-            {
-                "chunk_id": 2,
-                "name": "Bob",
-                "created_at": "2021-01-01 11:10:00",
-            },
-        ]
-    )
+    df = pd.DataFrame([
+        {
+            "chunk_id": 1,
+            "name": "Alice",
+            "created_at": "2021-01-01 11:10:00",
+        },
+        {
+            "chunk_id": 2,
+            "name": "Bob",
+            "created_at": "2021-01-01 11:10:00",
+        },
+    ])
     postgres_service.insert_df_to_table(df, "test_table", TEST_SCHEMA_NAME)
 
-    updated_df = pd.DataFrame(
-        [
-            {
-                "chunk_id": 1,
-                "name": "Alice Updated",
-                "created_at": "2021-02-01 11:15:00",
-            }
-        ]
-    )
+    updated_df = pd.DataFrame([
+        {
+            "chunk_id": 1,
+            "name": "Alice Updated",
+            "created_at": "2021-02-01 11:15:00",
+        }
+    ])
     postgres_service._refresh_table_from_df(
         df=updated_df,
         table_name="test_table",

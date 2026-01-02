@@ -1,5 +1,6 @@
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 from engine.llm_services.providers.anthropic_provider import AnthropicProvider
 
@@ -326,14 +327,17 @@ async def test_function_call_without_structured_output_batches_tool_results(anth
         mock_client.__aexit__ = AsyncMock(return_value=None)
         mock_client_class.return_value = mock_client
 
-        response, prompt_tokens, completion_tokens, total_tokens = (
-            await anthropic_provider.function_call_without_structured_output(
-                messages=messages,
-                tools=tools,
-                tool_choice="auto",
-                temperature=0.7,
-                stream=False,
-            )
+        (
+            response,
+            prompt_tokens,
+            completion_tokens,
+            total_tokens,
+        ) = await anthropic_provider.function_call_without_structured_output(
+            messages=messages,
+            tools=tools,
+            tool_choice="auto",
+            temperature=0.7,
+            stream=False,
         )
 
         # Verify the request was made

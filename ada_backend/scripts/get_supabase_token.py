@@ -1,8 +1,7 @@
 import argparse
 
-from supabase import create_client, Client
-
 from settings import settings
+from supabase import Client, create_client
 
 
 def get_user_jwt(username: str, password: str) -> str:
@@ -22,12 +21,10 @@ def get_user_jwt(username: str, password: str) -> str:
     )
 
     try:
-        response = supabase.auth.sign_in_with_password(
-            {
-                "email": username,
-                "password": password,
-            }
-        )
+        response = supabase.auth.sign_in_with_password({
+            "email": username,
+            "password": password,
+        })
 
         if hasattr(response, "session") and response.session:
             return response.session.access_token

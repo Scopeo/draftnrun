@@ -1,6 +1,6 @@
 import pytest
 
-from data_ingestion.document.folder_management.folder_management import FileDocumentType, FileDocument
+from data_ingestion.document.folder_management.folder_management import FileDocument, FileDocumentType
 from data_ingestion.document.markdown_ingestion import (
     get_chunks_from_markdown,
 )

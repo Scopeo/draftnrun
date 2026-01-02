@@ -1,13 +1,11 @@
 import logging
-
-from typing import Type, Any
-from pydantic import BaseModel, Field
-
+from typing import Any, Type
 
 from openinference.semconv.trace import OpenInferenceSpanKindValues
+from pydantic import BaseModel, Field
 
 from engine.agent.agent import Agent
-from engine.agent.types import ToolDescription, ComponentAttributes
+from engine.agent.types import ComponentAttributes, ToolDescription
 from engine.trace.trace_manager import TraceManager
 
 LOGGER = logging.getLogger(__name__)
@@ -64,7 +62,6 @@ class StaticResponder(Agent):
         inputs: StaticResponderInputs,
         ctx: dict,
     ) -> StaticResponderOutputs:
-
         return StaticResponderOutputs(
             input_from_previous=inputs.input,
             static_message=self._static_message,

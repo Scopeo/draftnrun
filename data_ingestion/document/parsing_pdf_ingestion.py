@@ -1,6 +1,6 @@
 import logging
-import tempfile
 import os
+import tempfile
 from pathlib import Path
 from typing import Callable, Optional
 
@@ -8,7 +8,6 @@ import pymupdf4llm
 
 from data_ingestion.document.folder_management.folder_management import FileChunk, FileDocument
 from data_ingestion.document.markdown_ingestion import chunk_markdown
-
 
 LOGGER = logging.getLogger(__name__)
 

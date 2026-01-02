@@ -1,11 +1,11 @@
-from io import BytesIO
-import pandas as pd
 import logging
 import uuid
+from io import BytesIO
 from typing import Callable, Optional
 
+import pandas as pd
 
-from data_ingestion.document.folder_management.folder_management import FileDocument, FileChunk
+from data_ingestion.document.folder_management.folder_management import FileChunk, FileDocument
 from data_ingestion.utils import get_chunk_token_count, split_df_by_token_limit
 
 LOGGER = logging.getLogger(__name__)

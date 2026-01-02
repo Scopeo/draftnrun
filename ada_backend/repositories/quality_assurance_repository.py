@@ -1,12 +1,11 @@
 import logging
-from typing import List, Optional, Tuple, Dict
+from typing import Dict, List, Optional, Tuple
 from uuid import UUID
 
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
-from sqlalchemy import select
-from sqlalchemy import func
 
-from ada_backend.database.models import InputGroundtruth, DatasetProject, VersionOutput
+from ada_backend.database.models import DatasetProject, InputGroundtruth, VersionOutput
 from ada_backend.schemas.input_groundtruth_schema import InputGroundtruthCreate
 
 LOGGER = logging.getLogger(__name__)
@@ -93,7 +92,7 @@ def create_inputs_groundtruths(
             groundtruth=data.groundtruth,
             position=position,
         )
-        for data, position in zip(inputs_groundtruths_data, positions)
+        for data, position in zip(inputs_groundtruths_data, positions, strict=False)
     ]
 
     session.add_all(inputs_groundtruths)

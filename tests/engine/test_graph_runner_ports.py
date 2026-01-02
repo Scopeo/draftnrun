@@ -1,5 +1,5 @@
 import asyncio
-from typing import Any, Optional, Type
+from typing import Any, Type, get_args, get_origin
 from unittest.mock import MagicMock, patch
 
 import networkx as nx
@@ -14,7 +14,6 @@ from engine.graph_runner.port_management import get_component_port_type
 from engine.legacy_compatibility import get_unmigrated_output_type
 from engine.trace.trace_manager import TraceManager
 from tests.mocks.dummy_agent import DummyAgent
-
 
 # ============================================================================
 # SHARED MOCK COMPONENTS - Inherit from Agent for consistency
@@ -354,10 +353,18 @@ class TestTypeDiscovery:
         GraphRunner(graph=g, runnables=runnables, start_nodes=["A"], trace_manager=tm)
 
         # Test AgentPayload pattern fields
-        assert get_unmigrated_output_type(dummy_agent, "messages") == list[ChatMessage]
-        assert get_unmigrated_output_type(dummy_agent, "artifacts") == dict
-        assert get_unmigrated_output_type(dummy_agent, "error") == Optional[str]
-        assert get_unmigrated_output_type(dummy_agent, "is_final") == Optional[bool]
+        messages_type = get_unmigrated_output_type(dummy_agent, "messages")
+        assert get_origin(messages_type) is list
+        assert get_args(messages_type) == (ChatMessage,)
+
+        artifacts_type = get_unmigrated_output_type(dummy_agent, "artifacts")
+        assert artifacts_type is dict
+
+        error_type = get_unmigrated_output_type(dummy_agent, "error")
+        assert set(get_args(error_type)) == {str, type(None)}
+
+        is_final_type = get_unmigrated_output_type(dummy_agent, "is_final")
+        assert set(get_args(is_final_type)) == {bool, type(None)}
 
         # Test unknown field
         assert get_unmigrated_output_type(dummy_agent, "unknown_field") is None

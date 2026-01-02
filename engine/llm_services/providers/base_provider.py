@@ -2,8 +2,9 @@ import json
 import logging
 from abc import ABC, abstractmethod
 from typing import Optional
-from pydantic import BaseModel
+
 from openai.types.chat import ChatCompletion
+from pydantic import BaseModel
 
 LOGGER = logging.getLogger(__name__)
 

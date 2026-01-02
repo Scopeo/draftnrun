@@ -3,7 +3,7 @@ from uuid import UUID
 
 from sqlalchemy.orm import Session
 
-from ada_backend.database.models import LLMJudge, EvaluationType
+from ada_backend.database.models import EvaluationType, LLMJudge
 
 
 def get_llm_judges_by_project(

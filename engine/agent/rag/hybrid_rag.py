@@ -3,21 +3,21 @@ from typing import Optional
 
 from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttributes
 
+from engine.agent.hybrid_synthesizer import HybridSynthesizer
+from engine.agent.rag.chunk_selection import RelevantChunk, RelevantChunkSelector
+from engine.agent.rag.formatter import Formatter
+from engine.agent.rag.rag import RAG
+from engine.agent.rag.reranker import Reranker
+from engine.agent.rag.retriever import Retriever
+from engine.agent.synthesizer import Synthesizer
 from engine.agent.types import (
-    ChatMessage,
     AgentPayload,
+    ChatMessage,
     ComponentAttributes,
     SourceChunk,
     ToolDescription,
 )
-from engine.agent.rag.rag import RAG
-from engine.agent.rag.reranker import Reranker
-from engine.agent.rag.retriever import Retriever
 from engine.trace.trace_manager import TraceManager
-from engine.agent.synthesizer import Synthesizer
-from engine.agent.hybrid_synthesizer import HybridSynthesizer
-from engine.agent.rag.formatter import Formatter
-from engine.agent.rag.chunk_selection import RelevantChunkSelector, RelevantChunk
 
 PATTERN = r"Image Description:.*?<END_IMAGE_DESCRIPTION>"
 
@@ -97,12 +97,10 @@ class HybridRAG(RAG):
             synthesized_response = self._formatter.format(synthesized_response)
 
         for i, source in enumerate(text_image_sources_for_synthesizer):
-            self.log_trace(
-                {
-                    f"{SpanAttributes.RETRIEVAL_DOCUMENTS}.{i}.document.content": source.content,
-                    f"{SpanAttributes.RETRIEVAL_DOCUMENTS}.{i}.document.id": source.name,
-                }
-            )
+            self.log_trace({
+                f"{SpanAttributes.RETRIEVAL_DOCUMENTS}.{i}.document.content": source.content,
+                f"{SpanAttributes.RETRIEVAL_DOCUMENTS}.{i}.document.id": source.name,
+            })
 
         return AgentPayload(
             messages=[ChatMessage(role="assistant", content=synthesized_response.response)],

@@ -1,42 +1,41 @@
-from uuid import UUID
-import uuid
-from typing import Optional
-import traceback
 import logging
-
-from sqlalchemy.orm import Session
-import networkx as nx
-
+import traceback
+import uuid
 from datetime import datetime
+from typing import Optional
+from uuid import UUID
 
-from ada_backend.database.models import EnvType, OrgSecretType, CallType, ResponseFormat
-from ada_backend.services.tag_service import compose_tag_name
+import networkx as nx
+from sqlalchemy.orm import Session
+
+from ada_backend.database.models import CallType, EnvType, OrgSecretType, ResponseFormat
+from ada_backend.repositories.credits_repository import get_organization_limit, get_organization_total_credits
 from ada_backend.repositories.edge_repository import get_edges
-from ada_backend.schemas.project_schema import ChatResponse
-from ada_backend.services.agent_builder_service import instantiate_component
-from ada_backend.services.file_response_service import process_files_for_response, temp_folder_exists
-from ada_backend.services.errors import ProjectNotFound, EnvironmentNotFound, OrganizationLimitExceededError
-from ada_backend.repositories.credits_repository import get_organization_total_credits, get_organization_limit
-from engine.graph_runner.graph_runner import GraphRunner
-from engine.agent.errors import (
-    KeyTypePromptTemplateError,
-    MissingKeyPromptTemplateError,
-)
+from ada_backend.repositories.field_expression_repository import get_field_expressions_for_instances
 from ada_backend.repositories.graph_runner_repository import (
+    delete_temp_folder,
     get_component_nodes,
     get_graph_runner_for_env,
     get_start_components,
     graph_runner_exists,
-    delete_temp_folder,
 )
-from ada_backend.repositories.port_mapping_repository import list_port_mappings_for_graph
-from ada_backend.repositories.field_expression_repository import get_field_expressions_for_instances
-from ada_backend.repositories.project_repository import get_project, get_project_with_details
 from ada_backend.repositories.organization_repository import get_organization_secrets
-from engine.graph_runner.runnable import Runnable
-from engine.trace.trace_context import get_trace_manager
-from engine.trace.span_context import get_tracing_span, set_tracing_span
+from ada_backend.repositories.port_mapping_repository import list_port_mappings_for_graph
+from ada_backend.repositories.project_repository import get_project, get_project_with_details
+from ada_backend.schemas.project_schema import ChatResponse
+from ada_backend.services.agent_builder_service import instantiate_component
+from ada_backend.services.errors import EnvironmentNotFound, OrganizationLimitExceededError, ProjectNotFound
+from ada_backend.services.file_response_service import process_files_for_response, temp_folder_exists
+from ada_backend.services.tag_service import compose_tag_name
+from engine.agent.errors import (
+    KeyTypePromptTemplateError,
+    MissingKeyPromptTemplateError,
+)
 from engine.field_expressions.serializer import from_json as expression_from_json
+from engine.graph_runner.graph_runner import GraphRunner
+from engine.graph_runner.runnable import Runnable
+from engine.trace.span_context import get_tracing_span, set_tracing_span
+from engine.trace.trace_context import get_trace_manager
 
 LOGGER = logging.getLogger(__name__)
 
@@ -112,13 +111,11 @@ async def build_graph_runner(
         expression_ast = None
         if expression.expression_json:
             expression_ast = expression_from_json(expression.expression_json)
-        expressions.append(
-            {
-                "target_instance_id": str(expression.component_instance_id),
-                "field_name": expression.field_name,
-                "expression_ast": expression_ast,
-            }
-        )
+        expressions.append({
+            "target_instance_id": str(expression.component_instance_id),
+            "field_name": expression.field_name,
+            "expression_ast": expression_ast,
+        })
 
     runnables: dict[str, Runnable] = {}
     graph = nx.DiGraph()
@@ -198,7 +195,6 @@ async def run_agent(
     tag_name: Optional[str] = None,
     response_format: Optional[ResponseFormat] = None,
 ) -> ChatResponse:
-
     project_details = get_project_with_details(session, project_id=project_id)
     if not project_details:
         raise ProjectNotFound(project_id)

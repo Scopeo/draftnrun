@@ -1,42 +1,42 @@
-from uuid import UUID
-from typing import Annotated
 import logging
-import time
 import threading
+import time
 from collections import defaultdict
+from typing import Annotated
 from urllib.parse import urlparse
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
 from ada_backend.database.setup_db import get_db
+from ada_backend.repositories.widget_repository import get_widget_by_key
 from ada_backend.routers.auth_router import (
-    user_has_access_to_organization_dependency,
-    get_user_from_supabase_token,
     UserRights,
+    get_user_from_supabase_token,
+    user_has_access_to_organization_dependency,
 )
 from ada_backend.schemas.auth_schema import SupabaseUser
 from ada_backend.schemas.widget_schema import (
-    WidgetSchema,
-    WidgetCreateSchema,
-    WidgetUpdateSchema,
     WidgetChatRequest,
+    WidgetCreateSchema,
+    WidgetSchema,
+    WidgetUpdateSchema,
 )
-from ada_backend.services.widget_service import (
-    get_widget_public_config_service,
-    widget_chat_service,
-    list_widgets_service,
-    get_widget_service,
-    get_widget_by_project_service,
-    create_widget_service,
-    update_widget_service,
-    regenerate_widget_key_service,
-    delete_widget_service,
-)
-from ada_backend.repositories.widget_repository import get_widget_by_key
-from ada_backend.services.errors import ProjectNotFound, EnvironmentNotFound, WidgetNotFound, WidgetDisabled
+from ada_backend.services.errors import EnvironmentNotFound, ProjectNotFound, WidgetDisabled, WidgetNotFound
 from ada_backend.services.user_roles_service import get_user_access_to_organization
+from ada_backend.services.widget_service import (
+    create_widget_service,
+    delete_widget_service,
+    get_widget_by_project_service,
+    get_widget_public_config_service,
+    get_widget_service,
+    list_widgets_service,
+    regenerate_widget_key_service,
+    update_widget_service,
+    widget_chat_service,
+)
 
 # Use MEMBER/DEVELOPER (matching main branch)
 _READER_RIGHT = UserRights.MEMBER

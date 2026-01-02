@@ -4,12 +4,12 @@ import pytest
 from pydantic import BaseModel
 
 from ada_backend.services.entity_factory import (
-    EntityFactory,
     AgentFactory,
+    EntityFactory,
     build_trace_manager_processor,
     detect_and_convert_dataclasses,
-    pydantic_processor,
     get_llm_provider_and_model,
+    pydantic_processor,
 )
 from engine.agent.types import ToolDescription
 from engine.trace.trace_context import get_trace_manager

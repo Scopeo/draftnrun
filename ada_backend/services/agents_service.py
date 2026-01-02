@@ -1,10 +1,11 @@
+import logging
 from collections import defaultdict
 from typing import DefaultDict
 from uuid import UUID, uuid4
-import logging
 
 from sqlalchemy.orm import Session
 
+from ada_backend.database import models as db
 from ada_backend.database.seed.seed_ai_agent import (
     AGENT_TOOLS_PARAMETER_NAME,
     AI_MODEL_PARAMETER_IDS,
@@ -17,24 +18,22 @@ from ada_backend.repositories.graph_runner_repository import upsert_component_no
 from ada_backend.repositories.project_repository import get_project
 from ada_backend.repositories.utils import create_component_instance
 from ada_backend.schemas.agent_schema import (
+    AgentInfoSchema,
     AgentUpdateSchema,
     AgentWithGraphRunnersSchema,
     ProjectAgentSchema,
-    AgentInfoSchema,
 )
 from ada_backend.schemas.parameter_schema import PipelineParameterSchema
 from ada_backend.schemas.pipeline.base import ComponentInstanceSchema, ComponentRelationshipSchema
 from ada_backend.schemas.pipeline.graph_schema import GraphUpdateResponse, GraphUpdateSchema
 from ada_backend.schemas.project_schema import GraphRunnerEnvDTO, ProjectWithGraphRunnersSchema
 from ada_backend.segment_analytics import track_agent_created
-from ada_backend.services.errors import ProjectNotFound, InvalidAgentTemplate
-from ada_backend.database import models as db
+from ada_backend.services.errors import InvalidAgentTemplate, ProjectNotFound
 from ada_backend.services.graph.get_graph_service import get_graph_service
 from ada_backend.services.graph.update_graph_service import update_graph_with_history_service
+from ada_backend.services.pipeline.update_pipeline_service import create_or_update_component_instance
 from ada_backend.services.project_service import create_project_with_graph_runner
 from ada_backend.services.tag_service import compose_tag_name
-from ada_backend.services.pipeline.update_pipeline_service import create_or_update_component_instance
-
 
 LOGGER = logging.getLogger(__name__)
 

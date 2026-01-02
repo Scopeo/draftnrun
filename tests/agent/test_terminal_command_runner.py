@@ -1,8 +1,9 @@
 import json
-import pytest
-from unittest.mock import Mock, patch, AsyncMock
+from unittest.mock import AsyncMock, Mock, patch
 
-from engine.agent.tools.terminal_command_runner import TerminalCommandRunner, TERMINAL_COMMAND_RUNNER_TOOL_DESCRIPTION
+import pytest
+
+from engine.agent.tools.terminal_command_runner import TERMINAL_COMMAND_RUNNER_TOOL_DESCRIPTION, TerminalCommandRunner
 from engine.agent.types import AgentPayload, ChatMessage
 from tests.mocks.trace_manager import MockTraceManager
 

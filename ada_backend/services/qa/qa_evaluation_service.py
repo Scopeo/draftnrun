@@ -2,17 +2,17 @@ import logging
 from typing import List, Optional, Tuple
 from uuid import UUID
 
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from ada_backend.database.models import EvaluationType, LLMJudge
+from ada_backend.repositories.llm_judges_repository import get_llm_judge_by_id
 from ada_backend.repositories.qa_evaluation_repository import (
+    delete_judge_evaluations,
     get_evaluations_by_version_output,
     upsert_judge_evaluation,
-    delete_judge_evaluations,
 )
-from ada_backend.repositories.llm_judges_repository import get_llm_judge_by_id
 from ada_backend.repositories.quality_assurance_repository import get_version_output
-from ada_backend.database.models import LLMJudge
-from ada_backend.services.agent_runner_service import setup_tracing_context
 from ada_backend.schemas.qa_evaluation_schema import (
     BooleanEvaluationResult,
     ErrorEvaluationResult,
@@ -20,14 +20,13 @@ from ada_backend.schemas.qa_evaluation_schema import (
     JudgeEvaluationResponse,
     ScoreEvaluationResult,
 )
+from ada_backend.services.agent_runner_service import setup_tracing_context
+from ada_backend.services.entity_factory import get_llm_provider_and_model
 from ada_backend.services.errors import LLMJudgeNotFound
 from ada_backend.services.qa.qa_error import VersionOutputEmptyError
-from ada_backend.services.entity_factory import get_llm_provider_and_model
 from engine.agent.utils_prompt import fill_prompt_template
 from engine.llm_services.llm_service import CompletionService
 from engine.trace.trace_context import get_trace_manager
-from ada_backend.database.models import EvaluationType
-from pydantic import BaseModel
 
 LOGGER = logging.getLogger(__name__)
 
@@ -67,7 +66,6 @@ def _setup_judge_evaluation_context(
     judge_id: UUID,
     version_output_id: UUID,
 ) -> Tuple[LLMJudge, CompletionService, Tuple[UUID, dict, Optional[str], str]]:
-
     setup_tracing_context(session=session, project_id=project_id)
 
     judge = get_llm_judge_by_id(
@@ -100,7 +98,6 @@ async def _evaluate_single_version_output(
     completion_service: CompletionService,
     version_output_data: Tuple[UUID, dict, Optional[str], str],
 ) -> JudgeEvaluationResponse:
-
     version_output_id, input_data, groundtruth, output = version_output_data
     try:
         if not output:

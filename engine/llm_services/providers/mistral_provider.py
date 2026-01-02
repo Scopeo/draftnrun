@@ -1,19 +1,20 @@
 import asyncio
+import base64
 import json
 import logging
-import base64
-from typing import Optional, Any
-from pydantic import BaseModel
-import openai
-import mistralai
-from openai.types.chat import ChatCompletion
+from typing import Any, Optional
 
+import mistralai
+import openai
+from openai.types.chat import ChatCompletion
+from pydantic import BaseModel
+
+from engine.llm_services.constrained_output_models import (
+    convert_json_str_to_pydantic,
+    format_prompt_with_pydantic_output,
+)
 from engine.llm_services.providers.base_provider import BaseProvider
 from engine.llm_services.utils import validate_and_extract_json_response, wrap_str_content_into_chat_completion_message
-from engine.llm_services.constrained_output_models import (
-    format_prompt_with_pydantic_output,
-    convert_json_str_to_pydantic,
-)
 
 LOGGER = logging.getLogger(__name__)
 
@@ -246,20 +247,21 @@ class MistralProvider(BaseProvider):
         if len(tools) == 0 or tool_choice == "none":
             LOGGER.info("Getting structured response without tools using LLM constrained method")
 
-            structured_json_output = json.dumps(
-                {
-                    "name": structured_output_tool["function"]["name"],
-                    "schema": structured_output_tool["function"]["parameters"],
-                }
-            )
+            structured_json_output = json.dumps({
+                "name": structured_output_tool["function"]["name"],
+                "schema": structured_output_tool["function"]["parameters"],
+            })
 
-            structured_content, prompt_tokens, completion_tokens, total_tokens = (
-                await self.constrained_complete_with_json_schema(
-                    messages=messages,
-                    response_format=json.loads(structured_json_output),
-                    temperature=temperature,
-                    stream=stream,
-                )
+            (
+                structured_content,
+                prompt_tokens,
+                completion_tokens,
+                total_tokens,
+            ) = await self.constrained_complete_with_json_schema(
+                messages=messages,
+                response_format=json.loads(structured_json_output),
+                temperature=temperature,
+                stream=stream,
             )
             response = wrap_str_content_into_chat_completion_message(structured_content, self._model_name)
             return response, prompt_tokens, completion_tokens, total_tokens

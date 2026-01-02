@@ -1,17 +1,17 @@
 import logging
 from typing import Optional
 
-from opentelemetry import trace as trace_api
 from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttributes
+from opentelemetry import trace as trace_api
 
-from engine.agent.types import SourceChunk, ComponentAttributes
-from engine.trace.trace_manager import TraceManager
-from engine.storage_service.db_service import DBService
+from engine.agent.types import ComponentAttributes, SourceChunk
 from engine.agent.utils import fuzzy_matching
+from engine.storage_service.db_service import DBService
+from engine.trace.trace_manager import TraceManager
 
 NUMBER_DOCS_TO_DISPLAY_TRACE = 30
 
-QUERY_DOCUMENT_CONTENT = "SELECT * FROM {schema_name}.{table_name} WHERE " "{document_name_column} IN ({placeholders})"
+QUERY_DOCUMENT_CONTENT = "SELECT * FROM {schema_name}.{table_name} WHERE {document_name_column} IN ({placeholders})"
 
 LOGGER = logging.getLogger(__name__)
 
@@ -92,17 +92,15 @@ class DocumentSearch:
     ) -> list[SourceChunk]:
         with self.trace_manager.start_span(self.component_attributes.component_instance_name) as span:
             documents_chunks = self._get_documents_without_trace(documents_name)
-            span.set_attributes(
-                {
-                    SpanAttributes.OPENINFERENCE_SPAN_KIND: OpenInferenceSpanKindValues.RETRIEVER.value,
-                    SpanAttributes.INPUT_VALUE: documents_name,
-                    "component_instance_id": (
-                        str(self.component_attributes.component_instance_id)
-                        if self.component_attributes.component_instance_id is not None
-                        else None
-                    ),
-                }
-            )
+            span.set_attributes({
+                SpanAttributes.OPENINFERENCE_SPAN_KIND: OpenInferenceSpanKindValues.RETRIEVER.value,
+                SpanAttributes.INPUT_VALUE: documents_name,
+                "component_instance_id": (
+                    str(self.component_attributes.component_instance_id)
+                    if self.component_attributes.component_instance_id is not None
+                    else None
+                ),
+            })
 
             if len(documents_chunks) > NUMBER_DOCS_TO_DISPLAY_TRACE:
                 for i, document in enumerate(documents_chunks):
@@ -116,12 +114,10 @@ class DocumentSearch:
             else:
                 # TODO: delete this block when we refactor the trace manager
                 for i, document in enumerate(documents_chunks):
-                    span.set_attributes(
-                        {
-                            f"{SpanAttributes.RETRIEVAL_DOCUMENTS}.{i}.document.term": document.document_name,
-                            f"{SpanAttributes.RETRIEVAL_DOCUMENTS}.{i}.document.definition": document.content,
-                        }
-                    )
+                    span.set_attributes({
+                        f"{SpanAttributes.RETRIEVAL_DOCUMENTS}.{i}.document.term": document.document_name,
+                        f"{SpanAttributes.RETRIEVAL_DOCUMENTS}.{i}.document.definition": document.content,
+                    })
             span.set_status(trace_api.StatusCode.OK)
 
         return documents_chunks

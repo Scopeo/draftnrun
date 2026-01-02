@@ -3,11 +3,6 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from ada_backend.database import models as db
-from ada_backend.database.models import (
-    ParameterType,
-    UIComponent,
-    UIComponentProperties,
-)
 from ada_backend.database.component_definition_seeding import (
     upsert_component_versions,
     upsert_components,
@@ -15,6 +10,12 @@ from ada_backend.database.component_definition_seeding import (
     upsert_components_parameter_definitions,
     upsert_release_stage_to_current_version_mapping,
 )
+from ada_backend.database.models import (
+    ParameterType,
+    UIComponent,
+    UIComponentProperties,
+)
+from ada_backend.database.seed.constants import COMPLETION_MODEL_IN_DB
 from ada_backend.database.seed.seed_tool_description import TOOL_DESCRIPTION_UUIDS
 from ada_backend.database.seed.utils import (
     COMPONENT_UUIDS,
@@ -22,7 +23,6 @@ from ada_backend.database.seed.utils import (
     ParameterLLMConfig,
     build_function_calling_service_config_definitions,
 )
-from ada_backend.database.seed.constants import COMPLETION_MODEL_IN_DB
 from engine.agent.document_react_loader import INITIAL_PROMPT as DEFAULT_DOCUMENT_REACT_LOADER_PROMPT
 
 

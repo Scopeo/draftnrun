@@ -1,23 +1,23 @@
 import base64
-from dataclasses import dataclass
+import hashlib
 import logging
+import os
+from dataclasses import dataclass
+from io import BytesIO
 from pathlib import Path
 from typing import Any, Optional
 from uuid import uuid4
-from io import BytesIO
-import os
-import hashlib
 
-from PIL import Image
 from e2b import EntryInfo
 from e2b_code_interpreter import AsyncSandbox
 from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttributes
 from opentelemetry.trace import get_current_span
+from PIL import Image
 
 from engine.agent.agent import Agent
 from engine.agent.types import (
-    ChatMessage,
     AgentPayload,
+    ChatMessage,
     ComponentAttributes,
     ToolDescription,
 )
@@ -25,7 +25,6 @@ from engine.temps_folder_utils import get_output_dir
 from engine.trace.serializer import serialize_to_json
 from engine.trace.trace_manager import TraceManager
 from settings import settings
-
 
 LOGGER = logging.getLogger(__name__)
 
@@ -213,12 +212,10 @@ class PythonCodeRunner(Agent):
     ) -> AgentPayload:
         span = get_current_span()
         trace_input = str(kwargs.get("python_code", ""))
-        span.set_attributes(
-            {
-                SpanAttributes.OPENINFERENCE_SPAN_KIND: self.TRACE_SPAN_KIND,
-                SpanAttributes.INPUT_VALUE: trace_input,
-            }
-        )
+        span.set_attributes({
+            SpanAttributes.OPENINFERENCE_SPAN_KIND: self.TRACE_SPAN_KIND,
+            SpanAttributes.INPUT_VALUE: trace_input,
+        })
 
         python_code = kwargs["python_code"]
         shared_sandbox = kwargs.get("shared_sandbox")

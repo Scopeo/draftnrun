@@ -6,6 +6,7 @@ TODO: Enable these tests when migrating test suite to PostgreSQL
 """
 
 import uuid
+
 import pytest
 from sqlalchemy.orm import Session
 

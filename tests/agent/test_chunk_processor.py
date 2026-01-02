@@ -3,15 +3,15 @@ Test module for ChunkProcessor functionality.
 Tests the ability to split input data, process each chunk with a graph runner, and merge results.
 """
 
-import uuid
 import asyncio
-from unittest.mock import patch, MagicMock
+import uuid
+from unittest.mock import MagicMock, patch
 
-import pytest
 import networkx as nx
+import pytest
 
-from engine.agent.types import AgentPayload, ChatMessage, ComponentAttributes
 from engine.agent.chunk_processor import ChunkProcessor
+from engine.agent.types import AgentPayload, ChatMessage, ComponentAttributes
 from engine.graph_runner.graph_runner import GraphRunner
 from tests.mocks.dummy_agent import DummyAgent
 

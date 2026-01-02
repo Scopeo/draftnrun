@@ -12,7 +12,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from engine.agent.agent import ComponentAttributes
 from engine.agent.llm_call_agent import LLMCallAgent
 from engine.agent.react_function_calling import ReActAgent
-from engine.agent.types import NodeData, ToolDescription, AgentPayload, ChatMessage
+from engine.agent.types import AgentPayload, ChatMessage, NodeData, ToolDescription
 from engine.trace.trace_manager import TraceManager
 from tests.agent.test_llm_call_agent import make_capability_resolver
 

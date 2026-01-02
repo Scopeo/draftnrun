@@ -1,23 +1,22 @@
-from collections import OrderedDict
-from uuid import UUID
-from datetime import datetime, timedelta, timezone
 from calendar import monthrange
-import requests
+from collections import OrderedDict
+from datetime import datetime, timedelta, timezone
+from uuid import UUID
 
 import numpy as np
 import pandas as pd
+import requests
 from sqlalchemy.orm import Session
 
 from ada_backend.database.models import CallType
-from ada_backend.schemas.chart_schema import Chart, ChartData, ChartType, ChartsResponse, Dataset
+from ada_backend.repositories.credits_repository import get_organization_limit, get_organization_total_credits
+from ada_backend.schemas.chart_schema import Chart, ChartData, ChartsResponse, ChartType, Dataset
 from ada_backend.services.metrics.utils import (
-    query_trace_duration,
     calculate_calls_per_day,
     count_conversations_per_day,
+    query_trace_duration,
 )
-from ada_backend.repositories.credits_repository import get_organization_total_credits, get_organization_limit
 from settings import settings
-
 
 TOKENS_DISTRIBUTION_BINS = [0, 1000, 2000, 3000, 4000, 5000, 6000, 7000, 8000, 9000, 10000]
 
@@ -25,18 +24,16 @@ TOKENS_DISTRIBUTION_BINS = [0, 1000, 2000, 3000, 4000, 5000, 6000, 7000, 8000, 9
 def calculate_prometheus_step(duration_days: int, target_points: int = 200) -> str:
     duration_seconds = duration_days * 24 * 60 * 60
     raw_step = duration_seconds / target_points
-    step_mapping = OrderedDict(
-        [
-            (15, "15s"),
-            (30, "30s"),
-            (60, "1m"),
-            (300, "5m"),
-            (900, "15m"),
-            (3600, "1h"),
-            (21600, "6h"),
-            (86400, "1d"),
-        ]
-    )
+    step_mapping = OrderedDict([
+        (15, "15s"),
+        (30, "30s"),
+        (60, "1m"),
+        (300, "5m"),
+        (900, "15m"),
+        (3600, "1h"),
+        (21600, "6h"),
+        (86400, "1d"),
+    ])
     for threshold, step in step_mapping.items():
         if raw_step <= threshold:
             return step

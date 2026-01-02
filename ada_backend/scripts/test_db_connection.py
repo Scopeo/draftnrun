@@ -3,9 +3,11 @@
 Simple script to test database connection.
 Run with: python -m ada_backend.scripts.test_db_connection
 """
+
 import sys
-from sqlalchemy.exc import SQLAlchemyError
+
 from sqlalchemy import inspect, text
+from sqlalchemy.exc import SQLAlchemyError
 
 from ada_backend.database.setup_db import engine, get_db_url
 from settings import settings
