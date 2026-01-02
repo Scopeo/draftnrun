@@ -21,12 +21,12 @@ from ada_backend.services.llm_models_service import (
     get_model_id_by_name_service,
 )
 from ada_backend.services.user_roles_service import get_user_access_to_organization
-from engine.agent.rag.cohere_reranker import CohereReranker
-from engine.agent.rag.formatter import Formatter
-from engine.agent.rag.retriever import Retriever
-from engine.agent.rag.vocabulary_search import VocabularySearch
-from engine.agent.synthesizer import Synthesizer
-from engine.agent.types import ToolDescription
+from engine.components.rag.cohere_reranker import CohereReranker
+from engine.components.rag.formatter import Formatter
+from engine.components.rag.retriever import Retriever
+from engine.components.rag.vocabulary_search import VocabularySearch
+from engine.components.synthesizer import Synthesizer
+from engine.components.types import ToolDescription
 from engine.llm_services.llm_service import CompletionService, EmbeddingService, OCRService, WebSearchService
 from engine.qdrant_service import QdrantCollectionSchema, QdrantService
 from engine.storage_service.local_service import SQLLocalService

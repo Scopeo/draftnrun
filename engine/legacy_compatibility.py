@@ -13,7 +13,7 @@ from typing import Any, Optional, Type
 
 from pydantic import BaseModel
 
-from engine.agent.types import AgentPayload, ChatMessage, NodeData
+from engine.components.types import AgentPayload, ChatMessage, NodeData
 from engine.trace.serializer import serialize_to_json
 
 LOGGER = logging.getLogger(__name__)

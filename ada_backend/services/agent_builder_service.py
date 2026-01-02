@@ -25,11 +25,11 @@ from ada_backend.schemas.pipeline.base import ToolDescriptionSchema
 from ada_backend.services.errors import MissingDataSourceError
 from ada_backend.services.registry import FACTORY_REGISTRY
 from ada_backend.utils.secret_resolver import replace_secret_placeholders
-from engine.agent.errors import (
+from engine.components.errors import (
     KeyTypePromptTemplateError,
     MissingKeyPromptTemplateError,
 )
-from engine.agent.types import ComponentAttributes, ToolDescription
+from engine.components.types import ComponentAttributes, ToolDescription
 
 LOGGER = logging.getLogger(__name__)
 

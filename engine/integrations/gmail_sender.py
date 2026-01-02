@@ -11,8 +11,8 @@ from opentelemetry.trace import get_current_span
 from pydantic import BaseModel, Field, validator
 
 from ada_backend.database.setup_db import get_db
-from engine.agent.agent import Agent
-from engine.agent.types import ComponentAttributes, ToolDescription
+from engine.components.component import Component
+from engine.components.types import ComponentAttributes, ToolDescription
 from engine.integrations.utils import get_gmail_sender_service, get_google_user_email, get_oauth_access_token
 from engine.temps_folder_utils import get_output_dir
 from engine.trace.trace_manager import TraceManager
@@ -142,7 +142,7 @@ def create_raw_mail_message(
     return {"raw": encoded_message}
 
 
-class GmailSender(Agent):
+class GmailSender(Component):
     TRACE_SPAN_KIND = OpenInferenceSpanKindValues.TOOL.value
     migrated = True
 
@@ -239,9 +239,11 @@ class GmailSender(Agent):
         if not inputs.mail_subject or not inputs.mail_body:
             raise ValueError("Both email_subject and email_body must be provided")
         span = get_current_span()
-        span.set_attributes({
-            SpanAttributes.INPUT_VALUE: f"Subject: {inputs.mail_subject}\n Body: {inputs.mail_body}",
-        })
+        span.set_attributes(
+            {
+                SpanAttributes.INPUT_VALUE: f"Subject: {inputs.mail_subject}\n Body: {inputs.mail_body}",
+            }
+        )
         if self.save_as_draft or not inputs.email_recipients:
             LOGGER.info("Creating draft email")
             draft = self.gmail_create_draft(

@@ -43,7 +43,7 @@ from ada_backend.services.project_service import (
     update_project_service,
 )
 from ada_backend.services.tag_service import compose_tag_name
-from engine.agent.errors import (
+from engine.components.errors import (
     KeyTypePromptTemplateError,
     MissingKeyPromptTemplateError,
 )

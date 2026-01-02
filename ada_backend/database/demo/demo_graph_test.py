@@ -10,7 +10,7 @@ from ada_backend.schemas.pipeline.base import (
     ToolDescriptionSchema,
 )
 from ada_backend.schemas.pipeline.graph_schema import EdgeSchema, GraphUpdateSchema, PortMappingSchema
-from engine.agent.rag.rag import format_rag_tool_description
+from engine.components.rag.rag import format_rag_tool_description
 
 GRAPH_TEST_TOOL_DESCRIPTION = ToolDescriptionSchema(
     name="Graph Test Chatbot",

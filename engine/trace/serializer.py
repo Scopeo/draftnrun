@@ -1,7 +1,7 @@
 import json
 from typing import Any, Optional
 
-from engine.agent.utils import shorten_base64_string
+from engine.components.utils import shorten_base64_string
 
 
 # TODO : when observability will handle json display, change the default indent to 0

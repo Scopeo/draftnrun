@@ -5,11 +5,11 @@ This agent simply adds a prefix to input messages, useful for testing graph flow
 
 import uuid
 
-from engine.agent.agent import Agent
-from engine.agent.types import AgentPayload, ChatMessage, ComponentAttributes, ToolDescription
+from engine.components.component import Component
+from engine.components.types import AgentPayload, ChatMessage, ComponentAttributes, ToolDescription
 
 
-class DummyAgent(Agent):
+class DummyAgent(Component):
     """A reusable dummy agent for testing that adds a prefix to the input message"""
 
     def __init__(self, trace_manager, prefix: str, agent_id: str = None):

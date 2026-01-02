@@ -11,7 +11,7 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.sql.type_api import TypeEngine
 
-from engine.agent.agent import ComponentAttributes
+from engine.components.component import ComponentAttributes
 from engine.storage_service.db_service import DBService
 from engine.storage_service.db_utils import (
     CHUNK_ID_COLUMN,

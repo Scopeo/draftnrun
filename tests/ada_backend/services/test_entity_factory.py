@@ -11,7 +11,7 @@ from ada_backend.services.entity_factory import (
     get_llm_provider_and_model,
     pydantic_processor,
 )
-from engine.agent.types import ToolDescription
+from engine.components.types import ToolDescription
 from engine.trace.trace_context import get_trace_manager
 from engine.trace.trace_manager import TraceManager
 

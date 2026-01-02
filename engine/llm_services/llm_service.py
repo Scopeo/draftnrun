@@ -10,8 +10,8 @@ from openinference.semconv.trace import SpanAttributes
 from opentelemetry.trace import get_current_span
 from pydantic import BaseModel
 
-from engine.agent.types import ToolDescription
-from engine.agent.utils import load_str_to_json
+from engine.components.types import ToolDescription
+from engine.components.utils import load_str_to_json
 from engine.llm_services.constrained_output_models import OutputFormatModel
 from engine.llm_services.providers import create_provider
 from engine.trace.trace_manager import TraceManager
