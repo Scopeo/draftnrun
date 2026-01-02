@@ -35,7 +35,7 @@ from ada_backend.database.seed.utils import (
 def seed_llm_call_components(session: Session):
     llm_call = db.Component(
         id=COMPONENT_UUIDS["llm_call"],
-        name="Ask AI",
+        name="AI",
         is_agent=True,
         function_callable=True,
         icon="tabler-message-chatbot",

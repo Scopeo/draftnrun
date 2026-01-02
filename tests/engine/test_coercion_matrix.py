@@ -7,8 +7,8 @@ is stable and handles all the critical type mismatches found during QA.
 
 import pytest
 
-from engine.agent.types import AgentPayload, ChatMessage, SourceChunk
 from engine.coercion_matrix import CoercionError, CoercionMatrix, coerce_value, get_coercion_matrix
+from engine.components.types import AgentPayload, ChatMessage, SourceChunk
 
 
 def test_primitive_coercions():

@@ -2,7 +2,7 @@ from typing import Dict, Optional, Protocol, Type, runtime_checkable
 
 from pydantic import BaseModel
 
-from engine.agent.types import AgentPayload, NodeData, ToolDescription
+from engine.components.types import AgentPayload, NodeData, ToolDescription
 
 
 @runtime_checkable

@@ -14,7 +14,7 @@ from ada_backend.database.models import Component, ParameterType, UIComponent, U
 from ada_backend.database.seed.seed_categories import CATEGORY_UUIDS
 from ada_backend.database.seed.seed_tool_description import TOOL_DESCRIPTION_UUIDS
 from ada_backend.database.seed.utils import COMPONENT_UUIDS, COMPONENT_VERSION_UUIDS
-from engine.agent.pdf_generation_tool import DEFAULT_CSS_FORMATTING
+from engine.components.pdf_generation_tool import DEFAULT_CSS_FORMATTING
 
 
 def seed_pdf_generation_components(session: Session):

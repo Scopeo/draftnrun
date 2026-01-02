@@ -11,7 +11,7 @@ for the type pairs you need, and the system handles the rest.
 import logging
 from typing import Any, Callable, Optional, Type, Union, get_args, get_origin
 
-from engine.agent.types import AgentPayload, ChatMessage, SourceChunk
+from engine.components.types import AgentPayload, ChatMessage, SourceChunk
 
 LOGGER = logging.getLogger(__name__)
 

@@ -30,38 +30,38 @@ from ada_backend.services.entity_factory import (
     compose_processors,
     detect_and_convert_dataclasses,
 )
-from engine.agent.chunk_processor import ChunkProcessor
-from engine.agent.document_enhanced_llm_call import DocumentEnhancedLLMCallAgent
-from engine.agent.document_react_loader import DocumentReactLoaderAgent
-from engine.agent.docx_generation_tool import DOCXGenerationTool
-from engine.agent.filter import Filter
-from engine.agent.graph_runner_block import GraphRunnerBlock
-from engine.agent.hybrid_synthesizer import HybridSynthesizer
-from engine.agent.inputs_outputs.start import Start
-from engine.agent.llm_call_agent import LLMCallAgent
-from engine.agent.ocr_call import OCRCall
-from engine.agent.pdf_generation_tool import PDFGenerationTool
-from engine.agent.rag.chunk_selection import RelevantChunkSelector
-from engine.agent.rag.cohere_reranker import CohereReranker
-from engine.agent.rag.document_search import DocumentSearch
-from engine.agent.rag.formatter import Formatter
-from engine.agent.rag.hybrid_rag import HybridRAG
-from engine.agent.rag.rag import RAG
-from engine.agent.rag.retriever import Retriever
-from engine.agent.rag.vocabulary_search import VocabularySearch
-from engine.agent.react_function_calling import ReActAgent
-from engine.agent.sql.react_sql_tool import ReactSQLAgent
-from engine.agent.sql.run_sql_query_tool import RunSQLQueryTool
-from engine.agent.sql.sql_tool import SQLTool
-from engine.agent.static_responder import StaticResponder
-from engine.agent.synthesizer import Synthesizer
-from engine.agent.tools.api_call_tool import APICallTool
-from engine.agent.tools.docx_template import DocxTemplateAgent
-from engine.agent.tools.linkup_tool import LinkupSearchTool
-from engine.agent.tools.python_code_runner import PythonCodeRunner
-from engine.agent.tools.tavily_search_tool import TavilyApiTool
-from engine.agent.tools.terminal_command_runner import TerminalCommandRunner
-from engine.agent.web_search_tool_openai import WebSearchOpenAITool
+from engine.components.ai_agent import AIAgent
+from engine.components.chunk_processor import ChunkProcessor
+from engine.components.document_enhanced_llm_call import DocumentEnhancedLLMCallAgent
+from engine.components.document_react_loader import DocumentReactLoaderAgent
+from engine.components.docx_generation_tool import DOCXGenerationTool
+from engine.components.filter import Filter
+from engine.components.graph_runner_block import GraphRunnerBlock
+from engine.components.hybrid_synthesizer import HybridSynthesizer
+from engine.components.inputs_outputs.start import Start
+from engine.components.llm_call import LLMCallAgent
+from engine.components.ocr_call import OCRCall
+from engine.components.pdf_generation_tool import PDFGenerationTool
+from engine.components.rag.chunk_selection import RelevantChunkSelector
+from engine.components.rag.cohere_reranker import CohereReranker
+from engine.components.rag.document_search import DocumentSearch
+from engine.components.rag.formatter import Formatter
+from engine.components.rag.hybrid_rag import HybridRAG
+from engine.components.rag.rag import RAG
+from engine.components.rag.retriever import Retriever
+from engine.components.rag.vocabulary_search import VocabularySearch
+from engine.components.sql.react_sql_tool import ReactSQLAgent
+from engine.components.sql.run_sql_query_tool import RunSQLQueryTool
+from engine.components.sql.sql_tool import SQLTool
+from engine.components.static_responder import StaticResponder
+from engine.components.synthesizer import Synthesizer
+from engine.components.tools.api_call_tool import APICallTool
+from engine.components.tools.docx_template import DocxTemplateAgent
+from engine.components.tools.linkup_tool import LinkupSearchTool
+from engine.components.tools.python_code_runner import PythonCodeRunner
+from engine.components.tools.tavily_search_tool import TavilyApiTool
+from engine.components.tools.terminal_command_runner import TerminalCommandRunner
+from engine.components.web_search_tool_openai import WebSearchOpenAITool
 from engine.integrations.gmail_sender import GmailSender
 from engine.storage_service.local_service import SQLLocalService
 from engine.storage_service.snowflake_service.snowflake_service import SnowflakeService
@@ -149,48 +149,60 @@ def create_factory_registry() -> FactoryRegistry:
     trace_manager_processor = build_trace_manager_processor()
 
     completion_service_processor = compose_processors(
-        build_param_name_translator({
-            # Name from DB -> Name in processor
-            COMPLETION_MODEL_IN_DB: "completion_model",
-            TEMPERATURE_IN_DB: "temperature",
-            VERBOSITY_IN_DB: "verbosity",
-            REASONING_IN_DB: "reasoning",
-            "api_key": "llm_api_key",
-        }),
+        build_param_name_translator(
+            {
+                # Name from DB -> Name in processor
+                COMPLETION_MODEL_IN_DB: "completion_model",
+                TEMPERATURE_IN_DB: "temperature",
+                VERBOSITY_IN_DB: "verbosity",
+                REASONING_IN_DB: "reasoning",
+                "api_key": "llm_api_key",
+            }
+        ),
         build_completion_service_processor(),
     )
     qdrant_service_processor = compose_processors(
-        build_param_name_translator({
-            "qdrant_collection_schema": "default_collection_schema",
-            EMBEDDING_MODEL_IN_DB: "embedding_model",
-            "api_key": "llm_api_key",
-        }),
+        build_param_name_translator(
+            {
+                "qdrant_collection_schema": "default_collection_schema",
+                EMBEDDING_MODEL_IN_DB: "embedding_model",
+                "api_key": "llm_api_key",
+            }
+        ),
         build_qdrant_service_processor(),
     )
     web_service_processor = compose_processors(
-        build_param_name_translator({
-            COMPLETION_MODEL_IN_DB: "completion_model",
-            "api_key": "llm_api_key",
-        }),
+        build_param_name_translator(
+            {
+                COMPLETION_MODEL_IN_DB: "completion_model",
+                "api_key": "llm_api_key",
+            }
+        ),
         build_web_service_processor(),
     )
     ocr_service_processor = compose_processors(
-        build_param_name_translator({
-            COMPLETION_MODEL_IN_DB: "completion_model",
-            "api_key": "llm_api_key",
-        }),
+        build_param_name_translator(
+            {
+                COMPLETION_MODEL_IN_DB: "completion_model",
+                "api_key": "llm_api_key",
+            }
+        ),
         build_ocr_service_processor(),
     )
     synthesizer_processor = compose_processors(
-        build_param_name_translator({
-            "api_key": "llm_api_key",
-        }),
+        build_param_name_translator(
+            {
+                "api_key": "llm_api_key",
+            }
+        ),
         build_synthesizer_processor(),
     )
     retriever_processor = compose_processors(
-        build_param_name_translator({
-            "api_key": "llm_api_key",
-        }),
+        build_param_name_translator(
+            {
+                "api_key": "llm_api_key",
+            }
+        ),
         build_retriever_processor(),
     )
     reranker_processor = build_reranker_processor()
@@ -287,7 +299,7 @@ def create_factory_registry() -> FactoryRegistry:
     registry.register(
         component_version_id=COMPONENT_VERSION_UUIDS["base_ai_agent"],
         factory=AgentFactory(
-            entity_class=ReActAgent,
+            entity_class=AIAgent,
             parameter_processors=[
                 completion_service_processor,
             ],
@@ -463,7 +475,7 @@ def create_factory_registry() -> FactoryRegistry:
         ),
     )
     registry.register(
-        component_version_id=COMPONENT_VERSION_UUIDS["document_enhanced_llm_call_agent"],
+        component_version_id=COMPONENT_VERSION_UUIDS["document_enhanced_llm_call"],
         factory=AgentFactory(
             entity_class=DocumentEnhancedLLMCallAgent,
         ),

@@ -6,9 +6,9 @@ import networkx as nx
 import pytest
 from pydantic import BaseModel
 
-from engine.agent.agent import Agent
-from engine.agent.static_responder import StaticResponder
-from engine.agent.types import AgentPayload, ChatMessage, ComponentAttributes, ToolDescription
+from engine.components.component import Component
+from engine.components.static_responder import StaticResponder
+from engine.components.types import AgentPayload, ChatMessage, ComponentAttributes, ToolDescription
 from engine.graph_runner.graph_runner import GraphRunner
 from engine.graph_runner.port_management import get_component_port_type
 from engine.legacy_compatibility import get_unmigrated_output_type
@@ -20,7 +20,7 @@ from tests.mocks.dummy_agent import DummyAgent
 # ============================================================================
 
 
-class MockIntOutputAgent(Agent):
+class MockIntOutputAgent(Component):
     """Mock agent that outputs int values."""
 
     migrated = True
@@ -55,7 +55,7 @@ class MockIntOutputAgent(Agent):
         return self.Outputs(output=42)
 
 
-class MockListInputAgent(Agent):
+class MockListInputAgent(Component):
     """Mock agent that expects list[ChatMessage] input."""
 
     migrated = True
@@ -133,7 +133,7 @@ def patch_prometheus_metrics():
         yield
 
 
-class EchoAgent(Agent):
+class EchoAgent(Component):
     """Deterministic migrated agent that echoes its input into an 'output' port.
 
     - input port: 'input'

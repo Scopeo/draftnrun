@@ -7,8 +7,8 @@ from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttribu
 from opentelemetry import trace as trace_api
 
 from engine import legacy_compatibility
-from engine.agent.types import AgentPayload, NodeData
 from engine.coercion_matrix import CoercionMatrix, create_default_coercion_matrix
+from engine.components.types import AgentPayload, NodeData
 from engine.field_expressions.ast import ExpressionNode, RefNode
 from engine.field_expressions.traversal import select_nodes
 from engine.graph_runner.field_expression_management import evaluate_expression
@@ -128,10 +128,12 @@ class GraphRunner:
 
         with self.trace_manager.start_span("Workflow", isolate_context=is_root_execution) as span:
             trace_input = serialize_to_json(input_data, shorten_string=True)
-            span.set_attributes({
-                SpanAttributes.OPENINFERENCE_SPAN_KIND: self.TRACE_SPAN_KIND,
-                SpanAttributes.INPUT_VALUE: trace_input,
-            })
+            span.set_attributes(
+                {
+                    SpanAttributes.OPENINFERENCE_SPAN_KIND: self.TRACE_SPAN_KIND,
+                    SpanAttributes.INPUT_VALUE: trace_input,
+                }
+            )
             # Legacy compatibility shim: accept AgentPayload or dict and normalize to dict for internal runner.
             # Long-term target: GraphRunner.run should accept NodeData only; remove when callers stop
             # passing AgentPayload/dict and provide NodeData instead.
@@ -142,9 +144,11 @@ class GraphRunner:
             final_output = await self._run_without_io_trace(normalized_input)
 
             trace_output = serialize_to_json(final_output, shorten_string=True)
-            span.set_attributes({
-                SpanAttributes.OUTPUT_VALUE: trace_output,
-            })
+            span.set_attributes(
+                {
+                    SpanAttributes.OUTPUT_VALUE: trace_output,
+                }
+            )
             span.set_status(trace_api.StatusCode.OK)
 
             params = get_tracing_span()

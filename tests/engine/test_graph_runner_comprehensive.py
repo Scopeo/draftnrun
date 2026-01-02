@@ -11,7 +11,7 @@ import networkx as nx
 import pytest
 from pydantic import BaseModel
 
-from engine.agent.types import ChatMessage
+from engine.components.types import ChatMessage
 from engine.graph_runner.graph_runner import GraphRunner
 from engine.trace.trace_manager import TraceManager
 from tests.mocks.dummy_agent import DummyAgent

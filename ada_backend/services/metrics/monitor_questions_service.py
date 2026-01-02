@@ -5,7 +5,7 @@ from uuid import UUID
 import pandas as pd
 
 from ada_backend.schemas.monitor_schema import OccurenceQuestionsList
-from engine.agent.types import AgentPayload
+from engine.components.types import AgentPayload
 from engine.llm_services.llm_service import CompletionService
 from engine.storage_service.db_service import DBService
 from engine.storage_service.db_utils import DBColumn, DBDefinition

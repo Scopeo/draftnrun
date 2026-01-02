@@ -3,7 +3,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from engine.agent.types import ToolDescription
+from engine.components.types import ToolDescription
 from engine.llm_services.llm_service import CompletionService, VisionService
 
 from .capability_matrix import get_provider_model_pairs, get_provider_required_settings

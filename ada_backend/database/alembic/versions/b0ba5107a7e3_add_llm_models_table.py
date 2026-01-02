@@ -365,7 +365,7 @@ def upgrade() -> None:
                     '303ff9a5-3264-472c-b69f-c2da5be3bac8',  -- hybrid_synthesizer
                     '079512c6-28e2-455f-af2c-f196015534bd',  -- formatter
                     '1F7334BE-7164-4440-BBF3-E986EED0388F',  -- static_responder
-                    '6460b304-640c-4468-abd3-67bbff6902d4',  -- document_enhanced_llm_call_agent
+                    '6460b304-640c-4468-abd3-67bbff6902d4',  -- document_enhanced_llm_call
                     '5d9f0f3e-2b4c-5678-9012-345678901bcd'   -- chunk_processor
                 )
             """
