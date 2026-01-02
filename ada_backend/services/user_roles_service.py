@@ -1,8 +1,9 @@
 from typing import Any
 from uuid import UUID
+
 import httpx
 
-from ada_backend.schemas.auth_schema import SupabaseUser, OrganizationAccess
+from ada_backend.schemas.auth_schema import OrganizationAccess, SupabaseUser
 from ada_backend.segment_analytics import identify_user_access_org
 from settings import settings
 

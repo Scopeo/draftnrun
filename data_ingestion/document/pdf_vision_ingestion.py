@@ -1,21 +1,22 @@
-import fitz
 import io
 import logging
 import uuid
-from typing import Callable, List, Any, Dict, Optional
 from enum import Enum
+from typing import Any, Callable, Dict, List, Optional
+
+import fitz
 from pydantic import BaseModel
 
-from engine.llm_services.llm_service import VisionService
-from data_ingestion.document.folder_management.folder_management import FileDocument, FileChunk
+from data_ingestion.document.folder_management.folder_management import FileChunk, FileDocument
 from data_ingestion.document.prompts_vision_ingestion import (
-    PPTX_CONTENT_EXTRACTION_PROMPT,
-    PDF_TABLE_OF_CONTENT_EXTRACTION_PROMPT,
-    PDF_STRUCTURED_CONTENT_EXTRACTION_PROMPT,
     PDF_CONTENT_EXTRACTION_PROMPT,
+    PDF_STRUCTURED_CONTENT_EXTRACTION_PROMPT,
+    PDF_TABLE_OF_CONTENT_EXTRACTION_PROMPT,
+    PPTX_CONTENT_EXTRACTION_PROMPT,
     PROMPT_DETERMINE_FILE_TYPE,
 )
 from data_ingestion.markdown.tree_chunker import parse_markdown_to_chunks
+from engine.llm_services.llm_service import VisionService
 from settings import settings
 
 LOGGER = logging.getLogger(__name__)
@@ -369,9 +370,7 @@ async def create_chunks_from_document(
                     images_content_list=images_content_list,
                 )
             except Exception as e:
-                LOGGER.error(
-                    f"Error processing with table of contents: {e}. " "Falling back to page-by-page processing."
-                )
+                LOGGER.error(f"Error processing with table of contents: {e}. Falling back to page-by-page processing.")
         else:
             LOGGER.info("Table of contents is empty. Falling back to page-by-page processing.")
 

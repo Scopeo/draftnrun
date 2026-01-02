@@ -5,38 +5,38 @@ from prometheus_client import start_http_server
 from prometheus_fastapi_instrumentator import PrometheusFastApiInstrumentator
 
 from ada_backend.admin.admin import setup_admin
+from ada_backend.graphql.schema import graphql_router
 from ada_backend.instrumentation import setup_performance_instrumentation
 from ada_backend.middleware.request_context import RequestContextMiddleware
-from ada_backend.routers.categories_router import router as categories_router
-from ada_backend.routers.project_router import router as project_router
-from ada_backend.routers.template_router import router as template_router
-from ada_backend.routers.integration_router import router as integration_router
-from ada_backend.routers.global_secret_router import router as global_secret_router
-from ada_backend.routers.auth_router import router as auth_router
-from ada_backend.routers.source_router import router as source_router
-from ada_backend.routers.ingestion_task_router import router as ingestion_task_router
-from ada_backend.routers.components_router import router as components_router
-from ada_backend.routers.component_version_router import router as component_version_router
-from ada_backend.routers.graph_router import router as graph_router
-from ada_backend.routers.s3_files_router import router as s3_files_router
-from ada_backend.routers.quality_assurance_router import router as quality_assurance_router
-from ada_backend.routers.llm_judges_router import router as llm_judges_router
-from ada_backend.routers.qa_evaluation_router import router as qa_evaluation_router
-from ada_backend.graphql.schema import graphql_router
-from ada_backend.routers.organization_router import router as org_router
-from ada_backend.routers.trace_router import router as trace_router
 from ada_backend.routers.admin_tools_router import router as admin_tools_router
-from ada_backend.routers.cron_router import router as cron_router
 from ada_backend.routers.agent_router import router as agent_router
+from ada_backend.routers.auth_router import router as auth_router
+from ada_backend.routers.categories_router import router as categories_router
+from ada_backend.routers.component_version_router import router as component_version_router
+from ada_backend.routers.components_router import router as components_router
+from ada_backend.routers.credits_router import router as credits_router
+from ada_backend.routers.cron_router import router as cron_router
+from ada_backend.routers.global_secret_router import router as global_secret_router
+from ada_backend.routers.graph_router import router as graph_router
+from ada_backend.routers.ingestion_database_router import router as ingestion_database_router
+from ada_backend.routers.ingestion_task_router import router as ingestion_task_router
+from ada_backend.routers.integration_router import router as integration_router
 from ada_backend.routers.knowledge_router import router as knowledge_router
+from ada_backend.routers.llm_judges_router import router as llm_judges_router
+from ada_backend.routers.llm_models_router import router as llm_models_router
+from ada_backend.routers.organization_router import router as org_router
+from ada_backend.routers.project_router import router as project_router
+from ada_backend.routers.qa_evaluation_router import router as qa_evaluation_router
+from ada_backend.routers.quality_assurance_router import router as quality_assurance_router
+from ada_backend.routers.s3_files_router import router as s3_files_router
+from ada_backend.routers.source_router import router as source_router
+from ada_backend.routers.template_router import router as template_router
+from ada_backend.routers.trace_router import router as trace_router
+from ada_backend.routers.widget_router import router as widget_router
 from engine.trace.trace_context import set_trace_manager
 from engine.trace.trace_manager import TraceManager
-from settings import settings
 from logger import setup_logging
-from ada_backend.routers.ingestion_database_router import router as ingestion_database_router
-from ada_backend.routers.llm_models_router import router as llm_models_router
-from ada_backend.routers.credits_router import router as credits_router
-from ada_backend.routers.widget_router import router as widget_router
+from settings import settings
 
 setup_logging()
 

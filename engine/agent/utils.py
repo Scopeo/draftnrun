@@ -1,15 +1,14 @@
 import json
+import logging
 import re
 import string
-from typing import Union, Any
-from typing import Callable, Optional, Tuple
 from datetime import datetime
 from pathlib import Path
-import logging
-
-from engine.temps_folder_utils import get_output_dir
+from typing import Any, Callable, Optional, Tuple, Union
 
 from fuzzywuzzy import fuzz, process
+
+from engine.temps_folder_utils import get_output_dir
 
 LOGGER = logging.getLogger(__name__)
 BASE64_CHARS = set("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=")
@@ -74,19 +73,15 @@ def parse_openai_message_format(message: Union[str, list]) -> tuple[str, list[di
                 if "text" in item:
                     text_content += item["text"]
                 if "file" in item:
-                    files_content.append(
-                        {
-                            "type": "file",
-                            "file": item["file"],
-                        }
-                    )
+                    files_content.append({
+                        "type": "file",
+                        "file": item["file"],
+                    })
                 if "image_url" in item:
-                    images_content.append(
-                        {
-                            "type": "image_url",
-                            "image_url": item["image_url"],
-                        }
-                    )
+                    images_content.append({
+                        "type": "image_url",
+                        "image_url": item["image_url"],
+                    })
 
     return text_content, files_content, images_content
 

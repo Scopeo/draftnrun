@@ -1,11 +1,12 @@
-import pytest
-from pydantic import BaseModel
 from typing import Optional
 
+import pytest
+from pydantic import BaseModel
+
 from engine.llm_services.constrained_output_models import (
-    search_for_json_object,
     convert_json_str_to_pydantic,
     format_prompt_with_pydantic_output,
+    search_for_json_object,
 )
 
 

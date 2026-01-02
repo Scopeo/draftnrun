@@ -1,29 +1,29 @@
-from typing import Annotated, List
 import logging
+from typing import Annotated, List
 from uuid import UUID
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from ada_backend.database.setup_db import get_db
+from ada_backend.routers.auth_router import (
+    UserRights,
+    user_has_access_to_organization_dependency,
+    user_has_access_to_organization_xor_verify_api_key,
+    verify_ingestion_api_key_dependency,
+)
 from ada_backend.schemas.auth_schema import SupabaseUser
 from ada_backend.schemas.source_schema import (
     DataSourceSchema,
     DataSourceSchemaResponse,
     ProjectUsingSourceSchema,
 )
-
-from ada_backend.routers.auth_router import (
-    user_has_access_to_organization_dependency,
-    UserRights,
-    verify_ingestion_api_key_dependency,
-    user_has_access_to_organization_xor_verify_api_key,
-)
 from ada_backend.services.source_service import (
-    get_sources_by_organization,
+    check_source_id_usage_service,
     create_source_by_organization,
     delete_source_service,
+    get_sources_by_organization,
     update_source_by_source_id,
-    check_source_id_usage_service,
 )
 
 router = APIRouter(tags=["Sources"])
@@ -169,7 +169,6 @@ def check_source_usage(
     ],
     session: Session = Depends(get_db),
 ) -> list[ProjectUsingSourceSchema]:
-
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
     try:

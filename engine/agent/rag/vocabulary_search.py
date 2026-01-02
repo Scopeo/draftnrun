@@ -1,11 +1,12 @@
 from typing import Optional
-import pandas as pd
-from opentelemetry import trace as trace_api
-from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttributes
 
-from engine.agent.types import TermDefinition, ComponentAttributes
-from engine.trace.trace_manager import TraceManager
+import pandas as pd
+from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttributes
+from opentelemetry import trace as trace_api
+
+from engine.agent.types import ComponentAttributes, TermDefinition
 from engine.agent.utils import fuzzy_matching
+from engine.trace.trace_manager import TraceManager
 
 NUMBER_CHUNKS_TO_DISPLAY_TRACE = 30
 VOCABULARY_CONTEXT_PROMPT_KEY = "retrieved_definitions"
@@ -71,17 +72,15 @@ class VocabularySearch:
     ) -> list[TermDefinition]:
         with self.trace_manager.start_span(self.component_attributes.component_instance_name) as span:
             chunks = self._get_chunks_without_trace(query_text)
-            span.set_attributes(
-                {
-                    SpanAttributes.OPENINFERENCE_SPAN_KIND: OpenInferenceSpanKindValues.RETRIEVER.value,
-                    SpanAttributes.INPUT_VALUE: query_text,
-                    "component_instance_id": (
-                        str(self.component_attributes.component_instance_id)
-                        if self.component_attributes.component_instance_id is not None
-                        else None
-                    ),
-                }
-            )
+            span.set_attributes({
+                SpanAttributes.OPENINFERENCE_SPAN_KIND: OpenInferenceSpanKindValues.RETRIEVER.value,
+                SpanAttributes.INPUT_VALUE: query_text,
+                "component_instance_id": (
+                    str(self.component_attributes.component_instance_id)
+                    if self.component_attributes.component_instance_id is not None
+                    else None
+                ),
+            })
 
             if len(chunks) > NUMBER_CHUNKS_TO_DISPLAY_TRACE:
                 for i, chunk in enumerate(chunks):
@@ -95,12 +94,10 @@ class VocabularySearch:
             else:
                 # TODO: delete this block when we refactor the trace manager
                 for i, chunk in enumerate(chunks):
-                    span.set_attributes(
-                        {
-                            f"{SpanAttributes.RETRIEVAL_DOCUMENTS}.{i}.document.content": chunk.definition,
-                            f"{SpanAttributes.RETRIEVAL_DOCUMENTS}.{i}.document.id": chunk.term,
-                        }
-                    )
+                    span.set_attributes({
+                        f"{SpanAttributes.RETRIEVAL_DOCUMENTS}.{i}.document.content": chunk.definition,
+                        f"{SpanAttributes.RETRIEVAL_DOCUMENTS}.{i}.document.id": chunk.term,
+                    })
             span.set_status(trace_api.StatusCode.OK)
 
         return chunks

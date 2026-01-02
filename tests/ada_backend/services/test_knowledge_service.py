@@ -5,8 +5,8 @@ Only the embedding service (LLM calls) is mocked.
 
 import asyncio
 import logging
-from typing import Iterator
 from types import SimpleNamespace
+from typing import Iterator
 from unittest.mock import AsyncMock, MagicMock, Mock
 from uuid import uuid4
 

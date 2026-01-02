@@ -6,7 +6,7 @@ embedding engine/backend policy.
 
 from collections.abc import Callable, Iterator
 
-from engine.field_expressions.ast import ExpressionNode, LiteralNode, RefNode, ConcatNode
+from engine.field_expressions.ast import ConcatNode, ExpressionNode, LiteralNode, RefNode
 
 
 def walk(expr: ExpressionNode) -> Iterator[ExpressionNode]:

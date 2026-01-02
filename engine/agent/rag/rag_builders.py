@@ -1,14 +1,14 @@
 import logging
 from typing import Optional
 
-from engine.agent.types import ToolDescription
 from engine.agent.rag.rag import RAG, format_rag_tool_description
-from engine.agent.rag.retriever import Retriever, DummyRetriever
-from engine.qdrant_service import QdrantService, QdrantCollectionSchema
-from engine.trace.trace_manager import TraceManager
+from engine.agent.rag.retriever import DummyRetriever, Retriever
 from engine.agent.synthesizer import Synthesizer
 from engine.agent.synthesizer_prompts import get_synthetizer_prompt_template_slack
+from engine.agent.types import ToolDescription
 from engine.llm_services.llm_service import CompletionService
+from engine.qdrant_service import QdrantCollectionSchema, QdrantService
+from engine.trace.trace_manager import TraceManager
 
 LOGGER = logging.getLogger(__name__)
 

@@ -1,13 +1,12 @@
 from typing import Optional
 
-from engine.agent.types import ToolDescription, ComponentAttributes
 from engine.agent.react_function_calling import ReActAgent
 from engine.agent.sql.run_sql_query_tool import RunSQLQueryTool
+from engine.agent.types import ComponentAttributes, ToolDescription
 from engine.llm_services.llm_service import CompletionService
 from engine.storage_service.db_service import DBService
-from engine.trace.trace_manager import TraceManager
 from engine.storage_service.snowflake_service.snowflake_service import SnowflakeService
-
+from engine.trace.trace_manager import TraceManager
 
 DEFAULT_REACT_SQL_TOOL_DESCRIPTION = ToolDescription(
     name="React_SQL_Tool",
@@ -81,7 +80,7 @@ class ReactSQLAgent(ReActAgent):
                 f"Error: {str(e)}"
             ) from e
         except Exception as e:
-            raise ValueError(f"Failed to get database schema description. " f"Error: {str(e)}") from e
+            raise ValueError(f"Failed to get database schema description. Error: {str(e)}") from e
 
         initial_prompt = prompt.format(
             additional_db_description=additional_db_description, schema=schema, dialect=db_service.dialect

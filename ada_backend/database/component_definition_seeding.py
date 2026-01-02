@@ -4,9 +4,8 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from ada_backend.database import models as db
-from ada_backend.database.utils import update_model_fields, models_are_equal
+from ada_backend.database.utils import models_are_equal, update_model_fields
 from ada_backend.repositories.release_stage_repository import upsert_release_stage_mapping_core
-
 
 LOGGER = logging.getLogger(__name__)
 

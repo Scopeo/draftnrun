@@ -1,13 +1,13 @@
-import shutil
-import pytest
 import asyncio
-from unittest.mock import MagicMock, patch, Mock
+import shutil
+from unittest.mock import MagicMock, Mock, patch
 
-from engine.agent.docx_generation_tool import DOCXGenerationTool
+import pytest
+
 from engine.agent.agent import ComponentAttributes
+from engine.agent.docx_generation_tool import DOCXGenerationTool
 from engine.temps_folder_utils import get_output_dir
 from engine.trace.trace_manager import TraceManager
-
 
 MARKDOWN_CONTENT = """# Test Document
 This is a test document with **bold** and *italic* text.
@@ -167,5 +167,4 @@ def test_docx_generation_temp_file_cleanup(docx_tool, tmp_path):
         # Clean up
         output_dir = get_output_dir()
         if output_dir.exists():
-
             shutil.rmtree(output_dir)

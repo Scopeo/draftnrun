@@ -1,21 +1,21 @@
-from uuid import UUID
-from typing import Annotated
 import logging
+from typing import Annotated
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from ada_backend.database.setup_db import get_db
 from ada_backend.routers.auth_router import (
-    user_has_access_to_organization_dependency,
     UserRights,
+    user_has_access_to_organization_dependency,
     user_has_access_to_project_dependency,
 )
 from ada_backend.schemas.agent_schema import (
+    AgentInfoSchema,
     AgentUpdateSchema,
     AgentWithGraphRunnersSchema,
     ProjectAgentSchema,
-    AgentInfoSchema,
 )
 from ada_backend.schemas.auth_schema import SupabaseUser
 from ada_backend.schemas.pipeline.graph_schema import GraphUpdateResponse
@@ -26,7 +26,7 @@ from ada_backend.services.agents_service import (
     get_all_agents_service,
     update_agent_service,
 )
-from ada_backend.services.errors import GraphNotFound, ProjectNotFound, InvalidAgentTemplate
+from ada_backend.services.errors import GraphNotFound, InvalidAgentTemplate, ProjectNotFound
 
 router = APIRouter(tags=["Agents"])
 

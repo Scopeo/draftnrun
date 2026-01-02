@@ -1,11 +1,11 @@
 import logging
-from typing import Optional
 import threading
+from typing import Optional
 
 import pandas as pd
 from snowflake.connector.pandas_tools import write_pandas
 
-from engine.agent.types import SourceChunk, ComponentAttributes
+from engine.agent.types import ComponentAttributes, SourceChunk
 from engine.storage_service.db_service import DBService
 from engine.storage_service.db_utils import DBDefinition, check_columns_matching_between_data_and_database_table
 from engine.storage_service.snowflake_service.snowflake_utils import (
@@ -34,8 +34,7 @@ class SnowflakeService(DBService):
         try:
             self.connector = connect_to_snowflake()
             LOGGER.info(
-                f"Connecting to Snowflake with {warehouse} warehouse, "
-                f"{database_name} database and {role_to_use} role"
+                f"Connecting to Snowflake with {warehouse} warehouse, {database_name} database and {role_to_use} role"
             )
             self.connector.cursor().execute(f"USE ROLE {role_to_use}")
             self.connector.cursor().execute(f"USE WAREHOUSE {warehouse}")

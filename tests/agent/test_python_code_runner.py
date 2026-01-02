@@ -1,20 +1,20 @@
-import pytest
+import asyncio
+import base64
 import json
 import os
-import base64
-from unittest.mock import MagicMock
-import pytest_asyncio
-import asyncio
 import uuid
+from unittest.mock import MagicMock
 
+import pytest
+import pytest_asyncio
 
 from engine.agent.tools.python_code_runner import (
-    PythonCodeRunner,
     PYTHON_CODE_RUNNER_TOOL_DESCRIPTION,
+    PythonCodeRunner,
 )
 from engine.agent.types import AgentPayload, ChatMessage, ComponentAttributes
-from engine.trace.trace_manager import TraceManager
 from engine.trace.span_context import set_tracing_span
+from engine.trace.trace_manager import TraceManager
 
 
 @pytest.fixture
@@ -347,7 +347,7 @@ print("Three plots generated!")
             decoded = base64.b64decode(image_data)
             assert len(decoded) > 0
         except Exception:
-            pytest.fail(f"Image {i+1} data is not valid base64")
+            pytest.fail(f"Image {i + 1} data is not valid base64")
 
 
 def test_execute_python_code_with_no_images(e2b_tool, e2b_api_key):
@@ -468,7 +468,7 @@ print("Two async plots generated!")
             decoded = base64.b64decode(image_data)
             assert len(decoded) > 0
         except Exception:
-            pytest.fail(f"Image {i+1} data in artifacts is not valid base64")
+            pytest.fail(f"Image {i + 1} data in artifacts is not valid base64")
 
     # Check that the response message mentions the correct number of images
     content = result.messages[0].content

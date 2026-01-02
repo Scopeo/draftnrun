@@ -1,30 +1,30 @@
-import logging
-import json
 import asyncio
+import json
+import logging
 from datetime import datetime
-from typing import Optional, Type, Any
+from typing import Any, Optional, Type
 
-from opentelemetry import trace as trace_api
-from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttributes
-from openai.types.chat import ChatCompletionMessageToolCall
 from e2b_code_interpreter import AsyncSandbox
+from openai.types.chat import ChatCompletionMessageToolCall
+from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttributes
+from opentelemetry import trace as trace_api
 from pydantic import BaseModel, Field
 
 from engine.agent.agent import Agent
-from engine.agent.types import (
-    AgentPayload,
-    ComponentAttributes,
-    ToolDescription,
-    ChatMessage,
-)
-from engine.graph_runner.runnable import Runnable
 from engine.agent.history_message_handling import HistoryMessageHandler
-from engine.agent.utils import load_str_to_json
-from engine.trace.trace_manager import TraceManager
-from engine.llm_services.llm_service import CompletionService
-from engine.agent.utils_prompt import fill_prompt_template
 from engine.agent.tools.python_code_runner import PYTHON_CODE_RUNNER_TOOL_DESCRIPTION
 from engine.agent.tools.terminal_command_runner import TERMINAL_COMMAND_RUNNER_TOOL_DESCRIPTION
+from engine.agent.types import (
+    AgentPayload,
+    ChatMessage,
+    ComponentAttributes,
+    ToolDescription,
+)
+from engine.agent.utils import load_str_to_json
+from engine.agent.utils_prompt import fill_prompt_template
+from engine.graph_runner.runnable import Runnable
+from engine.llm_services.llm_service import CompletionService
+from engine.trace.trace_manager import TraceManager
 from settings import settings
 
 LOGGER = logging.getLogger(__name__)
@@ -363,18 +363,14 @@ class ReActAgent(Agent):
         tool_choice = "auto" if self._current_iteration < self._max_iterations else "none"
         with self.trace_manager.start_span("Agentic reflexion") as span:
             llm_input_messages = [msg.model_dump() for msg in history_messages_handled]
-            span.set_attributes(
-                {
-                    SpanAttributes.OPENINFERENCE_SPAN_KIND: OpenInferenceSpanKindValues.LLM.value,
-                    SpanAttributes.LLM_INPUT_MESSAGES: json.dumps(llm_input_messages),
-                    SpanAttributes.LLM_MODEL_NAME: self._completion_service._model_name,
-                    "model_id": (
-                        str(self._completion_service._model_id)
-                        if self._completion_service._model_id is not None
-                        else None
-                    ),
-                }
-            )
+            span.set_attributes({
+                SpanAttributes.OPENINFERENCE_SPAN_KIND: OpenInferenceSpanKindValues.LLM.value,
+                SpanAttributes.LLM_INPUT_MESSAGES: json.dumps(llm_input_messages),
+                SpanAttributes.LLM_MODEL_NAME: self._completion_service._model_name,
+                "model_id": (
+                    str(self._completion_service._model_id) if self._completion_service._model_id is not None else None
+                ),
+            })
             chat_response = await self._completion_service.function_call_async(
                 messages=llm_input_messages,
                 tools=[agent.tool_description for agent in self.agent_tools],
@@ -382,11 +378,9 @@ class ReActAgent(Agent):
                 structured_output_tool=output_tool_description,
             )
 
-            span.set_attributes(
-                {
-                    SpanAttributes.LLM_OUTPUT_MESSAGES: json.dumps(chat_response.choices[0].message.model_dump()),
-                }
-            )
+            span.set_attributes({
+                SpanAttributes.LLM_OUTPUT_MESSAGES: json.dumps(chat_response.choices[0].message.model_dump()),
+            })
             span.set_status(trace_api.StatusCode.OK)
 
             all_tool_calls = chat_response.choices[0].message.tool_calls
@@ -445,7 +439,7 @@ class ReActAgent(Agent):
 
         elif self._current_iteration < self._max_iterations:
             self.log_trace_event(
-                message=(f"Number of successful tool outputs: {successful_output_count}. " f"Running the agent again.")
+                message=(f"Number of successful tool outputs: {successful_output_count}. Running the agent again.")
             )
             self._current_iteration += 1
             return await self._run_core(

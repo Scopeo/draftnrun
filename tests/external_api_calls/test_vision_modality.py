@@ -5,11 +5,12 @@ import pytest
 
 from engine.agent.types import ToolDescription
 from engine.llm_services.llm_service import CompletionService, VisionService
+
 from .capability_matrix import get_provider_model_pairs, get_provider_required_settings
 from .test_helpers import (
+    parse_possibly_double_encoded_json,
     skip_if_missing_settings,
     small_test_image_bytes_png,
-    parse_possibly_double_encoded_json,
 )
 
 

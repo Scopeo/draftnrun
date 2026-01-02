@@ -3,6 +3,7 @@ Core protocols and spec for cron handlers and executors.
 """
 
 from typing import Callable, Optional, Protocol, runtime_checkable
+
 from pydantic import BaseModel
 
 

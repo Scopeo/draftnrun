@@ -9,7 +9,7 @@ def test_add_sources_basic(mock_source_chunk_basic):
     sourced_response = SourcedResponse(response=response, sources=[mock_source_chunk_basic])
     result = formatter.format(sourced_response)
     expected = SourcedResponse(
-        response="This is the response [1].\n" "Sources:\n" "[1] <http://example.com|basic>\n",
+        response="This is the response [1].\nSources:\n[1] <http://example.com|basic>\n",
         sources=[mock_source_chunk_basic],
     )
     assert result == expected
@@ -67,7 +67,7 @@ def test_add_sources_with_page_number(mock_source_chunk_with_page_number):
     result = formatter.format(sourced_response)
 
     expected = SourcedResponse(
-        response="This is the response [1].\n" "Sources:\n" "[1] <http://example5.com|with_page_number page 300>\n",
+        response="This is the response [1].\nSources:\n[1] <http://example5.com|with_page_number page 300>\n",
         sources=[mock_source_chunk_with_page_number],
     )
     assert result == expected
@@ -81,7 +81,7 @@ def test_add_sources_special_characters(mock_source_chunk_special_characters):
     result = formatter.format(sourced_response)
 
     expected = SourcedResponse(
-        response="Here is the response [1].\n" "Sources:\n" "[1] <http://example4.com|special_characters>\n",
+        response="Here is the response [1].\nSources:\n[1] <http://example4.com|special_characters>\n",
         sources=[mock_source_chunk_special_characters],
     )
     assert result == expected

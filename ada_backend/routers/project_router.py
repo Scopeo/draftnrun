@@ -1,36 +1,38 @@
+import logging
 from typing import Annotated, List, Optional
 from uuid import UUID
-from fastapi import APIRouter, Depends, HTTPException, Body, Query
-from sqlalchemy.orm import Session
-import logging
 
-from ada_backend.database.models import EnvType, CallType, ProjectType, ResponseFormat
+from fastapi import APIRouter, Body, Depends, HTTPException, Query
+from sqlalchemy.orm import Session
+
+from ada_backend.database.models import CallType, EnvType, ProjectType, ResponseFormat
 from ada_backend.database.setup_db import get_db
+from ada_backend.repositories.env_repository import get_env_relationship_by_graph_runner_id
+from ada_backend.routers.auth_router import (
+    UserRights,
+    VerifiedApiKey,
+    user_has_access_to_organization_dependency,
+    user_has_access_to_project_dependency,
+    verify_api_key_dependency,
+)
 from ada_backend.schemas.auth_schema import SupabaseUser
 from ada_backend.schemas.chart_schema import ChartsResponse
 from ada_backend.schemas.monitor_schema import KPISResponse
 from ada_backend.schemas.project_schema import (
     ChatResponse,
+    ProjectCreateSchema,
     ProjectDeleteResponse,
     ProjectSchema,
-    ProjectWithGraphRunnersSchema,
     ProjectUpdateSchema,
-    ProjectCreateSchema,
+    ProjectWithGraphRunnersSchema,
 )
 from ada_backend.services.agent_runner_service import run_agent, run_env_agent
-from ada_backend.routers.auth_router import (
-    verify_api_key_dependency,
-    VerifiedApiKey,
-    user_has_access_to_organization_dependency,
-    user_has_access_to_project_dependency,
-    UserRights,
-)
 from ada_backend.services.charts_service import get_charts_by_project
 from ada_backend.services.errors import (
-    MissingDataSourceError,
-    ProjectNotFound,
     EnvironmentNotFound,
+    MissingDataSourceError,
     OrganizationLimitExceededError,
+    ProjectNotFound,
 )
 from ada_backend.services.metrics.monitor_kpis_service import get_monitoring_kpis_by_project
 from ada_backend.services.project_service import (
@@ -40,12 +42,11 @@ from ada_backend.services.project_service import (
     get_projects_by_organization_with_details_service,
     update_project_service,
 )
-from ada_backend.repositories.env_repository import get_env_relationship_by_graph_runner_id
+from ada_backend.services.tag_service import compose_tag_name
 from engine.agent.errors import (
     KeyTypePromptTemplateError,
     MissingKeyPromptTemplateError,
 )
-from ada_backend.services.tag_service import compose_tag_name
 
 LOGGER = logging.getLogger(__name__)
 
@@ -359,15 +360,13 @@ async def chat(
         raise HTTPException(status_code=400, detail=str(e)) from e
     except MissingKeyPromptTemplateError as e:
         LOGGER.error(
-            f"Missing key from prompt template for project {project_id} for graph runner "
-            f"{graph_runner_id}: {str(e)}",
+            f"Missing key from prompt template for project {project_id} for graph runner {graph_runner_id}: {str(e)}",
             exc_info=True,
         )
         raise HTTPException(status_code=400, detail=str(e)) from e
     except KeyTypePromptTemplateError as e:
         LOGGER.error(
-            f"Key type error in prompt template for project {project_id} for graph runner "
-            f"{graph_runner_id}: {str(e)}",
+            f"Key type error in prompt template for project {project_id} for graph runner {graph_runner_id}: {str(e)}",
             exc_info=True,
         )
         raise HTTPException(status_code=400, detail=str(e)) from e
@@ -438,13 +437,13 @@ async def chat_env(
         raise HTTPException(status_code=400, detail=str(e)) from e
     except MissingKeyPromptTemplateError as e:
         LOGGER.error(
-            f"Missing key from prompt template for project {project_id} in environment " f"{env}: {str(e)}",
+            f"Missing key from prompt template for project {project_id} in environment {env}: {str(e)}",
             exc_info=True,
         )
         raise HTTPException(status_code=400, detail=str(e)) from e
     except KeyTypePromptTemplateError as e:
         LOGGER.error(
-            f"Key type error in prompt template for project {project_id} in environment " f"{env}: {str(e)}",
+            f"Key type error in prompt template for project {project_id} in environment {env}: {str(e)}",
             exc_info=True,
         )
         raise HTTPException(status_code=400, detail=str(e)) from e

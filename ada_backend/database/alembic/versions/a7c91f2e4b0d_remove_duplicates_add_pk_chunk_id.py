@@ -8,12 +8,12 @@ Create Date: 2025-12-05 15:00:00.000000
 
 import logging
 from typing import Sequence, Union
-from sqlalchemy import text, inspect
+
+from sqlalchemy import inspect, text
 
 from engine.storage_service.local_service import SQLLocalService
 from ingestion_script.utils import CHUNK_ID_COLUMN_NAME
 from settings import settings
-
 
 # revision identifiers, used by Alembic.
 revision: str = "a7c91f2e4b0d"
@@ -94,11 +94,7 @@ def remove_duplicates_and_add_pk(db_service: SQLLocalService, table_name: str, s
 
             # Step 2: Check for NULL values in chunk_id
             null_count = connection.execute(
-                text(
-                    f"SELECT COUNT(*) "
-                    f'FROM "{schema_name}"."{table_name}" '
-                    f'WHERE "{CHUNK_ID_COLUMN_NAME}" IS NULL'
-                )
+                text(f'SELECT COUNT(*) FROM "{schema_name}"."{table_name}" WHERE "{CHUNK_ID_COLUMN_NAME}" IS NULL')
             ).scalar()
 
             if null_count and null_count > 0:

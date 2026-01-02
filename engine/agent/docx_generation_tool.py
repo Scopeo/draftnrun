@@ -2,13 +2,13 @@ import logging
 import tempfile
 from typing import Any
 
-
-from openinference.semconv.trace import OpenInferenceSpanKindValues
 from md2docx_python.src.md2docx_python import markdown_to_word
+from openinference.semconv.trace import OpenInferenceSpanKindValues
+
 from engine.agent.agent import Agent
-from engine.agent.types import ChatMessage, AgentPayload, ToolDescription, ComponentAttributes
-from engine.temps_folder_utils import get_output_dir
+from engine.agent.types import AgentPayload, ChatMessage, ComponentAttributes, ToolDescription
 from engine.agent.utils import prepare_markdown_output_path
+from engine.temps_folder_utils import get_output_dir
 from engine.trace.trace_manager import TraceManager
 
 LOGGER = logging.getLogger(__name__)

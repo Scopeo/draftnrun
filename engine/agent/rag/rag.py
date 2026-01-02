@@ -1,22 +1,22 @@
 import logging
-from typing import Optional, Type, Any
+from typing import Any, Optional, Type
 
 from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttributes
 from pydantic import BaseModel, Field
 
 from engine.agent.agent import Agent
+from engine.agent.build_context import build_context_from_vocabulary_chunks
+from engine.agent.rag.formatter import Formatter
+from engine.agent.rag.reranker import Reranker
+from engine.agent.rag.retriever import Retriever
+from engine.agent.rag.vocabulary_search import VocabularySearch
+from engine.agent.synthesizer import Synthesizer
 from engine.agent.types import (
     ComponentAttributes,
     ToolDescription,
 )
-from engine.agent.rag.reranker import Reranker
-from engine.agent.rag.retriever import Retriever
-from engine.trace.trace_manager import TraceManager
-from engine.agent.synthesizer import Synthesizer
-from engine.agent.rag.formatter import Formatter
-from engine.agent.rag.vocabulary_search import VocabularySearch
-from engine.agent.build_context import build_context_from_vocabulary_chunks
 from engine.agent.utils import merge_qdrant_filters_with_and_conditions
+from engine.trace.trace_manager import TraceManager
 
 LOGGER = logging.getLogger(__name__)
 
@@ -107,12 +107,10 @@ class RAG(Agent):
         sourced_response = self._formatter.format(sourced_response)
 
         for i, source in enumerate(chunks):
-            self.log_trace(
-                {
-                    f"{SpanAttributes.RETRIEVAL_DOCUMENTS}.{i}.document.content": source.content,
-                    f"{SpanAttributes.RETRIEVAL_DOCUMENTS}.{i}.document.id": source.name,
-                }
-            )
+            self.log_trace({
+                f"{SpanAttributes.RETRIEVAL_DOCUMENTS}.{i}.document.content": source.content,
+                f"{SpanAttributes.RETRIEVAL_DOCUMENTS}.{i}.document.id": source.name,
+            })
 
         return RAGOutputs(
             output=sourced_response.response,

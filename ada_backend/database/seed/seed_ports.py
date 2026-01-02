@@ -6,7 +6,6 @@ from ada_backend.database import models as db
 from ada_backend.services.registry import FACTORY_REGISTRY
 from engine.agent.agent import Agent
 
-
 LOGGER = logging.getLogger(__name__)
 
 

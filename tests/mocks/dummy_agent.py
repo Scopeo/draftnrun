@@ -4,8 +4,9 @@ This agent simply adds a prefix to input messages, useful for testing graph flow
 """
 
 import uuid
+
 from engine.agent.agent import Agent
-from engine.agent.types import AgentPayload, ChatMessage, ToolDescription, ComponentAttributes
+from engine.agent.types import AgentPayload, ChatMessage, ComponentAttributes, ToolDescription
 
 
 class DummyAgent(Agent):

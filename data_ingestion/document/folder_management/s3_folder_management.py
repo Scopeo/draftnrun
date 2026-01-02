@@ -1,9 +1,9 @@
+import logging
 from pathlib import Path
 from typing import List
-import logging
 
+from data_ingestion.boto3_client import delete_file_from_bucket, get_content_from_file, get_s3_boto3_client
 from data_ingestion.document.folder_management.folder_management import FileDocument, FileDocumentType, FolderManager
-from data_ingestion.boto3_client import get_s3_boto3_client, get_content_from_file, delete_file_from_bucket
 from settings import settings
 
 LOGGER = logging.getLogger(__name__)

@@ -3,8 +3,8 @@ from typing import Optional
 
 import cohere
 
-from engine.agent.types import SourceChunk, ComponentAttributes
 from engine.agent.rag.reranker import Reranker
+from engine.agent.types import ComponentAttributes, SourceChunk
 from engine.trace.trace_manager import TraceManager
 from settings import settings
 
@@ -45,7 +45,7 @@ class CohereReranker(Reranker):
         reranked_chunks = [
             chunks[result.index] for result in response.results if result.relevance_score >= self._score_threshold
         ]
-        for chunk, result in zip(reranked_chunks, response.results):
+        for chunk, result in zip(reranked_chunks, response.results, strict=False):
             chunk.metadata["reranked_score"] = result.relevance_score
         LOGGER.info(f"Reranked {len(reranked_chunks)} chunks")
         return reranked_chunks

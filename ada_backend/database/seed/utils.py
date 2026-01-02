@@ -1,21 +1,20 @@
-from uuid import UUID
-from sqlalchemy.orm import Session
-from pydantic import BaseModel
 import logging
+from uuid import UUID
 
+from pydantic import BaseModel
+from sqlalchemy.orm import Session
 
-from ada_backend.database.models import ParameterType, SelectOption, UIComponent, UIComponentProperties
 from ada_backend.database import models as db
+from ada_backend.database.models import ParameterType, SelectOption, UIComponent, UIComponentProperties
 from ada_backend.database.seed.constants import (
     COMPLETION_MODEL_IN_DB,
     EMBEDDING_MODEL_IN_DB,
+    REASONING_IN_DB,
     TEMPERATURE_IN_DB,
     VERBOSITY_IN_DB,
-    REASONING_IN_DB,
 )
-from ada_backend.services.llm_models_service import create_llm_model_service, llm_model_exists_service
-
 from ada_backend.schemas.llm_models_schema import LLMModelCreate, ModelCapabilityEnum
+from ada_backend.services.llm_models_service import create_llm_model_service, llm_model_exists_service
 from settings import settings
 
 LOGGER = logging.getLogger(__name__)

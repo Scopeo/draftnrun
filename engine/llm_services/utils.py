@@ -1,8 +1,8 @@
 import json
 import logging
-from typing import Any
 import time
 import uuid
+from typing import Any
 
 from openai.types.chat import ChatCompletion, ChatCompletionMessage
 from openai.types.chat.chat_completion import Choice
@@ -80,10 +80,7 @@ def chat_completion_to_response(
         else:
             LOGGER.error(f"Error converting to response format: Here is the full payload {chat_completion_messages}")
             raise ValueError(
-                (
-                    "Invalid message format: 'content' must be a list or a string."
-                    f" Received: {type(message['content'])}"
-                )
+                (f"Invalid message format: 'content' must be a list or a string. Received: {type(message['content'])}")
             )
     return response_messages
 

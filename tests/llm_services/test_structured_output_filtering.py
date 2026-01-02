@@ -1,6 +1,7 @@
 import json
-import pytest
 from unittest.mock import AsyncMock, patch
+
+import pytest
 from openai.types.chat import ChatCompletion, ChatCompletionMessage
 from openai.types.chat.chat_completion import Choice
 from openai.types.chat.chat_completion_message_tool_call import (
@@ -9,11 +10,11 @@ from openai.types.chat.chat_completion_message_tool_call import (
 )
 from openai.types.completion_usage import CompletionUsage
 
-from engine.llm_services.providers.google_provider import GoogleProvider
 from engine.llm_services.providers.anthropic_provider import AnthropicProvider
-from engine.llm_services.providers.mistral_provider import MistralProvider
 from engine.llm_services.providers.cerebras_provider import CerebrasProvider
 from engine.llm_services.providers.custom_provider import CustomProvider
+from engine.llm_services.providers.google_provider import GoogleProvider
+from engine.llm_services.providers.mistral_provider import MistralProvider
 
 
 def create_mock_completion(

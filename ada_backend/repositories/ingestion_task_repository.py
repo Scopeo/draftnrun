@@ -1,12 +1,10 @@
-from uuid import UUID
-from typing import Optional
-
 import logging
+from typing import Optional
+from uuid import UUID
 
 from sqlalchemy.orm import Session
 
 from ada_backend.database import models as db
-
 
 LOGGER = logging.getLogger(__name__)
 
@@ -70,7 +68,6 @@ def update_ingestion_task(
         if existing_task:
             # Update existing task
             if source_id is not None:  # Only update if source_id is not None
-
                 existing_task.source_id = source_id
             if source_name:
                 existing_task.source_name = source_name

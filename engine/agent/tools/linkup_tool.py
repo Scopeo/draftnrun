@@ -1,18 +1,22 @@
+import json
 from datetime import date
 from typing import Optional
+
+from linkup import LinkupClient
 from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttributes
 from opentelemetry.trace import get_current_span
 
 from engine.agent.agent import Agent
-from engine.agent.types import AgentPayload, ComponentAttributes, ToolDescription
-from engine.agent.types import ChatMessage, SourceChunk, SourcedResponse
+from engine.agent.types import (
+    AgentPayload,
+    ChatMessage,
+    ComponentAttributes,
+    SourceChunk,
+    SourcedResponse,
+    ToolDescription,
+)
 from engine.trace.trace_manager import TraceManager
-
-from linkup import LinkupClient
-import json
-
 from settings import settings
-
 
 LINKUP_TOOL_DESCRIPTION = ToolDescription(
     name="Linkup_Web_Search_Tool",
@@ -131,12 +135,10 @@ class LinkupSearchTool(Agent):
             f"exclude domains: {exclude_domains}\n"
             f"depth: {depth}"
         )
-        span.set_attributes(
-            {
-                SpanAttributes.OPENINFERENCE_SPAN_KIND: self.TRACE_SPAN_KIND,
-                SpanAttributes.INPUT_VALUE: trace_input,
-            }
-        )
+        span.set_attributes({
+            SpanAttributes.OPENINFERENCE_SPAN_KIND: self.TRACE_SPAN_KIND,
+            SpanAttributes.INPUT_VALUE: trace_input,
+        })
         response = self.search_results(
             query=content,
             depth=depth,
@@ -148,14 +150,12 @@ class LinkupSearchTool(Agent):
         )
 
         for i, source in enumerate(response.sources):
-            span.set_attributes(
-                {
-                    SpanAttributes.OPENINFERENCE_SPAN_KIND: OpenInferenceSpanKindValues.RETRIEVER.value,
-                    f"{SpanAttributes.RETRIEVAL_DOCUMENTS}.{i}.document.content": source.content,
-                    f"{SpanAttributes.RETRIEVAL_DOCUMENTS}.{i}.document.id": source.name,
-                    f"{SpanAttributes.RETRIEVAL_DOCUMENTS}.{i}.document.metadata": json.dumps(source.metadata),
-                }
-            )
+            span.set_attributes({
+                SpanAttributes.OPENINFERENCE_SPAN_KIND: OpenInferenceSpanKindValues.RETRIEVER.value,
+                f"{SpanAttributes.RETRIEVAL_DOCUMENTS}.{i}.document.content": source.content,
+                f"{SpanAttributes.RETRIEVAL_DOCUMENTS}.{i}.document.id": source.name,
+                f"{SpanAttributes.RETRIEVAL_DOCUMENTS}.{i}.document.metadata": json.dumps(source.metadata),
+            })
 
         return AgentPayload(
             messages=[ChatMessage(role="assistant", content=response.response)],

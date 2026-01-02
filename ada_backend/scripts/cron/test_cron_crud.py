@@ -1,8 +1,9 @@
-import httpx
-import json
 import argparse
 import asyncio
+import json
 from datetime import datetime
+
+import httpx
 
 from ada_backend.scripts.get_supabase_token import get_user_jwt
 from settings import settings

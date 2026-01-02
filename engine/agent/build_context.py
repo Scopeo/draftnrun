@@ -1,6 +1,6 @@
 import logging
-from typing import Optional, Callable
 from functools import partial
+from typing import Callable, Optional
 
 from engine.agent.types import SourceChunk, TermDefinition
 

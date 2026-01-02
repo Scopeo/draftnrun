@@ -1,35 +1,36 @@
-import logging
-import json
 import asyncio
 import concurrent.futures
 import contextvars
-from inspect import signature
-from typing import Optional, Any, Type, Callable, get_type_hints, get_origin, get_args, Union
-from uuid import UUID
+import json
+import logging
 from dataclasses import is_dataclass
+from inspect import signature
+from typing import Any, Callable, Optional, Type, Union, get_args, get_origin, get_type_hints
+from uuid import UUID
+
 from pydantic import BaseModel
 
-from engine.agent.types import ToolDescription
-from engine.agent.rag.retriever import Retriever
-from engine.agent.rag.cohere_reranker import CohereReranker
-from engine.agent.rag.vocabulary_search import VocabularySearch
-from engine.agent.rag.formatter import Formatter
-from engine.agent.synthesizer import Synthesizer
-from engine.trace.trace_context import get_trace_manager
-from engine.llm_services.llm_service import EmbeddingService, CompletionService, WebSearchService, OCRService
-from engine.qdrant_service import QdrantService, QdrantCollectionSchema
-from ada_backend.database.setup_db import get_db_session
-from ada_backend.database.models import EnvType
-from ada_backend.repositories.source_repository import get_data_source_by_id
-from ada_backend.repositories.project_repository import get_project
 from ada_backend.context import get_request_context
-from ada_backend.services.user_roles_service import get_user_access_to_organization
+from ada_backend.database.models import EnvType
+from ada_backend.database.setup_db import get_db_session
+from ada_backend.repositories.project_repository import get_project
+from ada_backend.repositories.source_repository import get_data_source_by_id
+from ada_backend.services.errors import MissingDataSourceError
 from ada_backend.services.llm_models_service import (
     get_llm_models_by_capability_select_options_service,
     get_model_id_by_name_service,
 )
-from ada_backend.services.errors import MissingDataSourceError
+from ada_backend.services.user_roles_service import get_user_access_to_organization
+from engine.agent.rag.cohere_reranker import CohereReranker
+from engine.agent.rag.formatter import Formatter
+from engine.agent.rag.retriever import Retriever
+from engine.agent.rag.vocabulary_search import VocabularySearch
+from engine.agent.synthesizer import Synthesizer
+from engine.agent.types import ToolDescription
+from engine.llm_services.llm_service import CompletionService, EmbeddingService, OCRService, WebSearchService
+from engine.qdrant_service import QdrantCollectionSchema, QdrantService
 from engine.storage_service.local_service import SQLLocalService
+from engine.trace.trace_context import get_trace_manager
 
 LOGGER = logging.getLogger(__name__)
 

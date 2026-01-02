@@ -1,6 +1,7 @@
 """Unit tests for fill_prompt_template function."""
 
 import pytest
+
 from engine.agent.errors import MissingKeyPromptTemplateError
 from engine.agent.utils_prompt import fill_prompt_template
 

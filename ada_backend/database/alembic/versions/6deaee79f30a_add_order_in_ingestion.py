@@ -8,13 +8,13 @@ Create Date: 2025-12-03 11:42:07.921159
 
 import logging
 from typing import Sequence, Union
-from sqlalchemy import text, inspect
+
+from sqlalchemy import inspect, text
 from sqlalchemy.exc import SQLAlchemyError
 
 from engine.storage_service.local_service import SQLLocalService
 from ingestion_script.utils import CHUNK_ID_COLUMN_NAME, ORDER_COLUMN_NAME
 from settings import settings
-
 
 # revision identifiers, used by Alembic.
 revision: str = "6deaee79f30a"
@@ -72,7 +72,7 @@ def add_order_column_to_table(db_service: SQLLocalService, table_name: str, sche
 
             LOGGER.info(f"  Adding '{ORDER_COLUMN_NAME}' column to {schema_name}.{table_name}...")
             add_column_sql = text(
-                f'ALTER TABLE "{schema_name}"."{table_name}" ' f'ADD COLUMN "{ORDER_COLUMN_NAME}" INTEGER'
+                f'ALTER TABLE "{schema_name}"."{table_name}" ADD COLUMN "{ORDER_COLUMN_NAME}" INTEGER'
             )
             connection.execute(add_column_sql)
             connection.commit()

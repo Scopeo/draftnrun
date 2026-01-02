@@ -1,10 +1,9 @@
 from typing import Optional
 
 from engine.agent.agent import Agent
-from engine.agent.types import AgentPayload, ChatMessage, ToolDescription, ComponentAttributes
+from engine.agent.types import AgentPayload, ChatMessage, ComponentAttributes, ToolDescription
 from engine.storage_service.db_service import DBService
 from engine.trace.trace_manager import TraceManager
-
 
 DEFAULT_RUN_SQL_QUERY_TOOL_DESCRIPTION = ToolDescription(
     name="Run_SQL_Query_Tool",

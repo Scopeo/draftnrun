@@ -5,8 +5,8 @@ from sqlalchemy.orm import Session
 from ada_backend.repositories.field_expression_repository import get_field_expressions_for_instances
 from ada_backend.schemas.pipeline.field_expression_schema import FieldExpressionUpdateSchema
 from engine.field_expressions.ast import ExpressionNode, RefNode
-from engine.field_expressions.serializer import from_json as expr_from_json
 from engine.field_expressions.parser import unparse_expression
+from engine.field_expressions.serializer import from_json as expr_from_json
 from engine.field_expressions.traversal import map_expression
 
 

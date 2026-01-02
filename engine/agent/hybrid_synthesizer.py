@@ -1,12 +1,13 @@
 from typing import Optional
+
 from pydantic import BaseModel
 
-from engine.agent.synthesizer_prompts import get_hybrid_synthetizer_prompt_template
+from engine.agent.build_context import build_context_from_source_chunks
 from engine.agent.synthesizer import Synthesizer
+from engine.agent.synthesizer_prompts import get_hybrid_synthetizer_prompt_template
+from engine.agent.types import ComponentAttributes, SourceChunk, SourcedResponse
 from engine.llm_services.llm_service import CompletionService
 from engine.trace.trace_manager import TraceManager
-from engine.agent.build_context import build_context_from_source_chunks
-from engine.agent.types import SourceChunk, SourcedResponse, ComponentAttributes
 
 
 class ResponseLLM(BaseModel):

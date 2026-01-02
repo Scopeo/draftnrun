@@ -5,23 +5,23 @@ import tempfile
 import zipfile
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple, Type
-from pydantic import BaseModel, Field, ConfigDict, create_model
-from PIL import Image
-import requests
 
+import requests
 from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttributes
 from opentelemetry.trace import get_current_span
+from PIL import Image
+from pydantic import BaseModel, ConfigDict, Field, create_model
 
 from engine.agent.agent import Agent
-from engine.agent.types import ToolDescription, ComponentAttributes, AgentPayload, ChatMessage
+from engine.agent.types import AgentPayload, ChatMessage, ComponentAttributes, ToolDescription
 from engine.llm_services.llm_service import CompletionService
 from engine.temps_folder_utils import get_output_dir
-from engine.trace.trace_manager import TraceManager
 from engine.trace.serializer import serialize_to_json
+from engine.trace.trace_manager import TraceManager
 
 try:
-    from docxtpl import DocxTemplate, InlineImage
     from docx.shared import Mm
+    from docxtpl import DocxTemplate, InlineImage
 except ImportError:
     DocxTemplate = None
     InlineImage = None
@@ -265,19 +265,19 @@ def _ensure_nested_fields(root: Dict, path: List[str]) -> None:
             if k not in cur:
                 sub = create_model(k.capitalize() + "Model")
                 # v2: config via 'model_config'
-                setattr(sub, "model_config", ConfigDict(extra="forbid"))
-                setattr(sub, "__dyn_fields__", {})
+                sub.model_config = ConfigDict(extra="forbid")
+                sub.__dyn_fields__ = {}
                 cur[k] = (sub, Field(...))
-            cur = getattr(cur[k][0], "__dyn_fields__")
+            cur = cur[k][0].__dyn_fields__
 
 
 def _materialize(fields: Dict) -> Dict:
     concrete = {}
     for name, (tp, fi) in fields.items():
         if isinstance(tp, type) and hasattr(tp, "__dyn_fields__"):
-            sub_fields = _materialize(getattr(tp, "__dyn_fields__"))
+            sub_fields = _materialize(tp.__dyn_fields__)
             model = create_model(tp.__name__, **sub_fields)
-            setattr(model, "model_config", ConfigDict(extra="forbid"))
+            model.model_config = ConfigDict(extra="forbid")
             concrete[name] = (model, fi)
         else:
             concrete[name] = (tp, fi)
@@ -316,7 +316,7 @@ def build_context_response_model(analysis: TemplateAnalysis, image_keys: List[st
             _ensure_nested_fields(root_fields, parts[:-1])
             cur = root_fields
             for k in parts[:-1]:
-                cur = getattr(cur[k][0], "__dyn_fields__")
+                cur = cur[k][0].__dyn_fields__
             cur[parts[-1]] = (bool, Field(...))
 
     for list_name, info in analysis.loops.items():
@@ -325,11 +325,11 @@ def build_context_response_model(analysis: TemplateAnalysis, image_keys: List[st
         else:
             item_fields = {attr: (str, Field(...)) for attr in sorted(info.get("fields") or [])}
             ItemModel = create_model(f"{list_name.capitalize()}Item", **item_fields)
-            setattr(ItemModel, "model_config", ConfigDict(extra="forbid"))
+            ItemModel.model_config = ConfigDict(extra="forbid")
             root_fields[list_name] = (List[ItemModel], Field(...))
 
     ContextModel = create_model("ContextModel", **_materialize(root_fields))
-    setattr(ContextModel, "model_config", ConfigDict(extra="forbid"))
+    ContextModel.model_config = ConfigDict(extra="forbid")
 
     images_fields = {}
     for k in image_keys:
@@ -338,18 +338,18 @@ def build_context_response_model(analysis: TemplateAnalysis, image_keys: List[st
             path=(str, Field(..., description="Path or URL to the image")),
             size=(int, Field(..., description="Image size in millimeters")),
         )
-        setattr(ImageDataModel, "model_config", ConfigDict(extra="forbid"))
+        ImageDataModel.model_config = ConfigDict(extra="forbid")
         images_fields[k] = (ImageDataModel, Field(...))
 
     ImagesModel = create_model("ImagesModel", **images_fields)
-    setattr(ImagesModel, "model_config", ConfigDict(extra="forbid"))
+    ImagesModel.model_config = ConfigDict(extra="forbid")
 
     DocxContextResponse = create_model(
         "DocxContextResponse",
         context=(ContextModel, Field(...)),
         images=(ImagesModel, Field(...)),
     )
-    setattr(DocxContextResponse, "model_config", ConfigDict(extra="forbid"))
+    DocxContextResponse.model_config = ConfigDict(extra="forbid")
     return DocxContextResponse
 
 
@@ -601,24 +601,22 @@ class DocxTemplateAgent(Agent):
 
             template_type = "base64" if template_base64 else "input_path"
 
-            span.set_attributes(
-                {
-                    SpanAttributes.INPUT_VALUE: serialize_to_json(
-                        {
-                            "template": template_type,
-                            "brief": (
-                                template_information_brief[:100]
-                                if len(template_information_brief) > 100
-                                else template_information_brief
-                            ),
-                            "output_filename": output_filename,
-                        },
-                        shorten_string=False,
-                        indent=0,
-                    ),
-                    SpanAttributes.OUTPUT_VALUE: success_msg,
-                }
-            )
+            span.set_attributes({
+                SpanAttributes.INPUT_VALUE: serialize_to_json(
+                    {
+                        "template": template_type,
+                        "brief": (
+                            template_information_brief[:100]
+                            if len(template_information_brief) > 100
+                            else template_information_brief
+                        ),
+                        "output_filename": output_filename,
+                    },
+                    shorten_string=False,
+                    indent=0,
+                ),
+                SpanAttributes.OUTPUT_VALUE: success_msg,
+            })
 
             return AgentPayload(
                 messages=[ChatMessage(role="assistant", content=success_msg)],

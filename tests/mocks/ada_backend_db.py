@@ -2,11 +2,11 @@ from uuid import UUID, uuid4
 
 import pytest
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, Session
+from sqlalchemy.orm import Session, sessionmaker
 
-from ada_backend.database.seed_db import seed_db
-from ada_backend.database.models import Base, ParameterType
 from ada_backend.database import models as db
+from ada_backend.database.models import Base, ParameterType
+from ada_backend.database.seed_db import seed_db
 
 
 @pytest.fixture(scope="function")
@@ -185,16 +185,14 @@ def populate_ada_backend_db_with_mock_data(session: Session):
         component_version_id=component_version_6.id,
         ref="embedding_service_a",
     )
-    session.add_all(
-        [
-            component_instance_1,
-            component_instance_2,
-            component_instance_3,
-            component_instance_4,
-            component_instance_5,
-            component_instance_6,
-        ]
-    )
+    session.add_all([
+        component_instance_1,
+        component_instance_2,
+        component_instance_3,
+        component_instance_4,
+        component_instance_5,
+        component_instance_6,
+    ])
     session.commit()
 
     # --- Basic Parameters ---

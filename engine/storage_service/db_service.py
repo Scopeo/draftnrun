@@ -1,12 +1,11 @@
-from abc import ABC, abstractmethod
 import logging
+from abc import ABC, abstractmethod
 from typing import Optional
 
 import pandas as pd
 
 from engine.agent.agent import ComponentAttributes
-from engine.storage_service.db_utils import DBDefinition, convert_to_correct_pandas_type, CHUNK_ID_COLUMN
-
+from engine.storage_service.db_utils import CHUNK_ID_COLUMN, DBDefinition, convert_to_correct_pandas_type
 
 LOGGER = logging.getLogger(__name__)
 

@@ -4,13 +4,14 @@ import pytest
 
 from engine.agent.types import ToolDescription
 from engine.llm_services.llm_service import CompletionService
+
 from .capability_matrix import get_provider_model_pairs, get_provider_required_settings
 from .test_helpers import (
     ConstrainedResponse,
-    skip_if_missing_settings,
     default_tool_description,
     json_schema_str,
     parse_possibly_double_encoded_json,
+    skip_if_missing_settings,
 )
 
 
@@ -99,9 +100,9 @@ class TestTextModality:
                 structured_output_tool=structured_tool,
             )
             content = response.choices[0].message.content
-            assert (
-                isinstance(content, str) and content.strip()
-            ), "Expected structured output in message.content as a JSON string"
+            assert isinstance(content, str) and content.strip(), (
+                "Expected structured output in message.content as a JSON string"
+            )
             parsed = parse_possibly_double_encoded_json(content)
             assert parsed.get("answer"), f"Provider {provider} returned structured output without 'answer' field"
             assert parsed.get("ok") is True, f"Provider {provider} returned structured output with ok != True"
@@ -181,9 +182,9 @@ class TestTextModality:
                 structured_output_tool=structured_tool,
             )
             content = response.choices[0].message.content
-            assert (
-                isinstance(content, str) and content.strip()
-            ), "Expected structured output in message.content as a JSON string"
+            assert isinstance(content, str) and content.strip(), (
+                "Expected structured output in message.content as a JSON string"
+            )
             parsed = parse_possibly_double_encoded_json(content)
             assert parsed.get("answer"), f"Provider {provider} returned output without 'answer' field: {parsed}"
             assert parsed.get("ok") is True, f"Provider {provider} returned output with ok != True: {parsed}"
@@ -221,19 +222,17 @@ class TestTextModality:
             tool_call = response1.choices[0].message.tool_calls[0]
 
             # Second turn: add tool response
-            messages.append(
-                {
-                    "role": "assistant",
-                    "content": None,
-                    "tool_calls": [
-                        {
-                            "id": tool_call.id,
-                            "type": "function",
-                            "function": {"name": "get_weather", "arguments": '{"city": "Paris"}'},
-                        }
-                    ],
-                }
-            )
+            messages.append({
+                "role": "assistant",
+                "content": None,
+                "tool_calls": [
+                    {
+                        "id": tool_call.id,
+                        "type": "function",
+                        "function": {"name": "get_weather", "arguments": '{"city": "Paris"}'},
+                    }
+                ],
+            })
             messages.append({"role": "tool", "tool_call_id": tool_call.id, "content": "Weather in Paris: Sunny, 22°C"})
 
             # This should not fail - Anthropic provider must convert 'tool' role properly

@@ -1,7 +1,8 @@
 from typing import Optional
-from sqlalchemy.orm import Session
 from uuid import UUID
-from sqlalchemy import func, cast, Integer
+
+from sqlalchemy import Integer, cast, func
+from sqlalchemy.orm import Session
 
 from ada_backend.database import models as db
 

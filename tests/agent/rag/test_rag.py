@@ -1,14 +1,14 @@
-import pytest
-from unittest.mock import MagicMock, patch, AsyncMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
 from llama_index.llms.openai import OpenAI
-from engine.agent.types import SourceChunk
-from engine.agent.rag.retriever import Retriever
-from engine.agent.synthesizer import Synthesizer
-from engine.agent.rag.vocabulary_search import VocabularySearch
-from engine.llm_services.llm_service import CompletionService
-from engine.agent.types import AgentPayload, ChatMessage
+
 from engine.agent.rag.rag import RAG
+from engine.agent.rag.retriever import Retriever
+from engine.agent.rag.vocabulary_search import VocabularySearch
+from engine.agent.synthesizer import Synthesizer
+from engine.agent.types import AgentPayload, ChatMessage, SourceChunk
+from engine.llm_services.llm_service import CompletionService
 from tests.mocks.trace_manager import MockTraceManager
 
 
@@ -112,7 +112,7 @@ def test_rag_run(
         MockQdrantResult(name="SourceChunk_1", content="Result 1"),
         MockQdrantResult(name="SourceChunk_2", content="Result 2"),
     ]
-    response_text = "Test Response [1][2]\n" "Sources:\n" "[1] <url1|SourceChunk_1>\n" "[2] <url2|SourceChunk_2>\n"
+    response_text = "Test Response [1][2]\nSources:\n[1] <url1|SourceChunk_1>\n[2] <url2|SourceChunk_2>\n"
     mock_complete.return_value.text = response_text
 
     output = rag.run_sync(message_to_process)
