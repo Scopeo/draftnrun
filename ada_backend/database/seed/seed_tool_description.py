@@ -5,25 +5,6 @@ from sqlalchemy.orm import Session
 from ada_backend.database import models as db
 from ada_backend.database.component_definition_seeding import upsert_tool_descriptions
 from ada_backend.database.utils import DEFAULT_TOOL_DESCRIPTION
-<<<<<<< HEAD
-from engine.components.ai_agent import get_dummy_ai_agent_description
-from engine.components.document_enhanced_llm_call import DEFAULT_DOCUMENT_ENHANCED_LLM_CALL_TOOL_DESCRIPTION
-from engine.components.docx_generation_tool import DEFAULT_DOCX_GENERATION_TOOL_DESCRIPTION
-from engine.components.filter import DEFAULT_FILTER_TOOL_DESCRIPTION
-from engine.components.inputs_outputs.start import DEFAULT_START_TOOL_DESCRIPTION
-from engine.components.llm_call import DEFAULT_LLM_CALL_TOOL_DESCRIPTION
-from engine.components.pdf_generation_tool import DEFAULT_PDF_GENERATION_TOOL_DESCRIPTION
-from engine.components.rag.rag import format_rag_tool_description
-from engine.components.sql.react_sql_tool import DEFAULT_REACT_SQL_TOOL_DESCRIPTION
-from engine.components.sql.run_sql_query_tool import DEFAULT_RUN_SQL_QUERY_TOOL_DESCRIPTION
-from engine.components.tools.api_call_tool import API_CALL_TOOL_DESCRIPTION
-from engine.components.tools.docx_template import DOCX_TEMPLATE_TOOL_DESCRIPTION
-from engine.components.tools.linkup_tool import LINKUP_TOOL_DESCRIPTION
-from engine.components.tools.python_code_runner import PYTHON_CODE_RUNNER_TOOL_DESCRIPTION
-from engine.components.tools.tavily_search_tool import TAVILY_TOOL_DESCRIPTION
-from engine.components.tools.terminal_command_runner import TERMINAL_COMMAND_RUNNER_TOOL_DESCRIPTION
-from engine.components.web_search_tool_openai import DEFAULT_WEB_SEARCH_OPENAI_TOOL_DESCRIPTION
-=======
 from engine.components.ai_agent import get_dummy_ai_agent_description
 from engine.components.document_enhanced_llm_call import DEFAULT_DOCUMENT_ENHANCED_LLM_CALL_TOOL_DESCRIPTION
 from engine.components.docx_generation_tool import DEFAULT_DOCX_GENERATION_TOOL_DESCRIPTION
@@ -42,7 +23,6 @@ from engine.components.tools.remote_mcp_tool import DEFAULT_REMOTE_MCP_TOOL_DESC
 from engine.components.tools.tavily_search_tool import TAVILY_TOOL_DESCRIPTION
 from engine.components.tools.terminal_command_runner import TERMINAL_COMMAND_RUNNER_TOOL_DESCRIPTION
 from engine.components.web_search_tool_openai import DEFAULT_WEB_SEARCH_OPENAI_TOOL_DESCRIPTION
->>>>>>> 6d6b56db (Add MCP)
 from engine.integrations.gmail_sender import GMAIL_SENDER_TOOL_DESCRIPTION
 
 TOOL_DESCRIPTION_UUIDS = {
