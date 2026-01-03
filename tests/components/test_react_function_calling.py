@@ -362,7 +362,7 @@ def test_structured_output_in_function_call_async(
         mock_client.responses.parse.assert_called_once()
 
     # Test 3: Full iteration flow - regular tool call -> structured output call
-    # First, add a mock agent tool to the ReActAgent
+    # First, add a mock agent tool to the agent
     mock_agent_tool = MagicMock()
     mock_agent_tool.tool_description.name = "test_tool"
     mock_agent_tool.tool_description.description = "Test tool description"
@@ -378,8 +378,8 @@ def test_structured_output_in_function_call_async(
         )
     )
 
-    # Create a ReActAgent instance that includes the tool from the start
-    react_agent_with_tool = ReActAgent(
+    # Create an agent instance that includes the tool from the start
+    react_agent_with_tool = AIAgent(
         completion_service=real_completion_service,
         component_attributes=ComponentAttributes(component_instance_name="Test Structured Output With Tool"),
         trace_manager=mock_trace_manager,

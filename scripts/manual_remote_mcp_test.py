@@ -26,8 +26,8 @@ import asyncio
 import json
 from typing import Any, Dict
 
-from engine.agent.tools.remote_mcp_tool import RemoteMCPTool, RemoteMCPToolInputs
-from engine.agent.types import ComponentAttributes
+from engine.components.tools.remote_mcp_tool import RemoteMCPTool, RemoteMCPToolInputs
+from engine.components.types import ComponentAttributes
 from engine.trace.trace_manager import TraceManager
 
 
