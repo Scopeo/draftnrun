@@ -74,18 +74,16 @@ class Retriever:
                 filters,
             )
             input_data = {"Query": query_text, "Filter": filters}
-            span.set_attributes(
-                {
-                    SpanAttributes.OPENINFERENCE_SPAN_KIND: OpenInferenceSpanKindValues.RETRIEVER.value,
-                    SpanAttributes.EMBEDDING_MODEL_NAME: self._vectorestore_service._embedding_service._model_name,
-                    SpanAttributes.INPUT_VALUE: serialize_to_json(input_data, shorten_string=False),
-                    "component_instance_id": (
-                        str(self.component_attributes.component_instance_id)
-                        if self.component_attributes.component_instance_id is not None
-                        else None
-                    ),
-                }
-            )
+            span.set_attributes({
+                SpanAttributes.OPENINFERENCE_SPAN_KIND: OpenInferenceSpanKindValues.RETRIEVER.value,
+                SpanAttributes.EMBEDDING_MODEL_NAME: self._vectorestore_service._embedding_service._model_name,
+                SpanAttributes.INPUT_VALUE: serialize_to_json(input_data, shorten_string=False),
+                "component_instance_id": (
+                    str(self.component_attributes.component_instance_id)
+                    if self.component_attributes.component_instance_id is not None
+                    else None
+                ),
+            })
 
             if len(chunks) > 30:
                 for i, chunk in enumerate(chunks):
@@ -102,13 +100,11 @@ class Retriever:
                 # TODO: delete this block when we refactor the trace manager
                 for i, chunk in enumerate(chunks):
                     metadata_str = json.dumps(chunk.metadata)
-                    span.set_attributes(
-                        {
-                            f"{SpanAttributes.RETRIEVAL_DOCUMENTS}.{i}.document.content": chunk.content,
-                            f"{SpanAttributes.RETRIEVAL_DOCUMENTS}.{i}.document.id": chunk.name,
-                            f"{SpanAttributes.RETRIEVAL_DOCUMENTS}.{i}.document.metadata": metadata_str,
-                        }
-                    )
+                    span.set_attributes({
+                        f"{SpanAttributes.RETRIEVAL_DOCUMENTS}.{i}.document.content": chunk.content,
+                        f"{SpanAttributes.RETRIEVAL_DOCUMENTS}.{i}.document.id": chunk.name,
+                        f"{SpanAttributes.RETRIEVAL_DOCUMENTS}.{i}.document.metadata": metadata_str,
+                    })
             span.set_status(trace_api.StatusCode.OK)
 
         return chunks

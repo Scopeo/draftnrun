@@ -86,12 +86,10 @@ class TerminalCommandRunner(Component):
     ) -> AgentPayload:
         span = get_current_span()
         trace_input = str(kwargs["command"])
-        span.set_attributes(
-            {
-                SpanAttributes.OPENINFERENCE_SPAN_KIND: self.TRACE_SPAN_KIND,
-                SpanAttributes.INPUT_VALUE: trace_input,
-            }
-        )
+        span.set_attributes({
+            SpanAttributes.OPENINFERENCE_SPAN_KIND: self.TRACE_SPAN_KIND,
+            SpanAttributes.INPUT_VALUE: trace_input,
+        })
 
         # Extract only the parameters that execute_terminal_command accepts
         command = kwargs["command"]

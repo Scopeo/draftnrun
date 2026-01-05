@@ -87,24 +87,22 @@ def test_qdrant_service():
     )
     assert retrieved_chunks[0] == correct_chunk
 
-    new_df_1 = pd.DataFrame(
-        [
-            {
-                "chunk_id": "1",
-                "content": "chunk1",
-                "file_id": "file_id1",
-                "url": "https//www.dummy1.com",
-                "last_edited_ts": "2025-01-2 10:40:40",
-            },
-            {
-                "chunk_id": "2",
-                "content": "chunk2",
-                "url": "https//www.dummy2.com",
-                "file_id": "file_id2",
-                "last_edited_ts": "2025-01-2 10:40:40",
-            },
-        ]
-    )
+    new_df_1 = pd.DataFrame([
+        {
+            "chunk_id": "1",
+            "content": "chunk1",
+            "file_id": "file_id1",
+            "url": "https//www.dummy1.com",
+            "last_edited_ts": "2025-01-2 10:40:40",
+        },
+        {
+            "chunk_id": "2",
+            "content": "chunk2",
+            "url": "https//www.dummy2.com",
+            "file_id": "file_id2",
+            "last_edited_ts": "2025-01-2 10:40:40",
+        },
+    ])
     asyncio.run(qdrant_agentic_service.sync_df_with_collection_async(new_df_1, TEST_COLLECTION_NAME))
     assert asyncio.run(qdrant_agentic_service.count_points_async(TEST_COLLECTION_NAME)) == 2
     synced_df = asyncio.run(qdrant_agentic_service.get_collection_data_async(TEST_COLLECTION_NAME))
@@ -112,24 +110,22 @@ def test_qdrant_service():
     synced_df.reset_index(drop=True, inplace=True)
     assert synced_df.equals(new_df_1)
 
-    new_df_2 = pd.DataFrame(
-        [
-            {
-                "chunk_id": "1",
-                "content": "chunk1",
-                "file_id": "file_id1",
-                "url": "https//www.dummy1.com",
-                "last_edited_ts": "2025-01-2 10:40:40",
-            },
-            {
-                "chunk_id": "3",
-                "content": "chunk3",
-                "file_id": "file_id3",
-                "url": "https//www.dummy3.com",
-                "last_edited_ts": "2025-01-2 10:40:40",
-            },
-        ]
-    )
+    new_df_2 = pd.DataFrame([
+        {
+            "chunk_id": "1",
+            "content": "chunk1",
+            "file_id": "file_id1",
+            "url": "https//www.dummy1.com",
+            "last_edited_ts": "2025-01-2 10:40:40",
+        },
+        {
+            "chunk_id": "3",
+            "content": "chunk3",
+            "file_id": "file_id3",
+            "url": "https//www.dummy3.com",
+            "last_edited_ts": "2025-01-2 10:40:40",
+        },
+    ])
     asyncio.run(qdrant_agentic_service.sync_df_with_collection_async(new_df_2, TEST_COLLECTION_NAME))
     assert asyncio.run(qdrant_agentic_service.count_points_async(TEST_COLLECTION_NAME)) == 2
     synced_df = asyncio.run(qdrant_agentic_service.get_collection_data_async(TEST_COLLECTION_NAME))
@@ -204,13 +200,11 @@ def test_multiple_metadata_fields_index_creation():
     call_tracker = []
 
     async def mock_create_index(collection_name: str, field_name: str, field_schema_type: FieldSchema):
-        call_tracker.append(
-            {
-                "collection_name": collection_name,
-                "field_name": field_name,
-                "field_schema_type": field_schema_type,
-            }
-        )
+        call_tracker.append({
+            "collection_name": collection_name,
+            "field_name": field_name,
+            "field_schema_type": field_schema_type,
+        })
         # Call the original method to maintain functionality
         return await original_create_index(collection_name, field_name, field_schema_type)
 
@@ -226,9 +220,9 @@ def test_multiple_metadata_fields_index_creation():
     ]
 
     # Should have 4 calls, one for each metadata field
-    assert (
-        len(metadata_field_calls) == 4
-    ), f"Expected 4 index creation calls for metadata fields, got {len(metadata_field_calls)}"
+    assert len(metadata_field_calls) == 4, (
+        f"Expected 4 index creation calls for metadata fields, got {len(metadata_field_calls)}"
+    )
 
     # Verify each field was called with the correct type
     field_type_map = {
@@ -241,9 +235,9 @@ def test_multiple_metadata_fields_index_creation():
     for field_name, expected_type in field_type_map.items():
         matching_calls = [call for call in metadata_field_calls if call["field_name"] == field_name]
         assert len(matching_calls) == 1, f"Expected exactly 1 call for field '{field_name}', got {len(matching_calls)}"
-        assert (
-            matching_calls[0]["field_schema_type"] == expected_type
-        ), f"Field '{field_name}' should have type {expected_type}, got {matching_calls[0]['field_schema_type']}"
+        assert matching_calls[0]["field_schema_type"] == expected_type, (
+            f"Field '{field_name}' should have type {expected_type}, got {matching_calls[0]['field_schema_type']}"
+        )
 
     # Also verify chunk_id and last_edited_ts indexes were created
     chunk_id_calls = [call for call in call_tracker if call["field_name"] == "chunk_id"]

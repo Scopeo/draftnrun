@@ -89,18 +89,16 @@ class Start:
                 filtered_input[k] = v
 
         with self.trace_manager.start_span(self.component_attributes.component_instance_name) as span:
-            span.set_attributes(
-                {
-                    SpanAttributes.OPENINFERENCE_SPAN_KIND: OpenInferenceSpanKindValues.UNKNOWN.value,
-                    SpanAttributes.INPUT_VALUE: serialize_to_json(base, shorten_string=True),
-                    SpanAttributes.OUTPUT_VALUE: serialize_to_json(filtered_input, shorten_string=True),
-                    "component_instance_id": (
-                        str(self.component_attributes.component_instance_id)
-                        if self.component_attributes.component_instance_id is not None
-                        else None
-                    ),
-                }
-            )
+            span.set_attributes({
+                SpanAttributes.OPENINFERENCE_SPAN_KIND: OpenInferenceSpanKindValues.UNKNOWN.value,
+                SpanAttributes.INPUT_VALUE: serialize_to_json(base, shorten_string=True),
+                SpanAttributes.OUTPUT_VALUE: serialize_to_json(filtered_input, shorten_string=True),
+                "component_instance_id": (
+                    str(self.component_attributes.component_instance_id)
+                    if self.component_attributes.component_instance_id is not None
+                    else None
+                ),
+            })
             span.set_status(trace_api.StatusCode.OK)
 
         # "messages" go in data, all other fields go in ctx

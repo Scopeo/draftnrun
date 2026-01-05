@@ -104,14 +104,12 @@ class WebSearchOpenAITool(Component):
             final_allowed_domains = inputs.filters.allowed_domains
 
         span = get_current_span()
-        span.set_attributes(
-            {
-                SpanAttributes.INPUT_VALUE: serialize_to_json(
-                    {"query": query_str, "allowed_domains": final_allowed_domains}, shorten_string=True
-                ),
-                SpanAttributes.LLM_MODEL_NAME: self._web_service._model_name,
-                "model_id": str(self._web_service._model_id) if self._web_service._model_id is not None else None,
-            }
-        )
+        span.set_attributes({
+            SpanAttributes.INPUT_VALUE: serialize_to_json(
+                {"query": query_str, "allowed_domains": final_allowed_domains}, shorten_string=True
+            ),
+            SpanAttributes.LLM_MODEL_NAME: self._web_service._model_name,
+            "model_id": str(self._web_service._model_id) if self._web_service._model_id is not None else None,
+        })
         output = await self._web_service.web_search_async(query_str, final_allowed_domains)
         return WebSearchOpenAIToolOutputs(output=output)

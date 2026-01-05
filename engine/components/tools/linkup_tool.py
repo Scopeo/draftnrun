@@ -135,12 +135,10 @@ class LinkupSearchTool(Component):
             f"exclude domains: {exclude_domains}\n"
             f"depth: {depth}"
         )
-        span.set_attributes(
-            {
-                SpanAttributes.OPENINFERENCE_SPAN_KIND: self.TRACE_SPAN_KIND,
-                SpanAttributes.INPUT_VALUE: trace_input,
-            }
-        )
+        span.set_attributes({
+            SpanAttributes.OPENINFERENCE_SPAN_KIND: self.TRACE_SPAN_KIND,
+            SpanAttributes.INPUT_VALUE: trace_input,
+        })
         response = self.search_results(
             query=content,
             depth=depth,
@@ -152,14 +150,12 @@ class LinkupSearchTool(Component):
         )
 
         for i, source in enumerate(response.sources):
-            span.set_attributes(
-                {
-                    SpanAttributes.OPENINFERENCE_SPAN_KIND: OpenInferenceSpanKindValues.RETRIEVER.value,
-                    f"{SpanAttributes.RETRIEVAL_DOCUMENTS}.{i}.document.content": source.content,
-                    f"{SpanAttributes.RETRIEVAL_DOCUMENTS}.{i}.document.id": source.name,
-                    f"{SpanAttributes.RETRIEVAL_DOCUMENTS}.{i}.document.metadata": json.dumps(source.metadata),
-                }
-            )
+            span.set_attributes({
+                SpanAttributes.OPENINFERENCE_SPAN_KIND: OpenInferenceSpanKindValues.RETRIEVER.value,
+                f"{SpanAttributes.RETRIEVAL_DOCUMENTS}.{i}.document.content": source.content,
+                f"{SpanAttributes.RETRIEVAL_DOCUMENTS}.{i}.document.id": source.name,
+                f"{SpanAttributes.RETRIEVAL_DOCUMENTS}.{i}.document.metadata": json.dumps(source.metadata),
+            })
 
         return AgentPayload(
             messages=[ChatMessage(role="assistant", content=response.response)],

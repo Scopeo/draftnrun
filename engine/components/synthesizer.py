@@ -49,32 +49,26 @@ class Synthesizer:
                 component_name=self.component_attributes.component_instance_name,
                 variables=input_dict,
             )
-            span.set_attributes(
-                {
-                    SpanAttributes.OPENINFERENCE_SPAN_KIND: OpenInferenceSpanKindValues.LLM.value,
-                    SpanAttributes.INPUT_VALUE: input_str,
-                    SpanAttributes.LLM_MODEL_NAME: self._completion_service._model_name,
-                    "component_instance_id": (
-                        str(self.component_attributes.component_instance_id)
-                        if self.component_attributes.component_instance_id is not None
-                        else None
-                    ),
-                    "model_id": (
-                        str(self._completion_service._model_id)
-                        if self._completion_service._model_id is not None
-                        else None
-                    ),
-                }
-            )
+            span.set_attributes({
+                SpanAttributes.OPENINFERENCE_SPAN_KIND: OpenInferenceSpanKindValues.LLM.value,
+                SpanAttributes.INPUT_VALUE: input_str,
+                SpanAttributes.LLM_MODEL_NAME: self._completion_service._model_name,
+                "component_instance_id": (
+                    str(self.component_attributes.component_instance_id)
+                    if self.component_attributes.component_instance_id is not None
+                    else None
+                ),
+                "model_id": (
+                    str(self._completion_service._model_id) if self._completion_service._model_id is not None else None
+                ),
+            })
             response = await self._completion_service.constrained_complete_with_pydantic_async(
                 messages=input_str,
                 response_format=self.response_format,
             )
-            span.set_attributes(
-                {
-                    SpanAttributes.OUTPUT_VALUE: response.response,
-                }
-            )
+            span.set_attributes({
+                SpanAttributes.OUTPUT_VALUE: response.response,
+            })
             span.set_status(trace_api.StatusCode.OK)
             response = SourcedResponse(
                 response=response.response,

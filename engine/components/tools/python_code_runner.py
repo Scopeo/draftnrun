@@ -212,12 +212,10 @@ class PythonCodeRunner(Component):
     ) -> AgentPayload:
         span = get_current_span()
         trace_input = str(kwargs.get("python_code", ""))
-        span.set_attributes(
-            {
-                SpanAttributes.OPENINFERENCE_SPAN_KIND: self.TRACE_SPAN_KIND,
-                SpanAttributes.INPUT_VALUE: trace_input,
-            }
-        )
+        span.set_attributes({
+            SpanAttributes.OPENINFERENCE_SPAN_KIND: self.TRACE_SPAN_KIND,
+            SpanAttributes.INPUT_VALUE: trace_input,
+        })
 
         python_code = kwargs["python_code"]
         shared_sandbox = kwargs.get("shared_sandbox")
