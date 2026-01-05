@@ -635,9 +635,9 @@ class QdrantService:
 
         for i in range(0, len(list_chunks), self._max_chunks_to_add):
             current_chunk_batch = list_chunks[i : i + self._max_chunks_to_add]
-            list_embeddings = await self._build_vectors_async(
-                [chunk[schema.content_field] for chunk in current_chunk_batch]
-            )
+            list_embeddings = await self._build_vectors_async([
+                chunk[schema.content_field] for chunk in current_chunk_batch
+            ])
             metadata_to_keep = set(schema.metadata_fields_to_keep or [])
             url_field = {schema.url_id_field} if schema.url_id_field else {}
             payload_fields = {

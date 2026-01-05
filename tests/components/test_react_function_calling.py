@@ -536,12 +536,10 @@ def test_structured_output_in_function_call_async(
 
             output = react_agent_max_iter.run_sync(agent_input)
             # Should return the structured output from the constrained_complete method
-            assert output.last_message.content == json.dumps(
-                {
-                    "answer": "Max iterations reached answer",
-                    "is_final": True,
-                }
-            )
+            assert output.last_message.content == json.dumps({
+                "answer": "Max iterations reached answer",
+                "is_final": True,
+            })
             assert output.is_final
 
             # Verify that the constrained_complete method was called (via responses.parse)

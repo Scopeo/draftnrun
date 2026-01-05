@@ -601,24 +601,22 @@ class DocxTemplateAgent(Component):
 
             template_type = "base64" if template_base64 else "input_path"
 
-            span.set_attributes(
-                {
-                    SpanAttributes.INPUT_VALUE: serialize_to_json(
-                        {
-                            "template": template_type,
-                            "brief": (
-                                template_information_brief[:100]
-                                if len(template_information_brief) > 100
-                                else template_information_brief
-                            ),
-                            "output_filename": output_filename,
-                        },
-                        shorten_string=False,
-                        indent=0,
-                    ),
-                    SpanAttributes.OUTPUT_VALUE: success_msg,
-                }
-            )
+            span.set_attributes({
+                SpanAttributes.INPUT_VALUE: serialize_to_json(
+                    {
+                        "template": template_type,
+                        "brief": (
+                            template_information_brief[:100]
+                            if len(template_information_brief) > 100
+                            else template_information_brief
+                        ),
+                        "output_filename": output_filename,
+                    },
+                    shorten_string=False,
+                    indent=0,
+                ),
+                SpanAttributes.OUTPUT_VALUE: success_msg,
+            })
 
             return AgentPayload(
                 messages=[ChatMessage(role="assistant", content=success_msg)],

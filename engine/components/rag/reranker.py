@@ -34,39 +34,33 @@ class Reranker(ABC):
             input_data = {"input_documents": input_documents}
 
             reranker_chunks = await self._rerank_without_trace(query, chunks)
-            span.set_attributes(
-                {
-                    SpanAttributes.OPENINFERENCE_SPAN_KIND: OpenInferenceSpanKindValues.RERANKER.value,
-                    SpanAttributes.INPUT_VALUE: serialize_to_json(input_data, shorten_string=False),
-                    RerankerAttributes.RERANKER_QUERY: query,
-                    RerankerAttributes.RERANKER_MODEL_NAME: self._model,
-                    "component_instance_id": (
-                        str(self.component_attributes.component_instance_id)
-                        if self.component_attributes.component_instance_id is not None
-                        else None
-                    ),
-                }
-            )
+            span.set_attributes({
+                SpanAttributes.OPENINFERENCE_SPAN_KIND: OpenInferenceSpanKindValues.RERANKER.value,
+                SpanAttributes.INPUT_VALUE: serialize_to_json(input_data, shorten_string=False),
+                RerankerAttributes.RERANKER_QUERY: query,
+                RerankerAttributes.RERANKER_MODEL_NAME: self._model,
+                "component_instance_id": (
+                    str(self.component_attributes.component_instance_id)
+                    if self.component_attributes.component_instance_id is not None
+                    else None
+                ),
+            })
 
             for i, chunk in enumerate(chunks):
-                span.set_attributes(
-                    {
-                        f"{RerankerAttributes.RERANKER_INPUT_DOCUMENTS}.{i}.document.content": chunk.content,
-                        f"{RerankerAttributes.RERANKER_INPUT_DOCUMENTS}.{i}.document.id": chunk.name,
-                    }
-                )
+                span.set_attributes({
+                    f"{RerankerAttributes.RERANKER_INPUT_DOCUMENTS}.{i}.document.content": chunk.content,
+                    f"{RerankerAttributes.RERANKER_INPUT_DOCUMENTS}.{i}.document.id": chunk.name,
+                })
 
             for i, reranker_chunk in enumerate(reranker_chunks):
                 metadata_str = json.dumps(reranker_chunk.metadata)
-                span.set_attributes(
-                    {
-                        f"{RerankerAttributes.RERANKER_OUTPUT_DOCUMENTS}.{i}.document.content": reranker_chunk.content,
-                        f"{RerankerAttributes.RERANKER_OUTPUT_DOCUMENTS}.{i}.document.id": reranker_chunk.name,
-                        f"{RerankerAttributes.RERANKER_OUTPUT_DOCUMENTS}.{i}.document.score": reranker_chunk.metadata[
-                            "reranked_score"
-                        ],
-                        f"{RerankerAttributes.RERANKER_OUTPUT_DOCUMENTS}.{i}.document.metadata": metadata_str,
-                    }
-                )
+                span.set_attributes({
+                    f"{RerankerAttributes.RERANKER_OUTPUT_DOCUMENTS}.{i}.document.content": reranker_chunk.content,
+                    f"{RerankerAttributes.RERANKER_OUTPUT_DOCUMENTS}.{i}.document.id": reranker_chunk.name,
+                    f"{RerankerAttributes.RERANKER_OUTPUT_DOCUMENTS}.{i}.document.score": reranker_chunk.metadata[
+                        "reranked_score"
+                    ],
+                    f"{RerankerAttributes.RERANKER_OUTPUT_DOCUMENTS}.{i}.document.metadata": metadata_str,
+                })
             span.set_status(trace_api.StatusCode.OK)
             return reranker_chunks

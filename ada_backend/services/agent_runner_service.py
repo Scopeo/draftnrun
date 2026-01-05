@@ -111,13 +111,11 @@ async def build_graph_runner(
         expression_ast = None
         if expression.expression_json:
             expression_ast = expression_from_json(expression.expression_json)
-        expressions.append(
-            {
-                "target_instance_id": str(expression.component_instance_id),
-                "field_name": expression.field_name,
-                "expression_ast": expression_ast,
-            }
-        )
+        expressions.append({
+            "target_instance_id": str(expression.component_instance_id),
+            "field_name": expression.field_name,
+            "expression_ast": expression_ast,
+        })
 
     runnables: dict[str, Runnable] = {}
     graph = nx.DiGraph()

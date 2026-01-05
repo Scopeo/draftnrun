@@ -36,21 +36,15 @@ class OCRCall(Component):
             )
 
             span = get_current_span()
-            span.set_attributes(
-                {
-                    SpanAttributes.INPUT_VALUE: serialize_to_json(payload_json, shorten_string=True),
-                    SpanAttributes.LLM_MODEL_NAME: self._ocr_service._model_name,
-                    "model_id": (
-                        str(self._ocr_service._model_id) if self._ocr_service._model_id is not None else None
-                    ),
-                }
-            )
+            span.set_attributes({
+                SpanAttributes.INPUT_VALUE: serialize_to_json(payload_json, shorten_string=True),
+                SpanAttributes.LLM_MODEL_NAME: self._ocr_service._model_name,
+                "model_id": (str(self._ocr_service._model_id) if self._ocr_service._model_id is not None else None),
+            })
             response = await self._ocr_service.get_ocr_text_async(payload_json)
-            span.set_attributes(
-                {
-                    SpanAttributes.OUTPUT_VALUE: serialize_to_json(response),
-                }
-            )
+            span.set_attributes({
+                SpanAttributes.OUTPUT_VALUE: serialize_to_json(response),
+            })
             return AgentPayload(
                 messages=[ChatMessage(role="assistant", content=response)],
             )

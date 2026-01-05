@@ -224,17 +224,13 @@ class LLMCallAgent(Component):
             content = text_content
 
         span = get_current_span()
-        span.set_attributes(
-            {
-                SpanAttributes.INPUT_VALUE: serialize_to_json(
-                    [{"role": "user", "content": content}], shorten_string=True
-                ),
-                SpanAttributes.LLM_MODEL_NAME: self._completion_service._model_name,
-                "model_id": (
-                    str(self._completion_service._model_id) if self._completion_service._model_id is not None else None
-                ),
-            }
-        )
+        span.set_attributes({
+            SpanAttributes.INPUT_VALUE: serialize_to_json([{"role": "user", "content": content}], shorten_string=True),
+            SpanAttributes.LLM_MODEL_NAME: self._completion_service._model_name,
+            "model_id": (
+                str(self._completion_service._model_id) if self._completion_service._model_id is not None else None
+            ),
+        })
         if output_format:
             response = await self._completion_service.constrained_complete_with_json_schema_async(
                 messages=[{"role": "user", "content": content}],

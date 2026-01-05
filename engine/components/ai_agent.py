@@ -363,18 +363,14 @@ class AIAgent(Component):
         tool_choice = "auto" if self._current_iteration < self._max_iterations else "none"
         with self.trace_manager.start_span("Agentic reflexion") as span:
             llm_input_messages = [msg.model_dump() for msg in history_messages_handled]
-            span.set_attributes(
-                {
-                    SpanAttributes.OPENINFERENCE_SPAN_KIND: OpenInferenceSpanKindValues.LLM.value,
-                    SpanAttributes.LLM_INPUT_MESSAGES: json.dumps(llm_input_messages),
-                    SpanAttributes.LLM_MODEL_NAME: self._completion_service._model_name,
-                    "model_id": (
-                        str(self._completion_service._model_id)
-                        if self._completion_service._model_id is not None
-                        else None
-                    ),
-                }
-            )
+            span.set_attributes({
+                SpanAttributes.OPENINFERENCE_SPAN_KIND: OpenInferenceSpanKindValues.LLM.value,
+                SpanAttributes.LLM_INPUT_MESSAGES: json.dumps(llm_input_messages),
+                SpanAttributes.LLM_MODEL_NAME: self._completion_service._model_name,
+                "model_id": (
+                    str(self._completion_service._model_id) if self._completion_service._model_id is not None else None
+                ),
+            })
             chat_response = await self._completion_service.function_call_async(
                 messages=llm_input_messages,
                 tools=[agent.tool_description for agent in self.agent_tools],
@@ -382,11 +378,9 @@ class AIAgent(Component):
                 structured_output_tool=output_tool_description,
             )
 
-            span.set_attributes(
-                {
-                    SpanAttributes.LLM_OUTPUT_MESSAGES: json.dumps(chat_response.choices[0].message.model_dump()),
-                }
-            )
+            span.set_attributes({
+                SpanAttributes.LLM_OUTPUT_MESSAGES: json.dumps(chat_response.choices[0].message.model_dump()),
+            })
             span.set_status(trace_api.StatusCode.OK)
 
             all_tool_calls = chat_response.choices[0].message.tool_calls

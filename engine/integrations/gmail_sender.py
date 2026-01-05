@@ -239,11 +239,9 @@ class GmailSender(Component):
         if not inputs.mail_subject or not inputs.mail_body:
             raise ValueError("Both email_subject and email_body must be provided")
         span = get_current_span()
-        span.set_attributes(
-            {
-                SpanAttributes.INPUT_VALUE: f"Subject: {inputs.mail_subject}\n Body: {inputs.mail_body}",
-            }
-        )
+        span.set_attributes({
+            SpanAttributes.INPUT_VALUE: f"Subject: {inputs.mail_subject}\n Body: {inputs.mail_body}",
+        })
         if self.save_as_draft or not inputs.email_recipients:
             LOGGER.info("Creating draft email")
             draft = self.gmail_create_draft(

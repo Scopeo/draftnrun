@@ -97,12 +97,10 @@ class HybridRAG(RAG):
             synthesized_response = self._formatter.format(synthesized_response)
 
         for i, source in enumerate(text_image_sources_for_synthesizer):
-            self.log_trace(
-                {
-                    f"{SpanAttributes.RETRIEVAL_DOCUMENTS}.{i}.document.content": source.content,
-                    f"{SpanAttributes.RETRIEVAL_DOCUMENTS}.{i}.document.id": source.name,
-                }
-            )
+            self.log_trace({
+                f"{SpanAttributes.RETRIEVAL_DOCUMENTS}.{i}.document.content": source.content,
+                f"{SpanAttributes.RETRIEVAL_DOCUMENTS}.{i}.document.id": source.name,
+            })
 
         return AgentPayload(
             messages=[ChatMessage(role="assistant", content=synthesized_response.response)],
