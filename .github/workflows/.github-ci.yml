@@ -6,7 +6,6 @@ on:
   pull_request:
     branches:
       - main
-      - noel25
 
 concurrency:
   group: ec2-runner-tests
