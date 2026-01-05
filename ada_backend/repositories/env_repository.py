@@ -1,10 +1,10 @@
-from uuid import UUID
 from typing import Optional
+from uuid import UUID
 
 from sqlalchemy.orm import Session
 
-from ada_backend.database.models import EnvType
 from ada_backend.database import models as db
+from ada_backend.database.models import EnvType
 
 
 def get_project_env_binding(

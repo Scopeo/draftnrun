@@ -4,8 +4,8 @@ from uuid import UUID
 import numpy as np
 import pandas as pd
 
-from ada_backend.services.charts_service import get_tokens_distribution_chart, TOKENS_DISTRIBUTION_BINS
-from ada_backend.schemas.chart_schema import Chart, ChartType, ChartData, Dataset
+from ada_backend.schemas.chart_schema import Chart, ChartData, ChartType, Dataset
+from ada_backend.services.charts_service import TOKENS_DISTRIBUTION_BINS, get_tokens_distribution_chart
 
 
 @patch("ada_backend.services.charts_service.query_trace_duration")

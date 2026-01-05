@@ -1,10 +1,11 @@
-from unittest.mock import MagicMock, patch, AsyncMock
 import json
-from pydantic import BaseModel
-import pytest
+from unittest.mock import AsyncMock, MagicMock, patch
 
-from engine.llm_services.llm_service import DEFAULT_TEMPERATURE, CompletionService, EmbeddingService
+import pytest
+from pydantic import BaseModel
+
 from engine.llm_services.constrained_output_models import OutputFormatModel
+from engine.llm_services.llm_service import DEFAULT_TEMPERATURE, CompletionService, EmbeddingService
 from engine.trace.span_context import set_tracing_span
 
 
@@ -140,7 +141,9 @@ async def test_embedding_service_async():
 @pytest.mark.asyncio
 async def test_custom_provider_constrained_output():
     """Test that custom providers work with constrained output methods and handle errors."""
-    with (patch("engine.llm_services.llm_service.settings") as mock_settings,):
+    with (
+        patch("engine.llm_services.providers.provider_factory.settings") as mock_settings,
+    ):
         mock_settings.custom_models = {
             "custom_models": {
                 "dummy-provider": [

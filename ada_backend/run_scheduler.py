@@ -1,16 +1,16 @@
 import asyncio
+import logging
 import signal
 import sys
-import logging
 from typing import Optional
 
-from logger import setup_logging
-from engine.trace.trace_context import set_trace_manager
 from ada_backend.scheduler.service import (
+    initialize_scheduler_trace_manager,
     start_scheduler,
     stop_scheduler,
-    initialize_scheduler_trace_manager,
 )
+from engine.trace.trace_context import set_trace_manager
+from logger import setup_logging
 
 LOGGER = logging.getLogger(__name__)
 

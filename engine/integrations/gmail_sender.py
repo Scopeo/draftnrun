@@ -1,9 +1,9 @@
 import base64
 import logging
+import mimetypes
 from email.message import EmailMessage
 from pathlib import Path
-from typing import Optional, Iterable, Type
-import mimetypes
+from typing import Iterable, Optional, Type
 
 from googleapiclient.errors import HttpError
 from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttributes
@@ -11,8 +11,8 @@ from opentelemetry.trace import get_current_span
 from pydantic import BaseModel, Field, validator
 
 from ada_backend.database.setup_db import get_db
-from engine.agent.agent import Agent
-from engine.agent.types import ComponentAttributes, ToolDescription
+from engine.components.component import Component
+from engine.components.types import ComponentAttributes, ToolDescription
 from engine.integrations.utils import get_gmail_sender_service, get_google_user_email, get_oauth_access_token
 from engine.temps_folder_utils import get_output_dir
 from engine.trace.trace_manager import TraceManager
@@ -142,7 +142,7 @@ def create_raw_mail_message(
     return {"raw": encoded_message}
 
 
-class GmailSender(Agent):
+class GmailSender(Component):
     TRACE_SPAN_KIND = OpenInferenceSpanKindValues.TOOL.value
     migrated = True
 
@@ -202,7 +202,7 @@ class GmailSender(Agent):
                 attachments=attachments,
             )
             draft = self.service.users().drafts().create(userId="me", body={"message": raw_email_message}).execute()
-            LOGGER.debug(f'Draft id: {draft["id"]}\nDraft message: {draft["message"]}')
+            LOGGER.debug(f"Draft id: {draft['id']}\nDraft message: {draft['message']}")
 
         except HttpError as error:
             LOGGER.error(f"An error occurred: {error}")

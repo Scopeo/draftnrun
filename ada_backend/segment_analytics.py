@@ -1,10 +1,9 @@
-from uuid import UUID
 import logging
+from uuid import UUID
 
 import segment.analytics as analytics
 
 from settings import settings
-
 
 LOGGER = logging.getLogger(__name__)
 if hasattr(settings, "SEGMENT_API_KEY") and hasattr(settings, "ENV"):

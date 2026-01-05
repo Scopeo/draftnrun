@@ -1,27 +1,26 @@
 import asyncio
-from typing import Any, Optional, Type
+from typing import Any, Type, get_args, get_origin
 from unittest.mock import MagicMock, patch
 
 import networkx as nx
 import pytest
 from pydantic import BaseModel
 
-from engine.agent.agent import Agent
-from engine.agent.static_responder import StaticResponder
-from engine.agent.types import AgentPayload, ChatMessage, ComponentAttributes, ToolDescription
+from engine.components.component import Component
+from engine.components.static_responder import StaticResponder
+from engine.components.types import AgentPayload, ChatMessage, ComponentAttributes, ToolDescription
 from engine.graph_runner.graph_runner import GraphRunner
 from engine.graph_runner.port_management import get_component_port_type
 from engine.legacy_compatibility import get_unmigrated_output_type
 from engine.trace.trace_manager import TraceManager
 from tests.mocks.dummy_agent import DummyAgent
 
-
 # ============================================================================
 # SHARED MOCK COMPONENTS - Inherit from Agent for consistency
 # ============================================================================
 
 
-class MockIntOutputAgent(Agent):
+class MockIntOutputAgent(Component):
     """Mock agent that outputs int values."""
 
     migrated = True
@@ -56,7 +55,7 @@ class MockIntOutputAgent(Agent):
         return self.Outputs(output=42)
 
 
-class MockListInputAgent(Agent):
+class MockListInputAgent(Component):
     """Mock agent that expects list[ChatMessage] input."""
 
     migrated = True
@@ -134,7 +133,7 @@ def patch_prometheus_metrics():
         yield
 
 
-class EchoAgent(Agent):
+class EchoAgent(Component):
     """Deterministic migrated agent that echoes its input into an 'output' port.
 
     - input port: 'input'
@@ -354,10 +353,18 @@ class TestTypeDiscovery:
         GraphRunner(graph=g, runnables=runnables, start_nodes=["A"], trace_manager=tm)
 
         # Test AgentPayload pattern fields
-        assert get_unmigrated_output_type(dummy_agent, "messages") == list[ChatMessage]
-        assert get_unmigrated_output_type(dummy_agent, "artifacts") == dict
-        assert get_unmigrated_output_type(dummy_agent, "error") == Optional[str]
-        assert get_unmigrated_output_type(dummy_agent, "is_final") == Optional[bool]
+        messages_type = get_unmigrated_output_type(dummy_agent, "messages")
+        assert get_origin(messages_type) is list
+        assert get_args(messages_type) == (ChatMessage,)
+
+        artifacts_type = get_unmigrated_output_type(dummy_agent, "artifacts")
+        assert artifacts_type is dict
+
+        error_type = get_unmigrated_output_type(dummy_agent, "error")
+        assert set(get_args(error_type)) == {str, type(None)}
+
+        is_final_type = get_unmigrated_output_type(dummy_agent, "is_final")
+        assert set(get_args(is_final_type)) == {bool, type(None)}
 
         # Test unknown field
         assert get_unmigrated_output_type(dummy_agent, "unknown_field") is None

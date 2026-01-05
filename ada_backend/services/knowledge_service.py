@@ -1,8 +1,8 @@
-from datetime import datetime, timezone
+import json
 import logging
+from datetime import datetime, timezone
 from typing import Any, Dict, List
 from uuid import UUID
-import json
 
 import pandas as pd
 import tiktoken
@@ -11,42 +11,42 @@ from sqlalchemy.orm import Session
 
 from ada_backend.database import models as db
 from ada_backend.repositories.knowledge_repository import (
-    delete_document,
     delete_chunk,
+    delete_document,
     get_chunk_rows_for_document,
     list_documents_for_source,
 )
 from ada_backend.repositories.source_repository import get_data_source_by_org_id
 from ada_backend.schemas.knowledge_schema import (
     KnowledgeChunk,
-    KnowledgeDocumentWithChunks,
-    KnowledgeDocumentsListResponse,
     KnowledgeDocumentMetadata,
     KnowledgeDocumentOverview,
+    KnowledgeDocumentsListResponse,
+    KnowledgeDocumentWithChunks,
 )
+from ada_backend.services.entity_factory import get_llm_provider_and_model
 from ada_backend.services.ingestion_database_service import (
     get_sql_local_service_for_ingestion,
 )
 from ada_backend.services.knowledge.errors import (
     KnowledgeEmptyChunkError,
     KnowledgeMaxChunkSizeError,
+    KnowledgeServiceDBChunkDeletionError,
+    KnowledgeServiceDBSourceConfigError,
     KnowledgeServiceDocumentNotFoundError,
     KnowledgeServiceInvalidEmbeddingModelReferenceError,
     KnowledgeServiceInvalidQdrantSchemaError,
+    KnowledgeServiceQdrantChunkDeletionError,
     KnowledgeServiceQdrantCollectionCheckError,
     KnowledgeServiceQdrantCollectionNotFoundError,
     KnowledgeServiceQdrantMissingFieldsError,
     KnowledgeServiceQdrantOperationError,
     KnowledgeServiceQdrantServiceCreationError,
-    KnowledgeServiceQdrantChunkDeletionError,
     KnowledgeSourceNotFoundError,
-    KnowledgeServiceDBSourceConfigError,
-    KnowledgeServiceDBChunkDeletionError,
 )
 from engine.llm_services.llm_service import EmbeddingService
-from engine.qdrant_service import QdrantService, QdrantCollectionSchema
+from engine.qdrant_service import QdrantCollectionSchema, QdrantService
 from engine.trace.trace_context import get_trace_manager
-from ada_backend.services.entity_factory import get_llm_provider_and_model
 
 LOGGER = logging.getLogger(__name__)
 
@@ -91,7 +91,7 @@ def _get_source_for_organization(
         raise KnowledgeSourceNotFoundError(source_id=str(source_id), organization_id=str(organization_id))
     if not source.database_schema or not source.database_table_name:
         raise KnowledgeServiceDBSourceConfigError(
-            f"Data source '{source_id}' " "is missing ingestion database identifiers (schema/table)"
+            f"Data source '{source_id}' is missing ingestion database identifiers (schema/table)"
         )
     return source
 

@@ -1,8 +1,8 @@
 import json
 import logging
-from typing import Any
 import time
 import uuid
+from typing import Any
 
 from openai.types.chat import ChatCompletion, ChatCompletionMessage
 from openai.types.chat.chat_completion import Choice
@@ -70,91 +70,19 @@ def chat_completion_to_response(
                     else:
                         content["type"] = f"{prefix}{content['type']}"
                 elif "type" in content and content["type"] == "image_url":
-                    # For image_url, convert to input_image format expected by response API
                     content["type"] = f"{prefix}image"
+                    if "image_url" in content and isinstance(content["image_url"], dict):
+                        url = content["image_url"].get("url")
+                        if url:
+                            content["image_url"] = url
         elif "content" in message and isinstance(message["content"], str):
             continue
         else:
             LOGGER.error(f"Error converting to response format: Here is the full payload {chat_completion_messages}")
             raise ValueError(
-                (
-                    "Invalid message format: 'content' must be a list or a string."
-                    f" Received: {type(message['content'])}"
-                )
+                (f"Invalid message format: 'content' must be a list or a string. Received: {type(message['content'])}")
             )
     return response_messages
-
-
-def make_messages_compatible_for_mistral(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """
-    Make messages compatible for Mistral API by removing tool-related
-    fields from message types that don't support them.
-
-    Mistral only allows:
-    - tool_calls in assistant messages
-    - tool_call_id in tool messages
-    """
-    if not isinstance(messages, list):
-        return messages
-
-    mistral_compatible_messages = []
-    for message in messages:
-        mistral_compatible_message = message.copy()
-        role = message.get("role")
-
-        # Remove tool_calls from non-assistant messages
-        if role != "assistant" and "tool_calls" in mistral_compatible_message:
-            del mistral_compatible_message["tool_calls"]
-
-        # Remove tool_call_id from non-tool messages
-        if role != "tool" and "tool_call_id" in mistral_compatible_message:
-            del mistral_compatible_message["tool_call_id"]
-
-        # Remove None values to avoid sending empty fields
-        mistral_compatible_message = {k: v for k, v in mistral_compatible_message.items() if v is not None}
-
-        mistral_compatible_messages.append(mistral_compatible_message)
-
-    return mistral_compatible_messages
-
-
-def make_mistral_ocr_compatible(payload_json: dict) -> dict | None:
-    if "messages" not in payload_json or not payload_json["messages"]:
-        return None
-
-    for message in reversed(payload_json["messages"]):
-        if not isinstance(message, dict) or "content" not in message:
-            continue
-
-        content = message["content"]
-        if not content:
-            continue
-
-        payload_json["messages"][-1]["content"] = content if isinstance(content, list) else [content]
-
-        for content_item in payload_json["messages"][-1]["content"]:
-            if (
-                isinstance(content_item, dict)
-                and "file" in content_item
-                and isinstance(content_item["file"], dict)
-                and "file_data" in content_item["file"]
-            ):
-                return {
-                    "type": "document_url",
-                    "document_url": content_item["file"]["file_data"],
-                }
-            elif (
-                isinstance(content_item, dict)
-                and "image_url" in content_item
-                and isinstance(content_item["image_url"], dict)
-                and "url" in content_item["image_url"]
-            ):
-                return {
-                    "type": "image_url",
-                    "image_url": content_item["image_url"]["url"],
-                }
-
-    return None
 
 
 # TODO: Quick fix for GPT-5 models, remove when we have better solution

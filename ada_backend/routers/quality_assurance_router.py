@@ -1,61 +1,61 @@
-from typing import Annotated, Dict, List, Optional
-from uuid import UUID
 import logging
 from datetime import datetime, timezone
+from typing import Annotated, Dict, List, Optional
+from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
+from ada_backend.database.setup_db import get_db
+from ada_backend.routers.auth_router import (
+    UserRights,
+    user_has_access_to_project_dependency,
+)
 from ada_backend.schemas.auth_schema import SupabaseUser
+from ada_backend.schemas.dataset_schema import (
+    DatasetCreateList,
+    DatasetDeleteList,
+    DatasetListResponse,
+    DatasetResponse,
+)
 from ada_backend.schemas.input_groundtruth_schema import (
     InputGroundtruthCreateList,
-    InputGroundtruthUpdateList,
     InputGroundtruthDeleteList,
+    InputGroundtruthResponse,
     InputGroundtruthResponseList,
+    InputGroundtruthUpdateList,
     PaginatedInputGroundtruthResponse,
     QARunRequest,
     QARunResponse,
-    InputGroundtruthResponse,
-)
-from ada_backend.schemas.dataset_schema import (
-    DatasetCreateList,
-    DatasetResponse,
-    DatasetDeleteList,
-    DatasetListResponse,
-)
-from ada_backend.routers.auth_router import (
-    user_has_access_to_project_dependency,
-    UserRights,
-)
-from ada_backend.services.qa.quality_assurance_service import (
-    create_inputs_groundtruths_service,
-    update_inputs_groundtruths_service,
-    delete_inputs_groundtruths_service,
-    get_inputs_groundtruths_with_version_outputs_service,
-    get_outputs_by_graph_runner_service,
-    get_version_output_ids_by_input_ids_and_graph_runner_service,
-    run_qa_service,
-    create_datasets_service,
-    update_dataset_service,
-    delete_datasets_service,
-    get_datasets_by_project_service,
-    save_conversation_to_groundtruth_service,
-    export_qa_data_to_csv_service,
-    import_qa_data_from_csv_service,
 )
 from ada_backend.services.errors import GraphNotBoundToProjectError
 from ada_backend.services.qa.qa_error import (
     CSVEmptyFileError,
-    CSVInvalidJSONError,
-    CSVMissingColumnError,
     CSVExportError,
-    CSVNonUniquePositionError,
+    CSVInvalidJSONError,
     CSVInvalidPositionError,
+    CSVMissingColumnError,
+    CSVNonUniquePositionError,
     QADuplicatePositionError,
     QAPartialPositionError,
 )
-from ada_backend.database.setup_db import get_db
+from ada_backend.services.qa.quality_assurance_service import (
+    create_datasets_service,
+    create_inputs_groundtruths_service,
+    delete_datasets_service,
+    delete_inputs_groundtruths_service,
+    export_qa_data_to_csv_service,
+    get_datasets_by_project_service,
+    get_inputs_groundtruths_with_version_outputs_service,
+    get_outputs_by_graph_runner_service,
+    get_version_output_ids_by_input_ids_and_graph_runner_service,
+    import_qa_data_from_csv_service,
+    run_qa_service,
+    save_conversation_to_groundtruth_service,
+    update_dataset_service,
+    update_inputs_groundtruths_service,
+)
 
 router = APIRouter(tags=["Quality Assurance"])
 LOGGER = logging.getLogger(__name__)
@@ -522,7 +522,6 @@ def export_qa_data_to_csv_endpoint(
     session: Session = Depends(get_db),
     graph_runner_id: UUID = Query(..., description="Graph runner ID to filter outputs"),
 ) -> Response:
-
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
     try:

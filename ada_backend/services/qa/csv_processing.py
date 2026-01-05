@@ -5,9 +5,9 @@ from typing import BinaryIO
 
 from ada_backend.services.qa.qa_error import (
     CSVEmptyFileError,
-    CSVMissingColumnError,
     CSVInvalidJSONError,
     CSVInvalidPositionError,
+    CSVMissingColumnError,
 )
 
 

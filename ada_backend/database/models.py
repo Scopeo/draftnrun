@@ -1,32 +1,34 @@
-import uuid
 import json
-from typing import List, Optional, Union, Type
-from enum import StrEnum
 import logging
+import uuid
+from enum import StrEnum
+from typing import List, Optional, Type, Union
 
-from sqlalchemy import (
-    Float,
-    ForeignKeyConstraint,
-    Index,
-    String,
-    Text,
-    JSON,
-    Integer,
-    ForeignKey,
-    DateTime,
-    Boolean,
-    Enum as SQLAlchemyEnum,
-    UniqueConstraint,
-    func,
-    CheckConstraint,
-    UUID,
-    TypeDecorator,
-)
 import sqlalchemy as sa
-from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.orm import relationship, declarative_base, mapped_column
 from cryptography.fernet import Fernet
 from pydantic import BaseModel, ConfigDict, Field
+from sqlalchemy import (
+    JSON,
+    UUID,
+    Boolean,
+    CheckConstraint,
+    DateTime,
+    Float,
+    ForeignKey,
+    ForeignKeyConstraint,
+    Index,
+    Integer,
+    String,
+    Text,
+    TypeDecorator,
+    UniqueConstraint,
+    func,
+)
+from sqlalchemy import (
+    Enum as SQLAlchemyEnum,
+)
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.orm import declarative_base, mapped_column, relationship
 
 from ada_backend.database.utils import camel_to_snake
 from ada_backend.schemas.llm_models_schema import ModelCapabilityEnum

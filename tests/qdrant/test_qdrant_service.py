@@ -1,11 +1,12 @@
-import pandas as pd
 import asyncio
-from uuid import uuid4
 from unittest.mock import AsyncMock, MagicMock
+from uuid import uuid4
 
-from engine.qdrant_service import QdrantCollectionSchema, QdrantService, FieldSchema
+import pandas as pd
+
+from engine.components.types import SourceChunk
 from engine.llm_services.llm_service import EmbeddingService
-from engine.agent.types import SourceChunk
+from engine.qdrant_service import FieldSchema, QdrantCollectionSchema, QdrantService
 from tests.mocks.trace_manager import MockTraceManager
 
 TEST_COLLECTION_NAME = f"test_agentic_ci_collection_{uuid4()}"
@@ -399,7 +400,7 @@ def test_merge_qdrant_filters():
 
         await qdrant_service.add_chunks_async(list_chunks=chunks, collection_name=TEST_COLLECTION_NAME_MERGE)
 
-        from engine.agent.utils import merge_qdrant_filters_with_and_conditions
+        from engine.components.utils import merge_qdrant_filters_with_and_conditions
 
         filter_1 = {"must": [{"key": "field_1", "match": {"value": "value_1"}}]}
         filter_2 = {"must": [{"key": "field_2", "match": {"value": "value_2"}}]}

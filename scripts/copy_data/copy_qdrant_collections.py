@@ -32,7 +32,7 @@ from pathlib import Path
 
 import requests
 from sqlalchemy import create_engine, text
-from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
+from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 
 def get_collections_from_db(db_url: str) -> set[str]:

@@ -1,6 +1,6 @@
+import logging
 from typing import Annotated, List
 from uuid import UUID
-import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.orm import Session
@@ -13,24 +13,24 @@ from ada_backend.routers.auth_router import (
 from ada_backend.schemas.auth_schema import SupabaseUser
 from ada_backend.schemas.knowledge_schema import (
     KnowledgeChunk,
-    KnowledgeDocumentWithChunks,
     KnowledgeDocumentsListResponse,
-)
-from ada_backend.services.knowledge_service import (
-    delete_document_service,
-    delete_chunk_service,
-    get_document_with_chunks_service,
-    list_documents_service,
-    update_document_chunks_service,
+    KnowledgeDocumentWithChunks,
 )
 from ada_backend.services.knowledge.errors import (
     KnowledgeEmptyChunkError,
     KnowledgeMaxChunkSizeError,
+    KnowledgeServiceDBSourceConfigError,
+    KnowledgeServiceDocumentNotFoundError,
     KnowledgeServiceQdrantConfigurationError,
     KnowledgeServiceQdrantOperationError,
     KnowledgeSourceNotFoundError,
-    KnowledgeServiceDocumentNotFoundError,
-    KnowledgeServiceDBSourceConfigError,
+)
+from ada_backend.services.knowledge_service import (
+    delete_chunk_service,
+    delete_document_service,
+    get_document_with_chunks_service,
+    list_documents_service,
+    update_document_chunks_service,
 )
 
 LOGGER = logging.getLogger(__name__)

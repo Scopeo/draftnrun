@@ -1,17 +1,17 @@
-import logging
-from typing import Optional, Any
-from dataclasses import dataclass
-import uuid
-from datetime import datetime
-import re
-from enum import Enum
 import asyncio
 import json
+import logging
+import re
+import uuid
+from dataclasses import dataclass
+from datetime import datetime
+from enum import Enum
+from typing import Any, Optional
 
 import httpx
 import pandas as pd
 
-from engine.agent.types import SourceChunk
+from engine.components.types import SourceChunk
 from engine.llm_services.llm_service import EmbeddingService
 from settings import settings
 
@@ -395,7 +395,7 @@ class QdrantService:
             ordered_chunks.append((vector_id, penalized_score, payload))
         ordered_chunks.sort(key=lambda x: x[1], reverse=True)
         sorted_chunks = ordered_chunks[:max_retrieved_chunks_after_penalty]
-        vector_ids, scores, payloads = zip(*sorted_chunks)
+        vector_ids, scores, payloads = zip(*sorted_chunks, strict=False)
         return vector_ids, scores, payloads
 
     def retrieve_similar_chunks(
@@ -459,7 +459,7 @@ class QdrantService:
         if not vector_results:
             LOGGER.warning(f"No similar vectors found for query: {query_text}")
             return []
-        vector_ids, scores, payloads = zip(*vector_results)
+        vector_ids, scores, payloads = zip(*vector_results, strict=False)
 
         LOGGER.debug(f"Retrieved similar vectors with IDs: {vector_ids}")
         if len(vector_ids) == 0:
@@ -657,7 +657,7 @@ class QdrantService:
                     },
                     "vector": vector,
                 }
-                for chunk, vector in zip(current_chunk_batch, list_embeddings)
+                for chunk, vector in zip(current_chunk_batch, list_embeddings, strict=False)
             ]
             if not await self.insert_points_in_collection_async(
                 points=list_payloads,
@@ -707,7 +707,6 @@ class QdrantService:
         timestamp_filter: str,
         timestamp_column_name: str,
     ) -> Optional[dict]:
-
         if not timestamp_filter or not timestamp_column_name:
             return None
         # Parse the filter string to extract operator and value
@@ -738,7 +737,6 @@ class QdrantService:
             return None
 
     def _build_query_filter(self, query_filter: str) -> Optional[dict]:
-
         if not query_filter:
             return None
 
@@ -767,7 +765,6 @@ class QdrantService:
         base_filter: Optional[dict],
         additional_filters: list[dict],
     ) -> Optional[dict]:
-
         valid_filters = [f for f in additional_filters if f is not None]
 
         # If no filters at all, return None
@@ -854,7 +851,6 @@ class QdrantService:
         timestamp_filter: Optional[str] = None,
         timestamp_column_name: Optional[str] = None,
     ) -> Optional[dict]:
-
         additional_filters = []
 
         if query_filter:
@@ -881,7 +877,6 @@ class QdrantService:
         collection_name: str,
         filter: Optional[dict] = None,
     ) -> list[dict]:
-
         payload = {
             "filter": filter,
             "offset": None,
@@ -1104,7 +1099,6 @@ class QdrantService:
         collection_name: str,
         query_filter_qdrant: Optional[dict] = None,
     ) -> pd.DataFrame:
-
         if not await self.collection_exists_async(collection_name):
             raise ValueError(f"Collection {collection_name} does not exist.")
 

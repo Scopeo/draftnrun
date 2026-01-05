@@ -1,38 +1,39 @@
+import logging
 from typing import Annotated, List
 from uuid import UUID
-import logging
-from sqlalchemy.orm import Session
-from fastapi import Depends, status, HTTPException, APIRouter, Query
 
-from ada_backend.schemas.auth_schema import SupabaseUser
-from ada_backend.routers.auth_router import (
-    ensure_super_admin_dependency,
-    user_has_access_to_organization_dependency,
-    UserRights,
-)
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy.orm import Session
+
 from ada_backend.database.setup_db import get_db
+from ada_backend.routers.auth_router import (
+    UserRights,
+    ensure_super_admin_dependency,
+    super_admin_or_admin_api_key_dependency,
+    user_has_access_to_organization_dependency,
+)
+from ada_backend.schemas.auth_schema import SupabaseUser
+from ada_backend.schemas.chart_schema import ChartsResponse
 from ada_backend.schemas.credits_schema import (
-    ComponentVersionCostResponse,
     ComponentVersionCost,
-    OrganizationLimitResponse,
+    ComponentVersionCostResponse,
     OrganizationLimit,
     OrganizationLimitAndUsageResponse,
+    OrganizationLimitResponse,
 )
-from ada_backend.schemas.chart_schema import ChartsResponse
 from ada_backend.services.charts_service import get_credit_usage_table_chart
 from ada_backend.services.credits_service import (
-    upsert_component_version_cost_service,
     create_organization_limit_service,
-    update_organization_limit_service,
-    delete_organization_limit_service,
     delete_component_version_cost_service,
+    delete_organization_limit_service,
     get_all_organization_limits_and_usage_service,
+    update_organization_limit_service,
+    upsert_component_version_cost_service,
 )
 from ada_backend.services.errors import (
     ComponentVersionCostNotFound,
     OrganizationLimitNotFound,
 )
-from ada_backend.routers.auth_router import super_admin_or_admin_api_key_dependency
 
 router = APIRouter(tags=["Credits"])
 LOGGER = logging.getLogger(__name__)

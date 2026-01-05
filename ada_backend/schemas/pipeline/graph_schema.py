@@ -1,10 +1,10 @@
+from datetime import datetime
 from typing import Optional
 from uuid import UUID
-from datetime import datetime
 
 from pydantic import BaseModel, Field
 
-from ada_backend.schemas.pipeline.base import ComponentRelationshipSchema, ComponentInstanceSchema
+from ada_backend.schemas.pipeline.base import ComponentInstanceSchema, ComponentRelationshipSchema
 from ada_backend.schemas.pipeline.get_pipeline_schema import ComponentInstanceReadSchema
 from ada_backend.schemas.pipeline.port_mapping_schema import PortMappingSchema
 

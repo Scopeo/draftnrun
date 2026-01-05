@@ -1,70 +1,70 @@
 from typing import Any
 from uuid import UUID
 
-from engine.agent.inputs_outputs.start import Start
-from engine.agent.filter import Filter
-from engine.agent.llm_call_agent import LLMCallAgent
-from engine.agent.sql.react_sql_tool import ReactSQLAgent
-from engine.agent.sql.run_sql_query_tool import RunSQLQueryTool
-from engine.agent.sql.sql_tool import SQLTool
-from engine.agent.react_function_calling import ReActAgent
-from engine.agent.synthesizer import Synthesizer
-from engine.agent.hybrid_synthesizer import HybridSynthesizer
-from engine.agent.rag.rag import RAG
-from engine.agent.rag.hybrid_rag import HybridRAG
-from engine.agent.rag.chunk_selection import RelevantChunkSelector
-from engine.agent.rag.formatter import Formatter
-from engine.agent.rag.retriever import Retriever
-from engine.agent.rag.cohere_reranker import CohereReranker
-from engine.agent.rag.vocabulary_search import VocabularySearch
-from engine.agent.tools.tavily_search_tool import TavilyApiTool
-from engine.agent.web_search_tool_openai import WebSearchOpenAITool
-from engine.agent.tools.api_call_tool import APICallTool
-from engine.agent.tools.python_code_runner import PythonCodeRunner
-from engine.agent.tools.terminal_command_runner import TerminalCommandRunner
-from engine.agent.pdf_generation_tool import PDFGenerationTool
-from engine.agent.docx_generation_tool import DOCXGenerationTool
-from engine.agent.tools.docx_template import DocxTemplateAgent
-from engine.agent.document_enhanced_llm_call import DocumentEnhancedLLMCallAgent
-from engine.agent.document_react_loader import DocumentReactLoaderAgent
-from engine.agent.ocr_call import OCRCall
-from engine.agent.rag.document_search import DocumentSearch
-from engine.agent.graph_runner_block import GraphRunnerBlock
-from engine.agent.chunk_processor import ChunkProcessor
-from engine.integrations.gmail_sender import GmailSender
-from engine.agent.tools.linkup_tool import LinkupSearchTool
-from engine.storage_service.local_service import SQLLocalService
-from engine.storage_service.snowflake_service.snowflake_service import SnowflakeService
-from ada_backend.services.entity_factory import (
-    EntityFactory,
-    AgentFactory,
-    NonToolCallableBlockFactory,
-    detect_and_convert_dataclasses,
-    build_trace_manager_processor,
-    build_completion_service_processor,
-    build_param_name_translator,
-    build_qdrant_service_processor,
-    compose_processors,
-    build_web_service_processor,
-    build_ocr_service_processor,
-    build_project_reference_processor,
-    build_db_service_processor,
-    build_retriever_processor,
-    build_synthesizer_processor,
-    build_reranker_processor,
-    build_vocabulary_search_processor,
-    build_formatter_processor,
-    build_llm_capability_resolver_processor,
-)
 from ada_backend.database.seed.constants import (
     COMPLETION_MODEL_IN_DB,
     EMBEDDING_MODEL_IN_DB,
+    REASONING_IN_DB,
     TEMPERATURE_IN_DB,
     VERBOSITY_IN_DB,
-    REASONING_IN_DB,
 )
 from ada_backend.database.seed.utils import COMPONENT_VERSION_UUIDS
-from engine.agent.static_responder import StaticResponder
+from ada_backend.services.entity_factory import (
+    AgentFactory,
+    EntityFactory,
+    NonToolCallableBlockFactory,
+    build_completion_service_processor,
+    build_db_service_processor,
+    build_formatter_processor,
+    build_llm_capability_resolver_processor,
+    build_ocr_service_processor,
+    build_param_name_translator,
+    build_project_reference_processor,
+    build_qdrant_service_processor,
+    build_reranker_processor,
+    build_retriever_processor,
+    build_synthesizer_processor,
+    build_trace_manager_processor,
+    build_vocabulary_search_processor,
+    build_web_service_processor,
+    compose_processors,
+    detect_and_convert_dataclasses,
+)
+from engine.components.ai_agent import AIAgent
+from engine.components.chunk_processor import ChunkProcessor
+from engine.components.document_enhanced_llm_call import DocumentEnhancedLLMCallAgent
+from engine.components.document_react_loader import DocumentReactLoaderAgent
+from engine.components.docx_generation_tool import DOCXGenerationTool
+from engine.components.filter import Filter
+from engine.components.graph_runner_block import GraphRunnerBlock
+from engine.components.hybrid_synthesizer import HybridSynthesizer
+from engine.components.inputs_outputs.start import Start
+from engine.components.llm_call import LLMCallAgent
+from engine.components.ocr_call import OCRCall
+from engine.components.pdf_generation_tool import PDFGenerationTool
+from engine.components.rag.chunk_selection import RelevantChunkSelector
+from engine.components.rag.cohere_reranker import CohereReranker
+from engine.components.rag.document_search import DocumentSearch
+from engine.components.rag.formatter import Formatter
+from engine.components.rag.hybrid_rag import HybridRAG
+from engine.components.rag.rag import RAG
+from engine.components.rag.retriever import Retriever
+from engine.components.rag.vocabulary_search import VocabularySearch
+from engine.components.sql.react_sql_tool import ReactSQLAgent
+from engine.components.sql.run_sql_query_tool import RunSQLQueryTool
+from engine.components.sql.sql_tool import SQLTool
+from engine.components.static_responder import StaticResponder
+from engine.components.synthesizer import Synthesizer
+from engine.components.tools.api_call_tool import APICallTool
+from engine.components.tools.docx_template import DocxTemplateAgent
+from engine.components.tools.linkup_tool import LinkupSearchTool
+from engine.components.tools.python_code_runner import PythonCodeRunner
+from engine.components.tools.tavily_search_tool import TavilyApiTool
+from engine.components.tools.terminal_command_runner import TerminalCommandRunner
+from engine.components.web_search_tool_openai import WebSearchOpenAITool
+from engine.integrations.gmail_sender import GmailSender
+from engine.storage_service.local_service import SQLLocalService
+from engine.storage_service.snowflake_service.snowflake_service import SnowflakeService
 
 
 class FactoryRegistry:
@@ -299,7 +299,7 @@ def create_factory_registry() -> FactoryRegistry:
     registry.register(
         component_version_id=COMPONENT_VERSION_UUIDS["base_ai_agent"],
         factory=AgentFactory(
-            entity_class=ReActAgent,
+            entity_class=AIAgent,
             parameter_processors=[
                 completion_service_processor,
             ],
@@ -475,7 +475,7 @@ def create_factory_registry() -> FactoryRegistry:
         ),
     )
     registry.register(
-        component_version_id=COMPONENT_VERSION_UUIDS["document_enhanced_llm_call_agent"],
+        component_version_id=COMPONENT_VERSION_UUIDS["document_enhanced_llm_call"],
         factory=AgentFactory(
             entity_class=DocumentEnhancedLLMCallAgent,
         ),

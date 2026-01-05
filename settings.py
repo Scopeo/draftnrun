@@ -1,14 +1,14 @@
+import json
 import os
 import re
-import json
 from pathlib import Path
 from typing import Any, Dict, Optional
+from urllib.parse import urlparse
 
 import yaml
-from pydantic_settings import BaseSettings, SettingsConfigDict
 from dotenv import load_dotenv
-from pydantic import model_validator, ValidationError
-from urllib.parse import urlparse
+from pydantic import ValidationError, model_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 BASE_DIR = Path(__file__).parent.resolve()
 CHATBOT_CONFIG_TEMPLATE_VARS = {
@@ -45,6 +45,8 @@ class BaseConfig(BaseSettings):
     CEREBRAS_API_KEY: Optional[str] = None
     CEREBRAS_BASE_URL: Optional[str] = None
     COHERE_API_KEY: Optional[str] = None
+    ANTHROPIC_API_KEY: Optional[str] = None
+    ANTHROPIC_BASE_URL: Optional[str] = "https://api.anthropic.com/v1/messages"
 
     SNOWFLAKE_ACCOUNT: Optional[str] = None
     SNOWFLAKE_USER: Optional[str] = None
@@ -102,6 +104,7 @@ class BaseConfig(BaseSettings):
 
     TEST_USER_EMAIL: Optional[str] = None
     TEST_USER_PASSWORD: Optional[str] = None
+    EXTERNAL_TEST_MISTRAL_OCR_IMAGE_URL: Optional[str] = None
 
     INGESTION_API_KEY: Optional[str] = None
     INGESTION_API_KEY_HASHED: Optional[str] = None
@@ -172,9 +175,13 @@ class BaseConfig(BaseSettings):
                 values.ADA_DB_PASSWORD = parsed.password
                 values.ADA_DB_NAME = parsed.path.lstrip("/") if parsed.path else None
 
-        elif all(
-            [values.ADA_DB_DRIVER, values.ADA_DB_HOST, values.ADA_DB_USER, values.ADA_DB_PASSWORD, values.ADA_DB_NAME]
-        ):
+        elif all([
+            values.ADA_DB_DRIVER,
+            values.ADA_DB_HOST,
+            values.ADA_DB_USER,
+            values.ADA_DB_PASSWORD,
+            values.ADA_DB_NAME,
+        ]):
             driver = values.ADA_DB_DRIVER
             host = values.ADA_DB_HOST
             port = values.ADA_DB_PORT or 5432

@@ -7,8 +7,8 @@ is stable and handles all the critical type mismatches found during QA.
 
 import pytest
 
-from engine.coercion_matrix import CoercionMatrix, CoercionError, get_coercion_matrix, coerce_value
-from engine.agent.types import ChatMessage, AgentPayload, SourceChunk
+from engine.coercion_matrix import CoercionError, CoercionMatrix, coerce_value, get_coercion_matrix
+from engine.components.types import AgentPayload, ChatMessage, SourceChunk
 
 
 def test_primitive_coercions():
@@ -243,9 +243,10 @@ def test_generic_list_coercions():
 
 def test_build_time_validation():
     """Test that build-time validation catches invalid port mappings."""
+    import networkx as nx
+
     from engine.graph_runner.graph_runner import GraphRunner
     from engine.trace.trace_manager import TraceManager
-    import networkx as nx
 
     # Create a simple test scenario
     tm = TraceManager(project_name="test")

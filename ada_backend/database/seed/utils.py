@@ -1,21 +1,20 @@
-from uuid import UUID
-from sqlalchemy.orm import Session
-from pydantic import BaseModel
 import logging
+from uuid import UUID
 
+from pydantic import BaseModel
+from sqlalchemy.orm import Session
 
-from ada_backend.database.models import ParameterType, SelectOption, UIComponent, UIComponentProperties
 from ada_backend.database import models as db
+from ada_backend.database.models import ParameterType, SelectOption, UIComponent, UIComponentProperties
 from ada_backend.database.seed.constants import (
     COMPLETION_MODEL_IN_DB,
     EMBEDDING_MODEL_IN_DB,
+    REASONING_IN_DB,
     TEMPERATURE_IN_DB,
     VERBOSITY_IN_DB,
-    REASONING_IN_DB,
 )
-from ada_backend.services.llm_models_service import create_llm_model_service, llm_model_exists_service
-
 from ada_backend.schemas.llm_models_schema import LLMModelCreate, ModelCapabilityEnum
+from ada_backend.services.llm_models_service import create_llm_model_service, llm_model_exists_service
 from settings import settings
 
 LOGGER = logging.getLogger(__name__)
@@ -44,7 +43,7 @@ COMPONENT_UUIDS: dict[str, UUID] = {
     "react_sql_agent": UUID("c0f1a2b3-4d5e-6f7a-8b9c-0d1e2f3a4b5c"),
     "run_sql_query_tool": UUID("667420c1-e2ca-446f-8e54-e0edd7e660bf"),
     "document_search": UUID("79399392-25ba-4cea-9f25-2738765dc329"),
-    "document_enhanced_llm_call_agent": UUID("6460b304-640c-4468-abd3-67bbff6902d4"),
+    "document_enhanced_llm_call": UUID("6460b304-640c-4468-abd3-67bbff6902d4"),
     "document_react_loader_agent": UUID("1c2fdf5b-4a8d-4788-acb6-86b00124c7ce"),
     "ocr_call": UUID("a3b4c5d6-e7f8-9012-3456-789abcdef012"),
     "start": UUID("01357c0b-bc99-44ce-a435-995acc5e2544"),
@@ -85,7 +84,7 @@ COMPONENT_VERSION_UUIDS: dict[str, UUID] = {
     "react_sql_agent_v2": UUID("d0e83ab2-fed1-4e32-9347-0c41353f3eb8"),
     "run_sql_query_tool": UUID("667420c1-e2ca-446f-8e54-e0edd7e660bf"),
     "document_search": UUID("79399392-25ba-4cea-9f25-2738765dc329"),
-    "document_enhanced_llm_call_agent": UUID("6460b304-640c-4468-abd3-67bbff6902d4"),
+    "document_enhanced_llm_call": UUID("6460b304-640c-4468-abd3-67bbff6902d4"),
     "document_react_loader_agent": UUID("1c2fdf5b-4a8d-4788-acb6-86b00124c7ce"),
     "ocr_call": UUID("a3b4c5d6-e7f8-9012-3456-789abcdef012"),
     "start": UUID("01357c0b-bc99-44ce-a435-995acc5e2544"),

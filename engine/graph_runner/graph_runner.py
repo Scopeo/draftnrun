@@ -1,30 +1,29 @@
-import logging
-from typing import Optional, Any, TypedDict, Iterator
 import json
+import logging
+from typing import Any, Iterator, Optional, TypedDict
 
 import networkx as nx
 from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttributes
 from opentelemetry import trace as trace_api
 
-from engine.agent.types import AgentPayload, NodeData
-from engine.coercion_matrix import create_default_coercion_matrix, CoercionMatrix
-from engine.graph_runner.runnable import Runnable
-from engine.graph_runner.types import Task, TaskState, PortMapping
-from engine.graph_runner.port_management import (
-    get_target_field_type,
-    get_source_type_for_mapping,
-    apply_function_call_strategy,
-    validate_port_mappings,
-    synthesize_default_mappings,
-)
-from engine.graph_runner.field_expression_management import evaluate_expression
+from engine import legacy_compatibility
+from engine.coercion_matrix import CoercionMatrix, create_default_coercion_matrix
+from engine.components.types import AgentPayload, NodeData
 from engine.field_expressions.ast import ExpressionNode, RefNode
 from engine.field_expressions.traversal import select_nodes
-from engine import legacy_compatibility
-from engine.trace.trace_manager import TraceManager
+from engine.graph_runner.field_expression_management import evaluate_expression
+from engine.graph_runner.port_management import (
+    apply_function_call_strategy,
+    get_source_type_for_mapping,
+    get_target_field_type,
+    synthesize_default_mappings,
+    validate_port_mappings,
+)
+from engine.graph_runner.runnable import Runnable
+from engine.graph_runner.types import PortMapping, Task, TaskState
 from engine.trace.serializer import serialize_to_json
 from engine.trace.span_context import get_tracing_span
-
+from engine.trace.trace_manager import TraceManager
 
 LOGGER = logging.getLogger(__name__)
 

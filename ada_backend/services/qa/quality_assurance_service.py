@@ -1,66 +1,66 @@
-import logging
-import json
 import csv
 import io
+import json
+import logging
+from collections import Counter
 from typing import BinaryIO, Dict, List, Optional
 from uuid import UUID
-from collections import Counter
 
 from sqlalchemy.orm import Session
 
+from ada_backend.database.models import CallType
+from ada_backend.repositories.env_repository import get_env_relationship_by_graph_runner_id
 from ada_backend.repositories.quality_assurance_repository import (
-    create_inputs_groundtruths,
-    update_inputs_groundtruths,
-    delete_inputs_groundtruths,
-    get_inputs_groundtruths_by_ids,
-    get_inputs_groundtruths_by_dataset,
-    get_inputs_groundtruths_count_by_dataset,
-    upsert_version_output,
-    create_datasets,
-    update_dataset,
-    delete_datasets,
-    get_datasets_by_project,
     clear_version_outputs_for_input_ids,
+    create_datasets,
+    create_inputs_groundtruths,
+    delete_datasets,
+    delete_inputs_groundtruths,
+    get_datasets_by_project,
+    get_inputs_groundtruths_by_dataset,
+    get_inputs_groundtruths_by_ids,
+    get_inputs_groundtruths_count_by_dataset,
     get_outputs_by_graph_runner,
-    get_version_output_ids_by_input_ids_and_graph_runner,
     get_positions_of_dataset,
-)
-from ada_backend.schemas.input_groundtruth_schema import (
-    InputGroundtruthResponse,
-    InputGroundtruthCreateList,
-    InputGroundtruthUpdateList,
-    InputGroundtruthDeleteList,
-    InputGroundtruthResponseList,
-    Pagination,
-    PaginatedInputGroundtruthResponse,
-    QARunRequest,
-    QARunResult,
-    QARunResponse,
-    QARunSummary,
-    InputGroundtruthCreate,
+    get_version_output_ids_by_input_ids_and_graph_runner,
+    update_dataset,
+    update_inputs_groundtruths,
+    upsert_version_output,
 )
 from ada_backend.schemas.dataset_schema import (
     DatasetCreateList,
-    DatasetResponse,
     DatasetDeleteList,
     DatasetListResponse,
+    DatasetResponse,
+)
+from ada_backend.schemas.input_groundtruth_schema import (
+    InputGroundtruthCreate,
+    InputGroundtruthCreateList,
+    InputGroundtruthDeleteList,
+    InputGroundtruthResponse,
+    InputGroundtruthResponseList,
+    InputGroundtruthUpdateList,
+    PaginatedInputGroundtruthResponse,
+    Pagination,
+    QARunRequest,
+    QARunResponse,
+    QARunResult,
+    QARunSummary,
 )
 from ada_backend.services.agent_runner_service import run_agent
-from ada_backend.database.models import CallType
-from ada_backend.repositories.env_repository import get_env_relationship_by_graph_runner_id
 from ada_backend.services.errors import GraphNotBoundToProjectError
 from ada_backend.services.metrics.utils import query_conversation_messages
+from ada_backend.services.qa.csv_processing import process_csv
 from ada_backend.services.qa.qa_error import (
-    CSVMissingColumnError,
-    CSVInvalidJSONError,
     CSVEmptyFileError,
     CSVExportError,
+    CSVInvalidJSONError,
     CSVInvalidPositionError,
+    CSVMissingColumnError,
     CSVNonUniquePositionError,
     QADuplicatePositionError,
     QAPartialPositionError,
 )
-from ada_backend.services.qa.csv_processing import process_csv
 
 LOGGER = logging.getLogger(__name__)
 
@@ -188,7 +188,6 @@ async def run_qa_service(
         environment = env_relationship.environment
         for input_entry in input_entries:
             try:
-
                 chat_response = await run_agent(
                     session=session,
                     project_id=project_id,
@@ -310,9 +309,7 @@ def create_inputs_groundtruths_service(
             inputs_groundtruths_data.inputs_groundtruths,
         )
 
-        LOGGER.info(
-            f"Created {len(created_inputs_groundtruths)} input-groundtruth " f"entries for dataset {dataset_id}"
-        )
+        LOGGER.info(f"Created {len(created_inputs_groundtruths)} input-groundtruth entries for dataset {dataset_id}")
 
         return InputGroundtruthResponseList(
             inputs_groundtruths=[InputGroundtruthResponse.model_validate(ig) for ig in created_inputs_groundtruths]
@@ -355,9 +352,7 @@ def update_inputs_groundtruths_service(
         if input_ids_changed:
             clear_version_outputs_for_input_ids(session, input_ids_changed)
 
-        LOGGER.info(
-            f"Updated {len(updated_inputs_groundtruths)} input-groundtruth " f"entries for dataset {dataset_id}"
-        )
+        LOGGER.info(f"Updated {len(updated_inputs_groundtruths)} input-groundtruth entries for dataset {dataset_id}")
 
         return InputGroundtruthResponseList(
             inputs_groundtruths=[InputGroundtruthResponse.model_validate(ig) for ig in updated_inputs_groundtruths]

@@ -1,12 +1,13 @@
-from uuid import UUID
-import pytest
 from unittest.mock import patch
+from uuid import UUID
+
+import pytest
 from fastapi.testclient import TestClient
 
+from ada_backend.database import models as db
 from ada_backend.database.setup_db import SessionLocal
 from ada_backend.main import app
 from ada_backend.repositories.component_repository import get_component_by_id
-from ada_backend.database import models as db
 from ada_backend.scripts.get_supabase_token import get_user_jwt
 from settings import settings
 

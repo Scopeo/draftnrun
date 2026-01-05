@@ -7,12 +7,11 @@ from typing import Optional
 from sqlalchemy.orm import Session
 
 from ada_backend.repositories.global_secret_repository import (
-    list_global_secrets,
-    get_global_secret,
-    upsert_global_secret,
     delete_global_secret,
+    get_global_secret,
+    list_global_secrets,
+    upsert_global_secret,
 )
-
 
 LOGGER = logging.getLogger(__name__)
 
