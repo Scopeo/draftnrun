@@ -164,7 +164,10 @@ def _setup_test_environment(
     monkeypatch.setattr(knowledge_service, "get_sql_local_service_for_ingestion", lambda: sql_local_service)
 
     # Mock _get_qdrant_service to return our mock
-    monkeypatch.setattr(knowledge_service, "_get_qdrant_service", lambda **kwargs: mock_qdrant_service)
+    def _get_qdrant_service_mock(qdrant_schema, embedding_model_reference):
+        return mock_qdrant_service
+
+    monkeypatch.setattr(knowledge_service, "_get_qdrant_service", _get_qdrant_service_mock)
 
     return test_source, file_id, dummy_chunk_id
 
@@ -235,7 +238,11 @@ def test_validate_qdrant_service_raises_when_collection_not_exists(
     """Test that non-existent Qdrant collection raises KnowledgeServiceQdrantConfigurationError."""
     mock_trace_manager = MockTraceManager(project_name="test")
     monkeypatch.setattr(knowledge_service, "get_trace_manager", lambda: mock_trace_manager)
-    monkeypatch.setattr(knowledge_service, "_get_qdrant_service", lambda **kwargs: mock_qdrant_service)
+
+    def _get_qdrant_service_mock(qdrant_schema, embedding_model_reference):
+        return mock_qdrant_service
+
+    monkeypatch.setattr(knowledge_service, "_get_qdrant_service", _get_qdrant_service_mock)
 
     non_existent_collection = f"non_existent_{uuid4()}"
     source = SimpleNamespace(

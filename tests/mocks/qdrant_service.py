@@ -89,28 +89,48 @@ def mock_qdrant_service() -> Iterator[MagicMock]:
     mock_qdrant._get_schema = Mock(side_effect=_get_schema)
     mock_qdrant.sync_df_with_collection_async = AsyncMock(side_effect=sync_df_with_collection_async)
 
-    # Set up sync methods (they call asyncio.run on async versions, just like the real QdrantService)
-    mock_qdrant.collection_exists = Mock(side_effect=lambda name: asyncio.run(collection_exists_async(name)))
-    mock_qdrant.create_collection = Mock(
-        side_effect=lambda name, **kwargs: asyncio.run(create_collection_async(name, **kwargs))
-    )
-    mock_qdrant.delete_collection = Mock(side_effect=lambda name: asyncio.run(delete_collection_async(name)))
-    mock_qdrant.get_collection_data = Mock(
-        side_effect=lambda name, **kwargs: asyncio.run(get_collection_data_async(name, **kwargs))
-    )
-    mock_qdrant.add_chunks = Mock(
-        side_effect=lambda list_chunks, collection_name: asyncio.run(add_chunks_async(list_chunks, collection_name))
-    )
-    mock_qdrant.delete_chunks = Mock(
-        side_effect=lambda point_ids, id_field, collection_name: asyncio.run(
-            delete_chunks_async(point_ids, id_field, collection_name)
-        )
-    )
-    mock_qdrant.sync_df_with_collection = Mock(
-        side_effect=lambda df, collection_name, **kwargs: asyncio.run(
-            sync_df_with_collection_async(df, collection_name, **kwargs)
-        )
-    )
+    def sync_collection_exists(*args, **kwargs):
+        collection_name = kwargs.get("collection_name") or (args[0] if args else None)
+        return asyncio.run(collection_exists_async(collection_name))
+
+    def sync_create_collection(*args, **kwargs):
+        collection_name = kwargs.get("collection_name") or (args[0] if args else None)
+        filtered_kwargs = {k: v for k, v in kwargs.items() if k != "collection_name"}
+        return asyncio.run(create_collection_async(collection_name, **filtered_kwargs))
+
+    def sync_delete_collection(*args, **kwargs):
+        collection_name = kwargs.get("collection_name") or (args[0] if args else None)
+        return asyncio.run(delete_collection_async(collection_name))
+
+    def sync_get_collection_data(*args, **kwargs):
+        collection_name = kwargs.get("collection_name") or (args[0] if args else None)
+        filtered_kwargs = {k: v for k, v in kwargs.items() if k != "collection_name"}
+        return asyncio.run(get_collection_data_async(collection_name, **filtered_kwargs))
+
+    def sync_add_chunks(*args, **kwargs):
+        list_chunks = kwargs.get("list_chunks") or (args[0] if args else None)
+        collection_name = kwargs.get("collection_name") or (args[1] if len(args) > 1 else None)
+        return asyncio.run(add_chunks_async(list_chunks, collection_name))
+
+    def sync_delete_chunks(*args, **kwargs):
+        point_ids = kwargs.get("point_ids") or (args[0] if args else None)
+        id_field = kwargs.get("id_field") or (args[1] if len(args) > 1 else None)
+        collection_name = kwargs.get("collection_name") or (args[2] if len(args) > 2 else None)
+        return asyncio.run(delete_chunks_async(point_ids, id_field, collection_name))
+
+    def sync_sync_df_with_collection(*args, **kwargs):
+        df = kwargs.get("df") or (args[0] if args else None)
+        collection_name = kwargs.get("collection_name") or (args[1] if len(args) > 1 else None)
+        other_kwargs = {k: v for k, v in kwargs.items() if k not in ("df", "collection_name")}
+        return asyncio.run(sync_df_with_collection_async(df, collection_name, **other_kwargs))
+
+    mock_qdrant.collection_exists = Mock(side_effect=sync_collection_exists)
+    mock_qdrant.create_collection = Mock(side_effect=sync_create_collection)
+    mock_qdrant.delete_collection = Mock(side_effect=sync_delete_collection)
+    mock_qdrant.get_collection_data = Mock(side_effect=sync_get_collection_data)
+    mock_qdrant.add_chunks = Mock(side_effect=sync_add_chunks)
+    mock_qdrant.delete_chunks = Mock(side_effect=sync_delete_chunks)
+    mock_qdrant.sync_df_with_collection = Mock(side_effect=sync_sync_df_with_collection)
 
     # Store collection_data for cleanup
     mock_qdrant._collection_data = collection_data
