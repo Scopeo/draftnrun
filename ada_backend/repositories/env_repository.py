@@ -1,4 +1,3 @@
-from uuid import UUID
 from typing import Optional
 from uuid import UUID
 
@@ -64,13 +63,17 @@ def bind_graph_runner_to_project(
     env: Optional[EnvType] = None,
 ) -> db.ProjectEnvironmentBinding:
     existing_binding = (
-        session.query(db.ProjectEnvironmentBinding)
-        .filter(
-            db.ProjectEnvironmentBinding.project_id == project_id,
-            db.ProjectEnvironmentBinding.environment == env,
+        (
+            session.query(db.ProjectEnvironmentBinding)
+            .filter(
+                db.ProjectEnvironmentBinding.project_id == project_id,
+                db.ProjectEnvironmentBinding.environment == env,
+            )
+            .first()
         )
-        .first()
-    ) if env is not None else False
+        if env is not None
+        else False
+    )
 
     if existing_binding:
         existing_binding.graph_runner_id = graph_runner_id

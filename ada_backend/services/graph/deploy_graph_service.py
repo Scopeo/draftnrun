@@ -342,7 +342,7 @@ def save_graph_version_service(
         env=None,
     )
     LOGGER.info(
-        f"Bound versioned graph runner {versioned_graph_runner_id} to project {project_id} " "with None environment"
+        f"Bound versioned graph runner {versioned_graph_runner_id} to project {project_id} with None environment"
     )
 
     return GraphSaveVersionResponse(
