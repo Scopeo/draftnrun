@@ -24,9 +24,7 @@ from sqlalchemy import (
     UniqueConstraint,
     func,
 )
-from sqlalchemy import (
-    Enum as SQLAlchemyEnum,
-)
+from sqlalchemy import Enum as SQLAlchemyEnum
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import declarative_base, mapped_column, relationship
 
