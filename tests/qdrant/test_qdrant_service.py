@@ -429,4 +429,5 @@ def test_merge_qdrant_filters():
 
         await qdrant_service.delete_collection_async(TEST_COLLECTION_NAME_MERGE)
 
+    # run test in asyncio context
     asyncio.run(run_test())
