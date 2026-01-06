@@ -127,24 +127,7 @@ def format_rag_tool_description(source: str) -> ToolDescription:
             "Searches a document database to retrieve relevant information in the "
             f"company's knowledge base {source}.\n\n"
             "OUTPUT FORMAT RULES (read first):\n"
-            "• Return a JSON object with keys: `query_text` (string) and, optionally, `filters` (object).\n"
-            "• If you include `filters`, it MUST be an object containing one or more of these keys ONLY: "
-            "`must`, `should`, `must_not`.\n"
-            "• NEVER output `filters` as an array. Do not place conditions directly under `filters`.\n"
-            "• If unsure, put all constraints under `must`.\n"
-            "• Use exact payload field names; do not invent new fields.\n\n"
-            "CANONICAL FILTER TEMPLATE:\n"
-            "{\n"
-            '  "query_text": "<your natural-language query>",\n'
-            '  "filters": {\n'
-            '    "must": [ <conditions> ],\n'
-            '    "should": [ <conditions> ],\n'
-            '    "must_not": [ <conditions> ]\n'
-            "  }\n"
-            "}\n\n"
-            "INVALID vs VALID:\n"
-            '• INVALID: "filters": [ {"key":"type_presse","match":{"value":"payante"}} ]\n'
-            '• VALID:   "filters": {"must": [ {"key":"type_presse","match":{"any":["payante"]}} ]}\n'
+            "• Return a JSON object with keys: `query_text` (string)\n"
         ),
         tool_properties={
             "query_text": {
