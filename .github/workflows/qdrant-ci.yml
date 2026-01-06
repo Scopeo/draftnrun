@@ -1,0 +1,139 @@
+name: qdrant-ci
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "engine/qdrant_service.py"
+      - "engine/qdrant_service/**"
+      - "tests/qdrant/**"
+
+concurrency:
+  group: ec2-runner-tests
+  cancel-in-progress: false
+
+jobs:
+  ci-pipeline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    strategy:
+      matrix:
+        python-version: [3.11]
+
+    env:
+      EC2_USER: ec2-user
+      EC2_PATH_BASE: /home/ec2-user/pr-tests
+      EC2_FOLDER_NAME: pr_
+
+    steps:
+      - name: Generate unique ID
+        run: |
+          RUN_ID=$(uuidgen)
+          echo "RUN_ID=$RUN_ID" >> $GITHUB_ENV
+
+      - name: Checkout repository
+        uses: actions/checkout@v2
+        with:
+          lfs: true
+
+      - name: Set up SSH key
+        uses: webfactory/ssh-agent@v0.5.3
+        with:
+          ssh-private-key: ${{ secrets.DEPLOY_KEY }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Copy files to EC2
+        uses: appleboy/scp-action@master
+        with:
+          host: ${{ secrets.EC2_HOST_TEST }}
+          username: ${{ env.EC2_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          source: "."
+          target: "${{ env.EC2_PATH_BASE }}/${{env.EC2_FOLDER_NAME}}${{env.RUN_ID}}"
+
+      - name: Install ci dependencies
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.EC2_HOST_TEST }}
+          username: ${{ env.EC2_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          script: |
+            set -e
+            echo "===> Changing directory to ${{ env.EC2_PATH_BASE }}/${{env.EC2_FOLDER_NAME}}${{ env.RUN_ID }}"
+            cd ${{ env.EC2_PATH_BASE }}/${{env.EC2_FOLDER_NAME}}${{ env.RUN_ID }}
+            pip install uv
+            uv sync
+
+      - name: Create credentials.env file
+        run: |
+          echo "OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}" >> credentials.env
+          echo "QDRANT_CLUSTER_URL=${{ secrets.QDRANT_CLUSTER_URL }}" >> credentials.env
+          echo "QDRANT_API_KEY=${{ secrets.QDRANT_API_KEY }}" >> credentials.env
+          echo "FERNET_KEY=${{ secrets.FERNET_KEY }}" >> credentials.env
+
+      - name: Upload credentials.env to EC2
+        uses: appleboy/scp-action@master
+        with:
+          host: ${{ secrets.EC2_HOST_TEST }}
+          username: ${{ env.EC2_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          source: "credentials.env"
+          target: "${{ env.EC2_PATH_BASE }}/${{ env.EC2_FOLDER_NAME }}${{ env.RUN_ID }}"
+
+      - name: Check OS
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.EC2_HOST_TEST }}
+          username: ${{ env.EC2_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          script: |
+            set -e
+            cat /etc/os-release
+
+      - name: Run Qdrant tests
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.EC2_HOST_TEST }}
+          username: ${{ env.EC2_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          script: |
+            set -e
+            echo "===> Changing directory to ${{ env.EC2_PATH_BASE }}/${{env.EC2_FOLDER_NAME}}${{ env.RUN_ID }}"
+            cd ${{ env.EC2_PATH_BASE }}/${{env.EC2_FOLDER_NAME}}${{ env.RUN_ID }}
+            echo "===> Running tests for RUN_ID: ${{ env.RUN_ID }}"
+            set -e
+            uv run pytest -q tests/qdrant
+
+      - name: Cleanup EC2 folder
+        if: always()
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.EC2_HOST_TEST }}
+          username: ${{ env.EC2_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          script: |
+            EC2_TEST_DIR="${{ env.EC2_PATH_BASE }}/${{env.EC2_FOLDER_NAME}}${{ env.RUN_ID }}"
+            echo "===> Changing directory to $EC2_TEST_DIR for cleanup"
+            cd "$EC2_TEST_DIR" || { echo "Directory not found, skipping Docker cleanup."; }
+
+            # Kill process using specific port
+            echo "===> Stopping ada_backend server on port 8000"
+            lsof -ti:8000 | xargs kill -TERM 2>/dev/null && echo "Server stopped" || echo "No server on port 8000"
+            sleep 1
+            lsof -ti:8000 | xargs kill -9 2>/dev/null || true  # Force kill if still running
+
+            echo "===> Cleaning up project directory: $EC2_TEST_DIR"
+            rm -rf "$EC2_TEST_DIR"
+
