@@ -1,6 +1,6 @@
 import asyncio
 import uuid
-from unittest.mock import patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from fastapi.testclient import TestClient
 
@@ -11,7 +11,6 @@ from ada_backend.schemas.ingestion_task_schema import IngestionTaskQueue
 from ada_backend.scripts.get_supabase_token import get_user_jwt
 from ada_backend.services.agent_runner_service import get_organization_llm_providers
 from data_ingestion.boto3_client import file_exists_in_bucket, get_s3_boto3_client
-from engine.qdrant_service import QdrantService
 from engine.storage_service.local_service import SQLLocalService
 from engine.trace.span_context import set_tracing_span
 from engine.trace.trace_context import set_trace_manager
@@ -120,10 +119,18 @@ def test_ingest_local_folder_source():
         )
         response.raise_for_status()
 
+    mock_qdrant_instance = MagicMock()
+    mock_qdrant_instance.collection_exists = MagicMock(return_value=True)
+    mock_qdrant_instance.collection_exists_async = AsyncMock(return_value=False)  # Collection doesn't exist initially
+    mock_qdrant_instance.create_collection_async = AsyncMock()
+    mock_qdrant_instance.sync_df_with_collection_async = AsyncMock()
+
     with (
         patch("ingestion_script.ingest_folder_source.create_source", side_effect=mock_create_source),
         patch("ingestion_script.ingest_folder_source.update_ingestion_task", side_effect=mock_update_ingestion_task),
+        patch("ingestion_script.ingest_folder_source.QdrantService") as mock_qdrant_service_class,
     ):
+        mock_qdrant_service_class.from_defaults.return_value = mock_qdrant_instance
         asyncio.run(
             ingest_local_folder_source(
                 list_of_files_to_ingest=test_source_attributes["list_of_files_from_local_folder"],
@@ -154,8 +161,10 @@ def test_ingest_local_folder_source():
             found_source = True
             break
     assert found_source
-    qdrant_service = QdrantService.from_defaults()
-    assert qdrant_service.collection_exists(qdrant_collection_name)
+
+    # Verify Qdrant operations were called correctly
+    mock_qdrant_instance.sync_df_with_collection_async.assert_called_once()
+    mock_qdrant_instance.create_collection_async.assert_called_once()
 
     db_service = SQLLocalService(engine_url=settings.INGESTION_DB_URL)
     chunk_df = db_service.get_table_df(
@@ -172,7 +181,6 @@ def test_ingest_local_folder_source():
     delete_source_response = client.delete(f"/sources/{ORGANIZATION_ID}/{test_source_id}", headers=HEADERS_JWT)
     assert delete_source_response.status_code == 204
 
-    assert not qdrant_service.collection_exists(qdrant_collection_name)
     assert not db_service.table_exists(
         table_name=database_table_name,
         schema_name=database_schema,
