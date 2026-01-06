@@ -47,5 +47,6 @@ jobs:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           QDRANT_CLUSTER_URL: ${{ secrets.QDRANT_CLUSTER_URL }}
           QDRANT_API_KEY: ${{ secrets.QDRANT_API_KEY }}
+          ADA_DB_URL: "sqlite:///:memory:"
         run: |
           uv run pytest -q tests/qdrant

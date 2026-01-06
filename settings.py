@@ -7,7 +7,7 @@ from urllib.parse import urlparse
 
 import yaml
 from dotenv import load_dotenv
-from pydantic import ValidationError, model_validator
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 BASE_DIR = Path(__file__).parent.resolve()
@@ -156,14 +156,14 @@ class BaseConfig(BaseSettings):
 
         if values.ADA_DB_DRIVER == "sqlite":
             if not url:
-                raise ValidationError("ADA_DB_URL is required for SQLite")
+                raise ValueError("ADA_DB_URL is required for SQLite")
             return values
 
         has_url = bool(url)
         has_components = any([values.ADA_DB_HOST, values.ADA_DB_USER, values.ADA_DB_PASSWORD, values.ADA_DB_NAME])
 
         if has_url and has_components and values.ADA_DB_DRIVER != "sqlite":
-            raise ValidationError("You cannot define ADA_DB_URL and individual components simultaneously")
+            raise ValueError("You cannot define ADA_DB_URL and individual components simultaneously")
 
         if url:
             parsed = urlparse(url)
