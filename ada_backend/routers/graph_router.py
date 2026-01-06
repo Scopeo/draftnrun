@@ -32,8 +32,8 @@ from ada_backend.services.errors import (
 )
 from ada_backend.services.graph.delete_graph_service import delete_graph_runner_service
 from ada_backend.services.graph.deploy_graph_service import (
-    deploy_graph_service,
     bind_graph_to_env_service,
+    deploy_graph_service,
     save_graph_version_service,
 )
 from ada_backend.services.graph.get_graph_modification_history_service import (
