@@ -15,6 +15,20 @@ from engine.components.types import AgentPayload, ChatMessage, SourceChunk
 
 LOGGER = logging.getLogger(__name__)
 
+GRAPH_RUNTIME_TARGET_TYPES: frozenset[type] = frozenset({
+    str,
+    int,
+    float,
+    bool,
+    dict,
+    list[str],
+    list[dict],
+    list[ChatMessage],
+    ChatMessage,
+    AgentPayload,
+    SourceChunk,
+})
+
 
 # ============================================================================
 # CORE COERCION FUNCTIONS
@@ -225,10 +239,13 @@ class CoercionMatrix:
                 LOGGER.debug(f"Fallback coercion failed: {e}")
                 raise CoercionError(source_type, target_type, value, str(e)) from e
 
-        # 5. Fail with clear error
-        error_msg = f"No coercion path found from {source_type.__name__} to {target_type.__name__}"
-        LOGGER.error(error_msg)
-        raise CoercionError(source_type, target_type, value, error_msg)
+        # 5. Fail-Open: If no explicit coercion is found, return the value for downstream validation.
+        # This lets unhandled types (enums, dates, etc.) pass through for later checks.
+        LOGGER.debug(
+            f"No coercion path from {source_type.__name__} to {target_type.__name__}. "
+            "Returning value as-is for downstream validation."
+        )
+        return value
 
     def can_coerce(self, source_type: Type | str, target_type: Type | str) -> bool:
         """Check if a coercion path exists between two types."""
@@ -259,6 +276,10 @@ class CoercionMatrix:
 
         # Check for fallback coercer
         if target_type in self._fallbacks:
+            return True
+
+        # Non graph-runtime types defer to schema validation
+        if not self.should_attempt_coercion(target_type):
             return True
 
         return False
@@ -329,6 +350,28 @@ class CoercionMatrix:
                 # This is a fallback for any other string representations
                 return str  # Default fallback
         return type_hint
+
+    def should_attempt_coercion(self, target_type: Type | str) -> bool:
+        """Return True when the matrix should try to coerce to ``target_type``."""
+        normalized_type = self._resolve_type(target_type)
+        normalized_type = self._normalize_dict_type(normalized_type)
+
+        origin = get_origin(normalized_type)
+        if origin is list:  # typing.List[T] -> list[T]
+            args = get_args(normalized_type)
+            inner_type = args[0] if args else Any
+            normalized_type = list[self._resolve_type(inner_type)]
+        elif origin is dict:  # typing.Dict[K, V] -> dict
+            normalized_type = dict
+
+        if normalized_type is type(Any) or str(normalized_type) == "typing.Any":
+            return False
+
+        if self._is_optional_type(normalized_type):
+            inner_type = self._get_optional_inner_type(normalized_type)
+            return self.should_attempt_coercion(inner_type)
+
+        return normalized_type in GRAPH_RUNTIME_TARGET_TYPES
 
 
 def create_default_coercion_matrix() -> CoercionMatrix:

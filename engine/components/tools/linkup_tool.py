@@ -1,20 +1,15 @@
 import json
 from datetime import date
-from typing import Optional
+from enum import Enum
+from typing import Optional, Type
 
 from linkup import LinkupClient
 from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttributes
 from opentelemetry.trace import get_current_span
+from pydantic import BaseModel, Field, field_validator
 
 from engine.components.component import Component
-from engine.components.types import (
-    AgentPayload,
-    ChatMessage,
-    ComponentAttributes,
-    SourceChunk,
-    SourcedResponse,
-    ToolDescription,
-)
+from engine.components.types import ComponentAttributes, SourceChunk, SourcedResponse, ToolDescription
 from engine.trace.trace_manager import TraceManager
 from settings import settings
 
@@ -57,8 +52,79 @@ LINKUP_TOOL_DESCRIPTION = ToolDescription(
 )
 
 
+class LinkupDepth(str, Enum):
+    STANDARD = "standard"
+    DEEP = "deep"
+
+
+class LinkupSearchToolInputs(BaseModel):
+    query: Optional[str] = Field(
+        default=None,
+        description="The standalone question to be answered using web search.",
+    )
+    depth: LinkupDepth = Field(
+        default=LinkupDepth.STANDARD,
+        description="The depth format: 'standard' or 'deep'",
+    )
+    from_date: Optional[date] = Field(
+        default=None,
+        description="The date from which the search results should be considered.",
+    )
+    to_date: Optional[date] = Field(
+        default=None,
+        description="The date until which the search results should be considered.",
+    )
+    include_domains: Optional[list[str]] = Field(
+        default=None,
+        description="The domains you want to search on.",
+    )
+    exclude_domains: Optional[list[str]] = Field(
+        default=None,
+        description="The domains you want to exclude from the search.",
+    )
+    model_config = {"extra": "allow"}  # For backward compatibility
+
+    @field_validator("include_domains", "exclude_domains", mode="before")
+    @classmethod
+    def split_space_separated_domains(cls, value: Optional[str | list[str]]):
+        """Allow either list[str] or space-separated string from the UI."""
+        if value is None:
+            return value
+        if isinstance(value, list):
+            normalized: list[str] = []
+            for item in value:
+                if isinstance(item, str):
+                    parts = [part.strip() for part in item.split(" ") if part.strip()]
+                    normalized.extend(parts)
+                else:
+                    normalized.append(item)
+            return normalized or None
+        if isinstance(value, str):
+            parts = [part.strip() for part in value.split(" ") if part.strip()]
+            return parts or None
+        return value
+
+
+class LinkupSearchToolOutputs(BaseModel):
+    output: str = Field(description="The answer from the Linkup web search.")
+    sources: list[SourceChunk] = Field(description="The sources from the Linkup web search.")
+
+
 class LinkupSearchTool(Component):
     TRACE_SPAN_KIND = OpenInferenceSpanKindValues.TOOL.value
+    migrated = True
+
+    @classmethod
+    def get_inputs_schema(cls) -> Type[BaseModel]:
+        return LinkupSearchToolInputs
+
+    @classmethod
+    def get_outputs_schema(cls) -> Type[BaseModel]:
+        return LinkupSearchToolOutputs
+
+    @classmethod
+    def get_canonical_ports(cls) -> dict[str, str | None]:
+        return {"input": "query", "output": "output"}
 
     def __init__(
         self,
@@ -78,7 +144,7 @@ class LinkupSearchTool(Component):
     def search_results(
         self,
         query: str,
-        depth: str,
+        depth: LinkupDepth,
         output_type: str,
         exclude_domains: Optional[list[str]] = None,
         include_domains: Optional[list[str]] = None,
@@ -87,12 +153,12 @@ class LinkupSearchTool(Component):
     ) -> SourcedResponse:
         response = self.linkup_client.search(
             query,
-            depth=depth,
+            depth=depth.value,
             output_type=output_type,
             exclude_domains=exclude_domains,
             include_domains=include_domains,
-            from_date=date.fromisoformat(from_date) if from_date else None,
-            to_date=date.fromisoformat(to_date) if to_date else None,
+            from_date=from_date,
+            to_date=to_date,
         )
         answer = response.answer
         sources = response.sources
@@ -112,41 +178,34 @@ class LinkupSearchTool(Component):
 
     async def _run_without_io_trace(
         self,
-        *inputs: AgentPayload,
-        query: str,
-        depth: str,
-        output_type: str = "sourcedAnswer",
-        exclude_domains: Optional[list[str]] = None,
-        include_domains: Optional[list[str]] = None,
-        from_date: Optional[date] = None,
-        to_date: Optional[date] = None,
-        ctx: Optional[dict] = None,
-    ) -> AgentPayload:
-        agent_input = inputs[0]
-        content = query or agent_input.last_message.content
-        if content is None:
+        inputs: LinkupSearchToolInputs,
+        ctx: dict,
+    ) -> LinkupSearchToolOutputs:
+        query_str = inputs.query
+        if not query_str:
             raise ValueError("No content provided for the Linkup search tool.")
+
         span = get_current_span()
         trace_input = (
-            f"query: {query}\n"
-            f"from date: {from_date}\n"
-            f"to date: {to_date}\n"
-            f"include domains: {include_domains}\n"
-            f"exclude domains: {exclude_domains}\n"
-            f"depth: {depth}"
+            f"query: {query_str}\n"
+            f"from date: {inputs.from_date.isoformat() if inputs.from_date else None}\n"
+            f"to date: {inputs.to_date.isoformat() if inputs.to_date else None}\n"
+            f"include domains: {inputs.include_domains}\n"
+            f"exclude domains: {inputs.exclude_domains}\n"
+            f"depth: {inputs.depth}"
         )
         span.set_attributes({
             SpanAttributes.OPENINFERENCE_SPAN_KIND: self.TRACE_SPAN_KIND,
             SpanAttributes.INPUT_VALUE: trace_input,
         })
         response = self.search_results(
-            query=content,
-            depth=depth,
-            output_type=output_type,
-            exclude_domains=exclude_domains,
-            include_domains=include_domains,
-            from_date=from_date,
-            to_date=to_date,
+            query=query_str,
+            depth=inputs.depth,
+            output_type="sourcedAnswer",
+            exclude_domains=inputs.exclude_domains,
+            include_domains=inputs.include_domains,
+            from_date=inputs.from_date,
+            to_date=inputs.to_date,
         )
 
         for i, source in enumerate(response.sources):
@@ -157,8 +216,7 @@ class LinkupSearchTool(Component):
                 f"{SpanAttributes.RETRIEVAL_DOCUMENTS}.{i}.document.metadata": json.dumps(source.metadata),
             })
 
-        return AgentPayload(
-            messages=[ChatMessage(role="assistant", content=response.response)],
-            artifacts={"sources": response.sources},
-            is_final=response.is_successful,
+        return LinkupSearchToolOutputs(
+            output=response.response,
+            sources=response.sources,
         )
