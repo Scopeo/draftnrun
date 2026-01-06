@@ -15,6 +15,9 @@ class Runnable(Protocol):
     def run_sync(self, *inputs: AgentPayload | NodeData, **kwargs) -> AgentPayload | NodeData:
         """Run the runnable with the given inputs and kwargs synchronously."""
 
+    def get_tool_descriptions(self) -> list[ToolDescription]:
+        """Return the tool descriptions this runnable exposes."""
+
     # Canonical ports accessors for cleaner GraphRunner logic
     @classmethod
     def get_canonical_ports(cls) -> Dict[str, Optional[str]]:

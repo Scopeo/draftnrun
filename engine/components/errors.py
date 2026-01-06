@@ -15,3 +15,10 @@ class KeyTypePromptTemplateError(Exception):
         self.error = error
         message = f"Value for key '{key}' cannot be cast to string: {error}"
         super().__init__(message)
+
+
+class RemoteMCPConnectionError(Exception):
+    """Raised when RemoteMCPTool cannot reach the MCP server."""
+
+    def __init__(self, server_url: str, detail: str):
+        super().__init__(f"MCP Tool failed to connect to {server_url}: {detail}")

@@ -21,6 +21,7 @@ def mock_agent():
     }
     mock_tool_description.required_tool_properties = ["test_property"]
     mock_agent.tool_description = mock_tool_description
+    mock_agent.get_tool_descriptions = MagicMock(return_value=[mock_tool_description])
     return mock_agent
 
 
@@ -361,7 +362,7 @@ def test_structured_output_in_function_call_async(
         mock_client.responses.parse.assert_called_once()
 
     # Test 3: Full iteration flow - regular tool call -> structured output call
-    # First, add a mock agent tool to the ReActAgent
+    # First, add a mock agent tool to the agent
     mock_agent_tool = MagicMock()
     mock_agent_tool.tool_description.name = "test_tool"
     mock_agent_tool.tool_description.description = "Test tool description"
@@ -369,6 +370,7 @@ def test_structured_output_in_function_call_async(
         "test_property": {"type": "string", "description": "Test property description"}
     }
     mock_agent_tool.tool_description.required_tool_properties = ["test_property"]
+    mock_agent_tool.get_tool_descriptions = MagicMock(return_value=[mock_agent_tool.tool_description])
     mock_agent_tool.run = AsyncMock(
         return_value=AgentPayload(
             messages=[ChatMessage(role="assistant", content="Tool executed successfully")],
@@ -376,8 +378,16 @@ def test_structured_output_in_function_call_async(
         )
     )
 
-    # Add the tool to the agent
-    react_agent.agent_tools = [mock_agent_tool]
+    # Create an agent instance that includes the tool from the start
+    react_agent_with_tool = AIAgent(
+        completion_service=real_completion_service,
+        component_attributes=ComponentAttributes(component_instance_name="Test Structured Output With Tool"),
+        trace_manager=mock_trace_manager,
+        tool_description=mock_tool_description,
+        output_format=output_tool_properties,
+        max_iterations=2,
+        agent_tools=[mock_agent_tool],
+    )
 
     with patch("openai.AsyncOpenAI") as mock_openai_client:
         mock_client = MagicMock()
@@ -439,7 +449,7 @@ def test_structured_output_in_function_call_async(
         mock_client.chat.completions.create = AsyncMock(side_effect=[mock_response_regular, mock_response_structured])
 
         # Mock the _process_tool_calls method to return the correct format for the first call
-        with patch.object(react_agent, "_process_tool_calls") as mock_process:
+        with patch.object(react_agent_with_tool, "_process_tool_calls") as mock_process:
             mock_process.return_value = (
                 {
                     "3": AgentPayload(
@@ -455,7 +465,7 @@ def test_structured_output_in_function_call_async(
                 ],
             )
 
-            output = react_agent.run_sync(agent_input)
+            output = react_agent_with_tool.run_sync(agent_input)
             # Should return the structured output from the second iteration
             assert output.last_message.content == json.dumps({"answer": "Final structured answer", "is_final": True})
             assert output.is_final
@@ -471,10 +481,8 @@ def test_structured_output_in_function_call_async(
         tool_description=mock_tool_description,
         output_format=output_tool_properties,
         max_iterations=1,  # Set to 1 to trigger max iterations on second call
+        agent_tools=[mock_agent_tool],
     )
-
-    # Add a mock agent tool
-    react_agent_max_iter.agent_tools = [mock_agent_tool]
 
     with patch("openai.AsyncOpenAI") as mock_openai_client:
         mock_client = MagicMock()
@@ -613,6 +621,7 @@ def test_context_passed_to_tools(
     mock_tool.tool_description.description = "A tool to test context passing"
     mock_tool.tool_description.tool_properties = {"query": {"type": "string", "description": "Query string"}}
     mock_tool.tool_description.required_tool_properties = ["query"]
+    mock_tool.get_tool_descriptions = MagicMock(return_value=[mock_tool.tool_description])
 
     # Mock the tool's run method to capture the ctx parameter
     mock_tool.run = AsyncMock(

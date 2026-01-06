@@ -26,6 +26,7 @@ from engine.components.rag.formatter import Formatter
 from engine.components.rag.retriever import Retriever
 from engine.components.rag.vocabulary_search import VocabularySearch
 from engine.components.synthesizer import Synthesizer
+from engine.components.tools.remote_mcp_tool import RemoteMCPTool
 from engine.components.types import ToolDescription
 from engine.llm_services.llm_service import CompletionService, EmbeddingService, OCRService, WebSearchService
 from engine.qdrant_service import QdrantCollectionSchema, QdrantService
@@ -178,6 +179,36 @@ class AgentFactory(EntityFactory):
             raise ValueError("Tool description must be a ToolDescription object.")
 
         return args, kwargs
+
+
+class RemoteMCPToolFactory:
+    """
+    Minimal factory to construct RemoteMCPTool via its async autodescovery constructor.
+    Runs the coroutine synchronously and drops unused params coming from the registry.
+    TODO: If more components need async constructors, extract a shared async-capable
+    factory/helper to avoid repeating this pattern.
+    """
+
+    # TODO: Replace with a proper async-capable factory interface; exposed for port seeding.
+    entity_class = RemoteMCPTool
+
+    def __call__(self, **kwargs):
+        # Tool descriptions come from the server; drop any default from DB seed
+        kwargs.pop("tool_description", None)
+        # Ensure trace manager is set if missing
+        if "trace_manager" not in kwargs:
+            trace_manager = get_trace_manager()
+            if trace_manager is None:
+                raise ValueError("Trace manager is required")
+            kwargs["trace_manager"] = trace_manager
+        coro = RemoteMCPTool.from_mcp_server(**kwargs)
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            return asyncio.run(coro)
+
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            return executor.submit(asyncio.run, coro).result()
 
 
 class NonToolCallableBlockFactory(EntityFactory):

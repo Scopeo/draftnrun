@@ -46,6 +46,10 @@ class Component(ABC):
         self._trace_attributes: dict[str, Any] = {}
         self._trace_events: list[str] = []
 
+    def get_tool_descriptions(self) -> list[ToolDescription]:
+        """Return the tool descriptions this agent exposes (default: single tool)."""
+        return [self.tool_description]
+
     @classmethod
     def get_inputs_schema(cls) -> Type[BaseModel]:
         class DefaultInput(BaseModel):
