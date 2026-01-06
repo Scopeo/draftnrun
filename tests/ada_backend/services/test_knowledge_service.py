@@ -1,6 +1,6 @@
 """
-Integration tests for knowledge service with real SQL and Qdrant connections.
-Only the embedding service (LLM calls) is mocked.
+Integration tests for knowledge service with real SQL connections.
+Qdrant and embedding service (LLM calls) are mocked.
 """
 
 import asyncio
@@ -20,16 +20,19 @@ from ada_backend.services.knowledge.errors import (
     KnowledgeServiceQdrantCollectionNotFoundError,
 )
 from engine.llm_services.llm_service import EmbeddingService
-from engine.qdrant_service import QdrantCollectionSchema, QdrantService
 from engine.storage_service.local_service import SQLLocalService
 from ingestion_script.ingest_folder_source import FILE_TABLE_DEFINITION
 from settings import settings
+from tests.mocks.qdrant_service import mock_qdrant_service as _mock_qdrant_service
 from tests.mocks.trace_manager import MockTraceManager
 
 TEST_COLLECTION_NAME_PREFIX = "test_knowledge"
 EMBEDDING_SIZE = 3072
 
 LOGGER = logging.getLogger(__name__)
+
+# Re-export as pytest fixture
+mock_qdrant_service = pytest.fixture(_mock_qdrant_service)
 
 
 @pytest.fixture
@@ -60,25 +63,6 @@ def mock_embedding_service() -> MagicMock:
 
 
 @pytest.fixture
-def qdrant_service(mock_embedding_service: MagicMock) -> Iterator[QdrantService]:
-    """Create a real Qdrant service with mocked embedding service."""
-    qdrant_schema = QdrantCollectionSchema(
-        chunk_id_field="chunk_id",
-        content_field="content",
-        file_id_field="file_id",
-        url_id_field="url",
-        last_edited_ts_field="last_edited_ts",
-        metadata_fields_to_keep={"metadata_to_keep_by_qdrant_field"},
-    )
-    qdrant_service = QdrantService.from_defaults(
-        embedding_service=mock_embedding_service,
-        default_collection_schema=qdrant_schema,
-        timeout=60.0,
-    )
-    yield qdrant_service
-
-
-@pytest.fixture
 def test_collection_name() -> str:
     """Generate a unique test collection name."""
     return f"{TEST_COLLECTION_NAME_PREFIX}_{uuid4()}"
@@ -86,11 +70,11 @@ def test_collection_name() -> str:
 
 def _setup_test_table_and_collection_with_dummy_chunk(
     sql_local_service: SQLLocalService,
-    qdrant_service: QdrantService,
+    mock_qdrant_service: MagicMock,
     test_collection_name: str,
 ) -> tuple[SimpleNamespace, str, str]:
     """
-    Create a table and collection with a dummy chunk already in both SQL and Qdrant.
+    Create a table and collection with a dummy chunk already in both SQL and mocked Qdrant.
     Returns: (test_source, file_id, dummy_chunk_id)
     """
     source_id = uuid4()
@@ -108,9 +92,8 @@ def _setup_test_table_and_collection_with_dummy_chunk(
         schema_name=schema_name,
     )
 
-    if asyncio.run(qdrant_service.collection_exists_async(test_collection_name)):
-        asyncio.run(qdrant_service.delete_collection_async(test_collection_name))
-    asyncio.run(qdrant_service.create_collection_async(collection_name=test_collection_name))
+    # Setup mock Qdrant collection
+    mock_qdrant_service.create_collection(collection_name=test_collection_name)
 
     file_id = f"test_file_{uuid4()}"
     dummy_chunk_id = f"{file_id}_1"
@@ -138,7 +121,7 @@ def _setup_test_table_and_collection_with_dummy_chunk(
         "url": "http://example.com/dummy",
         "metadata_to_keep_by_qdrant_field": "dummy_metadata_value",
     }
-    asyncio.run(qdrant_service.add_chunks_async(list_chunks=[chunk_dict], collection_name=test_collection_name))
+    mock_qdrant_service.add_chunks(list_chunks=[chunk_dict], collection_name=test_collection_name)
 
     source = SimpleNamespace(
         id=source_id,
@@ -163,7 +146,7 @@ def _setup_test_table_and_collection_with_dummy_chunk(
 def _setup_test_environment(
     monkeypatch: pytest.MonkeyPatch,
     sql_local_service: SQLLocalService,
-    qdrant_service: QdrantService,
+    mock_qdrant_service: MagicMock,
     test_collection_name: str,
 ) -> tuple[SimpleNamespace, str, str]:
     """
@@ -174,21 +157,24 @@ def _setup_test_environment(
     monkeypatch.setattr(knowledge_service, "get_trace_manager", lambda: mock_trace_manager)
 
     test_source, file_id, dummy_chunk_id = _setup_test_table_and_collection_with_dummy_chunk(
-        sql_local_service, qdrant_service, test_collection_name
+        sql_local_service, mock_qdrant_service, test_collection_name
     )
 
     monkeypatch.setattr(knowledge_service, "get_data_source_by_org_id", lambda **kwargs: test_source)
     monkeypatch.setattr(knowledge_service, "get_sql_local_service_for_ingestion", lambda: sql_local_service)
+
+    # Mock _get_qdrant_service to return our mock
+    monkeypatch.setattr(knowledge_service, "_get_qdrant_service", lambda **kwargs: mock_qdrant_service)
 
     return test_source, file_id, dummy_chunk_id
 
 
 def _cleanup_test_environment(
     sql_local_service: SQLLocalService,
-    qdrant_service: QdrantService,
+    mock_qdrant_service: MagicMock,
     test_source: SimpleNamespace,
 ) -> None:
-    """Clean up test environment (drop table, schema, and Qdrant collection)."""
+    """Clean up test environment (drop table, schema, and mocked Qdrant collection)."""
     try:
         if sql_local_service.table_exists(test_source.database_table_name, test_source.database_schema):
             sql_local_service.drop_table(test_source.database_table_name, test_source.database_schema)
@@ -198,25 +184,26 @@ def _cleanup_test_environment(
     except Exception as e:
         LOGGER.warning(f"Failed to cleanup schema {test_source.database_schema}: {e}")
 
-    if asyncio.run(qdrant_service.collection_exists_async(test_source.qdrant_collection_name)):
-        asyncio.run(qdrant_service.delete_collection_async(test_source.qdrant_collection_name))
+    # Cleanup mock Qdrant collection
+    if mock_qdrant_service.collection_exists(test_source.qdrant_collection_name):
+        mock_qdrant_service.delete_collection(test_source.qdrant_collection_name)
 
 
 def test_chunk_operations_integration(
     monkeypatch: pytest.MonkeyPatch,
     sql_local_service: SQLLocalService,
-    qdrant_service: QdrantService,
+    mock_qdrant_service: MagicMock,
     test_collection_name: str,
 ) -> None:
-    """Test delete chunk operations with real SQL and Qdrant operations."""
+    """Test delete chunk operations with real SQL and mocked Qdrant operations."""
     test_source, file_id, dummy_chunk_id = _setup_test_environment(
-        monkeypatch, sql_local_service, qdrant_service, test_collection_name
+        monkeypatch, sql_local_service, mock_qdrant_service, test_collection_name
     )
 
     mock_session = Mock()
 
     # ========== TEST DELETE CHUNK ==========
-    initial_collection_data = asyncio.run(qdrant_service.get_collection_data_async(test_source.qdrant_collection_name))
+    initial_collection_data = mock_qdrant_service.get_collection_data(test_source.qdrant_collection_name)
     initial_chunk_ids = initial_collection_data["chunk_id"].tolist()
     initial_count = len(initial_chunk_ids)
 
@@ -229,7 +216,7 @@ def test_chunk_operations_integration(
         )
     )
 
-    final_collection_data = asyncio.run(qdrant_service.get_collection_data_async(test_source.qdrant_collection_name))
+    final_collection_data = mock_qdrant_service.get_collection_data(test_source.qdrant_collection_name)
     if final_collection_data.empty:
         final_chunk_ids = []
     else:
@@ -238,16 +225,17 @@ def test_chunk_operations_integration(
     final_count = len(final_chunk_ids)
     assert final_count == initial_count - 1
 
-    _cleanup_test_environment(sql_local_service, qdrant_service, test_source)
+    _cleanup_test_environment(sql_local_service, mock_qdrant_service, test_source)
 
 
 def test_validate_qdrant_service_raises_when_collection_not_exists(
     monkeypatch: pytest.MonkeyPatch,
-    qdrant_service: QdrantService,
+    mock_qdrant_service: MagicMock,
 ) -> None:
     """Test that non-existent Qdrant collection raises KnowledgeServiceQdrantConfigurationError."""
     mock_trace_manager = MockTraceManager(project_name="test")
     monkeypatch.setattr(knowledge_service, "get_trace_manager", lambda: mock_trace_manager)
+    monkeypatch.setattr(knowledge_service, "_get_qdrant_service", lambda **kwargs: mock_qdrant_service)
 
     non_existent_collection = f"non_existent_{uuid4()}"
     source = SimpleNamespace(
@@ -273,6 +261,9 @@ def test_validate_qdrant_service_raises_when_invalid_schema(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Test that invalid qdrant_schema raises KnowledgeServiceQdrantConfigurationError."""
+    mock_trace_manager = MockTraceManager(project_name="test")
+    monkeypatch.setattr(knowledge_service, "get_trace_manager", lambda: mock_trace_manager)
+
     source = SimpleNamespace(
         id=uuid4(),
         database_schema="schema",
@@ -289,7 +280,10 @@ def test_validate_qdrant_service_raises_when_invalid_schema(
 def test_validate_qdrant_service_raises_when_invalid_embedding_model(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Test that invalid embedding_model_reference raises KnowledgeServiceQdrantConfigurationError."""
+    """Test invalid embedding_model_reference raises KnowledgeServiceQdrantConfigurationError."""
+    mock_trace_manager = MockTraceManager(project_name="test")
+    monkeypatch.setattr(knowledge_service, "get_trace_manager", lambda: mock_trace_manager)
+
     source = SimpleNamespace(
         id=uuid4(),
         database_schema="schema",
@@ -312,12 +306,12 @@ def test_validate_qdrant_service_raises_when_invalid_embedding_model(
 def test_delete_chunk_is_idempotent(
     monkeypatch: pytest.MonkeyPatch,
     sql_local_service: SQLLocalService,
-    qdrant_service: QdrantService,
+    mock_qdrant_service: MagicMock,
     test_collection_name: str,
 ) -> None:
     """Test that deleting a chunk multiple times is idempotent."""
     test_source, file_id, dummy_chunk_id = _setup_test_environment(
-        monkeypatch, sql_local_service, qdrant_service, test_collection_name
+        monkeypatch, sql_local_service, mock_qdrant_service, test_collection_name
     )
 
     mock_session = Mock()
@@ -339,4 +333,4 @@ def test_delete_chunk_is_idempotent(
             chunk_id=dummy_chunk_id,
         )
     )
-    _cleanup_test_environment(sql_local_service, qdrant_service, test_source)
+    _cleanup_test_environment(sql_local_service, mock_qdrant_service, test_source)
