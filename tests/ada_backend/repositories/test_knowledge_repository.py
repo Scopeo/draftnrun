@@ -9,7 +9,7 @@ from ada_backend.repositories.knowledge_repository import (
     list_documents_for_source,
 )
 from engine.storage_service.local_service import SQLLocalService
-from ingestion_script.ingest_folder_source import UNIFIED_TABLE_DEFINITION
+from ingestion_script.utils import UNIFIED_TABLE_DEFINITION
 from tests.mocks.db_service import TEST_SCHEMA_NAME
 
 

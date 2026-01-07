@@ -17,29 +17,18 @@ from data_ingestion.document.folder_management.google_drive_folder_management im
 from data_ingestion.document.folder_management.s3_folder_management import S3FolderManager
 from data_ingestion.document.supabase_file_uploader import sync_files_to_supabase
 from engine.llm_services.llm_service import EmbeddingService, VisionService
-from engine.qdrant_service import QdrantCollectionSchema, QdrantService
+from engine.qdrant_service import QdrantService
 from engine.storage_service.db_service import DBService
-from engine.storage_service.db_utils import (
-    CREATED_AT_COLUMN,
-    PROCESSED_DATETIME_FIELD,
-    UPDATED_AT_COLUMN,
-    DBColumn,
-    DBDefinition,
-    create_db_if_not_exists,
-)
+from engine.storage_service.db_utils import create_db_if_not_exists
 from engine.storage_service.local_service import SQLLocalService
 from engine.trace.trace_manager import TraceManager
 from ingestion_script.folder_utils import prepare_df_for_qdrant, sanitize_for_json
 from ingestion_script.utils import (
-    CHUNK_COLUMN_NAME,
     CHUNK_ID_COLUMN_NAME,
-    DOCUMENT_TITLE_COLUMN_NAME,
-    FILE_ID_COLUMN_NAME,
-    METADATA_COLUMN_NAME,
-    ORDER_COLUMN_NAME,
     SOURCE_ID_COLUMN_NAME,
     TIMESTAMP_COLUMN_NAME,
-    URL_COLUMN_NAME,
+    UNIFIED_QDRANT_SCHEMA,
+    UNIFIED_TABLE_DEFINITION,
     create_source,
     get_first_available_embeddings_custom_llm,
     get_first_available_multimodal_custom_llm,
@@ -50,37 +39,6 @@ from ingestion_script.utils import (
 from settings import settings
 
 LOGGER = logging.getLogger(__name__)
-
-
-# Unified table definition for all source types
-UNIFIED_TABLE_DEFINITION = DBDefinition(
-    columns=[
-        DBColumn(name=PROCESSED_DATETIME_FIELD, type="DATETIME", default="CURRENT_TIMESTAMP"),
-        DBColumn(name=CHUNK_ID_COLUMN_NAME, type="VARCHAR", is_primary=True),
-        DBColumn(name=SOURCE_ID_COLUMN_NAME, type="UUID", is_primary=True),
-        DBColumn(name=ORDER_COLUMN_NAME, type="INTEGER", is_nullable=True),
-        DBColumn(name=FILE_ID_COLUMN_NAME, type="VARCHAR"),
-        DBColumn(name=DOCUMENT_TITLE_COLUMN_NAME, type="VARCHAR"),
-        DBColumn(name=URL_COLUMN_NAME, type="VARCHAR", is_nullable=True),
-        DBColumn(name=CHUNK_COLUMN_NAME, type="VARCHAR"),
-        DBColumn(name=TIMESTAMP_COLUMN_NAME, type="VARCHAR"),
-        DBColumn(name=METADATA_COLUMN_NAME, type="JSONB"),
-        DBColumn(name=CREATED_AT_COLUMN, type="TIMESTAMP_TZ", default="CURRENT_TIMESTAMP"),
-        DBColumn(name=UPDATED_AT_COLUMN, type="TIMESTAMP_TZ", default="CURRENT_TIMESTAMP"),
-    ]
-)
-
-# Unified Qdrant schema for all source types
-# Note: metadata_fields_to_keep is None because we flatten metadata into separate columns
-UNIFIED_QDRANT_SCHEMA = QdrantCollectionSchema(
-    chunk_id_field=CHUNK_ID_COLUMN_NAME,
-    content_field=CHUNK_COLUMN_NAME,
-    url_id_field=URL_COLUMN_NAME,
-    file_id_field=FILE_ID_COLUMN_NAME,
-    last_edited_ts_field=TIMESTAMP_COLUMN_NAME,
-    metadata_fields_to_keep=None,
-    source_id_field=SOURCE_ID_COLUMN_NAME,
-)
 
 
 def load_llms_services():

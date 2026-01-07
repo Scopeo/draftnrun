@@ -20,11 +20,6 @@ from engine.qdrant_service import FieldSchema, QdrantService
 from engine.storage_service.db_utils import PROCESSED_DATETIME_FIELD
 from engine.storage_service.local_service import SQLLocalService
 from engine.trace.trace_manager import TraceManager
-from ingestion_script.ingest_folder_source import (
-    TIMESTAMP_COLUMN_NAME,
-    UNIFIED_QDRANT_SCHEMA,
-    UNIFIED_TABLE_DEFINITION,
-)
 from ingestion_script.utils import (
     CHUNK_COLUMN_NAME,
     CHUNK_ID_COLUMN_NAME,
@@ -34,6 +29,9 @@ from ingestion_script.utils import (
     METADATA_COLUMN_NAME,
     ORDER_COLUMN_NAME,
     SOURCE_ID_COLUMN_NAME,
+    TIMESTAMP_COLUMN_NAME,
+    UNIFIED_QDRANT_SCHEMA,
+    UNIFIED_TABLE_DEFINITION,
     URL_COLUMN_NAME,
     get_sanitize_names,
 )
