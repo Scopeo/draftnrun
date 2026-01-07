@@ -16,9 +16,15 @@ from ada_backend.schemas.source_schema import DataSourceSchema
 from data_ingestion.utils import sanitize_filename
 from engine.llm_services.llm_service import EmbeddingService, VisionService
 from engine.qdrant_service import QdrantCollectionSchema, QdrantService
+from engine.storage_service.db_utils import (
+    CREATED_AT_COLUMN,
+    PROCESSED_DATETIME_FIELD,
+    UPDATED_AT_COLUMN,
+    DBColumn,
+    DBDefinition,
+)
 from engine.storage_service.local_service import SQLLocalService
 from engine.trace.trace_manager import TraceManager
-from ingestion_script.ingest_folder_source import UNIFIED_TABLE_DEFINITION
 from settings import settings
 
 LOGGER = logging.getLogger(__name__)
@@ -50,6 +56,36 @@ UNIFIED_TABLE_COLUMNS = [
     TIMESTAMP_COLUMN_NAME,
     METADATA_COLUMN_NAME,
 ]
+
+# Unified table definition for all source types
+UNIFIED_TABLE_DEFINITION = DBDefinition(
+    columns=[
+        DBColumn(name=PROCESSED_DATETIME_FIELD, type="DATETIME", default="CURRENT_TIMESTAMP"),
+        DBColumn(name=CHUNK_ID_COLUMN_NAME, type="VARCHAR", is_primary=True),
+        DBColumn(name=SOURCE_ID_COLUMN_NAME, type="UUID", is_primary=True),
+        DBColumn(name=ORDER_COLUMN_NAME, type="INTEGER", is_nullable=True),
+        DBColumn(name=FILE_ID_COLUMN_NAME, type="VARCHAR"),
+        DBColumn(name=DOCUMENT_TITLE_COLUMN_NAME, type="VARCHAR"),
+        DBColumn(name=URL_COLUMN_NAME, type="VARCHAR", is_nullable=True),
+        DBColumn(name=CHUNK_COLUMN_NAME, type="VARCHAR"),
+        DBColumn(name=TIMESTAMP_COLUMN_NAME, type="VARCHAR"),
+        DBColumn(name=METADATA_COLUMN_NAME, type="JSONB"),
+        DBColumn(name=CREATED_AT_COLUMN, type="TIMESTAMP_TZ", default="CURRENT_TIMESTAMP"),
+        DBColumn(name=UPDATED_AT_COLUMN, type="TIMESTAMP_TZ", default="CURRENT_TIMESTAMP"),
+    ]
+)
+
+# Unified Qdrant schema for all source types
+# Note: metadata_fields_to_keep is None because we flatten metadata into separate columns
+UNIFIED_QDRANT_SCHEMA = QdrantCollectionSchema(
+    chunk_id_field=CHUNK_ID_COLUMN_NAME,
+    content_field=CHUNK_COLUMN_NAME,
+    url_id_field=URL_COLUMN_NAME,
+    file_id_field=FILE_ID_COLUMN_NAME,
+    last_edited_ts_field=TIMESTAMP_COLUMN_NAME,
+    metadata_fields_to_keep=None,
+    source_id_field=SOURCE_ID_COLUMN_NAME,
+)
 
 
 def _build_flattened_metadata(row) -> str:

@@ -16,8 +16,6 @@ from engine.storage_service.db_utils import DBDefinition
 from engine.storage_service.local_service import SQLLocalService
 from ingestion_script.ingest_folder_source import (
     TIMESTAMP_COLUMN_NAME,
-    UNIFIED_QDRANT_SCHEMA,
-    UNIFIED_TABLE_DEFINITION,
     sync_chunks_to_qdrant,
 )
 from ingestion_script.utils import (
@@ -28,6 +26,8 @@ from ingestion_script.utils import (
     METADATA_COLUMN_NAME,
     ORDER_COLUMN_NAME,
     SOURCE_ID_COLUMN_NAME,
+    UNIFIED_QDRANT_SCHEMA,
+    UNIFIED_TABLE_DEFINITION,
     URL_COLUMN_NAME,
     build_combined_sql_filter,
     map_source_filter_to_unified_table_filter,

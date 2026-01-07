@@ -5,8 +5,8 @@ from uuid import UUID
 import pandas as pd
 import pytest
 
-from ingestion_script.ingest_folder_source import UNIFIED_TABLE_DEFINITION
 from ingestion_script.ingest_website_source import ScrapedPage, scrape_website, upload_website_source
+from ingestion_script.utils import UNIFIED_TABLE_DEFINITION
 from settings import settings
 
 

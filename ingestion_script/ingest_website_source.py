@@ -18,12 +18,12 @@ from engine.qdrant_service import QdrantService
 from engine.storage_service.db_service import DBService
 from ingestion_script.ingest_folder_source import (
     TIMESTAMP_COLUMN_NAME,
-    UNIFIED_QDRANT_SCHEMA,
-    UNIFIED_TABLE_DEFINITION,
     sync_chunks_to_qdrant,
 )
 from ingestion_script.utils import (
     CHUNK_ID_COLUMN_NAME,
+    UNIFIED_QDRANT_SCHEMA,
+    UNIFIED_TABLE_DEFINITION,
     transform_chunks_df_for_unified_table,
     upload_source,
 )

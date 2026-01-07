@@ -21,7 +21,7 @@ from ada_backend.services.knowledge.errors import (
 )
 from engine.llm_services.llm_service import EmbeddingService
 from engine.storage_service.local_service import SQLLocalService
-from ingestion_script.ingest_folder_source import UNIFIED_TABLE_DEFINITION
+from ingestion_script.utils import UNIFIED_TABLE_DEFINITION
 from settings import settings
 from tests.mocks.qdrant_service import mock_qdrant_service as _mock_qdrant_service
 from tests.mocks.trace_manager import MockTraceManager
