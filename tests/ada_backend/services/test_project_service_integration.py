@@ -1,18 +1,23 @@
 """
-Tests for project service functions.
+Integration tests for project service functions.
+
+These tests use a real PostgreSQL database to test
+the full integration between service layer, repository layer, and database.
+
 Testing the simplified project list endpoint and full project details.
-TODO: Enable these tests when migrating test suite to PostgreSQL
-(currently skipped due to SQLite incompatibility with PostgreSQL regex constraints)
+These tests use PostgreSQL to support regex constraints in GraphRunner models.
 """
 
+import os
 import uuid
 from unittest.mock import patch
 
 import pytest
-from sqlalchemy.orm import Session
+from sqlalchemy import create_engine, text
+from sqlalchemy.orm import Session, sessionmaker
 
 from ada_backend.database import models as db
-from ada_backend.database.setup_db import get_db
+from ada_backend.database import setup_db
 from ada_backend.schemas.project_schema import (
     ProjectSchema,
     ProjectWithGraphRunnersSchema,
@@ -22,15 +27,56 @@ from ada_backend.services.project_service import (
     get_project_service,
     get_workflows_by_organization_service,
 )
+from settings import settings
 
 
-@pytest.fixture
-def db_session():
-    """Get a database session for testing."""
-    session_gen = get_db()
-    session = next(session_gen)
-    yield session
-    session.close()
+@pytest.fixture(scope="function")
+def db_session(alembic_engine, alembic_runner):
+    """
+    Get a PostgreSQL database session for testing.
+
+    Uses real ADA_DB_URL from settings if available, otherwise falls back to
+    ephemeral alembic_engine from pytest_mock_resources.
+
+    Uses transactions that rollback after each test to keep the database clean.
+    """
+    # Prefer real database URL if available
+    if settings.ADA_DB_URL:
+        try:
+            engine = create_engine(settings.ADA_DB_URL, echo=False)
+            # Test connection - assume migrations are already applied to real database
+            with engine.connect() as conn:
+                conn.execute(text("SELECT 1"))
+        except Exception as e:
+            if not os.getenv("CI"):
+                pytest.skip(
+                    f"Could not connect to real database: {e}. Ensure ADA_DB_URL is set and database is accessible."
+                )
+            raise
+    else:
+        # Fall back to ephemeral database - run migrations to create schema
+        engine = alembic_engine
+        alembic_runner.migrate_up_to("heads", return_current=False)
+
+    # Bind SessionLocal to the engine for this test
+    original_engine = setup_db.engine
+    setup_db.SessionLocal.configure(bind=engine)
+
+    # Create a session with a transaction that will be rolled back
+    SessionFactory = sessionmaker(bind=engine)
+    connection = engine.connect()
+    transaction = connection.begin()
+    session = SessionFactory(bind=connection)
+
+    try:
+        yield session
+    finally:
+        # Rollback transaction to clean up test data
+        transaction.rollback()
+        session.close()
+        connection.close()
+        # Restore original binding
+        setup_db.SessionLocal.configure(bind=original_engine)
 
 
 @pytest.fixture
