@@ -47,6 +47,7 @@ from ada_backend.services.knowledge.errors import (
 from engine.llm_services.llm_service import EmbeddingService
 from engine.qdrant_service import QdrantCollectionSchema, QdrantService
 from engine.trace.trace_context import get_trace_manager
+from ingestion_script.utils import CHUNK_ID_COLUMN_NAME, SOURCE_ID_COLUMN_NAME
 
 LOGGER = logging.getLogger(__name__)
 
@@ -192,6 +193,7 @@ def list_documents_service(
         sql_local_service=sql_local_service,
         schema_name=source.database_schema,
         table_name=source.database_table_name,
+        source_id=str(source_id),
     )
     documents: List[KnowledgeDocumentOverview] = []
     for row in rows:
@@ -220,6 +222,7 @@ def get_document_with_chunks_service(
         source.database_schema,
         source.database_table_name,
         document_id,
+        source_id=str(source_id),
     )
 
     if len(rows) == 0:
@@ -256,13 +259,14 @@ def get_document_with_chunks_service(
     return KnowledgeDocumentWithChunks(document=document_metadata, chunks=chunks, total_chunks=len(chunks))
 
 
-def _updated_chunk_to_dict(chunk: KnowledgeChunk) -> dict:
+def _updated_chunk_to_dict(chunk: KnowledgeChunk, source_id: str) -> dict:
     """Convert a KnowledgeChunkUpdate to a dictionary format suitable for Qdrant / SQL."""
     _check_token_size_chunk(chunk.content)
     chunk.last_edited_ts = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
     chunk_dict = chunk.model_dump()
     if "document_id" in chunk_dict:
         chunk_dict["file_id"] = chunk_dict.pop("document_id")
+    chunk_dict["source_id"] = source_id
     chunk_dict["metadata"] = json.dumps(chunk_dict["metadata"]) if chunk_dict["metadata"] else {}
 
     return chunk_dict
@@ -279,11 +283,12 @@ async def update_document_chunks_service(
     if not chunks:
         return []
 
-    chunks_dict = [_updated_chunk_to_dict(chunk) for chunk in chunks]
+    chunks_dict = [_updated_chunk_to_dict(chunk, str(source_id)) for chunk in chunks]
     sql_local_service.upsert_rows(
         table_name=source.database_table_name,
         schema_name=source.database_schema,
         rows=chunks_dict,
+        id_column_names=[CHUNK_ID_COLUMN_NAME, SOURCE_ID_COLUMN_NAME],
     )
 
     try:
@@ -292,6 +297,7 @@ async def update_document_chunks_service(
         await qdrant_service.sync_df_with_collection_async(
             df=chunks_df,
             collection_name=source.qdrant_collection_name,
+            query_filter_qdrant={"must": [{"key": SOURCE_ID_COLUMN_NAME, "match": {"value": str(source_id)}}]},
         )
         LOGGER.info(f"Upserted {len(chunks)} chunks to Qdrant collection {source.qdrant_collection_name}")
     except Exception as e:
@@ -307,6 +313,7 @@ async def update_document_chunks_service(
         table_name=source.database_table_name,
         chunk_ids=[chunk.chunk_id for chunk in chunks],
         schema_name=source.database_schema,
+        sql_query_filter=f"{SOURCE_ID_COLUMN_NAME} = '{str(source_id)}'",
     )
 
     updated_chunks: List[KnowledgeChunk] = []
@@ -350,8 +357,11 @@ async def delete_chunk_service(
             point_ids=[chunk_id],
             id_field=qdrant_collection_schema.chunk_id_field,
             collection_name=source.qdrant_collection_name,
+            filter={"must": [{"key": SOURCE_ID_COLUMN_NAME, "match": {"value": str(source_id)}}]},
         )
-        LOGGER.info(f"Deleted chunk {chunk_id} from Qdrant collection {source.qdrant_collection_name}")
+        LOGGER.info(
+            f"Deleted chunk {chunk_id} (source_id: {source_id}) from Qdrant collection {source.qdrant_collection_name}"
+        )
     except Exception as e:
         LOGGER.error(f"Failed to delete chunk from Qdrant: {str(e)}", exc_info=True)
         raise KnowledgeServiceQdrantChunkDeletionError(
@@ -366,6 +376,7 @@ async def delete_chunk_service(
             schema_name=source.database_schema,
             table_name=source.database_table_name,
             chunk_id=chunk_id,
+            source_id=str(source_id),
         )
     except Exception as e:
         LOGGER.error(

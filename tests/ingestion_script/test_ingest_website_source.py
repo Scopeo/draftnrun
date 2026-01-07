@@ -1,10 +1,11 @@
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
+from uuid import UUID
 
 import pandas as pd
 import pytest
 
-from ingestion_script.ingest_folder_source import FILE_TABLE_DEFINITION
+from ingestion_script.ingest_folder_source import UNIFIED_TABLE_DEFINITION
 from ingestion_script.ingest_website_source import ScrapedPage, scrape_website, upload_website_source
 from settings import settings
 
@@ -81,8 +82,13 @@ async def test_upload_website_source_syncs_scraped_pages(monkeypatch):
 
     chunk_df = pd.DataFrame({
         "chunk_id": ["chunk-1"],
+        "file_id": ["file-1"],
         "content": ["chunk content"],
         "url": ["https://example.com/page"],
+        "document_title": ["Example page"],
+        "last_edited_ts": ["2025-01-01T00:00:00Z"],
+        "metadata": ["{}"],
+        "order": [0],
     })
     chunks_mock = AsyncMock(return_value=chunk_df)
     monkeypatch.setattr(
@@ -105,6 +111,7 @@ async def test_upload_website_source_syncs_scraped_pages(monkeypatch):
 
     db_service = MagicMock()
     qdrant_service = MagicMock()
+    test_source_id = UUID("12345678-1234-5678-1234-567812345678")
 
     await upload_website_source(
         db_service=db_service,
@@ -112,6 +119,7 @@ async def test_upload_website_source_syncs_scraped_pages(monkeypatch):
         storage_schema_name="web_schema",
         storage_table_name="web_table",
         qdrant_collection_name="web_collection",
+        source_id=test_source_id,
         url="https://example.com",
         follow_links=True,
         max_depth=3,
@@ -151,7 +159,7 @@ async def test_upload_website_source_syncs_scraped_pages(monkeypatch):
     update_kwargs = db_service.update_table.call_args.kwargs
     assert update_kwargs["table_name"] == "web_table"
     assert update_kwargs["schema_name"] == "web_schema"
-    assert update_kwargs["table_definition"] is FILE_TABLE_DEFINITION
+    assert update_kwargs["table_definition"] is UNIFIED_TABLE_DEFINITION
     assert update_kwargs["append_mode"] is True
 
     sync_mock.assert_awaited_once_with(
@@ -160,4 +168,5 @@ async def test_upload_website_source_syncs_scraped_pages(monkeypatch):
         "web_collection",
         db_service,
         qdrant_service,
+        source_id=str(test_source_id),
     )
