@@ -22,7 +22,7 @@ from ada_backend.services.credits_service import (
 )
 from ada_backend.services.errors import OrganizationLimitNotFound
 
-ORGANIZATION_ID = "37b7d67f-8f29-4fce-8085-19dea582f605"  # umbrella organization
+ORGANIZATION_ID = UUID("37b7d67f-8f29-4fce-8085-19dea582f605")  # umbrella organization
 COMPONENT_VERSION_ID = str(COMPONENT_VERSION_UUIDS["llm_call"])
 
 
@@ -77,19 +77,17 @@ def create_organization_limit_in_db(session, organization_id: UUID, limit: float
 
 def test_get_all_organization_limits_and_usage(db_session):
     """Test getting all organization limits with usage."""
-    org_id_1 = UUID(ORGANIZATION_ID)
     org_id_2 = uuid4()
 
     existing_limits = (
-        db_session
-        .query(db.OrganizationLimit)
-        .filter(db.OrganizationLimit.organization_id.in_([org_id_1, org_id_2]))
+        db_session.query(db.OrganizationLimit)
+        .filter(db.OrganizationLimit.organization_id.in_([ORGANIZATION_ID, org_id_2]))
         .all()
     )
     for limit in existing_limits:
         delete_organization_limit(db_session, limit.id, limit.organization_id)
 
-    limit_1 = create_organization_limit_in_db(db_session, org_id_1, 1000.0)
+    limit_1 = create_organization_limit_in_db(db_session, ORGANIZATION_ID, 1000.0)
     limit_2 = create_organization_limit_in_db(db_session, org_id_2, 2000.0)
 
     result = get_all_organization_limits_and_usage_service(db_session, month=12, year=2025)
@@ -108,73 +106,73 @@ def test_get_all_organization_limits_and_usage(db_session):
 
 def test_create_organization_limit_success(db_session):
     """Test creating an organization limit."""
-    org_id = UUID(ORGANIZATION_ID)
 
     existing_limits = (
-        db_session.query(db.OrganizationLimit).filter(db.OrganizationLimit.organization_id == org_id).all()
+        db_session.query(db.OrganizationLimit).filter(db.OrganizationLimit.organization_id == ORGANIZATION_ID).all()
     )
     for limit in existing_limits:
         delete_organization_limit(db_session, limit.id, limit.organization_id)
 
-    result = create_organization_limit_service(db_session, org_id, 5000.0)
+    result = create_organization_limit_service(db_session, ORGANIZATION_ID, 5000.0)
 
-    assert result.organization_id == org_id
+    assert result.organization_id == ORGANIZATION_ID
     assert result.limit == 5000.0
     assert result.id is not None
     assert result.created_at is not None
     assert result.updated_at is not None
 
     limit_id = result.id
-    delete_organization_limit(db_session, limit_id, org_id)
+    delete_organization_limit(db_session, limit_id, ORGANIZATION_ID)
 
 
 def test_update_organization_limit_success(db_session):
     """Test updating an organization limit."""
-    org_id = UUID(ORGANIZATION_ID)
 
     existing_limits = (
-        db_session.query(db.OrganizationLimit).filter(db.OrganizationLimit.organization_id == org_id).all()
+        db_session.query(db.OrganizationLimit).filter(db.OrganizationLimit.organization_id == ORGANIZATION_ID).all()
     )
     for limit in existing_limits:
         delete_organization_limit(db_session, limit.id, limit.organization_id)
 
-    org_limit = create_organization_limit_in_db(db_session, org_id, 3000.0)
+    org_limit = create_organization_limit_in_db(db_session, ORGANIZATION_ID, 3000.0)
     limit_id = org_limit.id
 
     new_limit = 6000.0
-    result = update_organization_limit_service(db_session, id=limit_id, organization_id=org_id, limit=new_limit)
+    result = update_organization_limit_service(
+        db_session, id=limit_id, organization_id=ORGANIZATION_ID, limit=new_limit
+    )
 
     assert result.id == limit_id
-    assert result.organization_id == org_id
+    assert result.organization_id == ORGANIZATION_ID
     assert result.limit == new_limit
 
-    delete_organization_limit(db_session, limit_id, org_id)
+    delete_organization_limit(db_session, limit_id, ORGANIZATION_ID)
 
 
 def test_update_organization_limit_not_found(db_session):
     """Test updating a non-existent organization limit."""
-    org_id = UUID(ORGANIZATION_ID)
     fake_limit_id = uuid4()
     new_limit = 6000.0
 
     with pytest.raises(OrganizationLimitNotFound):
-        update_organization_limit_service(db_session, id=fake_limit_id, organization_id=org_id, limit=new_limit)
+        update_organization_limit_service(
+            db_session, id=fake_limit_id, organization_id=ORGANIZATION_ID, limit=new_limit
+        )
 
 
 def test_delete_organization_limit_success(db_session):
     """Test deleting an organization limit."""
-    org_id = UUID(ORGANIZATION_ID)
 
     existing_limits = (
-        db_session.query(db.OrganizationLimit).filter(db.OrganizationLimit.organization_id == org_id).all()
+        db_session.query(db.OrganizationLimit).filter(db.OrganizationLimit.organization_id == ORGANIZATION_ID).all()
     )
     for limit in existing_limits:
         delete_organization_limit(db_session, limit.id, limit.organization_id)
 
-    org_limit = create_organization_limit_in_db(db_session, org_id, 4000.0)
+    org_limit = create_organization_limit_in_db(db_session, ORGANIZATION_ID, 4000.0)
     limit_id = org_limit.id
 
-    delete_organization_limit_service(db_session, limit_id, org_id)
+    delete_organization_limit_service(db_session, limit_id, ORGANIZATION_ID)
 
     all_limits = db_session.query(db.OrganizationLimit).all()
     limit_ids = [limit.id for limit in all_limits]
@@ -183,98 +181,92 @@ def test_delete_organization_limit_success(db_session):
 
 def test_create_organization_limit_duplicate(db_session):
     """Test creating a duplicate organization limit (same org) should fail."""
-    org_id = UUID(ORGANIZATION_ID)
-
     existing_limits = (
-        db_session.query(db.OrganizationLimit).filter(db.OrganizationLimit.organization_id == org_id).all()
+        db_session.query(db.OrganizationLimit).filter(db.OrganizationLimit.organization_id == ORGANIZATION_ID).all()
     )
     for limit in existing_limits:
         delete_organization_limit(db_session, limit.id, limit.organization_id)
 
-    org_limit = create_organization_limit_in_db(db_session, org_id, 5000.0)
+    org_limit = create_organization_limit_in_db(db_session, ORGANIZATION_ID, 5000.0)
 
     with pytest.raises(IntegrityError):
-        create_organization_limit_service(db_session, org_id, 6000.0)
+        create_organization_limit_service(db_session, ORGANIZATION_ID, 6000.0)
     db_session.rollback()  # Rollback after IntegrityError to keep session clean
 
-    delete_organization_limit(db_session, org_limit.id, org_id)
+    delete_organization_limit(db_session, org_limit.id, ORGANIZATION_ID)
 
 
 def test_create_organization_limit_missing_fields(db_session):
     """Test creating an organization limit with default limit value."""
-    org_id = UUID(ORGANIZATION_ID)
 
     existing_limits = (
-        db_session.query(db.OrganizationLimit).filter(db.OrganizationLimit.organization_id == org_id).all()
+        db_session.query(db.OrganizationLimit).filter(db.OrganizationLimit.organization_id == ORGANIZATION_ID).all()
     )
     for limit in existing_limits:
         delete_organization_limit(db_session, limit.id, limit.organization_id)
 
-    result = create_organization_limit_service(db_session, org_id, 0.0)
+    result = create_organization_limit_service(db_session, ORGANIZATION_ID, 0.0)
 
     assert result.limit == 0.0
 
     limit_id = result.id
-    delete_organization_limit(db_session, limit_id, org_id)
+    delete_organization_limit(db_session, limit_id, ORGANIZATION_ID)
 
 
 def test_update_organization_limit_same_value(db_session):
     """Test updating an organization limit with the same value."""
-    org_id = UUID(ORGANIZATION_ID)
 
     existing_limits = (
-        db_session.query(db.OrganizationLimit).filter(db.OrganizationLimit.organization_id == org_id).all()
+        db_session.query(db.OrganizationLimit).filter(db.OrganizationLimit.organization_id == ORGANIZATION_ID).all()
     )
     for limit in existing_limits:
         delete_organization_limit(db_session, limit.id, limit.organization_id)
 
-    org_limit = create_organization_limit_in_db(db_session, org_id, 5000.0)
+    org_limit = create_organization_limit_in_db(db_session, ORGANIZATION_ID, 5000.0)
     limit_id = org_limit.id
 
-    result = update_organization_limit_service(db_session, id=limit_id, organization_id=org_id, limit=5000.0)
+    result = update_organization_limit_service(db_session, id=limit_id, organization_id=ORGANIZATION_ID, limit=5000.0)
 
     assert result.limit == 5000.0
 
-    delete_organization_limit(db_session, limit_id, org_id)
+    delete_organization_limit(db_session, limit_id, ORGANIZATION_ID)
 
 
 def test_update_organization_limit_zero_limit(db_session):
     """Test updating an organization limit with zero limit."""
-    org_id = UUID(ORGANIZATION_ID)
 
     existing_limits = (
-        db_session.query(db.OrganizationLimit).filter(db.OrganizationLimit.organization_id == org_id).all()
+        db_session.query(db.OrganizationLimit).filter(db.OrganizationLimit.organization_id == ORGANIZATION_ID).all()
     )
     for limit in existing_limits:
         delete_organization_limit(db_session, limit.id, limit.organization_id)
 
-    org_limit = create_organization_limit_in_db(db_session, org_id, 1000.0)
+    org_limit = create_organization_limit_in_db(db_session, ORGANIZATION_ID, 1000.0)
     limit_id = org_limit.id
 
-    result = update_organization_limit_service(db_session, id=limit_id, organization_id=org_id, limit=0.0)
+    result = update_organization_limit_service(db_session, id=limit_id, organization_id=ORGANIZATION_ID, limit=0.0)
 
     assert result.limit == 0.0
 
-    delete_organization_limit(db_session, limit_id, org_id)
+    delete_organization_limit(db_session, limit_id, ORGANIZATION_ID)
 
 
 def test_get_all_organization_limits_and_usage_with_filters(db_session):
     """Test getting all organization limits with usage."""
-    org_id = UUID(ORGANIZATION_ID)
 
     existing_limits = (
-        db_session.query(db.OrganizationLimit).filter(db.OrganizationLimit.organization_id == org_id).all()
+        db_session.query(db.OrganizationLimit).filter(db.OrganizationLimit.organization_id == ORGANIZATION_ID).all()
     )
     for limit in existing_limits:
         delete_organization_limit(db_session, limit.id, limit.organization_id)
 
-    limit_1 = create_organization_limit_in_db(db_session, org_id, 1000.0)
+    limit_1 = create_organization_limit_in_db(db_session, ORGANIZATION_ID, 1000.0)
     limit_2 = create_organization_limit_in_db(db_session, uuid4(), 2000.0)
 
     result = get_all_organization_limits_and_usage_service(db_session, month=12, year=2025)
 
     assert isinstance(result, list)
-    assert any(item.organization_id == org_id for item in result)
+    assert any(item.organization_id == ORGANIZATION_ID for item in result)
 
     delete_organization_limit(db_session, limit_1.id, limit_1.organization_id)
     delete_organization_limit(db_session, limit_2.id, limit_2.organization_id)
@@ -361,8 +353,7 @@ def test_delete_component_version_cost_success(db_session, ensure_component_vers
     delete_component_version_cost_service(db_session, component_version_id)
 
     cost = (
-        db_session
-        .query(db.ComponentCost)
+        db_session.query(db.ComponentCost)
         .filter(db.ComponentCost.component_version_id == component_version_id)
         .first()
     )
