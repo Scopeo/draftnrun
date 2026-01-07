@@ -6,12 +6,12 @@ on:
   workflow_dispatch:
     inputs:
       environment:
-        description: 'Environment to deploy'
+        description: "Environment to deploy"
         required: true
         type: choice
         options: [staging, prod]
       breaking_migration:
-        description: 'Scale to zero for breaking DB migration'
+        description: "Scale to zero for breaking DB migration"
         required: false
         default: false
         type: boolean
