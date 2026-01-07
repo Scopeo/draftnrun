@@ -8,6 +8,8 @@ from sqlalchemy.engine.url import make_url
 
 PROCESSED_DATETIME_FIELD = "_processed_datetime"
 CHUNK_ID_COLUMN = "chunk_id"
+CREATED_AT_COLUMN = "created_at"
+UPDATED_AT_COLUMN = "updated_at"
 
 LOGGER = logging.getLogger(__name__)
 PANDAS_DTYPE_MAPPING: dict[str, str] = {
@@ -21,6 +23,9 @@ PANDAS_DTYPE_MAPPING: dict[str, str] = {
     "BOOLEAN": "bool",
     "ARRAY": "object",
     "VARIANT": "object",
+    "JSONB": "object",
+    "TIMESTAMP_TZ": "datetime64[ns]",
+    "UUID": "str",
 }
 
 
@@ -93,9 +98,11 @@ def convert_to_correct_pandas_type(df: pd.DataFrame, column_name: str, db_defini
 
 
 def check_columns_matching_between_data_and_database_table(columns_data, table_description):
+    AUTO_MANAGED_COLUMNS = {PROCESSED_DATETIME_FIELD, CREATED_AT_COLUMN, UPDATED_AT_COLUMN}
+
     column_table = [column["name"].lower() for column in table_description]
-    columns_data = set(columns_data) - set([PROCESSED_DATETIME_FIELD])
-    column_table = set(column_table) - set([PROCESSED_DATETIME_FIELD])
+    columns_data = set(columns_data) - AUTO_MANAGED_COLUMNS
+    column_table = set(column_table) - AUTO_MANAGED_COLUMNS
     if set(columns_data) != set(column_table):
         LOGGER.error(f"Columns in data and table do not match : data {columns_data}, table {column_table}")
         raise ValueError("Columns in data and table do not match")

@@ -1,13 +1,19 @@
 import json
+import logging
 from typing import Optional
+from uuid import UUID
 
 from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttributes
 from opentelemetry import trace as trace_api
 
 from engine.components.types import ComponentAttributes, SourceChunk
+from engine.components.utils import merge_qdrant_filters_with_and_conditions
 from engine.qdrant_service import QdrantService
 from engine.trace.serializer import serialize_to_json
 from engine.trace.trace_manager import TraceManager
+from ingestion_script.utils import SOURCE_ID_COLUMN_NAME
+
+LOGGER = logging.getLogger(__name__)
 
 
 def cast_string_to_list(string: Optional[str]) -> list[str]:
@@ -30,6 +36,7 @@ class Retriever:
         metadata_date_key: Optional[str] = None,
         max_retrieved_chunks_after_penalty: Optional[int] = None,
         component_attributes: Optional[ComponentAttributes] = None,
+        source_id: Optional[UUID] = None,
     ):
         self.trace_manager = trace_manager
         self.collection_name = collection_name
@@ -43,22 +50,41 @@ class Retriever:
         self.component_attributes = component_attributes or ComponentAttributes(
             component_instance_name=self.__class__.__name__
         )
+        self.source_id = source_id
+        LOGGER.info(f"Retriever initialized with source_id={self.source_id} for collection={collection_name}")
 
     async def _get_chunks_without_trace(
         self,
         query_text: str,
         filters: Optional[dict] = None,
     ) -> list[SourceChunk]:
+        source_id_filter = None
+        if self.source_id:
+            source_id_filter = {"must": [{"key": SOURCE_ID_COLUMN_NAME, "match": {"value": str(self.source_id)}}]}
+
+        final_filter = (
+            merge_qdrant_filters_with_and_conditions(source_id_filter, filters)
+            if (source_id_filter and filters)
+            else (source_id_filter or filters)
+        )
+        LOGGER.info(
+            f"Retriever querying collection '{self.collection_name}' with source_id={self.source_id}, "
+            f"filter: {json.dumps(final_filter)}"
+        )
         chunks = await self._vectorestore_service.retrieve_similar_chunks_async(
             query_text=query_text,
             collection_name=self.collection_name,
             limit=self._max_retrieved_chunks,
-            filter=filters,
+            filter=final_filter,
             enable_date_penalty_for_chunks=self.enable_chunk_penalization,
             chunk_age_penalty_rate=self.chunk_age_penalty_rate,
             default_penalty_rate=self.default_penalty_rate,
             metadata_date_key=cast_string_to_list(self.metadata_date_key),
             max_retrieved_chunks_after_penalty=self.max_retrieved_chunks_after_penalty,
+        )
+        LOGGER.info(
+            f"Retriever retrieved {len(chunks)} chunks from collection "
+            f"'{self.collection_name}' with source_id={self.source_id}"
         )
 
         return chunks
@@ -83,6 +109,7 @@ class Retriever:
                     if self.component_attributes.component_instance_id is not None
                     else None
                 ),
+                "source_id": str(self.source_id),
             })
 
             if len(chunks) > 30:

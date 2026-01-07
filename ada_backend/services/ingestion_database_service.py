@@ -12,13 +12,13 @@ def get_sql_local_service_for_ingestion() -> SQLLocalService:
 
 def create_table_in_ingestion_db(
     organization_id: UUID,
-    source_name: str,
+    source_id: UUID,
     table_definition: DBDefinition,
 ) -> tuple[str, DBDefinition]:
     sql_local_service = get_sql_local_service_for_ingestion()
     schema_name, table_name, qdrant_collection_name = get_sanitize_names(
-        source_name=source_name,
         organization_id=str(organization_id),
+        embedding_model_reference=None,
     )
     sql_local_service.create_table(
         table_name=table_name,

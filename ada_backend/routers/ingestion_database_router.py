@@ -16,16 +16,18 @@ LOGGER = logging.getLogger(__name__)
 def create_table_in_database(
     verified_ingestion_api_key: Annotated[None, Depends(verify_ingestion_api_key_dependency)],
     organization_id: UUID,
-    source_name: str,
+    source_id: UUID,
     table_definition: DBDefinition,
 ) -> tuple[str, DBDefinition]:
     try:
-        table_name, table_definition = create_table_in_ingestion_db(organization_id, source_name, table_definition)
+        table_name, table_definition = create_table_in_ingestion_db(organization_id, source_id, table_definition)
         return table_name, table_definition
+    except HTTPException:
+        raise
     except Exception as e:
         LOGGER.exception(
             "Failed to create table in database for organization %s, source %s",
             organization_id,
-            source_name,
+            source_id,
         )
         raise HTTPException(status_code=500, detail=str(e)) from e

@@ -86,9 +86,11 @@ class DBService(ABC):
         table_name: str,
         column_name: str,
         schema_name: Optional[str] = None,
+        source_id: Optional[str] = None,
     ) -> set:
         """
         Fetch all values from a specific column as a set.
+        If source_id is provided, only fetch values for rows matching that source_id.
         """
         pass
 
@@ -102,6 +104,7 @@ class DBService(ABC):
         timestamp_column_name: Optional[str] = None,
         append_mode: bool = True,
         sql_query_filter: Optional[str] = None,
+        source_id: Optional[str] = None,
     ) -> None:
         """
         Update a table on Database with a new DataFrame.
@@ -112,7 +115,9 @@ class DBService(ABC):
         else:
             target_table_name = table_name
 
-        if not self.table_exists(table_name, schema_name=schema_name):
+        table_exists = self.table_exists(table_name, schema_name=schema_name)
+
+        if not table_exists:
             LOGGER.info(f"Table {target_table_name} does not exist. Creating it...")
             self.create_table(
                 table_name=table_name,
@@ -124,11 +129,13 @@ class DBService(ABC):
                 new_df[col] = new_df[col].astype(object).where(new_df[col].notna(), None)
             self.insert_df_to_table(df=new_df, table_name=table_name, schema_name=schema_name)
         else:
-            # For checking existing IDs and preventing duplicates, get all IDs as a set
+            # For checking existing IDs and preventing duplicates, get IDs as a set
+            # If source_id is provided, filter by source_id to avoid cross-source chunk_id collisions
             all_existing_ids = self._fetch_column_as_set(
                 table_name=table_name,
                 column_name=id_column_name,
                 schema_name=schema_name,
+                source_id=source_id,
             )
 
             # For UPDATE operations, use the filtered query if provided

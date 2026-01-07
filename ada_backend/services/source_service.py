@@ -23,6 +23,7 @@ from ada_backend.schemas.source_schema import (
 from ada_backend.services.ingestion_task_service import create_ingestion_task_by_organization
 from engine.qdrant_service import QdrantCollectionSchema, QdrantService
 from engine.storage_service.local_service import SQLLocalService
+from ingestion_script.utils import SOURCE_ID_COLUMN_NAME
 from settings import settings
 
 LOGGER = logging.getLogger(__name__)
@@ -145,24 +146,41 @@ def delete_source_service(
         # TODO change snowflake to db service when ingestion script is updated
         # TODO enhance security by double checking deletion rights
         if source.qdrant_collection_name and source.qdrant_schema:
-            LOGGER.info(f"Deleting Qdrant collection {source.qdrant_collection_name}")
             qdrant_service = QdrantService.from_defaults(
                 default_collection_schema=QdrantCollectionSchema(**source.qdrant_schema),
             )
 
-            qdrant_service.delete_collection(
-                collection_name=source.qdrant_collection_name,
+            LOGGER.info(
+                f"Deleting chunks for source {source_id} from Qdrant collection {source.qdrant_collection_name}"
             )
-            LOGGER.info(f"Qdrant collection {source.qdrant_collection_name} deleted")
+
+            source_id_filter = {"must": [{"key": SOURCE_ID_COLUMN_NAME, "match": {"value": str(source_id)}}]}
+            success = qdrant_service.delete_points(
+                collection_name=source.qdrant_collection_name,
+                filter=source_id_filter,
+            )
+            if success:
+                LOGGER.info(
+                    f"Successfully deleted chunks for source {source_id} "
+                    f"from Qdrant collection {source.qdrant_collection_name}"
+                )
+            else:
+                LOGGER.warning(
+                    f"Failed to delete chunks for source {source_id} "
+                    f"from Qdrant collection {source.qdrant_collection_name}"
+                )
+
         if source.database_table_name:
-            LOGGER.info(f"Deleting table {source.database_table_name}")
             db_service = SQLLocalService(engine_url=settings.INGESTION_DB_URL)
-            db_service.drop_table(
+            LOGGER.info(f"Deleting chunks for source {source_id} from table {source.database_table_name}")
+
+            db_service.delete_rows_from_table_by_filter(
                 table_name=source.database_table_name,
                 schema_name=source.database_schema,
+                filter_condition=f"{SOURCE_ID_COLUMN_NAME} = '{source_id}'",
             )
-            LOGGER.info(f"Table {source.database_table_name} deleted")
-            delete_source(session, organization_id, source_id)
+            LOGGER.info(f"Deleted chunks for source {source_id} from table {source.database_table_name}")
+        delete_source(session, organization_id, source_id)
     except Exception as e:
         LOGGER.error(f"Error in delete_source_by_id: {str(e)}")
         raise ValueError(f"Failed to delete source: {str(e)}") from e
