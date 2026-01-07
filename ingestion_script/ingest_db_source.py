@@ -30,6 +30,7 @@ from ingestion_script.utils import (
     SOURCE_ID_COLUMN_NAME,
     URL_COLUMN_NAME,
     build_combined_sql_filter,
+    map_source_filter_to_unified_table_filter,
     resolve_sql_timestamp_filter,
     upload_source,
 )
@@ -192,6 +193,13 @@ async def upload_db_source(
         timestamp_filter=resolved_timestamp_filter,
         timestamp_column_name=timestamp_column_name,
     )
+
+    combined_filter_sql_unified = map_source_filter_to_unified_table_filter(
+        sql_filter=combined_filter_sql,
+        timestamp_column_name=timestamp_column_name,
+        metadata_column_names=metadata_column_names,
+    )
+
     combined_filter_qdrant = qdrant_service._build_combined_filter(
         query_filter=query_filter,
         timestamp_filter=resolved_timestamp_filter,
@@ -222,7 +230,7 @@ async def upload_db_source(
         timestamp_column_name=TIMESTAMP_COLUMN_NAME,
         append_mode=update_existing,
         schema_name=storage_schema_name,
-        sql_query_filter=combined_filter_sql,
+        sql_query_filter=combined_filter_sql_unified,  # Use unified filter for unified table
         source_id=str(source_id),  # Pass source_id to filter existing IDs by source
     )
 
@@ -233,7 +241,7 @@ async def upload_db_source(
         collection_name=qdrant_collection_name,
         db_service=db_service,
         qdrant_service=qdrant_service,
-        sql_query_filter=combined_filter_sql,
+        sql_query_filter=combined_filter_sql_unified,  # Use unified filter for sync
         query_filter_qdrant=combined_filter_qdrant,
         source_id=source_id,
     )
@@ -261,12 +269,21 @@ async def ingestion_database(
 ) -> None:
     source_type = db.SourceType.DATABASE
     LOGGER.info("Start ingestion data from the database source...")
+    qdrant_schema = UNIFIED_QDRANT_SCHEMA
+    metadata_fields_to_keep = set(metadata_column_names) if metadata_column_names else None
+    if metadata_fields_to_keep:
+        metadata_field_types = {col: "VARCHAR" for col in metadata_fields_to_keep}
+    if timestamp_column_name:
+        metadata_fields_to_keep.add(timestamp_column_name)
+        metadata_field_types[timestamp_column_name] = "DATETIME"
+    qdrant_schema.metadata_fields_to_keep = metadata_fields_to_keep
+    qdrant_schema.metadata_field_types = metadata_field_types if metadata_field_types else None
     await upload_source(
         source_name,
         organization_id,
         task_id,
         source_type,
-        UNIFIED_QDRANT_SCHEMA,
+        qdrant_schema,
         update_existing=update_existing,
         ingestion_function=partial(
             upload_db_source,
