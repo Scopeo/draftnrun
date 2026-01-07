@@ -18,7 +18,7 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_PREFIX: ${{ github.repository }}
+  IMAGE_NAME: ${{ github.repository }}
 
 jobs:
   build-and-deploy:
@@ -79,6 +79,16 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Extract metadata for API
+        id: meta-api
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-api
+          tags: |
+            type=sha
+            type=raw,value=${{ steps.env.outputs.environment }}
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+
       - name: Build and push API
         uses: docker/build-push-action@v5
         with:
@@ -86,12 +96,20 @@ jobs:
           file: Dockerfile.api
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: |
-            ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-api:${{ github.sha }}
-            ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-api:${{ steps.env.outputs.environment }}
-            ${{ github.ref == 'refs/heads/main' && format('{0}/{1}-api:latest', env.REGISTRY, env.IMAGE_PREFIX) || '' }}
+          tags: ${{ steps.meta-api.outputs.tags }}
+          labels: ${{ steps.meta-api.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Extract metadata for Worker
+        id: meta-worker
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-worker
+          tags: |
+            type=sha
+            type=raw,value=${{ steps.env.outputs.environment }}
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
 
       - name: Build and push Worker
         uses: docker/build-push-action@v5
@@ -100,12 +118,20 @@ jobs:
           file: Dockerfile.worker
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: |
-            ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-worker:${{ github.sha }}
-            ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-worker:${{ steps.env.outputs.environment }}
-            ${{ github.ref == 'refs/heads/main' && format('{0}/{1}-worker:latest', env.REGISTRY, env.IMAGE_PREFIX) || '' }}
+          tags: ${{ steps.meta-worker.outputs.tags }}
+          labels: ${{ steps.meta-worker.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Extract metadata for Scheduler
+        id: meta-scheduler
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-scheduler
+          tags: |
+            type=sha
+            type=raw,value=${{ steps.env.outputs.environment }}
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
 
       - name: Build and push Scheduler
         uses: docker/build-push-action@v5
@@ -114,10 +140,8 @@ jobs:
           file: Dockerfile.scheduler
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: |
-            ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-scheduler:${{ github.sha }}
-            ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-scheduler:${{ steps.env.outputs.environment }}
-            ${{ github.ref == 'refs/heads/main' && format('{0}/{1}-scheduler:latest', env.REGISTRY, env.IMAGE_PREFIX) || '' }}
+          tags: ${{ steps.meta-scheduler.outputs.tags }}
+          labels: ${{ steps.meta-scheduler.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -158,8 +182,8 @@ jobs:
           script: |
             set -e
             REGISTRY="${{ env.REGISTRY }}"
-            PREFIX="${{ env.IMAGE_PREFIX }}"
-            TAG="${{ github.sha }}"
+            PREFIX=$(echo "${{ env.IMAGE_NAME }}" | tr '[:upper:]' '[:lower:]')
+            TAG="sha-$(echo '${{ github.sha }}' | cut -c1-7)"
             NS="${{ steps.k8s.outputs.namespace }}"
 
             echo "🚀 Deploying images tagged: ${TAG}"
