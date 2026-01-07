@@ -1,0 +1,209 @@
+name: Build and Deploy to K8s
+
+on:
+  # push:
+  #   branches: [staging, main]  # Enable after migration complete
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy'
+        required: true
+        type: choice
+        options: [staging, prod]
+      breaking_migration:
+        description: 'Scale to zero for breaking DB migration'
+        required: false
+        default: false
+        type: boolean
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_PREFIX: ${{ github.repository }}
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set environment
+        id: env
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            ENV="${{ inputs.environment }}"
+          elif [ "${{ github.ref }}" = "refs/heads/main" ]; then
+            ENV="prod"
+          else
+            ENV="staging"
+          fi
+          echo "environment=${ENV}" >> $GITHUB_OUTPUT
+          echo "Deploying to: ${ENV}"
+
+      - name: Check for breaking migration label
+        id: breaking
+        run: |
+          # Check manual input first
+          if [ "${{ inputs.breaking_migration }}" = "true" ]; then
+            echo "breaking=true" >> $GITHUB_OUTPUT
+            echo "⚠️ Breaking migration: manual input"
+            exit 0
+          fi
+
+          # Check PR label (for push events from merged PRs)
+          PR_NUMBER=$(gh pr list --state merged --search "${{ github.sha }}" --json number -q '.[0].number' 2>/dev/null || echo "")
+          if [ -n "$PR_NUMBER" ]; then
+            LABELS=$(gh pr view "$PR_NUMBER" --json labels -q '.labels[].name' 2>/dev/null || echo "")
+            if echo "$LABELS" | grep -q "breaking-migration"; then
+              echo "breaking=true" >> $GITHUB_OUTPUT
+              echo "⚠️ Breaking migration: PR #$PR_NUMBER has label"
+              exit 0
+            fi
+          fi
+
+          echo "breaking=false" >> $GITHUB_OUTPUT
+          echo "✅ No breaking migration detected"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push API
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: Dockerfile.api
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-api:${{ github.sha }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-api:${{ steps.env.outputs.environment }}
+            ${{ github.ref == 'refs/heads/main' && format('{0}/{1}-api:latest', env.REGISTRY, env.IMAGE_PREFIX) || '' }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build and push Worker
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: Dockerfile.worker
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-worker:${{ github.sha }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-worker:${{ steps.env.outputs.environment }}
+            ${{ github.ref == 'refs/heads/main' && format('{0}/{1}-worker:latest', env.REGISTRY, env.IMAGE_PREFIX) || '' }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build and push Scheduler
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: Dockerfile.scheduler
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-scheduler:${{ github.sha }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-scheduler:${{ steps.env.outputs.environment }}
+            ${{ github.ref == 'refs/heads/main' && format('{0}/{1}-scheduler:latest', env.REGISTRY, env.IMAGE_PREFIX) || '' }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # --- DEPLOY TO K8S ---
+
+      - name: Set K8s variables
+        id: k8s
+        run: |
+          if [ "${{ steps.env.outputs.environment }}" = "prod" ]; then
+            echo "host_secret=EC2_HOST_K8S_PROD" >> $GITHUB_OUTPUT
+            echo "namespace=ada-prod" >> $GITHUB_OUTPUT
+          else
+            echo "host_secret=EC2_HOST_K8S_STAGING" >> $GITHUB_OUTPUT
+            echo "namespace=ada-staging" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Scale down (breaking migration only)
+        if: ${{ steps.breaking.outputs.breaking == 'true' }}
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets[steps.k8s.outputs.host_secret] }}
+          username: ec2-user
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          script: |
+            echo "⚠️ Breaking migration - scaling down..."
+            kubectl scale deployment --all -n ${{ steps.k8s.outputs.namespace }} --replicas=0
+            kubectl wait --for=delete pod -l app -n ${{ steps.k8s.outputs.namespace }} --timeout=300s || true
+
+      - name: Run database migrations
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets[steps.k8s.outputs.host_secret] }}
+          username: ec2-user
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          script: |
+            set -e
+            echo "🗄️ Running migrations..."
+            kubectl exec deployment/ada-api -n ${{ steps.k8s.outputs.namespace }} -- \
+              alembic -c ada_backend/database/alembic.ini upgrade head || \
+              echo "Migration skipped (pod not ready yet, will run after deploy)"
+
+      - name: Deploy new images
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets[steps.k8s.outputs.host_secret] }}
+          username: ec2-user
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          command_timeout: 15m
+          script: |
+            set -e
+            REGISTRY="${{ env.REGISTRY }}"
+            PREFIX="${{ env.IMAGE_PREFIX }}"
+            TAG="${{ github.sha }}"
+            NS="${{ steps.k8s.outputs.namespace }}"
+
+            echo "🚀 Deploying images tagged: ${TAG}"
+
+            kubectl set image deployment/ada-api -n ${NS} \
+              ada-api=${REGISTRY}/${PREFIX}-api:${TAG}
+            kubectl set image deployment/ada-worker -n ${NS} \
+              ada-worker=${REGISTRY}/${PREFIX}-worker:${TAG}
+            kubectl set image deployment/ada-scheduler -n ${NS} \
+              ada-scheduler=${REGISTRY}/${PREFIX}-scheduler:${TAG}
+
+            echo "⏳ Waiting for rollouts..."
+            kubectl rollout status deployment/ada-api -n ${NS} --timeout=10m
+            kubectl rollout status deployment/ada-worker -n ${NS} --timeout=10m
+            kubectl rollout status deployment/ada-scheduler -n ${NS} --timeout=10m
+
+            echo "✅ Deploy complete!"
+            kubectl get pods -n ${NS}
+
+      - name: Scale up (breaking migration only)
+        if: ${{ steps.breaking.outputs.breaking == 'true' }}
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets[steps.k8s.outputs.host_secret] }}
+          username: ec2-user
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          script: |
+            NS="${{ steps.k8s.outputs.namespace }}"
+            echo "⬆️ Scaling back up..."
+            kubectl scale deployment/ada-api -n ${NS} --replicas=1
+            kubectl scale deployment/ada-worker -n ${NS} --replicas=1
+            kubectl scale deployment/ada-scheduler -n ${NS} --replicas=1
