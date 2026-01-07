@@ -1,6 +1,7 @@
 import inspect
 import json
 import logging
+import re
 import uuid
 from datetime import datetime, timezone
 from typing import Optional
@@ -17,6 +18,7 @@ from engine.llm_services.llm_service import EmbeddingService, VisionService
 from engine.qdrant_service import QdrantCollectionSchema, QdrantService
 from engine.storage_service.local_service import SQLLocalService
 from engine.trace.trace_manager import TraceManager
+from ingestion_script.ingest_folder_source import UNIFIED_TABLE_DEFINITION
 from settings import settings
 
 LOGGER = logging.getLogger(__name__)
@@ -382,6 +384,154 @@ def build_combined_sql_filter(
     if filters:
         return " AND ".join(filters)
     return None
+
+
+def _extract_column_names_from_sql(sql_filter: str) -> set[str]:
+    """
+    Extract column names from a SQL WHERE clause.
+
+    This function uses regex to identify SQL identifiers that are likely column names.
+    It looks for identifiers that appear in contexts where columns are expected.
+
+    Args:
+        sql_filter: SQL WHERE clause
+
+    Returns:
+        Set of column names found in the SQL (lowercase)
+    """
+    # SQL keywords that should not be considered as column names
+    sql_keywords = {
+        "select",
+        "from",
+        "where",
+        "and",
+        "or",
+        "not",
+        "in",
+        "is",
+        "null",
+        "like",
+        "between",
+        "exists",
+        "case",
+        "when",
+        "then",
+        "else",
+        "end",
+        "as",
+        "on",
+        "join",
+        "inner",
+        "left",
+        "right",
+        "outer",
+        "union",
+        "all",
+        "distinct",
+        "group",
+        "by",
+        "having",
+        "order",
+        "asc",
+        "desc",
+        "limit",
+        "offset",
+        "count",
+        "sum",
+        "avg",
+        "max",
+        "min",
+        "cast",
+        "coalesce",
+        "extract",
+        "date",
+        "time",
+        "timestamp",
+        "interval",
+        "true",
+        "false",
+        "current_date",
+        "current_time",
+        "current_timestamp",
+        "now",
+        "upper",
+        "lower",
+        "trim",
+        "substring",
+        "length",
+        "replace",
+        "concat",
+        "abs",
+        "round",
+        "floor",
+        "ceil",
+        "mod",
+        "power",
+    }
+
+    # Pattern to match SQL identifiers (column names)
+    # Matches: word characters, optionally quoted identifiers, or identifiers with dots
+    # We look for identifiers that are not SQL keywords
+    pattern = r"\b([a-z_][a-z0-9_]*)\b"
+
+    # Find all potential identifiers
+    matches = re.findall(pattern, sql_filter.lower())
+
+    # Filter out SQL keywords and return unique column names
+    column_names = {match for match in matches if match not in sql_keywords}
+
+    return column_names
+
+
+def map_source_filter_to_unified_table_filter(
+    sql_filter: Optional[str],
+    timestamp_column_name: Optional[str],
+    metadata_column_names: Optional[list[str]],
+) -> Optional[str]:
+    """
+    Map a SQL filter from source database columns to unified table columns.
+
+    This function:
+    1. Uses metadata_column_names and timestamp_column_name to know which columns are in metadata
+    2. Extracts all column names from the SQL filter
+    3. For each column:
+       - If it's in metadata_column_names or timestamp_column_name → map to metadata->>'column_name'
+       - Otherwise, check if it's in the unified table
+       - If not in unified table → map to metadata->>'column_name'
+
+    Args:
+        sql_filter: SQL WHERE clause using source column names
+        timestamp_column_name: Name of timestamp column in source DB (stored in metadata JSONB)
+        metadata_column_names: List of column names stored in metadata JSONB
+
+    Returns:
+        SQL WHERE clause using unified table column names
+    """
+    if not sql_filter:
+        return None
+
+    unified_columns = {col.name.lower() for col in UNIFIED_TABLE_DEFINITION.columns}
+
+    known_metadata_columns = set()
+    if timestamp_column_name and timestamp_column_name.lower() not in unified_columns:
+        known_metadata_columns.add(timestamp_column_name.lower())
+    if metadata_column_names:
+        known_metadata_columns.update(col.lower() for col in metadata_column_names)
+
+    columns_in_filter = _extract_column_names_from_sql(sql_filter)
+
+    mapped_filter = sql_filter
+
+    for col in columns_in_filter:
+        col_lower = col.lower()
+
+        if col_lower not in unified_columns and col_lower not in known_metadata_columns:
+            escaped_col = re.escape(col)
+            pattern = rf"\b{escaped_col}\b"
+            replacement = f"{METADATA_COLUMN_NAME}->>'{col}'"
+            mapped_filter = re.sub(pattern, replacement, mapped_filter, flags=re.IGNORECASE)
+
+    return mapped_filter
 
 
 def get_first_available_multimodal_custom_llm():
