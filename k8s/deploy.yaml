@@ -1,0 +1,150 @@
+# Ada K8s Deployment Manifest
+# Usage: kubectl apply -f https://raw.githubusercontent.com/Scopeo/agentic_toolbox/main/k8s/deploy.yaml -n <namespace>
+#
+# Prerequisites:
+#   kubectl create namespace ada-prod
+#   kubectl create secret generic ada-secrets -n ada-prod --from-env-file=credentials.env
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ada-api
+  labels:
+    app: ada-api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ada-api
+  template:
+    metadata:
+      labels:
+        app: ada-api
+    spec:
+      containers:
+        - name: ada-api
+          image: ghcr.io/scopeo/draftnrun-api:latest
+          ports:
+            - containerPort: 8000
+          envFrom:
+            - secretRef:
+                name: ada-secrets
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: "250m"
+            limits:
+              memory: "2Gi"
+              cpu: "1000m"
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 30
+            periodSeconds: 10
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ada-worker
+  labels:
+    app: ada-worker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ada-worker
+  template:
+    metadata:
+      labels:
+        app: ada-worker
+    spec:
+      containers:
+        - name: ada-worker
+          image: ghcr.io/scopeo/draftnrun-worker:latest
+          envFrom:
+            - secretRef:
+                name: ada-secrets
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: "250m"
+            limits:
+              memory: "4Gi"
+              cpu: "2000m"
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ada-scheduler
+  labels:
+    app: ada-scheduler
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ada-scheduler
+  template:
+    metadata:
+      labels:
+        app: ada-scheduler
+    spec:
+      containers:
+        - name: ada-scheduler
+          image: ghcr.io/scopeo/draftnrun-scheduler:latest
+          envFrom:
+            - secretRef:
+                name: ada-secrets
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ada-api
+  labels:
+    app: ada-api
+spec:
+  type: ClusterIP
+  selector:
+    app: ada-api
+  ports:
+    - port: 80
+      targetPort: 8000
+      protocol: TCP
+
+---
+# Ingress (optional - uncomment if using ingress controller)
+# apiVersion: networking.k8s.io/v1
+# kind: Ingress
+# metadata:
+#   name: ada-api
+#   annotations:
+#     kubernetes.io/ingress.class: traefik
+# spec:
+#   rules:
+#     - host: api.your-domain.com
+#       http:
+#         paths:
+#           - path: /
+#             pathType: Prefix
+#             backend:
+#               service:
+#                 name: ada-api
+#                 port:
+#                   number: 80
