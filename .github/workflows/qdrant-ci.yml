@@ -48,5 +48,6 @@ jobs:
           QDRANT_CLUSTER_URL: ${{ secrets.QDRANT_CLUSTER_URL }}
           QDRANT_API_KEY: ${{ secrets.QDRANT_API_KEY }}
           ADA_DB_URL: "sqlite:///:memory:"
+          FERNET_KEY: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
         run: |
           uv run pytest -q tests/qdrant
