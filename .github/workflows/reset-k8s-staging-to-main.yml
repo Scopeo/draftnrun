@@ -1,0 +1,126 @@
+name: Reset K8s Staging to Main
+
+on:
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_PREFIX: ${{ github.repository }}
+
+jobs:
+  reset:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main (to get migration files list)
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Get main branch migration revisions
+        id: migrations
+        run: |
+          REVISIONS=$(ls ada_backend/database/alembic/versions/*.py 2>/dev/null | xargs -I {} basename {} .py | cut -d'_' -f1 | tr '\n' ' ')
+          echo "revisions=${REVISIONS}" >> $GITHUB_OUTPUT
+          echo "Main branch revisions: ${REVISIONS}"
+
+      - name: Auto-downgrade migrations before reset
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.EC2_HOST_K8S_STAGING }}
+          username: ec2-user
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          script: |
+            set -e
+            MAIN_REVISIONS="${{ steps.migrations.outputs.revisions }}"
+
+            echo "📊 Current Alembic revision:"
+            kubectl exec deployment/ada-api -n ada-staging -- \
+              alembic -c ada_backend/database/alembic.ini current || echo "No running pod"
+
+            CURRENT_REV=$(kubectl exec deployment/ada-api -n ada-staging -- \
+              alembic -c ada_backend/database/alembic.ini current 2>/dev/null | grep -oE '^[a-f0-9]+' || echo "")
+
+            if [ -n "$CURRENT_REV" ]; then
+              if ! echo "$MAIN_REVISIONS" | grep -q "${CURRENT_REV:0:12}"; then
+                echo "⬇️ Current revision $CURRENT_REV not in main, downgrading..."
+
+                while true; do
+                  CURRENT_REV=$(kubectl exec deployment/ada-api -n ada-staging -- \
+                    alembic -c ada_backend/database/alembic.ini current 2>/dev/null | grep -oE '^[a-f0-9]+' || echo "")
+
+                  if [ -z "$CURRENT_REV" ]; then
+                    echo "📊 Reached base revision"
+                    break
+                  fi
+
+                  REV_PREFIX="${CURRENT_REV:0:12}"
+                  if echo "$MAIN_REVISIONS" | grep -q "$REV_PREFIX"; then
+                    echo "✅ Reached revision $CURRENT_REV (exists in main)"
+                    break
+                  fi
+
+                  echo "⬇️ Downgrading from $CURRENT_REV..."
+                  kubectl exec deployment/ada-api -n ada-staging -- \
+                    alembic -c ada_backend/database/alembic.ini downgrade -1
+                done
+              else
+                echo "✅ Current revision exists in main, no downgrade needed"
+              fi
+            fi
+
+      - name: Deploy with existing main image (no rebuild!)
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.EC2_HOST_K8S_STAGING }}
+          username: ec2-user
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          command_timeout: 15m
+          script: |
+            set -e
+            REGISTRY="${{ env.REGISTRY }}"
+            PREFIX="${{ env.IMAGE_PREFIX }}"
+
+            echo "🚀 Deploying with :main tag (existing image, no rebuild)"
+
+            # Use the :main tagged images (already built on last push to main)
+            kubectl set image deployment/ada-api -n ada-staging \
+              ada-api=${REGISTRY}/${PREFIX}-api:main
+            kubectl set image deployment/ada-worker -n ada-staging \
+              ada-worker=${REGISTRY}/${PREFIX}-worker:main
+            kubectl set image deployment/ada-scheduler -n ada-staging \
+              ada-scheduler=${REGISTRY}/${PREFIX}-scheduler:main
+
+            echo "⏳ Waiting for API rollout..."
+            kubectl rollout status deployment/ada-api -n ada-staging --timeout=10m
+
+      - name: Run migrations and seed
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.EC2_HOST_K8S_STAGING }}
+          username: ec2-user
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          script: |
+            set -e
+            echo "🗄️ Running migrations and seed..."
+            kubectl exec deployment/ada-api -n ada-staging -- \
+              sh -c "alembic -c ada_backend/database/alembic.ini upgrade head && python -m ada_backend.scripts.seed_db"
+
+      - name: Wait for all rollouts
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.EC2_HOST_K8S_STAGING }}
+          username: ec2-user
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          command_timeout: 15m
+          script: |
+            echo "⏳ Waiting for worker and scheduler..."
+            kubectl rollout status deployment/ada-worker -n ada-staging --timeout=10m
+            kubectl rollout status deployment/ada-scheduler -n ada-staging --timeout=10m
+
+            echo "✅ Reset to main complete!"
+            kubectl get pods -n ada-staging
