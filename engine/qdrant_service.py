@@ -1004,6 +1004,8 @@ class QdrantService:
         )
         if "result" in response:
             LOGGER.info(f"Status of collection creation {collection_name} : {response['result']}")
+            # TODO: Remove when production qdrant collections have proper indexes
+            await self._create_indexes_from_schema(collection_name=collection_name, schema=schema)
             return True
         LOGGER.error(f"Problem with status of collection creation {collection_name} : {response}")
         return False
@@ -1165,9 +1167,6 @@ class QdrantService:
             raise ValueError(f"Collection {collection_name} does not exist.")
 
         schema = self._get_schema(collection_name)
-
-        # TODO: Remove when production qdrant collections have proper indexes
-        await self._create_indexes_from_schema(collection_name=collection_name, schema=schema)
 
         all_points = await self.get_points_async(
             collection_name=collection_name,
