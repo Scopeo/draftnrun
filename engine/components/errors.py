@@ -17,8 +17,8 @@ class KeyTypePromptTemplateError(Exception):
         super().__init__(message)
 
 
-class RemoteMCPConnectionError(Exception):
-    """Raised when RemoteMCPTool cannot reach the MCP server."""
+class MCPConnectionError(Exception):
+    """Raised when an MCP tool cannot connect to its endpoint (HTTP/SSE or stdio)."""
 
-    def __init__(self, server_url: str, detail: str):
-        super().__init__(f"MCP Tool failed to connect to {server_url}: {detail}")
+    def __init__(self, endpoint: str, detail: str):
+        super().__init__(f"MCP Tool failed to connect to {endpoint}: {detail}")

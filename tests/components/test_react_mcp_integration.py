@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from engine.components.ai_agent import AIAgent
-from engine.components.tools.remote_mcp_tool import RemoteMCPTool
+from engine.components.tools.mcp.remote_mcp_tool import RemoteMCPTool
 from engine.components.types import AgentPayload, ChatMessage, ComponentAttributes, ToolDescription
 from engine.llm_services.llm_service import CompletionService
 from engine.trace.trace_manager import TraceManager

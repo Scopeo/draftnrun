@@ -33,7 +33,7 @@ from engine.components.rag.retriever import Retriever
 from engine.components.rag.vocabulary_search import VocabularySearch
 from engine.components.synthesizer import Synthesizer
 from engine.components.tools.hubspot_mcp_tool import HubSpotMCPTool
-from engine.components.tools.remote_mcp_tool import RemoteMCPTool
+from engine.components.tools.mcp.remote_mcp_tool import RemoteMCPTool
 from engine.components.types import ComponentAttributes, ToolDescription
 from engine.llm_services.llm_service import CompletionService, EmbeddingService, OCRService, WebSearchService
 from engine.qdrant_service import QdrantCollectionSchema, QdrantService
