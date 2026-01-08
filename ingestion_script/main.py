@@ -6,7 +6,7 @@ from uuid import UUID
 from ada_backend.database import models as db
 from ada_backend.database.models import SourceType
 from ada_backend.database.setup_db import SessionLocal
-from ada_backend.schemas.ingestion_task_schema import IngestionTaskUpdate
+from ada_backend.schemas.ingestion_task_schema import IngestionTaskUpdate, ResultType, TaskResultMetadata
 from ada_backend.services.agent_runner_service import get_organization_llm_providers
 from engine.trace.span_context import set_tracing_span
 from engine.trace.trace_context import set_trace_manager
@@ -14,8 +14,6 @@ from engine.trace.trace_manager import TraceManager
 from ingestion_script.ingest_folder_source import ingest_google_drive_source, ingest_local_folder_source
 from ingestion_script.ingest_website_source import ingest_website_source
 from ingestion_script.utils import update_ingestion_task
-from ada_backend.schemas.ingestion_task_schema import TaskResultMetadata, ResultType
-from ada_backend.database import models as db
 from settings import settings
 
 # Configure logging to ensure all logs are captured by worker subprocess

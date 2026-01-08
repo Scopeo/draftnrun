@@ -13,6 +13,7 @@ from ada_backend.repositories.ingestion_task_repository import (
 from ada_backend.schemas.ingestion_task_schema import (
     IngestionTaskQueue,
     IngestionTaskResponse,
+    IngestionTaskUpdate,
     TaskResultMetadata,
 )
 from ada_backend.segment_analytics import track_ingestion_task_created
@@ -35,6 +36,7 @@ def get_ingestion_task_by_organization_id(
                 source_name=task.source_name,
                 source_type=task.source_type,
                 status=task.status,
+                result_metadata=(TaskResultMetadata(**task.result_metadata) if task.result_metadata else None),
                 created_at=str(task.created_at),
                 updated_at=str(task.updated_at),
             )

@@ -6,12 +6,9 @@ from uuid import UUID
 import pandas as pd
 
 from ada_backend.database import models as db
-from ada_backend.schemas.ingestion_task_schema import IngestionTaskUpdate
+from ada_backend.schemas.ingestion_task_schema import IngestionTaskUpdate, ResultType, TaskResultMetadata
 from ada_backend.schemas.source_schema import DataSourceSchema
-from data_ingestion.document.document_chunking import (
-    document_chunking_mapping,
-    get_chunks_dataframe_from_doc,
-)
+from data_ingestion.document.document_chunking import document_chunking_mapping, get_chunks_dataframe_from_doc
 from data_ingestion.document.folder_management.folder_management import FolderManager
 from data_ingestion.document.folder_management.google_drive_folder_management import GoogleDriveFolderManager
 from data_ingestion.document.folder_management.s3_folder_management import S3FolderManager
@@ -31,7 +28,6 @@ from ingestion_script.utils import (
     get_sanitize_names,
     update_ingestion_task,
 )
-from ada_backend.schemas.ingestion_task_schema import TaskResultMetadata, ResultType
 from settings import settings
 
 LOGGER = logging.getLogger(__name__)
