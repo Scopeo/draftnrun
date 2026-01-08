@@ -43,6 +43,7 @@ COPY --from=builder /app/.venv /app/.venv
 COPY ada_backend/ ./ada_backend/
 COPY engine/ ./engine/
 COPY data_ingestion/ ./data_ingestion/
+COPY ingestion_script/ ./ingestion_script/
 COPY settings.py logger.py logging-config.yaml ./
 
 # Set environment
