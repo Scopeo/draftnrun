@@ -61,6 +61,7 @@ from engine.components.tools.api_call_tool import APICallTool
 from engine.components.tools.docx_template import DocxTemplateAgent
 from engine.components.tools.linkup_tool import LinkupSearchTool
 from engine.components.tools.python_code_runner import PythonCodeRunner
+from engine.components.tools.retriever_tool import RetrieverTool
 from engine.components.tools.terminal_command_runner import TerminalCommandRunner
 from engine.components.web_search_tool_openai import WebSearchOpenAITool
 from engine.integrations.gmail_sender import GmailSender
@@ -431,6 +432,16 @@ def create_factory_registry() -> FactoryRegistry:
         component_version_id=COMPONENT_VERSION_UUIDS["linkup_search_tool"],
         factory=AgentFactory(
             entity_class=LinkupSearchTool,
+        ),
+    )
+    registry.register(
+        component_version_id=COMPONENT_VERSION_UUIDS["retriever_tool"],
+        factory=AgentFactory(
+            entity_class=RetrieverTool,
+            parameter_processors=[
+                trace_manager_processor,
+                build_retriever_processor(target_name="retriever"),
+            ],
         ),
     )
     registry.register(

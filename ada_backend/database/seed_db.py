@@ -28,12 +28,10 @@ from ada_backend.database.seed.seed_pdf_generation import seed_pdf_generation_co
 from ada_backend.database.seed.seed_ports import seed_port_definitions
 from ada_backend.database.seed.seed_project_reference import seed_project_reference_components
 from ada_backend.database.seed.seed_python_code_runner import seed_python_code_runner_components
-from ada_backend.database.seed.seed_rag import (
-    seed_rag_components,
-    seed_rag_v3_parameter_groups,
-)
+from ada_backend.database.seed.seed_rag import seed_rag_components, seed_rag_v3_parameter_groups
 from ada_backend.database.seed.seed_react_sql import seed_react_sql_components
 from ada_backend.database.seed.seed_remote_mcp_tool import seed_remote_mcp_tool_components
+from ada_backend.database.seed.seed_retriever_tool import seed_retriever_tool_components
 from ada_backend.database.seed.seed_smart_rag import seed_smart_rag_components
 from ada_backend.database.seed.seed_sql_tool import seed_sql_tool_components
 from ada_backend.database.seed.seed_start import seed_start_components
@@ -79,6 +77,7 @@ def seed_db(session: Session):
         seed_project_reference_components(session)
         seed_chunk_processor_components(session)
         seed_linkup_tool_components(session)
+        seed_retriever_tool_components(session)
         seed_static_responder_components(session)
         seed_table_lookup_components(session)
         seed_remote_mcp_tool_components(session)

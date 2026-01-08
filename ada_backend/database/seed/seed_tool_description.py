@@ -21,6 +21,7 @@ from engine.components.tools.docx_template import DOCX_TEMPLATE_TOOL_DESCRIPTION
 from engine.components.tools.linkup_tool import LINKUP_TOOL_DESCRIPTION
 from engine.components.tools.python_code_runner import PYTHON_CODE_RUNNER_TOOL_DESCRIPTION
 from engine.components.tools.remote_mcp_tool import DEFAULT_REMOTE_MCP_TOOL_DESCRIPTION
+from engine.components.tools.retriever_tool import RETRIEVER_TOOL_DESCRIPTION
 from engine.components.tools.tavily_search_tool import TAVILY_TOOL_DESCRIPTION
 from engine.components.tools.terminal_command_runner import TERMINAL_COMMAND_RUNNER_TOOL_DESCRIPTION
 from engine.components.web_search_tool_openai import DEFAULT_WEB_SEARCH_OPENAI_TOOL_DESCRIPTION
@@ -48,6 +49,7 @@ TOOL_DESCRIPTION_UUIDS = {
     "docx_template_tool_description": UUID("e2b22222-3333-4444-5555-666666666666"),
     "remote_mcp_tool_description": UUID("4c6ef0d2-53c0-4ab2-96cb-3c2b5f5b3e88"),
     "default_table_lookup_tool_description": UUID("5c6d7e8f-9012-3456-789a-bcdef0123456"),
+    "default_retriever_tool_description": UUID("b1c2d3e4-f5a6-7b8c-9d0e-1f2a3b4c5d6e"),
 }
 
 
@@ -130,6 +132,10 @@ def seed_tool_description(session: Session):
         id=TOOL_DESCRIPTION_UUIDS["default_table_lookup_tool_description"],
         **DEFAULT_TABLE_LOOKUP_TOOL_DESCRIPTION.model_dump(),
     )
+    retriever_tool_description = db.ToolDescription(
+        id=TOOL_DESCRIPTION_UUIDS["default_retriever_tool_description"],
+        **RETRIEVER_TOOL_DESCRIPTION.model_dump(),
+    )
     upsert_tool_descriptions(
         session=session,
         tool_descriptions=[
@@ -150,6 +156,7 @@ def seed_tool_description(session: Session):
             default_llm_call_tool_description,
             pdf_generation_tool_description,
             linkup_search_tool_description,
+            retriever_tool_description,
             docx_generation_tool_description,
             docx_template_tool_description,
             remote_mcp_tool_description,
