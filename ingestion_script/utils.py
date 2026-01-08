@@ -518,8 +518,23 @@ def _extract_column_names_from_sql(sql_filter: str) -> set[str]:
     # Find all potential identifiers (from SQL without string literals)
     matches = re.findall(pattern, sql_without_strings.lower())
 
-    # Filter out SQL keywords and return unique column names
-    column_names = {match for match in matches if match not in sql_keywords}
+    # Filter out SQL keywords, but keep words that appear in column contexts
+    # (e.g., followed by comparison operators, IS, etc. - these are likely column names)
+    column_names = set()
+    sql_lower = sql_without_strings.lower()
+
+    for match in matches:
+        if match not in sql_keywords:
+            column_names.add(match)
+        else:
+            # Check if keyword appears in a column context (not as a function)
+            # Look for patterns like: "date <", "date >", "date =", "date IS", etc.
+            # These indicate it's being used as a column name, not a function
+            escaped_match = re.escape(match)
+            # Pattern: word boundary, keyword, whitespace, then comparison operator or IS
+            column_context_pattern = rf"\b{escaped_match}\b\s*(<|>|<=|>=|=|!=|<>|IS|IS NOT)"
+            if re.search(column_context_pattern, sql_lower, re.IGNORECASE):
+                column_names.add(match)
 
     return column_names
 
@@ -533,9 +548,11 @@ def map_source_filter_to_unified_table_filter(
     """
     if not sql_filter:
         return None
+    LOGGER.info(f"Mapping source filter to unified table filter: {sql_filter}")
     unified_columns = {col.name.lower() for col in UNIFIED_TABLE_DEFINITION.columns}
 
     columns_in_filter = _extract_column_names_from_sql(sql_filter)
+    LOGGER.info(f"Columns in filter: {columns_in_filter}")
 
     mapped_filter = sql_filter
 
