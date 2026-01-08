@@ -12,7 +12,8 @@ import requests
 import structlog
 from dotenv import load_dotenv
 
-from ada_backend.schemas.ingestion_task_schema import TaskResultMetadata, ResultType
+from ada_backend.database import models as db
+from ada_backend.schemas.ingestion_task_schema import IngestionTaskUpdate, ResultType, TaskResultMetadata
 
 # Configure structured logging
 structlog.configure(
@@ -360,9 +361,6 @@ class Worker:
     ) -> None:
         """Update the task status to FAILED in the database."""
         try:
-            from ada_backend.database import models as db
-            from ada_backend.schemas.ingestion_task_schema import IngestionTaskUpdate
-
             failed_task = IngestionTaskUpdate(
                 id=task_id,
                 source_name=source_name,

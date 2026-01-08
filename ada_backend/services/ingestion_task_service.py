@@ -36,6 +36,7 @@ def get_ingestion_task_by_organization_id(
                 source_name=task.source_name,
                 source_type=task.source_type,
                 status=task.status,
+                result_metadata=(TaskResultMetadata(**task.result_metadata) if task.result_metadata else None),
                 created_at=str(task.created_at),
                 updated_at=str(task.updated_at),
             )
