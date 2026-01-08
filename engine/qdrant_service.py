@@ -963,6 +963,7 @@ class QdrantService:
         collection_name: str,
         vector_size: int = 3072,
         distance: str = "Cosine",
+        schema: Optional[QdrantCollectionSchema] = None,
     ) -> bool:
         """Async version of create_collection."""
         if self._embedding_service is None:
@@ -970,6 +971,8 @@ class QdrantService:
             embedding_size = vector_size
         else:
             embedding_size = self._embedding_service.embedding_size
+        if not schema:
+            schema = self.default_schema
         if await self.collection_exists_async(collection_name):
             LOGGER.error(f"Collection {collection_name} already exists.")
             return False
@@ -977,6 +980,8 @@ class QdrantService:
         response = await self._send_request_async(
             method="PUT", endpoint=f"collections/{collection_name}?wait=true", payload=payload
         )
+        # TODO: Remove when production qdrant collections have proper indexes
+        await self._create_indexes_from_schema(collection_name=collection_name, schema=schema)
         if "result" in response:
             LOGGER.info(f"Status of collection creation {collection_name} : {response['result']}")
             return True
