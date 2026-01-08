@@ -98,6 +98,10 @@ async def sync_chunks_to_qdrant(
         schema_name=table_schema,
         sql_query_filter=combined_filter,
     )
+    LOGGER.info(
+        f"Found {len(chunks_df)} chunks to sync to Qdrant from table {table_name} "
+        f"in schema {table_schema} with filter {combined_filter}"
+    )
 
     chunks_df = prepare_df_for_qdrant(chunks_df)
 
