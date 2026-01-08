@@ -1,6 +1,6 @@
 import re
 
-from engine.field_expressions.ast import ConcatNode, LiteralNode, RefNode, ExpressionNode
+from engine.field_expressions.ast import ConcatNode, ExpressionNode, LiteralNode, RefNode
 from engine.field_expressions.errors import FieldExpressionParseError
 
 # Matches @{{instance.port}} where instance and port allow [a-zA-Z0-9_-]. An optional key can be provided after ::.

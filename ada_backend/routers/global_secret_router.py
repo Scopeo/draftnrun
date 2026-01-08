@@ -1,5 +1,5 @@
-from typing import Annotated
 import logging
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -9,11 +9,10 @@ from ada_backend.routers.auth_router import ensure_super_admin_dependency
 from ada_backend.schemas.auth_schema import SupabaseUser
 from ada_backend.schemas.global_secret_schema import GlobalSecretListItem, UpsertGlobalSecretRequest
 from ada_backend.services.global_secret_service import (
+    delete_for_admin,
     list_for_admin,
     upsert_for_admin,
-    delete_for_admin,
 )
-
 
 LOGGER = logging.getLogger(__name__)
 

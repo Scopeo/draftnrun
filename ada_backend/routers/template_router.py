@@ -1,17 +1,17 @@
-from fastapi import APIRouter, Depends, HTTPException
 import logging
 from uuid import UUID
 
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+
 from ada_backend.database.setup_db import get_db
-from ada_backend.services.template_service import list_templates_services
 from ada_backend.routers.auth_router import (
-    user_has_access_to_organization_dependency,
     UserRights,
+    user_has_access_to_organization_dependency,
 )
 from ada_backend.schemas.auth_schema import SupabaseUser
 from ada_backend.schemas.template_schema import TemplateResponse
-
+from ada_backend.services.template_service import list_templates_services
 
 router = APIRouter(prefix="/templates", tags=["Templates"])
 LOGGER = logging.getLogger(__name__)

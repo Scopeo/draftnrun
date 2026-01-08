@@ -1,15 +1,14 @@
-from uuid import UUID
-from datetime import datetime, timedelta, timezone
-import requests
 import logging
+from datetime import datetime, timedelta, timezone
+from uuid import UUID
 
-from sqlalchemy.orm import Session
+import requests
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
+from sqlalchemy.orm import Session
 
-
-from ada_backend.repositories.integration_repository import get_integration_secret, update_integration_secret
 from ada_backend.database import models as db
+from ada_backend.repositories.integration_repository import get_integration_secret, update_integration_secret
 
 LOGGER = logging.getLogger(__name__)
 
@@ -69,7 +68,6 @@ def get_oauth_access_token(
     google_client_id: str,
     google_client_secret: str,
 ) -> str:
-
     integration_secret = get_integration_secret(session, integration_secret_id)
     if integration_secret:
         # If the token is expired or needs to be refreshed

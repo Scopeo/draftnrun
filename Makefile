@@ -32,12 +32,11 @@ test:
 .PHONY: format
 format:
 	@echo "Formatting Code"
-	@uv run black .
+	@uv run ruff format .
 
 .PHONY: quality-check
 quality-check:
-	uv run flake8 .
-	uv run black --check .
+	uv run ruff check .
 
 .PHONY: pre-push
 pre-push: test quality-check

@@ -1,11 +1,10 @@
 import logging
 from typing import Optional
 
-from pydantic import BaseModel, field_validator
 import pandas as pd
+from pydantic import BaseModel, field_validator
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine.url import make_url
-
 
 PROCESSED_DATETIME_FIELD = "_processed_datetime"
 CHUNK_ID_COLUMN = "chunk_id"

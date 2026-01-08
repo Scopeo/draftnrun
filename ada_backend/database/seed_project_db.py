@@ -1,14 +1,14 @@
-from uuid import UUID, uuid4
-import logging
 import asyncio
+import logging
+from uuid import UUID, uuid4
 
 from sqlalchemy.orm import Session
 
 from ada_backend.database import models as db
 from ada_backend.database.demo.demo_graph_test import build_graph_test_chatbot, build_graph_test_source
 from ada_backend.database.demo.demo_react_sql_tool import build_react_sql_agent_chatbot
-from ada_backend.services.graph.update_graph_service import update_graph_service
 from ada_backend.database.seed.utils import COMPONENT_VERSION_UUIDS
+from ada_backend.services.graph.update_graph_service import update_graph_service
 
 LOGGER = logging.getLogger(__name__)
 
@@ -60,13 +60,11 @@ def seed_projects(session: Session):
         type=db.ProjectType.WORKFLOW,
     )
 
-    session.add_all(
-        [
-            project_1,
-            graph_test_project,
-            react_sql_agent_project,
-        ]
-    )
+    session.add_all([
+        project_1,
+        graph_test_project,
+        react_sql_agent_project,
+    ])
     session.commit()
 
 
@@ -109,24 +107,20 @@ def seed_graph_runner(session: Session):
         environment=db.EnvType.DRAFT,
     )
 
-    session.add_all(
-        [
-            graph_runner_prod,
-            graph_runner_draft,
-            react_sql_graph_runner_prod,
-            react_sql_graph_runner_draft,
-        ]
-    )
+    session.add_all([
+        graph_runner_prod,
+        graph_runner_draft,
+        react_sql_graph_runner_prod,
+        react_sql_graph_runner_draft,
+    ])
     session.commit()
 
-    session.add_all(
-        [
-            test_gr_relationship_prod,
-            test_gr_relationship_draft,
-            react_gr_relationship_prod,
-            react_gr_relationship_draft,
-        ]
-    )
+    session.add_all([
+        test_gr_relationship_prod,
+        test_gr_relationship_draft,
+        react_gr_relationship_prod,
+        react_gr_relationship_draft,
+    ])
     session.commit()
 
 
@@ -221,6 +215,7 @@ def seed_projects_db(session: Session):
 
 if __name__ == "__main__":
     import logging
+
     from ada_backend.database.setup_db import get_db
 
     logging.basicConfig(level=logging.INFO)

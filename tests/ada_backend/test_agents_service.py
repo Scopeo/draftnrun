@@ -2,11 +2,11 @@ import asyncio
 import uuid
 
 from ada_backend.database.models import ParameterType
-from ada_backend.services import agents_service
-from ada_backend.schemas.pipeline.base import ComponentInstanceSchema
-from ada_backend.schemas.parameter_schema import PipelineParameterReadSchema, PipelineParameterSchema
 from ada_backend.schemas.agent_schema import AgentUpdateSchema
+from ada_backend.schemas.parameter_schema import PipelineParameterReadSchema, PipelineParameterSchema
+from ada_backend.schemas.pipeline.base import ComponentInstanceSchema
 from ada_backend.schemas.pipeline.graph_schema import GraphUpdateResponse
+from ada_backend.services import agents_service
 
 
 class DummyAgent:

@@ -8,12 +8,12 @@ Create Date: 2025-09-04 18:01:58.754696
 
 # alembic revision: introduce polymorphic api_keys without legacy org table
 from __future__ import annotations
+
 from typing import Sequence, Union
 
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 from sqlalchemy.dialects import postgresql as psql
-
 
 # revision identifiers, used by Alembic.
 revision: str = "8b393d7c2c4b"

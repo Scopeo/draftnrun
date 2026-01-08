@@ -1,9 +1,9 @@
 import pytest
 
-from engine.field_expressions.parser import parse_expression, unparse_expression
-from engine.field_expressions.ast import LiteralNode, RefNode, ConcatNode
-from engine.field_expressions.serializer import to_json, from_json
+from engine.field_expressions.ast import ConcatNode, LiteralNode, RefNode
 from engine.field_expressions.errors import FieldExpressionParseError
+from engine.field_expressions.parser import parse_expression, unparse_expression
+from engine.field_expressions.serializer import from_json, to_json
 
 
 def test_parse_literal_only():

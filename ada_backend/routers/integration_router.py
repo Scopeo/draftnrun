@@ -1,16 +1,16 @@
-from typing import Annotated
 import logging
+from typing import Annotated
 from uuid import UUID
 
-from sqlalchemy.orm import Session
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
 
 from ada_backend.database.setup_db import get_db
-from ada_backend.schemas.auth_schema import SupabaseUser
 from ada_backend.routers.auth_router import (
     UserRights,
     user_has_access_to_project_dependency,
 )
+from ada_backend.schemas.auth_schema import SupabaseUser
 from ada_backend.schemas.integration_schema import CreateProjectIntegrationSchema, IntegrationSecretResponse
 from ada_backend.services.integration_service import add_integration_secrets_service
 

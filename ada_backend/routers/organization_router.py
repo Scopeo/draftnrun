@@ -1,5 +1,5 @@
-from typing import Annotated
 import logging
+from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -8,13 +8,12 @@ from sqlalchemy.orm import Session
 from ada_backend.database.setup_db import get_db
 from ada_backend.routers.auth_router import UserRights, user_has_access_to_organization_dependency
 from ada_backend.schemas.auth_schema import SupabaseUser
-from ada_backend.schemas.organization_schema import OrganizationSecretResponse, OrganizationGetSecretKeysResponse
+from ada_backend.schemas.organization_schema import OrganizationGetSecretKeysResponse, OrganizationSecretResponse
 from ada_backend.services.organization_service import (
-    upsert_secret_to_org_service,
     delete_secret_to_org_service,
     get_secret_keys_service,
+    upsert_secret_to_org_service,
 )
-
 
 router = APIRouter(
     prefix="/org",

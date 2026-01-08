@@ -3,6 +3,7 @@ import logging
 from typing import Optional
 from uuid import UUID
 
+from ada_backend.database import models as db
 from ada_backend.database.models import SourceType
 from ada_backend.database.setup_db import SessionLocal
 from ada_backend.schemas.ingestion_task_schema import IngestionTaskUpdate

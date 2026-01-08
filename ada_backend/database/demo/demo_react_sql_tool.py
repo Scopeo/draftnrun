@@ -1,11 +1,11 @@
 from uuid import UUID, uuid4
 
+from ada_backend.database.seed.constants import COMPLETION_MODEL_IN_DB
 from ada_backend.schemas.pipeline.base import (
-    PipelineParameterSchema,
     ComponentInstanceSchema,
+    PipelineParameterSchema,
 )
 from ada_backend.schemas.pipeline.graph_schema import GraphUpdateSchema
-from ada_backend.database.seed.constants import COMPLETION_MODEL_IN_DB
 from settings import settings
 
 ADDITIONAL_DB_DESCRIPTION = (

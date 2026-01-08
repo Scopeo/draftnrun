@@ -4,14 +4,15 @@ Testing the versioning features for agents with multiple graph runners.
 """
 
 import uuid
+
 import pytest
 from sqlalchemy.orm import Session
 
 from ada_backend.database import models as db
+from ada_backend.database.setup_db import get_db
 from ada_backend.repositories.agent_repository import (
     fetch_agents_with_graph_runners_by_organization,
 )
-from ada_backend.database.setup_db import get_db
 
 
 @pytest.fixture

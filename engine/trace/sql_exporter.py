@@ -1,21 +1,21 @@
 import ast
-from datetime import datetime, timezone
+import json
 import logging
+from datetime import datetime, timezone
 from typing import Any, cast
 from uuid import UUID
-import json
 
-from opentelemetry.sdk.trace import ReadableSpan, Event, BoundedAttributes
 from openinference.semconv.trace import SpanAttributes
+from opentelemetry.sdk.trace import BoundedAttributes, Event, ReadableSpan
 from opentelemetry.sdk.trace.export import SpanExporter, SpanExportResult
 from opentelemetry.trace.status import StatusCode
-from sqlalchemy import func, select, create_engine, update
-from sqlalchemy.orm import sessionmaker, aliased
+from sqlalchemy import create_engine, func, select, update
+from sqlalchemy.orm import aliased, sessionmaker
 
-from engine.trace.nested_utils import split_nested_keys
-from ada_backend.database.trace_models import Span, SpanMessage
-from ada_backend.database.models import LLMCost, Cost, ComponentCost, ComponentInstance, Usage, SpanUsage
+from ada_backend.database.models import ComponentCost, ComponentInstance, Cost, LLMCost, SpanUsage, Usage
 from ada_backend.database.setup_db import get_db_url
+from ada_backend.database.trace_models import Span, SpanMessage
+from engine.trace.nested_utils import split_nested_keys
 
 LOGGER = logging.getLogger(__name__)
 
@@ -132,7 +132,6 @@ class SQLSpanExporter(SpanExporter):
     def _calculate_span_credits(
         self, span: ReadableSpan, model_id: UUID | None, component_instance_id: UUID | None
     ) -> tuple[float | None, float | None, float | None, float | None, bool]:
-
         credits_input_token = None
         credits_output_token = None
         credits_per_call = None
@@ -193,7 +192,6 @@ class SQLSpanExporter(SpanExporter):
         credits_per_call: float | None,
         credits_per: dict | None,
     ) -> None:
-
         span_usage = SpanUsage(
             span_id=span_id,
             credits_input_token=credits_input_token,

@@ -1,7 +1,7 @@
-from ada_backend.database.component_definition_seeding import upsert_categories
-import ada_backend.database.models as db
 from uuid import UUID
 
+import ada_backend.database.models as db
+from ada_backend.database.component_definition_seeding import upsert_categories
 
 CATEGORY_UUIDS = {
     "trigger": UUID("3312c1ff-a559-4824-a15f-01780a9bf7c2"),

@@ -1,33 +1,41 @@
+import logging
 from typing import Optional
 from uuid import UUID, uuid4
-import logging
 
 from sqlalchemy.orm import Session
 
 from ada_backend.database import models as db
-from ada_backend.database.models import EnvType, CallType
+from ada_backend.database.models import CallType, EnvType
+from ada_backend.repositories.project_repository import get_project
+from ada_backend.repositories.widget_repository import (
+    create_widget as repo_create_widget,
+)
+from ada_backend.repositories.widget_repository import (
+    delete_widget as repo_delete_widget,
+)
 from ada_backend.repositories.widget_repository import (
     get_widget_by_id,
     get_widget_by_key,
     get_widgets_by_organization,
     get_widgets_by_project,
-    create_widget as repo_create_widget,
-    update_widget as repo_update_widget,
-    regenerate_widget_key as repo_regenerate_widget_key,
-    delete_widget as repo_delete_widget,
 )
-from ada_backend.repositories.project_repository import get_project
+from ada_backend.repositories.widget_repository import (
+    regenerate_widget_key as repo_regenerate_widget_key,
+)
+from ada_backend.repositories.widget_repository import (
+    update_widget as repo_update_widget,
+)
 from ada_backend.schemas.widget_schema import (
-    WidgetSchema,
-    WidgetPublicConfigSchema,
-    WidgetConfig,
-    WidgetTheme,
-    WidgetCreateSchema,
-    WidgetUpdateSchema,
     WidgetChatResponse,
+    WidgetConfig,
+    WidgetCreateSchema,
+    WidgetPublicConfigSchema,
+    WidgetSchema,
+    WidgetTheme,
+    WidgetUpdateSchema,
 )
 from ada_backend.services.agent_runner_service import run_env_agent
-from ada_backend.services.errors import ProjectNotFound, WidgetNotFound, WidgetDisabled
+from ada_backend.services.errors import ProjectNotFound, WidgetDisabled, WidgetNotFound
 
 LOGGER = logging.getLogger(__name__)
 

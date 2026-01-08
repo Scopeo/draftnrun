@@ -1,9 +1,10 @@
-import pytest
+from typing import Dict, List
 
-from engine.llm_services.utils_pydantic_generator import build_generic_pydantic_instance_from_pydantic_model
-from data_ingestion.document.pdf_vision_ingestion import TOCSections, TableOfContent, FileType
+import pytest
 from pydantic import BaseModel
-from typing import List, Dict
+
+from data_ingestion.document.pdf_vision_ingestion import FileType, TableOfContent, TOCSections
+from engine.llm_services.utils_pydantic_generator import build_generic_pydantic_instance_from_pydantic_model
 
 
 @pytest.fixture

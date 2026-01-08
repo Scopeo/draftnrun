@@ -1,16 +1,16 @@
 import asyncio
+
 import networkx as nx
 import pytest
 from pydantic import BaseModel, Field
 
-from engine.trace.trace_manager import TraceManager
+from engine.components.component import Component
+from engine.components.types import ChatMessage, ComponentAttributes, ToolDescription
 from engine.field_expressions.serializer import from_json as expr_from_json
 from engine.graph_runner.graph_runner import GraphRunner
-from engine.agent.types import ComponentAttributes, ChatMessage, ToolDescription
-from engine.agent.agent import Agent
-from tests.mocks.dummy_agent import DummyAgent
 from engine.trace.span_context import set_tracing_span
-
+from engine.trace.trace_manager import TraceManager
+from tests.mocks.dummy_agent import DummyAgent
 
 # Deterministic migrated components for robust, predictable tests
 
@@ -23,7 +23,7 @@ class IntEchoOutputs(BaseModel):
     output: int
 
 
-class IntEcho(Agent):
+class IntEcho(Component):
     migrated = True
 
     @classmethod
@@ -39,7 +39,7 @@ class IntEcho(Agent):
         return IntEchoOutputs(output=inputs.input)
 
 
-class StrEcho(Agent):
+class StrEcho(Component):
     """Echoes the 'input' string as output with a fixed wrapper."""
 
     migrated = True
@@ -71,7 +71,7 @@ class StrEcho(Agent):
         return StrEcho.Outputs(output=f"echo[{inputs.input}]")
 
 
-class FixedStringSource(Agent):
+class FixedStringSource(Component):
     """Produces a fixed string regardless of inputs, for deterministic refs."""
 
     migrated = True
@@ -107,7 +107,7 @@ class FixedStringSource(Agent):
         return FixedStringSource.Outputs(output=self._value)
 
 
-class FixedIntSource(Agent):
+class FixedIntSource(Component):
     """Produces a fixed int regardless of inputs."""
 
     migrated = True
@@ -143,7 +143,7 @@ class FixedIntSource(Agent):
         return FixedIntSource.Outputs(output=self._value)
 
 
-class DualConcat(Agent):
+class DualConcat(Component):
     """Two-input component joining a and b deterministically."""
 
     migrated = True
@@ -176,7 +176,7 @@ class DualConcat(Agent):
         return DualConcat.Outputs(output=f"a[{inputs.a}]|b[{inputs.b}]")
 
 
-class DictOutputSource(Agent):
+class DictOutputSource(Component):
     """Source that outputs a dict with multiple keys."""
 
     migrated = True
@@ -212,7 +212,7 @@ class DictOutputSource(Agent):
         return DictOutputSource.Outputs(output=self._value)
 
 
-class MessagesSink(Agent):
+class MessagesSink(Component):
     """Accepts list[ChatMessage] and summarizes deterministically."""
 
     migrated = True
@@ -265,15 +265,13 @@ class TestGraphRunnerExpressions:
             {
                 "target_instance_id": "B",
                 "field_name": "input",
-                "expression_ast": expr_from_json(
-                    {
-                        "type": "concat",
-                        "parts": [
-                            {"type": "literal", "value": "x:"},
-                            {"type": "ref", "instance": "A", "port": "output"},
-                        ],
-                    }
-                ),
+                "expression_ast": expr_from_json({
+                    "type": "concat",
+                    "parts": [
+                        {"type": "literal", "value": "x:"},
+                        {"type": "ref", "instance": "A", "port": "output"},
+                    ],
+                }),
             }
         ]
 
@@ -395,18 +393,16 @@ class TestGraphRunnerExpressions:
             {
                 "target_instance_id": "B",
                 "field_name": "input",
-                "expression_ast": expr_from_json(
-                    {
-                        "type": "concat",
-                        "parts": [
-                            {"type": "literal", "value": "upper["},
-                            {"type": "ref", "instance": "A", "port": "output"},
-                            {"type": "literal", "value": "] lower["},
-                            {"type": "ref", "instance": "C", "port": "output"},
-                            {"type": "literal", "value": "]"},
-                        ],
-                    }
-                ),
+                "expression_ast": expr_from_json({
+                    "type": "concat",
+                    "parts": [
+                        {"type": "literal", "value": "upper["},
+                        {"type": "ref", "instance": "A", "port": "output"},
+                        {"type": "literal", "value": "] lower["},
+                        {"type": "ref", "instance": "C", "port": "output"},
+                        {"type": "literal", "value": "]"},
+                    ],
+                }),
             }
         ]
         # Provide mapping as well; non-ref expression overrides mapping value
@@ -702,15 +698,13 @@ class TestGraphRunnerExpressions:
             {
                 "target_instance_id": "B",
                 "field_name": "input",
-                "expression_ast": expr_from_json(
-                    {
-                        "type": "concat",
-                        "parts": [
-                            {"type": "literal", "value": "num:"},
-                            {"type": "ref", "instance": "A", "port": "output"},
-                        ],
-                    }
-                ),
+                "expression_ast": expr_from_json({
+                    "type": "concat",
+                    "parts": [
+                        {"type": "literal", "value": "num:"},
+                        {"type": "ref", "instance": "A", "port": "output"},
+                    ],
+                }),
             }
         ]
 
@@ -773,18 +767,16 @@ class TestGraphRunnerComplexFormulas:
             {
                 "target_instance_id": "D",
                 "field_name": "input",
-                "expression_ast": expr_from_json(
-                    {
-                        "type": "concat",
-                        "parts": [
-                            {"type": "literal", "value": "upper["},
-                            {"type": "ref", "instance": "B", "port": "output"},
-                            {"type": "literal", "value": "] lower["},
-                            {"type": "ref", "instance": "C", "port": "output"},
-                            {"type": "literal", "value": "]"},
-                        ],
-                    }
-                ),
+                "expression_ast": expr_from_json({
+                    "type": "concat",
+                    "parts": [
+                        {"type": "literal", "value": "upper["},
+                        {"type": "ref", "instance": "B", "port": "output"},
+                        {"type": "literal", "value": "] lower["},
+                        {"type": "ref", "instance": "C", "port": "output"},
+                        {"type": "literal", "value": "]"},
+                    ],
+                }),
             }
         ]
 
@@ -828,9 +820,12 @@ class TestGraphRunnerComplexFormulas:
             {
                 "target_instance_id": "B",
                 "field_name": "input",
-                "expression_ast": expr_from_json(
-                    {"type": "ref", "instance": "A", "port": "output", "key": "messages"}
-                ),
+                "expression_ast": expr_from_json({
+                    "type": "ref",
+                    "instance": "A",
+                    "port": "output",
+                    "key": "messages",
+                }),
             }
         ]
 
@@ -861,15 +856,13 @@ class TestGraphRunnerComplexFormulas:
             {
                 "target_instance_id": "B",
                 "field_name": "input",
-                "expression_ast": expr_from_json(
-                    {
-                        "type": "concat",
-                        "parts": [
-                            {"type": "literal", "value": "prefix: "},
-                            {"type": "ref", "instance": "A", "port": "output", "key": "messages"},
-                        ],
-                    }
-                ),
+                "expression_ast": expr_from_json({
+                    "type": "concat",
+                    "parts": [
+                        {"type": "literal", "value": "prefix: "},
+                        {"type": "ref", "instance": "A", "port": "output", "key": "messages"},
+                    ],
+                }),
             }
         ]
 
@@ -908,9 +901,12 @@ class TestGraphRunnerComplexFormulas:
             {
                 "target_instance_id": "B",
                 "field_name": "input",
-                "expression_ast": expr_from_json(
-                    {"type": "ref", "instance": "A", "port": "output", "key": "nonexistent"}
-                ),
+                "expression_ast": expr_from_json({
+                    "type": "ref",
+                    "instance": "A",
+                    "port": "output",
+                    "key": "nonexistent",
+                }),
             }
         ]
 
@@ -950,9 +946,12 @@ class TestGraphRunnerComplexFormulas:
             {
                 "target_instance_id": "B",
                 "field_name": "input",
-                "expression_ast": expr_from_json(
-                    {"type": "ref", "instance": "A", "port": "output", "key": "messages"}
-                ),
+                "expression_ast": expr_from_json({
+                    "type": "ref",
+                    "instance": "A",
+                    "port": "output",
+                    "key": "messages",
+                }),
             }
         ]
 

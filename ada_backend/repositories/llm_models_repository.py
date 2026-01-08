@@ -1,7 +1,8 @@
-from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import and_, case
-from uuid import UUID
 from typing import Optional
+from uuid import UUID
+
+from sqlalchemy import and_, case
+from sqlalchemy.orm import Session, joinedload
 
 from ada_backend.database import models as db
 
@@ -18,7 +19,6 @@ def _get_provider_order(provider: str) -> int:
 
 
 def get_all_llm_models(session: Session) -> list[db.LLMModel]:
-
     return (
         session.query(db.LLMModel)
         .order_by(_get_provider_order(db.LLMModel.provider), db.LLMModel.display_name.asc())
@@ -28,7 +28,6 @@ def get_all_llm_models(session: Session) -> list[db.LLMModel]:
 
 
 def get_llm_models_by_capability(session: Session, capabilities: list[str]) -> list[db.LLMModel]:
-
     query = (
         session.query(db.LLMModel)
         .order_by(_get_provider_order(db.LLMModel.provider), db.LLMModel.display_name.asc())

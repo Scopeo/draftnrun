@@ -3,11 +3,6 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from ada_backend.database import models as db
-from ada_backend.database.models import (
-    ParameterType,
-    UIComponent,
-    UIComponentProperties,
-)
 from ada_backend.database.component_definition_seeding import (
     upsert_component_versions,
     upsert_components,
@@ -15,6 +10,12 @@ from ada_backend.database.component_definition_seeding import (
     upsert_components_parameter_definitions,
     upsert_release_stage_to_current_version_mapping,
 )
+from ada_backend.database.models import (
+    ParameterType,
+    UIComponent,
+    UIComponentProperties,
+)
+from ada_backend.database.seed.constants import COMPLETION_MODEL_IN_DB
 from ada_backend.database.seed.seed_tool_description import TOOL_DESCRIPTION_UUIDS
 from ada_backend.database.seed.utils import (
     COMPONENT_UUIDS,
@@ -22,8 +23,7 @@ from ada_backend.database.seed.utils import (
     ParameterLLMConfig,
     build_function_calling_service_config_definitions,
 )
-from ada_backend.database.seed.constants import COMPLETION_MODEL_IN_DB
-from engine.agent.document_react_loader import INITIAL_PROMPT as DEFAULT_DOCUMENT_REACT_LOADER_PROMPT
+from engine.components.document_react_loader import INITIAL_PROMPT as DEFAULT_DOCUMENT_REACT_LOADER_PROMPT
 
 
 def seed_smart_rag_components(session: Session):
@@ -48,8 +48,8 @@ def seed_smart_rag_components(session: Session):
         session=session,
         component_versions=[document_search_version],
     )
-    document_enhanced_llm_call_agent = db.Component(
-        id=COMPONENT_UUIDS["document_enhanced_llm_call_agent"],
+    document_enhanced_llm_call = db.Component(
+        id=COMPONENT_UUIDS["document_enhanced_llm_call"],
         name="Document Enhanced LLM Agent",
         is_agent=False,
         function_callable=False,
@@ -63,13 +63,13 @@ def seed_smart_rag_components(session: Session):
     upsert_components(
         session=session,
         components=[
-            document_enhanced_llm_call_agent,
+            document_enhanced_llm_call,
             document_react_loader_agent,
         ],
     )
-    document_enhanced_llm_call_agent_version = db.ComponentVersion(
-        id=COMPONENT_VERSION_UUIDS["document_enhanced_llm_call_agent"],
-        component_id=COMPONENT_UUIDS["document_enhanced_llm_call_agent"],
+    document_enhanced_llm_call_version = db.ComponentVersion(
+        id=COMPONENT_VERSION_UUIDS["document_enhanced_llm_call"],
+        component_id=COMPONENT_UUIDS["document_enhanced_llm_call"],
         version_tag="0.0.1",
         release_stage=db.ReleaseStage.BETA,
         description="LLM Call Agent able to load a file and use it as context",
@@ -86,7 +86,7 @@ def seed_smart_rag_components(session: Session):
     upsert_component_versions(
         session=session,
         component_versions=[
-            document_enhanced_llm_call_agent_version,
+            document_enhanced_llm_call_version,
             document_react_loader_agent_version,
         ],
     )
@@ -94,21 +94,21 @@ def seed_smart_rag_components(session: Session):
     document_react_loader_agent_document_enhanced_llm_agent_param = db.ComponentParameterDefinition(
         id=UUID("8ff93e7c-9bc3-4855-b9a4-9aabd9f06356"),
         component_version_id=document_react_loader_agent_version.id,
-        name="document_enhanced_llm_call_agent",
+        name="document_enhanced_llm_call",
         type=ParameterType.COMPONENT,
         nullable=False,
     )
     # document enhanced llm call agent
-    document_enhanced_llm_call_agent_document_search_param = db.ComponentParameterDefinition(
+    document_enhanced_llm_call_document_search_param = db.ComponentParameterDefinition(
         id=UUID("7facf1a7-47c5-468c-95c9-650a2b883f1f"),
-        component_version_id=document_enhanced_llm_call_agent_version.id,
+        component_version_id=document_enhanced_llm_call_version.id,
         name="document_search",
         type=ParameterType.COMPONENT,
         nullable=False,
     )
-    document_enhanced_llm_call_agent_synthesizer_param = db.ComponentParameterDefinition(
+    document_enhanced_llm_call_synthesizer_param = db.ComponentParameterDefinition(
         id=UUID("90450c2a-d24d-41e0-85b9-1b0da2661b15"),
-        component_version_id=document_enhanced_llm_call_agent_version.id,
+        component_version_id=document_enhanced_llm_call_version.id,
         name="synthesizer",
         type=ParameterType.COMPONENT,
         nullable=False,
@@ -125,8 +125,8 @@ def seed_smart_rag_components(session: Session):
         session=session,
         component_parameter_definitions=[
             document_react_loader_agent_document_enhanced_llm_agent_param,
-            document_enhanced_llm_call_agent_document_search_param,
-            document_enhanced_llm_call_agent_synthesizer_param,
+            document_enhanced_llm_call_document_search_param,
+            document_enhanced_llm_call_synthesizer_param,
             document_search_db_service_param,
         ],
     )
@@ -137,16 +137,16 @@ def seed_smart_rag_components(session: Session):
             db.ComponentParameterChildRelationship(
                 id=UUID("e8dcf9d9-3ea5-4c8f-bdde-e9d0dddd45de"),
                 component_parameter_definition_id=document_react_loader_agent_document_enhanced_llm_agent_param.id,
-                child_component_version_id=document_enhanced_llm_call_agent_version.id,
+                child_component_version_id=document_enhanced_llm_call_version.id,
             ),
             db.ComponentParameterChildRelationship(
                 id=UUID("14cd549b-ccdb-4c29-a315-e97023dec3ac"),
-                component_parameter_definition_id=document_enhanced_llm_call_agent_document_search_param.id,
+                component_parameter_definition_id=document_enhanced_llm_call_document_search_param.id,
                 child_component_version_id=document_search_version.id,
             ),
             db.ComponentParameterChildRelationship(
                 id=UUID("a0d97386-2eca-477f-81d6-759d0a8833f6"),
-                component_parameter_definition_id=document_enhanced_llm_call_agent_synthesizer_param.id,
+                component_parameter_definition_id=document_enhanced_llm_call_synthesizer_param.id,
                 child_component_version_id=COMPONENT_VERSION_UUIDS["synthesizer"],
             ),
             db.ComponentParameterChildRelationship(
@@ -270,9 +270,9 @@ def seed_smart_rag_components(session: Session):
     )
     upsert_release_stage_to_current_version_mapping(
         session=session,
-        component_id=document_enhanced_llm_call_agent_version.component_id,
-        release_stage=document_enhanced_llm_call_agent_version.release_stage,
-        component_version_id=document_enhanced_llm_call_agent_version.id,
+        component_id=document_enhanced_llm_call_version.component_id,
+        release_stage=document_enhanced_llm_call_version.release_stage,
+        component_version_id=document_enhanced_llm_call_version.id,
     )
     upsert_release_stage_to_current_version_mapping(
         session=session,

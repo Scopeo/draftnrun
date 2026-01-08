@@ -1,24 +1,25 @@
-from typing import Annotated, Optional
 import logging
+from typing import Annotated, Optional
 from uuid import UUID
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from ada_backend.database.models import ReleaseStage
 from ada_backend.database.setup_db import get_db
+from ada_backend.routers.auth_router import (
+    UserRights,
+    ensure_super_admin_dependency,
+    user_has_access_to_organization_dependency,
+)
 from ada_backend.schemas.auth_schema import SupabaseUser
 from ada_backend.schemas.components_schema import ComponentsResponse
-from ada_backend.routers.auth_router import (
-    user_has_access_to_organization_dependency,
-    UserRights,
-)
 from ada_backend.services.components_service import (
+    delete_component_service,
     get_all_components_endpoint,
     get_all_components_global_endpoint,
-    delete_component_service,
 )
 from ada_backend.services.errors import EntityInUseDeletionError
-from ada_backend.routers.auth_router import ensure_super_admin_dependency
 
 router = APIRouter(prefix="/components", tags=["Components"])
 LOGGER = logging.getLogger(__name__)

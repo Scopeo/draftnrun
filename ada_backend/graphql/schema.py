@@ -1,12 +1,12 @@
 import strawberry
-from strawberry.fastapi import GraphQLRouter
-from fastapi import Request, Depends
+from fastapi import Depends, Request
 from sqlalchemy.orm import Session
+from strawberry.fastapi import GraphQLRouter
 
-from ada_backend.graphql.queries import Query
-from ada_backend.graphql.mutations import Mutation
 from ada_backend.database.setup_db import get_db
 from ada_backend.graphql.context import GraphQLContext
+from ada_backend.graphql.mutations import Mutation
+from ada_backend.graphql.queries import Query
 
 
 async def get_context(

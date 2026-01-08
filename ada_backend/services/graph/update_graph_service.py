@@ -2,22 +2,27 @@ import hashlib
 import json
 import logging
 from collections import defaultdict
-from typing import Optional, Iterator
+from typing import Iterator, Optional
 from uuid import UUID
 
 from sqlalchemy.orm import Session
 
+from ada_backend.database import models as db
 from ada_backend.database.models import EnvType
 from ada_backend.repositories.component_repository import (
+    get_canonical_ports_for_component_versions,
     get_component_instance_by_id,
+    get_component_instances_by_ids,
     get_component_parameter_definition_by_component_version,
     upsert_sub_component_input,
-    get_component_instances_by_ids,
-    get_canonical_ports_for_component_versions,
 )
 from ada_backend.repositories.edge_repository import delete_edge, get_edges, upsert_edge
 from ada_backend.repositories.env_repository import get_env_relationship_by_graph_runner_id
-from ada_backend.services.errors import GraphNotBoundToProjectError
+from ada_backend.repositories.field_expression_repository import (
+    delete_field_expression,
+    get_field_expressions_for_instances,
+    upsert_field_expression,
+)
 from ada_backend.repositories.graph_runner_repository import (
     delete_node,
     get_component_nodes,
@@ -28,31 +33,25 @@ from ada_backend.repositories.graph_runner_repository import (
     upsert_component_node,
 )
 from ada_backend.repositories.port_mapping_repository import (
+    delete_port_mapping_for_target_input,
     delete_port_mappings_for_graph,
-    get_output_port_definition_id,
     get_input_port_definition_id,
+    get_output_port_definition_id,
     get_port_definition_by_id,
     insert_port_mapping,
-    delete_port_mapping_for_target_input,
 )
-from ada_backend.database import models as db
-from ada_backend.schemas.pipeline.graph_schema import GraphUpdateResponse, GraphUpdateSchema
 from ada_backend.schemas.parameter_schema import ParameterKind
+from ada_backend.schemas.pipeline.graph_schema import GraphUpdateResponse, GraphUpdateSchema
+from ada_backend.segment_analytics import track_project_saved
 from ada_backend.services.agent_runner_service import get_agent_for_project
+from ada_backend.services.errors import GraphNotBoundToProjectError
 from ada_backend.services.graph.delete_graph_service import delete_component_instances_from_nodes
 from ada_backend.services.pipeline.update_pipeline_service import create_or_update_component_instance
-from ada_backend.segment_analytics import track_project_saved
-from ada_backend.repositories.field_expression_repository import (
-    upsert_field_expression,
-    get_field_expressions_for_instances,
-    delete_field_expression,
-)
-from engine.field_expressions.parser import parse_expression
+from engine.field_expressions.ast import ExpressionNode, RefNode
 from engine.field_expressions.errors import FieldExpressionError, FieldExpressionParseError
+from engine.field_expressions.parser import parse_expression
 from engine.field_expressions.serializer import to_json as expr_to_json
-from engine.field_expressions.ast import RefNode, ExpressionNode
-from engine.field_expressions.traversal import select_nodes, get_pure_ref
-
+from engine.field_expressions.traversal import get_pure_ref, select_nodes
 
 LOGGER = logging.getLogger(__name__)
 

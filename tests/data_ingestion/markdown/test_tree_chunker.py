@@ -1,5 +1,6 @@
-import pytest
 from unittest.mock import MagicMock
+
+import pytest
 
 from data_ingestion.markdown.markdown_parser import MarkdownLevel, MarkdownNode
 from data_ingestion.markdown.tree_chunker import TreeChunker

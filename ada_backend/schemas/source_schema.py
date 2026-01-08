@@ -1,6 +1,7 @@
+from datetime import datetime
 from typing import Optional
 from uuid import UUID
-from datetime import datetime
+
 from pydantic import BaseModel, ConfigDict
 
 from ada_backend.database import models as db

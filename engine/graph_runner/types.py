@@ -4,11 +4,11 @@ Graph Runner Types
 This module contains the core data structures used by the GraphRunner system.
 """
 
-from enum import StrEnum
 from dataclasses import dataclass
+from enum import StrEnum
 from typing import Optional
 
-from engine.agent.types import NodeData
+from engine.components.types import NodeData
 
 
 class TaskState(StrEnum):

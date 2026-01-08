@@ -4,8 +4,8 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field
 
 from ada_backend.schemas.integration_schema import GraphIntegrationSchema
-from ada_backend.schemas.pipeline.field_expression_schema import FieldExpressionUpdateSchema
 from ada_backend.schemas.parameter_schema import PipelineParameterSchema
+from ada_backend.schemas.pipeline.field_expression_schema import FieldExpressionUpdateSchema
 
 
 class ToolDescriptionSchema(BaseModel):

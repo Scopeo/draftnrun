@@ -9,9 +9,9 @@ type coercion, and input resolution for field expressions.
 import logging
 from typing import Any, Callable
 
-from engine.graph_runner.types import Task
-from engine.field_expressions.ast import ExpressionNode, LiteralNode, RefNode, ConcatNode
+from engine.field_expressions.ast import ConcatNode, ExpressionNode, LiteralNode, RefNode
 from engine.field_expressions.errors import FieldExpressionError
+from engine.graph_runner.types import Task
 
 LOGGER = logging.getLogger(__name__)
 

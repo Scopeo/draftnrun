@@ -1,12 +1,11 @@
-from datetime import datetime
-from uuid import UUID
-from typing import Optional
 import logging
+from datetime import datetime
+from typing import Optional
+from uuid import UUID
 
 from sqlalchemy.orm import Session
 
 from ada_backend.database import models as db
-
 
 LOGGER = logging.getLogger(__name__)
 
@@ -61,7 +60,6 @@ def insert_secret_integration(
     expires_in: Optional[int] = None,
     token_last_updated: Optional[datetime] = None,
 ) -> db.SecretIntegration:
-
     new_integration = db.SecretIntegration(
         integration_id=integration_id,
         expires_in=expires_in,

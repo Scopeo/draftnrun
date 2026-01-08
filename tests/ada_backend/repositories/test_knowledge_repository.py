@@ -4,13 +4,13 @@ from typing import Iterator
 import pytest
 from sqlalchemy import select
 
-from engine.storage_service.local_service import SQLLocalService
-from ingestion_script.ingest_folder_source import FILE_TABLE_DEFINITION
 from ada_backend.repositories.knowledge_repository import (
     delete_chunk,
     delete_document,
     list_documents_for_source,
 )
+from engine.storage_service.local_service import SQLLocalService
+from ingestion_script.ingest_folder_source import FILE_TABLE_DEFINITION
 
 
 @pytest.fixture

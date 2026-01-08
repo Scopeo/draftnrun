@@ -8,12 +8,12 @@ to ensure it correctly identifies when graphs are identical or different.
 import uuid
 from uuid import UUID
 
-from ada_backend.services.graph.update_graph_service import _calculate_graph_hash
-from ada_backend.schemas.pipeline.graph_schema import GraphUpdateSchema, EdgeSchema
-from ada_backend.schemas.pipeline.base import ComponentInstanceSchema, ComponentRelationshipSchema
-from ada_backend.schemas.pipeline.port_mapping_schema import PortMappingSchema
-from ada_backend.schemas.pipeline.field_expression_schema import FieldExpressionUpdateSchema
 from ada_backend.schemas.parameter_schema import PipelineParameterSchema
+from ada_backend.schemas.pipeline.base import ComponentInstanceSchema, ComponentRelationshipSchema
+from ada_backend.schemas.pipeline.field_expression_schema import FieldExpressionUpdateSchema
+from ada_backend.schemas.pipeline.graph_schema import EdgeSchema, GraphUpdateSchema
+from ada_backend.schemas.pipeline.port_mapping_schema import PortMappingSchema
+from ada_backend.services.graph.update_graph_service import _calculate_graph_hash
 
 
 def create_component_instance(

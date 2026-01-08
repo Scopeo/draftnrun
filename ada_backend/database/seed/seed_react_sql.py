@@ -3,11 +3,6 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from ada_backend.database import models as db
-from ada_backend.database.models import (
-    ParameterType,
-    UIComponent,
-    UIComponentProperties,
-)
 from ada_backend.database.component_definition_seeding import (
     upsert_component_categories,
     upsert_component_versions,
@@ -15,6 +10,12 @@ from ada_backend.database.component_definition_seeding import (
     upsert_components_parameter_definitions,
     upsert_release_stage_to_current_version_mapping,
 )
+from ada_backend.database.models import (
+    ParameterType,
+    UIComponent,
+    UIComponentProperties,
+)
+from ada_backend.database.seed.constants import COMPLETION_MODEL_IN_DB, TEMPERATURE_IN_DB
 from ada_backend.database.seed.seed_categories import CATEGORY_UUIDS
 from ada_backend.database.seed.seed_tool_description import TOOL_DESCRIPTION_UUIDS
 from ada_backend.database.seed.utils import (
@@ -23,8 +24,7 @@ from ada_backend.database.seed.utils import (
     ParameterLLMConfig,
     build_function_calling_service_config_definitions,
 )
-from ada_backend.database.seed.constants import COMPLETION_MODEL_IN_DB, TEMPERATURE_IN_DB
-from engine.agent.sql.react_sql_tool import DEFAULT_REACT_SQL_TOOL_PROMPT
+from engine.components.sql.react_sql_tool import DEFAULT_REACT_SQL_TOOL_PROMPT
 
 
 def seed_react_sql_components(session: Session):

@@ -1,24 +1,23 @@
-from collections import defaultdict
 import json
+import logging
+from collections import defaultdict
 from typing import List, Optional
 from uuid import UUID
-import logging
 
 import pandas as pd
 
+from ada_backend.database.models import CallType, EnvType
 from ada_backend.schemas.trace_schema import (
-    RootTraceSpan,
-    TraceSpan,
     PaginatedRootTracesResponse,
     Pagination,
+    RootTraceSpan,
+    TraceSpan,
 )
+from ada_backend.segment_analytics import track_project_observability_loaded, track_span_observability_loaded
 from ada_backend.services.metrics.utils import (
     query_root_trace_duration,
     query_trace_by_trace_id,
 )
-from ada_backend.segment_analytics import track_project_observability_loaded, track_span_observability_loaded
-from ada_backend.database.models import EnvType, CallType
-
 
 LOGGER = logging.getLogger(__name__)
 

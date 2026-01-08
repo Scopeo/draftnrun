@@ -1,8 +1,9 @@
-from sqlalchemy.orm import Session
-from sqlalchemy import func, literal
-from uuid import UUID
-from typing import Optional, List
 from dataclasses import dataclass
+from typing import List, Optional
+from uuid import UUID
+
+from sqlalchemy import func, literal
+from sqlalchemy.orm import Session
 
 import ada_backend.database.models as db
 
@@ -36,7 +37,6 @@ def create_llm_cost(
     credits_per_input_token: Optional[float] = None,
     credits_per_output_token: Optional[float] = None,
 ) -> db.LLMCost:
-
     llm_cost = db.LLMCost(
         llm_model_id=llm_model_id,
         credits_per_input_token=credits_per_input_token,
@@ -106,7 +106,6 @@ def create_component_version_cost(
     credits_per_call: Optional[float] = None,
     credits_per: Optional[dict] = None,
 ) -> db.ComponentCost:
-
     component_cost = db.ComponentCost(
         component_version_id=component_version_id,
         credits_per_call=credits_per_call,
@@ -124,7 +123,6 @@ def upsert_component_version_cost(
     credits_per_call: Optional[float] = None,
     credits_per: Optional[dict] = None,
 ) -> db.ComponentCost:
-
     component_cost = (
         session.query(db.ComponentCost).filter(db.ComponentCost.component_version_id == component_version_id).first()
     )
@@ -240,7 +238,6 @@ def get_organization_total_credits(session: Session, organization_id: UUID, year
 def get_all_organization_limits_with_usage(
     session: Session, month: int, year: int
 ) -> List[OrganizationLimitAndUsageDTO]:
-
     usage_subquery = (
         session.query(
             db.Project.organization_id.label("org_id"),

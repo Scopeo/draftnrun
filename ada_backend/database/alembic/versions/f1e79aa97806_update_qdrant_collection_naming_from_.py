@@ -6,18 +6,18 @@ Create Date: 2025-10-16 15:35:48.748785
 
 """
 
-from typing import Sequence, Union
-import logging
 import asyncio
+import logging
+from typing import Sequence, Union
 
-from sqlalchemy import text
+import psycopg2
 from alembic import op
+from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
+from sqlalchemy import text
 
 from data_ingestion.utils import sanitize_filename
 from engine.qdrant_service import QdrantService
 from settings import settings
-import psycopg2
-from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
 
 # revision identifiers, used by Alembic.
 revision: str = "f1e79aa97806"
@@ -135,7 +135,7 @@ async def _process_collection(
                     payload={"points": batch},
                 )
                 LOGGER.info(
-                    f"Inserted batch {i//insert_batch_size + 1}/"
+                    f"Inserted batch {i // insert_batch_size + 1}/"
                     "{(len(all_points) + insert_batch_size - 1)//insert_batch_size}"
                 )
         else:

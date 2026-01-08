@@ -1,26 +1,26 @@
 import base64
-import secrets
 import hashlib
+import secrets
 from uuid import UUID
 
 from sqlalchemy.orm import Session
+
 from ada_backend.database.models import ApiKeyType, OrgApiKey, ProjectApiKey
-from ada_backend.schemas.auth_schema import (
-    ApiKeyCreatedResponse,
-    VerifiedApiKey,
-    ApiKeyGetResponse,
-    ApiKeyData,
-)
 from ada_backend.repositories.api_key_repository import (
     create_api_key,
-    get_api_key_by_hashed_key,
     deactivate_api_key,
+    get_api_key_by_hashed_key,
     get_api_keys_by_org_id,
     get_api_keys_by_project_id,
     get_project_by_api_key,
 )
+from ada_backend.schemas.auth_schema import (
+    ApiKeyCreatedResponse,
+    ApiKeyData,
+    ApiKeyGetResponse,
+    VerifiedApiKey,
+)
 from settings import settings
-
 
 API_KEY_PREFIX = "taylor_"
 API_KEY_BYTES = 24  # 192 bits of entropy

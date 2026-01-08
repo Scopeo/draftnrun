@@ -1,6 +1,6 @@
+import logging
 from typing import Optional
 from uuid import UUID
-import logging
 
 from sqlalchemy.orm import Session
 

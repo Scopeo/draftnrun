@@ -1,10 +1,11 @@
 import asyncio
-import pytest
 import uuid
 from unittest.mock import Mock, patch
 
+import pytest
+
 from data_ingestion.document.document_chunking import get_chunks_dataframe_from_doc
-from data_ingestion.document.folder_management.folder_management import FileDocument, FileDocumentType, FileChunk
+from data_ingestion.document.folder_management.folder_management import FileChunk, FileDocument, FileDocumentType
 
 
 @pytest.fixture

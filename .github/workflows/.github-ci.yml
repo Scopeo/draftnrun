@@ -6,7 +6,6 @@ on:
   pull_request:
     branches:
       - main
-      - Dev
 
 concurrency:
   group: ec2-runner-tests
@@ -82,7 +81,7 @@ jobs:
             set -e
             echo "===> Changing directory to ${{ env.EC2_PATH_BASE }}/${{env.EC2_FOLDER_NAME}}${{ env.RUN_ID }}"
             cd ${{ env.EC2_PATH_BASE }}/${{env.EC2_FOLDER_NAME}}${{env.RUN_ID}}
-            uv run flake8 .
+            uv run ruff check .
 
       - name: Create credentials.env file
         run: |
@@ -92,6 +91,9 @@ jobs:
           echo "GOOGLE_API_KEY=${{ secrets.GOOGLE_API_KEY }}" >> credentials.env
           echo "GOOGLE_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai/" >> credentials.env
           echo "CEREBRAS_API_KEY=${{ secrets.CEREBRAS_API_KEY }}" >> credentials.env
+          echo "CEREBRAS_BASE_URL=https://api.cerebras.ai/v1" >> credentials.env
+          echo "ANTHROPIC_API_KEY=${{ secrets.ANTHROPIC_API_KEY }}" >> credentials.env
+          echo "ANTHROPIC_BASE_URL=https://api.anthropic.com/v1/messages" >> credentials.env
           echo "SNOWFLAKE_USER=${{ secrets.SNOWFLAKE_USER }}" >> credentials.env
           echo "SNOWFLAKE_PASSWORD=${{ secrets.SNOWFLAKE_PASSWORD }}" >> credentials.env
           echo "SNOWFLAKE_ACCOUNT=${{ secrets.SNOWFLAKE_ACCOUNT }}" >> credentials.env
@@ -230,14 +232,9 @@ jobs:
             echo "===> Changing directory to ${{ env.EC2_PATH_BASE }}/${{env.EC2_FOLDER_NAME}}${{ env.RUN_ID }}"
             cd ${{ env.EC2_PATH_BASE }}/${{env.EC2_FOLDER_NAME}}${{ env.RUN_ID }}
 
-            # Check and install pg_dump 16 if needed
-            if ! command -v /usr/pgsql-16/bin/pg_dump &> /dev/null; then
-              echo "===> Installing PostgreSQL 16 client tools"
-              sudo dnf remove -y postgresql15* || true
-              sudo dnf install -y postgresql16
-            else
-              echo "===> PostgreSQL 16 client tools already installed"
-            fi
+            # Source db_utils.sh to use ensure_pg_tools function
+            source "./scripts/copy_data/db_utils.sh"
+            ensure_pg_tools
 
             # Load credentials if present (optional)
             if [ -f credentials.env ]; then
@@ -291,6 +288,9 @@ jobs:
               echo "===> Using cached prod dump"
             fi
 
+            # Validate dump using shared script
+            bash "./scripts/copy_data/validate_dump.sh" "$DUMP_PATH"
+
             echo "===> Copying dumps into postgres container"
             cd services
             CONTAINER_ID=$(docker compose ps -q postgres)
@@ -343,7 +343,7 @@ jobs:
             echo "===> Changing directory to ${{ env.EC2_PATH_BASE }}/${{env.EC2_FOLDER_NAME}}${{ env.RUN_ID }}"
             cd ${{ env.EC2_PATH_BASE }}/${{env.EC2_FOLDER_NAME}}${{env.RUN_ID}}
             echo "===> Running tests for RUN_ID: ${{ env.RUN_ID }}"
-            uv run coverage run -m pytest
+            uv run coverage run -m pytest --ignore=tests/external_api_calls --ignore=tests/qdrant --durations=10
             uv run coverage report -i
             uv run coverage html -i
             uv run coverage xml -i

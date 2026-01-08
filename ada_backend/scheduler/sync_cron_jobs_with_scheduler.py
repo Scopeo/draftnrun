@@ -74,8 +74,8 @@ def _sync_and_load_jobs():
     and removes jobs from the scheduler that are no longer active or present in the DB.
     """
     from ada_backend.scheduler.service import (
-        get_scheduler,
         add_job_to_scheduler,
+        get_scheduler,
         remove_job_from_scheduler,
     )
 

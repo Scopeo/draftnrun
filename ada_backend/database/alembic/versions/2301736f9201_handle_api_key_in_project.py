@@ -8,11 +8,10 @@ Create Date: 2025-06-11 09:53:52.566127
 
 from typing import Sequence, Union
 
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 
 from ada_backend.database.models import OrgSecretType
-
 
 # revision identifiers, used by Alembic.
 revision: str = "2301736f9201"

@@ -4,7 +4,7 @@ from uuid import UUID
 import strawberry
 from strawberry.types import Info
 
-from ada_backend.graphql.types.project_types import ProjectType, GraphRunnerEnvType
+from ada_backend.graphql.types.project_types import GraphRunnerEnvType, ProjectType
 from ada_backend.services.project_service import get_project_service, get_workflows_by_organization
 
 

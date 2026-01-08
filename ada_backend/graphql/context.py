@@ -1,6 +1,6 @@
-from strawberry.fastapi import BaseContext
 from fastapi import Request
 from sqlalchemy.orm import Session
+from strawberry.fastapi import BaseContext
 
 
 class GraphQLContext(BaseContext):

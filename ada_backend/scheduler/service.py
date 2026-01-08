@@ -1,25 +1,26 @@
 import logging
-from typing import Optional, Dict, Any
-from uuid import UUID
 from datetime import datetime, timezone
+from typing import Any, Dict, Optional
+from uuid import UUID
 
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
+from apscheduler.events import EVENT_JOB_ERROR, EVENT_JOB_EXECUTED, JobExecutionEvent
 from apscheduler.executors.asyncio import AsyncIOExecutor
-from apscheduler.events import EVENT_JOB_EXECUTED, EVENT_JOB_ERROR, JobExecutionEvent
 from apscheduler.job import Job
+from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+
+from ada_backend.database.models import CronEntrypoint, CronStatus
 from ada_backend.database.setup_db import get_db_session, get_db_url
-from ada_backend.database.models import CronStatus, CronEntrypoint
 from ada_backend.repositories.cron_repository import (
+    get_cron_runs_by_cron_id,
     insert_cron_run,
     update_cron_run,
-    get_cron_runs_by_cron_id,
 )
+from ada_backend.scheduler.sync_cron_jobs_with_scheduler import schedule_sync_job
+from ada_backend.scheduler.utils import log_sync_job_status
 from ada_backend.services.cron.registry import CRON_REGISTRY
 from engine.trace.trace_context import set_trace_manager
 from engine.trace.trace_manager import TraceManager
-from ada_backend.scheduler.utils import log_sync_job_status
-from ada_backend.scheduler.sync_cron_jobs_with_scheduler import schedule_sync_job
 
 LOGGER = logging.getLogger(__name__)
 
@@ -254,7 +255,7 @@ def add_job_to_scheduler(
         args=[cron_id, entrypoint, payload],
         id=str(cron_id),
         timezone=tz,
-        **dict(zip(["second", "minute", "hour", "day", "month", "day_of_week"], cron_expr.split())),
+        **dict(zip(["second", "minute", "hour", "day", "month", "day_of_week"], cron_expr.split(), strict=False)),
         replace_existing=True,
     )
 

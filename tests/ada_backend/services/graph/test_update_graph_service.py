@@ -8,15 +8,16 @@ For now, they are marked as integration tests.
 """
 
 import uuid
+
 import pytest
 from sqlalchemy.orm import Session
 
 from ada_backend.database import models as db
+from ada_backend.schemas.pipeline.graph_schema import GraphUpdateSchema
 from ada_backend.services.graph.update_graph_service import (
     update_graph_service,
     validate_graph_is_draft,
 )
-from ada_backend.schemas.pipeline.graph_schema import GraphUpdateSchema
 
 # Mark all tests in this module as integration tests requiring PostgreSQL
 pytestmark = pytest.mark.skip(

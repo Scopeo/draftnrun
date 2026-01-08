@@ -1,9 +1,10 @@
 """Tests for cron service frequency validation."""
 
 import pytest
-from ada_backend.services.cron.service import _validate_maximum_frequency
-from ada_backend.services.cron.errors import CronValidationError
+
 from ada_backend.services.cron.constants import CRON_MIN_INTERVAL_MINUTES
+from ada_backend.services.cron.errors import CronValidationError
+from ada_backend.services.cron.service import _validate_maximum_frequency
 
 
 class TestCronFrequencyValidation:

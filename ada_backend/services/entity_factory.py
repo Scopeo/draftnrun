@@ -1,35 +1,37 @@
-import logging
-import json
 import asyncio
 import concurrent.futures
 import contextvars
-from inspect import signature
-from typing import Optional, Any, Type, Callable, get_type_hints, get_origin, get_args, Union
-from uuid import UUID
+import json
+import logging
 from dataclasses import is_dataclass
+from inspect import signature
+from typing import Any, Callable, Optional, Type, Union, get_args, get_origin, get_type_hints
+from uuid import UUID
+
 from pydantic import BaseModel
 
-from engine.agent.types import ToolDescription
-from engine.agent.rag.retriever import Retriever
-from engine.agent.rag.cohere_reranker import CohereReranker
-from engine.agent.rag.vocabulary_search import VocabularySearch
-from engine.agent.rag.formatter import Formatter
-from engine.agent.synthesizer import Synthesizer
-from engine.trace.trace_context import get_trace_manager
-from engine.llm_services.llm_service import EmbeddingService, CompletionService, WebSearchService, OCRService
-from engine.qdrant_service import QdrantService, QdrantCollectionSchema
-from ada_backend.database.setup_db import get_db_session
-from ada_backend.database.models import EnvType
-from ada_backend.repositories.source_repository import get_data_source_by_id
-from ada_backend.repositories.project_repository import get_project
 from ada_backend.context import get_request_context
-from ada_backend.services.user_roles_service import get_user_access_to_organization
+from ada_backend.database.models import EnvType
+from ada_backend.database.setup_db import get_db_session
+from ada_backend.repositories.project_repository import get_project
+from ada_backend.repositories.source_repository import get_data_source_by_id
+from ada_backend.services.errors import MissingDataSourceError
 from ada_backend.services.llm_models_service import (
     get_llm_models_by_capability_select_options_service,
     get_model_id_by_name_service,
 )
-from ada_backend.services.errors import MissingDataSourceError
+from ada_backend.services.user_roles_service import get_user_access_to_organization
+from engine.components.rag.cohere_reranker import CohereReranker
+from engine.components.rag.formatter import Formatter
+from engine.components.rag.retriever import Retriever
+from engine.components.rag.vocabulary_search import VocabularySearch
+from engine.components.synthesizer import Synthesizer
+from engine.components.tools.remote_mcp_tool import RemoteMCPTool
+from engine.components.types import ToolDescription
+from engine.llm_services.llm_service import CompletionService, EmbeddingService, OCRService, WebSearchService
+from engine.qdrant_service import QdrantCollectionSchema, QdrantService
 from engine.storage_service.local_service import SQLLocalService
+from engine.trace.trace_context import get_trace_manager
 
 LOGGER = logging.getLogger(__name__)
 
@@ -177,6 +179,36 @@ class AgentFactory(EntityFactory):
             raise ValueError("Tool description must be a ToolDescription object.")
 
         return args, kwargs
+
+
+class RemoteMCPToolFactory:
+    """
+    Minimal factory to construct RemoteMCPTool via its async autodescovery constructor.
+    Runs the coroutine synchronously and drops unused params coming from the registry.
+    TODO: If more components need async constructors, extract a shared async-capable
+    factory/helper to avoid repeating this pattern.
+    """
+
+    # TODO: Replace with a proper async-capable factory interface; exposed for port seeding.
+    entity_class = RemoteMCPTool
+
+    def __call__(self, **kwargs):
+        # Tool descriptions come from the server; drop any default from DB seed
+        kwargs.pop("tool_description", None)
+        # Ensure trace manager is set if missing
+        if "trace_manager" not in kwargs:
+            trace_manager = get_trace_manager()
+            if trace_manager is None:
+                raise ValueError("Trace manager is required")
+            kwargs["trace_manager"] = trace_manager
+        coro = RemoteMCPTool.from_mcp_server(**kwargs)
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            return asyncio.run(coro)
+
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            return executor.submit(asyncio.run, coro).result()
 
 
 class NonToolCallableBlockFactory(EntityFactory):

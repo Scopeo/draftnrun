@@ -4,11 +4,12 @@ from uuid import UUID
 
 from sqlalchemy.orm import Session
 
+from ada_backend.database.models import EvaluationType
 from ada_backend.repositories.llm_judges_repository import (
     create_llm_judge,
+    delete_llm_judges,
     get_llm_judges_by_project,
     update_llm_judge,
-    delete_llm_judges,
 )
 from ada_backend.schemas.llm_judges_schema import (
     LLMJudgeCreate,
@@ -17,7 +18,6 @@ from ada_backend.schemas.llm_judges_schema import (
     LLMJudgeUpdate,
 )
 from ada_backend.services.errors import LLMJudgeNotFound
-from ada_backend.database.models import EvaluationType
 from ada_backend.services.qa.utils import (
     DEFAULT_BOOLEAN_PROMPT,
     DEFAULT_FREE_TEXT_PROMPT,

@@ -2,25 +2,26 @@
 Tests for endpoint_polling cron entrypoint.
 """
 
-import pytest
-from unittest.mock import Mock, AsyncMock, patch
+from unittest.mock import AsyncMock, Mock, patch
 from uuid import uuid4
 
-from ada_backend.services.cron.entries.endpoint_polling import (
-    EndpointPollingUserPayload,
-    EndpointPollingExecutionPayload,
-    validate_registration,
-    validate_execution,
-    execute,
-    _extract_ids_from_response,
-    _extract_ids_and_filter_values_from_response,
-)
+import pytest
+
+from ada_backend.database.models import DataSource, EndpointPollingHistory, EnvType, Project
 from ada_backend.services.cron.entries.agent_inference import (
-    AgentInferenceUserPayload,
     AgentInferenceExecutionPayload,
+    AgentInferenceUserPayload,
+)
+from ada_backend.services.cron.entries.endpoint_polling import (
+    EndpointPollingExecutionPayload,
+    EndpointPollingUserPayload,
+    _extract_ids_and_filter_values_from_response,
+    _extract_ids_from_response,
+    execute,
+    validate_execution,
+    validate_registration,
 )
 from ada_backend.services.cron.errors import CronValidationError
-from ada_backend.database.models import DataSource, EnvType, Project, EndpointPollingHistory
 
 
 @pytest.fixture

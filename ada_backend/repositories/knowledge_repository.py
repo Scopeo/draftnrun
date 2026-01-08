@@ -1,12 +1,10 @@
 import logging
 from typing import List, Tuple
 
-from sqlalchemy import func, select, delete
+from sqlalchemy import Table, delete, func, select
 from sqlalchemy.engine import Row
-from sqlalchemy import Table
 
 from engine.storage_service.local_service import SQLLocalService
-
 
 LOGGER = logging.getLogger(__name__)
 

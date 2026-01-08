@@ -180,8 +180,8 @@ class Worker:
             )
 
             # Real-time logging - stream output as it happens
-            import select
             import fcntl
+            import select
 
             # Make stdout and stderr non-blocking for real-time reading
             if process.stdout:
@@ -360,8 +360,8 @@ class Worker:
     ) -> None:
         """Update the task status to FAILED in the database."""
         try:
-            from ada_backend.schemas.ingestion_task_schema import IngestionTaskUpdate
             from ada_backend.database import models as db
+            from ada_backend.schemas.ingestion_task_schema import IngestionTaskUpdate
 
             failed_task = IngestionTaskUpdate(
                 id=task_id,
@@ -495,6 +495,5 @@ class Worker:
 
 
 if __name__ == "__main__":
-
     worker = Worker()
     worker.run()

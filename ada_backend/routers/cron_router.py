@@ -1,40 +1,40 @@
+import logging
 from typing import Annotated
 from uuid import UUID
-import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from ada_backend.database.setup_db import get_db
-from ada_backend.schemas.auth_schema import SupabaseUser
 from ada_backend.routers.auth_router import (
-    user_has_access_to_organization_dependency,
     UserRights,
+    user_has_access_to_organization_dependency,
 )
+from ada_backend.schemas.auth_schema import SupabaseUser
 from ada_backend.schemas.cron_schema import (
     CronJobCreate,
-    CronJobUpdate,
-    CronJobResponse,
-    CronJobWithRuns,
-    CronJobListResponse,
-    CronRunListResponse,
     CronJobDeleteResponse,
+    CronJobListResponse,
     CronJobPauseResponse,
-)
-from ada_backend.services.cron.service import (
-    get_cron_jobs_for_organization,
-    get_cron_job_detail,
-    create_cron_job,
-    update_cron_job_service,
-    delete_cron_job_service,
-    pause_cron_job,
-    resume_cron_job,
-    get_cron_runs,
+    CronJobResponse,
+    CronJobUpdate,
+    CronJobWithRuns,
+    CronRunListResponse,
 )
 from ada_backend.services.cron.errors import (
-    CronValidationError,
-    CronJobNotFound,
     CronJobAccessDenied,
+    CronJobNotFound,
+    CronValidationError,
+)
+from ada_backend.services.cron.service import (
+    create_cron_job,
+    delete_cron_job_service,
+    get_cron_job_detail,
+    get_cron_jobs_for_organization,
+    get_cron_runs,
+    pause_cron_job,
+    resume_cron_job,
+    update_cron_job_service,
 )
 
 LOGGER = logging.getLogger(__name__)

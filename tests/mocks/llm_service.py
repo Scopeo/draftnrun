@@ -1,6 +1,6 @@
 import json
-from unittest.mock import MagicMock, AsyncMock
 from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 

@@ -1,15 +1,15 @@
 import logging
-from pathlib import Path
-from typing import Optional, Callable
 import re
 import tempfile
+from pathlib import Path
+from typing import Callable, Optional
 
 import pypandoc
 
 from data_ingestion.document.folder_management.folder_management import FileChunk, FileDocument
-from engine.llm_services.llm_service import VisionService
-from data_ingestion.document.markdown_ingestion import CHUNK_SIZE, CHUNK_OVERLAP, chunk_markdown
+from data_ingestion.document.markdown_ingestion import CHUNK_OVERLAP, CHUNK_SIZE, chunk_markdown
 from data_ingestion.utils import get_image_description_prompt
+from engine.llm_services.llm_service import VisionService
 
 LOGGER = logging.getLogger(__name__)
 

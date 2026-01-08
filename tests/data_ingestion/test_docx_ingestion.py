@@ -1,6 +1,6 @@
-import pytest
 from unittest import mock
-from data_ingestion.document.folder_management.folder_management import FileDocumentType, FileDocument
+
+import pytest
 
 from data_ingestion.document.docx_ingestion import (
     _docx_to_md,
@@ -8,6 +8,7 @@ from data_ingestion.document.docx_ingestion import (
     extract_sections_around_images,
     get_chunks_from_docx,
 )
+from data_ingestion.document.folder_management.folder_management import FileDocument, FileDocumentType
 
 
 @pytest.fixture

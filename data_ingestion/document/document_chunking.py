@@ -1,25 +1,25 @@
 import inspect
-from typing import Callable, Optional
-from functools import partial
-import logging
 import json
+import logging
+from functools import partial
+from typing import Callable, Optional
 
 import pandas as pd
 
-from data_ingestion.document.docx_ingestion import get_chunks_from_docx
-from data_ingestion.document.markdown_ingestion import get_chunks_from_markdown
-from data_ingestion.document.pdf_vision_ingestion import create_chunks_from_document
-from data_ingestion.document.parsing_pdf_ingestion import create_chunks_from_document_without_llm
-from data_ingestion.document.excel_ingestion import ingest_excel_file
 from data_ingestion.document.csv_ingestion import ingest_csv_file
+from data_ingestion.document.docx_ingestion import get_chunks_from_docx
+from data_ingestion.document.excel_ingestion import ingest_excel_file
 from data_ingestion.document.folder_management.folder_management import (
     BaseDocument,
     FileChunk,
     FileDocument,
     FileDocumentType,
 )
-from ingestion_script.utils import ORDER_COLUMN_NAME
+from data_ingestion.document.markdown_ingestion import get_chunks_from_markdown
+from data_ingestion.document.parsing_pdf_ingestion import create_chunks_from_document_without_llm
+from data_ingestion.document.pdf_vision_ingestion import create_chunks_from_document
 from engine.llm_services.llm_service import CompletionService, VisionService
+from ingestion_script.utils import ORDER_COLUMN_NAME
 
 LOGGER = logging.getLogger(__name__)
 FileProcessor = Callable[[FileDocument], list[FileChunk]]
@@ -33,7 +33,6 @@ def document_chunking_mapping(
     chunk_size: Optional[int] = 1024,
     use_llm_for_pdf: bool = True,
 ) -> dict[FileDocumentType, FileProcessor]:
-
     if use_llm_for_pdf:
         pdf_processor = partial(
             create_chunks_from_document,

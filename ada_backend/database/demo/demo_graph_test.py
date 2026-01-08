@@ -1,17 +1,16 @@
-from uuid import UUID, uuid4
 import json
+from uuid import UUID, uuid4
 
 from ada_backend.database import models as db
+from ada_backend.database.seed.constants import COMPLETION_MODEL_IN_DB
 from ada_backend.schemas.parameter_schema import PipelineParameterSchema
 from ada_backend.schemas.pipeline.base import (
-    ComponentRelationshipSchema,
     ComponentInstanceSchema,
+    ComponentRelationshipSchema,
     ToolDescriptionSchema,
 )
 from ada_backend.schemas.pipeline.graph_schema import EdgeSchema, GraphUpdateSchema, PortMappingSchema
-from engine.agent.rag.rag import format_rag_tool_description
-from ada_backend.database.seed.constants import COMPLETION_MODEL_IN_DB
-
+from engine.components.rag.rag import format_rag_tool_description
 
 GRAPH_TEST_TOOL_DESCRIPTION = ToolDescriptionSchema(
     name="Graph Test Chatbot",

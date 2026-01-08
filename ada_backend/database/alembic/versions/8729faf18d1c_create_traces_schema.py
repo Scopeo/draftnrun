@@ -6,13 +6,13 @@ Create Date: 2025-11-10 15:54:03.957667
 
 """
 
-from typing import Sequence, Union
-import logging
 import json
+import logging
+from typing import Sequence, Union
 
-from alembic import op
 import sqlalchemy as sa
-from sqlalchemy import create_engine, text, inspect
+from alembic import op
+from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.dialects.postgresql import JSONB
 
 from settings import settings
@@ -288,11 +288,9 @@ def upgrade() -> None:
                             # Handle JSONB attributes - convert string to dict if needed
                             if "attributes" in row_dict:
                                 if isinstance(row_dict["attributes"], str):
-
                                     row_dict["attributes"] = json.loads(row_dict["attributes"])
                                 # Convert dict back to JSON string for SQL parameter
                                 if isinstance(row_dict["attributes"], dict):
-
                                     row_dict["attributes"] = json.dumps(row_dict["attributes"])
                             # Handle NULL values for optional enum fields
                             if table_name == "spans":

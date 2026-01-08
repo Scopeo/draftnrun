@@ -24,7 +24,6 @@ def validate_prerequisites() -> bool:
 
     # Check if FastAPI server is running
     try:
-
         response = requests.get("http://localhost:8000/", timeout=5)
         if response.status_code == 200:
             print("✅ FastAPI server is running")

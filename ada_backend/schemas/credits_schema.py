@@ -1,7 +1,8 @@
-from pydantic import BaseModel, ConfigDict
-from uuid import UUID
 from datetime import datetime
 from typing import Optional
+from uuid import UUID
+
+from pydantic import BaseModel, ConfigDict
 
 
 class OrganizationLimit(BaseModel):
@@ -9,7 +10,6 @@ class OrganizationLimit(BaseModel):
 
 
 class OrganizationLimitResponse(OrganizationLimit):
-
     id: UUID
     organization_id: UUID
     created_at: datetime

@@ -1,12 +1,23 @@
-from typing import Optional, List
-from uuid import UUID
 import logging
 from dataclasses import dataclass
+from typing import List, Optional
+from uuid import UUID
 
 from sqlalchemy.orm import Session, joinedload
 
 from ada_backend.database import models as db
-from ada_backend.database.models import ParameterType, ReleaseStage, UIComponent, UIComponentProperties
+from ada_backend.database.component_definition_seeding import (
+    upsert_components,
+    upsert_components_parameter_definitions,
+    upsert_release_stage_to_current_version_mapping,
+)
+from ada_backend.database.models import (
+    ComponentGlobalParameter,
+    ParameterType,
+    ReleaseStage,
+    UIComponent,
+    UIComponentProperties,
+)
 from ada_backend.repositories.categories_repository import fetch_associated_category_names
 from ada_backend.repositories.integration_repository import (
     delete_linked_integration,
@@ -19,12 +30,6 @@ from ada_backend.schemas.components_schema import (
 )
 from ada_backend.schemas.integration_schema import IntegrationSchema
 from ada_backend.schemas.parameter_schema import ComponentParamDefDTO, ParameterGroupSchema
-from ada_backend.database.models import ComponentGlobalParameter
-from ada_backend.database.component_definition_seeding import (
-    upsert_components,
-    upsert_components_parameter_definitions,
-    upsert_release_stage_to_current_version_mapping,
-)
 from ada_backend.schemas.pipeline.base import ToolDescriptionSchema
 from ada_backend.utils.component_utils import get_ui_component_properties_with_llm_options
 
@@ -596,7 +601,6 @@ def process_components_with_versions(
     session: Session,
     components_with_version: list[ComponentWithVersionDTO],
 ) -> List[ComponentWithParametersDTO]:
-
     component_version_ids = [c.component_version_id for c in components_with_version]
     component_costs = (
         {
@@ -845,7 +849,7 @@ def upsert_basic_parameter(
 
     if value and org_secret_id:
         raise ValueError(
-            "Cannot set both value and org_secret_id for a basic parameter. " "Use one or the other.",
+            "Cannot set both value and org_secret_id for a basic parameter. Use one or the other.",
         )
 
     parameter = (

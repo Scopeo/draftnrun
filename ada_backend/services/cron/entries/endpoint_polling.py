@@ -6,29 +6,31 @@ compares them with existing values stored in the ingestion database,
 and identifies new values (endpoint_values - stored_values).
 """
 
-import logging
 import json
+import logging
 import re
 from typing import Any, Optional
 from uuid import UUID
-from pydantic import Field, HttpUrl
 
 import httpx
+from pydantic import Field, HttpUrl
 
+from ada_backend.database.models import CallType
 from ada_backend.repositories.tracker_history_repository import (
     create_tracked_values_bulk,
     get_tracked_values_history,
     seed_initial_endpoint_history,
 )
-from ada_backend.services.cron.core import BaseUserPayload, BaseExecutionPayload, CronEntrySpec
-from ada_backend.services.cron.entries.agent_inference import AgentInferenceExecutionPayload, AgentInferenceUserPayload
-from ada_backend.services.cron.errors import CronValidationError
 from ada_backend.services.agent_runner_service import run_env_agent
-from ada_backend.database.models import CallType
+from ada_backend.services.cron.core import BaseExecutionPayload, BaseUserPayload, CronEntrySpec
+from ada_backend.services.cron.entries.agent_inference import AgentInferenceExecutionPayload, AgentInferenceUserPayload
 from ada_backend.services.cron.entries.agent_inference import (
-    validate_registration as validate_registration_agent_inference,
     validate_execution as validate_execution_agent_inference,
 )
+from ada_backend.services.cron.entries.agent_inference import (
+    validate_registration as validate_registration_agent_inference,
+)
+from ada_backend.services.cron.errors import CronValidationError
 
 LOGGER = logging.getLogger(__name__)
 
@@ -710,25 +712,21 @@ async def execute(execution_payload: EndpointPollingExecutionPayload, **kwargs) 
                     input_data=input_data,
                     call_type=CallType.API,
                 )
-                workflow_results.append(
-                    {
-                        "id": new_value,
-                        "status": "success",
-                        "message": workflow_result.message,
-                        "trace_id": workflow_result.trace_id,
-                    }
-                )
+                workflow_results.append({
+                    "id": new_value,
+                    "status": "success",
+                    "message": workflow_result.message,
+                    "trace_id": workflow_result.trace_id,
+                })
                 successful_values.append(new_value)
                 LOGGER.info(f"Successfully triggered workflow for value {new_value}")
             except Exception as e:
                 LOGGER.error(f"Failed to trigger workflow for value {new_value}: {e}")
-                workflow_results.append(
-                    {
-                        "id": new_value,
-                        "status": "error",
-                        "error": str(e),
-                    }
-                )
+                workflow_results.append({
+                    "id": new_value,
+                    "status": "error",
+                    "error": str(e),
+                })
 
     if successful_values:
         create_tracked_values_bulk(

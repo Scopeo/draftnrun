@@ -1,8 +1,8 @@
+import hashlib
 import logging
 from functools import partial
 from typing import Optional
 from uuid import UUID
-import hashlib
 
 import pandas as pd
 from firecrawl import AsyncFirecrawl

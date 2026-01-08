@@ -1,15 +1,9 @@
-from uuid import UUID
 import json
+from uuid import UUID
 
 from sqlalchemy.orm import Session
 
 from ada_backend.database import models as db
-from ada_backend.database.models import (
-    ParameterType,
-    UIComponent,
-    UIComponentProperties,
-    SelectOption,
-)
 from ada_backend.database.component_definition_seeding import (
     upsert_component_categories,
     upsert_component_versions,
@@ -18,25 +12,31 @@ from ada_backend.database.component_definition_seeding import (
     upsert_components_parameter_definitions,
     upsert_release_stage_to_current_version_mapping,
 )
+from ada_backend.database.models import (
+    ParameterType,
+    SelectOption,
+    UIComponent,
+    UIComponentProperties,
+)
+from ada_backend.database.seed.constants import (
+    COMPLETION_MODEL_IN_DB,
+    REASONING_IN_DB,
+    TEMPERATURE_IN_DB,
+    VERBOSITY_IN_DB,
+)
 from ada_backend.database.seed.seed_categories import CATEGORY_UUIDS
 from ada_backend.database.seed.seed_tool_description import TOOL_DESCRIPTION_UUIDS
 from ada_backend.database.seed.utils import (
     COMPONENT_UUIDS,
     COMPONENT_VERSION_UUIDS,
+    DEFAULT_MODEL,
     ParameterLLMConfig,
     build_completion_service_config_definitions,
-    build_parameters_group,
     build_components_parameters_assignments_to_parameter_groups,
+    build_parameters_group,
     build_parameters_group_definitions,
 )
-from ada_backend.database.seed.constants import (
-    COMPLETION_MODEL_IN_DB,
-    TEMPERATURE_IN_DB,
-    VERBOSITY_IN_DB,
-    REASONING_IN_DB,
-)
-from ada_backend.database.seed.utils import DEFAULT_MODEL
-from engine.agent.synthesizer_prompts import (
+from engine.components.synthesizer_prompts import (
     get_base_synthetizer_prompt_template,
     get_hybrid_synthetizer_prompt_template,
 )
@@ -333,7 +333,7 @@ def seed_rag_components(session: Session):
         ui_component_properties=UIComponentProperties(
             label="Prompt Template",
             placeholder=(
-                "Enter your prompt template here. " "Use {{context_str}} and {{query_str}} for variable substitution."
+                "Enter your prompt template here. Use {{context_str}} and {{query_str}} for variable substitution."
             ),
         ).model_dump(exclude_unset=True, exclude_none=True),
         is_advanced=False,

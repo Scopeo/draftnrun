@@ -1,7 +1,8 @@
-from typing import Protocol, runtime_checkable, Optional, Dict, Type
+from typing import Dict, Optional, Protocol, Type, runtime_checkable
+
 from pydantic import BaseModel
 
-from engine.agent.types import ToolDescription, AgentPayload, NodeData
+from engine.components.types import AgentPayload, NodeData, ToolDescription
 
 
 @runtime_checkable
@@ -13,6 +14,9 @@ class Runnable(Protocol):
 
     def run_sync(self, *inputs: AgentPayload | NodeData, **kwargs) -> AgentPayload | NodeData:
         """Run the runnable with the given inputs and kwargs synchronously."""
+
+    def get_tool_descriptions(self) -> list[ToolDescription]:
+        """Return the tool descriptions this runnable exposes."""
 
     # Canonical ports accessors for cleaner GraphRunner logic
     @classmethod

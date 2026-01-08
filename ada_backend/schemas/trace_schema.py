@@ -1,7 +1,8 @@
 from uuid import UUID
+
 from pydantic import BaseModel
 
-from ada_backend.database.models import EnvType, CallType
+from ada_backend.database.models import CallType, EnvType
 
 
 class TraceSpan(BaseModel):

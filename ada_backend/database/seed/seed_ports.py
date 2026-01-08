@@ -4,8 +4,7 @@ from sqlalchemy.orm import Session
 
 from ada_backend.database import models as db
 from ada_backend.services.registry import FACTORY_REGISTRY
-from engine.agent.agent import Agent
-
+from engine.components.component import Component
 
 LOGGER = logging.getLogger(__name__)
 
@@ -22,7 +21,7 @@ def seed_port_definitions(session: Session):
 
     for component_version_id, factory in FACTORY_REGISTRY._registry.items():
         agent_class = factory.entity_class
-        if not issubclass(agent_class, Agent):
+        if not issubclass(agent_class, Component):
             continue
 
         component_version = session.query(db.ComponentVersion).filter_by(id=component_version_id).first()

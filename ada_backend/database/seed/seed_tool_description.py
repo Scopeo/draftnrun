@@ -5,25 +5,25 @@ from sqlalchemy.orm import Session
 from ada_backend.database import models as db
 from ada_backend.database.component_definition_seeding import upsert_tool_descriptions
 from ada_backend.database.utils import DEFAULT_TOOL_DESCRIPTION
-from engine.agent.llm_call_agent import DEFAULT_LLM_CALL_TOOL_DESCRIPTION
-from engine.agent.tools.tavily_search_tool import TAVILY_TOOL_DESCRIPTION
-from engine.agent.tools.api_call_tool import API_CALL_TOOL_DESCRIPTION
-from engine.agent.document_enhanced_llm_call import DEFAULT_DOCUMENT_ENHANCED_LLM_CALL_TOOL_DESCRIPTION
-from engine.agent.inputs_outputs.start import DEFAULT_START_TOOL_DESCRIPTION
-from engine.agent.filter import DEFAULT_FILTER_TOOL_DESCRIPTION
-from engine.agent.rag.rag import format_rag_tool_description
-from engine.agent.react_function_calling import get_dummy_ai_agent_description
-from engine.agent.sql.react_sql_tool import DEFAULT_REACT_SQL_TOOL_DESCRIPTION
-from engine.agent.sql.run_sql_query_tool import DEFAULT_RUN_SQL_QUERY_TOOL_DESCRIPTION
-from engine.agent.web_search_tool_openai import DEFAULT_WEB_SEARCH_OPENAI_TOOL_DESCRIPTION
+from engine.components.ai_agent import get_dummy_ai_agent_description
+from engine.components.document_enhanced_llm_call import DEFAULT_DOCUMENT_ENHANCED_LLM_CALL_TOOL_DESCRIPTION
+from engine.components.docx_generation_tool import DEFAULT_DOCX_GENERATION_TOOL_DESCRIPTION
+from engine.components.filter import DEFAULT_FILTER_TOOL_DESCRIPTION
+from engine.components.inputs_outputs.start import DEFAULT_START_TOOL_DESCRIPTION
+from engine.components.llm_call import DEFAULT_LLM_CALL_TOOL_DESCRIPTION
+from engine.components.pdf_generation_tool import DEFAULT_PDF_GENERATION_TOOL_DESCRIPTION
+from engine.components.rag.rag import format_rag_tool_description
+from engine.components.sql.react_sql_tool import DEFAULT_REACT_SQL_TOOL_DESCRIPTION
+from engine.components.sql.run_sql_query_tool import DEFAULT_RUN_SQL_QUERY_TOOL_DESCRIPTION
+from engine.components.tools.api_call_tool import API_CALL_TOOL_DESCRIPTION
+from engine.components.tools.docx_template import DOCX_TEMPLATE_TOOL_DESCRIPTION
+from engine.components.tools.linkup_tool import LINKUP_TOOL_DESCRIPTION
+from engine.components.tools.python_code_runner import PYTHON_CODE_RUNNER_TOOL_DESCRIPTION
+from engine.components.tools.remote_mcp_tool import DEFAULT_REMOTE_MCP_TOOL_DESCRIPTION
+from engine.components.tools.tavily_search_tool import TAVILY_TOOL_DESCRIPTION
+from engine.components.tools.terminal_command_runner import TERMINAL_COMMAND_RUNNER_TOOL_DESCRIPTION
+from engine.components.web_search_tool_openai import DEFAULT_WEB_SEARCH_OPENAI_TOOL_DESCRIPTION
 from engine.integrations.gmail_sender import GMAIL_SENDER_TOOL_DESCRIPTION
-from engine.agent.tools.python_code_runner import PYTHON_CODE_RUNNER_TOOL_DESCRIPTION
-from engine.agent.tools.terminal_command_runner import TERMINAL_COMMAND_RUNNER_TOOL_DESCRIPTION
-from engine.agent.pdf_generation_tool import DEFAULT_PDF_GENERATION_TOOL_DESCRIPTION
-from engine.agent.tools.linkup_tool import LINKUP_TOOL_DESCRIPTION
-from engine.agent.docx_generation_tool import DEFAULT_DOCX_GENERATION_TOOL_DESCRIPTION
-from engine.agent.tools.docx_template import DOCX_TEMPLATE_TOOL_DESCRIPTION
-
 
 TOOL_DESCRIPTION_UUIDS = {
     "default_ai_agent_description": UUID("1a4d4098-c2b4-4078-96a6-0a8f9c7d018c"),
@@ -45,6 +45,7 @@ TOOL_DESCRIPTION_UUIDS = {
     "linkup_search_tool_description": UUID("d2e3f456-789a-bcde-f012-3456789abcde"),
     "default_docx_generation_tool_description": UUID("d57c546b-9f9d-4207-bb6e-0e38b2a3bce5"),
     "docx_template_tool_description": UUID("e2b22222-3333-4444-5555-666666666666"),
+    "remote_mcp_tool_description": UUID("4c6ef0d2-53c0-4ab2-96cb-3c2b5f5b3e88"),
 }
 
 
@@ -119,6 +120,10 @@ def seed_tool_description(session: Session):
         id=TOOL_DESCRIPTION_UUIDS["docx_template_tool_description"],
         **DOCX_TEMPLATE_TOOL_DESCRIPTION.model_dump(),
     )
+    remote_mcp_tool_description = db.ToolDescription(
+        id=TOOL_DESCRIPTION_UUIDS["remote_mcp_tool_description"],
+        **DEFAULT_REMOTE_MCP_TOOL_DESCRIPTION.model_dump(),
+    )
     upsert_tool_descriptions(
         session=session,
         tool_descriptions=[
@@ -141,5 +146,6 @@ def seed_tool_description(session: Session):
             linkup_search_tool_description,
             docx_generation_tool_description,
             docx_template_tool_description,
+            remote_mcp_tool_description,
         ],
     )

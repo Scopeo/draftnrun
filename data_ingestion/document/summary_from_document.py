@@ -1,6 +1,6 @@
 import logging
 
-from data_ingestion.document.folder_management.folder_management import FileDocumentType, FileChunk
+from data_ingestion.document.folder_management.folder_management import FileChunk, FileDocumentType
 from engine.llm_services.llm_service import CompletionService
 
 LOGGER = logging.getLogger(__name__)
@@ -13,7 +13,7 @@ Answer in French if the text is in French, and English otherwise.
 """
 
 DEFAULT_PROMPT_STACKING_SUMMARY_ON_CHUNKS = (
-    "Here is a summary of the document.\n" "{summary}\n" "Here is a chunk of the document.\n" "{chunk}\n"
+    "Here is a summary of the document.\n{summary}\nHere is a chunk of the document.\n{chunk}\n"
 )
 
 
@@ -36,7 +36,7 @@ def add_summary_in_chunks(
 def get_summary_from_document(document, llm_google_service: CompletionService):
     if document.type == FileDocumentType.PDF:
         return get_summary_from_file(llm_google_service)
-    LOGGER.warning(f"Document type {document.type} not supported for summary extraction." " Returning empty string.")
+    LOGGER.warning(f"Document type {document.type} not supported for summary extraction. Returning empty string.")
     return ""
 
 

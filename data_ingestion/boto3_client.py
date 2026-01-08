@@ -1,6 +1,6 @@
 import logging
-from typing import Optional
 import re
+from typing import Optional
 
 import boto3
 from botocore.config import Config

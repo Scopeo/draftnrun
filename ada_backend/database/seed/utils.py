@@ -1,21 +1,20 @@
-from uuid import UUID
-from sqlalchemy.orm import Session
-from pydantic import BaseModel
 import logging
+from uuid import UUID
 
+from pydantic import BaseModel
+from sqlalchemy.orm import Session
 
-from ada_backend.database.models import ParameterType, SelectOption, UIComponent, UIComponentProperties
 from ada_backend.database import models as db
+from ada_backend.database.models import ParameterType, SelectOption, UIComponent, UIComponentProperties
 from ada_backend.database.seed.constants import (
     COMPLETION_MODEL_IN_DB,
     EMBEDDING_MODEL_IN_DB,
+    REASONING_IN_DB,
     TEMPERATURE_IN_DB,
     VERBOSITY_IN_DB,
-    REASONING_IN_DB,
 )
-from ada_backend.services.llm_models_service import create_llm_model_service, llm_model_exists_service
-
 from ada_backend.schemas.llm_models_schema import LLMModelCreate, ModelCapabilityEnum
+from ada_backend.services.llm_models_service import create_llm_model_service, llm_model_exists_service
 from settings import settings
 
 LOGGER = logging.getLogger(__name__)
@@ -44,7 +43,7 @@ COMPONENT_UUIDS: dict[str, UUID] = {
     "react_sql_agent": UUID("c0f1a2b3-4d5e-6f7a-8b9c-0d1e2f3a4b5c"),
     "run_sql_query_tool": UUID("667420c1-e2ca-446f-8e54-e0edd7e660bf"),
     "document_search": UUID("79399392-25ba-4cea-9f25-2738765dc329"),
-    "document_enhanced_llm_call_agent": UUID("6460b304-640c-4468-abd3-67bbff6902d4"),
+    "document_enhanced_llm_call": UUID("6460b304-640c-4468-abd3-67bbff6902d4"),
     "document_react_loader_agent": UUID("1c2fdf5b-4a8d-4788-acb6-86b00124c7ce"),
     "ocr_call": UUID("a3b4c5d6-e7f8-9012-3456-789abcdef012"),
     "start": UUID("01357c0b-bc99-44ce-a435-995acc5e2544"),
@@ -59,6 +58,7 @@ COMPONENT_UUIDS: dict[str, UUID] = {
     "chunk_processor": UUID("5d9f0f3e-2b4c-5678-9012-345678901bcd"),
     "docx_generation": UUID("b5195a0f-94f5-4f5c-8804-32dd19b16833"),
     "static_responder": UUID("1F7334BE-7164-4440-BBF3-E986EED0388F"),
+    "remote_mcp_tool": UUID("de3e606d-1f9d-4d74-b64f-bbde9ad6f0f4"),
 }
 COMPONENT_VERSION_UUIDS: dict[str, UUID] = {
     "synthesizer": UUID("6f790dd1-06f6-4489-a655-1a618763a114"),
@@ -85,7 +85,7 @@ COMPONENT_VERSION_UUIDS: dict[str, UUID] = {
     "react_sql_agent_v2": UUID("d0e83ab2-fed1-4e32-9347-0c41353f3eb8"),
     "run_sql_query_tool": UUID("667420c1-e2ca-446f-8e54-e0edd7e660bf"),
     "document_search": UUID("79399392-25ba-4cea-9f25-2738765dc329"),
-    "document_enhanced_llm_call_agent": UUID("6460b304-640c-4468-abd3-67bbff6902d4"),
+    "document_enhanced_llm_call": UUID("6460b304-640c-4468-abd3-67bbff6902d4"),
     "document_react_loader_agent": UUID("1c2fdf5b-4a8d-4788-acb6-86b00124c7ce"),
     "ocr_call": UUID("a3b4c5d6-e7f8-9012-3456-789abcdef012"),
     "start": UUID("01357c0b-bc99-44ce-a435-995acc5e2544"),
@@ -101,6 +101,7 @@ COMPONENT_VERSION_UUIDS: dict[str, UUID] = {
     "docx_generation": UUID("b5195a0f-94f5-4f5c-8804-32dd19b16833"),
     "static_responder": UUID("1F7334BE-7164-4440-BBF3-E986EED0388F"),
     "docx_template_agent": UUID("e2b30000-3333-4444-5555-666666666666"),
+    "remote_mcp_tool": UUID("5e472b85-7601-4e5b-81c7-8b361b5c5c9a"),
 }
 
 DEFAULT_MODEL = "openai:gpt-5-mini"

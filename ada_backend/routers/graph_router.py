@@ -1,11 +1,12 @@
-from typing import Annotated
 import logging
+from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.orm import Session
 
 from ada_backend.database.models import EnvType
+from ada_backend.database.setup_db import get_db
 from ada_backend.repositories.project_repository import get_project
 from ada_backend.routers.auth_router import (
     UserRights,
@@ -20,28 +21,27 @@ from ada_backend.schemas.pipeline.graph_schema import (
     GraphUpdateResponse,
     GraphUpdateSchema,
 )
-from ada_backend.database.setup_db import get_db
-
 from ada_backend.services.errors import (
-    GraphNotFound,
     GraphNotBoundToProjectError,
+    GraphNotFound,
     GraphRunnerAlreadyInEnvironmentError,
     MissingDataSourceError,
     ProjectNotFound,
 )
-from ada_backend.services.graph.deploy_graph_service import deploy_graph_service, bind_graph_to_env_service
-from ada_backend.services.graph.load_copy_graph_service import load_copy_graph_service
-from ada_backend.services.graph.update_graph_service import update_graph_with_history_service
-from ada_backend.services.graph.get_graph_service import get_graph_service
+from ada_backend.services.graph.delete_graph_service import delete_graph_runner_service
+from ada_backend.services.graph.deploy_graph_service import bind_graph_to_env_service, deploy_graph_service
 from ada_backend.services.graph.get_graph_modification_history_service import (
     get_graph_modification_history_service,
 )
-from ada_backend.services.graph.delete_graph_service import delete_graph_runner_service
-from engine.field_expressions.errors import FieldExpressionError
-from engine.agent.errors import (
+from ada_backend.services.graph.get_graph_service import get_graph_service
+from ada_backend.services.graph.load_copy_graph_service import load_copy_graph_service
+from ada_backend.services.graph.update_graph_service import update_graph_with_history_service
+from engine.components.errors import (
     KeyTypePromptTemplateError,
     MissingKeyPromptTemplateError,
+    RemoteMCPConnectionError,
 )
+from engine.field_expressions.errors import FieldExpressionError
 
 router = APIRouter(
     prefix="/projects/{project_id}/graph",
@@ -194,6 +194,12 @@ async def update_project_pipeline(
     except KeyTypePromptTemplateError as e:
         LOGGER.error(
             f"Key type error in prompt template for project {project_id} runner {graph_runner_id}: {str(e)}",
+            exc_info=True,
+        )
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except RemoteMCPConnectionError as e:
+        LOGGER.error(
+            f"MCP connection failed for project {project_id} runner {graph_runner_id}: {str(e)}",
             exc_info=True,
         )
         raise HTTPException(status_code=400, detail=str(e)) from e

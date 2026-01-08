@@ -1,7 +1,7 @@
 from typing import Optional
+from uuid import UUID
 
 from sqlalchemy.orm import Session
-from uuid import UUID
 
 from ada_backend.repositories.tag_repository import get_latest_tag_version_for_project
 

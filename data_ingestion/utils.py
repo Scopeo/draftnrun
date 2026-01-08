@@ -1,13 +1,12 @@
 import json
-from typing import Any, Optional
 import os
-from datetime import datetime
 import re
 import unicodedata
-import tiktoken
+from datetime import datetime
+from typing import Any, Optional
+
 import pandas as pd
-
-
+import tiktoken
 from pydantic import BaseModel, Field
 
 from engine.storage_service.db_service import DBService
@@ -108,7 +107,6 @@ def split_df_by_token_limit(
     df: pd.DataFrame,
     max_tokens: int,
 ) -> list[pd.DataFrame]:
-
     chunks = []
     current_chunk = []
 

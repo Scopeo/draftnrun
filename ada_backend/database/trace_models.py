@@ -1,16 +1,18 @@
-from sqlalchemy.orm import mapped_column
+from openinference.semconv.trace import OpenInferenceSpanKindValues
+from opentelemetry.trace.status import StatusCode
 from sqlalchemy import (
+    TIMESTAMP,
+    UUID,
+    ForeignKey,
+    Integer,
     String,
     Text,
-    Integer,
+)
+from sqlalchemy import (
     Enum as SQLAlchemyEnum,
-    UUID,
-    TIMESTAMP,
-    ForeignKey,
 )
 from sqlalchemy.dialects.postgresql import JSONB
-from opentelemetry.trace.status import StatusCode
-from openinference.semconv.trace import OpenInferenceSpanKindValues
+from sqlalchemy.orm import mapped_column
 
 from ada_backend.database.models import Base, CallType, EnvType, make_pg_enum
 

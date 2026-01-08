@@ -12,7 +12,6 @@ from uuid import UUID
 from alembic import op
 from sqlalchemy import text
 
-
 # revision identifiers, used by Alembic.
 revision: str = "7f2bae4dea37"
 down_revision: Union[str, None] = "f2c95397dc15"

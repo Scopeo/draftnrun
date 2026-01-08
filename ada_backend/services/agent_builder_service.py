@@ -4,33 +4,33 @@ from uuid import UUID
 
 from sqlalchemy.orm import Session
 
+from ada_backend.database.models import ComponentInstance
+from ada_backend.database.seed.utils import COMPONENT_VERSION_UUIDS
+from ada_backend.repositories.component_repository import (
+    get_base_component_from_version,
+    get_component_basic_parameters,
+    get_component_instance_by_id,
+    get_component_name_from_instance,
+    get_component_sub_components,
+    get_global_parameters_by_component_version_id,
+    get_tool_description,
+    get_tool_description_component,
+)
 from ada_backend.repositories.integration_repository import (
-    get_integration_from_component,
     get_component_instance_integration_relationship,
+    get_integration_from_component,
 )
 from ada_backend.repositories.organization_repository import get_organization_secrets_from_project_id
 from ada_backend.schemas.pipeline.base import ToolDescriptionSchema
-from engine.agent.types import ComponentAttributes, ToolDescription
-from ada_backend.database.models import ComponentInstance
-from ada_backend.repositories.component_repository import (
-    get_base_component_from_version,
-    get_component_instance_by_id,
-    get_component_basic_parameters,
-    get_component_name_from_instance,
-    get_component_sub_components,
-    get_tool_description,
-    get_tool_description_component,
-    get_global_parameters_by_component_version_id,
-)
-from ada_backend.services.registry import FACTORY_REGISTRY
 from ada_backend.services.errors import MissingDataSourceError
-from engine.agent.errors import (
+from ada_backend.services.registry import FACTORY_REGISTRY
+from ada_backend.utils.secret_resolver import replace_secret_placeholders
+from engine.components.errors import (
     KeyTypePromptTemplateError,
     MissingKeyPromptTemplateError,
+    RemoteMCPConnectionError,
 )
-from ada_backend.utils.secret_resolver import replace_secret_placeholders
-from ada_backend.database.seed.utils import COMPONENT_VERSION_UUIDS
-
+from engine.components.types import ComponentAttributes, ToolDescription
 
 LOGGER = logging.getLogger(__name__)
 
@@ -165,7 +165,12 @@ def instantiate_component(
             if param_name not in grouped_sub_components:
                 grouped_sub_components[param_name] = []
             grouped_sub_components[param_name].append((sub_component.order, instantiated_sub_component))
-        except (MissingDataSourceError, MissingKeyPromptTemplateError, KeyTypePromptTemplateError):
+        except (
+            MissingDataSourceError,
+            MissingKeyPromptTemplateError,
+            KeyTypePromptTemplateError,
+            RemoteMCPConnectionError,
+        ):
             raise
         except Exception as e:
             raise ValueError(
@@ -258,7 +263,7 @@ def instantiate_component(
             f"Failed to connect to database for component '{component_name}' "
             f"(instance ID: {component_instance.id}): {str(e)}"
         ) from e
-    except MissingDataSourceError:
+    except (MissingDataSourceError, RemoteMCPConnectionError):
         raise
     except Exception as e:
         raise ValueError(

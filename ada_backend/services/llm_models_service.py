@@ -1,28 +1,29 @@
-from sqlalchemy.orm import Session
 from uuid import UUID
 
+from sqlalchemy.orm import Session
+
+from ada_backend.database.models import SelectOption
+from ada_backend.repositories.credits_repository import (
+    delete_llm_cost,
+    upsert_llm_cost,
+)
 from ada_backend.repositories.llm_models_repository import (
-    get_llm_models_by_capability,
     create_llm_model,
     delete_llm_model,
-    update_llm_model,
     get_all_llm_models,
-    llm_model_exists,
+    get_llm_models_by_capability,
     get_model_id_by_name,
-)
-from ada_backend.repositories.credits_repository import (
-    upsert_llm_cost,
-    delete_llm_cost,
+    llm_model_exists,
+    update_llm_model,
 )
 from ada_backend.schemas.llm_models_schema import (
+    LLMModelCreate,
     LLMModelResponse,
     LLMModelUpdate,
-    LLMModelCreate,
-    ModelCapabilityEnum,
     ModelCapabilitiesResponse,
+    ModelCapabilityEnum,
     ModelCapabilityOption,
 )
-from ada_backend.database.models import SelectOption
 from ada_backend.services.errors import LLMModelNotFound
 
 
@@ -116,7 +117,6 @@ def create_llm_model_service(
     session: Session,
     llm_model_data: LLMModelCreate,
 ) -> LLMModelResponse:
-
     created_llm_model = create_llm_model(
         session,
         llm_model_data.display_name,
@@ -137,7 +137,6 @@ def create_llm_model_service(
 
 
 def delete_llm_model_service(session: Session, llm_model_id: UUID) -> None:
-
     delete_llm_cost(session, llm_model_id)
     delete_llm_model(session, llm_model_id)
 

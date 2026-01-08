@@ -4,28 +4,26 @@ from uuid import UUID
 
 from sqlalchemy.orm import Session
 
+from ada_backend.database import models as db
 from ada_backend.repositories.source_repository import (
     create_source,
     delete_source,
     get_data_source_by_org_id,
+    get_projects_using_source,
+    get_source_attributes,
     get_sources,
     update_source_last_edited_time,
-    get_source_attributes,
-    get_projects_using_source,
 )
+from ada_backend.schemas.ingestion_task_schema import IngestionTaskQueue, SourceAttributes
 from ada_backend.schemas.source_schema import (
     DataSourceSchema,
     DataSourceSchemaResponse,
     ProjectUsingSourceSchema,
 )
-from ada_backend.schemas.ingestion_task_schema import SourceAttributes
+from ada_backend.services.ingestion_task_service import create_ingestion_task_by_organization
 from engine.qdrant_service import QdrantCollectionSchema, QdrantService
 from engine.storage_service.local_service import SQLLocalService
 from settings import settings
-from ada_backend.schemas.ingestion_task_schema import IngestionTaskQueue
-from ada_backend.services.ingestion_task_service import create_ingestion_task_by_organization
-from ada_backend.database import models as db
-
 
 LOGGER = logging.getLogger(__name__)
 
@@ -140,7 +138,6 @@ def delete_source_service(
 ) -> None:
     """Delete sources with matching name in the organization."""
     try:
-
         source = get_data_source_by_org_id(session, organization_id, source_id)
         if not source:
             raise ValueError(f"Source {source_id} not found")
@@ -190,7 +187,6 @@ def update_source_by_source_id(
     user_id: UUID | None = None,
     api_key_id: UUID | None = None,
 ) -> None:
-
     source_attributes = get_source_attributes_by_org_id(session, organization_id, source_id)
     source_data = get_data_source_by_org_id(session, organization_id, source_id)
     ingestion_task_data = IngestionTaskQueue(
@@ -213,6 +209,5 @@ def check_source_id_usage_service(
     organization_id: UUID,
     source_id: UUID,
 ) -> list[ProjectUsingSourceSchema]:
-
     projects = get_projects_using_source(session, organization_id, source_id)
     return [ProjectUsingSourceSchema(id=project.id, name=project.name) for project in projects]

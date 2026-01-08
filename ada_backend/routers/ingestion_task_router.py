@@ -1,31 +1,29 @@
+import logging
 from typing import Annotated, List
 from uuid import UUID
-import logging
 
-from sqlalchemy.orm import Session
 from fastapi import APIRouter, Depends, HTTPException, status
-
+from sqlalchemy.orm import Session
 
 from ada_backend.database.setup_db import get_db
-from ada_backend.schemas.auth_schema import SupabaseUser
 from ada_backend.routers.auth_router import (
-    user_has_access_to_organization_dependency,
     UserRights,
-    verify_ingestion_api_key_dependency,
+    user_has_access_to_organization_dependency,
     user_has_access_to_organization_xor_verify_api_key,
+    verify_ingestion_api_key_dependency,
 )
-from ada_backend.services.ingestion_task_service import (
-    get_ingestion_task_by_organization_id,
-    create_ingestion_task_by_organization,
-    upsert_ingestion_task_by_organization_id,
-    delete_ingestion_task_by_id,
-)
+from ada_backend.schemas.auth_schema import SupabaseUser
 from ada_backend.schemas.ingestion_task_schema import (
     IngestionTaskQueue,
-    IngestionTaskUpdate,
     IngestionTaskResponse,
+    IngestionTaskUpdate,
 )
-
+from ada_backend.services.ingestion_task_service import (
+    create_ingestion_task_by_organization,
+    delete_ingestion_task_by_id,
+    get_ingestion_task_by_organization_id,
+    upsert_ingestion_task_by_organization_id,
+)
 
 LOGGER = logging.getLogger(__name__)
 
