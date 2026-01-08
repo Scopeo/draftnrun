@@ -675,8 +675,6 @@ class QdrantService:
         """
         schema = self._get_schema(collection_name)
 
-        await self._create_indexes_from_schema(collection_name=collection_name, schema=schema)
-
         for i in range(0, len(list_chunks), self._max_chunks_to_add):
             current_chunk_batch = list_chunks[i : i + self._max_chunks_to_add]
             list_embeddings = await self._build_vectors_async([
