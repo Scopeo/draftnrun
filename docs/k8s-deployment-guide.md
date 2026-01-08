@@ -99,6 +99,9 @@ EOF
 ### 3.2 Apply to Kubernetes
 
 ```bash
+# clean file
+sed -i 's/\r//g; s/^[[:space:]]*//; s/[[:space:]]*$//; s/[[:space:]]*=[[:space:]]*/=/; /^$/d' credentials.env
+
 # Create secret from env file
 kubectl create secret generic ada-secrets -n ada-prod \
   --from-env-file=credentials.env
