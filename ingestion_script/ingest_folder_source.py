@@ -114,6 +114,7 @@ async def sync_chunks_to_qdrant(
     if not await qdrant_service.collection_exists_async(collection_name):
         await qdrant_service.create_collection_async(collection_name)
         await qdrant_service.create_index_if_needed_async(collection_name, SOURCE_ID_COLUMN_NAME, FieldSchema.KEYWORD)
+        await qdrant_service.create_index_if_needed_async(collection_name, CHUNK_ID_COLUMN_NAME, FieldSchema.KEYWORD)
     await qdrant_service.sync_df_with_collection_async(
         df=chunks_df,
         collection_name=collection_name,

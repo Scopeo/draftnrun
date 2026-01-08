@@ -512,6 +512,12 @@ async def _merge_collections(
                 field_schema_type=FieldSchema.KEYWORD,
             )
             LOGGER.info(f"Created index on {SOURCE_ID_COLUMN_NAME} for collection {new_collection_name}")
+            await qdrant_service.create_index_if_needed_async(
+                collection_name=new_collection_name,
+                field_name=CHUNK_ID_COLUMN_NAME,
+                field_schema_type=FieldSchema.KEYWORD,
+            )
+            LOGGER.info(f"Created index on {CHUNK_ID_COLUMN_NAME} for collection {new_collection_name}")
         except Exception as e:
             LOGGER.error(
                 f"Error setting up target collection {new_collection_name}: {str(e)}, skipping collection merge"
