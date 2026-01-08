@@ -1002,8 +1002,6 @@ class QdrantService:
         response = await self._send_request_async(
             method="PUT", endpoint=f"collections/{collection_name}?wait=true", payload=payload
         )
-        # TODO: Remove when production qdrant collections have proper indexes
-        await self._create_indexes_from_schema(collection_name=collection_name, schema=schema)
         if "result" in response:
             LOGGER.info(f"Status of collection creation {collection_name} : {response['result']}")
             return True
