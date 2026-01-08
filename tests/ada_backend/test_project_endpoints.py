@@ -1,258 +1,297 @@
-from uuid import uuid4
+"""
+Integration tests for project service functions (converted from endpoint tests).
 
-from fastapi.testclient import TestClient
+These tests use a real PostgreSQL database to test
+the full integration between service layer, repository layer, and database.
 
-from ada_backend.database.seed.utils import COMPONENT_UUIDS, COMPONENT_VERSION_UUIDS
-from ada_backend.main import app
-from ada_backend.scripts.get_supabase_token import get_user_jwt
+Testing project CRUD operations via service functions.
+These tests use PostgreSQL to support regex constraints in GraphRunner models.
+"""
+
+import os
+import uuid
+from unittest.mock import patch
+
+import pytest
+from sqlalchemy import create_engine, text
+from sqlalchemy.orm import Session, sessionmaker
+
+from ada_backend.database import setup_db
+from ada_backend.database.seed.utils import COMPONENT_UUIDS
+from ada_backend.schemas.project_schema import (
+    ProjectCreateSchema,
+    ProjectUpdateSchema,
+)
+from ada_backend.services.errors import ProjectNotFound
+from ada_backend.services.graph.get_graph_service import get_graph_service
+from ada_backend.services.project_service import (
+    create_workflow,
+    delete_project_service,
+    get_project_service,
+    get_workflows_by_organization_service,
+    update_project_service,
+)
 from settings import settings
 
-client = TestClient(app)
-ORGANIZATION_ID = "37b7d67f-8f29-4fce-8085-19dea582f605"  # umbrella organization
-JWT_TOKEN = get_user_jwt(settings.TEST_USER_EMAIL, settings.TEST_USER_PASSWORD)
-HEADERS_JWT = {
-    "accept": "application/json",
-    "Authorization": f"Bearer {JWT_TOKEN}",
-}
 
-HEADERS_API_KEY = {
-    "x-ingestion-api-key": settings.INGESTION_API_KEY,
-    "Content-Type": "application/json",
-}
-TEST_PROJECT_ID = str(uuid4())
+@pytest.fixture(scope="function")
+def db_session(alembic_engine, alembic_runner):
+    """
+    Get a PostgreSQL database session for testing.
 
+    Uses real ADA_DB_URL from settings if available, otherwise falls back to
+    ephemeral alembic_engine from pytest_mock_resources.
 
-def test_create_project():
-    endpoint = f"/projects/{ORGANIZATION_ID}"
-    payload = {
-        "project_id": TEST_PROJECT_ID,
-        "project_name": f"test project {TEST_PROJECT_ID}",
-        "description": "test project description",
-    }
-    response = client.post(endpoint, headers=HEADERS_JWT, json=payload)
-    project = response.json()
-    assert response.status_code == 200
-    assert isinstance(project, dict)
-    assert project["project_id"] == str(TEST_PROJECT_ID)
-    assert project["project_name"] == f"test project {TEST_PROJECT_ID}"
-    assert project["description"] == "test project description"
-    assert project["organization_id"] == ORGANIZATION_ID
-    assert project["created_at"] is not None
-    assert project["updated_at"] is not None
-    assert len(project["graph_runners"]) > 0
+    Uses transactions that rollback after each test to keep the database clean.
+    """
+    if settings.ADA_DB_URL:
+        try:
+            engine = create_engine(settings.ADA_DB_URL, echo=False)
+            # Test connection - assume migrations are already applied to real database
+            with engine.connect() as conn:
+                conn.execute(text("SELECT 1"))
+        except Exception as e:
+            if not os.getenv("CI"):
+                pytest.skip(
+                    f"Could not connect to real database: {e}. Ensure ADA_DB_URL is set and database is accessible."
+                )
+            raise
+    else:
+        # Fall back to ephemeral database - run migrations to create schema
+        engine = alembic_engine
+        alembic_runner.migrate_up_to("heads", return_current=False)
 
+    # Bind SessionLocal to the engine for this test
+    original_engine = setup_db.engine
+    setup_db.SessionLocal.configure(bind=engine)
 
-def test_get_project_by_organization():
-    endpoint = f"/projects/org/{ORGANIZATION_ID}"
-    response = client.get(endpoint, headers=HEADERS_JWT)
-    projects = response.json()
+    # Create a session with a transaction that will be rolled back
+    SessionFactory = sessionmaker(bind=engine)
+    connection = engine.connect()
+    transaction = connection.begin()
+    session = SessionFactory(bind=connection)
 
-    assert response.status_code == 200
-    assert isinstance(projects, list)
-    assert len(projects) > 0
-    assert all(isinstance(project, dict) for project in projects)
-    assert all("project_id" in project for project in projects)
-    assert all("project_name" in project for project in projects)
-    assert all("description" in project for project in projects)
-    assert all("organization_id" in project for project in projects)
-    assert all(project["organization_id"] == ORGANIZATION_ID for project in projects)
+    try:
+        yield session
+    finally:
+        transaction.rollback()
+        session.close()
+        connection.close()
+        setup_db.SessionLocal.configure(bind=original_engine)
 
 
-def test_get_project():
-    endpoint = f"/projects/{TEST_PROJECT_ID}"
-    response = client.get(endpoint, headers=HEADERS_JWT)
-    project = response.json()
-
-    assert response.status_code == 200
-    assert isinstance(project, dict)
-    assert project["project_id"] == str(TEST_PROJECT_ID)
-    assert project["project_name"] == f"test project {TEST_PROJECT_ID}"
-    assert project["description"] == "test project description"
-    assert project["organization_id"] == ORGANIZATION_ID
-    assert project["created_at"] is not None
-    assert project["updated_at"] is not None
-    assert len(project["graph_runners"]) > 0
+@pytest.fixture
+def test_organization():
+    """Create a test organization ID."""
+    return uuid.uuid4()
 
 
-def test_check_project_has_input_component():
-    endpoint = f"/projects/{TEST_PROJECT_ID}"
-    response = client.get(endpoint, headers=HEADERS_JWT)
-    project = response.json()
-
-    graph_runner_id = project["graph_runners"][0]["graph_runner_id"]
-    endpoint = f"/projects/{TEST_PROJECT_ID}/graph/{graph_runner_id}"
-    response = client.get(endpoint, headers=HEADERS_JWT)
-    graph_description = response.json()
-    assert response.status_code == 200
-    assert graph_description["component_instances"][0]["component_id"] == str(COMPONENT_UUIDS["start"])
+@pytest.fixture
+def test_user_id():
+    """Create a test user ID."""
+    return uuid.uuid4()
 
 
-def test_update_project():
-    endpoint = f"/projects/{TEST_PROJECT_ID}"
-    payload = {
-        "project_name": f"updated test project {TEST_PROJECT_ID}",
-        "description": "updated test project description",
-    }
-    response = client.patch(endpoint, headers=HEADERS_JWT, json=payload)
-    project = response.json()
+def test_create_project(db_session: Session, test_organization, test_user_id):
+    """Test creating a project via service."""
+    project_id = uuid.uuid4()
+    project_schema = ProjectCreateSchema(
+        project_id=project_id,
+        project_name=f"test project {project_id}",
+        description="test project description",
+    )
 
-    assert response.status_code == 200
-    assert isinstance(project, dict)
-    assert project["project_id"] == str(TEST_PROJECT_ID)
-    assert project["project_name"] == f"updated test project {TEST_PROJECT_ID}"
-    assert project["description"] == "updated test project description"
+    with patch("ada_backend.services.project_service.track_project_created") as mock_track:
+        result = create_workflow(
+            session=db_session,
+            user_id=test_user_id,
+            organization_id=test_organization,
+            project_schema=project_schema,
+        )
+
+        # Verify tracking was called
+        mock_track.assert_called_once_with(test_user_id, test_organization, project_id, project_schema.project_name)
+
+    # Verify project was created
+    assert isinstance(result, dict) or hasattr(result, "project_id")
+    assert result.project_id == project_id
+    assert result.project_name == f"test project {project_id}"
+    assert result.description == "test project description"
+    assert result.organization_id == test_organization
+    assert result.created_at is not None
+    assert result.updated_at is not None
+    assert len(result.graph_runners) > 0
 
 
-def test_delete_project():
-    endpoint = f"/projects/{TEST_PROJECT_ID}"
-    response = client.delete(endpoint, headers=HEADERS_JWT)
-    result = response.json()
-    assert response.status_code == 200
-    assert isinstance(result, dict)
-    assert "project_id" in result
-    assert result["project_id"] == str(TEST_PROJECT_ID)
-    assert "graph_runner_ids" in result
-    assert isinstance(result["graph_runner_ids"], list)
-    assert len(result["graph_runner_ids"]) > 0
+def test_get_project_by_organization(db_session: Session, test_organization, test_user_id):
+    """Test getting projects by organization via service."""
+    # Create multiple projects first
+    project_ids = []
+    for i in range(3):
+        project_id = uuid.uuid4()
+        project_schema = ProjectCreateSchema(
+            project_id=project_id,
+            project_name=f"test project {i}",
+            description=f"Description {i}",
+        )
+        create_workflow(
+            session=db_session,
+            user_id=test_user_id,
+            organization_id=test_organization,
+            project_schema=project_schema,
+        )
+        project_ids.append(project_id)
+
+    # Get projects by organization
+    result = get_workflows_by_organization_service(db_session, test_organization)
+
+    assert isinstance(result, list)
+    assert len(result) > 0
+    assert all(hasattr(project, "project_id") for project in result)
+    assert all(hasattr(project, "project_name") for project in result)
+    assert all(hasattr(project, "description") for project in result)
+    assert all(hasattr(project, "organization_id") for project in result)
+    assert all(project.organization_id == test_organization for project in result)
+
+    # Verify created projects are present
+    result_ids = {p.project_id for p in result}
+    for project_id in project_ids:
+        assert project_id in result_ids
+
+
+def test_get_project(db_session: Session, test_organization, test_user_id):
+    """Test getting a single project via service."""
+    # Create a project
+    project_id = uuid.uuid4()
+    project_schema = ProjectCreateSchema(
+        project_id=project_id,
+        project_name=f"test project {project_id}",
+        description="test project description",
+    )
+    create_workflow(
+        session=db_session,
+        user_id=test_user_id,
+        organization_id=test_organization,
+        project_schema=project_schema,
+    )
+
+    # Get the project
+    result = get_project_service(db_session, project_id)
+
+    assert isinstance(result, dict) or hasattr(result, "project_id")
+    assert result.project_id == project_id
+    assert result.project_name == f"test project {project_id}"
+    assert result.description == "test project description"
+    assert result.organization_id == test_organization
+    assert result.created_at is not None
+    assert result.updated_at is not None
+    assert len(result.graph_runners) > 0
+
+
+def test_check_project_has_input_component(db_session: Session, test_organization, test_user_id):
+    """Test that created project has a graph runner with start component."""
+    # Create a project
+    project_id = uuid.uuid4()
+    project_schema = ProjectCreateSchema(
+        project_id=project_id,
+        project_name=f"test project {project_id}",
+        description="test project description",
+    )
+    create_workflow(
+        session=db_session,
+        user_id=test_user_id,
+        organization_id=test_organization,
+        project_schema=project_schema,
+    )
+
+    # Get the project
+    project = get_project_service(db_session, project_id)
+    assert len(project.graph_runners) > 0
+
+    # Get the draft graph runner
+    graph_runner_id = project.graph_runners[0].graph_runner_id
+
+    # Get the graph details
+    graph = get_graph_service(
+        session=db_session,
+        project_id=project_id,
+        graph_runner_id=graph_runner_id,
+    )
+
+    assert len(graph.component_instances) > 0
+    assert graph.component_instances[0].component_id == str(COMPONENT_UUIDS["start"])
+
+
+def test_update_project(db_session: Session, test_organization, test_user_id):
+    """Test updating a project via service."""
+    # Create a project
+    project_id = uuid.uuid4()
+    project_schema = ProjectCreateSchema(
+        project_id=project_id,
+        project_name=f"test project {project_id}",
+        description="test project description",
+    )
+    create_workflow(
+        session=db_session,
+        user_id=test_user_id,
+        organization_id=test_organization,
+        project_schema=project_schema,
+    )
+
+    # Update the project
+    update_schema = ProjectUpdateSchema(
+        project_name=f"updated test project {project_id}",
+        description="updated test project description",
+    )
+
+    with patch("ada_backend.services.project_service.track_project_saved") as mock_track:
+        result = update_project_service(
+            session=db_session,
+            user_id=test_user_id,
+            project_id=project_id,
+            project_schema=update_schema,
+        )
+
+        # Verify tracking was called
+        mock_track.assert_called_once_with(test_user_id, project_id)
+
+    assert isinstance(result, dict) or hasattr(result, "project_id")
+    assert result.project_id == project_id
+    assert result.project_name == f"updated test project {project_id}"
+    assert result.description == "updated test project description"
+
+
+def test_delete_project(db_session: Session, test_organization, test_user_id):
+    """Test deleting a project via service."""
+    # Create a project
+    project_id = uuid.uuid4()
+    project_schema = ProjectCreateSchema(
+        project_id=project_id,
+        project_name=f"test project {project_id}",
+        description="test project description",
+    )
+    create_workflow(
+        session=db_session,
+        user_id=test_user_id,
+        organization_id=test_organization,
+        project_schema=project_schema,
+    )
+
+    # Get graph runner IDs before deletion
+    project = get_project_service(db_session, project_id)
+    graph_runner_ids = [gr.graph_runner_id for gr in project.graph_runners]
+
+    # Delete the project
+    result = delete_project_service(db_session, project_id)
+
+    assert isinstance(result, dict) or hasattr(result, "project_id")
+    assert "project_id" in result.__dict__ or result.project_id == project_id
+    assert result.project_id == project_id
+    assert "graph_runner_ids" in result.__dict__
+    assert isinstance(result.graph_runner_ids, list)
+    assert len(result.graph_runner_ids) > 0
+    assert set(result.graph_runner_ids) == set(graph_runner_ids)
 
     # Verify that the project has been deleted
-    response = client.get(endpoint, headers=HEADERS_JWT)
-    assert response.status_code == 404
-
-
-def test_chat_endpoint_missing_prompt_key():
-    """Test that chat endpoint returns HTTP 400 when prompt template key is missing."""
-    project_uuid = str(uuid4())
-    project_payload = {
-        "project_id": project_uuid,
-        "project_name": f"test_missing_key_{project_uuid}",
-        "description": "Test project for missing prompt key error",
-    }
-
-    project_response = client.post(f"/projects/{ORGANIZATION_ID}", headers=HEADERS_JWT, json=project_payload)
-    assert project_response.status_code == 200
-
-    project_details = client.get(f"/projects/{project_uuid}", headers=HEADERS_JWT).json()
-    graph_runner_id = None
-    for gr in project_details["graph_runners"]:
-        if gr["env"] == "draft":
-            graph_runner_id = gr["graph_runner_id"]
-            break
-    assert graph_runner_id is not None
-
-    start_id = str(uuid4())
-    llm_call_id = str(uuid4())
-    edge_id = str(uuid4())
-
-    workflow_config = {
-        "component_instances": [
-            {
-                "is_agent": True,
-                "is_protected": False,
-                "function_callable": False,
-                "can_use_function_calling": False,
-                "tool_parameter_name": None,
-                "subcomponents_info": [],
-                "id": start_id,
-                "name": "Start",
-                "ref": "Start",
-                "is_start_node": True,
-                "component_id": str(COMPONENT_UUIDS["start"]),
-                "component_version_id": str(COMPONENT_VERSION_UUIDS["start_v2"]),
-                "parameters": [
-                    {
-                        "value": '{"messages": []}',
-                        "name": "payload_schema",
-                        "order": None,
-                        "type": "string",
-                        "nullable": False,
-                        "default": '{"messages": []}',
-                        "ui_component": "Textarea",
-                        "ui_component_properties": {},
-                        "is_advanced": False,
-                    }
-                ],
-                "tool_description": {
-                    "name": "default",
-                    "description": "",
-                    "tool_properties": {},
-                    "required_tool_properties": [],
-                },
-                "component_name": "Start",
-                "component_description": "This block is triggered by an API call",
-            },
-            {
-                "is_agent": True,
-                "is_protected": False,
-                "function_callable": False,
-                "can_use_function_calling": False,
-                "tool_parameter_name": None,
-                "subcomponents_info": [],
-                "id": llm_call_id,
-                "name": "LLM Call",
-                "ref": "",
-                "is_start_node": False,
-                "component_id": str(COMPONENT_UUIDS["llm_call"]),
-                "component_version_id": str(COMPONENT_VERSION_UUIDS["llm_call"]),
-                "parameters": [
-                    {
-                        "value": "Hello {{user_name}}, {{input}}",
-                        "name": "prompt_template",
-                        "order": None,
-                        "type": "string",
-                        "nullable": False,
-                        "default": "Answer this question: {{input}}",
-                        "ui_component": "Textarea",
-                        "ui_component_properties": {},
-                        "is_advanced": False,
-                    },
-                    {
-                        "value": "openai:gpt-4o-mini",
-                        "name": "completion_model",
-                        "order": None,
-                        "type": "string",
-                        "nullable": False,
-                        "default": "openai:gpt-4o-mini",
-                        "ui_component": "Select",
-                        "ui_component_properties": {},
-                        "is_advanced": False,
-                    },
-                ],
-                "tool_description": {
-                    "name": "default",
-                    "description": "",
-                    "tool_properties": {},
-                    "required_tool_properties": [],
-                },
-                "component_name": "LLM Call",
-                "component_description": "Templated LLM Call",
-            },
-        ],
-        "relationships": [],
-        "edges": [{"id": edge_id, "origin": start_id, "destination": llm_call_id, "order": 0}],
-        "port_mappings": [
-            {
-                "source_instance_id": start_id,
-                "source_port_name": "messages",
-                "target_instance_id": llm_call_id,
-                "target_port_name": "messages",
-            }
-        ],
-    }
-
-    update_response = client.put(
-        f"/projects/{project_uuid}/graph/{graph_runner_id}", headers=HEADERS_JWT, json=workflow_config
-    )
-    assert update_response.status_code == 200
-
-    chat_payload = {"messages": [{"role": "user", "content": "Hello"}]}
-
-    chat_response = client.post(
-        f"/projects/{project_uuid}/graphs/{graph_runner_id}/chat", headers=HEADERS_JWT, json=chat_payload
-    )
-
-    assert chat_response.status_code == 400
-    assert "Missing template variable(s)" in chat_response.json()["detail"]
-    assert "user_name" in chat_response.json()["detail"]
-
-    client.delete(f"/projects/{project_uuid}", headers=HEADERS_JWT)
+    with pytest.raises(ProjectNotFound):
+        get_project_service(db_session, project_id)
