@@ -17,7 +17,7 @@ from data_ingestion.document.folder_management.google_drive_folder_management im
 from data_ingestion.document.folder_management.s3_folder_management import S3FolderManager
 from data_ingestion.document.supabase_file_uploader import sync_files_to_supabase
 from engine.llm_services.llm_service import EmbeddingService, VisionService
-from engine.qdrant_service import QdrantService
+from engine.qdrant_service import FieldSchema, QdrantService
 from engine.storage_service.db_service import DBService
 from engine.storage_service.db_utils import create_db_if_not_exists
 from engine.storage_service.local_service import SQLLocalService
@@ -113,6 +113,7 @@ async def sync_chunks_to_qdrant(
     LOGGER.info(f"Syncing chunks to Qdrant collection {collection_name} with {len(chunks_df)} rows")
     if not await qdrant_service.collection_exists_async(collection_name):
         await qdrant_service.create_collection_async(collection_name)
+        await qdrant_service.create_index_if_needed_async(collection_name, SOURCE_ID_COLUMN_NAME, FieldSchema.KEYWORD)
     await qdrant_service.sync_df_with_collection_async(
         df=chunks_df,
         collection_name=collection_name,
