@@ -10,7 +10,7 @@ from llama_index.core.node_parser import SentenceSplitter
 
 from ada_backend.database import models as db
 from ada_backend.schemas.ingestion_task_schema import SourceAttributes
-from engine.qdrant_service import FieldSchema, QdrantService
+from engine.qdrant_service import FieldSchema, QdrantService, map_pandas_dtype_to_qdrant_field_schema
 from engine.storage_service.db_service import DBService
 from engine.storage_service.db_utils import DBDefinition
 from engine.storage_service.local_service import SQLLocalService
@@ -63,11 +63,13 @@ def _map_sqlalchemy_type_to_internal(type_str: str) -> str:
     return "VARCHAR"
 
 
-def get_db_source(
+async def get_db_source(
     db_url: str,
     table_name: str,
     id_column_name: str,
     text_column_names: list[str],
+    qdrant_service: QdrantService,
+    qdrant_collection_name: str,
     source_schema_name: Optional[str] = None,
     metadata_column_names: Optional[list[str]] = None,
     timestamp_column_name: Optional[str] = None,
@@ -93,6 +95,26 @@ def get_db_source(
         raise ValueError(f"Metadata columns {metadata_column_names} not found in the columns: {df.columns.tolist()}")
     if timestamp_column_name and timestamp_column_name not in df.columns:
         raise ValueError(f"Timestamp column '{timestamp_column_name}' not found in the columns: {df.columns.tolist()}")
+
+    # TODO: remove this when we have a proper metadata schema
+    if metadata_column_names:
+        for col in metadata_column_names:
+            qdrant_field_schema = map_pandas_dtype_to_qdrant_field_schema(df[col].dtype)
+            LOGGER.info(
+                f"Creating index for metadata column '{col}' with pandas type {df[col].dtype} "
+                f"and qdrant type {qdrant_field_schema}"
+            )
+            await qdrant_service.create_index_if_needed_async(
+                collection_name=qdrant_collection_name,
+                field_name=col,
+                field_schema_type=qdrant_field_schema,
+            )
+    if timestamp_column_name:
+        await qdrant_service.create_index_if_needed_async(
+            collection_name=qdrant_collection_name,
+            field_name=timestamp_column_name,
+            field_schema_type=FieldSchema.DATETIME,
+        )
 
     df["text"] = df[text_column_names].apply(lambda x: " ".join(x.astype(str)), axis=1)
     LOGGER.info(f"Retrieved {len(df)} rows from the source table '{table_name}'.")
@@ -205,7 +227,7 @@ async def upload_db_source(
         timestamp_column_name=timestamp_column_name,
     )
 
-    df = get_db_source(
+    df = await get_db_source(
         db_url=source_db_url,
         table_name=source_table_name,
         id_column_name=id_column_name,
@@ -217,6 +239,8 @@ async def upload_db_source(
         chunk_size=chunk_size,
         chunk_overlap=chunk_overlap,
         sql_query_filter=combined_filter_sql,
+        qdrant_service=qdrant_service,
+        qdrant_collection_name=qdrant_collection_name,
     )
 
     df[SOURCE_ID_COLUMN_NAME] = str(source_id)
@@ -233,20 +257,6 @@ async def upload_db_source(
         source_id=str(source_id),  # Pass source_id to filter existing IDs by source
     )
 
-    # TODO: remove this when we have a proper metadata schema
-    if metadata_column_names:
-        for col in metadata_column_names:
-            await qdrant_service.create_index_if_needed_async(
-                collection_name=qdrant_collection_name,
-                field_name=col,
-                field_schema_type=FieldSchema.KEYWORD,
-            )
-    if timestamp_column_name:
-        await qdrant_service.create_index_if_needed_async(
-            collection_name=qdrant_collection_name,
-            field_name=timestamp_column_name,
-            field_schema_type=FieldSchema.DATETIME,
-        )
     LOGGER.info(f"Updated table '{storage_table_name}' in schema '{storage_schema_name}' with {len(df)} rows.")
     await sync_chunks_to_qdrant(
         storage_schema_name,
