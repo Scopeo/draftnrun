@@ -1047,6 +1047,8 @@ class QdrantService:
 
         payload = {"filter": filter} if filter else {}
 
+        LOGGER.info(f"Counting points in collection {collection_name} with filter {filter}")
+
         response = await self._send_request_async(
             method="POST", endpoint=f"collections/{collection_name}/points/count", payload=payload
         )
