@@ -197,7 +197,6 @@ async def upload_db_source(
     combined_filter_sql_unified = map_source_filter_to_unified_table_filter(
         sql_filter=combined_filter_sql,
         timestamp_column_name=timestamp_column_name,
-        metadata_column_names=metadata_column_names,
     )
 
     combined_filter_qdrant = qdrant_service._build_combined_filter(
