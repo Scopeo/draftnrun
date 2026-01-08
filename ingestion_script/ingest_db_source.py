@@ -10,7 +10,7 @@ from llama_index.core.node_parser import SentenceSplitter
 
 from ada_backend.database import models as db
 from ada_backend.schemas.ingestion_task_schema import SourceAttributes
-from engine.qdrant_service import QdrantService
+from engine.qdrant_service import QdrantService, map_pandas_dtype_to_qdrant_field_schema
 from engine.storage_service.db_service import DBService
 from engine.storage_service.db_utils import DBDefinition
 from engine.storage_service.local_service import SQLLocalService
@@ -233,6 +233,14 @@ async def upload_db_source(
         source_id=str(source_id),  # Pass source_id to filter existing IDs by source
     )
 
+    # TODO: remove this when we have a proper metadata schema
+    if metadata_column_names:
+        for col in metadata_column_names:
+            await qdrant_service.create_index_if_needed_async(
+                collection_name=qdrant_collection_name,
+                field_name=col,
+                field_schema_type=map_pandas_dtype_to_qdrant_field_schema(df[col].dtype),
+            )
     LOGGER.info(f"Updated table '{storage_table_name}' in schema '{storage_schema_name}' with {len(df)} rows.")
     await sync_chunks_to_qdrant(
         storage_schema_name,

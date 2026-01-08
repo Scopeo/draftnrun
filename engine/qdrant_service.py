@@ -90,6 +90,27 @@ def map_internal_type_to_qdrant_field_schema(internal_type: str) -> FieldSchema:
     return type_mapping.get(internal_type, FieldSchema.KEYWORD)
 
 
+def map_pandas_dtype_to_qdrant_field_schema(pandas_dtype) -> FieldSchema:
+    """Map pandas dtype to Qdrant FieldSchema types."""
+    if pd.api.types.is_integer_dtype(pandas_dtype):
+        return FieldSchema.INTEGER
+
+    if pd.api.types.is_float_dtype(pandas_dtype):
+        return FieldSchema.FLOAT
+
+    if pd.api.types.is_bool_dtype(pandas_dtype):
+        return FieldSchema.BOOLEAN
+
+    if pd.api.types.is_datetime64_any_dtype(pandas_dtype):
+        return FieldSchema.DATETIME
+
+    if pd.api.types.is_string_dtype(pandas_dtype):
+        return FieldSchema.KEYWORD
+
+    # For object dtype and everything else, default to KEYWORD
+    return FieldSchema.KEYWORD
+
+
 @dataclass
 class QdrantCollectionSchema:
     """
