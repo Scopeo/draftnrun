@@ -7,6 +7,8 @@ on:
       - main
     paths:
       - "engine/llm_services/**"
+      - "components/types.py"
+      - "components/utils.py"
       - "tests/llm_services/**"
       - "engine/trace/**"
 
