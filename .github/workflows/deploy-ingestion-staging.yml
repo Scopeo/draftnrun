@@ -46,7 +46,6 @@ jobs:
             git remote set-url origin git@github.com:scopeo/draftnrun.git
             git fetch origin ${{ github.ref_name }}
             git reset --hard FETCH_HEAD
-            git clean -fd
             echo "Code updated successfully."
 
       - name: Restart ada-worker Service
