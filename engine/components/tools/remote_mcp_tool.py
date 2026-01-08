@@ -31,6 +31,8 @@ class RemoteMCPToolInputs(BaseModel):
         description="Arguments to pass to the MCP tool.",
         json_schema_extra={"disabled_as_input": True},
     )
+    # TODO: Remove this after function-calling refactor
+    model_config = {"extra": "allow"}
 
 
 class RemoteMCPToolOutputs(BaseModel):
@@ -161,7 +163,10 @@ class RemoteMCPTool(Component):
         if tool_name not in self._tool_description_map:
             raise ValueError(f"Tool {tool_name} not found in MCP registry.")
 
-        arguments = inputs.tool_arguments or {}
+        # TODO: Remove this after function-calling refactor
+        arguments = inputs.tool_arguments.copy()
+        if inputs.model_extra:
+            arguments.update(inputs.model_extra)
 
         span = get_current_span()
         span.set_attributes({
