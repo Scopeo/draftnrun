@@ -32,8 +32,9 @@ from engine.components.rag.formatter import Formatter
 from engine.components.rag.retriever import Retriever
 from engine.components.rag.vocabulary_search import VocabularySearch
 from engine.components.synthesizer import Synthesizer
+from engine.components.tools.hubspot_mcp_tool import HubSpotMCPTool
 from engine.components.tools.remote_mcp_tool import RemoteMCPTool
-from engine.components.types import ToolDescription
+from engine.components.types import ComponentAttributes, ToolDescription
 from engine.llm_services.llm_service import CompletionService, EmbeddingService, OCRService, WebSearchService
 from engine.qdrant_service import QdrantCollectionSchema, QdrantService
 from engine.storage_service.local_service import SQLLocalService
@@ -208,6 +209,37 @@ class RemoteMCPToolFactory:
                 raise ValueError("Trace manager is required")
             kwargs["trace_manager"] = trace_manager
         coro = RemoteMCPTool.from_mcp_server(**kwargs)
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            return asyncio.run(coro)
+
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            return executor.submit(asyncio.run, coro).result()
+
+
+class HubSpotMCPToolFactory:
+    """
+    Factory to construct HubSpotMCPTool via its async autodescovery constructor.
+    Similar to RemoteMCPToolFactory but for HubSpot-specific MCP server.
+    """
+
+    entity_class = HubSpotMCPTool
+
+    def __call__(self, **kwargs):
+        kwargs.pop("tool_description", None)
+
+        if "trace_manager" not in kwargs:
+            trace_manager = get_trace_manager()
+            if trace_manager is None:
+                raise ValueError("Trace manager is required")
+            kwargs["trace_manager"] = trace_manager
+
+        if "component_attributes" not in kwargs:
+            component_instance_name = kwargs.pop("component_instance_name", "hubspot_mcp_tool")
+            kwargs["component_attributes"] = ComponentAttributes(component_instance_name=component_instance_name)
+
+        coro = HubSpotMCPTool.from_mcp_server(**kwargs)
         try:
             asyncio.get_running_loop()
         except RuntimeError:
