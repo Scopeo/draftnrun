@@ -9,14 +9,15 @@ import json
 import logging
 from typing import Any, Optional
 
+import httpx
 from mcp import ClientSession
-from mcp.client.sse import sse_client
 from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttributes
 from opentelemetry.trace import get_current_span
 from pydantic import BaseModel, Field
 
 from engine.components.component import Component
 from engine.components.errors import RemoteMCPConnectionError
+from engine.components.tools.hubspot_streamable_http import streamable_http_client
 from engine.components.types import ComponentAttributes, ToolDescription
 from engine.trace.trace_manager import TraceManager
 from settings import settings
@@ -96,14 +97,27 @@ class HubSpotMCPTool(Component):
         """Get headers with Bearer token for HubSpot MCP."""
         return {"Authorization": f"Bearer {self.access_token}"}
 
+    def _create_http_client(self) -> httpx.AsyncClient:
+        """Create httpx.AsyncClient configured with Bearer token for HubSpot MCP."""
+        return httpx.AsyncClient(
+            headers=self._get_headers(),
+            timeout=httpx.Timeout(self.timeout, read=300.0),  # Longer read timeout for SSE streams
+        )
+
     async def _list_tools_with_sdk(self):
-        """Use MCP SDK to list tools from HubSpot MCP server."""
-        # TODO: Use streamable_http_client when available in mcp package
-        # For now using sse_client as fallback - HubSpot may support SSE transport
-        async with sse_client(self.server_url, headers=self._get_headers(), timeout=self.timeout) as (read, write):
-            async with ClientSession(read, write) as session:
-                await session.initialize()
-                return await session.list_tools()
+        """Use MCP SDK with Streamable HTTP to list tools from HubSpot MCP server."""
+        client = self._create_http_client()
+        try:
+            async with streamable_http_client(self.server_url, http_client=client, terminate_on_close=True) as (
+                read,
+                write,
+                get_session_id,
+            ):
+                async with ClientSession(read, write) as session:
+                    await session.initialize()
+                    return await session.list_tools()
+        finally:
+            await client.aclose()
 
     @classmethod
     async def from_mcp_server(
@@ -200,13 +214,18 @@ class HubSpotMCPTool(Component):
         )
 
     async def _call_tool_with_sdk(self, tool_name: str, arguments: dict[str, Any]):
-        """Use MCP SDK to call a tool on HubSpot MCP server."""
-        # TODO: Use streamable_http_client when available in mcp package
-        # For now using sse_client as fallback - HubSpot may support SSE transport
+        """Use MCP SDK with Streamable HTTP to call a tool on HubSpot MCP server."""
+        client = self._create_http_client()
         try:
-            async with sse_client(self.server_url, headers=self._get_headers(), timeout=self.timeout) as (read, write):
+            async with streamable_http_client(self.server_url, http_client=client, terminate_on_close=True) as (
+                read,
+                write,
+                get_session_id,
+            ):
                 async with ClientSession(read, write) as session:
                     await session.initialize()
                     return await session.call_tool(tool_name, arguments=arguments)
         except Exception as exc:  # noqa: BLE001 - keep root cause attached
             raise RemoteMCPConnectionError(self.server_url, str(exc)) from exc
+        finally:
+            await client.aclose()
