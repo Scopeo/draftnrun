@@ -1,3 +1,4 @@
+import json
 import logging
 from contextlib import contextmanager
 from pathlib import Path
@@ -258,6 +259,26 @@ class SQLLocalService(DBService):
             session.execute(stmt)
             session.commit()
 
+    def _parse_jsonb_columns(self, df: pd.DataFrame, jsonb_columns: set[str]) -> pd.DataFrame:
+        df = df.copy()
+        for col_name in jsonb_columns:
+            if col_name in df.columns:
+
+                def parse_jsonb_value(value):
+                    if pd.isna(value):
+                        return None
+                    if isinstance(value, str):
+                        try:
+                            return json.loads(value)
+                        except (json.JSONDecodeError, TypeError):
+                            # If it's not valid JSON, return as-is (might be None or empty)
+                            return value if value else None
+                    # If it's already a dict/list, return as-is
+                    return value
+
+                df[col_name] = df[col_name].apply(parse_jsonb_value)
+        return df
+
     def insert_df_to_table(
         self,
         df: pd.DataFrame,
@@ -271,6 +292,9 @@ class SQLLocalService(DBService):
         table = self.get_table(table_name, schema_name)
         description_table = self.describe_table(table_name, schema_name)
         check_columns_matching_between_data_and_database_table(df.columns, description_table)
+
+        jsonb_columns = {col["name"] for col in description_table if "jsonb" in str(col.get("type", "")).lower()}
+        df = self._parse_jsonb_columns(df, jsonb_columns)
 
         with self.Session() as session:
             data = df.to_dict(orient="records")
@@ -325,6 +349,9 @@ class SQLLocalService(DBService):
         """
         table = self.get_table(table_name, schema_name)
         sql_alchemy_columns = self.convert_table_definition_to_sqlalchemy(table_definition)
+
+        jsonb_columns = {col.name for col in table_definition.columns if col.type in ("JSONB", "VARIANT")}
+        df = self._parse_jsonb_columns(df, jsonb_columns)
 
         # Remove the temporary table if it exists in metadata
         if "updated_values" in self.metadata.tables:
