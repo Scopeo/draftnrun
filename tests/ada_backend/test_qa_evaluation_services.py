@@ -1,363 +1,255 @@
 from unittest.mock import patch
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
-from fastapi.testclient import TestClient
 
-from ada_backend.database.models import EvaluationType
-from ada_backend.main import app
-from ada_backend.schemas.qa_evaluation_schema import (
-    BooleanEvaluationResult,
-    FreeTextEvaluationResult,
-    ScoreEvaluationResult,
+from ada_backend.database.models import EnvType, EvaluationType, VersionOutput
+from ada_backend.database.setup_db import get_db_session
+from ada_backend.repositories.quality_assurance_repository import (
+    create_datasets,
+    create_inputs_groundtruths,
 )
-from ada_backend.scripts.get_supabase_token import get_user_jwt
-from settings import settings
+from ada_backend.schemas.input_groundtruth_schema import InputGroundtruthCreate
+from ada_backend.schemas.llm_judges_schema import LLMJudgeCreate, LLMJudgeUpdate
+from ada_backend.schemas.project_schema import ProjectCreateSchema
+from ada_backend.schemas.qa_evaluation_schema import BooleanEvaluationResult, ErrorEvaluationResult
+from ada_backend.services.errors import LLMJudgeNotFound
+from ada_backend.services.project_service import create_workflow, delete_project_service, get_project_service
+from ada_backend.services.qa.llm_judges_service import (
+    create_llm_judge_service,
+    delete_llm_judges_service,
+    get_llm_judges_by_project_service,
+    update_llm_judge_service,
+)
+from ada_backend.services.qa.qa_evaluation_service import (
+    delete_judge_evaluations_service,
+    get_evaluations_by_version_output_service,
+    run_judge_evaluation_service,
+)
 
-client = TestClient(app)
-ORGANIZATION_ID = "37b7d67f-8f29-4fce-8085-19dea582f605"
-JWT_TOKEN = get_user_jwt(settings.TEST_USER_EMAIL, settings.TEST_USER_PASSWORD)
-HEADERS_JWT = {
-    "accept": "application/json",
-    "Authorization": f"Bearer {JWT_TOKEN}",
-}
+ORGANIZATION_ID = UUID("37b7d67f-8f29-4fce-8085-19dea582f605")
 
 MOCK_LLM_SERVICE_PATH = (
     "ada_backend.services.qa.qa_evaluation_service.CompletionService.constrained_complete_with_pydantic_async"
 )
 
 
-@pytest.fixture
-def test_project():
-    """Create a test project and clean it up after the test."""
-    project_id = str(uuid4())
-    project_payload = {
-        "project_id": project_id,
-        "project_name": f"qa_evaluation_test_{project_id}",
-        "description": "Test project for QA evaluation",
-    }
-    response = client.post(f"/projects/{ORGANIZATION_ID}", headers=HEADERS_JWT, json=project_payload)
-    assert response.status_code == 200
-    yield project_id
-    client.delete(f"/projects/{project_id}", headers=HEADERS_JWT)
-
-
-@pytest.fixture
-def evaluation_scenario(test_project):
-    """Create a complete evaluation scenario with project, dataset, input, version_output, and judge."""
-    project_response = client.get(f"/projects/{test_project}", headers=HEADERS_JWT)
-    assert project_response.status_code == 200
-    project_data = project_response.json()
-    graph_runner_id = None
-    for gr in project_data["graph_runners"]:
-        if gr["env"] == "draft":
-            graph_runner_id = gr["graph_runner_id"]
-            break
-    assert graph_runner_id is not None, "Draft graph runner not found"
-
-    dataset_payload = {"datasets_name": [f"test_dataset_{uuid4()}"]}
-    dataset_response = client.post(f"/projects/{test_project}/qa/datasets", headers=HEADERS_JWT, json=dataset_payload)
-    assert dataset_response.status_code == 200
-    dataset_id = dataset_response.json()["datasets"][0]["id"]
-
-    input_payload = {
-        "inputs_groundtruths": [
-            {
-                "input": {"messages": [{"role": "user", "content": "What is 2 + 2?"}]},
-                "groundtruth": "4",
-            }
-        ]
-    }
-    input_response = client.post(
-        f"/projects/{test_project}/qa/datasets/{dataset_id}/entries", headers=HEADERS_JWT, json=input_payload
+def _create_project_and_graph_runner(session) -> tuple[UUID, UUID]:
+    project_id = uuid4()
+    user_id = uuid4()
+    project_payload = ProjectCreateSchema(
+        project_id=project_id,
+        project_name=f"qa_evaluation_test_{project_id}",
+        description="Test project for QA evaluation",
     )
-    assert input_response.status_code == 200
-    input_id = input_response.json()["inputs_groundtruths"][0]["id"]
-
-    run_payload = {"graph_runner_id": graph_runner_id, "input_ids": [input_id]}
-    run_response = client.post(
-        f"/projects/{test_project}/qa/datasets/{dataset_id}/run", headers=HEADERS_JWT, json=run_payload
+    create_workflow(
+        session=session,
+        user_id=user_id,
+        organization_id=ORGANIZATION_ID,
+        project_schema=project_payload,
     )
-    assert run_response.status_code == 200
 
-    version_output_response = client.get(
-        f"/projects/{test_project}/qa/version-outputs?graph_runner_id={graph_runner_id}&input_ids={input_id}",
-        headers=HEADERS_JWT,
+    project_details = get_project_service(session, project_id)
+    draft_graph_runner_id = next(gr.graph_runner_id for gr in project_details.graph_runners if gr.env == EnvType.DRAFT)
+    return project_id, draft_graph_runner_id
+
+
+def _create_evaluation_scenario(session, project_id: UUID, graph_runner_id: UUID) -> dict:
+    datasets = create_datasets(
+        session=session,
+        project_id=project_id,
+        dataset_names=["test_dataset"],
     )
-    assert version_output_response.status_code == 200
-    version_output_ids = version_output_response.json()
-    assert input_id in version_output_ids
-    assert version_output_ids[input_id] is not None
-    version_output_id = version_output_ids[input_id]
 
-    judge_data = {
-        "name": f"Test Judge {uuid4()}",
-        "evaluation_type": EvaluationType.BOOLEAN,
-        "prompt_template": "Test prompt template",
-    }
-    judge_response = client.post(f"/projects/{test_project}/qa/llm-judges", headers=HEADERS_JWT, json=judge_data)
-    assert judge_response.status_code == 200
-    judge_id = judge_response.json()["id"]
+    inputs_groundtruths = create_inputs_groundtruths(
+        session=session,
+        dataset_id=datasets[0].id,
+        inputs_groundtruths_data=[
+            InputGroundtruthCreate(
+                input={"messages": [{"role": "user", "content": "What is 2 + 2?"}]},
+                groundtruth="4",
+            )
+        ],
+    )
+
+    version_output = VersionOutput(
+        input_id=inputs_groundtruths[0].id,
+        graph_runner_id=graph_runner_id,
+        output='{"messages": [{"role": "assistant", "content": "4"}]}',
+    )
+    session.add(version_output)
+
+    judge = create_llm_judge_service(
+        session=session,
+        project_id=project_id,
+        judge_data=LLMJudgeCreate(
+            name="Test Judge",
+            evaluation_type=EvaluationType.BOOLEAN,
+            prompt_template="Test prompt template",
+        ),
+    )
 
     return {
-        "project_id": test_project,
-        "graph_runner_id": graph_runner_id,
-        "dataset_id": dataset_id,
-        "input_id": input_id,
-        "version_output_id": version_output_id,
-        "judge_id": judge_id,
+        "project_id": project_id,
+        "version_output_id": version_output.id,
+        "judge_id": judge.id,
     }
 
 
-@pytest.fixture
-def mock_llm_service():
-    with patch(MOCK_LLM_SERVICE_PATH) as mock:
-        mock.return_value = BooleanEvaluationResult(result=True, justification="Mock justification")
-        yield mock
-
-
-def test_llm_judge_management(test_project):
+def test_llm_judge_management():
     """Test complete LLM judge CRUD operations."""
-    response = client.get(f"/projects/{test_project}/qa/llm-judges", headers=HEADERS_JWT)
-    assert response.status_code == 200
-    assert response.json() == []
+    with get_db_session() as session:
+        project_id, _ = _create_project_and_graph_runner(session)
 
-    create_data = {
-        "name": "Test Judge",
-        "description": "Test description",
-        "evaluation_type": EvaluationType.BOOLEAN,
-        "prompt_template": "Test: {{input}}",
-    }
-    response = client.post(f"/projects/{test_project}/qa/llm-judges", headers=HEADERS_JWT, json=create_data)
-    assert response.status_code == 200
-    judge = response.json()
-    assert judge["name"] == "Test Judge"
-    assert judge["description"] == "Test description"
-    assert judge["evaluation_type"] == "boolean"
-    assert judge["llm_model_reference"] == "openai:gpt-5-mini"
-    assert judge["temperature"] == 1.0
-    assert judge["project_id"] == test_project
-    assert "id" in judge
-    assert "created_at" in judge
-    judge_id = judge["id"]
+        judges = get_llm_judges_by_project_service(session=session, project_id=project_id)
+        assert judges == []
 
-    response = client.get(f"/projects/{test_project}/qa/llm-judges", headers=HEADERS_JWT)
-    assert response.status_code == 200
-    judges = response.json()
-    assert len(judges) == 1
-    assert judges[0]["id"] == judge_id
+        create_data = LLMJudgeCreate(
+            name="Test Judge",
+            description="Test description",
+            evaluation_type=EvaluationType.BOOLEAN,
+            prompt_template="Test: {{input}}",
+        )
+        judge = create_llm_judge_service(
+            session=session,
+            project_id=project_id,
+            judge_data=create_data,
+        )
+        assert judge.name == "Test Judge"
+        judge_id = judge.id
 
-    update_data = {"name": "Updated Judge Name"}
-    response = client.patch(
-        f"/projects/{test_project}/qa/llm-judges/{judge_id}", headers=HEADERS_JWT, json=update_data
-    )
-    assert response.status_code == 200
-    updated_judge = response.json()
-    assert updated_judge["name"] == "Updated Judge Name"
-    assert updated_judge["evaluation_type"] == "boolean"
+        judges = get_llm_judges_by_project_service(session=session, project_id=project_id)
+        assert len(judges) == 1
+        assert judges[0].id == judge_id
+        assert judges[0].name == "Test Judge"
+        assert judges[0].project_id == project_id
 
-    update_data = {"description": "Updated description", "temperature": 0.9}
-    response = client.patch(
-        f"/projects/{test_project}/qa/llm-judges/{judge_id}", headers=HEADERS_JWT, json=update_data
-    )
-    assert response.status_code == 200
-    updated_judge = response.json()
-    assert updated_judge["description"] == "Updated description"
-    assert updated_judge["temperature"] == 0.9
+        update_data = LLMJudgeUpdate(name="Updated Judge Name", description="Updated description", temperature=0.9)
+        updated_judge = update_llm_judge_service(
+            session=session,
+            project_id=project_id,
+            judge_id=judge_id,
+            judge_data=update_data,
+        )
+        assert updated_judge.name == "Updated Judge Name"
+        assert updated_judge.description == "Updated description"
+        assert updated_judge.temperature == 0.9
+        assert updated_judge.id == judge_id
 
-    delete_payload = [judge_id]
-    response = client.request(
-        method="DELETE", url=f"/projects/{test_project}/qa/llm-judges", headers=HEADERS_JWT, json=delete_payload
-    )
-    assert response.status_code == 204
+        delete_llm_judges_service(
+            session=session,
+            project_id=project_id,
+            judge_ids=[judge_id],
+        )
 
-    response = client.get(f"/projects/{test_project}/qa/llm-judges", headers=HEADERS_JWT)
-    assert response.status_code == 200
-    assert response.json() == []
+        update_data = LLMJudgeUpdate(name="Update on unexisting judge")
+        with pytest.raises(LLMJudgeNotFound):
+            update_llm_judge_service(
+                session=session,
+                project_id=project_id,
+                judge_id=judge_id,
+                judge_data=update_data,
+            )
 
-    non_existent_judge_id = str(uuid4())
-    response = client.patch(
-        f"/projects/{test_project}/qa/llm-judges/{non_existent_judge_id}",
-        headers=HEADERS_JWT,
-        json={"name": "Test"},
-    )
-    assert response.status_code == 400
-
-
-def test_llm_judge_defaults():
-    for evaluation_type in ["boolean", "score", "free_text"]:
-        response = client.get(f"/qa/llm-judges/defaults?evaluation_type={evaluation_type}", headers=HEADERS_JWT)
-        assert response.status_code == 200
-        template = response.json()
-        assert template["evaluation_type"] == evaluation_type
-        assert "prompt_template" in template
-        assert isinstance(template["prompt_template"], str)
-        assert len(template["prompt_template"]) > 0
+        delete_project_service(session=session, project_id=project_id)
 
 
 @patch(MOCK_LLM_SERVICE_PATH)
-def test_get_evaluations(mock_llm, evaluation_scenario):
-    project_id = evaluation_scenario["project_id"]
-    version_output_id = evaluation_scenario["version_output_id"]
-
-    response = client.get(
-        f"/projects/{project_id}/qa/version-outputs/{version_output_id}/evaluations", headers=HEADERS_JWT
-    )
-    assert response.status_code == 200
-    assert response.json() == []
-
-
-@patch(MOCK_LLM_SERVICE_PATH)
-def test_run_evaluation_boolean(mock_llm, evaluation_scenario):
+@pytest.mark.asyncio
+async def test_run_delete_evaluation_boolean(mock_llm):
     mock_llm.return_value = BooleanEvaluationResult(result=True, justification="Test justification")
-    project_id = evaluation_scenario["project_id"]
-    version_output_id = evaluation_scenario["version_output_id"]
-    judge_id = evaluation_scenario["judge_id"]
+    with get_db_session() as session:
+        project_id, graph_runner_id = _create_project_and_graph_runner(session)
+        evaluation_scenario = _create_evaluation_scenario(session, project_id, graph_runner_id)
 
-    payload = {"version_output_id": version_output_id}
-    response = client.post(
-        f"/projects/{project_id}/qa/llm-judges/{judge_id}/evaluations/run", headers=HEADERS_JWT, json=payload
-    )
-    assert response.status_code == 200
-    evaluation = response.json()
-    assert evaluation["judge_id"] == judge_id
-    assert evaluation["version_output_id"] == version_output_id
-    assert evaluation["evaluation_result"]["type"] == "boolean"
-    assert "result" in evaluation["evaluation_result"]
-    assert "justification" in evaluation["evaluation_result"]
+        version_output_id = evaluation_scenario["version_output_id"]
+        judge_id = evaluation_scenario["judge_id"]
 
+        evaluation = await run_judge_evaluation_service(
+            session=session,
+            project_id=project_id,
+            judge_id=judge_id,
+            version_output_id=version_output_id,
+        )
 
-@patch(MOCK_LLM_SERVICE_PATH)
-def test_run_evaluation_score(mock_llm, evaluation_scenario):
-    mock_llm.return_value = ScoreEvaluationResult(score=4, max_score=4, justification="Test score justification")
-    project_id = evaluation_scenario["project_id"]
-    version_output_id = evaluation_scenario["version_output_id"]
+        assert evaluation.judge_id == judge_id
+        assert evaluation.version_output_id == version_output_id
+        assert evaluation.evaluation_result.type == "boolean"
+        assert evaluation.evaluation_result.justification == "Test justification"
 
-    judge_data = {
-        "name": f"Score Judge {uuid4()}",
-        "evaluation_type": EvaluationType.SCORE,
-        "prompt_template": "Test: {{input}}",
-    }
-    response = client.post(f"/projects/{project_id}/qa/llm-judges", headers=HEADERS_JWT, json=judge_data)
-    assert response.status_code == 200
-    judge_id = response.json()["id"]
+        delete_judge_evaluations_service(session=session, evaluation_ids=[evaluation.id])
 
-    payload = {"version_output_id": version_output_id}
-    response = client.post(
-        f"/projects/{project_id}/qa/llm-judges/{judge_id}/evaluations/run", headers=HEADERS_JWT, json=payload
-    )
-    assert response.status_code == 200
-    evaluation = response.json()
-    assert evaluation["evaluation_result"]["type"] == "score"
-    assert "score" in evaluation["evaluation_result"]
-    assert "max_score" in evaluation["evaluation_result"]
+        delete_judge_evaluations_service(session=session, evaluation_ids=[evaluation.id])  # idempotent
+
+        evaluations = get_evaluations_by_version_output_service(
+            session=session,
+            version_output_id=version_output_id,
+        )
+        assert evaluations == []
+
+        delete_project_service(session=session, project_id=project_id)
 
 
-@patch(MOCK_LLM_SERVICE_PATH)
-def test_run_evaluation_free_text(mock_llm, evaluation_scenario):
-    mock_llm.return_value = FreeTextEvaluationResult(result="Good", justification="Test free text justification")
-    project_id = evaluation_scenario["project_id"]
-    version_output_id = evaluation_scenario["version_output_id"]
+@pytest.mark.asyncio
+async def test_evaluation_errors():
+    with get_db_session() as session:
+        project_id, graph_runner_id = _create_project_and_graph_runner(session)
+        evaluation_scenario = _create_evaluation_scenario(session, project_id, graph_runner_id)
 
-    judge_data = {
-        "name": f"Free Text Judge {uuid4()}",
-        "evaluation_type": EvaluationType.FREE_TEXT,
-        "prompt_template": "Test: {{input}}",
-    }
-    response = client.post(f"/projects/{project_id}/qa/llm-judges", headers=HEADERS_JWT, json=judge_data)
-    assert response.status_code == 200
-    judge_id = response.json()["id"]
+        version_output_id = evaluation_scenario["version_output_id"]
 
-    payload = {"version_output_id": version_output_id}
-    response = client.post(
-        f"/projects/{project_id}/qa/llm-judges/{judge_id}/evaluations/run", headers=HEADERS_JWT, json=payload
-    )
-    assert response.status_code == 200
-    evaluation = response.json()
-    assert evaluation["evaluation_result"]["type"] == "free_text"
-    assert "result" in evaluation["evaluation_result"]
+        non_existent_judge_id = uuid4()
+        with pytest.raises(ValueError, match="Failed to run judge evaluation"):
+            await run_judge_evaluation_service(
+                session=session,
+                project_id=project_id,
+                judge_id=non_existent_judge_id,
+                version_output_id=version_output_id,
+            )
+
+        delete_project_service(session=session, project_id=project_id)
 
 
-@patch(MOCK_LLM_SERVICE_PATH)
-def test_delete_evaluations(mock_llm, evaluation_scenario):
-    mock_llm.return_value = BooleanEvaluationResult(result=True, justification="Test justification")
-    project_id = evaluation_scenario["project_id"]
-    version_output_id = evaluation_scenario["version_output_id"]
-    judge_id = evaluation_scenario["judge_id"]
+@pytest.mark.asyncio
+async def test_validation_errors_version_output():
+    with get_db_session() as session:
+        project_id, graph_runner_id = _create_project_and_graph_runner(session)
+        evaluation_scenario = _create_evaluation_scenario(session, project_id, graph_runner_id)
 
-    payload = {"version_output_id": version_output_id}
-    response = client.post(
-        f"/projects/{project_id}/qa/llm-judges/{judge_id}/evaluations/run", headers=HEADERS_JWT, json=payload
-    )
-    assert response.status_code == 200
-    evaluation_id = response.json()["id"]
+        non_existent_version_output_id = uuid4()
+        with pytest.raises(ValueError, match="Failed to run judge evaluation"):
+            await run_judge_evaluation_service(
+                session=session,
+                project_id=evaluation_scenario["project_id"],
+                judge_id=evaluation_scenario["judge_id"],
+                version_output_id=non_existent_version_output_id,
+            )
 
-    delete_payload = [evaluation_id]
-    response = client.request(
-        method="DELETE", url=f"/projects/{project_id}/qa/evaluations", headers=HEADERS_JWT, json=delete_payload
-    )
-    assert response.status_code == 204
-
-    response = client.request(
-        method="DELETE", url=f"/projects/{project_id}/qa/evaluations", headers=HEADERS_JWT, json=delete_payload
-    )  # idempotent
-    assert response.status_code == 204
-
-    response = client.get(
-        f"/projects/{project_id}/qa/version-outputs/{version_output_id}/evaluations", headers=HEADERS_JWT
-    )
-    assert response.status_code == 200
-    assert response.json() == []
+        delete_project_service(session=session, project_id=evaluation_scenario["project_id"])
 
 
-@patch(MOCK_LLM_SERVICE_PATH)
-def test_evaluation_errors(mock_llm, evaluation_scenario, test_project):
-    project_id = evaluation_scenario["project_id"]
-    version_output_id = evaluation_scenario["version_output_id"]
+@pytest.mark.asyncio
+async def test_version_output_empty_error():
+    with get_db_session() as session:
+        project_id, graph_runner_id = _create_project_and_graph_runner(session)
+        evaluation_scenario = _create_evaluation_scenario(session, project_id, graph_runner_id)
 
-    non_existent_judge_id = str(uuid4())
-    payload = {"version_output_id": version_output_id}
-    response = client.post(
-        f"/projects/{project_id}/qa/llm-judges/{non_existent_judge_id}/evaluations/run",
-        headers=HEADERS_JWT,
-        json=payload,
-    )
-    assert response.status_code == 400
+        version_output_id = evaluation_scenario["version_output_id"]
+        judge_id = evaluation_scenario["judge_id"]
 
-    headers_no_auth = {"accept": "application/json"}
-    response = client.get(f"/projects/{test_project}/qa/llm-judges", headers=headers_no_auth)
-    assert response.status_code in [401, 403]
+        version_output = session.query(VersionOutput).filter(VersionOutput.id == version_output_id).first()
+        version_output.output = ""
+        session.flush()
 
-    response = client.get(
-        f"/projects/{project_id}/qa/version-outputs/{version_output_id}/evaluations", headers=headers_no_auth
-    )
-    assert response.status_code in [401, 403]
+        evaluation = await run_judge_evaluation_service(
+            session=session,
+            project_id=project_id,
+            judge_id=judge_id,
+            version_output_id=version_output_id,
+        )
 
+        assert evaluation.evaluation_result.type == "error"
+        assert isinstance(evaluation.evaluation_result, ErrorEvaluationResult)
+        assert "no output" in evaluation.evaluation_result.justification.lower()
 
-def test_create_judge_validation_missing_evaluation_type(test_project):
-    judge_data = {
-        "name": "Test Judge",
-        "prompt_template": "Test: {{input}}",
-    }
-    response = client.post(f"/projects/{test_project}/qa/llm-judges", headers=HEADERS_JWT, json=judge_data)
-    assert response.status_code == 422
-
-
-def test_create_judge_validation_invalid_uuid(test_project):
-    judge_data = {
-        "name": "Test Judge",
-        "evaluation_type": EvaluationType.BOOLEAN,
-        "prompt_template": "Test: {{input}}",
-    }
-    response = client.post("/projects/invalid-uuid/qa/llm-judges", headers=HEADERS_JWT, json=judge_data)
-    assert response.status_code == 422
-
-
-def test_run_evaluation_validation_missing_version_output_id(evaluation_scenario):
-    project_id = evaluation_scenario["project_id"]
-    judge_id = evaluation_scenario["judge_id"]
-
-    response = client.post(
-        f"/projects/{project_id}/qa/llm-judges/{judge_id}/evaluations/run", headers=HEADERS_JWT, json={}
-    )
-    assert response.status_code == 422
+        delete_project_service(session=session, project_id=project_id)

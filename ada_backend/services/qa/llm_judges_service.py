@@ -102,6 +102,8 @@ def update_llm_judge_service(
             raise LLMJudgeNotFound(judge_id=judge_id, project_id=project_id)
         LOGGER.info(f"Updated LLM judge {judge_id} for project {project_id}")
         return LLMJudgeResponse.model_validate(updated_judge)
+    except LLMJudgeNotFound:
+        raise
     except Exception as e:
         LOGGER.error(f"Error in update_llm_judge_service for judge {judge_id}: {str(e)}")
         raise ValueError(f"Failed to update LLM judge: {str(e)}") from e
