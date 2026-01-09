@@ -12,6 +12,12 @@ from pydantic import BaseModel
 
 from ada_backend.context import get_request_context
 from ada_backend.database.models import EnvType
+from ada_backend.database.seed.constants import (
+    COMPLETION_MODEL_IN_DB,
+    REASONING_IN_DB,
+    TEMPERATURE_IN_DB,
+    VERBOSITY_IN_DB,
+)
 from ada_backend.database.setup_db import get_db_session
 from ada_backend.repositories.project_repository import get_project
 from ada_backend.repositories.source_repository import get_data_source_by_id
@@ -725,10 +731,10 @@ def build_synthesizer_processor(target_name: str = "synthesizer") -> ParameterPr
     """
 
     def processor(params: dict, constructor_params: dict[str, Any]) -> dict:
-        completion_model = params.pop("completion_model")
+        completion_model = params.pop(COMPLETION_MODEL_IN_DB)
         provider, model_name = get_llm_provider_and_model(llm_model=completion_model)
 
-        temperature = params.pop("temperature", 1.0)
+        temperature = params.pop(TEMPERATURE_IN_DB, 1.0)
         if temperature is not None:
             try:
                 temperature = float(temperature)
@@ -743,8 +749,8 @@ def build_synthesizer_processor(target_name: str = "synthesizer") -> ParameterPr
             trace_manager=get_trace_manager(),
             temperature=temperature,
             api_key=params.pop("llm_api_key", None),
-            verbosity=params.pop("verbosity", None),
-            reasoning=params.pop("reasoning", None),
+            verbosity=params.pop(VERBOSITY_IN_DB, None),
+            reasoning=params.pop(REASONING_IN_DB, None),
             model_id=model_id,
         )
 
