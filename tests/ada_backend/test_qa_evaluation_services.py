@@ -3,7 +3,7 @@ from uuid import UUID, uuid4
 
 import pytest
 
-from ada_backend.database.models import EnvType, EvaluationType, VersionOutput
+from ada_backend.database.models import EvaluationType, VersionOutput
 from ada_backend.database.setup_db import get_db_session
 from ada_backend.repositories.quality_assurance_repository import (
     create_datasets,
@@ -11,10 +11,9 @@ from ada_backend.repositories.quality_assurance_repository import (
 )
 from ada_backend.schemas.input_groundtruth_schema import InputGroundtruthCreate
 from ada_backend.schemas.llm_judges_schema import LLMJudgeCreate, LLMJudgeUpdate
-from ada_backend.schemas.project_schema import ProjectCreateSchema
 from ada_backend.schemas.qa_evaluation_schema import BooleanEvaluationResult, ErrorEvaluationResult
 from ada_backend.services.errors import LLMJudgeNotFound
-from ada_backend.services.project_service import create_workflow, delete_project_service, get_project_service
+from ada_backend.services.project_service import delete_project_service
 from ada_backend.services.qa.llm_judges_service import (
     create_llm_judge_service,
     delete_llm_judges_service,
@@ -26,32 +25,11 @@ from ada_backend.services.qa.qa_evaluation_service import (
     get_evaluations_by_version_output_service,
     run_judge_evaluation_service,
 )
-
-ORGANIZATION_ID = UUID("37b7d67f-8f29-4fce-8085-19dea582f605")
+from tests.ada_backend.test_utils import create_project_and_graph_runner
 
 MOCK_LLM_SERVICE_PATH = (
     "ada_backend.services.qa.qa_evaluation_service.CompletionService.constrained_complete_with_pydantic_async"
 )
-
-
-def _create_project_and_graph_runner(session) -> tuple[UUID, UUID]:
-    project_id = uuid4()
-    user_id = uuid4()
-    project_payload = ProjectCreateSchema(
-        project_id=project_id,
-        project_name=f"qa_evaluation_test_{project_id}",
-        description="Test project for QA evaluation",
-    )
-    create_workflow(
-        session=session,
-        user_id=user_id,
-        organization_id=ORGANIZATION_ID,
-        project_schema=project_payload,
-    )
-
-    project_details = get_project_service(session, project_id)
-    draft_graph_runner_id = next(gr.graph_runner_id for gr in project_details.graph_runners if gr.env == EnvType.DRAFT)
-    return project_id, draft_graph_runner_id
 
 
 def _create_evaluation_scenario(session, project_id: UUID, graph_runner_id: UUID) -> dict:
@@ -99,7 +77,9 @@ def _create_evaluation_scenario(session, project_id: UUID, graph_runner_id: UUID
 def test_llm_judge_management():
     """Test complete LLM judge CRUD operations."""
     with get_db_session() as session:
-        project_id, _ = _create_project_and_graph_runner(session)
+        project_id, _ = create_project_and_graph_runner(
+            session, name="LLM Judge Management Test", description="Test project"
+        )
 
         judges = get_llm_judges_by_project_service(session=session, project_id=project_id)
         assert judges == []
@@ -159,7 +139,9 @@ def test_llm_judge_management():
 async def test_run_delete_evaluation_boolean(mock_llm):
     mock_llm.return_value = BooleanEvaluationResult(result=True, justification="Test justification")
     with get_db_session() as session:
-        project_id, graph_runner_id = _create_project_and_graph_runner(session)
+        project_id, graph_runner_id = create_project_and_graph_runner(
+            session, name="Boolean Evaluation Test", description="Test project"
+        )
         evaluation_scenario = _create_evaluation_scenario(session, project_id, graph_runner_id)
 
         version_output_id = evaluation_scenario["version_output_id"]
@@ -193,7 +175,9 @@ async def test_run_delete_evaluation_boolean(mock_llm):
 @pytest.mark.asyncio
 async def test_evaluation_errors():
     with get_db_session() as session:
-        project_id, graph_runner_id = _create_project_and_graph_runner(session)
+        project_id, graph_runner_id = create_project_and_graph_runner(
+            session, name="Evaluation Errors Test", description="Test project"
+        )
         evaluation_scenario = _create_evaluation_scenario(session, project_id, graph_runner_id)
 
         version_output_id = evaluation_scenario["version_output_id"]
@@ -213,7 +197,9 @@ async def test_evaluation_errors():
 @pytest.mark.asyncio
 async def test_validation_errors_version_output():
     with get_db_session() as session:
-        project_id, graph_runner_id = _create_project_and_graph_runner(session)
+        project_id, graph_runner_id = create_project_and_graph_runner(
+            session, name="Version Output Validation Test", description="Test project"
+        )
         evaluation_scenario = _create_evaluation_scenario(session, project_id, graph_runner_id)
 
         non_existent_version_output_id = uuid4()
@@ -231,7 +217,9 @@ async def test_validation_errors_version_output():
 @pytest.mark.asyncio
 async def test_version_output_empty_error():
     with get_db_session() as session:
-        project_id, graph_runner_id = _create_project_and_graph_runner(session)
+        project_id, graph_runner_id = create_project_and_graph_runner(
+            session, name="Empty Output Error Test", description="Test project"
+        )
         evaluation_scenario = _create_evaluation_scenario(session, project_id, graph_runner_id)
 
         version_output_id = evaluation_scenario["version_output_id"]
