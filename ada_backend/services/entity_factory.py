@@ -710,6 +710,7 @@ def build_retriever_processor(target_name: str = "retriever") -> ParameterProces
             qdrant_service=qdrant_service,
             collection_name=collection_name,
             component_attributes=None,
+            source_id=source_id,
             **validated_params,
         )
 

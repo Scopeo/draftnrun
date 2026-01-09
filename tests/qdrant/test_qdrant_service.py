@@ -166,6 +166,23 @@ def test_multiple_metadata_fields_index_creation():
         timeout=60.0,
     )
 
+    # Mock create_index_if_needed_async to track calls
+    # (index creation happens during create_collection)
+    original_create_index = qdrant_service.create_index_if_needed_async
+    call_tracker = []
+
+    async def mock_create_index(collection_name: str, field_name: str, field_schema_type: FieldSchema):
+        call_tracker.append({
+            "collection_name": collection_name,
+            "field_name": field_name,
+            "field_schema_type": field_schema_type,
+        })
+        # Call the original method to maintain functionality
+        return await original_create_index(collection_name, field_name, field_schema_type)
+
+    # Patch the method
+    qdrant_service.create_index_if_needed_async = mock_create_index
+
     # Create collection
     if qdrant_service.collection_exists(TEST_COLLECTION_NAME_MULTI):
         qdrant_service.delete_collection(TEST_COLLECTION_NAME_MULTI)
@@ -187,25 +204,6 @@ def test_multiple_metadata_fields_index_creation():
         }
     ]
     qdrant_service.add_chunks(list_chunks=chunks, collection_name=TEST_COLLECTION_NAME_MULTI)
-
-    # Mock create_index_if_needed_async to track calls
-    original_create_index = qdrant_service.create_index_if_needed_async
-    call_tracker = []
-
-    async def mock_create_index(collection_name: str, field_name: str, field_schema_type: FieldSchema):
-        call_tracker.append({
-            "collection_name": collection_name,
-            "field_name": field_name,
-            "field_schema_type": field_schema_type,
-        })
-        # Call the original method to maintain functionality
-        return await original_create_index(collection_name, field_name, field_schema_type)
-
-    # Patch the method
-    qdrant_service.create_index_if_needed_async = mock_create_index
-
-    # Call get_collection_data which triggers index creation
-    qdrant_service.get_collection_data(TEST_COLLECTION_NAME_MULTI)
 
     # Verify that create_index_if_needed_async was called for ALL metadata fields
     metadata_field_calls = [

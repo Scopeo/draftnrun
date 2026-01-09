@@ -1,3 +1,4 @@
+import json
 import logging
 from contextlib import contextmanager
 from pathlib import Path
@@ -7,7 +8,8 @@ import pandas as pd
 import sqlalchemy
 from func_timeout import FunctionTimedOut, func_timeout
 from sqlalchemy import MetaData, create_engine, text
-from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy.dialects.postgresql import JSONB, insert
+from sqlalchemy.dialects.postgresql import UUID as PostgresUUID
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.sql.type_api import TypeEngine
 
@@ -19,6 +21,7 @@ from engine.storage_service.db_utils import (
     DBDefinition,
     check_columns_matching_between_data_and_database_table,
 )
+from engine.storage_service.errors import RowNotFoundError
 
 LOGGER = logging.getLogger(__name__)
 
@@ -34,7 +37,10 @@ TYPE_MAPPING: dict[str, Type[TypeEngine]] = {
     "FLOAT": sqlalchemy.Float,
     "BOOLEAN": sqlalchemy.Boolean,
     "ARRAY": sqlalchemy.JSON,
-    "VARIANT": sqlalchemy.JSON,
+    "VARIANT": JSONB,
+    "JSONB": JSONB,
+    "TIMESTAMP_TZ": sqlalchemy.TIMESTAMP(timezone=True),
+    "UUID": PostgresUUID,
 }
 DEFAULT_MAPPING = {"CURRENT_TIMESTAMP": sqlalchemy.func.current_timestamp()}
 
@@ -253,6 +259,26 @@ class SQLLocalService(DBService):
             session.execute(stmt)
             session.commit()
 
+    def _parse_jsonb_columns(self, df: pd.DataFrame, jsonb_columns: set[str]) -> pd.DataFrame:
+        df = df.copy()
+        for col_name in jsonb_columns:
+            if col_name in df.columns:
+
+                def parse_jsonb_value(value):
+                    if pd.isna(value):
+                        return None
+                    if isinstance(value, str):
+                        try:
+                            return json.loads(value)
+                        except (json.JSONDecodeError, TypeError):
+                            # If it's not valid JSON, return as-is (might be None or empty)
+                            return value if value else None
+                    # If it's already a dict/list, return as-is
+                    return value
+
+                df[col_name] = df[col_name].apply(parse_jsonb_value)
+        return df
+
     def insert_df_to_table(
         self,
         df: pd.DataFrame,
@@ -266,6 +292,9 @@ class SQLLocalService(DBService):
         table = self.get_table(table_name, schema_name)
         description_table = self.describe_table(table_name, schema_name)
         check_columns_matching_between_data_and_database_table(df.columns, description_table)
+
+        jsonb_columns = {col["name"] for col in description_table if "jsonb" in str(col.get("type", "")).lower()}
+        df = self._parse_jsonb_columns(df, jsonb_columns)
 
         with self.Session() as session:
             data = df.to_dict(orient="records")
@@ -291,13 +320,17 @@ class SQLLocalService(DBService):
         table_name: str,
         column_name: str,
         schema_name: Optional[str] = None,
+        source_id: Optional[str] = None,
     ) -> set:
         """
         Fetch all values from a specific column as a set.
+        If source_id is provided, only fetch values for rows matching that source_id.
         """
         table = self.get_table(table_name, schema_name)
         with self.Session() as session:
             stmt = sqlalchemy.select(table.c[column_name])
+            if source_id is not None:
+                stmt = stmt.where(table.c["source_id"] == source_id)
             result = session.execute(stmt)
             return set(result.scalars().all())
 
@@ -316,6 +349,9 @@ class SQLLocalService(DBService):
         """
         table = self.get_table(table_name, schema_name)
         sql_alchemy_columns = self.convert_table_definition_to_sqlalchemy(table_definition)
+
+        jsonb_columns = {col.name for col in table_definition.columns if col.type in ("JSONB", "VARIANT")}
+        df = self._parse_jsonb_columns(df, jsonb_columns)
 
         # Remove the temporary table if it exists in metadata
         if "updated_values" in self.metadata.tables:
@@ -336,7 +372,9 @@ class SQLLocalService(DBService):
 
             # Exclude _processed_datetime field from the temp table values, but set it explicitly to current timestamp
             columns_to_update = {
-                col.name: temp_table.c[col.name] for col in table.columns if col.name != PROCESSED_DATETIME_FIELD
+                col.name: temp_table.c[col.name]
+                for col in table.columns
+                if col.name != PROCESSED_DATETIME_FIELD and col.name in temp_table.c
             }
 
             columns_to_update = self.add_processed_datetime_if_exists(table, columns_to_update)
@@ -360,10 +398,26 @@ class SQLLocalService(DBService):
         ids: list[str | int],
         schema_name: Optional[str] = None,
         id_column_name: str = CHUNK_ID_COLUMN,
+        sql_query_filter: Optional[str] = None,
     ):
         table = self.get_table(table_name, schema_name)
         with self.Session() as session:
             delete_stmt = sqlalchemy.delete(table).where(table.c[id_column_name].in_(ids))
+            if sql_query_filter:
+                delete_stmt = delete_stmt.where(text(sql_query_filter))
+            session.execute(delete_stmt)
+            session.commit()
+
+    def delete_rows_from_table_by_filter(
+        self,
+        table_name: str,
+        filter_condition: str,
+        schema_name: Optional[str] = None,
+    ):
+        """Delete rows from a table based on a filter condition."""
+        table = self.get_table(table_name, schema_name)
+        with self.Session() as session:
+            delete_stmt = sqlalchemy.delete(table).where(text(filter_condition))
             session.execute(delete_stmt)
             session.commit()
 
@@ -430,6 +484,7 @@ class SQLLocalService(DBService):
         chunk_id: str,
         update_data: dict,
         schema_name: Optional[str] = None,
+        sql_query_filter: Optional[str] = None,
     ) -> None:
         """
         Update a specific row in the table by its chunk_id.
@@ -438,18 +493,21 @@ class SQLLocalService(DBService):
 
         with self.Session() as session:
             # Check if the row exists
-            existing_record = session.execute(
-                sqlalchemy.select(table).where(table.c[CHUNK_ID_COLUMN] == chunk_id)
-            ).scalar_one_or_none()
+            where_clause = table.c[CHUNK_ID_COLUMN] == chunk_id
+            if sql_query_filter:
+                where_clause = where_clause & text(sql_query_filter)
+            existing_record = session.execute(sqlalchemy.select(table).where(where_clause)).scalar_one_or_none()
 
             if not existing_record:
-                raise ValueError(f"Row with chunk_id='{chunk_id}' not found in table {table_name}")
+                raise RowNotFoundError(id_column_name=CHUNK_ID_COLUMN, row_id=chunk_id, table_name=table_name)
 
-            # Update the row
             update_values = update_data.copy()
             update_values = self.add_processed_datetime_if_exists(table, update_values)
 
-            stmt = sqlalchemy.update(table).where(table.c.chunk_id == chunk_id).values(**update_values)
+            filter_condition = table.c[CHUNK_ID_COLUMN] == chunk_id
+            if sql_query_filter:
+                filter_condition = filter_condition & text(sql_query_filter)
+            stmt = sqlalchemy.update(table).where(filter_condition).values(**update_values)
             result = session.execute(stmt)
 
             if result.rowcount == 0:
@@ -469,7 +527,12 @@ class SQLLocalService(DBService):
         return pd.read_sql(query, self.engine)
 
     def get_rows_paginated(
-        self, table_name: str, schema_name: Optional[str] = None, page: int = 1, page_size: int = 10
+        self,
+        table_name: str,
+        schema_name: Optional[str] = None,
+        page: int = 1,
+        page_size: int = 10,
+        sql_query_filter: Optional[str] = None,
     ) -> tuple[list[dict], int]:
         """
         Get paginated rows from a table as a list of dictionaries.
@@ -480,11 +543,15 @@ class SQLLocalService(DBService):
         with self.Session() as session:
             # Get total count
             count_stmt = sqlalchemy.select(sqlalchemy.func.count()).select_from(table)
+            if sql_query_filter:
+                count_stmt = count_stmt.where(text(sql_query_filter))
             total_count = session.execute(count_stmt).scalar()
 
             # Get paginated rows
             offset = (page - 1) * page_size
             stmt = sqlalchemy.select(table).offset(offset).limit(page_size)
+            if sql_query_filter:
+                stmt = stmt.where(text(sql_query_filter))
             rows = session.execute(stmt).fetchall()
 
             result = []
@@ -510,7 +577,7 @@ class SQLLocalService(DBService):
             result = session.execute(stmt).fetchone()
 
             if result is None:
-                raise ValueError(f"Row with {id_column_name}='{chunk_id}' not found in table {table_name}")
+                raise RowNotFoundError(id_column_name=id_column_name, row_id=chunk_id, table_name=table_name)
 
             # Convert the SQLAlchemy Row to a dictionary
             row_dict = {}
@@ -525,6 +592,7 @@ class SQLLocalService(DBService):
         chunk_ids: list[str],
         schema_name: Optional[str] = None,
         id_column_name: str = CHUNK_ID_COLUMN,
+        sql_query_filter: Optional[str] = None,
     ) -> list[dict]:
         """Get multiple rows by their chunk IDs. Returns a list of dictionaries."""
         if not chunk_ids:
@@ -533,6 +601,8 @@ class SQLLocalService(DBService):
         table = self.get_table(table_name, schema_name)
         with self.Session() as session:
             stmt = sqlalchemy.select(table).where(table.c[id_column_name].in_(chunk_ids))
+            if sql_query_filter:
+                stmt = stmt.where(text(sql_query_filter))
             results = session.execute(stmt).fetchall()
 
             # Convert SQLAlchemy Rows to dictionaries
@@ -550,25 +620,32 @@ class SQLLocalService(DBService):
         table_name: str,
         rows: list[dict],
         schema_name: Optional[str] = None,
-        id_column_name: str = CHUNK_ID_COLUMN,
+        id_column_names: Optional[list[str]] = None,
     ) -> None:
         if not rows:
             return
 
+        if id_column_names is None:
+            id_column_names = [CHUNK_ID_COLUMN]
+
         table = self.get_table(table_name, schema_name)
-        if id_column_name not in table.c:
-            raise ValueError(f"Column '{id_column_name}' not found in table '{table_name}'.")
+
+        for id_column_name in id_column_names:
+            if id_column_name not in table.c:
+                raise ValueError(f"Column '{id_column_name}' not found in table '{table_name}'.")
 
         row_keys: set[str] = set().union(*(r.keys() for r in rows))
-        updatable_cols = [k for k in row_keys if k != id_column_name and k in table.c]
+        excluded_cols = set(id_column_names)
+        updatable_cols = [k for k in row_keys if k not in excluded_cols and k in table.c]
 
         insert_stmt = insert(table).values(rows)
 
         with self.Session() as session:
             with session.begin():
                 update_dict = {col: insert_stmt.excluded[col] for col in updatable_cols}
+                index_elements = [table.c[col_name] for col_name in id_column_names]
                 stmt = insert_stmt.on_conflict_do_update(
-                    index_elements=[table.c[id_column_name]],
+                    index_elements=index_elements,
                     set_=update_dict,
                 )
                 session.execute(stmt)

@@ -17,53 +17,28 @@ from data_ingestion.document.folder_management.google_drive_folder_management im
 from data_ingestion.document.folder_management.s3_folder_management import S3FolderManager
 from data_ingestion.document.supabase_file_uploader import sync_files_to_supabase
 from engine.llm_services.llm_service import EmbeddingService, VisionService
-from engine.qdrant_service import QdrantCollectionSchema, QdrantService
+from engine.qdrant_service import FieldSchema, QdrantService
 from engine.storage_service.db_service import DBService
-from engine.storage_service.db_utils import PROCESSED_DATETIME_FIELD, DBColumn, DBDefinition, create_db_if_not_exists
+from engine.storage_service.db_utils import create_db_if_not_exists
 from engine.storage_service.local_service import SQLLocalService
 from engine.trace.trace_manager import TraceManager
+from ingestion_script.folder_utils import prepare_df_for_qdrant, sanitize_for_json
 from ingestion_script.utils import (
     CHUNK_ID_COLUMN_NAME,
-    ORDER_COLUMN_NAME,
+    SOURCE_ID_COLUMN_NAME,
+    TIMESTAMP_COLUMN_NAME,
+    UNIFIED_QDRANT_SCHEMA,
+    UNIFIED_TABLE_DEFINITION,
     create_source,
     get_first_available_embeddings_custom_llm,
     get_first_available_multimodal_custom_llm,
     get_sanitize_names,
+    transform_chunks_df_for_unified_table,
     update_ingestion_task,
 )
 from settings import settings
 
 LOGGER = logging.getLogger(__name__)
-
-TIMESTAMP_COLUMN_NAME = "last_edited_ts"
-META_DATA_TO_KEEP = [
-    "folder_name",
-    "page_number",
-]
-
-FILE_TABLE_DEFINITION = DBDefinition(
-    columns=[
-        DBColumn(name=PROCESSED_DATETIME_FIELD, type="DATETIME", default="CURRENT_TIMESTAMP"),
-        DBColumn(name=CHUNK_ID_COLUMN_NAME, type="VARCHAR", is_primary=True),
-        DBColumn(name="file_id", type="VARCHAR"),
-        DBColumn(name=ORDER_COLUMN_NAME, type="INTEGER", is_nullable=True),
-        DBColumn(name="content", type="VARCHAR"),
-        DBColumn(name="document_title", type="VARCHAR"),
-        DBColumn(name="url", type="VARCHAR"),
-        DBColumn(name="bounding_boxes", type="VARCHAR"),
-        DBColumn(name=TIMESTAMP_COLUMN_NAME, type="VARCHAR"),
-        DBColumn(name="metadata", type="VARIANT"),
-    ]
-)
-
-QDRANT_SCHEMA = QdrantCollectionSchema(
-    chunk_id_field=CHUNK_ID_COLUMN_NAME,
-    content_field="content",
-    url_id_field="url",
-    file_id_field="file_id",
-    last_edited_ts_field=TIMESTAMP_COLUMN_NAME,
-    metadata_fields_to_keep=["metadata"],
-)
 
 
 def load_llms_services():
@@ -109,19 +84,45 @@ async def sync_chunks_to_qdrant(
     qdrant_service: QdrantService,
     sql_query_filter: Optional[str] = None,
     query_filter_qdrant: Optional[dict] = None,
+    source_id: Optional[str] = None,
 ) -> None:
+    if source_id and sql_query_filter:
+        combined_filter = f"({sql_query_filter}) AND {SOURCE_ID_COLUMN_NAME} = '{source_id}'"
+    elif source_id:
+        combined_filter = f"{SOURCE_ID_COLUMN_NAME} = '{source_id}'"
+    else:
+        combined_filter = sql_query_filter
+
     chunks_df = db_service.get_table_df(
         table_name,
         schema_name=table_schema,
-        sql_query_filter=sql_query_filter,
+        sql_query_filter=combined_filter,
     )
+    LOGGER.info(
+        f"Found {len(chunks_df)} chunks to sync to Qdrant from table {table_name} "
+        f"in schema {table_schema} with filter {combined_filter}"
+    )
+
+    chunks_df = prepare_df_for_qdrant(chunks_df)
+
+    if source_id:
+        source_id_filter = {"key": SOURCE_ID_COLUMN_NAME, "match": {"value": str(source_id)}}
+        combined_filter_qdrant = qdrant_service._combine_filters(
+            base_filter=query_filter_qdrant,
+            additional_filters=[source_id_filter],
+        )
+    else:
+        combined_filter_qdrant = query_filter_qdrant
+
     LOGGER.info(f"Syncing chunks to Qdrant collection {collection_name} with {len(chunks_df)} rows")
     if not await qdrant_service.collection_exists_async(collection_name):
         await qdrant_service.create_collection_async(collection_name)
+        await qdrant_service.create_index_if_needed_async(collection_name, SOURCE_ID_COLUMN_NAME, FieldSchema.KEYWORD)
+        await qdrant_service.create_index_if_needed_async(collection_name, CHUNK_ID_COLUMN_NAME, FieldSchema.KEYWORD)
     await qdrant_service.sync_df_with_collection_async(
         df=chunks_df,
         collection_name=collection_name,
-        query_filter_qdrant=query_filter_qdrant,
+        query_filter_qdrant=combined_filter_qdrant,
     )
 
 
@@ -245,9 +246,10 @@ async def _ingest_folder_source(
             ingestion_task=ingestion_task,
         )
         return
+    embedding_model_ref = f"{embedding_service._provider}:{embedding_service._model_name}"
     db_table_schema, db_table_name, qdrant_collection_name = get_sanitize_names(
-        source_id=str(source_id),
         organization_id=organization_id,
+        embedding_model_reference=embedding_model_ref,
     )
 
     LOGGER.info(f"Table schema in ingestion : {db_table_schema}")
@@ -259,8 +261,8 @@ async def _ingest_folder_source(
         database_schema=db_table_schema,
         database_table_name=db_table_name,
         qdrant_collection_name=qdrant_collection_name,
-        qdrant_schema=QDRANT_SCHEMA.to_dict(),
-        embedding_model_reference=f"{embedding_service._provider}:{embedding_service._model_name}",
+        qdrant_schema=UNIFIED_QDRANT_SCHEMA.to_dict(),
+        embedding_model_reference=embedding_model_ref,
     )
     if settings.INGESTION_DB_URL is None:
         raise ValueError("INGESTION_DB_URL is not set")
@@ -268,7 +270,7 @@ async def _ingest_folder_source(
     db_service = SQLLocalService(engine_url=settings.INGESTION_DB_URL)
     qdrant_service = QdrantService.from_defaults(
         embedding_service=embedding_service,
-        default_collection_schema=QDRANT_SCHEMA,
+        default_collection_schema=UNIFIED_QDRANT_SCHEMA,
     )
 
     LOGGER.info("Starting ingestion process")
@@ -386,18 +388,35 @@ async def _ingest_folder_source(
             LOGGER.warning("No valid chunks remaining after filtering - nothing to sync")
             return
 
-        LOGGER.info(f"Syncing {len(all_chunks_df)} total chunks to db table {db_table_name}")
+        if "document_title" in all_chunks_df.columns:
+            all_chunks_df["document_title"] = all_chunks_df["document_title"].apply(sanitize_for_json)
+        if "metadata" in all_chunks_df.columns:
+            all_chunks_df["metadata"] = all_chunks_df["metadata"].apply(sanitize_for_json)
+        if "url" in all_chunks_df.columns:
+            all_chunks_df["url"] = all_chunks_df["url"].apply(sanitize_for_json)
+
+        all_chunks_df_for_db = transform_chunks_df_for_unified_table(all_chunks_df, source_id)
+
+        LOGGER.info(f"Syncing {len(all_chunks_df_for_db)} total chunks to db table {db_table_name}")
         db_service.update_table(
-            new_df=all_chunks_df,
+            new_df=all_chunks_df_for_db,
             table_name=db_table_name,
-            table_definition=FILE_TABLE_DEFINITION,
+            table_definition=UNIFIED_TABLE_DEFINITION,
             id_column_name=CHUNK_ID_COLUMN_NAME,
             timestamp_column_name=TIMESTAMP_COLUMN_NAME,
             append_mode=True,
             schema_name=db_table_schema,
+            source_id=str(source_id),
         )
 
-        await sync_chunks_to_qdrant(db_table_schema, db_table_name, qdrant_collection_name, db_service, qdrant_service)
+        await sync_chunks_to_qdrant(
+            table_schema=db_table_schema,
+            table_name=db_table_name,
+            collection_name=qdrant_collection_name,
+            db_service=db_service,
+            qdrant_service=qdrant_service,
+            source_id=str(source_id),
+        )
     except Exception as e:
         LOGGER.error(f"Failed to ingest folder source: {str(e)}")
         ingestion_task.status = db.TaskStatus.FAILED

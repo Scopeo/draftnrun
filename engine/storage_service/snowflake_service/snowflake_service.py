@@ -250,8 +250,25 @@ class SnowflakeService(DBService):
         table_name: str,
         column_name: str,
         schema_name: Optional[str] = None,
+        source_id: Optional[str] = None,
     ) -> set:
-        pass
+        """
+        Fetch all values from a specific column as a set.
+        If source_id is provided, only fetch values for rows matching that source_id.
+        """
+        if schema_name:
+            target_table_name = f"{schema_name}.{table_name}"
+        else:
+            target_table_name = table_name
+
+        query = f"SELECT {column_name} FROM {target_table_name}"
+        if source_id is not None:
+            query += f" WHERE source_id = '{source_id}'"
+
+        df = self._fetch_sql_query_as_dataframe(query)
+        if df.empty or column_name not in df.columns:
+            return set()
+        return set(df[column_name])
 
     @staticmethod
     def convert_list_to_sql_array(items: list) -> str:

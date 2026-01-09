@@ -1,7 +1,7 @@
 """Mock Qdrant service for testing."""
 
 import asyncio
-from typing import Iterator
+from typing import Iterator, Optional
 from unittest.mock import AsyncMock, MagicMock, Mock
 
 import pandas as pd
@@ -53,7 +53,9 @@ def mock_qdrant_service() -> Iterator[MagicMock]:
         return True
 
     # Mock delete_chunks_async
-    async def delete_chunks_async(point_ids: list[str], id_field: str, collection_name: str) -> bool:
+    async def delete_chunks_async(
+        point_ids: list[str], id_field: str, collection_name: str, filter: Optional[dict] = None
+    ) -> bool:
         if collection_name not in collection_data:
             return True
         if collection_data[collection_name].empty:
@@ -71,6 +73,7 @@ def mock_qdrant_service() -> Iterator[MagicMock]:
             file_id_field="file_id",
             url_id_field="url",
             last_edited_ts_field="last_edited_ts",
+            source_id_field="source_id",
             metadata_fields_to_keep={"metadata_to_keep_by_qdrant_field"},
         )
 
