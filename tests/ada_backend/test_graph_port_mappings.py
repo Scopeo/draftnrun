@@ -6,17 +6,16 @@ from ada_backend.database.models import EnvType
 from ada_backend.database.seed.utils import COMPONENT_UUIDS, COMPONENT_VERSION_UUIDS
 from ada_backend.database.setup_db import get_db_session
 from ada_backend.schemas.pipeline.graph_schema import GraphUpdateSchema
-from ada_backend.schemas.project_schema import ProjectCreateSchema
 from ada_backend.services.graph.deploy_graph_service import deploy_graph_service
 from ada_backend.services.graph.get_graph_service import get_graph_service
 from ada_backend.services.graph.update_graph_service import update_graph_service
-from ada_backend.services.project_service import create_workflow, delete_project_service, get_project_service
+from ada_backend.services.project_service import delete_project_service
+from tests.ada_backend.test_utils import create_project_and_graph_runner
 
 # Test constants
 SOURCE_PORT_NAME = "output"
 TARGET_PORT_NAME = "messages"
 
-ORGANIZATION_ID = UUID("37b7d67f-8f29-4fce-8085-19dea582f605")  # umbrella organization
 COMPONENT_ID = str(COMPONENT_UUIDS["llm_call"])
 COMPONENT_VERSION_ID = str(COMPONENT_VERSION_UUIDS["llm_call"])
 
@@ -36,26 +35,6 @@ def _run_update_graph(session, graph_runner_id: UUID, project_id: UUID, payload:
     return asyncio.run(_update())
 
 
-def _create_project_and_graph_runner(session) -> tuple[UUID, UUID]:
-    project_id = uuid4()
-    user_id = uuid4()
-    project_payload = ProjectCreateSchema(
-        project_id=project_id,
-        project_name=f"port_mappings_test_{project_id}",
-        description="Test project for port mappings migration",
-    )
-    create_workflow(
-        session=session,
-        user_id=user_id,
-        organization_id=ORGANIZATION_ID,
-        project_schema=project_payload,
-    )
-
-    project_details = get_project_service(session, project_id)
-    draft_graph_runner_id = next(gr.graph_runner_id for gr in project_details.graph_runners if gr.env == EnvType.DRAFT)
-    return project_id, draft_graph_runner_id
-
-
 def test_get_put_roundtrip_port_mappings_migration():
     """
     For an unmigrated graph (no port_mappings provided on PUT), verify that:
@@ -65,7 +44,9 @@ def test_get_put_roundtrip_port_mappings_migration():
     - Subsequent GET returns the same explicit port_mappings
     """
     with get_db_session() as session:
-        project_id, graph_runner_id = _create_project_and_graph_runner(session)
+        project_id, graph_runner_id = create_project_and_graph_runner(
+            session, project_name_prefix="port_mappings_test", description="Test project for port mappings migration"
+        )
 
         # Two component instances connected by a single edge; no port_mappings in the payload
         src_instance_id = str(uuid4())
@@ -276,7 +257,9 @@ def test_deploy_graph_copies_port_mappings():
     to the new graph runner.
     """
     with get_db_session() as session:
-        project_id, graph_runner_id = _create_project_and_graph_runner(session)
+        project_id, graph_runner_id = create_project_and_graph_runner(
+            session, project_name_prefix="port_mappings_test", description="Test project for port mappings migration"
+        )
 
         # Two component instances connected by a single edge with explicit port mappings
         src_instance_id = str(uuid4())
