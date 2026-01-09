@@ -94,19 +94,14 @@ class HubSpotMCPTool(Component):
         return self._mcp_tool_descriptions
 
     def _get_headers(self) -> dict[str, str]:
-        """Get headers with Bearer token and Client ID for HubSpot MCP."""
-        headers = {"Authorization": f"Bearer {self.access_token}"}
-        # HubSpot MCP requires Client ID in headers according to their documentation
-        client_id = settings.HUBSPOT_MCP_CLIENT_ID
-        if client_id:
-            headers["X-HubSpot-Client-Id"] = client_id
-        return headers
+        """Get headers with Bearer token for HubSpot MCP."""
+        return {"Authorization": f"Bearer {self.access_token}"}
 
     def _create_http_client(self) -> httpx.AsyncClient:
         """Create httpx.AsyncClient configured with Bearer token for HubSpot MCP."""
         return httpx.AsyncClient(
             headers=self._get_headers(),
-            timeout=httpx.Timeout(self.timeout, read=300.0),  # Longer read timeout for SSE streams
+            timeout=httpx.Timeout(self.timeout, read=300.0),
         )
 
     async def _list_tools_with_sdk(self):
@@ -183,12 +178,12 @@ class HubSpotMCPTool(Component):
     def get_outputs_schema(cls):
         return HubSpotMCPToolOutputs
 
-    async def _run_without_io_trace(
+    async def _run_without_io_trace(  # type: ignore[override]
         self,
-        inputs: HubSpotMCPToolInputs,
+        inputs: HubSpotMCPToolInputs,  # type: ignore[assignment]
         ctx: dict[str, Any],
-    ) -> HubSpotMCPToolOutputs:
-        tool_name = inputs.tool_name
+    ) -> HubSpotMCPToolOutputs:  # type: ignore[override]
+        tool_name = inputs.tool_name  # type: ignore[attr-defined]
         if not tool_name:
             raise ValueError("tool_name is required to call a HubSpot MCP tool.")
 
@@ -196,7 +191,7 @@ class HubSpotMCPTool(Component):
             raise ValueError(f"Tool {tool_name} not found in HubSpot MCP registry.")
 
         # TODO: Remove this after function-calling refactor
-        arguments = inputs.tool_arguments.copy()
+        arguments = inputs.tool_arguments.copy()  # type: ignore[attr-defined]
         if inputs.model_extra:
             arguments.update(inputs.model_extra)
 
