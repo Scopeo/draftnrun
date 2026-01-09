@@ -12,6 +12,7 @@ from ada_backend.database.seed.utils import COMPONENT_VERSION_UUIDS
 from ada_backend.services.entity_factory import (
     AgentFactory,
     EntityFactory,
+    HubSpotMCPToolFactory,
     NonToolCallableBlockFactory,
     RemoteMCPToolFactory,
     build_completion_service_processor,
@@ -396,6 +397,10 @@ def create_factory_registry() -> FactoryRegistry:
     registry.register(
         component_version_id=COMPONENT_VERSION_UUIDS["remote_mcp_tool"],
         factory=RemoteMCPToolFactory(),
+    )
+    registry.register(
+        component_version_id=COMPONENT_VERSION_UUIDS["hubspot_mcp_tool"],
+        factory=HubSpotMCPToolFactory(),
     )
     registry.register(
         component_version_id=COMPONENT_VERSION_UUIDS["python_code_runner"],

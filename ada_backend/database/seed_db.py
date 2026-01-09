@@ -34,6 +34,7 @@ from ada_backend.database.seed.seed_rag import (
 )
 from ada_backend.database.seed.seed_react_sql import seed_react_sql_components
 from ada_backend.database.seed.seed_remote_mcp_tool import seed_remote_mcp_tool_components
+from ada_backend.database.seed.seed_hubspot_mcp_tool import seed_hubspot_mcp_tool_components
 from ada_backend.database.seed.seed_smart_rag import seed_smart_rag_components
 from ada_backend.database.seed.seed_sql_tool import seed_sql_tool_components
 from ada_backend.database.seed.seed_start import seed_start_components
@@ -82,6 +83,7 @@ def seed_db(session: Session):
         seed_linkup_tool_components(session)
         seed_static_responder_components(session)
         seed_remote_mcp_tool_components(session)
+        seed_hubspot_mcp_tool_components(session)
 
         # Seed port definitions from code (with upsert)
         seed_port_definitions(session)

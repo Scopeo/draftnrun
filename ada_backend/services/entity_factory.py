@@ -211,6 +211,46 @@ class RemoteMCPToolFactory:
             return executor.submit(asyncio.run, coro).result()
 
 
+class HubSpotMCPToolFactory:
+    """
+    Factory to construct HubSpotMCPTool via its async autodescovery constructor.
+    Similar to RemoteMCPToolFactory but for HubSpot-specific MCP server.
+    """
+
+    entity_class = HubSpotMCPTool
+
+    def __call__(self, **kwargs):
+        from engine.components.tools.hubspot_mcp_tool import HubSpotMCPTool
+        from engine.components.types import ComponentAttributes
+
+        # Tool descriptions come from the server; drop any default from DB seed
+        kwargs.pop("tool_description", None)
+        
+        # Ensure trace manager is set if missing
+        if "trace_manager" not in kwargs:
+            trace_manager = get_trace_manager()
+            if trace_manager is None:
+                raise ValueError("Trace manager is required")
+            kwargs["trace_manager"] = trace_manager
+
+        # Ensure component_attributes is set
+        if "component_attributes" not in kwargs:
+            component_instance_name = kwargs.pop("component_instance_name", "hubspot_mcp_tool")
+            kwargs["component_attributes"] = ComponentAttributes(component_instance_name=component_instance_name)
+
+        # Extract parameters that should be passed to from_mcp_server
+        # access_token, refresh_token come from DB parameters
+
+        coro = HubSpotMCPTool.from_mcp_server(**kwargs)
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            return asyncio.run(coro)
+
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            return executor.submit(asyncio.run, coro).result()
+
+
 class NonToolCallableBlockFactory(EntityFactory):
     """
     Factory for agent-like blocks that are not meant to be function-callable.
