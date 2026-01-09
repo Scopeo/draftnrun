@@ -127,6 +127,7 @@ def test_ingest_local_folder_source():
     mock_qdrant_instance.collection_exists = MagicMock(return_value=True)
     mock_qdrant_instance.collection_exists_async = AsyncMock(return_value=False)  # Collection doesn't exist initially
     mock_qdrant_instance.create_collection_async = AsyncMock()
+    mock_qdrant_instance.create_index_if_needed_async = AsyncMock()
     mock_qdrant_instance.sync_df_with_collection_async = AsyncMock()
     mock_qdrant_instance.count_points = MagicMock(return_value=0)  # No points after deletion
 
