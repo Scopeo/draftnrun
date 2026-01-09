@@ -29,7 +29,6 @@ from ada_backend.database.seed.seed_tool_description import TOOL_DESCRIPTION_UUI
 from ada_backend.database.seed.utils import (
     COMPONENT_UUIDS,
     COMPONENT_VERSION_UUIDS,
-    DEFAULT_MODEL,
     ParameterLLMConfig,
     build_completion_service_config_definitions,
     build_components_parameters_assignments_to_parameter_groups,
@@ -308,20 +307,6 @@ def seed_rag_components(session: Session):
         is_advanced=False,
     )
 
-    rag_v3_completion_model_param = db.ComponentParameterDefinition(
-        id=UUID("134a4ddb-6906-4a22-b6b9-404f48543cc7"),
-        component_version_id=rag_agent_v3_version.id,
-        name="completion_model",
-        type=ParameterType.LLM_MODEL,
-        nullable=False,
-        default=DEFAULT_MODEL,
-        ui_component=UIComponent.SELECT,
-        ui_component_properties=UIComponentProperties(
-            label="Model Name",
-        ).model_dump(exclude_unset=True, exclude_none=True),
-        is_advanced=False,
-    )
-
     rag_v3_prompt_template_param = db.ComponentParameterDefinition(
         id=UUID("0bfd2f69-ee7f-44a5-8e1b-84bde9678183"),
         component_version_id=rag_agent_v3_version.id,
@@ -453,74 +438,6 @@ def seed_rag_components(session: Session):
             placeholder="Enter the maximum number of chunks here",
         ).model_dump(exclude_unset=True, exclude_none=True),
         is_advanced=True,
-    )
-
-    rag_v3_temperature_param = db.ComponentParameterDefinition(
-        id=UUID("697a921c-c0b7-4393-a9e1-67f180265226"),
-        component_version_id=rag_agent_v3_version.id,
-        name="temperature",
-        type=ParameterType.FLOAT,
-        nullable=True,
-        default="1.0",
-        ui_component=UIComponent.SLIDER,
-        ui_component_properties=UIComponentProperties(
-            label="Temperature",
-            placeholder="Enter temperature, it is different for each model, check the model documentation",
-            min=0,
-            max=2,
-            step=0.01,
-            marks=True,
-        ).model_dump(exclude_unset=True, exclude_none=True),
-        is_advanced=True,
-    )
-
-    rag_v3_verbosity_param = db.ComponentParameterDefinition(
-        id=UUID("72111114-d1ab-4bf6-9248-6f493e1b4728"),
-        component_version_id=rag_agent_v3_version.id,
-        name="verbosity",
-        type=ParameterType.STRING,
-        nullable=True,
-        default=None,
-        ui_component=UIComponent.SELECT,
-        ui_component_properties=UIComponentProperties(
-            label="Verbosity",
-            options=[
-                SelectOption(value="low", label="Low"),
-                SelectOption(value="medium", label="Medium"),
-                SelectOption(value="high", label="High"),
-            ],
-            placeholder="Select verbosity level useful only for GPT 5 models",
-        ).model_dump(exclude_unset=True, exclude_none=True),
-        is_advanced=True,
-    )
-
-    rag_v3_reasoning_param = db.ComponentParameterDefinition(
-        id=UUID("7f6312f7-84f7-4984-b5e5-1dec0deee4c0"),
-        component_version_id=rag_agent_v3_version.id,
-        name="reasoning",
-        type=ParameterType.STRING,
-        nullable=True,
-        default=None,
-        ui_component=UIComponent.SELECT,
-        ui_component_properties=UIComponentProperties(
-            label="Reasoning",
-            options=[
-                SelectOption(value="minimal", label="Minimal"),
-                SelectOption(value="medium", label="Medium"),
-                SelectOption(value="high", label="High"),
-                SelectOption(value="low", label="Low"),
-            ],
-            placeholder="Select reasoning level useful only for GPT 5 models",
-        ).model_dump(exclude_unset=True, exclude_none=True),
-        is_advanced=True,
-    )
-
-    rag_v3_llm_api_key_param = db.ComponentParameterDefinition(
-        id=UUID("f885ed15-e661-4790-bf14-1bb780459047"),
-        component_version_id=rag_agent_v3_version.id,
-        name="llm_api_key",
-        type=ParameterType.LLM_API_KEY,
-        nullable=True,
     )
 
     rag_v3_use_reranker_param = db.ComponentParameterDefinition(
@@ -714,7 +631,6 @@ def seed_rag_components(session: Session):
         component_parameter_definitions=[
             # Basic parameters
             rag_v3_data_source_param,
-            rag_v3_completion_model_param,
             rag_v3_prompt_template_param,
             # Advanced retriever parameters
             rag_v3_max_retrieved_chunks_param,
@@ -723,11 +639,6 @@ def seed_rag_components(session: Session):
             rag_v3_default_penalty_rate_param,
             rag_v3_metadata_date_key_param,
             rag_v3_max_retrieved_chunks_after_penalty_param,
-            # Advanced synthesizer parameters
-            rag_v3_temperature_param,
-            rag_v3_verbosity_param,
-            rag_v3_reasoning_param,
-            rag_v3_llm_api_key_param,
             # Advanced Reranker parameters
             rag_v3_use_reranker_param,
             rag_v3_cohere_model_param,
@@ -742,6 +653,32 @@ def seed_rag_components(session: Session):
             # Advanced Formatter parameters
             rag_v3_use_formatter_param,
             rag_v3_add_sources_param,
+            # Synthesizer parameters
+            *build_completion_service_config_definitions(
+                component_version_id=rag_agent_v3_version.id,
+                params_to_seed=[
+                    ParameterLLMConfig(
+                        param_name=COMPLETION_MODEL_IN_DB,
+                        param_id=UUID("134a4ddb-6906-4a22-b6b9-404f48543cc7"),
+                    ),
+                    ParameterLLMConfig(
+                        param_name=TEMPERATURE_IN_DB,
+                        param_id=UUID("697a921c-c0b7-4393-a9e1-67f180265226"),
+                    ),
+                    ParameterLLMConfig(
+                        param_name=VERBOSITY_IN_DB,
+                        param_id=UUID("72111114-d1ab-4bf6-9248-6f493e1b4728"),
+                    ),
+                    ParameterLLMConfig(
+                        param_name=REASONING_IN_DB,
+                        param_id=UUID("7f6312f7-84f7-4984-b5e5-1dec0deee4c0"),
+                    ),
+                    ParameterLLMConfig(
+                        param_name="api_key",
+                        param_id=UUID("f885ed15-e661-4790-bf14-1bb780459047"),
+                    ),
+                ],
+            ),
         ],
     )
 
