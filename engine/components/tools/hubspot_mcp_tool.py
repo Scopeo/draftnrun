@@ -94,8 +94,13 @@ class HubSpotMCPTool(Component):
         return self._mcp_tool_descriptions
 
     def _get_headers(self) -> dict[str, str]:
-        """Get headers with Bearer token for HubSpot MCP."""
-        return {"Authorization": f"Bearer {self.access_token}"}
+        """Get headers with Bearer token and Client ID for HubSpot MCP."""
+        headers = {"Authorization": f"Bearer {self.access_token}"}
+        # HubSpot MCP requires Client ID in headers according to their documentation
+        client_id = settings.HUBSPOT_MCP_CLIENT_ID
+        if client_id:
+            headers["X-HubSpot-Client-Id"] = client_id
+        return headers
 
     def _create_http_client(self) -> httpx.AsyncClient:
         """Create httpx.AsyncClient configured with Bearer token for HubSpot MCP."""
