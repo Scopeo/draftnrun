@@ -1,0 +1,40 @@
+# Staging overlay - inherits from base, applies staging-specific config
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Inherit all resources from base
+resources:
+  - ../base
+  - namespace.yaml
+  # cloudwatch-logging.yaml is applied separately (has its own namespace)
+
+# Apply to staging namespace
+namespace: ada-staging
+
+# Container images
+# For local testing (no registry):
+images:
+  - name: ada-api
+    newName: draftnrun-api
+    newTag: test
+  - name: ada-worker
+    newName: draftnrun-worker
+    newTag: test
+  - name: ada-scheduler
+    newName: draftnrun-scheduler
+    newTag: test
+# For CI/CD with GitHub registry, use:
+#  - name: ada-api
+#    newName: ghcr.io/scopeo/draftnrun-api
+#    newTag: latest
+
+# Staging-specific patches (optional)
+# Reduce replicas for staging to save resources
+patches:
+  - patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 1
+    target:
+      kind: Deployment
+      name: ada-api

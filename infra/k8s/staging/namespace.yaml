@@ -1,0 +1,7 @@
+# Namespace for staging environment
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ada-staging
+  labels:
+    environment: staging
