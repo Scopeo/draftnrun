@@ -26,6 +26,7 @@ from engine.components.rag.formatter import Formatter
 from engine.components.rag.retriever import Retriever
 from engine.components.rag.vocabulary_search import VocabularySearch
 from engine.components.synthesizer import Synthesizer
+from engine.components.tools.hubspot_mcp_tool import HubSpotMCPTool
 from engine.components.tools.remote_mcp_tool import RemoteMCPTool
 from engine.components.types import ToolDescription
 from engine.llm_services.llm_service import CompletionService, EmbeddingService, OCRService, WebSearchService
@@ -220,7 +221,6 @@ class HubSpotMCPToolFactory:
     entity_class = HubSpotMCPTool
 
     def __call__(self, **kwargs):
-        from engine.components.tools.hubspot_mcp_tool import HubSpotMCPTool
         from engine.components.types import ComponentAttributes
 
         # Tool descriptions come from the server; drop any default from DB seed
