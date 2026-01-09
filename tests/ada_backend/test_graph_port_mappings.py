@@ -45,7 +45,7 @@ def test_get_put_roundtrip_port_mappings_migration():
     """
     with get_db_session() as session:
         project_id, graph_runner_id = create_project_and_graph_runner(
-            session, name="Port Mappings Roundtrip Test", description="Test project"
+            session, project_name_prefix="port_mappings_test", description="Test project for port mappings migration"
         )
 
         # Two component instances connected by a single edge; no port_mappings in the payload
@@ -258,7 +258,7 @@ def test_deploy_graph_copies_port_mappings():
     """
     with get_db_session() as session:
         project_id, graph_runner_id = create_project_and_graph_runner(
-            session, name="Port Mappings Deploy Test", description="Test project"
+            session, project_name_prefix="port_mappings_test", description="Test project for port mappings migration"
         )
 
         # Two component instances connected by a single edge with explicit port mappings

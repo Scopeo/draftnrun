@@ -78,7 +78,7 @@ def test_llm_judge_management():
     """Test complete LLM judge CRUD operations."""
     with get_db_session() as session:
         project_id, _ = create_project_and_graph_runner(
-            session, name="LLM Judge Management Test", description="Test project"
+            session, project_name_prefix="llm_judge_management_test", description="Test project"
         )
 
         judges = get_llm_judges_by_project_service(session=session, project_id=project_id)
@@ -140,7 +140,7 @@ async def test_run_delete_evaluation_boolean(mock_llm):
     mock_llm.return_value = BooleanEvaluationResult(result=True, justification="Test justification")
     with get_db_session() as session:
         project_id, graph_runner_id = create_project_and_graph_runner(
-            session, name="Boolean Evaluation Test", description="Test project"
+            session, project_name_prefix="boolean_evaluation_test", description="Test project"
         )
         evaluation_scenario = _create_evaluation_scenario(session, project_id, graph_runner_id)
 
@@ -176,7 +176,7 @@ async def test_run_delete_evaluation_boolean(mock_llm):
 async def test_evaluation_errors():
     with get_db_session() as session:
         project_id, graph_runner_id = create_project_and_graph_runner(
-            session, name="Evaluation Errors Test", description="Test project"
+            session, project_name_prefix="evaluation_errors_test", description="Test project"
         )
         evaluation_scenario = _create_evaluation_scenario(session, project_id, graph_runner_id)
 
@@ -198,7 +198,7 @@ async def test_evaluation_errors():
 async def test_validation_errors_version_output():
     with get_db_session() as session:
         project_id, graph_runner_id = create_project_and_graph_runner(
-            session, name="Version Output Validation Test", description="Test project"
+            session, project_name_prefix="version_output_validation_test", description="Test project"
         )
         evaluation_scenario = _create_evaluation_scenario(session, project_id, graph_runner_id)
 
@@ -218,7 +218,7 @@ async def test_validation_errors_version_output():
 async def test_version_output_empty_error():
     with get_db_session() as session:
         project_id, graph_runner_id = create_project_and_graph_runner(
-            session, name="Empty Output Error Test", description="Test project"
+            session, project_name_prefix="empty_output_error_test", description="Test project"
         )
         evaluation_scenario = _create_evaluation_scenario(session, project_id, graph_runner_id)
 
