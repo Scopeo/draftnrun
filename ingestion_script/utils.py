@@ -7,6 +7,12 @@ from uuid import UUID
 
 import requests
 
+from ada_backend.schemas.ingestion_task_schema import (
+    IngestionTaskUpdate,
+    TaskResultMetadata,
+    ResultType,
+    SourceAttributes,
+)
 from ada_backend.database import models as db
 from ada_backend.schemas.ingestion_task_schema import IngestionTaskUpdate, SourceAttributes
 from ada_backend.schemas.source_schema import DataSourceSchema
@@ -209,14 +215,24 @@ async def upload_source(
 
     if not update_existing and db_service.schema_exists(schema_name=schema_name):
         if db_service.table_exists(table_name=table_name, schema_name=schema_name):
-            LOGGER.error(f"Source {source_name} already exists db in {schema_name}")
+            error_msg = f"Source {source_name} already exists in database schema {schema_name}"
+            LOGGER.error(error_msg)
+            ingestion_task.result_metadata = TaskResultMetadata(
+                message=error_msg,
+                type=ResultType.ERROR,
+            )
             update_ingestion_task(
                 organization_id=organization_id,
                 ingestion_task=ingestion_task,
             )
             raise ValueError(f"Source '{source_name}' already exists in database schema '{schema_name}'")
     elif not update_existing and await qdrant_service.collection_exists_async(qdrant_collection_name):
-        LOGGER.error(f"Source {source_name} already exists in Qdrant")
+        error_msg = f"Source {source_name} already exists in Qdrant"
+        LOGGER.error(error_msg)
+        ingestion_task.result_metadata = TaskResultMetadata(
+            message=error_msg,
+            type=ResultType.ERROR,
+        )
         update_ingestion_task(
             organization_id=organization_id,
             ingestion_task=ingestion_task,
@@ -233,12 +249,17 @@ async def upload_source(
             update_existing=update_existing,
         )
     except Exception as e:
-        LOGGER.error(f"Failed to get data from the database: {str(e)}")
+        error_msg = f"Failed to get data from the database: {str(e)}"
+        LOGGER.error(error_msg)
         ingestion_task = IngestionTaskUpdate(
             id=task_id,
             source_name=source_name,
             source_type=source_type,
             status=db.TaskStatus.FAILED,
+            result_metadata=TaskResultMetadata(
+                message=error_msg,
+                type=ResultType.ERROR,
+            ),
         )
         update_ingestion_task(
             organization_id=organization_id,

@@ -12,6 +12,9 @@ import requests
 import structlog
 from dotenv import load_dotenv
 
+from ada_backend.database import models as db
+from ada_backend.schemas.ingestion_task_schema import IngestionTaskUpdate, ResultType, TaskResultMetadata
+
 # Configure structured logging
 structlog.configure(
     processors=[structlog.processors.TimeStamper(fmt="iso"), structlog.processors.JSONRenderer()],
@@ -260,12 +263,18 @@ class Worker:
             if process.returncode != 0:
                 logger.error("script_failed", return_code=process.returncode)
                 # Update task status to FAILED when subprocess fails
+
+                result_metadata = TaskResultMetadata(
+                    message=f"Ingestion subprocess failed with return code {process.returncode}",
+                    type=ResultType.ERROR,
+                )
                 self._update_task_status_to_failed(
                     organization_id=organization_id,
                     task_id=task_id,
                     source_name=source_name,
                     source_type=source_type,
                     ingestion_id=ingestion_id,
+                    result_metadata=result_metadata,
                 )
             else:
                 logger.info("task_completed", ingestion_id=ingestion_id)
@@ -274,12 +283,17 @@ class Worker:
             logger.error("task_error", error=str(e), exc_info=True)
             # Update task status to FAILED when worker encounters an exception
             try:
+                result_metadata = TaskResultMetadata(
+                    message=str(e),
+                    type=ResultType.ERROR,
+                )
                 self._update_task_status_to_failed(
                     organization_id=organization_id,
                     task_id=task_id,
                     source_name=source_name,
                     source_type=source_type,
                     ingestion_id=ingestion_id,
+                    result_metadata=result_metadata,
                 )
             except Exception as update_error:
                 logger.error("failed_to_update_task_status", error=str(update_error))
@@ -343,18 +357,16 @@ class Worker:
         source_name: str,
         source_type: str,
         ingestion_id: str,
+        result_metadata=None,
     ) -> None:
         """Update the task status to FAILED in the database."""
         try:
-            from ada_backend.database import models as db
-            from ada_backend.schemas.ingestion_task_schema import IngestionTaskUpdate
-
-            # Create the failed task update
             failed_task = IngestionTaskUpdate(
                 id=task_id,
                 source_name=source_name,
                 source_type=source_type,
                 status=db.TaskStatus.FAILED,
+                result_metadata=result_metadata,
             )
 
             # Get API base URL from environment or use default
