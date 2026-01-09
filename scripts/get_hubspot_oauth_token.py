@@ -30,8 +30,11 @@ import httpx
 
 from settings import settings
 
+# Default redirect URI for OAuth callback (using port 9999 to avoid conflicts)
+DEFAULT_REDIRECT_URI = "http://localhost:9999/oauth-callback"
 
-def build_install_url(client_id: str, redirect_uri: str = "http://localhost:3000/oauth-callback") -> str:
+
+def build_install_url(client_id: str, redirect_uri: str = DEFAULT_REDIRECT_URI) -> str:
     """Build the Install URL for the HubSpot app."""
     base_url = "https://app-eu1.hubspot.com/oauth/authorize/user"
     params = {
@@ -56,7 +59,7 @@ async def exchange_code_for_token(
     client_id: str,
     client_secret: str,
     code: str,
-    redirect_uri: str = "http://localhost:3000/oauth-callback",
+    redirect_uri: str = DEFAULT_REDIRECT_URI,
 ) -> dict:
     """Exchange OAuth code for access_token and refresh_token."""
     token_url = "https://api.hubapi.com/oauth/v1/token"
@@ -105,8 +108,8 @@ Examples:
     )
     parser.add_argument(
         "--redirect-uri",
-        default="http://localhost:3000/oauth-callback",
-        help="Redirect URI configured in the app (default: http://localhost:3000/oauth-callback)",
+        default=DEFAULT_REDIRECT_URI,
+        help=f"Redirect URI configured in the app (default: {DEFAULT_REDIRECT_URI})",
     )
     parser.add_argument(
         "--code",
