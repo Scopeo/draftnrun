@@ -38,39 +38,13 @@ def seed_hubspot_mcp_tool_components(session: Session):
         component_id=COMPONENT_UUIDS["hubspot_mcp_tool"],
         version_tag="0.0.1",
         release_stage=db.ReleaseStage.INTERNAL,
-        description="Connect to HubSpot CRM via MCP server. Requires OAuth access token (obtain via scripts/get_hubspot_oauth_token.py).",
+        description="Connect to HubSpot CRM via MCP server. Requires HUBSPOT_MCP_ACCESS_TOKEN in credentials.env (obtain via scripts/get_hubspot_oauth_token.py).",
         default_tool_description_id=TOOL_DESCRIPTION_UUIDS["default_tool_description"],
     )
     upsert_component_versions(session, [hubspot_mcp_component_version])
 
-    parameter_definitions = [
-        ComponentParameterDefinition(
-            id=UUID("c1d2e3f4-a5b6-7890-cdef-123456789abc"),
-            component_version_id=hubspot_mcp_component_version.id,
-            name="access_token",
-            type=ParameterType.STRING,
-            nullable=True,
-            ui_component=UIComponent.TEXTFIELD,
-            ui_component_properties=UIComponentProperties(
-                label="Access Token",
-                placeholder="OAuth access token (or set HUBSPOT_MCP_ACCESS_TOKEN in env)",
-                helper_text="Optional. If not provided, will use HUBSPOT_MCP_ACCESS_TOKEN from environment. Get token via scripts/get_hubspot_oauth_token.py",
-            ).model_dump(exclude_unset=True, exclude_none=True),
-        ),
-        ComponentParameterDefinition(
-            id=UUID("d2e3f4a5-b6c7-8901-def2-23456789abcd"),
-            component_version_id=hubspot_mcp_component_version.id,
-            name="refresh_token",
-            type=ParameterType.STRING,
-            nullable=True,
-            ui_component=UIComponent.TEXTFIELD,
-            ui_component_properties=UIComponentProperties(
-                label="Refresh Token",
-                placeholder="OAuth refresh token (or set HUBSPOT_MCP_REFRESH_TOKEN in env)",
-                helper_text="Optional. Used to refresh access token when it expires (future feature).",
-            ).model_dump(exclude_unset=True, exclude_none=True),
-        ),
-    ]
+    # No parameters - tokens come from environment variables only
+    parameter_definitions = []
     upsert_components_parameter_definitions(session, parameter_definitions)
     upsert_component_categories(
         session=session,

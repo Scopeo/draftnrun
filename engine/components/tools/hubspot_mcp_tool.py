@@ -72,9 +72,7 @@ class HubSpotMCPTool(Component):
         self.server_url = HUBSPOT_MCP_SERVER_URL
         self.access_token = access_token or settings.HUBSPOT_MCP_ACCESS_TOKEN
         if not self.access_token:
-            raise ValueError(
-                "access_token is required. Set HUBSPOT_MCP_ACCESS_TOKEN in credentials.env or pass it as parameter."
-            )
+            raise ValueError("HUBSPOT_MCP_ACCESS_TOKEN is required. Set it in credentials.env")
         self.timeout = timeout
 
         if tool_descriptions is None:
@@ -133,9 +131,7 @@ class HubSpotMCPTool(Component):
         temp.server_url = HUBSPOT_MCP_SERVER_URL
         temp.access_token = access_token or settings.HUBSPOT_MCP_ACCESS_TOKEN
         if not temp.access_token:
-            raise ValueError(
-                "access_token is required. Set HUBSPOT_MCP_ACCESS_TOKEN in credentials.env or pass it as parameter."
-            )
+            raise ValueError("HUBSPOT_MCP_ACCESS_TOKEN is required. Set it in credentials.env")
         temp.timeout = timeout
 
         try:
@@ -166,7 +162,6 @@ class HubSpotMCPTool(Component):
         return cls(
             trace_manager=trace_manager,
             component_attributes=component_attributes,
-            access_token=temp.access_token,
             timeout=timeout,
             tool_descriptions=tool_descriptions,
         )
