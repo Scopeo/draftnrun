@@ -46,7 +46,7 @@ depends_on: Union[str, Sequence[str], None] = None
 # Configure logger for migration - ensure it outputs to console
 # The logger needs to have a handler and appropriate level to show logs during Alembic migration
 LOGGER = logging.getLogger("alembic.migration")
-LOGGER.setLevel(logging.INFO)
+LOGGER.setLevel(logging.DEBUG)
 
 # Ensure the logger has a console handler
 # Check if logger already has handlers (from alembic.ini config)
@@ -344,10 +344,13 @@ def _build_json_metadata_sql(metadata_cols, column_types=None):
         elif col_type in ("integer", "bigint", "numeric", "double precision", "real"):
             # Numeric types - jsonb_build_object handles it correctly
             value_expr = f'"{col}"'
+        elif col_type in ("datetime", "timestamp", "date"):
+            # Datetime types - jsonb_build_object handles it correctly
+            value_expr = f'"{col}"'
         else:
             # String types and others - jsonb_build_object converts to JSON string
             # Handle NULL by using empty string or null
-            value_expr = f"COALESCE(\"{col}\"::text, '')"
+            value_expr = f'to_jsonb("{col}"::text)'
 
         obj_parts.append(f"'{col}', {value_expr}")
 
