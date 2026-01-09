@@ -13,13 +13,13 @@ from ada_backend.database.seed.utils import COMPONENT_UUIDS
 from ada_backend.database.setup_db import get_db_session
 from ada_backend.schemas.parameter_schema import ParameterKind
 from ada_backend.schemas.pipeline.graph_schema import GraphUpdateSchema
-from ada_backend.schemas.project_schema import ProjectCreateSchema
 from ada_backend.services.graph.deploy_graph_service import deploy_graph_service
 from ada_backend.services.graph.get_graph_service import get_graph_service
 from ada_backend.services.graph.load_copy_graph_service import load_copy_graph_service
 from ada_backend.services.graph.update_graph_service import update_graph_service
-from ada_backend.services.project_service import create_workflow, delete_project_service, get_project_service
+from ada_backend.services.project_service import delete_project_service
 from engine.field_expressions.errors import FieldExpressionError
+from tests.ada_backend.test_utils import create_project_and_graph_runner
 
 # Test constants
 ORGANIZATION_ID = UUID("37b7d67f-8f29-4fce-8085-19dea582f605")  # umbrella organization
@@ -136,30 +136,6 @@ def _create_graph_payload_with_field_expressions(
     }
 
 
-def _create_project_and_get_graph_runner(session, project_name_prefix: str) -> tuple[UUID, UUID]:
-    """Create a test project and return project_id and draft graph_runner_id."""
-    project_id = uuid4()
-    user_id = uuid4()
-
-    project_payload = ProjectCreateSchema(
-        project_id=project_id,
-        project_name=f"{project_name_prefix}_{project_id}",
-        description=f"Test {project_name_prefix}",
-    )
-
-    create_workflow(
-        session=session,
-        user_id=user_id,
-        organization_id=ORGANIZATION_ID,
-        project_schema=project_payload,
-    )
-
-    project_details = get_project_service(session, project_id)
-    draft_graph_runner_id = next(gr.graph_runner_id for gr in project_details.graph_runners if gr.env == EnvType.DRAFT)
-
-    return project_id, draft_graph_runner_id
-
-
 def _assert_expression_remapped(
     expr_json: dict,
     expr_text: str,
@@ -194,7 +170,7 @@ def _assert_expression_remapped(
 def test_field_expressions_e2e():
     """Test field expressions parsing and GraphRunner integration end-to-end."""
     with get_db_session() as session:
-        project_id, graph_runner_id = _create_project_and_get_graph_runner(session, "field_expressions_test")
+        project_id, graph_runner_id = create_project_and_graph_runner(session, "field_expressions_test")
 
         src_instance_id = str(uuid4())
         dst_instance_id = str(uuid4())
@@ -363,7 +339,7 @@ def test_field_expressions_e2e():
 def test_invalid_reference_uuid_returns_error():
     """Test that invalid UUID in reference raises FieldExpressionError."""
     with get_db_session() as session:
-        project_id, graph_runner_id = _create_project_and_get_graph_runner(session, "field_expr_invalid_uuid")
+        project_id, graph_runner_id = create_project_and_graph_runner(session, "field_expr_invalid_uuid")
 
         src_instance_id = str(uuid4())
         dst_instance_id = str(uuid4())
@@ -441,7 +417,7 @@ def test_invalid_reference_uuid_returns_error():
 def test_deploy_remaps_field_expression_instance_ids():
     """Deploy should remap instance IDs in field expressions to new IDs."""
     with get_db_session() as session:
-        project_id, graph_runner_id = _create_project_and_get_graph_runner(session, "deploy_expr")
+        project_id, graph_runner_id = create_project_and_graph_runner(session, "deploy_expr")
 
         src_instance_id = str(uuid4())
         dst_instance_id = str(uuid4())
@@ -493,7 +469,7 @@ def test_deploy_remaps_field_expression_instance_ids():
 def test_load_copy_includes_field_expressions_and_roundtrip():
     """load-copy should include field expressions and remap refs to new IDs, and its payload should PUT cleanly."""
     with get_db_session() as session:
-        project_id, graph_runner_id = _create_project_and_get_graph_runner(session, "load_copy_expr")
+        project_id, graph_runner_id = create_project_and_graph_runner(session, "load_copy_expr")
 
         src_instance_id = str(uuid4())
         dst_instance_id = str(uuid4())
@@ -527,7 +503,7 @@ def test_load_copy_includes_field_expressions_and_roundtrip():
         assert str(src_instance_id) not in expr_text_new
         assert str(new_src.id) in expr_text_new
 
-        project_id_2, clone_graph_runner_id = _create_project_and_get_graph_runner(session, "load_copy_expr_target")
+        project_id_2, clone_graph_runner_id = create_project_and_graph_runner(session, "load_copy_expr_target")
         _run_update_graph(session, clone_graph_runner_id, project_id_2, load_payload.model_dump())
 
         cloned = get_graph_service(
@@ -546,7 +522,7 @@ def test_load_copy_includes_field_expressions_and_roundtrip():
 def test_load_copy_cloned_graph_has_remapped_field_expressions():
     """After PUT load-copy payload, the cloned graph should have field expressions with remapped IDs."""
     with get_db_session() as session:
-        project_id, graph_runner_id = _create_project_and_get_graph_runner(session, "load_copy_clone")
+        project_id, graph_runner_id = create_project_and_graph_runner(session, "load_copy_clone")
 
         src_instance_id = str(uuid4())
         dst_instance_id = str(uuid4())
@@ -570,9 +546,7 @@ def test_load_copy_cloned_graph_has_remapped_field_expressions():
             graph_runner_id_to_copy=graph_runner_id,
         )
 
-        project_id_clone, clone_graph_runner_id = _create_project_and_get_graph_runner(
-            session, "load_copy_clone_target"
-        )
+        project_id_clone, clone_graph_runner_id = create_project_and_graph_runner(session, "load_copy_clone_target")
         _run_update_graph(session, clone_graph_runner_id, project_id_clone, load_payload.model_dump())
 
         cloned_graph = get_graph_service(
@@ -605,7 +579,7 @@ def test_load_copy_cloned_graph_has_remapped_field_expressions():
 def test_invalid_reference_unknown_port_returns_error():
     """Test that invalid port in reference raises FieldExpressionError."""
     with get_db_session() as session:
-        project_id, graph_runner_id = _create_project_and_get_graph_runner(session, "field_expr_invalid_port")
+        project_id, graph_runner_id = create_project_and_graph_runner(session, "field_expr_invalid_port")
 
         src_instance_id = str(uuid4())
         dst_instance_id = str(uuid4())
