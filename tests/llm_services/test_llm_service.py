@@ -26,43 +26,68 @@ def setup_tracing_context():
 
 
 def test_completion_service():
-    completion_service = CompletionService(trace_manager=MagicMock(), provider="openai", model_name="gpt-4.1-mini")
+    completion_service = CompletionService(
+        trace_manager=MagicMock(), provider="openai", model_name="gpt-4.1-mini", api_key="fake-key"
+    )
     assert completion_service._provider == "openai"
     assert completion_service._model_name == "gpt-4.1-mini"
     assert completion_service._api_key is not None
     assert completion_service._invocation_parameters.get("temperature") == DEFAULT_TEMPERATURE
     assert completion_service._trace_manager is not None
-    text = "Hello, world!"
-    response = completion_service.complete(text)
-    assert response is not None
-    assert isinstance(response, str)
-    assert len(response) > 0
+
+    # Mock the provider's complete method
+    mock_response = ("Hello, world! This is a test response.", 10, 20, 30)
+    with patch.object(completion_service._provider_instance, "complete", new_callable=AsyncMock) as mock_complete:
+        mock_complete.return_value = mock_response
+        text = "Hello, world!"
+        response = completion_service.complete(text)
+        assert response is not None
+        assert isinstance(response, str)
+        assert len(response) > 0
 
 
 @pytest.mark.asyncio
 async def test_completion_service_async():
-    completion_service = CompletionService(trace_manager=MagicMock(), provider="openai", model_name="gpt-4o-mini")
+    completion_service = CompletionService(
+        trace_manager=MagicMock(), provider="openai", model_name="gpt-4o-mini", api_key="fake-key"
+    )
     assert completion_service._provider == "openai"
     assert completion_service._model_name == "gpt-4o-mini"
     assert completion_service._api_key is not None
     assert completion_service._invocation_parameters.get("temperature") == DEFAULT_TEMPERATURE
     assert completion_service._trace_manager is not None
-    text = "Hello, world!"
-    response = await completion_service.complete_async(text)
-    assert response is not None
-    assert isinstance(response, str)
-    assert len(response) > 0
+
+    # Mock the provider's complete method
+    mock_response = ("Hello, world! This is a test response.", 10, 20, 30)
+    with patch.object(completion_service._provider_instance, "complete", new_callable=AsyncMock) as mock_complete:
+        mock_complete.return_value = mock_response
+        text = "Hello, world!"
+        response = await completion_service.complete_async(text)
+        assert response is not None
+        assert isinstance(response, str)
+        assert len(response) > 0
 
 
 def test_completion_service_constrained_complete():
-    completion_service = CompletionService(trace_manager=MagicMock(), provider="openai", model_name="gpt-4.1-mini")
+    completion_service = CompletionService(
+        trace_manager=MagicMock(), provider="openai", model_name="gpt-4.1-mini", api_key="fake-key"
+    )
     text = "Hello, world!"
 
-    response = completion_service.constrained_complete_with_pydantic(text, ResponseFormat)
-    assert response is not None
-    assert isinstance(response, ResponseFormat)
-    assert len(response.response) > 0
-    assert response.is_successful
+    # Mock the provider's constrained_complete_with_pydantic method
+    mock_pydantic_response = (ResponseFormat(response="Test response", is_successful=True), 10, 20, 30)
+    with patch.object(
+        completion_service._provider_instance,
+        "constrained_complete_with_pydantic",
+        new_callable=AsyncMock,
+    ) as mock_constrained:
+        mock_constrained.return_value = mock_pydantic_response
+        response = completion_service.constrained_complete_with_pydantic(text, ResponseFormat)
+        assert response is not None
+        assert isinstance(response, ResponseFormat)
+        assert len(response.response) > 0
+        assert response.is_successful
+
     response_json = {
         "name": "test_response",
         "type": "json_schema",
@@ -74,22 +99,42 @@ def test_completion_service_constrained_complete():
         },
     }
     assert OutputFormatModel.model_validate(response_json) is not None
-    response = completion_service.constrained_complete_with_json_schema(text, json.dumps(response_json))
-    assert response is not None
-    assert isinstance(response, str)
-    assert len(response) > 0
+
+    # Mock the provider's constrained_complete_with_json_schema method
+    mock_json_response = ('{"text": "Test response"}', 10, 20, 30)
+    with patch.object(
+        completion_service._provider_instance,
+        "constrained_complete_with_json_schema",
+        new_callable=AsyncMock,
+    ) as mock_json:
+        mock_json.return_value = mock_json_response
+        response = completion_service.constrained_complete_with_json_schema(text, json.dumps(response_json))
+        assert response is not None
+        assert isinstance(response, str)
+        assert len(response) > 0
 
 
 @pytest.mark.asyncio
 async def test_completion_service_constrained_complete_async():
-    completion_service = CompletionService(trace_manager=MagicMock(), provider="openai", model_name="gpt-4.1-mini")
+    completion_service = CompletionService(
+        trace_manager=MagicMock(), provider="openai", model_name="gpt-4.1-mini", api_key="fake-key"
+    )
     text = "Hello, world!"
 
-    response = await completion_service.constrained_complete_with_pydantic_async(text, ResponseFormat)
-    assert response is not None
-    assert isinstance(response, ResponseFormat)
-    assert len(response.response) > 0
-    assert response.is_successful
+    # Mock the provider's constrained_complete_with_pydantic method
+    mock_pydantic_response = (ResponseFormat(response="Test response", is_successful=True), 10, 20, 30)
+    with patch.object(
+        completion_service._provider_instance,
+        "constrained_complete_with_pydantic",
+        new_callable=AsyncMock,
+    ) as mock_constrained:
+        mock_constrained.return_value = mock_pydantic_response
+        response = await completion_service.constrained_complete_with_pydantic_async(text, ResponseFormat)
+        assert response is not None
+        assert isinstance(response, ResponseFormat)
+        assert len(response.response) > 0
+        assert response.is_successful
+
     response_json = {
         "name": "test_response",
         "type": "json_schema",
@@ -101,41 +146,67 @@ async def test_completion_service_constrained_complete_async():
         },
     }
     assert OutputFormatModel.model_validate(response_json) is not None
-    response = await completion_service.constrained_complete_with_json_schema_async(text, json.dumps(response_json))
-    assert response is not None
-    assert isinstance(response, str)
-    assert len(response) > 0
+
+    # Mock the provider's constrained_complete_with_json_schema method
+    mock_json_response = ('{"text": "Test response"}', 10, 20, 30)
+    with patch.object(
+        completion_service._provider_instance,
+        "constrained_complete_with_json_schema",
+        new_callable=AsyncMock,
+    ) as mock_json:
+        mock_json.return_value = mock_json_response
+        response = await completion_service.constrained_complete_with_json_schema_async(
+            text, json.dumps(response_json)
+        )
+        assert response is not None
+        assert isinstance(response, str)
+        assert len(response) > 0
 
 
 def test_embedding_service():
     embedding_service = EmbeddingService(
-        trace_manager=MagicMock(), provider="openai", model_name="text-embedding-3-large"
+        trace_manager=MagicMock(),
+        provider="openai",
+        model_name="text-embedding-3-large",
+        api_key="fake-key",
     )
     assert embedding_service._provider == "openai"
     assert embedding_service._model_name == "text-embedding-3-large"
     assert embedding_service._api_key is not None
     assert embedding_service._trace_manager is not None
-    text = "Hello, world!"
-    response = embedding_service.embed_text(text)
-    assert response is not None
-    assert isinstance(response, list)
-    assert len(response) > 0
+
+    # Mock the provider's embed method
+    mock_embedding = ([0.1, 0.2, 0.3, 0.4, 0.5], 10, 0, 10)
+    with patch.object(embedding_service._provider_instance, "embed", new_callable=AsyncMock) as mock_embed:
+        mock_embed.return_value = mock_embedding
+        text = "Hello, world!"
+        response = embedding_service.embed_text(text)
+        assert response is not None
+        assert isinstance(response, list)
+        assert len(response) > 0
 
 
 @pytest.mark.asyncio
 async def test_embedding_service_async():
     embedding_service = EmbeddingService(
-        trace_manager=MagicMock(), provider="openai", model_name="text-embedding-3-large"
+        trace_manager=MagicMock(),
+        provider="openai",
+        model_name="text-embedding-3-large",
+        api_key="fake-key",
     )
     assert embedding_service._provider == "openai"
     assert embedding_service._model_name == "text-embedding-3-large"
     assert embedding_service._api_key is not None
     assert embedding_service._trace_manager is not None
-    text = "Hello, world!"
-    response = await embedding_service.embed_text_async(text)
-    assert response is not None
-    assert isinstance(response, list)
-    assert len(response) > 0
+
+    mock_embedding = ([0.1, 0.2, 0.3, 0.4, 0.5], 10, 0, 10)
+    with patch.object(embedding_service._provider_instance, "embed", new_callable=AsyncMock) as mock_embed:
+        mock_embed.return_value = mock_embedding
+        text = "Hello, world!"
+        response = await embedding_service.embed_text_async(text)
+        assert response is not None
+        assert isinstance(response, list)
+        assert len(response) > 0
 
 
 @pytest.mark.asyncio
