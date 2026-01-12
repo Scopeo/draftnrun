@@ -86,7 +86,6 @@ class MistralProvider(BaseProvider):
         stream: bool,
         **kwargs,
     ) -> tuple[str, int, int, int]:
-        # Make messages compatible for Mistral API
         if isinstance(messages, list):
             mistral_compatible_messages = self._convert_messages_to_mistral_format(messages)
 
