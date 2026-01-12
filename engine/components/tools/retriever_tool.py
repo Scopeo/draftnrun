@@ -9,6 +9,7 @@ from engine.components.build_context import build_context_from_source_chunks
 from engine.components.component import Component
 from engine.components.rag.retriever import Retriever
 from engine.components.types import ComponentAttributes, SourceChunk, ToolDescription
+from engine.trace.serializer import serialize_to_json
 from engine.trace.trace_manager import TraceManager
 
 RETRIEVER_TOOL_DESCRIPTION = ToolDescription(
@@ -88,13 +89,12 @@ class RetrieverTool(Component):
             raise ValueError("No query provided for the retriever tool.")
 
         span = get_current_span()
-        trace_input = f"query: {query_str}\nfilters: {json.dumps(inputs.filters) if inputs.filters else None}"
+        trace_input = {"query": query_str, "filters": inputs.filters}
         span.set_attributes({
             SpanAttributes.OPENINFERENCE_SPAN_KIND: self.TRACE_SPAN_KIND,
-            SpanAttributes.INPUT_VALUE: trace_input,
+            SpanAttributes.INPUT_VALUE: serialize_to_json(trace_input, shorten_string=False),
         })
 
-        # Use the retriever to get chunks
         chunks = await self.retriever.get_chunks(
             query_text=query_str,
             filters=inputs.filters,

@@ -57,17 +57,17 @@ def seed_retriever_tool_components(session: Session):
         is_advanced=False,
     )
 
-    max_retrieved_chunks_param = db.ComponentParameterDefinition(
+    number_of_chunks_param = db.ComponentParameterDefinition(
         id=UUID("8b2c3d4e-5f67-8901-bcde-f234567890ab"),
         component_version_id=retriever_tool_version.id,
-        name="max_retrieved_chunks",
+        name="number_of_chunks",
         type=ParameterType.INTEGER,
         nullable=False,
         default=10,
         ui_component=UIComponent.TEXTFIELD,
         ui_component_properties=UIComponentProperties(
-            label="Max Retrieved Chunks",
-            description="Maximum number of chunks to retrieve from the knowledge base.",
+            label="Number of Chunks",
+            description="Number of chunks to retrieve from the knowledge base.",
         ).model_dump(exclude_unset=True, exclude_none=True),
         is_advanced=False,
     )
@@ -132,17 +132,17 @@ def seed_retriever_tool_components(session: Session):
         is_advanced=True,
     )
 
-    max_retrieved_chunks_after_penalty_param = db.ComponentParameterDefinition(
+    retrieved_chunks_before_applying_penalty_param = db.ComponentParameterDefinition(
         id=UUID("3f890123-4567-8901-2345-678def901234"),
         component_version_id=retriever_tool_version.id,
-        name="max_retrieved_chunks_after_penalty",
+        name="retrieved_chunks_before_applying_penalty",
         type=ParameterType.INTEGER,
         nullable=True,
         default=None,
         ui_component=UIComponent.TEXTFIELD,
         ui_component_properties=UIComponentProperties(
-            label="Max Chunks After Penalty",
-            description="Maximum number of chunks to return after applying date penalty.",
+            label="Retrieved Chunks Before Applying Penalty",
+            description="Number of chunks to retrieve before applying date penalty.",
         ).model_dump(exclude_unset=True, exclude_none=True),
         is_advanced=True,
     )
@@ -151,12 +151,12 @@ def seed_retriever_tool_components(session: Session):
         session=session,
         component_parameter_definitions=[
             data_source_param,
-            max_retrieved_chunks_param,
+            number_of_chunks_param,
             enable_date_penalty_param,
             chunk_age_penalty_rate_param,
             default_penalty_rate_param,
             metadata_date_key_param,
-            max_retrieved_chunks_after_penalty_param,
+            retrieved_chunks_before_applying_penalty_param,
         ],
     )
 

@@ -14,6 +14,7 @@ from engine.components.component import Component
 from engine.components.history_message_handling import HistoryMessageHandler
 from engine.components.rag.formatter import Formatter
 from engine.components.tools.python_code_runner import PYTHON_CODE_RUNNER_TOOL_DESCRIPTION
+from engine.components.tools.retriever_tool import RETRIEVER_TOOL_DESCRIPTION
 from engine.components.tools.terminal_command_runner import TERMINAL_COMMAND_RUNNER_TOOL_DESCRIPTION
 from engine.components.types import AgentPayload, ChatMessage, ComponentAttributes, SourcedResponse, ToolDescription
 from engine.components.utils import load_str_to_json
@@ -29,7 +30,11 @@ INITIAL_PROMPT = (
     "Don't make assumptions about what values to plug into functions. Ask for "
     "clarification if a user request is ambiguous. "
 )
-RETRIEVER_CITATION_INSTRUCTION = "When using information from retrieved sources, cite them using [1], [2], etc."
+RETRIEVER_CITATION_INSTRUCTION = (
+    "When using information from retrieved sources, cite them using [1], [2], etc. "
+    "Use the retriever tool ONCE, then answer based on the retrieved information. "
+    "If the retrieved information is not relevant, say so clearly rather than retrieving again."
+)
 DEFAULT_FALLBACK_REACT_ANSWER = "I couldn't find a solution to your problem."
 CODE_RUNNER_TOOLS = [PYTHON_CODE_RUNNER_TOOL_DESCRIPTION.name, TERMINAL_COMMAND_RUNNER_TOOL_DESCRIPTION.name]
 
@@ -268,7 +273,7 @@ class AIAgent(Component):
 
     def _check_for_retriever_tool(self) -> bool:
         """Check if retriever tool is present in agent tools."""
-        return "retriever" in self._tool_registry
+        return RETRIEVER_TOOL_DESCRIPTION.name in self._tool_registry
 
     def _get_tool_descriptions_for_llm(self) -> list[ToolDescription]:
         """Return tool descriptions for LLM function calling."""
@@ -437,19 +442,15 @@ class AIAgent(Component):
                     dict(agent_input.artifacts) if hasattr(agent_input, "artifacts") and agent_input.artifacts else {}
                 )
 
-                # Filter sources to only cited ones (same logic as RAG synthesizer + formatter)
                 response_content = chat_response.choices[0].message.content or ""
                 if "sources" in artifacts and artifacts["sources"]:
-                    # Create SourcedResponse with all sources (like synthesizer does)
                     sourced_response = SourcedResponse(
                         response=response_content,
                         sources=artifacts["sources"],
                         is_successful=True,
                     )
-                    # Use formatter to filter to only cited sources and renumber them (like RAG does)
                     filtered_response = self._formatter._renumber_sources(sourced_response)
                     artifacts["sources"] = filtered_response.sources
-                    # Use the renumbered response content
                     response_content = filtered_response.response
 
                 if imgs:
@@ -469,12 +470,38 @@ class AIAgent(Component):
             ctx=ctx,
         )
 
-        # Collect artifacts from all tool outputs
         collected_artifacts = {}
-        for agent_output in agent_outputs.values():
+        all_sources = []
+
+        for tool_call_id, agent_output in agent_outputs.items():
             if agent_output.artifacts:
-                # Merge artifacts, with later tools overriding earlier ones for same keys
-                collected_artifacts.update(agent_output.artifacts)
+                tool_function_name = next(
+                    (tc.function.name for tc in processed_tool_calls if tc.id == tool_call_id), "unknown_tool"
+                )
+
+                tool_entry = self._tool_registry.get(tool_function_name)
+                if tool_entry:
+                    tool_instance, _ = tool_entry
+                    tool_display_name = (
+                        tool_instance.component_attributes.component_instance_name
+                        if hasattr(tool_instance, "component_attributes") and tool_instance.component_attributes
+                        else tool_function_name
+                    )
+                else:
+                    tool_display_name = tool_function_name
+
+                if "sources" in agent_output.artifacts:
+                    sources = agent_output.artifacts["sources"]
+                    for source in sources:
+                        source["metadata"]["tool_name"] = tool_display_name
+                        all_sources.append(source)
+
+                for key, value in agent_output.artifacts.items():
+                    if key != "sources":
+                        collected_artifacts[key] = value
+
+        if all_sources:
+            collected_artifacts["sources"] = all_sources
 
         agent_input.messages.append(
             ChatMessage(
@@ -492,7 +519,6 @@ class AIAgent(Component):
                 )
             )
 
-        # Store collected artifacts in agent_input for next iteration
         agent_input.artifacts.update(collected_artifacts)
 
         # If there's 0 or more than 1 final outputs, run the agent again

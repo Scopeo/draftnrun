@@ -24,6 +24,7 @@ from ada_backend.services.entity_factory import (
     build_qdrant_service_processor,
     build_reranker_processor,
     build_retriever_processor,
+    build_retriever_processor_v2,
     build_synthesizer_processor,
     build_trace_manager_processor,
     build_vocabulary_search_processor,
@@ -440,7 +441,7 @@ def create_factory_registry() -> FactoryRegistry:
             entity_class=RetrieverTool,
             parameter_processors=[
                 trace_manager_processor,
-                build_retriever_processor(target_name="retriever"),
+                build_retriever_processor_v2(target_name="retriever"),
             ],
         ),
     )
