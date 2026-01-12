@@ -14,6 +14,7 @@ from ada_backend.schemas.ingestion_task_schema import (
     IngestionTaskQueue,
     IngestionTaskResponse,
     IngestionTaskUpdate,
+    ResultType,
     TaskResultMetadata,
 )
 from ada_backend.segment_analytics import track_ingestion_task_created
@@ -90,8 +91,6 @@ def create_ingestion_task_by_organization(
             # Get the task we just created to preserve its source_id
             tasks = get_ingestion_task(session, organization_id, task_id=task_id)
             source_id = tasks[0].source_id if tasks else None
-
-            from ada_backend.schemas.ingestion_task_schema import ResultType
 
             error_metadata = TaskResultMetadata(
                 message="Failed to push task to Redis queue",

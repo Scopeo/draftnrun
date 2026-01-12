@@ -401,12 +401,11 @@ async def _ingest_folder_source(
                     type=ResultType.ERROR,
                 ),
             )
-            LOGGER.info("[NO_CHUNKS] Updating task status to FAILED")
             update_ingestion_task(
                 organization_id=organization_id,
                 ingestion_task=ingestion_task_failed,
             )
-            LOGGER.info("[NO_CHUNKS] Task marked as FAILED - no source created")
+            LOGGER.error("[NO_CHUNKS] Task marked as FAILED - no source created")
             return
 
         all_chunks_df = pd.concat(file_chunks_dfs, ignore_index=True)
