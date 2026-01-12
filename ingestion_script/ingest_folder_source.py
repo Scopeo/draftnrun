@@ -383,7 +383,6 @@ async def _ingest_folder_source(
 
         if not file_chunks_dfs:
             LOGGER.warning("No chunks created from any file - marking task as FAILED")
-            # Build error message with failed files details
             if failed_files:
                 failed_file_names = [f["file_name"] for f in failed_files]
                 failed_files_str = ", ".join(failed_file_names)
@@ -393,7 +392,7 @@ async def _ingest_folder_source(
 
             ingestion_task_failed = IngestionTaskUpdate(
                 id=task_id,
-                source_id=None,  # Don't set source_id since we're not creating a source
+                source_id=None,
                 source_name=source_name,
                 source_type=source_type,
                 status=db.TaskStatus.FAILED,

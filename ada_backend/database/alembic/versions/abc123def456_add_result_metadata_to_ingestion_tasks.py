@@ -1,7 +1,7 @@
 """add_result_metadata_to_ingestion_tasks
 
 Revision ID: abc123def456
-Revises: 3f8319d78154
+Revises: 4786bbd3c51
 Create Date: 2025-12-18 00:00:00.000000
 
 """
@@ -14,7 +14,7 @@ from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
 revision: str = "abc123def456"
-down_revision: Union[str, None] = "3f8319d78154"
+down_revision: Union[str, None] = "4786bbd3c51"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
