@@ -112,11 +112,9 @@ async def get_chunks_dataframe_from_doc(
             f"'{document.type.value}' on file '{document.file_name}'"
         )
     else:
-        LOGGER.error(
-            f"[PROCESSOR_ROUTING] FAILED - No processor found for file type "
-            f"'{document.type.value}' on file '{document.file_name}'"
-        )
-        return pd.DataFrame()
+        error_msg = f"No processor found for file type '{document.type.value}' on file '{document.file_name}'"
+        LOGGER.error(f"[PROCESSOR_ROUTING] FAILED - {error_msg}")
+        raise ValueError(error_msg)
 
     # TODO: add summary to chunks when we will have a gemini functional service
     # description_doc = None
@@ -152,7 +150,7 @@ async def get_chunks_dataframe_from_doc(
             f"with '{processor_name}' - {str(e)}",
             exc_info=True,
         )
-        return pd.DataFrame()
+        raise
     # if description_doc is not None:
     #     chunks = add_summary_in_chunks_func(
     #         summary=description_doc,

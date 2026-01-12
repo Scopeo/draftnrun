@@ -369,7 +369,6 @@ async def _ingest_folder_source(
 
                 if chunks_df.empty:
                     LOGGER.warning(f"No chunks created for {document.file_name} - skipping")
-                    failed_files.append({"file_name": document.file_name, "reason": "No chunks created"})
                     continue
 
                 file_chunks_dfs.append(chunks_df)
@@ -384,11 +383,14 @@ async def _ingest_folder_source(
         if not file_chunks_dfs:
             LOGGER.warning("No chunks created from any file - marking task as FAILED")
             if failed_files:
-                failed_file_names = [f["file_name"] for f in failed_files]
-                failed_files_str = ", ".join(failed_file_names)
-                error_msg = f"Unable to process files: {failed_files_str}. File types are not supported."
+                error_messages = []
+                for f in failed_files:
+                    file_name = f["file_name"]
+                    reason = f["reason"]
+                    error_messages.append(f"{file_name}: {reason}")
+                error_msg = " | ".join(error_messages)
             else:
-                error_msg = "Unable to process files. File types are not supported"
+                error_msg = "Unable to process files"
 
             ingestion_task_failed = IngestionTaskUpdate(
                 id=task_id,
@@ -471,8 +473,12 @@ async def _ingest_folder_source(
     )
 
     if failed_files:
-        failed_file_names = [f["file_name"] for f in failed_files]
-        failed_files_str = ", ".join(failed_file_names)
+        error_messages = []
+        for f in failed_files:
+            file_name = f["file_name"]
+            reason = f["reason"]
+            error_messages.append(f"{file_name}: {reason}")
+        failed_files_errors_str = " | ".join(error_messages)
         ingestion_task = IngestionTaskUpdate(
             id=task_id,
             source_id=source_id,
@@ -482,7 +488,7 @@ async def _ingest_folder_source(
             result_metadata=TaskResultMetadata(
                 message=(
                     f"Partially completed: {len(successful_files)} succeeded, {len(failed_files)} failed. "
-                    f"Failed files: {failed_files_str}"
+                    f"Failed files: {failed_files_errors_str}"
                 ),
                 type=ResultType.PARTIAL_SUCCESS,
             ),
