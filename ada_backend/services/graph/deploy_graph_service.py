@@ -1,5 +1,5 @@
 import logging
-from typing import Optional, Tuple
+from typing import Optional
 from uuid import UUID, uuid4
 
 from sqlalchemy.orm import Session
@@ -36,6 +36,7 @@ from ada_backend.services.errors import (
     GraphRunnerAlreadyInEnvironmentError,
 )
 from ada_backend.services.field_expression_remap_service import remap_field_expressions_for_cloning
+from ada_backend.services.graph.delete_graph_service import delete_graph_runner_service
 from ada_backend.services.pipeline.get_pipeline_service import get_component_instance, get_relationships
 from ada_backend.services.pipeline.update_pipeline_service import create_or_update_component_instance
 from ada_backend.services.tag_service import compute_next_tag_version
@@ -219,7 +220,7 @@ def _bind_graph_to_env_helper(
     graph_runner_id: UUID,
     project_id: UUID,
     env: EnvType,
-) -> Tuple[db.GraphRunner, db.ProjectEnvironmentBinding, Optional[db.GraphRunner]]:
+) -> Optional[db.GraphRunner]:
     if not graph_runner_exists(session, graph_runner_id):
         raise GraphNotFound(graph_runner_id)
 
@@ -244,10 +245,6 @@ def _bind_graph_to_env_helper(
         env=env,
     )
 
-    if previous_env_graph:
-        update_graph_runner_env(session, previous_env_graph.id, env=None)
-        LOGGER.info(f"Removed previous {env.value} graph runner {previous_env_graph.id} from {env.value}")
-
     return previous_env_graph
 
 
@@ -262,6 +259,10 @@ def deploy_graph_service(
         project_id=project_id,
         env=EnvType.PRODUCTION,
     )
+
+    if previous_production_graph:
+        update_graph_runner_env(session, previous_production_graph.id, env=None)
+        LOGGER.info(f"Removed previous production graph runner {previous_production_graph.id} from production")
 
     new_graph_runner_id = clone_graph_runner(
         session=session,
@@ -293,12 +294,43 @@ def bind_graph_to_env_service(
     project_id: UUID,
     env: EnvType,
 ) -> None:
-    _bind_graph_to_env_helper(
+    previous_env_graph = _bind_graph_to_env_helper(
         session=session,
         graph_runner_id=graph_runner_id,
         project_id=project_id,
         env=env,
     )
+    if previous_env_graph:
+        update_graph_runner_env(session, previous_env_graph.id, env=None)
+        LOGGER.info(f"Removed previous {env.value} graph runner {previous_env_graph.id} from {env.value}")
 
     update_graph_runner_env(session, graph_runner_id, env=env)
     LOGGER.info(f"Bound graph runner {graph_runner_id} to {env.value}")
+
+
+def load_version_as_draft_service(
+    session: Session,
+    project_id: UUID,
+    graph_runner_id: UUID,
+) -> None:
+    previous_draft_graph = _bind_graph_to_env_helper(
+        session=session,
+        graph_runner_id=graph_runner_id,
+        project_id=project_id,
+        env=EnvType.DRAFT,
+    )
+
+    new_draft_graph_runner_id = clone_graph_runner(
+        session=session,
+        graph_runner_id_to_copy=graph_runner_id,
+        project_id=project_id,
+    )
+
+    bind_graph_runner_to_project(
+        session, graph_runner_id=new_draft_graph_runner_id, project_id=project_id, env=EnvType.DRAFT
+    )
+    LOGGER.info(f"Created new Draft from graph runner {graph_runner_id}")
+
+    if previous_draft_graph is not None:
+        delete_graph_runner_service(session, previous_draft_graph.id)
+        LOGGER.info(f"Deleted previous draft graph {previous_draft_graph.id}")
