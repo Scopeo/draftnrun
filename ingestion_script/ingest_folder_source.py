@@ -13,6 +13,7 @@ from data_ingestion.document.folder_management.folder_management import FolderMa
 from data_ingestion.document.folder_management.google_drive_folder_management import GoogleDriveFolderManager
 from data_ingestion.document.folder_management.s3_folder_management import S3FolderManager
 from data_ingestion.document.supabase_file_uploader import sync_files_to_supabase
+from data_ingestion.utils import PDFReadingMode
 from engine.llm_services.llm_service import EmbeddingService, VisionService
 from engine.qdrant_service import FieldSchema, QdrantService
 from engine.storage_service.db_service import DBService
@@ -134,6 +135,7 @@ async def ingest_google_drive_source(
     chunk_size: Optional[int] = 1024,
     chunk_overlap: Optional[int] = 0,
     source_id: Optional[UUID] = None,
+    pdf_reading_mode: PDFReadingMode = PDFReadingMode.STANDARD,
 ) -> None:
     LOGGER.info(
         f"[INGESTION_SOURCE] Starting GOOGLE DRIVE ingestion - Source: '{source_name}', "
@@ -159,6 +161,7 @@ async def ingest_google_drive_source(
         chunk_size=chunk_size,
         chunk_overlap=chunk_overlap,
         source_id=source_id,
+        pdf_reading_mode=pdf_reading_mode,
     )
 
 
@@ -172,6 +175,7 @@ async def ingest_local_folder_source(
     chunk_size: Optional[int] = 1024,
     chunk_overlap: Optional[int] = 0,
     source_id: Optional[UUID] = None,
+    pdf_reading_mode: PDFReadingMode = PDFReadingMode.STANDARD,
 ) -> None:
     LOGGER.info(
         f"[INGESTION_SOURCE] Starting LOCAL ingestion - Source: '{source_name}', "
@@ -195,6 +199,7 @@ async def ingest_local_folder_source(
         chunk_size=chunk_size,
         chunk_overlap=chunk_overlap,
         source_id=source_id,
+        pdf_reading_mode=pdf_reading_mode,
     )
     folder_manager.clean_bucket()
 
@@ -210,6 +215,7 @@ async def _ingest_folder_source(
     chunk_size: Optional[int] = 1024,
     chunk_overlap: Optional[int] = 0,
     source_id: Optional[UUID] = None,
+    pdf_reading_mode: PDFReadingMode = PDFReadingMode.STANDARD,
 ) -> None:
     if source_id is None:
         source_id = uuid.uuid4()
@@ -295,7 +301,7 @@ async def _ingest_folder_source(
             llm_service=fallback_vision_llm_service,
             get_file_content_func=folder_manager.get_file_content,
             chunk_size=chunk_size,
-            use_llm_for_pdf=settings.USE_LLM_FOR_PDF_PARSING,
+            pdf_reading_mode=pdf_reading_mode,
             overlapping_size=chunk_overlap,
         )
     except Exception as e:

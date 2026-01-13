@@ -3,6 +3,7 @@ import os
 import re
 import unicodedata
 from datetime import datetime
+from enum import Enum
 from typing import Any, Optional
 
 import pandas as pd
@@ -124,3 +125,11 @@ def split_df_by_token_limit(
         chunks.append(chunk_df)
 
     return chunks
+
+
+class PDFReadingMode(str, Enum):
+    """PDF processing mode options"""
+
+    LLM_VISION = "llm_vision"
+    STANDARD = "standard"
+    LLAMAPARSE = "llamaparse"

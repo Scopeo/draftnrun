@@ -149,6 +149,8 @@ class BaseConfig(BaseSettings):
 
     ADMIN_KEY_HASHED: Optional[str] = None
 
+    LLAMACLOUD_API_KEY: Optional[str] = None
+
     @model_validator(mode="after")
     @classmethod
     def sync_db_settings(cls, values):
