@@ -56,6 +56,7 @@ from engine.components.sql.run_sql_query_tool import RunSQLQueryTool
 from engine.components.sql.sql_tool import SQLTool
 from engine.components.static_responder import StaticResponder
 from engine.components.synthesizer import Synthesizer
+from engine.components.table_lookup import TableLookup
 from engine.components.tools.api_call_tool import APICallTool
 from engine.components.tools.docx_template import DocxTemplateAgent
 from engine.components.tools.linkup_tool import LinkupSearchTool
@@ -523,6 +524,13 @@ def create_factory_registry() -> FactoryRegistry:
             parameter_processors=[
                 completion_service_processor,
             ],
+        ),
+    )
+
+    registry.register(
+        component_version_id=COMPONENT_VERSION_UUIDS["table_lookup"],
+        factory=AgentFactory(
+            entity_class=TableLookup,
         ),
     )
 

@@ -59,6 +59,7 @@ COMPONENT_UUIDS: dict[str, UUID] = {
     "docx_generation": UUID("b5195a0f-94f5-4f5c-8804-32dd19b16833"),
     "static_responder": UUID("1F7334BE-7164-4440-BBF3-E986EED0388F"),
     "remote_mcp_tool": UUID("de3e606d-1f9d-4d74-b64f-bbde9ad6f0f4"),
+    "table_lookup": UUID("3a4b5c6d-7e8f-9012-3456-789abcdef123"),
 }
 COMPONENT_VERSION_UUIDS: dict[str, UUID] = {
     "synthesizer": UUID("6f790dd1-06f6-4489-a655-1a618763a114"),
@@ -102,6 +103,7 @@ COMPONENT_VERSION_UUIDS: dict[str, UUID] = {
     "static_responder": UUID("1F7334BE-7164-4440-BBF3-E986EED0388F"),
     "docx_template_agent": UUID("e2b30000-3333-4444-5555-666666666666"),
     "remote_mcp_tool": UUID("5e472b85-7601-4e5b-81c7-8b361b5c5c9a"),
+    "table_lookup": UUID("4b5c6d7e-8f90-1234-5678-9abcdef01234"),
 }
 
 DEFAULT_MODEL = "openai:gpt-5-mini"
