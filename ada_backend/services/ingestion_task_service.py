@@ -14,6 +14,8 @@ from ada_backend.schemas.ingestion_task_schema import (
     IngestionTaskQueue,
     IngestionTaskResponse,
     IngestionTaskUpdate,
+    ResultType,
+    TaskResultMetadata,
 )
 from ada_backend.segment_analytics import track_ingestion_task_created
 from ada_backend.utils.redis_client import push_ingestion_task
@@ -35,6 +37,7 @@ def get_ingestion_task_by_organization_id(
                 source_name=task.source_name,
                 source_type=task.source_type,
                 status=task.status,
+                result_metadata=(TaskResultMetadata(**task.result_metadata) if task.result_metadata else None),
                 created_at=str(task.created_at),
                 updated_at=str(task.updated_at),
             )
@@ -89,6 +92,11 @@ def create_ingestion_task_by_organization(
             tasks = get_ingestion_task(session, organization_id, task_id=task_id)
             source_id = tasks[0].source_id if tasks else None
 
+            error_metadata = TaskResultMetadata(
+                message="Failed to push task to Redis queue",
+                type=ResultType.ERROR,
+            )
+
             update_ingestion_task(
                 session,
                 organization_id,
@@ -97,6 +105,7 @@ def create_ingestion_task_by_organization(
                 ingestion_task_data.source_type,
                 db.TaskStatus.FAILED,
                 task_id,
+                result_metadata=error_metadata.model_dump(),  # Convert to dict for JSONB
             )
             LOGGER.info(f"Updated task {task_id} status to FAILED due to Redis push failure")
         else:
@@ -115,6 +124,11 @@ def upsert_ingestion_task_by_organization_id(
 ) -> None:
     """Create a new source for an organization."""
     try:
+        # Convert TaskResultMetadata to dict for JSONB storage
+        result_metadata_dict = None
+        if ingestion_task_data.result_metadata:
+            result_metadata_dict = ingestion_task_data.result_metadata.model_dump()
+
         return update_ingestion_task(
             session,
             organization_id,
@@ -123,6 +137,7 @@ def upsert_ingestion_task_by_organization_id(
             ingestion_task_data.source_type,
             ingestion_task_data.status,
             ingestion_task_data.id,
+            result_metadata_dict,
         )
     except Exception as e:
         LOGGER.error(f"Error in upsert_ingestion_task_by_organization_id: {str(e)}")

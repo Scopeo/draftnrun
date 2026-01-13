@@ -54,6 +54,7 @@ def update_ingestion_task(
     source_type: db.SourceType,
     status: db.TaskStatus,
     task_id: UUID,
+    result_metadata: dict = None,
 ) -> None:
     """Update an ingestion task for an organization."""
     try:
@@ -75,6 +76,8 @@ def update_ingestion_task(
                 existing_task.source_type = source_type
             if status:
                 existing_task.status = status
+            if result_metadata is not None:
+                existing_task.result_metadata = result_metadata
 
         session.commit()
     except Exception as e:

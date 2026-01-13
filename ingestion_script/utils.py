@@ -11,7 +11,12 @@ import pandas as pd
 import requests
 
 from ada_backend.database import models as db
-from ada_backend.schemas.ingestion_task_schema import IngestionTaskUpdate, SourceAttributes
+from ada_backend.schemas.ingestion_task_schema import (
+    IngestionTaskUpdate,
+    ResultType,
+    SourceAttributes,
+    TaskResultMetadata,
+)
 from ada_backend.schemas.source_schema import DataSourceSchema
 from data_ingestion.utils import sanitize_filename
 from engine.llm_services.llm_service import EmbeddingService, VisionService
@@ -359,12 +364,17 @@ async def upload_source(
             source_id=result_source_id,
         )
     except Exception as e:
-        LOGGER.error(f"Failed to get data from the database: {str(e)}")
+        error_msg = f"Failed to get data from the database: {str(e)}"
+        LOGGER.error(error_msg)
         ingestion_task = IngestionTaskUpdate(
             id=task_id,
             source_name=source_name,
             source_type=source_type,
             status=db.TaskStatus.FAILED,
+            result_metadata=TaskResultMetadata(
+                message=error_msg,
+                type=ResultType.ERROR,
+            ),
         )
         update_ingestion_task(
             organization_id=organization_id,

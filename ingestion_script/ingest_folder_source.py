@@ -6,12 +6,9 @@ from uuid import UUID
 import pandas as pd
 
 from ada_backend.database import models as db
-from ada_backend.schemas.ingestion_task_schema import IngestionTaskUpdate
+from ada_backend.schemas.ingestion_task_schema import IngestionTaskUpdate, ResultType, TaskResultMetadata
 from ada_backend.schemas.source_schema import DataSourceSchema
-from data_ingestion.document.document_chunking import (
-    document_chunking_mapping,
-    get_chunks_dataframe_from_doc,
-)
+from data_ingestion.document.document_chunking import document_chunking_mapping, get_chunks_dataframe_from_doc
 from data_ingestion.document.folder_management.folder_management import FolderManager
 from data_ingestion.document.folder_management.google_drive_folder_management import GoogleDriveFolderManager
 from data_ingestion.document.folder_management.s3_folder_management import S3FolderManager
@@ -227,7 +224,12 @@ async def _ingest_folder_source(
         try:
             vision_completion_service, fallback_vision_llm_service = load_llms_services()
         except ValueError as e:
-            LOGGER.error(f"Failed to load LLM services: {str(e)}")
+            error_msg = f"Failed to load LLM services: {str(e)}"
+            LOGGER.error(error_msg)
+            ingestion_task.result_metadata = TaskResultMetadata(
+                message=error_msg,
+                type=ResultType.ERROR,
+            )
             update_ingestion_task(
                 organization_id=organization_id,
                 ingestion_task=ingestion_task,
@@ -240,7 +242,12 @@ async def _ingest_folder_source(
     try:
         embedding_service = load_embedding_service()
     except ValueError as e:
-        LOGGER.error(f"Failed to load embedding service: {str(e)}")
+        error_msg = f"Failed to load embedding service: {str(e)}"
+        LOGGER.error(error_msg)
+        ingestion_task.result_metadata = TaskResultMetadata(
+            message=error_msg,
+            type=ResultType.ERROR,
+        )
         update_ingestion_task(
             organization_id=organization_id,
             ingestion_task=ingestion_task,
@@ -292,7 +299,12 @@ async def _ingest_folder_source(
             overlapping_size=chunk_overlap,
         )
     except Exception as e:
-        LOGGER.error(f"Failed to chunk documents: {str(e)}")
+        error_msg = f"Failed to chunk documents: {str(e)}"
+        LOGGER.error(error_msg)
+        ingestion_task.result_metadata = TaskResultMetadata(
+            message=error_msg,
+            type=ResultType.ERROR,
+        )
         update_ingestion_task(
             organization_id=organization_id,
             ingestion_task=ingestion_task,
@@ -340,40 +352,62 @@ async def _ingest_folder_source(
             return
 
         file_chunks_dfs = []
+        failed_files = []
+        successful_files = []
 
         for document in files_info:
-            chunks_df = await get_chunks_dataframe_from_doc(
-                document,
-                document_chunk_mapping,
-                llm_service=fallback_vision_llm_service,
-                add_doc_description_to_chunks=add_doc_description_to_chunks,
-                documents_summary_func=document_summary_func,
-                add_summary_in_chunks_func=add_summary_in_chunks_func,
-                default_chunk_size=chunk_size,
-            )
+            try:
+                chunks_df = await get_chunks_dataframe_from_doc(
+                    document,
+                    document_chunk_mapping,
+                    llm_service=fallback_vision_llm_service,
+                    add_doc_description_to_chunks=add_doc_description_to_chunks,
+                    documents_summary_func=document_summary_func,
+                    add_summary_in_chunks_func=add_summary_in_chunks_func,
+                    default_chunk_size=chunk_size,
+                )
 
-            if chunks_df.empty:
-                LOGGER.warning(f"No chunks created for {document.file_name} - skipping")
+                if chunks_df.empty:
+                    LOGGER.warning(f"No chunks created for {document.file_name} - skipping")
+                    continue
+
+                file_chunks_dfs.append(chunks_df)
+                successful_files.append({"file_name": document.file_name, "chunks_count": len(chunks_df)})
+                LOGGER.info(f"Created {len(chunks_df)} chunks for {document.file_name}")
+            except Exception as e:
+                error_msg = f"Failed to process {document.file_name}: {str(e)}"
+                LOGGER.error(error_msg)
+                failed_files.append({"file_name": document.file_name, "reason": str(e)})
                 continue
 
-            file_chunks_dfs.append(chunks_df)
-            LOGGER.info(f"Created {len(chunks_df)} chunks for {document.file_name}")
-
         if not file_chunks_dfs:
-            LOGGER.warning("No chunks created from any file - nothing to sync")
-            ingestion_task_completed = IngestionTaskUpdate(
+            LOGGER.warning("No chunks created from any file - marking task as FAILED")
+            if failed_files:
+                error_messages = []
+                for f in failed_files:
+                    file_name = f["file_name"]
+                    reason = f["reason"]
+                    error_messages.append(f"{file_name}: {reason}")
+                error_msg = " | ".join(error_messages)
+            else:
+                error_msg = "Unable to process files"
+
+            ingestion_task_failed = IngestionTaskUpdate(
                 id=task_id,
-                source_id=source_id,
+                source_id=None,
                 source_name=source_name,
                 source_type=source_type,
-                status=db.TaskStatus.COMPLETED,
+                status=db.TaskStatus.FAILED,
+                result_metadata=TaskResultMetadata(
+                    message=error_msg,
+                    type=ResultType.ERROR,
+                ),
             )
-            LOGGER.info(f"[EMPTY_FOLDER] Calling update_ingestion_task with status: {ingestion_task_completed.status}")
             update_ingestion_task(
                 organization_id=organization_id,
-                ingestion_task=ingestion_task_completed,
+                ingestion_task=ingestion_task_failed,
             )
-            LOGGER.info("[EMPTY_FOLDER] Task status update completed")
+            LOGGER.error("[NO_CHUNKS] Task marked as FAILED - no source created")
             return
 
         all_chunks_df = pd.concat(file_chunks_dfs, ignore_index=True)
@@ -418,8 +452,13 @@ async def _ingest_folder_source(
             source_id=str(source_id),
         )
     except Exception as e:
-        LOGGER.error(f"Failed to ingest folder source: {str(e)}")
+        error_msg = f"Failed to ingest folder source: {str(e)}"
+        LOGGER.error(error_msg)
         ingestion_task.status = db.TaskStatus.FAILED
+        ingestion_task.result_metadata = TaskResultMetadata(
+            message=error_msg,
+            type=ResultType.ERROR,
+        )
         update_ingestion_task(
             organization_id=organization_id,
             ingestion_task=ingestion_task,
@@ -433,13 +472,35 @@ async def _ingest_folder_source(
         source_data=source_data,
     )
 
-    ingestion_task = IngestionTaskUpdate(
-        id=task_id,
-        source_id=source_id,
-        source_name=source_name,
-        source_type=source_type,
-        status=db.TaskStatus.COMPLETED,
-    )
+    if failed_files:
+        error_messages = []
+        for f in failed_files:
+            file_name = f["file_name"]
+            reason = f["reason"]
+            error_messages.append(f"{file_name}: {reason}")
+        failed_files_errors_str = " | ".join(error_messages)
+        ingestion_task = IngestionTaskUpdate(
+            id=task_id,
+            source_id=source_id,
+            source_name=source_name,
+            source_type=source_type,
+            status=db.TaskStatus.COMPLETED,
+            result_metadata=TaskResultMetadata(
+                message=(
+                    f"Partially completed: {len(successful_files)} succeeded, {len(failed_files)} failed. "
+                    f"Failed files: {failed_files_errors_str}"
+                ),
+                type=ResultType.PARTIAL_SUCCESS,
+            ),
+        )
+    else:
+        ingestion_task = IngestionTaskUpdate(
+            id=task_id,
+            source_id=source_id,
+            source_name=source_name,
+            source_type=source_type,
+            status=db.TaskStatus.COMPLETED,
+        )
 
     LOGGER.info(f" Update status {str(source_id)} source for organization {organization_id} in database")
     update_ingestion_task(

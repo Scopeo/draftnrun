@@ -467,6 +467,7 @@ class IngestionTaskAdmin(EnhancedModelView, model=db.IngestionTask):
         "source_name",
         "source_type",
         "status",
+        "result_metadata",
         "created_at",
         "updated_at",
     ]
