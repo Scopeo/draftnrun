@@ -1,21 +1,45 @@
 import csv
 import io
 import json
+from unittest.mock import MagicMock
 from uuid import uuid4
 
-from fastapi.testclient import TestClient
+import pytest
 
-from ada_backend.main import app
-from ada_backend.scripts.get_supabase_token import get_user_jwt
-from settings import settings
-
-client = TestClient(app)
-ORGANIZATION_ID = "37b7d67f-8f29-4fce-8085-19dea582f605"  # umbrella organization
-JWT_TOKEN = get_user_jwt(settings.TEST_USER_EMAIL, settings.TEST_USER_PASSWORD)
-HEADERS_JWT = {
-    "accept": "application/json",
-    "Authorization": f"Bearer {JWT_TOKEN}",
-}
+from ada_backend.database.setup_db import get_db_session
+from engine.trace.trace_context import set_trace_manager
+from ada_backend.schemas.dataset_schema import DatasetCreateList, DatasetDeleteList
+from ada_backend.schemas.input_groundtruth_schema import (
+    InputGroundtruthCreateList,
+    InputGroundtruthDeleteList,
+    InputGroundtruthUpdateList,
+    InputGroundtruthUpdateWithId,
+    QARunRequest,
+)
+from ada_backend.services.project_service import delete_project_service, get_project_service
+from ada_backend.services.graph.update_graph_service import update_graph_service
+from ada_backend.services.graph.deploy_graph_service import deploy_graph_service
+from ada_backend.database.models import EnvType
+from ada_backend.schemas.pipeline.graph_schema import GraphUpdateSchema
+from ada_backend.services.qa.quality_assurance_service import (
+    create_datasets_service,
+    create_inputs_groundtruths_service,
+    delete_datasets_service,
+    delete_inputs_groundtruths_service,
+    get_datasets_by_project_service,
+    get_inputs_groundtruths_with_version_outputs_service,
+    import_qa_data_from_csv_service,
+    run_qa_service,
+    update_dataset_service,
+    update_inputs_groundtruths_service,
+)
+from ada_backend.services.qa.qa_error import (
+    CSVInvalidPositionError,
+    CSVNonUniquePositionError,
+    QADuplicatePositionError,
+    QAPartialPositionError,
+)
+from tests.ada_backend.test_utils import create_project_and_graph_runner
 
 # JSON constants for test workflow configuration
 DEFAULT_PAYLOAD_SCHEMA = {"messages": [{"role": "user", "content": "Hello"}], "additional_info": "info"}
@@ -71,212 +95,159 @@ DEFAULT_FILTER_SCHEMA = {
 
 
 def test_pagination():
-    """Test pagination for GET entries endpoint with 10 rows, 5 per page."""
-    project_uuid = str(uuid4())
-    project_payload = {
-        "project_id": project_uuid,
-        "project_name": f"pagination_test_{project_uuid}",
-        "description": "Test project for pagination",
-    }
-    client.post(f"/projects/{ORGANIZATION_ID}", headers=HEADERS_JWT, json=project_payload)
+    """Test pagination for get_inputs_groundtruths_with_version_outputs_service with 10 rows, 5 per page."""
+    with get_db_session() as session:
+        project_id, _ = create_project_and_graph_runner(
+            session, project_name_prefix="pagination_test", description="Test project for pagination"
+        )
 
-    dataset_payload = {"datasets_name": [f"pagination_dataset_{project_uuid}"]}
-    dataset_response = client.post(f"/projects/{project_uuid}/qa/datasets", headers=HEADERS_JWT, json=dataset_payload)
-    dataset_id = dataset_response.json()["datasets"][0]["id"]
+        dataset_data = create_datasets_service(
+            session, project_id, DatasetCreateList(datasets_name=[f"pagination_dataset_{project_id}"])
+        )
+        dataset_id = dataset_data.datasets[0].id
 
-    input_endpoint = f"/projects/{project_uuid}/qa/datasets/{dataset_id}/entries"
-
-    # Create 10 entries
-    create_payload = {
-        "inputs_groundtruths": [
+        # Create 10 entries
+        create_payload = InputGroundtruthCreateList(
+            inputs_groundtruths=[
             {"input": {"messages": [{"role": "user", "content": f"Test {i}"}]}, "groundtruth": f"GT {i}"}
             for i in range(1, 11)
         ]
-    }
-    create_response = client.post(input_endpoint, headers=HEADERS_JWT, json=create_payload)
-    assert create_response.status_code == 200
-    created = create_response.json()["inputs_groundtruths"]
-    assert len(created) == 10
+        )
+        created_response = create_inputs_groundtruths_service(session, dataset_id, create_payload)
+        created = created_response.inputs_groundtruths
+        assert len(created) == 10
 
-    # Get page 1 with 5 items per page
-    page1_response = client.get(f"{input_endpoint}?page=1&page_size=5", headers=HEADERS_JWT)
-    assert page1_response.status_code == 200
-    page1_data = page1_response.json()
-    page1_entries = page1_data["inputs_groundtruths"]
-    assert len(page1_entries) == 5
-    assert page1_data["pagination"]["total_items"] == 10
-    assert page1_data["pagination"]["page"] == 1
-    assert page1_data["pagination"]["size"] == 5
+        # Get page 1 with 5 items per page
+        page1_data = get_inputs_groundtruths_with_version_outputs_service(session, dataset_id, page=1, page_size=5)
+        page1_entries = page1_data.inputs_groundtruths
+        assert len(page1_entries) == 5
+        assert page1_data.pagination.total_items == 10
+        assert page1_data.pagination.page == 1
+        assert page1_data.pagination.size == 5
 
-    # Verify order of page 1 (positions 1-5)
-    page1_positions = [entry["position"] for entry in page1_entries]
-    assert page1_positions == [1, 2, 3, 4, 5]
+        # Verify order of page 1 (positions 1-5)
+        page1_positions = [entry.position for entry in page1_entries]
+        assert page1_positions == [1, 2, 3, 4, 5]
 
-    # Get page 2 with 5 items per page
-    page2_response = client.get(f"{input_endpoint}?page=2&page_size=5", headers=HEADERS_JWT)
-    assert page2_response.status_code == 200
-    page2_data = page2_response.json()
-    page2_entries = page2_data["inputs_groundtruths"]
-    assert len(page2_entries) == 5
-    assert page2_data["pagination"]["total_items"] == 10
-    assert page2_data["pagination"]["page"] == 2
-    assert page2_data["pagination"]["size"] == 5
+        # Get page 2 with 5 items per page
+        page2_data = get_inputs_groundtruths_with_version_outputs_service(session, dataset_id, page=2, page_size=5)
+        page2_entries = page2_data.inputs_groundtruths
+        assert len(page2_entries) == 5
+        assert page2_data.pagination.total_items == 10
+        assert page2_data.pagination.page == 2
+        assert page2_data.pagination.size == 5
 
-    # Verify order of page 2 (positions 6-10)
-    page2_positions = [entry["position"] for entry in page2_entries]
-    assert page2_positions == [6, 7, 8, 9, 10]
+        # Verify order of page 2 (positions 6-10)
+        page2_positions = [entry.position for entry in page2_entries]
+        assert page2_positions == [6, 7, 8, 9, 10]
 
-    # Verify no overlap between pages
-    page1_ids = {entry["id"] for entry in page1_entries}
-    page2_ids = {entry["id"] for entry in page2_entries}
-    assert page1_ids.isdisjoint(page2_ids)
+        # Verify no overlap between pages
+        page1_ids = {entry.id for entry in page1_entries}
+        page2_ids = {entry.id for entry in page2_entries}
+        assert page1_ids.isdisjoint(page2_ids)
 
-    client.delete(f"/projects/{project_uuid}", headers=HEADERS_JWT)
+        delete_project_service(session=session, project_id=project_id)
 
 
 def test_dataset_management():
     """Test dataset CRUD operations."""
+    with get_db_session() as session:
+        project_id, _ = create_project_and_graph_runner(
+            session, project_name_prefix="dataset_test", description="Test project for dataset management"
+        )
 
-    # Create a project
-    project_uuid = str(uuid4())
-    project_payload = {
-        "project_id": project_uuid,
-        "project_name": f"dataset_test_{project_uuid}",
-        "description": "Test project for dataset management",
-    }
+        # Test dataset creation
+        create_payload = DatasetCreateList(datasets_name=["dataset1", "dataset2", "dataset3"])
+        created_response = create_datasets_service(session, project_id, create_payload)
+        created_datasets = created_response.datasets
+        assert len(created_datasets) == 3
 
-    project_response = client.post(f"/projects/{ORGANIZATION_ID}", headers=HEADERS_JWT, json=project_payload)
-    assert project_response.status_code == 200
+        # Test dataset retrieval
+        retrieved_datasets = get_datasets_by_project_service(session, project_id)
+        assert len(retrieved_datasets) == 3
 
-    # Test dataset creation
-    dataset_endpoint = f"/projects/{project_uuid}/qa/datasets"
-    create_payload = {"datasets_name": ["dataset1", "dataset2", "dataset3"]}
+        # Test dataset update
+        dataset_to_update = created_datasets[0].id
+        updated_dataset = update_dataset_service(session, project_id, dataset_to_update, "updated_dataset1")
+        assert updated_dataset.dataset_name == "updated_dataset1"
 
-    create_response = client.post(dataset_endpoint, headers=HEADERS_JWT, json=create_payload)
-    assert create_response.status_code == 200
-    created_datasets = create_response.json()["datasets"]
-    assert len(created_datasets) == 3
+        # Test dataset deletion
+        dataset_to_delete = created_datasets[1].id
+        delete_payload = DatasetDeleteList(dataset_ids=[dataset_to_delete])
+        deleted_count = delete_datasets_service(session, project_id, delete_payload)
+        assert deleted_count == 1  # Should have deleted 1 dataset
 
-    # Test dataset retrieval
-    get_response = client.get(dataset_endpoint, headers=HEADERS_JWT)
-    assert get_response.status_code == 200
-    retrieved_datasets = get_response.json()
-    assert len(retrieved_datasets) == 3
+        # Verify the dataset was deleted
+        remaining_datasets = get_datasets_by_project_service(session, project_id)
+        assert len(remaining_datasets) == 2  # Should now have 2 datasets instead of 3
 
-    # Test dataset update
-    dataset_to_update = created_datasets[0]["id"]
-    update_endpoint = f"/projects/{project_uuid}/qa/datasets/{dataset_to_update}?dataset_name=updated_dataset1"
-
-    update_response = client.patch(update_endpoint, headers=HEADERS_JWT)
-    assert update_response.status_code == 200
-    updated_dataset = update_response.json()
-    assert updated_dataset["dataset_name"] == "updated_dataset1"
-
-    # Test dataset deletion
-    dataset_to_delete = created_datasets[1]["id"]
-    delete_payload = {"dataset_ids": [dataset_to_delete]}
-
-    delete_response = client.request(method="DELETE", url=dataset_endpoint, headers=HEADERS_JWT, json=delete_payload)
-    assert delete_response.status_code == 200
-    delete_result = delete_response.json()
-    assert "message" in delete_result
-    assert "1" in delete_result["message"]  # Should have deleted 1 dataset
-
-    # Verify the dataset was deleted
-    get_response = client.get(dataset_endpoint, headers=HEADERS_JWT)
-    assert get_response.status_code == 200
-    remaining_datasets = get_response.json()
-    assert len(remaining_datasets) == 2  # Should now have 2 datasets instead of 3
-
-    # Cleanup
-    client.delete(f"/projects/{project_uuid}", headers=HEADERS_JWT)
+        delete_project_service(session=session, project_id=project_id)
 
 
 def test_input_groundtruth_basic_operations():
     """Test input-groundtruth CRUD operations."""
+    with get_db_session() as session:
+        project_id, _ = create_project_and_graph_runner(
+            session, project_name_prefix="input_groundtruth_test", description="Test project for input-groundtruth operations"
+        )
 
-    # Create a project
-    project_uuid = str(uuid4())
-    project_payload = {
-        "project_id": project_uuid,
-        "project_name": f"input_groundtruth_test_{project_uuid}",
-        "description": "Test project for input-groundtruth operations",
-    }
+        # Create a dataset
+        dataset_uuid = str(uuid4())
+        dataset_data = create_datasets_service(
+            session, project_id, DatasetCreateList(datasets_name=[f"input_groundtruth_dataset_{dataset_uuid}"])
+        )
+        dataset_id = dataset_data.datasets[0].id
 
-    project_response = client.post(f"/projects/{ORGANIZATION_ID}", headers=HEADERS_JWT, json=project_payload)
-    assert project_response.status_code == 200
+        # Test input-groundtruth creation
+        create_payload = InputGroundtruthCreateList(
+            inputs_groundtruths=[
+                {"input": {"messages": [{"role": "user", "content": "What is 2 + 2?"}]}, "groundtruth": "4"},
+                {
+                    "input": {"messages": [{"role": "user", "content": "What is the capital of France?"}]},
+                    "groundtruth": "Paris",
+                },
+                {
+                    "input": {"messages": [{"role": "user", "content": "What is the weather like today?"}]}
+                },  # No groundtruth
+            ]
+        )
+        created_response = create_inputs_groundtruths_service(session, dataset_id, create_payload)
+        created_inputs = created_response.inputs_groundtruths
+        assert len(created_inputs) == 3
 
-    # Create a dataset
-    dataset_uuid = str(uuid4())
-    dataset_payload = {"datasets_name": [f"input_groundtruth_dataset_{dataset_uuid}"]}
+        # Test input-groundtruth retrieval
+        retrieved_data = get_inputs_groundtruths_with_version_outputs_service(session, dataset_id)
+        retrieved_inputs = retrieved_data.inputs_groundtruths
+        assert len(retrieved_inputs) == 3
 
-    dataset_response = client.post(f"/projects/{project_uuid}/qa/datasets", headers=HEADERS_JWT, json=dataset_payload)
-    assert dataset_response.status_code == 200
-    dataset_data = dataset_response.json()
-    dataset_id = dataset_data["datasets"][0]["id"]
+        # Test input-groundtruth update
+        input_to_update = created_inputs[0].id
+        update_payload = InputGroundtruthUpdateList(
+            inputs_groundtruths=[
+                InputGroundtruthUpdateWithId(
+                    id=input_to_update,
+                    input={"messages": [{"role": "user", "content": "What is 2 + 2?"}]},
+                    groundtruth="4 (updated)",
+                )
+            ]
+        )
+        updated_response = update_inputs_groundtruths_service(session, dataset_id, update_payload)
+        updated_inputs = updated_response.inputs_groundtruths
+        assert len(updated_inputs) == 1
+        assert updated_inputs[0].groundtruth == "4 (updated)"
 
-    # Test input-groundtruth creation
-    input_endpoint = f"/projects/{project_uuid}/qa/datasets/{dataset_id}/entries"
-    create_payload = {
-        "inputs_groundtruths": [
-            {"input": {"messages": [{"role": "user", "content": "What is 2 + 2?"}]}, "groundtruth": "4"},
-            {
-                "input": {"messages": [{"role": "user", "content": "What is the capital of France?"}]},
-                "groundtruth": "Paris",
-            },
-            {
-                "input": {"messages": [{"role": "user", "content": "What is the weather like today?"}]}
-            },  # No groundtruth
-        ]
-    }
+        # Test input-groundtruth deletion
+        input_to_delete = created_inputs[1].id
+        delete_payload = InputGroundtruthDeleteList(input_groundtruth_ids=[input_to_delete])
+        deleted_count = delete_inputs_groundtruths_service(session, dataset_id, delete_payload)
+        assert deleted_count == 1  # Should have deleted 1 input
 
-    create_response = client.post(input_endpoint, headers=HEADERS_JWT, json=create_payload)
-    assert create_response.status_code == 200
-    created_inputs = create_response.json()["inputs_groundtruths"]
-    assert len(created_inputs) == 3
+        # Verify the input was deleted
+        remaining_data = get_inputs_groundtruths_with_version_outputs_service(session, dataset_id)
+        remaining_inputs = remaining_data.inputs_groundtruths
+        assert len(remaining_inputs) == 2  # Should now have 2 inputs instead of 3
 
-    # Test input-groundtruth retrieval
-    get_response = client.get(input_endpoint, headers=HEADERS_JWT)
-    assert get_response.status_code == 200
-    retrieved_inputs = get_response.json()["inputs_groundtruths"]
-    assert len(retrieved_inputs) == 3
-
-    # Test input-groundtruth update
-    input_to_update = created_inputs[0]["id"]
-    update_payload = {
-        "inputs_groundtruths": [
-            {
-                "id": input_to_update,
-                "input": {"messages": [{"role": "user", "content": "What is 2 + 2?"}]},
-                "groundtruth": "4 (updated)",
-            }
-        ]
-    }
-
-    update_response = client.patch(input_endpoint, headers=HEADERS_JWT, json=update_payload)
-    assert update_response.status_code == 200
-    updated_inputs = update_response.json()["inputs_groundtruths"]
-    assert len(updated_inputs) == 1
-    assert updated_inputs[0]["groundtruth"] == "4 (updated)"
-
-    # Test input-groundtruth deletion
-    input_to_delete = created_inputs[1]["id"]
-    delete_payload = {"input_groundtruth_ids": [input_to_delete]}
-
-    delete_response = client.request(method="DELETE", url=input_endpoint, headers=HEADERS_JWT, json=delete_payload)
-    assert delete_response.status_code == 200
-    delete_result = delete_response.json()
-    assert "message" in delete_result
-    assert "1" in delete_result["message"]  # Should have deleted 1 input
-
-    # Verify the input was deleted
-    get_response = client.get(input_endpoint, headers=HEADERS_JWT)
-    assert get_response.status_code == 200
-    remaining_inputs = get_response.json()["inputs_groundtruths"]
-    assert len(remaining_inputs) == 2  # Should now have 2 inputs instead of 3
-
-    # Cleanup
-    client.delete(f"/projects/{project_uuid}", headers=HEADERS_JWT)
+        delete_project_service(session=session, project_id=project_id)
 
 
 def _create_dummy_agent_workflow_config():
@@ -390,414 +361,351 @@ def _create_dummy_agent_workflow_config():
     }
 
 
-def test_run_qa_endpoint():
-    """Test the run_qa endpoint with graph_runner_id (migrated from version field)."""
-
-    # Create a project for testing
-    project_uuid = str(uuid4())
-    project_payload = {
-        "project_id": project_uuid,
-        "project_name": f"qa_run_test_{project_uuid}",
-        "description": "Test project for QA run endpoint",
-    }
-
-    project_response = client.post(f"/projects/{ORGANIZATION_ID}", headers=HEADERS_JWT, json=project_payload)
-    assert project_response.status_code == 200
-    project_data = project_response.json()
-    assert project_data["project_id"] == project_uuid
-
-    # Get the project details to find the graph runner ID
-    project_details_response = client.get(f"/projects/{project_uuid}", headers=HEADERS_JWT)
-    assert project_details_response.status_code == 200
-    project_details = project_details_response.json()
-
-    # Find the draft graph runner
-    draft_graph_runner = None
-    for gr in project_details["graph_runners"]:
-        if gr["env"] == "draft":
-            draft_graph_runner = gr
-            break
-
-    assert draft_graph_runner is not None, "Draft graph runner not found"
-    graph_runner_id = draft_graph_runner["graph_runner_id"]
-
-    # Update the project's workflow configuration using the helper function
-    workflow_config = _create_dummy_agent_workflow_config()
-
-    # Update the graph
-    update_graph_response = client.put(
-        f"/projects/{project_uuid}/graph/{graph_runner_id}", headers=HEADERS_JWT, json=workflow_config
-    )
-    assert update_graph_response.status_code == 200
-
-    # Deploy the project to production so we can test the production version
-    deploy_response = client.post(f"/projects/{project_uuid}/graph/{graph_runner_id}/deploy", headers=HEADERS_JWT)
-    assert deploy_response.status_code == 200
-
-    # Get production graph runner ID after deployment
-    project_details_response = client.get(f"/projects/{project_uuid}", headers=HEADERS_JWT)
-    project_details = project_details_response.json()
-    production_graph_runner = None
-    for gr in project_details["graph_runners"]:
-        if gr["env"] == "production":
-            production_graph_runner = gr
-            break
-    assert production_graph_runner is not None, "Production graph runner not found"
-    production_graph_runner_id = production_graph_runner["graph_runner_id"]
-
-    # Create a dataset
-    dataset_uuid = str(uuid4())
-    dataset_payload = {"datasets_name": [f"qa_run_dataset_{dataset_uuid}"]}
-
-    dataset_response = client.post(f"/projects/{project_uuid}/qa/datasets", headers=HEADERS_JWT, json=dataset_payload)
-    assert dataset_response.status_code == 200
-    dataset_data = dataset_response.json()
-    dataset_id = dataset_data["datasets"][0]["id"]
-
-    # Create input-groundtruth entries
-    input_payload = {
-        "inputs_groundtruths": [
-            {"input": {"messages": [{"role": "user", "content": "What is 2 + 2?"}]}, "groundtruth": "4"},
-            {
-                "input": {"messages": [{"role": "user", "content": "What is the capital of France?"}]},
-                "groundtruth": "Paris",
-            },
-            {
-                "input": {"messages": [{"role": "user", "content": "What is the weather like today?"}]}
-            },  # No groundtruth
-        ]
-    }
-
-    input_response = client.post(
-        f"/projects/{project_uuid}/qa/datasets/{dataset_id}/entries", headers=HEADERS_JWT, json=input_payload
-    )
-    assert input_response.status_code == 200
-    input_data = input_response.json()
-    assert len(input_data["inputs_groundtruths"]) == 3
-
-    # Test the run_qa endpoint with draft graph_runner_id on selected inputs
-    run_qa_payload_selection = {
-        "graph_runner_id": graph_runner_id,
-        "input_ids": [input_data["inputs_groundtruths"][0]["id"], input_data["inputs_groundtruths"][1]["id"]],
-    }
-
-    run_qa_response_selection = client.post(
-        f"/projects/{project_uuid}/qa/datasets/{dataset_id}/run", headers=HEADERS_JWT, json=run_qa_payload_selection
-    )
-
-    assert run_qa_response_selection.status_code == 200, (
-        f"Expected status code 200, got {run_qa_response_selection.status_code}"
-    )
-
-    qa_results_selection = run_qa_response_selection.json()
-    assert "results" in qa_results_selection
-    assert "summary" in qa_results_selection
-
-    # Check that all results have input == output (dummy agent behavior)
-    for result in qa_results_selection["results"]:
-        # Filter now outputs clean string content directly (not JSON)
-        output_content = result["output"]
-        input_content = result["input"]["messages"][0]["content"]
-        assert input_content == output_content, (
-            f"Input and output should be the same for dummy agent. Input: {input_content}, Output: {output_content}"
-        )
-        assert result["success"] is True, f"All results should be successful. Result: {result}"
-        assert result["graph_runner_id"] == graph_runner_id, f"graph_runner_id should match. Result: {result}"
-
-    # Verify summary statistics for selection
-    summary_selection = qa_results_selection["summary"]
-    assert summary_selection["total"] == 2
-    assert summary_selection["passed"] == 2
-    assert summary_selection["failed"] == 0
-    assert summary_selection["success_rate"] == 100.0
-
-    # Test the run_qa endpoint with run_all=True on production graph_runner
-    run_qa_payload_all = {
-        "graph_runner_id": production_graph_runner_id,
-        "run_all": True,
-    }
-
-    run_qa_response_all = client.post(
-        f"/projects/{project_uuid}/qa/datasets/{dataset_id}/run", headers=HEADERS_JWT, json=run_qa_payload_all
-    )
-
-    assert run_qa_response_all.status_code == 200, f"Expected status code 200, got {run_qa_response_all.status_code}"
-
-    qa_results_all = run_qa_response_all.json()
-    assert "results" in qa_results_all
-    assert "summary" in qa_results_all
-
-    # Should process all 3 entries when using run_all=True
-    assert len(qa_results_all["results"]) == 3
-
-    # Check that all results have input == output (dummy agent behavior)
-    for result in qa_results_all["results"]:
-        # Filter now outputs clean string content directly (not JSON)
-        output_content = result["output"]
-        input_content = result["input"]["messages"][0]["content"]
-        assert input_content == output_content, (
-            f"Input and output should be the same for dummy agent. Input: {input_content}, Output: {output_content}"
-        )
-        assert result["success"] is True, f"All results should be successful. Result: {result}"
-        assert result["graph_runner_id"] == production_graph_runner_id, (
-            f"graph_runner_id should match production. Result: {result}"
+@pytest.mark.asyncio
+async def test_run_qa_service():
+    """Test the run_qa_service with graph_runner_id (migrated from version field)."""
+    mock_trace_manager = MagicMock()
+    mock_span = MagicMock()
+    mock_span.__enter__ = MagicMock(return_value=mock_span)
+    mock_span.__exit__ = MagicMock(return_value=None)
+    mock_trace_manager.start_span.return_value = mock_span
+    mock_span.to_json.return_value = '{"context": {"trace_id": "testid"}, "attributes": {}, "parent_id": null}'
+    set_trace_manager(mock_trace_manager)
+    
+    with get_db_session() as session:
+        project_id, draft_graph_runner_id = create_project_and_graph_runner(
+            session, project_name_prefix="qa_run_test", description="Test project for QA run endpoint"
         )
 
-    # Verify summary statistics for run_all
-    summary_all = qa_results_all["summary"]
-    assert summary_all["total"] == 3
-    assert summary_all["passed"] == 3
-    assert summary_all["failed"] == 0
-    assert summary_all["success_rate"] == 100.0
+        # Update the project's workflow configuration using the helper function
+        workflow_config_dict = _create_dummy_agent_workflow_config()
+        workflow_config = GraphUpdateSchema(**workflow_config_dict)
 
-    # Cleanup
-    client.delete(f"/projects/{project_uuid}", headers=HEADERS_JWT)
+        # Update the graph
+        await update_graph_service(session, draft_graph_runner_id, project_id, workflow_config)
+
+        # Deploy the project to production so we can test the production version
+        deploy_graph_service(session, draft_graph_runner_id, project_id)
+
+        # Get production graph runner ID after deployment
+        project_details = get_project_service(session, project_id)
+        production_graph_runner = None
+        for gr in project_details.graph_runners:
+            if gr.env == EnvType.PRODUCTION:
+                production_graph_runner = gr
+                break
+        assert production_graph_runner is not None, "Production graph runner not found"
+        production_graph_runner_id = production_graph_runner.graph_runner_id
+
+        # Create a dataset
+        dataset_uuid = str(uuid4())
+        dataset_data = create_datasets_service(
+            session, project_id, DatasetCreateList(datasets_name=[f"qa_run_dataset_{dataset_uuid}"])
+        )
+        dataset_id = dataset_data.datasets[0].id
+
+        # Create input-groundtruth entries
+        input_payload = InputGroundtruthCreateList(
+            inputs_groundtruths=[
+                {"input": {"messages": [{"role": "user", "content": "What is 2 + 2?"}]}, "groundtruth": "4"},
+                {
+                    "input": {"messages": [{"role": "user", "content": "What is the capital of France?"}]},
+                    "groundtruth": "Paris",
+                },
+                {
+                    "input": {"messages": [{"role": "user", "content": "What is the weather like today?"}]}
+                },  # No groundtruth
+            ]
+        )
+
+        input_response = create_inputs_groundtruths_service(session, dataset_id, input_payload)
+        input_data = input_response.inputs_groundtruths
+        assert len(input_data) == 3
+
+        # Test run_qa_service with draft graph_runner_id on selected inputs
+        run_qa_payload_selection = QARunRequest(
+            graph_runner_id=draft_graph_runner_id,
+            input_ids=[input_data[0].id, input_data[1].id],
+        )
+
+        qa_results_selection = await run_qa_service(session, project_id, dataset_id, run_qa_payload_selection)
+
+        assert "results" in qa_results_selection.model_dump()
+        assert "summary" in qa_results_selection.model_dump()
+
+        # Check that all results have input == output (dummy agent behavior)
+        for result in qa_results_selection.results:
+            # Filter now outputs clean string content directly (not JSON)
+            output_content = result.output
+            input_content = result.input["messages"][0]["content"]
+            assert input_content == output_content, (
+                f"Input and output should be the same for dummy agent. Input: {input_content}, Output: {output_content}"
+            )
+            assert result.success is True, f"All results should be successful. Result: {result}"
+            assert result.graph_runner_id == draft_graph_runner_id, f"graph_runner_id should match. Result: {result}"
+
+        # Verify summary statistics for selection
+        summary_selection = qa_results_selection.summary
+        assert summary_selection.total == 2
+        assert summary_selection.passed == 2
+        assert summary_selection.failed == 0
+        assert summary_selection.success_rate == 100.0
+
+        # Test run_qa_service with run_all=True on production graph_runner
+        run_qa_payload_all = QARunRequest(
+            graph_runner_id=production_graph_runner_id,
+            run_all=True,
+        )
+
+        qa_results_all = await run_qa_service(session, project_id, dataset_id, run_qa_payload_all)
+
+        assert "results" in qa_results_all.model_dump()
+        assert "summary" in qa_results_all.model_dump()
+
+        # Should process all 3 entries when using run_all=True
+        assert len(qa_results_all.results) == 3
+
+        # Check that all results have input == output (dummy agent behavior)
+        for result in qa_results_all.results:
+            # Filter now outputs clean string content directly (not JSON)
+            output_content = result.output
+            input_content = result.input["messages"][0]["content"]
+            assert input_content == output_content, (
+                f"Input and output should be the same for dummy agent. Input: {input_content}, Output: {output_content}"
+            )
+            assert result.success is True, f"All results should be successful. Result: {result}"
+            assert result.graph_runner_id == production_graph_runner_id, (
+                f"graph_runner_id should match production. Result: {result}"
+            )
+
+        # Verify summary statistics for run_all
+        summary_all = qa_results_all.summary
+        assert summary_all.total == 3
+        assert summary_all.passed == 3
+        assert summary_all.failed == 0
+        assert summary_all.success_rate == 100.0
+
+        delete_project_service(session=session, project_id=project_id)
 
 
 def test_position_field_in_responses():
     """Test that index field is included and persists correctly after deletions."""
-    project_uuid = str(uuid4())
-    project_payload = {
-        "project_id": project_uuid,
-        "project_name": f"index_test_{project_uuid}",
-        "description": "Test project for index field",
-    }
-    client.post(f"/projects/{ORGANIZATION_ID}", headers=HEADERS_JWT, json=project_payload)
+    with get_db_session() as session:
+        project_id, _ = create_project_and_graph_runner(
+            session, project_name_prefix="index_test", description="Test project for index field"
+        )
 
-    dataset_payload = {"datasets_name": [f"index_dataset_{project_uuid}"]}
-    dataset_response = client.post(f"/projects/{project_uuid}/qa/datasets", headers=HEADERS_JWT, json=dataset_payload)
-    dataset_id = dataset_response.json()["datasets"][0]["id"]
+        dataset_data = create_datasets_service(
+            session, project_id, DatasetCreateList(datasets_name=[f"index_dataset_{project_id}"])
+        )
+        dataset_id = dataset_data.datasets[0].id
 
-    input_endpoint = f"/projects/{project_uuid}/qa/datasets/{dataset_id}/entries"
+        # Add 5 entries - should get indexes 1 to 5
+        create_payload = InputGroundtruthCreateList(
+            inputs_groundtruths=[
+                {"input": {"messages": [{"role": "user", "content": f"Test {i}"}]}, "groundtruth": f"GT {i}"}
+                for i in range(5)
+            ]
+        )
+        created_response = create_inputs_groundtruths_service(session, dataset_id, create_payload)
+        created = created_response.inputs_groundtruths
+        assert len(created) == 5
+        positions = [entry.position for entry in created]
+        assert positions == [1, 2, 3, 4, 5]
 
-    # Add 5 entries - should get indexes 1 to 5
-    create_payload = {
-        "inputs_groundtruths": [
-            {"input": {"messages": [{"role": "user", "content": f"Test {i}"}]}, "groundtruth": f"GT {i}"}
-            for i in range(5)
-        ]
-    }
-    create_response = client.post(input_endpoint, headers=HEADERS_JWT, json=create_payload)
-    assert create_response.status_code == 200
-    created = create_response.json()["inputs_groundtruths"]
-    assert len(created) == 5
-    positions = [entry["position"] for entry in created]
-    assert positions == [1, 2, 3, 4, 5]
+        # Delete entry with position 3
+        entry_to_delete = next(entry.id for entry in created if entry.position == 3)
+        delete_payload = InputGroundtruthDeleteList(input_groundtruth_ids=[entry_to_delete])
+        delete_inputs_groundtruths_service(session, dataset_id, delete_payload)
 
-    # Delete entry with position 3
-    entry_to_delete = next(entry["id"] for entry in created if entry["position"] == 3)
-    delete_payload = {"input_groundtruth_ids": [entry_to_delete]}
-    client.request(method="DELETE", url=input_endpoint, headers=HEADERS_JWT, json=delete_payload)
+        # Verify remaining entries still have their original positions
+        remaining_data = get_inputs_groundtruths_with_version_outputs_service(session, dataset_id)
+        remaining = remaining_data.inputs_groundtruths
+        remaining_positions = [entry.position for entry in remaining]
+        assert remaining_positions == [1, 2, 4, 5]
 
-    # Verify remaining entries still have their original positions
-    get_response = client.get(input_endpoint, headers=HEADERS_JWT)
-    assert get_response.status_code == 200
-    remaining = get_response.json()["inputs_groundtruths"]
-    remaining_positions = [entry["position"] for entry in remaining]
-    assert remaining_positions == [1, 2, 4, 5]
+        # Add one new entry
+        new_entry_payload = InputGroundtruthCreateList(
+            inputs_groundtruths=[{"input": {"messages": [{"role": "user", "content": "New entry"}]}, "groundtruth": "New GT"}]
+        )
+        new_entry_response = create_inputs_groundtruths_service(session, dataset_id, new_entry_payload)
+        new_entry = new_entry_response.inputs_groundtruths[0]
+        assert new_entry.position == 6
 
-    # Add one new entry
-    new_entry_payload = {
-        "inputs_groundtruths": [
-            {"input": {"messages": [{"role": "user", "content": "New entry"}]}, "groundtruth": "New GT"}
-        ]
-    }
-    new_entry_response = client.post(input_endpoint, headers=HEADERS_JWT, json=new_entry_payload)
-    assert new_entry_response.status_code == 200
-    new_entry = new_entry_response.json()["inputs_groundtruths"][0]
-    assert new_entry["position"] == 6
+        # Verify final state
+        final_data = get_inputs_groundtruths_with_version_outputs_service(session, dataset_id)
+        final_entries = final_data.inputs_groundtruths
+        final_positions = [entry.position for entry in final_entries]
+        assert sorted(final_positions) == [1, 2, 4, 5, 6]
 
-    # Verify final state
-    final_response = client.get(input_endpoint, headers=HEADERS_JWT)
-    final_entries = final_response.json()["inputs_groundtruths"]
-    final_positions = [entry["position"] for entry in final_entries]
-    assert sorted(final_positions) == [1, 2, 4, 5, 6]
-
-    client.delete(f"/projects/{project_uuid}", headers=HEADERS_JWT)
+        delete_project_service(session=session, project_id=project_id)
 
 
 def test_duplicate_positions_validation():
     """Test duplicate position validation."""
-    project_uuid = str(uuid4())
-    project_payload = {
-        "project_id": project_uuid,
-        "project_name": f"duplicate_test_{project_uuid}",
-        "description": "Test project for duplicate positions",
-    }
-    client.post(f"/projects/{ORGANIZATION_ID}", headers=HEADERS_JWT, json=project_payload)
+    with get_db_session() as session:
+        project_id, _ = create_project_and_graph_runner(
+            session, project_name_prefix="duplicate_test", description="Test project for duplicate positions"
+        )
 
-    dataset_payload = {"datasets_name": [f"duplicate_dataset_{project_uuid}"]}
-    dataset_response = client.post(f"/projects/{project_uuid}/qa/datasets", headers=HEADERS_JWT, json=dataset_payload)
-    dataset_id = dataset_response.json()["datasets"][0]["id"]
+        dataset_data = create_datasets_service(
+            session, project_id, DatasetCreateList(datasets_name=[f"duplicate_dataset_{project_id}"])
+        )
+        dataset_id = dataset_data.datasets[0].id
 
-    input_endpoint = f"/projects/{project_uuid}/qa/datasets/{dataset_id}/entries"
-    create_payload = {
-        "inputs_groundtruths": [
-            {"input": {"messages": [{"role": "user", "content": "Test 1"}]}, "groundtruth": "GT 1", "position": 1},
-            {"input": {"messages": [{"role": "user", "content": "Test 2"}]}, "groundtruth": "GT 2", "position": 1},
-        ]
-    }
+        create_payload = InputGroundtruthCreateList(
+            inputs_groundtruths=[
+                {"input": {"messages": [{"role": "user", "content": "Test 1"}]}, "groundtruth": "GT 1", "position": 1},
+                {"input": {"messages": [{"role": "user", "content": "Test 2"}]}, "groundtruth": "GT 2", "position": 1},
+            ]
+        )
 
-    response = client.post(input_endpoint, headers=HEADERS_JWT, json=create_payload)
-    assert response.status_code == 400
-    assert "Duplicate positions" in response.json()["detail"]
+        with pytest.raises(QADuplicatePositionError) as exc_info:
+            create_inputs_groundtruths_service(session, dataset_id, create_payload)
+        assert "Duplicate positions" in str(exc_info.value)
 
-    client.delete(f"/projects/{project_uuid}", headers=HEADERS_JWT)
+        delete_project_service(session=session, project_id=project_id)
 
 
 def test_partial_position_validation():
     """Test partial position validation."""
-    project_uuid = str(uuid4())
-    project_payload = {
-        "project_id": project_uuid,
-        "project_name": f"partial_test_{project_uuid}",
-        "description": "Test project for partial positions",
-    }
-    client.post(f"/projects/{ORGANIZATION_ID}", headers=HEADERS_JWT, json=project_payload)
+    with get_db_session() as session:
+        project_id, _ = create_project_and_graph_runner(
+            session, project_name_prefix="partial_test", description="Test project for partial positions"
+        )
 
-    dataset_payload = {"datasets_name": [f"partial_dataset_{project_uuid}"]}
-    dataset_response = client.post(f"/projects/{project_uuid}/qa/datasets", headers=HEADERS_JWT, json=dataset_payload)
-    dataset_id = dataset_response.json()["datasets"][0]["id"]
+        dataset_data = create_datasets_service(
+            session, project_id, DatasetCreateList(datasets_name=[f"partial_dataset_{project_id}"])
+        )
+        dataset_id = dataset_data.datasets[0].id
 
-    input_endpoint = f"/projects/{project_uuid}/qa/datasets/{dataset_id}/entries"
-    create_payload = {
-        "inputs_groundtruths": [
-            {"input": {"messages": [{"role": "user", "content": "Test 1"}]}, "groundtruth": "GT 1", "position": 1},
-            {"input": {"messages": [{"role": "user", "content": "Test 2"}]}, "groundtruth": "GT 2"},
-        ]
-    }
+        create_payload = InputGroundtruthCreateList(
+            inputs_groundtruths=[
+                {"input": {"messages": [{"role": "user", "content": "Test 1"}]}, "groundtruth": "GT 1", "position": 1},
+                {"input": {"messages": [{"role": "user", "content": "Test 2"}]}, "groundtruth": "GT 2"},
+            ]
+        )
 
-    response = client.post(input_endpoint, headers=HEADERS_JWT, json=create_payload)
-    assert response.status_code == 400
-    assert "Partial positioning" in response.json()["detail"]
+        with pytest.raises(QAPartialPositionError) as exc_info:
+            create_inputs_groundtruths_service(session, dataset_id, create_payload)
+        assert "Partial positioning" in str(exc_info.value)
 
-    client.delete(f"/projects/{project_uuid}", headers=HEADERS_JWT)
+        delete_project_service(session=session, project_id=project_id)
 
 
 def test_position_auto_generation():
     """Test that positions are auto-generated when not provided."""
-    project_uuid = str(uuid4())
-    project_payload = {
-        "project_id": project_uuid,
-        "project_name": f"auto_index_test_{project_uuid}",
-        "description": "Test project for auto-generated positions",
-    }
-    client.post(f"/projects/{ORGANIZATION_ID}", headers=HEADERS_JWT, json=project_payload)
+    with get_db_session() as session:
+        project_id, _ = create_project_and_graph_runner(
+            session, project_name_prefix="auto_index_test", description="Test project for auto-generated positions"
+        )
 
-    dataset_payload = {"datasets_name": [f"auto_index_dataset_{project_uuid}"]}
-    dataset_response = client.post(f"/projects/{project_uuid}/qa/datasets", headers=HEADERS_JWT, json=dataset_payload)
-    dataset_id = dataset_response.json()["datasets"][0]["id"]
+        dataset_data = create_datasets_service(
+            session, project_id, DatasetCreateList(datasets_name=[f"auto_index_dataset_{project_id}"])
+        )
+        dataset_id = dataset_data.datasets[0].id
 
-    input_endpoint = f"/projects/{project_uuid}/qa/datasets/{dataset_id}/entries"
-    create_payload = {
-        "inputs_groundtruths": [
-            {"input": {"messages": [{"role": "user", "content": "Test 1"}]}, "groundtruth": "GT 1"},
-            {"input": {"messages": [{"role": "user", "content": "Test 2"}]}, "groundtruth": "GT 2"},
-        ]
-    }
+        create_payload = InputGroundtruthCreateList(
+            inputs_groundtruths=[
+                {"input": {"messages": [{"role": "user", "content": "Test 1"}]}, "groundtruth": "GT 1"},
+                {"input": {"messages": [{"role": "user", "content": "Test 2"}]}, "groundtruth": "GT 2"},
+            ]
+        )
 
-    response = client.post(input_endpoint, headers=HEADERS_JWT, json=create_payload)
-    assert response.status_code == 200
-    created = response.json()["inputs_groundtruths"]
-    assert created[0]["position"] == 1
-    assert created[1]["position"] == 2
+        created_response = create_inputs_groundtruths_service(session, dataset_id, create_payload)
+        created = created_response.inputs_groundtruths
+        assert created[0].position == 1
+        assert created[1].position == 2
 
-    client.delete(f"/projects/{project_uuid}", headers=HEADERS_JWT)
+        delete_project_service(session=session, project_id=project_id)
 
 
 def test_csv_import_duplicate_positions_inside_csv():
     """Test CSV import with duplicate positions within CSV."""
-    project_uuid = str(uuid4())
-    project_payload = {
-        "project_id": project_uuid,
-        "project_name": f"csv_duplicate_test_{project_uuid}",
-        "description": "Test project for CSV duplicate positions",
-    }
-    client.post(f"/projects/{ORGANIZATION_ID}", headers=HEADERS_JWT, json=project_payload)
+    with get_db_session() as session:
+        project_id, _ = create_project_and_graph_runner(
+            session, project_name_prefix="csv_duplicate_test", description="Test project for CSV duplicate positions"
+        )
 
-    dataset_payload = {"datasets_name": [f"csv_duplicate_dataset_{project_uuid}"]}
-    dataset_response = client.post(f"/projects/{project_uuid}/qa/datasets", headers=HEADERS_JWT, json=dataset_payload)
-    dataset_id = dataset_response.json()["datasets"][0]["id"]
+        dataset_data = create_datasets_service(
+            session, project_id, DatasetCreateList(datasets_name=[f"csv_duplicate_dataset_{project_id}"])
+        )
+        dataset_id = dataset_data.datasets[0].id
 
-    # CSV with duplicate positions
-    input1 = json.dumps({"messages": [{"role": "user", "content": "Test 1"}]})
-    input2 = json.dumps({"messages": [{"role": "user", "content": "Test 2"}]})
-    csv_buffer = io.StringIO()
-    writer = csv.writer(csv_buffer)
-    writer.writerow(["position", "input", "expected_output"])
-    writer.writerow([1, input1, "GT 1"])
-    writer.writerow([1, input2, "GT 2"])
-    csv_content = csv_buffer.getvalue()
-    csv_file = ("test.csv", csv_content.encode("utf-8"), "text/csv")
+        # CSV with duplicate positions
+        input1 = json.dumps({"messages": [{"role": "user", "content": "Test 1"}]})
+        input2 = json.dumps({"messages": [{"role": "user", "content": "Test 2"}]})
+        csv_buffer = io.StringIO()
+        writer = csv.writer(csv_buffer)
+        writer.writerow(["position", "input", "expected_output"])
+        writer.writerow([1, input1, "GT 1"])
+        writer.writerow([1, input2, "GT 2"])
+        csv_content = csv_buffer.getvalue()
+        csv_file = io.BytesIO(csv_content.encode("utf-8"))
 
-    import_endpoint = f"/projects/{project_uuid}/qa/datasets/{dataset_id}/import"
-    response = client.post(import_endpoint, headers=HEADERS_JWT, files={"file": csv_file})
-    assert response.status_code == 400
-    error_detail = response.json()["detail"]
-    assert "Duplicate positions found in CSV import: [1]" in error_detail
-    assert "CSV import" in error_detail
+        with pytest.raises(CSVNonUniquePositionError) as exc_info:
+            import_qa_data_from_csv_service(session, dataset_id, csv_file)
+        error_detail = str(exc_info.value)
+        assert "Duplicate positions found in CSV import: [1]" in error_detail
+        assert "CSV import" in error_detail
 
-    client.delete(f"/projects/{project_uuid}", headers=HEADERS_JWT)
+        delete_project_service(session=session, project_id=project_id)
 
 
 def test_csv_import_invalid_positions_values():
     """Test CSV import with invalid position values (non-integer)."""
-    project_uuid = str(uuid4())
-    project_payload = {
-        "project_id": project_uuid,
-        "project_name": f"csv_invalid_index_test_{project_uuid}",
-        "description": "Test project for CSV invalid position values",
-    }
-    client.post(f"/projects/{ORGANIZATION_ID}", headers=HEADERS_JWT, json=project_payload)
+    with get_db_session() as session:
+        project_id, _ = create_project_and_graph_runner(
+            session, project_name_prefix="csv_invalid_index_test", description="Test project for CSV invalid position values"
+        )
 
-    dataset_payload = {"datasets_name": [f"csv_invalid_index_dataset_{project_uuid}"]}
-    dataset_response = client.post(f"/projects/{project_uuid}/qa/datasets", headers=HEADERS_JWT, json=dataset_payload)
-    dataset_id = dataset_response.json()["datasets"][0]["id"]
+        dataset_data = create_datasets_service(
+            session, project_id, DatasetCreateList(datasets_name=[f"csv_invalid_index_dataset_{project_id}"])
+        )
+        dataset_id = dataset_data.datasets[0].id
 
-    # CSV with invalid position value (non-integer)
-    input_json = json.dumps({"messages": [{"role": "user", "content": "Test"}]})
-    csv_buffer = io.StringIO()
-    writer = csv.writer(csv_buffer)
-    writer.writerow(["position", "input", "expected_output"])
-    writer.writerow(["abc", input_json, "GT"])
-    csv_content = csv_buffer.getvalue()
-    csv_file = ("test.csv", csv_content.encode("utf-8"), "text/csv")
+        # CSV with invalid position value (non-integer)
+        input_json = json.dumps({"messages": [{"role": "user", "content": "Test"}]})
+        csv_buffer = io.StringIO()
+        writer = csv.writer(csv_buffer)
+        writer.writerow(["position", "input", "expected_output"])
+        writer.writerow(["abc", input_json, "GT"])
+        csv_content = csv_buffer.getvalue()
+        csv_file = io.BytesIO(csv_content.encode("utf-8"))
 
-    import_endpoint = f"/projects/{project_uuid}/qa/datasets/{dataset_id}/import"
-    response = client.post(import_endpoint, headers=HEADERS_JWT, files={"file": csv_file})
-    assert response.status_code == 400
-    assert "Invalid integer in 'position' column" in response.json()["detail"]
-    assert "row" in response.json()["detail"]
+        with pytest.raises(CSVInvalidPositionError) as exc_info:
+            import_qa_data_from_csv_service(session, dataset_id, csv_file)
+        error_detail = str(exc_info.value)
+        assert "Invalid integer in 'position' column" in error_detail
+        assert "row" in error_detail
 
-    client.delete(f"/projects/{project_uuid}", headers=HEADERS_JWT)
+        delete_project_service(session=session, project_id=project_id)
 
 
 def test_csv_import_position_less_than_one():
     """Test CSV import with position < 1."""
-    project_uuid = str(uuid4())
-    project_payload = {
-        "project_id": project_uuid,
-        "project_name": f"csv_position_lt_one_test_{project_uuid}",
-        "description": "Test project for CSV position < 1",
-    }
-    client.post(f"/projects/{ORGANIZATION_ID}", headers=HEADERS_JWT, json=project_payload)
+    with get_db_session() as session:
+        project_id, _ = create_project_and_graph_runner(
+            session, project_name_prefix="csv_position_lt_one_test", description="Test project for CSV position < 1"
+        )
 
-    dataset_payload = {"datasets_name": [f"csv_position_lt_one_dataset_{project_uuid}"]}
-    dataset_response = client.post(f"/projects/{project_uuid}/qa/datasets", headers=HEADERS_JWT, json=dataset_payload)
-    dataset_id = dataset_response.json()["datasets"][0]["id"]
+        dataset_data = create_datasets_service(
+            session, project_id, DatasetCreateList(datasets_name=[f"csv_position_lt_one_dataset_{project_id}"])
+        )
+        dataset_id = dataset_data.datasets[0].id
 
-    input_json = json.dumps({"messages": [{"role": "user", "content": "Test"}]})
-    csv_buffer = io.StringIO()
-    writer = csv.writer(csv_buffer)
-    writer.writerow(["position", "input", "expected_output"])
-    writer.writerow([0, input_json, "GT"])
-    csv_content = csv_buffer.getvalue()
-    csv_file = ("test.csv", csv_content.encode("utf-8"), "text/csv")
+        input_json = json.dumps({"messages": [{"role": "user", "content": "Test"}]})
+        csv_buffer = io.StringIO()
+        writer = csv.writer(csv_buffer)
+        writer.writerow(["position", "input", "expected_output"])
+        writer.writerow([0, input_json, "GT"])
+        csv_content = csv_buffer.getvalue()
+        csv_file = io.BytesIO(csv_content.encode("utf-8"))
 
-    import_endpoint = f"/projects/{project_uuid}/qa/datasets/{dataset_id}/import"
-    response = client.post(import_endpoint, headers=HEADERS_JWT, files={"file": csv_file})
-    assert response.status_code == 400
-    assert "Invalid integer in 'position' column" in response.json()["detail"]
-    assert "greater than or equal to 1" in response.json()["detail"]
+        with pytest.raises(CSVInvalidPositionError) as exc_info:
+            import_qa_data_from_csv_service(session, dataset_id, csv_file)
+        error_detail = str(exc_info.value)
+        assert "Invalid integer in 'position' column" in error_detail
+        assert "greater than or equal to 1" in error_detail
 
-    client.delete(f"/projects/{project_uuid}", headers=HEADERS_JWT)
+        delete_project_service(session=session, project_id=project_id)
