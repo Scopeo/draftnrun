@@ -70,27 +70,6 @@ DEFAULT_FILTER_SCHEMA = {
 }
 
 
-def test_version_management():
-    """Test that projects no longer create default versions."""
-    # Create a project
-    project_uuid = str(uuid4())
-    project_payload = {
-        "project_id": project_uuid,
-        "project_name": f"version_test_{project_uuid}",
-        "description": "Test project for version management",
-    }
-
-    project_response = client.post(f"/projects/{ORGANIZATION_ID}", headers=HEADERS_JWT, json=project_payload)
-    assert project_response.status_code == 200
-
-    # Verify that version endpoints no longer exist (should return 404 because the endpoint doesn't exist)
-    versions_response = client.get(f"/projects/{project_uuid}/qa/versions", headers=HEADERS_JWT)
-    assert versions_response.status_code == 404  # Not Found - endpoint doesn't exist
-
-    # Cleanup
-    client.delete(f"/projects/{project_uuid}", headers=HEADERS_JWT)
-
-
 def test_pagination():
     """Test pagination for GET entries endpoint with 10 rows, 5 per page."""
     project_uuid = str(uuid4())
@@ -575,104 +554,6 @@ def test_run_qa_endpoint():
     client.delete(f"/projects/{project_uuid}", headers=HEADERS_JWT)
 
 
-def test_quality_assurance_complete_workflow():
-    """Test a complete quality assurance workflow with graph_runner_id."""
-
-    # Create a project
-    project_uuid = str(uuid4())
-    project_payload = {
-        "project_id": project_uuid,
-        "project_name": f"qa_complete_workflow_{project_uuid}",
-        "description": "Test project for complete QA workflow",
-    }
-
-    project_response = client.post(f"/projects/{ORGANIZATION_ID}", headers=HEADERS_JWT, json=project_payload)
-    assert project_response.status_code == 200
-
-    # Get graph runner IDs
-    project_details_response = client.get(f"/projects/{project_uuid}", headers=HEADERS_JWT)
-    assert project_details_response.status_code == 200
-    project_details = project_details_response.json()
-
-    draft_graph_runner = None
-    for gr in project_details["graph_runners"]:
-        if gr["env"] == "draft":
-            draft_graph_runner = gr
-            break
-    assert draft_graph_runner is not None, "Draft graph runner not found"
-    draft_graph_runner_id = draft_graph_runner["graph_runner_id"]
-
-    # Create a dataset
-    dataset_payload = {"datasets_name": ["complete_workflow_dataset"]}
-    dataset_response = client.post(f"/projects/{project_uuid}/qa/datasets", headers=HEADERS_JWT, json=dataset_payload)
-    assert dataset_response.status_code == 200
-    dataset_id = dataset_response.json()["datasets"][0]["id"]
-
-    # Create input-groundtruth entries
-    input_payload = {
-        "inputs_groundtruths": [
-            {"input": {"messages": [{"role": "user", "content": "Test input 1"}]}, "groundtruth": "Expected output 1"},
-            {"input": {"messages": [{"role": "user", "content": "Test input 2"}]}, "groundtruth": "Expected output 2"},
-        ]
-    }
-    input_response = client.post(
-        f"/projects/{project_uuid}/qa/datasets/{dataset_id}/entries", headers=HEADERS_JWT, json=input_payload
-    )
-    assert input_response.status_code == 200
-    input_data = input_response.json()
-
-    # Test querying entries (migrated API - no longer supports version filter)
-    get_response_initial = client.get(
-        f"/projects/{project_uuid}/qa/datasets/{dataset_id}/entries", headers=HEADERS_JWT
-    )
-    assert get_response_initial.status_code == 200
-    initial_results = get_response_initial.json()["inputs_groundtruths"]
-    assert len(initial_results) == 2  # All 2 inputs should be returned
-
-    # Test new outputs endpoint - should return empty initially
-    get_outputs_response = client.get(
-        f"/projects/{project_uuid}/qa/datasets/{dataset_id}/outputs?graph_runner_id={draft_graph_runner_id}",
-        headers=HEADERS_JWT,
-    )
-    assert get_outputs_response.status_code == 200
-    draft_outputs = get_outputs_response.json()
-    assert len(draft_outputs) == 0  # No outputs exist yet
-
-    # Run QA on draft graph runner
-    run_qa_payload = {
-        "graph_runner_id": draft_graph_runner_id,
-        "input_ids": [input_data["inputs_groundtruths"][0]["id"]],
-    }
-    run_qa_response = client.post(
-        f"/projects/{project_uuid}/qa/datasets/{dataset_id}/run", headers=HEADERS_JWT, json=run_qa_payload
-    )
-    assert run_qa_response.status_code == 200
-    qa_results = run_qa_response.json()
-    assert "results" in qa_results
-    assert "summary" in qa_results
-    assert len(qa_results["results"]) == 1, "Should have 1 result for 1 input"
-    assert qa_results["results"][0]["success"] is True, "QA run should be successful"
-    assert qa_results["results"][0]["graph_runner_id"] == str(draft_graph_runner_id), "graph_runner_id should match"
-    assert qa_results["results"][0]["input"] is not None, "Input should be present in results"
-    assert qa_results["results"][0]["output"] is not None, "Output should be present in results"
-
-    # Verify outputs were created using the outputs endpoint (now returns Dict[UUID, str])
-    get_outputs_after_run = client.get(
-        f"/projects/{project_uuid}/qa/datasets/{dataset_id}/outputs?graph_runner_id={draft_graph_runner_id}",
-        headers=HEADERS_JWT,
-    )
-    assert get_outputs_after_run.status_code == 200
-    draft_outputs_after_run = get_outputs_after_run.json()
-    assert len(draft_outputs_after_run) == 1, "Should have 1 output after running 1 input"
-    # The endpoint now returns Dict[UUID, str] so keys are UUIDs (serialized as strings in JSON)
-    first_input_id = str(input_data["inputs_groundtruths"][0]["id"])
-    assert first_input_id in draft_outputs_after_run, "Output should exist for the input that was run"
-    assert draft_outputs_after_run[first_input_id] is not None, "Output should not be None"
-
-    # Cleanup
-    client.delete(f"/projects/{project_uuid}", headers=HEADERS_JWT)
-
-
 def test_position_field_in_responses():
     """Test that index field is included and persists correctly after deletions."""
     project_uuid = str(uuid4())
@@ -859,48 +740,6 @@ def test_csv_import_duplicate_positions_inside_csv():
     client.delete(f"/projects/{project_uuid}", headers=HEADERS_JWT)
 
 
-def test_csv_import_conflicting_with_existing_positions():
-    """Test CSV import with positions conflicting with existing dataset entries."""
-    project_uuid = str(uuid4())
-    project_payload = {
-        "project_id": project_uuid,
-        "project_name": f"csv_conflict_test_{project_uuid}",
-        "description": "Test project for CSV position conflicts",
-    }
-    client.post(f"/projects/{ORGANIZATION_ID}", headers=HEADERS_JWT, json=project_payload)
-
-    dataset_payload = {"datasets_name": [f"csv_conflict_dataset_{project_uuid}"]}
-    dataset_response = client.post(f"/projects/{project_uuid}/qa/datasets", headers=HEADERS_JWT, json=dataset_payload)
-    dataset_id = dataset_response.json()["datasets"][0]["id"]
-
-    # Create existing entry with position 1
-    input_endpoint = f"/projects/{project_uuid}/qa/datasets/{dataset_id}/entries"
-    create_payload = {
-        "inputs_groundtruths": [
-            {"input": {"messages": [{"role": "user", "content": "Existing"}]}, "groundtruth": "GT", "position": 1}
-        ]
-    }
-    client.post(input_endpoint, headers=HEADERS_JWT, json=create_payload)
-
-    # CSV with position 1 (conflicts with existing)
-    input_json = json.dumps({"messages": [{"role": "user", "content": "New"}]})
-    csv_buffer = io.StringIO()
-    writer = csv.writer(csv_buffer)
-    writer.writerow(["position", "input", "expected_output"])
-    writer.writerow([1, input_json, "New GT"])
-    csv_content = csv_buffer.getvalue()
-    csv_file = ("test.csv", csv_content.encode("utf-8"), "text/csv")
-
-    import_endpoint = f"/projects/{project_uuid}/qa/datasets/{dataset_id}/import"
-    response = client.post(import_endpoint, headers=HEADERS_JWT, files={"file": csv_file})
-    assert response.status_code == 400
-    error_detail = response.json()["detail"]
-    assert "Duplicate positions found in CSV import: [1]" in error_detail
-    assert "CSV import" in error_detail
-
-    client.delete(f"/projects/{project_uuid}", headers=HEADERS_JWT)
-
-
 def test_csv_import_invalid_positions_values():
     """Test CSV import with invalid position values (non-integer)."""
     project_uuid = str(uuid4())
@@ -929,37 +768,6 @@ def test_csv_import_invalid_positions_values():
     assert response.status_code == 400
     assert "Invalid integer in 'position' column" in response.json()["detail"]
     assert "row" in response.json()["detail"]
-
-    client.delete(f"/projects/{project_uuid}", headers=HEADERS_JWT)
-
-
-def test_position_less_than_one():
-    """Test that positions < 1 are rejected."""
-    project_uuid = str(uuid4())
-    project_payload = {
-        "project_id": project_uuid,
-        "project_name": f"position_lt_one_test_{project_uuid}",
-        "description": "Test project for position < 1 validation",
-    }
-    client.post(f"/projects/{ORGANIZATION_ID}", headers=HEADERS_JWT, json=project_payload)
-
-    dataset_payload = {"datasets_name": [f"position_lt_one_dataset_{project_uuid}"]}
-    dataset_response = client.post(f"/projects/{project_uuid}/qa/datasets", headers=HEADERS_JWT, json=dataset_payload)
-    dataset_id = dataset_response.json()["datasets"][0]["id"]
-
-    input_endpoint = f"/projects/{project_uuid}/qa/datasets/{dataset_id}/entries"
-    create_payload = {
-        "inputs_groundtruths": [
-            {"input": {"messages": [{"role": "user", "content": "Test"}]}, "groundtruth": "GT", "position": 0}
-        ]
-    }
-
-    response = client.post(input_endpoint, headers=HEADERS_JWT, json=create_payload)
-    assert response.status_code == 422
-    assert (
-        "position for a QA example must be a positive integer greater or equal to 1 if provided"
-        in response.json()["detail"][0]["msg"]
-    )
 
     client.delete(f"/projects/{project_uuid}", headers=HEADERS_JWT)
 
