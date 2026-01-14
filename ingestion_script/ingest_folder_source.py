@@ -305,7 +305,7 @@ async def _ingest_folder_source(
             overlapping_size=chunk_overlap,
         )
     except Exception as e:
-        error_msg = f"Failed to chunk documents: {str(e)}"
+        error_msg = f"Failed to chunk documents: {str(e)}, PDF reading mode: {pdf_reading_mode.value}"
         LOGGER.error(error_msg)
         ingestion_task.result_metadata = TaskResultMetadata(
             message=error_msg,
@@ -396,7 +396,7 @@ async def _ingest_folder_source(
                     error_messages.append(f"{file_name}: {reason}")
                 error_msg = " | ".join(error_messages)
             else:
-                error_msg = "Unable to process files"
+                error_msg = f"Unable to process files, PDF reading mode: {pdf_reading_mode.value}"
 
             ingestion_task_failed = IngestionTaskUpdate(
                 id=task_id,
@@ -458,7 +458,7 @@ async def _ingest_folder_source(
             source_id=str(source_id),
         )
     except Exception as e:
-        error_msg = f"Failed to ingest folder source: {str(e)}"
+        error_msg = f"Failed to ingest folder source: {str(e)}, PDF reading mode: {pdf_reading_mode.value}"
         LOGGER.error(error_msg)
         ingestion_task.status = db.TaskStatus.FAILED
         ingestion_task.result_metadata = TaskResultMetadata(
@@ -494,6 +494,7 @@ async def _ingest_folder_source(
             result_metadata=TaskResultMetadata(
                 message=(
                     f"Partially completed: {len(successful_files)} succeeded, {len(failed_files)} failed. "
+                    f"PDF reading mode: {pdf_reading_mode.value}. "
                     f"Failed files: {failed_files_errors_str}"
                 ),
                 type=ResultType.PARTIAL_SUCCESS,
