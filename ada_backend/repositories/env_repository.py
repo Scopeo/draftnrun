@@ -72,7 +72,7 @@ def bind_graph_runner_to_project(
             .first()
         )
         if env is not None
-        else False
+        else None
     )
 
     if existing_binding:

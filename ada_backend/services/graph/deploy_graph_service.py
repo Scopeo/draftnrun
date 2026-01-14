@@ -348,9 +348,8 @@ def save_graph_version_service(
     if not graph_runner_exists(session, graph_id=graph_runner_id):
         raise GraphNotFound(graph_runner_id)
 
-    try:
-        env_relationship = get_env_relationship_by_graph_runner_id(session=session, graph_runner_id=graph_runner_id)
-    except ValueError:
+    env_relationship = get_env_relationship_by_graph_runner_id(session=session, graph_runner_id=graph_runner_id)
+    if env_relationship is None:
         raise GraphNotBoundToProjectError(graph_runner_id, bound_project_id=None)
 
     if env_relationship.environment != EnvType.DRAFT:

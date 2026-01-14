@@ -289,8 +289,6 @@ def save_graph_version(
     ],
     session: Session = Depends(get_db),
 ) -> GraphSaveVersionResponse:
-    if not user.id:
-        raise HTTPException(status_code=400, detail="User ID not found")
     project = get_project(session, project_id=project_id)
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
@@ -315,7 +313,6 @@ def save_graph_version(
         LOGGER.error(
             f"Database connection failed for project {project_id} runner {graph_runner_id}: {str(e)}", exc_info=True
         )
-        raise HTTPException(status_code=503, detail=f"Database connection error: {str(e)}") from e
     except ValueError as e:
         LOGGER.error(
             f"Failed to save version for project {project_id} runner {graph_runner_id}: {str(e)}", exc_info=True
