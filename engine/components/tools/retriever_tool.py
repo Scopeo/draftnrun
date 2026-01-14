@@ -20,10 +20,6 @@ RETRIEVER_TOOL_DESCRIPTION = ToolDescription(
             "type": "string",
             "description": "The search query to retrieve relevant chunks from the knowledge base.",
         },
-        "filters": {
-            "type": "object",
-            "description": "Optional filters to apply to the retrieval (e.g., metadata filters).",
-        },
     },
     required_tool_properties=["query"],
 )
@@ -43,6 +39,7 @@ class RetrieverToolInputs(BaseModel):
 class RetrieverToolOutputs(BaseModel):
     output: str = Field(description="Summary of retrieved chunks.")
     chunks: list[SourceChunk] = Field(description="The retrieved document chunks from the knowledge base.")
+    # TODO: Flatten this dict for easier output consumption
     artifacts: dict[str, Any] = Field(
         default_factory=dict,
         description="Artifacts including sources for display in the UI.",
@@ -100,7 +97,14 @@ class RetrieverTool(Component):
             filters=inputs.filters,
         )
 
-        # Log retrieved chunks to trace
+        tool_name = (
+            self.component_attributes.component_instance_name
+            if self.component_attributes and self.component_attributes.component_instance_name
+            else "retriever"
+        )
+        for chunk in chunks:
+            chunk.metadata["tool_name"] = tool_name
+
         for i, chunk in enumerate(chunks):
             metadata_str = json.dumps(chunk.metadata)
             span.set_attributes({
@@ -110,11 +114,9 @@ class RetrieverTool(Component):
                 f"{SpanAttributes.RETRIEVAL_DOCUMENTS}.{i}.document.metadata": metadata_str,
             })
 
-        # Format the chunks as output content (same function as synthesizer uses)
         chunks_output = build_context_from_source_chunks(
             sources=chunks,
             llm_metadata_keys=chunks[0].metadata.keys() if chunks else [],
         )
 
-        # Return with chunks as output and sources in artifacts
         return RetrieverToolOutputs(output=chunks_output, chunks=chunks, artifacts={"sources": chunks})

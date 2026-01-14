@@ -699,8 +699,6 @@ def build_retriever_processor(target_name: str = "retriever") -> ParameterProces
             raise MissingDataSourceError(component_name)
 
         if isinstance(data_source, str):
-            import json
-
             data_source = json.loads(data_source)
 
         source_id_str = data_source.get("id") if isinstance(data_source, dict) else None
@@ -761,15 +759,13 @@ def build_retriever_processor_v2(target_name: str = "retriever") -> ParameterPro
             raise MissingDataSourceError(component_name)
 
         if isinstance(data_source, str):
-            import json
-
             data_source = json.loads(data_source)
 
         source_id_str = data_source.get("id") if isinstance(data_source, dict) else None
         if not source_id_str:
             raise ValueError("data_source must contain an 'id' field")
         source_id = UUID(source_id_str)
-
+        # TODO: Avoid opening new DB sessions and inject the current one instead
         with get_db_session() as session:
             source = get_data_source_by_id(session, source_id)
             if source is None:
@@ -803,14 +799,8 @@ def build_retriever_processor_v2(target_name: str = "retriever") -> ParameterPro
         enable_date_penalty = validated_params.pop("enable_date_penalty_for_chunks")
         retrieved_chunks_before_penalty = validated_params.pop("retrieved_chunks_before_applying_penalty", None)
 
-        if enable_date_penalty:
-            max_retrieved_chunks = (
-                retrieved_chunks_before_penalty if retrieved_chunks_before_penalty is not None else number_of_chunks
-            )
-            max_retrieved_chunks_after_penalty = number_of_chunks
-        else:
-            max_retrieved_chunks = number_of_chunks
-            max_retrieved_chunks_after_penalty = None
+        max_retrieved_chunks = retrieved_chunks_before_penalty if enable_date_penalty else number_of_chunks
+        max_retrieved_chunks_after_penalty = number_of_chunks if enable_date_penalty else None
 
         retriever = Retriever(
             trace_manager=get_trace_manager(),

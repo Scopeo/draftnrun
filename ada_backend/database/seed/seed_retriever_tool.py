@@ -40,7 +40,6 @@ def seed_retriever_tool_components(session: Session):
     )
     upsert_component_versions(session, [retriever_tool_version])
 
-    # Create parameter definitions
     data_source_param = db.ComponentParameterDefinition(
         id=UUID("9a1b2c3d-4e5f-6789-0abc-def123456789"),
         component_version_id=retriever_tool_version.id,
@@ -63,7 +62,7 @@ def seed_retriever_tool_components(session: Session):
         name="number_of_chunks",
         type=ParameterType.INTEGER,
         nullable=False,
-        default=10,
+        default="10",
         ui_component=UIComponent.TEXTFIELD,
         ui_component_properties=UIComponentProperties(
             label="Number of Chunks",
@@ -78,7 +77,7 @@ def seed_retriever_tool_components(session: Session):
         name="enable_date_penalty_for_chunks",
         type=ParameterType.BOOLEAN,
         nullable=False,
-        default=False,
+        default="False",
         ui_component=UIComponent.CHECKBOX,
         ui_component_properties=UIComponentProperties(
             label="Enable Date Penalty",
@@ -93,11 +92,16 @@ def seed_retriever_tool_components(session: Session):
         name="chunk_age_penalty_rate",
         type=ParameterType.FLOAT,
         nullable=True,
-        default=None,
-        ui_component=UIComponent.TEXTFIELD,
+        default="0.1",
+        ui_component=UIComponent.SLIDER,
         ui_component_properties=UIComponentProperties(
-            label="Chunk Age Penalty Rate",
-            description="Rate at which to penalize older chunks.",
+            min=0.0,
+            max=1.0,
+            step=0.01,
+            marks=True,
+            label="Penalty per Age",
+            description="Determines how much to penalize older content chunks. "
+            "A higher value means older chunks are penalized more.",
         ).model_dump(exclude_unset=True, exclude_none=True),
         is_advanced=True,
     )
@@ -108,11 +112,16 @@ def seed_retriever_tool_components(session: Session):
         name="default_penalty_rate",
         type=ParameterType.FLOAT,
         nullable=True,
-        default=None,
-        ui_component=UIComponent.TEXTFIELD,
+        default="0.1",
+        ui_component=UIComponent.SLIDER,
         ui_component_properties=UIComponentProperties(
+            min=0.0,
+            max=1.0,
+            step=0.01,
+            marks=True,
             label="Default Penalty Rate",
-            description="Default penalty rate for chunks without date information.",
+            description="Used as a fallback penalty rate for chunks without a specific date. "
+            "This allows you to decide how to deal with missing information.",
         ).model_dump(exclude_unset=True, exclude_none=True),
         is_advanced=True,
     )
@@ -123,11 +132,18 @@ def seed_retriever_tool_components(session: Session):
         name="metadata_date_key",
         type=ParameterType.STRING,
         nullable=True,
-        default=None,
+        default="date",
         ui_component=UIComponent.TEXTFIELD,
         ui_component_properties=UIComponentProperties(
-            label="Metadata Date Key",
-            description="Key in chunk metadata containing the date information.",
+            label="Date field used for penalty",
+            description=(
+                "The metadata field(s) that contain the date information for each chunk. "
+                "You can specify multiple date fields names as a comma-separated list "
+                "(e.g., created_date,updated_date). "
+                "The system will check each field in order and use the first valid (non-null) date it finds. "
+                "This date is used to calculate the chunk's age when applying penalties."
+            ),
+            placeholder="Enter the date field here",
         ).model_dump(exclude_unset=True, exclude_none=True),
         is_advanced=True,
     )
@@ -138,11 +154,12 @@ def seed_retriever_tool_components(session: Session):
         name="retrieved_chunks_before_applying_penalty",
         type=ParameterType.INTEGER,
         nullable=True,
-        default=None,
+        default="10",
         ui_component=UIComponent.TEXTFIELD,
         ui_component_properties=UIComponentProperties(
-            label="Retrieved Chunks Before Applying Penalty",
-            description="Number of chunks to retrieve before applying date penalty.",
+            label="Max Retrieved Chunks Before Applying Penalty",
+            description="The maximum number of chunks to retrieve before applying date penalty. "
+            "This sets the upper limit for how many chunks will be returned before applying penalties. ",
         ).model_dump(exclude_unset=True, exclude_none=True),
         is_advanced=True,
     )

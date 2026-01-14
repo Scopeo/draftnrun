@@ -95,7 +95,7 @@ COMPONENT_VERSION_UUIDS: dict[str, UUID] = {
     "python_code_runner": UUID("e2b00000-0000-1111-2222-333333333333"),
     "terminal_command_runner": UUID("e2b10000-1111-2222-3333-444444444444"),
     "linkup_search_tool": UUID("f3e45678-9abc-def0-1234-56789abcdef0"),
-    "retriever_tool": UUID("a1b2c3d4-e5f6-7890-abcd-ef1234567891"),
+    "retriever_tool": UUID("a1b2c3d4-e5f6-7890-abcd-ef1234567890"),
     "pdf_generation": UUID("428baac0-0c5f-4374-b2de-8075218082b4"),
     "project_reference": UUID("4c8f9e2d-1a3b-4567-8901-234567890abc"),
     "chunk_processor": UUID("5d9f0f3e-2b4c-5678-9012-345678901bcd"),

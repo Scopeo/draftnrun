@@ -193,9 +193,7 @@ class AIAgent(Component):
         self._output_tool_agent_description = self._get_output_tool_description(output_format)
         # Tool cache is snapshotted at init; provide agent_tools up front.
         self._build_tool_cache()
-        # Formatter for filtering cited sources (same as RAG)
         self._formatter = Formatter(add_sources=False, component_attributes=component_attributes)
-        # Check if retriever tool is present and add citation instruction
         self._has_retriever_tool = self._check_for_retriever_tool()
 
     @staticmethod
@@ -272,7 +270,6 @@ class AIAgent(Component):
                 self._tool_registry[desc.name] = (tool, desc)
 
     def _check_for_retriever_tool(self) -> bool:
-        """Check if retriever tool is present in agent tools."""
         return RETRIEVER_TOOL_DESCRIPTION.name in self._tool_registry
 
     def _get_tool_descriptions_for_llm(self) -> list[ToolDescription]:
@@ -371,7 +368,6 @@ class AIAgent(Component):
         # Prepare system prompt content
         system_prompt_content = initial_prompt
 
-        # Add retriever citation instruction if retriever tool is present
         if self._has_retriever_tool:
             system_prompt_content = f"{initial_prompt}\n{RETRIEVER_CITATION_INSTRUCTION}"
 
@@ -475,26 +471,9 @@ class AIAgent(Component):
 
         for tool_call_id, agent_output in agent_outputs.items():
             if agent_output.artifacts:
-                tool_function_name = next(
-                    (tc.function.name for tc in processed_tool_calls if tc.id == tool_call_id), "unknown_tool"
-                )
-
-                tool_entry = self._tool_registry.get(tool_function_name)
-                if tool_entry:
-                    tool_instance, _ = tool_entry
-                    tool_display_name = (
-                        tool_instance.component_attributes.component_instance_name
-                        if hasattr(tool_instance, "component_attributes") and tool_instance.component_attributes
-                        else tool_function_name
-                    )
-                else:
-                    tool_display_name = tool_function_name
-
                 if "sources" in agent_output.artifacts:
                     sources = agent_output.artifacts["sources"]
-                    for source in sources:
-                        source["metadata"]["tool_name"] = tool_display_name
-                        all_sources.append(source)
+                    all_sources.extend(sources)
 
                 for key, value in agent_output.artifacts.items():
                     if key != "sources":
@@ -533,7 +512,7 @@ class AIAgent(Component):
             final_output: AgentPayload = next(
                 agent_output for agent_output in agent_outputs.values() if agent_output.is_final
             )
-            # Merge collected artifacts into the final output
+
             if collected_artifacts:
                 final_output.artifacts.update(collected_artifacts)
             await self._cleanup_shared_sandbox()
