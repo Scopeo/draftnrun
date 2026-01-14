@@ -34,8 +34,8 @@ def document_chunking_mapping(
     overlapping_size: int = 50,
     chunk_size: Optional[int] = 1024,
     pdf_reading_mode: PDFReadingMode = PDFReadingMode.STANDARD,
+    llamaparse_api_key: Optional[str] = None,
 ) -> dict[FileDocumentType, FileProcessor]:
-
     if pdf_reading_mode == PDFReadingMode.LLM_VISION:
         pdf_processor = partial(
             create_chunks_from_document,
@@ -44,7 +44,18 @@ def document_chunking_mapping(
             get_file_content=get_file_content_func,
         )
         LOGGER.info("Using LLM-based vision PDF processing")
-    elif pdf_reading_mode == PDFReadingMode.STANDARD:
+
+    elif pdf_reading_mode == PDFReadingMode.LLAMAPARSE:
+        pdf_processor = partial(
+            create_chunks_from_document_with_llamaparse,
+            get_file_content=get_file_content_func,
+            chunk_size=chunk_size,
+            chunk_overlap=overlapping_size,
+            llamaparse_api_key=llamaparse_api_key,
+        )
+        LOGGER.info("Using LlamaParse for PDF processing")
+
+    else:
         pdf_processor = partial(
             create_chunks_from_document_without_llm,
             get_file_content=get_file_content_func,
@@ -52,14 +63,6 @@ def document_chunking_mapping(
             chunk_overlap=overlapping_size,
         )
         LOGGER.info("Using pymupdf4llm for standard PDF processing")
-    elif pdf_reading_mode == PDFReadingMode.LLAMAPARSE:
-        pdf_processor = partial(
-            create_chunks_from_document_with_llamaparse,
-            get_file_content=get_file_content_func,
-            chunk_size=chunk_size,
-            chunk_overlap=overlapping_size,
-        )
-        LOGGER.info("Using LlamaParse for PDF processing")
 
     document_chunking_mapping = {
         FileDocumentType.PDF.value: pdf_processor,

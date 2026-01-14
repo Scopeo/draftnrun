@@ -122,6 +122,7 @@ async def ingestion_main_async(
                 chunk_overlap=chunk_overlap,
                 source_id=source_id,
                 pdf_reading_mode=pdf_reading_mode,
+                llamaparse_api_key=settings.LLAMACLOUD_API_KEY,
             )
         except Exception as e:
             error_msg = f"Error during google drive ingestion: {str(e)}"
@@ -157,6 +158,7 @@ async def ingestion_main_async(
                 chunk_overlap=chunk_overlap,
                 source_id=source_id,
                 pdf_reading_mode=pdf_reading_mode,
+                llamaparse_api_key=settings.LLAMACLOUD_API_KEY,
             )
         except Exception as e:
             error_msg = f"Error during local ingestion: {str(e)}"
