@@ -6,8 +6,8 @@ from uuid import uuid4
 
 import pytest
 
+from ada_backend.database.models import EnvType
 from ada_backend.database.setup_db import get_db_session
-from engine.trace.trace_context import set_trace_manager
 from ada_backend.schemas.dataset_schema import DatasetCreateList, DatasetDeleteList
 from ada_backend.schemas.input_groundtruth_schema import (
     InputGroundtruthCreateList,
@@ -16,11 +16,16 @@ from ada_backend.schemas.input_groundtruth_schema import (
     InputGroundtruthUpdateWithId,
     QARunRequest,
 )
-from ada_backend.services.project_service import delete_project_service, get_project_service
-from ada_backend.services.graph.update_graph_service import update_graph_service
-from ada_backend.services.graph.deploy_graph_service import deploy_graph_service
-from ada_backend.database.models import EnvType
 from ada_backend.schemas.pipeline.graph_schema import GraphUpdateSchema
+from ada_backend.services.graph.deploy_graph_service import deploy_graph_service
+from ada_backend.services.graph.update_graph_service import update_graph_service
+from ada_backend.services.project_service import delete_project_service, get_project_service
+from ada_backend.services.qa.qa_error import (
+    CSVInvalidPositionError,
+    CSVNonUniquePositionError,
+    QADuplicatePositionError,
+    QAPartialPositionError,
+)
 from ada_backend.services.qa.quality_assurance_service import (
     create_datasets_service,
     create_inputs_groundtruths_service,
@@ -33,12 +38,7 @@ from ada_backend.services.qa.quality_assurance_service import (
     update_dataset_service,
     update_inputs_groundtruths_service,
 )
-from ada_backend.services.qa.qa_error import (
-    CSVInvalidPositionError,
-    CSVNonUniquePositionError,
-    QADuplicatePositionError,
-    QAPartialPositionError,
-)
+from engine.trace.trace_context import set_trace_manager
 from tests.ada_backend.test_utils import create_project_and_graph_runner
 
 # JSON constants for test workflow configuration
@@ -109,9 +109,9 @@ def test_pagination():
         # Create 10 entries
         create_payload = InputGroundtruthCreateList(
             inputs_groundtruths=[
-            {"input": {"messages": [{"role": "user", "content": f"Test {i}"}]}, "groundtruth": f"GT {i}"}
-            for i in range(1, 11)
-        ]
+                {"input": {"messages": [{"role": "user", "content": f"Test {i}"}]}, "groundtruth": f"GT {i}"}
+                for i in range(1, 11)
+            ]
         )
         created_response = create_inputs_groundtruths_service(session, dataset_id, create_payload)
         created = created_response.inputs_groundtruths
@@ -188,7 +188,9 @@ def test_input_groundtruth_basic_operations():
     """Test input-groundtruth CRUD operations."""
     with get_db_session() as session:
         project_id, _ = create_project_and_graph_runner(
-            session, project_name_prefix="input_groundtruth_test", description="Test project for input-groundtruth operations"
+            session,
+            project_name_prefix="input_groundtruth_test",
+            description="Test project for input-groundtruth operations",
         )
 
         # Create a dataset
@@ -371,7 +373,7 @@ async def test_run_qa_service():
     mock_trace_manager.start_span.return_value = mock_span
     mock_span.to_json.return_value = '{"context": {"trace_id": "testid"}, "attributes": {}, "parent_id": null}'
     set_trace_manager(mock_trace_manager)
-    
+
     with get_db_session() as session:
         project_id, draft_graph_runner_id = create_project_and_graph_runner(
             session, project_name_prefix="qa_run_test", description="Test project for QA run endpoint"
@@ -439,7 +441,8 @@ async def test_run_qa_service():
             output_content = result.output
             input_content = result.input["messages"][0]["content"]
             assert input_content == output_content, (
-                f"Input and output should be the same for dummy agent. Input: {input_content}, Output: {output_content}"
+                "Input and output should be the same for dummy agent. "
+                f"Input: {input_content}, Output: {output_content}"
             )
             assert result.success is True, f"All results should be successful. Result: {result}"
             assert result.graph_runner_id == draft_graph_runner_id, f"graph_runner_id should match. Result: {result}"
@@ -471,7 +474,8 @@ async def test_run_qa_service():
             output_content = result.output
             input_content = result.input["messages"][0]["content"]
             assert input_content == output_content, (
-                f"Input and output should be the same for dummy agent. Input: {input_content}, Output: {output_content}"
+                "Input and output should be the same for dummy agent. "
+                f"Input: {input_content}, Output: {output_content}"
             )
             assert result.success is True, f"All results should be successful. Result: {result}"
             assert result.graph_runner_id == production_graph_runner_id, (
@@ -526,7 +530,9 @@ def test_position_field_in_responses():
 
         # Add one new entry
         new_entry_payload = InputGroundtruthCreateList(
-            inputs_groundtruths=[{"input": {"messages": [{"role": "user", "content": "New entry"}]}, "groundtruth": "New GT"}]
+            inputs_groundtruths=[
+                {"input": {"messages": [{"role": "user", "content": "New entry"}]}, "groundtruth": "New GT"}
+            ]
         )
         new_entry_response = create_inputs_groundtruths_service(session, dataset_id, new_entry_payload)
         new_entry = new_entry_response.inputs_groundtruths[0]
@@ -656,7 +662,9 @@ def test_csv_import_invalid_positions_values():
     """Test CSV import with invalid position values (non-integer)."""
     with get_db_session() as session:
         project_id, _ = create_project_and_graph_runner(
-            session, project_name_prefix="csv_invalid_index_test", description="Test project for CSV invalid position values"
+            session,
+            project_name_prefix="csv_invalid_index_test",
+            description="Test project for CSV invalid position values",
         )
 
         dataset_data = create_datasets_service(

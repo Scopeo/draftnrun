@@ -5,6 +5,7 @@ import pytest
 
 from ada_backend.database import models as db
 from ada_backend.database.setup_db import get_db_session
+from ada_backend.repositories.source_repository import delete_source
 from ada_backend.schemas.ingestion_task_schema import IngestionTaskQueue
 from ada_backend.schemas.source_schema import DataSourceSchema
 from ada_backend.scripts.get_supabase_token import get_user_jwt
@@ -14,7 +15,6 @@ from ada_backend.services.ingestion_task_service import (
     delete_ingestion_task_by_id,
     get_ingestion_task_by_organization_id,
 )
-from ada_backend.repositories.source_repository import delete_source
 from ada_backend.services.source_service import (
     create_source_by_organization,
     update_source_by_source_id,
@@ -124,7 +124,7 @@ def test_create_ingestion_task_auth(
     api_key_id,
 ):
     source_name = f"Test_Create_{auth_type}"
-    
+
     if auth_type == "user_id":
         task_id = create_ingestion_task(source_name, SOURCE_ATTRIBUTES, user_id=user_id)
     else:
@@ -153,7 +153,7 @@ def test_update_source_auth(
         database_table_name=f"test_table_{auth_type}",
         attributes=SOURCE_ATTRIBUTES,
     )
-    
+
     with get_db_session() as session:
         source_id = create_source_by_organization(
             session=session,
