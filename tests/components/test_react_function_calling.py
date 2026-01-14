@@ -448,6 +448,12 @@ def test_structured_output_in_function_call_async(
         # Mock the responses in sequence
         mock_client.chat.completions.create = AsyncMock(side_effect=[mock_response_regular, mock_response_structured])
 
+        # Mock responses.parse for constrained output (triggered when tool_choice="none" at max iterations)
+        mock_parse_response = MagicMock()
+        mock_parse_response.output_text = json.dumps({"answer": "Final structured answer", "is_final": True})
+        mock_parse_response.usage = MagicMock(output_tokens=10, input_tokens=5, total_tokens=15)
+        mock_client.responses.parse = AsyncMock(return_value=mock_parse_response)
+
         # Mock the _process_tool_calls method to return the correct format for the first call
         with patch.object(react_agent_with_tool, "_process_tool_calls") as mock_process:
             mock_process.return_value = (
@@ -469,18 +475,20 @@ def test_structured_output_in_function_call_async(
             # Should return the structured output from the second iteration
             assert output.last_message.content == json.dumps({"answer": "Final structured answer", "is_final": True})
             assert output.is_final
-            # Verify two LLM calls were made (first for tool, second for structured output)
-            assert mock_client.chat.completions.create.call_count == 2
+            # Verify calls: first iteration uses chat.completions.create (1 call)
+            # Second iteration at max uses responses.parse (1 call) with tool_choice="none"
+            assert mock_client.chat.completions.create.call_count == 1
+            assert mock_client.responses.parse.call_count == 1
 
     # Test 4: Max iterations reached - tool_choice should be "none" and constrained_complete should be called
-    # Create a new ReActAgent with max_iterations=1 to trigger the max iteration scenario
+    # Create a new ReActAgent with max_iterations=2 to allow one tool execution then force constrained output
     react_agent_max_iter = AIAgent(
         completion_service=real_completion_service,
         component_attributes=ComponentAttributes(component_instance_name="Test Max Iterations"),
         trace_manager=mock_trace_manager,
         tool_description=mock_tool_description,
         output_format=output_tool_properties,
-        max_iterations=1,  # Set to 1 to trigger max iterations on second call
+        max_iterations=2,  # Allows iteration 0 (tool call) and iteration 1 (forced constrained output)
         agent_tools=[mock_agent_tool],
     )
 
@@ -553,10 +561,9 @@ def test_structured_output_in_function_call_async(
             # Verify that the constrained_complete method was called (via responses.parse)
             mock_client.responses.parse.assert_called_once()
 
-            # Verify that the first call had tool_choice="required" (for structured output)
-            # and the second call had tool_choice="none" (for max iterations)
-            assert mock_client.chat.completions.create.call_count == 1  # Only one chat.completions.create call
-            # The second call goes through responses.parse (constrained_complete)
+            # With max_iterations=2: iteration 0 uses chat.completions.create (tool_choice="auto")
+            # Iteration 1 uses responses.parse (tool_choice="none" for forced constrained output)
+            assert mock_client.chat.completions.create.call_count == 1
 
 
 def test_react_agent_with_null_output_format(mock_trace_manager, mock_tool_description, mock_llm_service):
