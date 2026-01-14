@@ -750,7 +750,12 @@ def build_retriever_processor(target_name: str = "retriever") -> ParameterProces
     return processor
 
 
-def build_retriever_processor_v2(target_name: str = "retriever") -> ParameterProcessor:
+def build_retriever_processor_v2() -> ParameterProcessor:
+    """
+    Build processor for Retriever component (used as a tool).
+    Prepares constructor parameters for Retriever instantiation.
+    """
+
     def processor(params: dict, constructor_params: dict[str, Any]) -> dict:
         data_source = params.pop("data_source", None)
         if data_source is None:
@@ -802,18 +807,14 @@ def build_retriever_processor_v2(target_name: str = "retriever") -> ParameterPro
         max_retrieved_chunks = retrieved_chunks_before_penalty if enable_date_penalty else number_of_chunks
         max_retrieved_chunks_after_penalty = number_of_chunks if enable_date_penalty else None
 
-        retriever = Retriever(
-            trace_manager=get_trace_manager(),
-            qdrant_service=qdrant_service,
-            collection_name=collection_name,
-            component_attributes=None,
-            max_retrieved_chunks=max_retrieved_chunks,
-            enable_date_penalty_for_chunks=enable_date_penalty,
-            max_retrieved_chunks_after_penalty=max_retrieved_chunks_after_penalty,
-            **validated_params,
-        )
+        params["qdrant_service"] = qdrant_service
+        params["collection_name"] = collection_name
+        params["max_retrieved_chunks"] = max_retrieved_chunks
+        params["enable_date_penalty_for_chunks"] = enable_date_penalty
+        params["max_retrieved_chunks_after_penalty"] = max_retrieved_chunks_after_penalty
+        params["source_id"] = source_id
+        params.update(validated_params)  # chunk_age_penalty_rate, default_penalty_rate, metadata_date_key
 
-        params[target_name] = retriever
         return params
 
     return processor

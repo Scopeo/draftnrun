@@ -13,8 +13,8 @@ from pydantic import BaseModel, Field
 from engine.components.component import Component
 from engine.components.history_message_handling import HistoryMessageHandler
 from engine.components.rag.formatter import Formatter
+from engine.components.rag.retriever import RETRIEVER_CITATION_INSTRUCTION, RETRIEVER_TOOL_DESCRIPTION
 from engine.components.tools.python_code_runner import PYTHON_CODE_RUNNER_TOOL_DESCRIPTION
-from engine.components.tools.retriever_tool import RETRIEVER_TOOL_DESCRIPTION
 from engine.components.tools.terminal_command_runner import TERMINAL_COMMAND_RUNNER_TOOL_DESCRIPTION
 from engine.components.types import AgentPayload, ChatMessage, ComponentAttributes, SourcedResponse, ToolDescription
 from engine.components.utils import load_str_to_json
@@ -30,11 +30,7 @@ INITIAL_PROMPT = (
     "Don't make assumptions about what values to plug into functions. Ask for "
     "clarification if a user request is ambiguous. "
 )
-RETRIEVER_CITATION_INSTRUCTION = (
-    "When using information from retrieved sources, cite them using [1], [2], etc. "
-    "Use the retriever tool ONCE, then answer based on the retrieved information. "
-    "If the retrieved information is not relevant, say so clearly rather than retrieving again."
-)
+
 DEFAULT_FALLBACK_REACT_ANSWER = "I couldn't find a solution to your problem."
 CODE_RUNNER_TOOLS = [PYTHON_CODE_RUNNER_TOOL_DESCRIPTION.name, TERMINAL_COMMAND_RUNNER_TOOL_DESCRIPTION.name]
 
@@ -439,6 +435,7 @@ class AIAgent(Component):
                 )
 
                 response_content = chat_response.choices[0].message.content or ""
+                # TODO Make sources a first-class typed output (instead of going through artifacts)
                 if "sources" in artifacts and artifacts["sources"]:
                     sourced_response = SourcedResponse(
                         response=response_content,
@@ -466,21 +463,7 @@ class AIAgent(Component):
             ctx=ctx,
         )
 
-        collected_artifacts = {}
-        all_sources = []
-
-        for tool_call_id, agent_output in agent_outputs.items():
-            if agent_output.artifacts:
-                if "sources" in agent_output.artifacts:
-                    sources = agent_output.artifacts["sources"]
-                    all_sources.extend(sources)
-
-                for key, value in agent_output.artifacts.items():
-                    if key != "sources":
-                        collected_artifacts[key] = value
-
-        if all_sources:
-            collected_artifacts["sources"] = all_sources
+        collected_artifacts = _collect_output_artifacts(agent_outputs)
 
         agent_input.messages.append(
             ChatMessage(
@@ -606,3 +589,25 @@ def get_images_from_message(messages: list[ChatMessage]) -> list[str]:
                 imgs = []
             return imgs
     return []
+
+
+def _collect_output_artifacts(agent_outputs: dict[str, AgentPayload]) -> dict[str, Any]:
+    # TODO: Refactor to use typed approach instead of dict-based artifacts
+
+    collected_artifacts = {}
+    all_sources = []
+
+    for tool_call_id, agent_output in agent_outputs.items():
+        if agent_output.artifacts:
+            if "sources" in agent_output.artifacts:
+                sources = agent_output.artifacts["sources"]
+                all_sources.extend(sources)
+
+            for key, value in agent_output.artifacts.items():
+                if key != "sources":
+                    collected_artifacts[key] = value
+
+    if all_sources:
+        collected_artifacts["sources"] = all_sources
+
+    return collected_artifacts

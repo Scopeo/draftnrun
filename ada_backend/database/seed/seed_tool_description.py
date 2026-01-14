@@ -13,6 +13,7 @@ from engine.components.inputs_outputs.start import DEFAULT_START_TOOL_DESCRIPTIO
 from engine.components.llm_call import DEFAULT_LLM_CALL_TOOL_DESCRIPTION
 from engine.components.pdf_generation_tool import DEFAULT_PDF_GENERATION_TOOL_DESCRIPTION
 from engine.components.rag.rag import format_rag_tool_description
+from engine.components.rag.retriever import RETRIEVER_TOOL_DESCRIPTION
 from engine.components.sql.react_sql_tool import DEFAULT_REACT_SQL_TOOL_DESCRIPTION
 from engine.components.sql.run_sql_query_tool import DEFAULT_RUN_SQL_QUERY_TOOL_DESCRIPTION
 from engine.components.table_lookup import DEFAULT_TABLE_LOOKUP_TOOL_DESCRIPTION
@@ -21,7 +22,6 @@ from engine.components.tools.docx_template import DOCX_TEMPLATE_TOOL_DESCRIPTION
 from engine.components.tools.linkup_tool import LINKUP_TOOL_DESCRIPTION
 from engine.components.tools.python_code_runner import PYTHON_CODE_RUNNER_TOOL_DESCRIPTION
 from engine.components.tools.remote_mcp_tool import DEFAULT_REMOTE_MCP_TOOL_DESCRIPTION
-from engine.components.tools.retriever_tool import RETRIEVER_TOOL_DESCRIPTION
 from engine.components.tools.tavily_search_tool import TAVILY_TOOL_DESCRIPTION
 from engine.components.tools.terminal_command_runner import TERMINAL_COMMAND_RUNNER_TOOL_DESCRIPTION
 from engine.components.web_search_tool_openai import DEFAULT_WEB_SEARCH_OPENAI_TOOL_DESCRIPTION
