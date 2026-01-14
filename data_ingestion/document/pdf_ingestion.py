@@ -7,7 +7,6 @@ from llama_cloud_services import LlamaParse
 from data_ingestion.document.folder_management.folder_management import FileChunk, FileDocument
 from data_ingestion.document.markdown_ingestion import chunk_markdown
 from data_ingestion.utils import PDFReadingMode, get_file_path_from_content
-from settings import settings
 
 LOGGER = logging.getLogger(__name__)
 
@@ -47,10 +46,15 @@ async def create_chunks_from_pdf_document(
                         raise ValueError("llamaparse_api_key is required for LLAMAPARSE mode")
                     markdown_text = await _parse_pdf_with_llamaparse(file_path, llamaparse_api_key)
                 else:
-                    raise ValueError(f"Invalid PDF reading mode: {pdf_reading_mode}")
+                    raise ValueError(f"Invalid PDF reading mode: {pdf_reading_mode.value} reading mode")
             except Exception as e:
-                LOGGER.error(f"Error parsing PDF {document.file_name} with {pdf_reading_mode}: {e}", exc_info=True)
-                raise Exception(f"Error parsing PDF {document.file_name} with {pdf_reading_mode}") from e
+                LOGGER.error(
+                    f"Error parsing PDF {document.file_name} with {pdf_reading_mode.value} reading mode: {e}",
+                    exc_info=True,
+                )
+                raise Exception(
+                    f"Error parsing PDF {document.file_name} with {pdf_reading_mode.value} reading mode"
+                ) from e
         return chunk_markdown(
             document_to_process=document,
             content=markdown_text,
@@ -58,5 +62,7 @@ async def create_chunks_from_pdf_document(
             chunk_overlap=chunk_overlap,
         )
     except Exception as e:
-        LOGGER.error(f"Error processing PDF {document.file_name} with {pdf_reading_mode}: {e}", exc_info=True)
-        raise Exception(f"Error processing PDF {document.file_name} with {pdf_reading_mode}") from e
+        LOGGER.error(
+            f"Error processing PDF {document.file_name} with {pdf_reading_mode.value} reading mode: {e}", exc_info=True
+        )
+        raise Exception(f"Error processing PDF {document.file_name} with {pdf_reading_mode.value} reading mode") from e
