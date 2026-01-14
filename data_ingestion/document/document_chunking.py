@@ -15,9 +15,8 @@ from data_ingestion.document.folder_management.folder_management import (
     FileDocument,
     FileDocumentType,
 )
-from data_ingestion.document.llamaparse_ingestion import create_chunks_from_document_with_llamaparse
 from data_ingestion.document.markdown_ingestion import get_chunks_from_markdown
-from data_ingestion.document.parsing_pdf_ingestion import create_chunks_from_document_without_llm
+from data_ingestion.document.pdf_ingestion import create_chunks_from_pdf_document
 from data_ingestion.document.pdf_vision_ingestion import create_chunks_from_document
 from data_ingestion.utils import PDFReadingMode
 from engine.llm_services.llm_service import CompletionService, VisionService
@@ -47,20 +46,22 @@ def document_chunking_mapping(
 
     elif pdf_reading_mode == PDFReadingMode.LLAMAPARSE:
         pdf_processor = partial(
-            create_chunks_from_document_with_llamaparse,
+            create_chunks_from_pdf_document,
             get_file_content=get_file_content_func,
             chunk_size=chunk_size,
             chunk_overlap=overlapping_size,
             llamaparse_api_key=llamaparse_api_key,
+            pdf_reading_mode=pdf_reading_mode,
         )
         LOGGER.info("Using LlamaParse for PDF processing")
 
     else:
         pdf_processor = partial(
-            create_chunks_from_document_without_llm,
+            create_chunks_from_pdf_document,
             get_file_content=get_file_content_func,
             chunk_size=chunk_size,
             chunk_overlap=overlapping_size,
+            pdf_reading_mode=PDFReadingMode.STANDARD,
         )
         LOGGER.info("Using pymupdf4llm for standard PDF processing")
 
