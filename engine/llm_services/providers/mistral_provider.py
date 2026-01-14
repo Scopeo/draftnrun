@@ -86,13 +86,16 @@ class MistralProvider(BaseProvider):
         stream: bool,
         **kwargs,
     ) -> tuple[str, int, int, int]:
+        if isinstance(messages, list):
+            mistral_compatible_messages = self._convert_messages_to_mistral_format(messages)
+
         client = openai.AsyncOpenAI(
             api_key=self._api_key,
             base_url=self._base_url,
         )
         response = await client.chat.completions.create(
             model=self._model_name,
-            messages=messages,
+            messages=mistral_compatible_messages,
             temperature=temperature,
         )
 

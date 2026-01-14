@@ -121,6 +121,11 @@ jobs:
             cd ${{ env.EC2_PATH_BASE }}/${{env.EC2_FOLDER_NAME}}${{env.RUN_ID}}
             echo "===> Running tests for RUN_ID: ${{ env.RUN_ID }}"
             set -e
+            
+            set -a
+            source credentials.env
+            set +a
+            
             uv run pytest -q tests/external_api_calls
 
       - name: Download external API calls report from EC2

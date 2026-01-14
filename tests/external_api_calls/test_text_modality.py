@@ -133,7 +133,12 @@ class TestTextModality:
         def test_function_call_with_empty_tools(self, provider: str, model: str) -> None:
             skip_if_missing_settings(*get_provider_required_settings(provider))
             service = CompletionService(trace_manager=MagicMock(), provider=provider, model_name=model)
-            messages = [{"role": "user", "content": "Say 'ok' and nothing else."}]
+            # Include invalid fields (tool_calls, tool_call_id) in system/user messages
+            # to test that they are properly removed before API calls
+            messages = [
+                {"role": "system", "content": "You are helpful.", "tool_calls": None, "tool_call_id": None},
+                {"role": "user", "content": "Say 'ok' and nothing else.", "tool_calls": None, "tool_call_id": None},
+            ]
             response = service.function_call(messages=messages, tools=[], tool_choice="auto")
             assert response is not None
             assert len(response.choices) == 1
