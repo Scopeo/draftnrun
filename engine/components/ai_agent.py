@@ -433,7 +433,7 @@ class AIAgent(Component):
             if not all_tool_calls:
                 self.log_trace_event("No tool calls found in the response. Returning the chat response.")
                 imgs = get_images_from_message(history_messages_handled)
-                # Merge any existing artifacts from previous iterations with new ones
+
                 artifacts = (
                     dict(agent_input.artifacts) if hasattr(agent_input, "artifacts") and agent_input.artifacts else {}
                 )
