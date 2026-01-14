@@ -4,12 +4,14 @@ from sqlalchemy.orm import Session
 
 from ada_backend.database import models as db
 from ada_backend.database.component_definition_seeding import (
+    upsert_component_categories,
     upsert_component_versions,
     upsert_components,
     upsert_components_parameter_definitions,
     upsert_release_stage_to_current_version_mapping,
 )
 from ada_backend.database.models import ParameterType, UIComponent, UIComponentProperties
+from ada_backend.database.seed.seed_categories import CATEGORY_UUIDS
 from ada_backend.database.seed.utils import COMPONENT_UUIDS, COMPONENT_VERSION_UUIDS
 
 
@@ -96,4 +98,10 @@ def seed_chunk_processor_components(session: Session):
         component_id=chunk_processor_version.component_id,
         release_stage=chunk_processor_version.release_stage,
         component_version_id=chunk_processor_version.id,
+    )
+
+    upsert_component_categories(
+        session=session,
+        component_id=chunk_processor.id,
+        category_ids=[CATEGORY_UUIDS["workflow_logic"]],
     )

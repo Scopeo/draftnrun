@@ -61,7 +61,6 @@ from engine.components.tools.api_call_tool import APICallTool
 from engine.components.tools.docx_template import DocxTemplateAgent
 from engine.components.tools.linkup_tool import LinkupSearchTool
 from engine.components.tools.python_code_runner import PythonCodeRunner
-from engine.components.tools.tavily_search_tool import TavilyApiTool
 from engine.components.tools.terminal_command_runner import TerminalCommandRunner
 from engine.components.web_search_tool_openai import WebSearchOpenAITool
 from engine.integrations.gmail_sender import GmailSender
@@ -365,15 +364,6 @@ def create_factory_registry() -> FactoryRegistry:
         component_version_id=COMPONENT_VERSION_UUIDS["hybrid_rag_agent"],
         factory=AgentFactory(
             entity_class=HybridRAG,
-        ),
-    )
-    registry.register(
-        component_version_id=COMPONENT_VERSION_UUIDS["tavily_agent"],
-        factory=AgentFactory(
-            entity_class=TavilyApiTool,
-            parameter_processors=[
-                completion_service_processor,
-            ],
         ),
     )
     web_search_factory = AgentFactory(

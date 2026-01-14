@@ -276,7 +276,11 @@ def seed_rag_components(session: Session):
         ],
     )
 
-    upsert_component_categories(session=session, component_id=rag_agent.id, category_ids=[CATEGORY_UUIDS["query"]])
+    upsert_component_categories(
+        session=session, component_id=rag_agent.id, category_ids=[
+            CATEGORY_UUIDS["search_engine"], CATEGORY_UUIDS["most_used"]
+        ]
+    )
 
     rag_agent_v3_version = db.ComponentVersion(
         id=COMPONENT_VERSION_UUIDS["rag_agent_v3"],

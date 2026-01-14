@@ -75,8 +75,9 @@ def seed_terminal_command_runner_components(session: Session):
         release_stage=terminal_command_runner_version.release_stage,
         component_version_id=terminal_command_runner_version.id,
     )
+
     upsert_component_categories(
         session=session,
         component_id=terminal_command_runner_component.id,
-        category_ids=[CATEGORY_UUIDS["processing"]],
+        category_ids=[CATEGORY_UUIDS["run_code"]],
     )

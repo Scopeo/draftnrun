@@ -44,8 +44,9 @@ def seed_linkup_tool_components(session: Session):
         release_stage=linkup_tool_version.release_stage,
         component_version_id=linkup_tool_version.id,
     )
+
     upsert_component_categories(
         session=session,
         component_id=linkup_tool.id,
-        category_ids=[CATEGORY_UUIDS["query"]],
+        category_ids=[CATEGORY_UUIDS["search_engine"], CATEGORY_UUIDS["most_used"]],
     )

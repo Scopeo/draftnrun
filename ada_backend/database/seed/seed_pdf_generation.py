@@ -62,16 +62,16 @@ def seed_pdf_generation_components(session: Session):
         ],
     )
 
-    upsert_component_categories(
-        session=session,
-        component_id=pdf_generation_component.id,
-        category_ids=[CATEGORY_UUIDS["action"]],
-    )
-
     # Create release stage mapping
     upsert_release_stage_to_current_version_mapping(
         session=session,
         component_id=pdf_generation_component_version.component_id,
         release_stage=pdf_generation_component_version.release_stage,
         component_version_id=pdf_generation_component_version.id,
+    )
+
+    upsert_component_categories(
+        session=session,
+        component_id=pdf_generation_component.id,
+        category_ids=[CATEGORY_UUIDS["file_generation"]],
     )

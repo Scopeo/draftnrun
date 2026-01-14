@@ -70,7 +70,7 @@ def seed_static_responder_components(session: Session):
     upsert_component_categories(
         session=session,
         component_id=static_responder.id,
-        category_ids=[CATEGORY_UUIDS["processing"]],
+        category_ids=[CATEGORY_UUIDS["workflow_logic"]],
     )
 
     # Create release stage mapping

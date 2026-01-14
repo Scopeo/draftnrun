@@ -32,7 +32,7 @@ class ComponentVersionUseInfoSchema(BaseModel):
     release_stage: ReleaseStage
     tool_parameter_name: Optional[str] = None
     subcomponents_info: list[SubComponentParamSchema]
-    categories: List[str] = []
+    category_ids: List[UUID] = []
     icon: Optional[str] = None
 
 

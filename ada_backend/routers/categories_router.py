@@ -9,6 +9,7 @@ from ada_backend.database.setup_db import get_db
 from ada_backend.routers.auth_router import (
     UserRights,
     ensure_super_admin_dependency,
+    get_user_from_supabase_token,
     user_has_access_to_organization_dependency,
 )
 from ada_backend.schemas.auth_schema import SupabaseUser
@@ -28,9 +29,7 @@ LOGGER = logging.getLogger(__name__)
 
 @router.get(path="/categories", response_model=list[CategoryResponse])
 def get_all_categories(
-    user: Annotated[
-        SupabaseUser, Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.MEMBER.value))
-    ],
+    user: Annotated[SupabaseUser, Depends(get_user_from_supabase_token)],
     session: Session = Depends(get_db),
 ) -> list[CategoryResponse]:
     if not user.id:

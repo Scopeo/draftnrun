@@ -187,8 +187,9 @@ def seed_llm_call_components(session: Session):
         release_stage=llm_call_version.release_stage,
         component_version_id=llm_call_version.id,
     )
+
     upsert_component_categories(
         session=session,
         component_id=llm_call.id,
-        category_ids=[CATEGORY_UUIDS["most_used"]],
+        category_ids=[CATEGORY_UUIDS["ai"]],
     )

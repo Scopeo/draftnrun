@@ -39,7 +39,6 @@ from ada_backend.database.seed.seed_sql_tool import seed_sql_tool_components
 from ada_backend.database.seed.seed_start import seed_start_components
 from ada_backend.database.seed.seed_static_responder import seed_static_responder_components
 from ada_backend.database.seed.seed_table_lookup import seed_table_lookup_components
-from ada_backend.database.seed.seed_tavily import seed_tavily_components
 from ada_backend.database.seed.seed_terminal_command_runner import seed_terminal_command_runner_components
 from ada_backend.database.seed.seed_tool_description import seed_tool_description
 from ada_backend.database.seed.seed_web_search import seed_web_search_components
@@ -68,7 +67,6 @@ def seed_db(session: Session):
         seed_pdf_generation_components(session)
         seed_docx_generation_components(session)
         seed_docx_template_components(session)
-        seed_tavily_components(session)
         seed_llm_call_components(session)
         seed_sql_tool_components(session)
         seed_react_sql_components(session)

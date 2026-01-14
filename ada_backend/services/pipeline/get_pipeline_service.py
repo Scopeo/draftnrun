@@ -4,7 +4,9 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from ada_backend.database.models import ParameterType
-from ada_backend.repositories.categories_repository import fetch_associated_category_names
+from ada_backend.repositories.categories_repository import (
+    fetch_associated_category_ids,
+)
 from ada_backend.repositories.component_repository import (
     get_component_by_id,
     get_component_instance_by_id,
@@ -157,7 +159,7 @@ def get_component_instance(
             if component_version.integration_id
             else None
         ),
-        categories=fetch_associated_category_names(session, component.id) if component else [],
+        category_ids=fetch_associated_category_ids(session, component.id) if component else [],
     )
 
 

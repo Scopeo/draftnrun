@@ -496,6 +496,8 @@ class Category(Base):
     id = mapped_column(UUID(as_uuid=True), primary_key=True, index=True, default=uuid.uuid4)
     name = mapped_column(String, unique=True, nullable=False)
     description = mapped_column(Text, nullable=True)
+    icon = mapped_column(String, nullable=True)
+    display_order = mapped_column(Integer, nullable=False, default=0, server_default="0")
     created_at = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 

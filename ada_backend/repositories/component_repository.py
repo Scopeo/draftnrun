@@ -18,7 +18,6 @@ from ada_backend.database.models import (
     UIComponent,
     UIComponentProperties,
 )
-from ada_backend.repositories.categories_repository import fetch_associated_category_names
 from ada_backend.repositories.integration_repository import (
     delete_linked_integration,
     get_component_instance_integration_relationship,
@@ -65,6 +64,50 @@ class ComponentWithVersionDTO:
     integration_id: Optional[UUID]
     icon: Optional[str] = None
     default_tool_description_id: Optional[UUID] = None
+    category_ids: Optional[list[UUID]] = None
+
+
+def _fetch_category_ids_for_components(
+    session: Session,
+    component_ids: list[UUID],
+) -> dict[UUID, list[UUID]]:
+    """
+    Fetches category IDs for a list of components via the ComponentCategory junction table.
+    Returns a dict mapping component_id -> [category_id, ...]
+    """
+    if not component_ids:
+        return {}
+
+    results = (
+        session.query(db.ComponentCategory.component_id, db.ComponentCategory.category_id)
+        .filter(db.ComponentCategory.component_id.in_(component_ids))
+        .all()
+    )
+
+    category_map: dict[UUID, list[UUID]] = {}
+    for component_id, category_id in results:
+        if component_id not in category_map:
+            category_map[component_id] = []
+        category_map[component_id].append(category_id)
+
+    return category_map
+
+
+def _process_component_version_query_result(
+    session: Session,
+    result: list[tuple[db.Component, db.ComponentVersion]],
+) -> list[ComponentWithVersionDTO]:
+    """
+    Processes query results containing Component and ComponentVersion tuples.
+    Fetches category mappings and builds ComponentWithVersionDTO objects.
+    """
+    component_ids = [comp.id for comp, _ in result]
+    category_map = _fetch_category_ids_for_components(session, component_ids)
+
+    return [
+        _build_component_with_version_dto(comp, ver, category_map.get(comp.id, []))
+        for comp, ver in result
+    ]
 
 
 def get_global_parameters_by_component_version_id(
@@ -498,6 +541,7 @@ def get_tool_parameter_by_component_version(
 def _build_component_with_version_dto(
     comp: db.Component,
     ver: db.ComponentVersion,
+    category_ids: Optional[list[UUID]] = None,
 ) -> ComponentWithVersionDTO:
     return ComponentWithVersionDTO(
         component_id=comp.id,
@@ -513,6 +557,7 @@ def _build_component_with_version_dto(
         is_protected=comp.is_protected,
         integration_id=ver.integration_id,
         default_tool_description_id=ver.default_tool_description_id,
+        category_ids=category_ids or [],
     )
 
 
@@ -539,8 +584,7 @@ def get_current_component_versions(
     )
 
     result = query.all()
-
-    return [_build_component_with_version_dto(comp, ver) for comp, ver in result]
+    return _process_component_version_query_result(session, result)
 
 
 def get_all_component_versions(
@@ -558,8 +602,7 @@ def get_all_component_versions(
     )
 
     result = query.all()
-
-    return [_build_component_with_version_dto(comp, ver) for comp, ver in result]
+    return _process_component_version_query_result(session, result)
 
 
 # TODO: Put in service layer or write as query
@@ -741,7 +784,7 @@ def process_components_with_versions(
                         )
                         for subcomponent_param, param_child_def in subcomponent_params
                     ],
-                    categories=fetch_associated_category_names(session, component_with_version.component_id),
+                    category_ids=(component_with_version.category_ids if component_with_version.category_ids else []),
                     credits_per_call=component_cost.credits_per_call if component_cost else None,
                     credits_per=component_cost.credits_per if component_cost else None,
                 )

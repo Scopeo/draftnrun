@@ -149,16 +149,16 @@ def seed_filter_components(session: Session):
             )
         session.commit()
 
-    upsert_component_categories(
-        session=session,
-        component_id=filter.id,
-        category_ids=[CATEGORY_UUIDS["processing"]],
-    )
-
     # Create release stage mapping
     upsert_release_stage_to_current_version_mapping(
         session=session,
         component_id=filter_version.component_id,
         release_stage=filter_version.release_stage,
         component_version_id=filter_version.id,
+    )
+
+    upsert_component_categories(
+        session=session,
+        component_id=filter.id,
+        category_ids=[CATEGORY_UUIDS["workflow_logic"]],
     )

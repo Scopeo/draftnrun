@@ -32,11 +32,6 @@ def seed_docx_generation_components(session: Session):
         default_tool_description_id=TOOL_DESCRIPTION_UUIDS["default_docx_generation_tool_description"],
     )
     upsert_component_versions(session, [docx_generation_component_version])
-    upsert_component_categories(
-        session=session,
-        component_id=docx_generation_component.id,
-        category_ids=[CATEGORY_UUIDS["action"]],
-    )
 
     # Create release stage mapping
     upsert_release_stage_to_current_version_mapping(
@@ -44,4 +39,10 @@ def seed_docx_generation_components(session: Session):
         component_id=docx_generation_component_version.component_id,
         release_stage=docx_generation_component_version.release_stage,
         component_version_id=docx_generation_component_version.id,
+    )
+
+    upsert_component_categories(
+        session=session,
+        component_id=docx_generation_component.id,
+        category_ids=[CATEGORY_UUIDS["file_generation"]],
     )

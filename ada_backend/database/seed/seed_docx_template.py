@@ -111,5 +111,5 @@ def seed_docx_template_components(session: Session):
     upsert_component_categories(
         session=session,
         component_id=docx_template_component.id,
-        category_ids=[CATEGORY_UUIDS["action"]],
+        category_ids=[CATEGORY_UUIDS["file_generation"]],
     )
