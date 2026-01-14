@@ -103,7 +103,7 @@ class RetrieverTool(Component):
             else "retriever"
         )
         for chunk in chunks:
-            chunk.metadata["tool_name"] = tool_name
+            chunk.tool_name = tool_name
 
         for i, chunk in enumerate(chunks):
             metadata_str = json.dumps(chunk.metadata)

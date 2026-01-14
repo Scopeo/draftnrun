@@ -77,6 +77,7 @@ class SourceChunk(BaseModel):
     content: str
     url: Optional[str] = None
     url_display_type: URLDisplayType = URLDisplayType.viewer
+    tool_name: Optional[str] = None
     metadata: dict[str, Any] = Field(default_factory=dict)
 
     def to_string(self) -> str:
