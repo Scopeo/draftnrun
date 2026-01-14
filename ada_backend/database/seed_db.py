@@ -38,6 +38,7 @@ from ada_backend.database.seed.seed_smart_rag import seed_smart_rag_components
 from ada_backend.database.seed.seed_sql_tool import seed_sql_tool_components
 from ada_backend.database.seed.seed_start import seed_start_components
 from ada_backend.database.seed.seed_static_responder import seed_static_responder_components
+from ada_backend.database.seed.seed_table_lookup import seed_table_lookup_components
 from ada_backend.database.seed.seed_tavily import seed_tavily_components
 from ada_backend.database.seed.seed_terminal_command_runner import seed_terminal_command_runner_components
 from ada_backend.database.seed.seed_tool_description import seed_tool_description
@@ -81,6 +82,7 @@ def seed_db(session: Session):
         seed_chunk_processor_components(session)
         seed_linkup_tool_components(session)
         seed_static_responder_components(session)
+        seed_table_lookup_components(session)
         seed_remote_mcp_tool_components(session)
 
         # Seed port definitions from code (with upsert)

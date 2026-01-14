@@ -15,6 +15,7 @@ from engine.components.pdf_generation_tool import DEFAULT_PDF_GENERATION_TOOL_DE
 from engine.components.rag.rag import format_rag_tool_description
 from engine.components.sql.react_sql_tool import DEFAULT_REACT_SQL_TOOL_DESCRIPTION
 from engine.components.sql.run_sql_query_tool import DEFAULT_RUN_SQL_QUERY_TOOL_DESCRIPTION
+from engine.components.table_lookup import DEFAULT_TABLE_LOOKUP_TOOL_DESCRIPTION
 from engine.components.tools.api_call_tool import API_CALL_TOOL_DESCRIPTION
 from engine.components.tools.docx_template import DOCX_TEMPLATE_TOOL_DESCRIPTION
 from engine.components.tools.linkup_tool import LINKUP_TOOL_DESCRIPTION
@@ -46,6 +47,7 @@ TOOL_DESCRIPTION_UUIDS = {
     "default_docx_generation_tool_description": UUID("d57c546b-9f9d-4207-bb6e-0e38b2a3bce5"),
     "docx_template_tool_description": UUID("e2b22222-3333-4444-5555-666666666666"),
     "remote_mcp_tool_description": UUID("4c6ef0d2-53c0-4ab2-96cb-3c2b5f5b3e88"),
+    "default_table_lookup_tool_description": UUID("5c6d7e8f-9012-3456-789a-bcdef0123456"),
 }
 
 
@@ -124,6 +126,10 @@ def seed_tool_description(session: Session):
         id=TOOL_DESCRIPTION_UUIDS["remote_mcp_tool_description"],
         **DEFAULT_REMOTE_MCP_TOOL_DESCRIPTION.model_dump(),
     )
+    default_table_lookup_tool_description = db.ToolDescription(
+        id=TOOL_DESCRIPTION_UUIDS["default_table_lookup_tool_description"],
+        **DEFAULT_TABLE_LOOKUP_TOOL_DESCRIPTION.model_dump(),
+    )
     upsert_tool_descriptions(
         session=session,
         tool_descriptions=[
@@ -147,5 +153,6 @@ def seed_tool_description(session: Session):
             docx_generation_tool_description,
             docx_template_tool_description,
             remote_mcp_tool_description,
+            default_table_lookup_tool_description,
         ],
     )
