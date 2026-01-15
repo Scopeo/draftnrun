@@ -1,0 +1,34 @@
+# Scheduler Deployment for cron jobs (APScheduler)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ada-scheduler
+  labels:
+    app: ada-scheduler
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate  # Only 1 scheduler at a time to avoid duplicate jobs
+  selector:
+    matchLabels:
+      app: ada-scheduler
+  template:
+    metadata:
+      labels:
+        app: ada-scheduler
+    spec:
+      terminationGracePeriodSeconds: 1800
+      containers:
+        - name: ada-scheduler
+          image: ada-scheduler  # Replaced by Kustomize
+          imagePullPolicy: IfNotPresent
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "512Mi"
+            limits:
+              cpu: "1000m"
+              memory: "2Gi"
+          envFrom:
+            - secretRef:
+                name: ada-secrets

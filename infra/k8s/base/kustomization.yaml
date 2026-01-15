@@ -1,0 +1,9 @@
+# Base Kustomization - shared across all environments
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - api-deployment.yaml
+  - api-ingress.yaml
+  - worker-deployment.yaml
+  - scheduler-deployment.yaml

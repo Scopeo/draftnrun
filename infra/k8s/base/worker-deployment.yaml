@@ -1,0 +1,44 @@
+# Worker Deployment for ingestion tasks
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ada-worker
+  labels:
+    app: ada-worker
+spec:
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: ada-worker
+  template:
+    metadata:
+      labels:
+        app: ada-worker
+    spec:
+      terminationGracePeriodSeconds: 1800
+      containers:
+        - name: ada-worker
+          image: ada-worker  # Replaced by Kustomize
+          imagePullPolicy: IfNotPresent
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "2Gi"
+            limits:
+              cpu: "4000m"
+              memory: "8Gi"
+          envFrom:
+            - secretRef:
+                name: ada-secrets
+          env:
+            - name: MAX_CONCURRENT_INGESTIONS
+              value: "2"
+            - name: API_BASE_URL
+              value: "http://ada-api"  # Resolves within same namespace
+            - name: ADA_URL
+              value: "http://ada-api"  # Resolves within same namespace

@@ -6,12 +6,12 @@ on:
   workflow_dispatch:
     inputs:
       environment:
-        description: 'Environment to deploy'
+        description: "Environment to deploy"
         required: true
         type: choice
         options: [staging, prod]
       breaking_migration:
-        description: 'Scale to zero for breaking DB migration'
+        description: "Scale to zero for breaking DB migration"
         required: false
         default: false
         type: boolean
@@ -39,6 +39,13 @@ jobs:
           fi
           echo "environment=${ENV}" >> $GITHUB_OUTPUT
           echo "Deploying to: ${ENV}"
+
+      - name: Block non-main deploys to prod
+        if: ${{ steps.env.outputs.environment == 'prod' && github.ref != 'refs/heads/main' }}
+        run: |
+          echo "❌ ERROR: Production deployments only allowed from main branch"
+          echo "Current branch: ${{ github.ref }}"
+          exit 1
 
       - name: Check for breaking migration label
         id: breaking
