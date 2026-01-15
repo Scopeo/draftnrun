@@ -61,6 +61,7 @@ class RetrieverInputs(BaseModel):
 class RetrieverOutputs(BaseModel):
     output: str = Field(description="Summary of retrieved chunks.")
     chunks: list[SourceChunk] = Field(description="The retrieved document chunks from the knowledge base.")
+    # TODO: Remove nested artifacts dict use directly the sources
     artifacts: dict[str, Any] = Field(
         default_factory=dict,
         description="Artifacts including sources for display in the UI.",

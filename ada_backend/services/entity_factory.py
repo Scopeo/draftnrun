@@ -274,6 +274,78 @@ class NonToolCallableBlockFactory(EntityFactory):
         )
 
 
+def build_retriever_params_translator_processor() -> ParameterProcessor:
+    """
+    Returns a processor function to translate retriever parameter names from
+    the UI/DB format to the format expected by the Retriever constructor.
+
+    Translates:
+    - number_of_chunks + enable_date_penalty_for_chunks -> max_retrieved_chunks / max_retrieved_chunks_after_penalty
+    - retrieved_chunks_before_applying_penalty -> max_retrieved_chunks (when date penalty is enabled)
+
+    Returns:
+        ParameterProcessor: A function to process retriever constructor parameters.
+    """
+
+    def processor(params: dict, constructor_params: dict[str, Any]) -> dict:
+        list_of_params_to_pop = [
+            ParameterToValidate(argument="number_of_chunks", type=int, optional=False),
+            ParameterToValidate(argument="enable_date_penalty_for_chunks", type=bool, optional=False),
+            ParameterToValidate(argument="chunk_age_penalty_rate", type=float, optional=True),
+            ParameterToValidate(argument="default_penalty_rate", type=float, optional=True),
+            ParameterToValidate(argument="retrieved_chunks_before_applying_penalty", type=int, optional=True),
+            ParameterToValidate(argument="metadata_date_key", type=str, optional=True),
+        ]
+        validated_params = _pop_and_validate_parameters(list_of_params_to_pop, params)
+
+        number_of_chunks = validated_params.pop("number_of_chunks")
+        enable_date_penalty = validated_params.pop("enable_date_penalty_for_chunks")
+        retrieved_chunks_before_penalty = validated_params.pop("retrieved_chunks_before_applying_penalty", None)
+
+        max_retrieved_chunks = retrieved_chunks_before_penalty if enable_date_penalty else number_of_chunks
+        max_retrieved_chunks_after_penalty = number_of_chunks if enable_date_penalty else None
+
+        params["max_retrieved_chunks"] = max_retrieved_chunks
+        params["enable_date_penalty_for_chunks"] = enable_date_penalty
+        params["max_retrieved_chunks_after_penalty"] = max_retrieved_chunks_after_penalty
+        params.update(validated_params)
+
+        return params
+
+    return processor
+
+
+class RetrieverFactory(AgentFactory):
+    """
+    Factory class for creating Retriever instances.
+    """
+
+    def __init__(
+        self,
+        entity_class: Type[Any],
+        parameter_processors: Optional[list[ParameterProcessor]] = None,
+        constructor_method: str = "__init__",
+    ):
+        """
+        Initialize the RetrieverFactory.
+
+        Args:
+            entity_class (Type[Any]): The class or callable to use for creating retrievers.
+            parameter_processors (Optional[list[ParameterProcessor]]): A list of
+                parameter processors.
+        """
+        processors = parameter_processors or []
+        processors.append(build_trace_manager_processor())
+        processors.append(build_qdrant_service_processor())
+        processors.append(build_retriever_params_translator_processor())
+
+        super().__init__(
+            entity_class=entity_class,
+            parameter_processors=processors,
+            constructor_method=constructor_method,
+        )
+
+
 def build_dataclass_processor(dataclass_type: Type[Any], param_name: str) -> ParameterProcessor:
     """
     Creates a processor for converting a specific parameter to a specific dataclass type.
@@ -745,76 +817,6 @@ def build_retriever_processor(target_name: str = "retriever") -> ParameterProces
         )
 
         params[target_name] = retriever
-        return params
-
-    return processor
-
-
-def build_retriever_processor_v2() -> ParameterProcessor:
-    """
-    Build processor for Retriever component (used as a tool).
-    Prepares constructor parameters for Retriever instantiation.
-    """
-
-    def processor(params: dict, constructor_params: dict[str, Any]) -> dict:
-        data_source = params.pop("data_source", None)
-        if data_source is None:
-            component_attrs = params.get("component_attributes")
-            component_name = getattr(component_attrs, "component_instance_name", None)
-            raise MissingDataSourceError(component_name)
-
-        if isinstance(data_source, str):
-            data_source = json.loads(data_source)
-
-        source_id_str = data_source.get("id") if isinstance(data_source, dict) else None
-        if not source_id_str:
-            raise ValueError("data_source must contain an 'id' field")
-        source_id = UUID(source_id_str)
-        # TODO: Avoid opening new DB sessions and inject the current one instead
-        with get_db_session() as session:
-            source = get_data_source_by_id(session, source_id)
-            if source is None:
-                raise ValueError(f"Source with id {source_id} not found")
-
-            provider, model_name = get_llm_provider_and_model(llm_model=source.embedding_model_reference)
-            collection_name = source.qdrant_collection_name
-            qdrant_schema = QdrantCollectionSchema(**source.qdrant_schema)
-
-        embedding_service = EmbeddingService(
-            trace_manager=get_trace_manager(),
-            api_key=params.pop("llm_api_key", None),
-            provider=provider,
-            model_name=model_name,
-        )
-        qdrant_service = QdrantService.from_defaults(
-            embedding_service=embedding_service,
-            default_collection_schema=qdrant_schema,
-        )
-        list_of_params_to_pop = [
-            ParameterToValidate(argument="number_of_chunks", type=int, optional=False),
-            ParameterToValidate(argument="enable_date_penalty_for_chunks", type=bool, optional=False),
-            ParameterToValidate(argument="chunk_age_penalty_rate", type=float, optional=True),
-            ParameterToValidate(argument="default_penalty_rate", type=float, optional=True),
-            ParameterToValidate(argument="retrieved_chunks_before_applying_penalty", type=int, optional=True),
-            ParameterToValidate(argument="metadata_date_key", type=str, optional=True),
-        ]
-        validated_params = _pop_and_validate_parameters(list_of_params_to_pop, params)
-
-        number_of_chunks = validated_params.pop("number_of_chunks")
-        enable_date_penalty = validated_params.pop("enable_date_penalty_for_chunks")
-        retrieved_chunks_before_penalty = validated_params.pop("retrieved_chunks_before_applying_penalty", None)
-
-        max_retrieved_chunks = retrieved_chunks_before_penalty if enable_date_penalty else number_of_chunks
-        max_retrieved_chunks_after_penalty = number_of_chunks if enable_date_penalty else None
-
-        params["qdrant_service"] = qdrant_service
-        params["collection_name"] = collection_name
-        params["max_retrieved_chunks"] = max_retrieved_chunks
-        params["enable_date_penalty_for_chunks"] = enable_date_penalty
-        params["max_retrieved_chunks_after_penalty"] = max_retrieved_chunks_after_penalty
-        params["source_id"] = source_id
-        params.update(validated_params)  # chunk_age_penalty_rate, default_penalty_rate, metadata_date_key
-
         return params
 
     return processor
