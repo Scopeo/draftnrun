@@ -16,8 +16,13 @@ from data_ingestion.document.folder_management.folder_management import (
     FileDocumentType,
 )
 from data_ingestion.document.markdown_ingestion import get_chunks_from_markdown
-from data_ingestion.document.parsing_pdf_ingestion import create_chunks_from_document_without_llm
+from data_ingestion.document.pdf_ingestion import (
+    _parse_pdf_with_llamaparse,
+    _parse_pdf_without_llm,
+    create_chunks_from_pdf_document,
+)
 from data_ingestion.document.pdf_vision_ingestion import create_chunks_from_document
+from data_ingestion.utils import PDFReadingMode
 from engine.llm_services.llm_service import CompletionService, VisionService
 from ingestion_script.utils import ORDER_COLUMN_NAME
 
@@ -31,24 +36,40 @@ def document_chunking_mapping(
     get_file_content_func: Optional[Callable[[FileDocument], str]] = None,
     overlapping_size: int = 50,
     chunk_size: Optional[int] = 1024,
-    use_llm_for_pdf: bool = True,
+    pdf_reading_mode: PDFReadingMode = PDFReadingMode.STANDARD,
+    llamaparse_api_key: Optional[str] = None,
 ) -> dict[FileDocumentType, FileProcessor]:
-    if use_llm_for_pdf:
+    if pdf_reading_mode == PDFReadingMode.LLM_VISION:
         pdf_processor = partial(
             create_chunks_from_document,
             google_llm_service=vision_ingestion_service,
             openai_llm_service=llm_service,
             get_file_content=get_file_content_func,
         )
-        LOGGER.info("Using LLM-based PDF processing")
-    else:
+        LOGGER.info("Using LLM-based vision PDF processing")
+
+    elif pdf_reading_mode == PDFReadingMode.LLAMAPARSE:
+        if not llamaparse_api_key:
+            raise ValueError("llamaparse_api_key is required for LLAMAPARSE mode")
+        pdf_parser = partial(_parse_pdf_with_llamaparse, llamaparse_api_key=llamaparse_api_key)
         pdf_processor = partial(
-            create_chunks_from_document_without_llm,
+            create_chunks_from_pdf_document,
             get_file_content=get_file_content_func,
+            pdf_parser=pdf_parser,
             chunk_size=chunk_size,
             chunk_overlap=overlapping_size,
         )
-        LOGGER.info("Using non-LLM PDF processing with pymupdf4llm")
+        LOGGER.info("Using LlamaParse for PDF processing")
+
+    else:
+        pdf_processor = partial(
+            create_chunks_from_pdf_document,
+            get_file_content=get_file_content_func,
+            pdf_parser=_parse_pdf_without_llm,
+            chunk_size=chunk_size,
+            chunk_overlap=overlapping_size,
+        )
+        LOGGER.info("Using pymupdf4llm for standard PDF processing")
 
     document_chunking_mapping = {
         FileDocumentType.PDF.value: pdf_processor,

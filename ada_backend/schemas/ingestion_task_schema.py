@@ -4,6 +4,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict
 
 from ada_backend.database import models as db
+from data_ingestion.utils import PDFReadingMode
 
 
 class ResultType:
@@ -63,6 +64,7 @@ class SourceAttributes(BaseModel):
     exclude_paths: Optional[list[str]] = None  # URL pathname regex patterns to exclude
     include_tags: Optional[list[str]] = None  # HTML tags to include in content extraction
     exclude_tags: Optional[list[str]] = None  # HTML tags to exclude from content extraction
+    pdf_reading_mode: Optional[PDFReadingMode] = PDFReadingMode.STANDARD
 
 
 class IngestionTaskUpdate(IngestionTask):

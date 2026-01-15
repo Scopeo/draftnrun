@@ -85,6 +85,7 @@ async def ingestion_main_async(
     update_existing = source_attributes.get("update_existing")
     if update_existing is None:
         update_existing = DEFAULT_UPDATE_EXISTING
+    pdf_reading_mode = source_attributes.get("pdf_reading_mode")
 
     failed_ingestion_task = IngestionTaskUpdate(
         id=task_id,
@@ -120,6 +121,8 @@ async def ingestion_main_async(
                 chunk_size=chunk_size,
                 chunk_overlap=chunk_overlap,
                 source_id=source_id,
+                pdf_reading_mode=pdf_reading_mode,
+                llamaparse_api_key=settings.LLAMACLOUD_API_KEY,
             )
         except Exception as e:
             error_msg = f"Error during google drive ingestion: {str(e)}"
@@ -154,6 +157,8 @@ async def ingestion_main_async(
                 chunk_size=chunk_size,
                 chunk_overlap=chunk_overlap,
                 source_id=source_id,
+                pdf_reading_mode=pdf_reading_mode,
+                llamaparse_api_key=settings.LLAMACLOUD_API_KEY,
             )
         except Exception as e:
             error_msg = f"Error during local ingestion: {str(e)}"

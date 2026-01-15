@@ -5,6 +5,7 @@ from uuid import UUID
 import pandas as pd
 import pytest
 
+from data_ingestion.utils import PDFReadingMode
 from ingestion_script.ingest_website_source import ScrapedPage, scrape_website, upload_website_source
 from ingestion_script.utils import UNIFIED_TABLE_DEFINITION
 from settings import settings
@@ -147,7 +148,7 @@ async def test_upload_website_source_syncs_scraped_pages(monkeypatch):
     _, mapping_kwargs = mapping_mock.call_args
     assert mapping_kwargs["chunk_size"] == 256
     assert mapping_kwargs["overlapping_size"] == 16
-    assert mapping_kwargs["use_llm_for_pdf"] is False
+    assert mapping_kwargs["pdf_reading_mode"] == PDFReadingMode.STANDARD
 
     document_arg = chunks_mock.await_args.args[0]
     assert document_arg.metadata["source_url"] == "https://example.com/page"

@@ -1,8 +1,12 @@
 import json
 import os
 import re
+import tempfile
 import unicodedata
+from contextlib import contextmanager
 from datetime import datetime
+from enum import Enum
+from pathlib import Path
 from typing import Any, Optional
 
 import pandas as pd
@@ -43,6 +47,22 @@ class Chunk(BaseModel):
         """
         base_dict = self.model_dump(exclude={"metadata"})  # Dump the model without "metadata"
         return {**base_dict, **self.metadata}  # Merge metadata into base dictionary
+
+
+@contextmanager
+def get_file_path_from_content(content: bytes | str, suffix: str = ".pdf"):
+    if isinstance(content, bytes):
+        temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
+        temp_path = Path(temp_file.name)
+        try:
+            temp_file.write(content)
+            temp_file.close()
+            yield str(temp_path)
+        finally:
+            if temp_path.exists():
+                os.unlink(temp_path)
+    else:
+        yield content
 
 
 def get_last_modification_time_from_local_file(file_path: str) -> str:
@@ -124,3 +144,11 @@ def split_df_by_token_limit(
         chunks.append(chunk_df)
 
     return chunks
+
+
+class PDFReadingMode(str, Enum):
+    """PDF processing mode options"""
+
+    LLM_VISION = "llm_vision"
+    STANDARD = "standard"
+    LLAMAPARSE = "llamaparse"

@@ -9,17 +9,12 @@ from firecrawl import AsyncFirecrawl
 from pydantic import BaseModel
 
 from ada_backend.database import models as db
-from data_ingestion.document.document_chunking import (
-    document_chunking_mapping,
-    get_chunks_dataframe_from_doc,
-)
+from data_ingestion.document.document_chunking import document_chunking_mapping, get_chunks_dataframe_from_doc
 from data_ingestion.document.folder_management.folder_management import WebsiteDocument
+from data_ingestion.utils import PDFReadingMode
 from engine.qdrant_service import QdrantService
 from engine.storage_service.db_service import DBService
-from ingestion_script.ingest_folder_source import (
-    TIMESTAMP_COLUMN_NAME,
-    sync_chunks_to_qdrant,
-)
+from ingestion_script.ingest_folder_source import TIMESTAMP_COLUMN_NAME, sync_chunks_to_qdrant
 from ingestion_script.utils import (
     CHUNK_ID_COLUMN_NAME,
     UNIFIED_QDRANT_SCHEMA,
@@ -188,7 +183,7 @@ async def upload_website_source(
         get_file_content_func=get_file_content_func,
         chunk_size=chunk_size,
         overlapping_size=chunk_overlap,
-        use_llm_for_pdf=False,
+        pdf_reading_mode=PDFReadingMode.STANDARD,
     )
 
     db_service.create_schema(storage_schema_name)
