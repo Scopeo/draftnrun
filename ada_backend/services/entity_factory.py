@@ -315,37 +315,6 @@ def build_retriever_params_translator_processor() -> ParameterProcessor:
     return processor
 
 
-class RetrieverFactory(AgentFactory):
-    """
-    Factory class for creating Retriever instances.
-    """
-
-    def __init__(
-        self,
-        entity_class: Type[Any],
-        parameter_processors: Optional[list[ParameterProcessor]] = None,
-        constructor_method: str = "__init__",
-    ):
-        """
-        Initialize the RetrieverFactory.
-
-        Args:
-            entity_class (Type[Any]): The class or callable to use for creating retrievers.
-            parameter_processors (Optional[list[ParameterProcessor]]): A list of
-                parameter processors.
-        """
-        processors = parameter_processors or []
-        processors.append(build_trace_manager_processor())
-        processors.append(build_qdrant_service_processor())
-        processors.append(build_retriever_params_translator_processor())
-
-        super().__init__(
-            entity_class=entity_class,
-            parameter_processors=processors,
-            constructor_method=constructor_method,
-        )
-
-
 def build_dataclass_processor(dataclass_type: Type[Any], param_name: str) -> ParameterProcessor:
     """
     Creates a processor for converting a specific parameter to a specific dataclass type.

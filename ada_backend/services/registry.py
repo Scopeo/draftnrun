@@ -14,7 +14,6 @@ from ada_backend.services.entity_factory import (
     EntityFactory,
     NonToolCallableBlockFactory,
     RemoteMCPToolFactory,
-    RetrieverFactory,
     build_completion_service_processor,
     build_db_service_processor,
     build_formatter_processor,
@@ -24,6 +23,7 @@ from ada_backend.services.entity_factory import (
     build_project_reference_processor,
     build_qdrant_service_processor,
     build_reranker_processor,
+    build_retriever_params_translator_processor,
     build_retriever_processor,
     build_synthesizer_processor,
     build_trace_manager_processor,
@@ -436,8 +436,13 @@ def create_factory_registry() -> FactoryRegistry:
     )
     registry.register(
         component_version_id=COMPONENT_VERSION_UUIDS["retriever_tool"],
-        factory=RetrieverFactory(
+        factory=AgentFactory(
             entity_class=Retriever,
+            parameter_processors=[
+                build_retriever_params_translator_processor(),
+                trace_manager_processor,
+                qdrant_service_processor,
+            ],
         ),
     )
     registry.register(
