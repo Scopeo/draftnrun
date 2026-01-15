@@ -19,7 +19,7 @@ from ada_backend.database.seed.utils import COMPONENT_UUIDS, COMPONENT_VERSION_U
 def seed_retriever_tool_components(session: Session):
     retriever_tool = db.Component(
         id=COMPONENT_UUIDS["retriever_tool"],
-        name="Knowledge Base Search",
+        name="Knowledge Search (Retriever)",
         is_agent=True,
         function_callable=True,
         icon="tabler-database-search",

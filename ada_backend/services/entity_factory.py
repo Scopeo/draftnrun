@@ -274,20 +274,35 @@ class NonToolCallableBlockFactory(EntityFactory):
         )
 
 
+def build_source_id_extractor_processor() -> ParameterProcessor:
+    def processor(params: dict, constructor_params: dict[str, Any]) -> dict:
+        data_source = params.pop("data_source", None)
+        if data_source is None:
+            component_attrs = params.get("component_attributes")
+            component_name = getattr(component_attrs, "component_instance_name", None)
+            raise MissingDataSourceError(component_name)
+
+        if isinstance(data_source, str):
+            data_source = json.loads(data_source)
+
+        source_id_str = data_source.get("id") if isinstance(data_source, dict) else None
+        if not source_id_str:
+            raise ValueError("data_source must contain an 'id' field")
+        source_id = UUID(source_id_str)
+
+        params["source_id"] = source_id
+        return params
+
+    return processor
+
+
+# TODO: Remove this processor when the retriever is migrated to the new component architecture
 def build_retriever_params_translator_processor() -> ParameterProcessor:
-    """
-    Returns a processor function to translate retriever parameter names from
-    the UI/DB format to the format expected by the Retriever constructor.
-
-    Translates:
-    - number_of_chunks + enable_date_penalty_for_chunks -> max_retrieved_chunks / max_retrieved_chunks_after_penalty
-    - retrieved_chunks_before_applying_penalty -> max_retrieved_chunks (when date penalty is enabled)
-
-    Returns:
-        ParameterProcessor: A function to process retriever constructor parameters.
-    """
+    source_id_extractor = build_source_id_extractor_processor()
 
     def processor(params: dict, constructor_params: dict[str, Any]) -> dict:
+        params = source_id_extractor(params, constructor_params)
+
         list_of_params_to_pop = [
             ParameterToValidate(argument="number_of_chunks", type=int, optional=False),
             ParameterToValidate(argument="enable_date_penalty_for_chunks", type=bool, optional=False),
@@ -731,21 +746,12 @@ def build_retriever_processor(target_name: str = "retriever") -> ParameterProces
     Returns:
         ParameterProcessor: A processor function that handles Retriever creation
     """
+    # Use the shared source_id extractor
+    source_id_extractor = build_source_id_extractor_processor()
 
     def processor(params: dict, constructor_params: dict[str, Any]) -> dict:
-        data_source = params.pop("data_source", None)
-        if data_source is None:
-            component_attrs = params.get("component_attributes")
-            component_name = getattr(component_attrs, "component_instance_name", None)
-            raise MissingDataSourceError(component_name)
-
-        if isinstance(data_source, str):
-            data_source = json.loads(data_source)
-
-        source_id_str = data_source.get("id") if isinstance(data_source, dict) else None
-        if not source_id_str:
-            raise ValueError("data_source must contain an 'id' field")
-        source_id = UUID(source_id_str)
+        params = source_id_extractor(params, constructor_params)
+        source_id = params.pop("source_id")
 
         with get_db_session() as session:
             source = get_data_source_by_id(session, source_id)
