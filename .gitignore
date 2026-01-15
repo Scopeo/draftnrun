@@ -36,6 +36,9 @@ custom_models.json
 # .env files for ada_ingestion_system
 ada_ingestion_system/.env
 
+# k8s secrets (use secrets.yaml.example as template)
+infra/k8s/*/secrets.yaml
+
 # cache
 **__pycache__**
 *checkpoint.ipynb
