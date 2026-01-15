@@ -168,7 +168,7 @@ def get_cron_job_detail(
         raise CronJobAccessDenied("Access denied")
 
     if include_runs:
-        runs = get_cron_runs_by_cron_id(session, cron_id)
+        runs = get_cron_runs_by_cron_id(session, cron_id, limit=10)
         return CronJobWithRuns(
             **CronJobResponse.model_validate(cron_job).model_dump(),
             recent_runs=runs,
