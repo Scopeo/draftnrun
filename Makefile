@@ -55,6 +55,11 @@ generate-backend-secret-key:
 	@echo "Generating backend secret key"
 	@uv run python -c "import secrets; print(secrets.token_hex(32))"
 
+.PHONY: uuid
+uuid:
+	@echo "Generating UUID"
+	@uv run python -c "import uuid; print(uuid.uuid4())"
+
 .PHONY: get-supabase-token
 get-supabase-token:
 	@echo "Fetching Supabase token for username $(username)"
