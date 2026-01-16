@@ -188,5 +188,5 @@ def seed_retriever_tool_components(session: Session):
     upsert_component_categories(
         session=session,
         component_id=retriever_tool.id,
-        category_ids=[CATEGORY_UUIDS["query"]],
+        category_ids=[CATEGORY_UUIDS["search_engine"]],
     )
