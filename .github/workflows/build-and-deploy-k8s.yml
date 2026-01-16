@@ -1,8 +1,8 @@
 name: Build and Deploy to K8s
 
 on:
-  # push:
-  #   branches: [staging, main]  # Enable after migration complete
+  push:
+    branches: [staging]
   workflow_dispatch:
     inputs:
       environment:
