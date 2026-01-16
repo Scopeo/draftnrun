@@ -59,8 +59,7 @@ class RetrieverInputs(BaseModel):
 
 
 class RetrieverOutputs(BaseModel):
-    output: str = Field(description="Summary of retrieved chunks.")
-    chunks: list[SourceChunk] = Field(description="The retrieved document chunks from the knowledge base.")
+    formatted_content: str = Field(description="Formatted content of the retrieved chunks.")
     # TODO: Remove nested artifacts dict use directly the sources
     artifacts: dict[str, Any] = Field(
         default_factory=dict,
@@ -82,7 +81,7 @@ class Retriever(Component):
 
     @classmethod
     def get_canonical_ports(cls) -> dict[str, str | None]:
-        return {"input": "query", "output": "chunks"}
+        return {"input": "query", "output": "formatted_content"}
 
     def __init__(
         self,
@@ -246,7 +245,7 @@ class Retriever(Component):
             llm_metadata_keys=chunks[0].metadata.keys() if chunks else [],
         )
 
-        return RetrieverOutputs(output=chunks_output, chunks=chunks, artifacts={"sources": chunks})
+        return RetrieverOutputs(formatted_content=chunks_output, artifacts={"sources": chunks})
 
 
 class DummyRetriever(Retriever):

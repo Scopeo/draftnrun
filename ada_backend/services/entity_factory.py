@@ -274,9 +274,14 @@ class NonToolCallableBlockFactory(EntityFactory):
         )
 
 
-def build_source_id_extractor_processor() -> ParameterProcessor:
+def build_source_metadata_extractor_processor() -> ParameterProcessor:
+    """
+    Extracts source_id and collection_name from data_source in a single database query.
+    Leaves data_source intact for downstream processors.
+    """
+
     def processor(params: dict, constructor_params: dict[str, Any]) -> dict:
-        data_source = params.pop("data_source", None)
+        data_source = params.get("data_source", None)
         if data_source is None:
             component_attrs = params.get("component_attributes")
             component_name = getattr(component_attrs, "component_instance_name", None)
@@ -290,7 +295,16 @@ def build_source_id_extractor_processor() -> ParameterProcessor:
             raise ValueError("data_source must contain an 'id' field")
         source_id = UUID(source_id_str)
 
+        # Fetch source metadata from database
+        with get_db_session() as session:
+            source = get_data_source_by_id(session, source_id)
+            if source is None:
+                raise ValueError(f"Source with id {source_id} not found")
+            collection_name = source.qdrant_collection_name
+
         params["source_id"] = source_id
+        params["collection_name"] = collection_name
+
         return params
 
     return processor
@@ -298,10 +312,10 @@ def build_source_id_extractor_processor() -> ParameterProcessor:
 
 # TODO: Remove this processor when the retriever is migrated to the new component architecture
 def build_retriever_params_translator_processor() -> ParameterProcessor:
-    source_id_extractor = build_source_id_extractor_processor()
+    source_metadata_extractor = build_source_metadata_extractor_processor()
 
     def processor(params: dict, constructor_params: dict[str, Any]) -> dict:
-        params = source_id_extractor(params, constructor_params)
+        params = source_metadata_extractor(params, constructor_params)
 
         list_of_params_to_pop = [
             ParameterToValidate(argument="number_of_chunks", type=int, optional=False),
@@ -746,12 +760,14 @@ def build_retriever_processor(target_name: str = "retriever") -> ParameterProces
     Returns:
         ParameterProcessor: A processor function that handles Retriever creation
     """
-    # Use the shared source_id extractor
-    source_id_extractor = build_source_id_extractor_processor()
+
+    source_metadata_extractor = build_source_metadata_extractor_processor()
 
     def processor(params: dict, constructor_params: dict[str, Any]) -> dict:
-        params = source_id_extractor(params, constructor_params)
+        params = source_metadata_extractor(params, constructor_params)
         source_id = params.pop("source_id")
+        collection_name = params.pop("collection_name")
+        params.pop("data_source", None)
 
         with get_db_session() as session:
             source = get_data_source_by_id(session, source_id)
@@ -759,7 +775,6 @@ def build_retriever_processor(target_name: str = "retriever") -> ParameterProces
                 raise ValueError(f"Source with id {source_id} not found")
 
             provider, model_name = get_llm_provider_and_model(llm_model=source.embedding_model_reference)
-            collection_name = source.qdrant_collection_name
             qdrant_schema = QdrantCollectionSchema(**source.qdrant_schema)
 
         embedding_service = EmbeddingService(
