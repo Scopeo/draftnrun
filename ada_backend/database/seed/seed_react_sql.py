@@ -120,7 +120,7 @@ def seed_react_sql_components(session: Session):
     upsert_component_categories(
         session=session,
         component_id=react_sql_agent.id,
-        category_ids=[CATEGORY_UUIDS["query"]],
+        category_ids=[CATEGORY_UUIDS["information_retrieval"]],
     )
 
     # Create release stage mapping

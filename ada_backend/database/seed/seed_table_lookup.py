@@ -33,7 +33,7 @@ def seed_table_lookup_components(session: Session):
         id=COMPONENT_UUIDS["table_lookup"],
         name="Table Lookup",
         is_agent=True,
-        function_callable=True,
+        function_callable=False,
         icon="tabler-table",
     )
     upsert_components(
@@ -91,7 +91,7 @@ def seed_table_lookup_components(session: Session):
     upsert_component_categories(
         session=session,
         component_id=table_lookup.id,
-        category_ids=[CATEGORY_UUIDS["logical"]],
+        category_ids=[CATEGORY_UUIDS["workflow_logic"]],
     )
 
     upsert_release_stage_to_current_version_mapping(

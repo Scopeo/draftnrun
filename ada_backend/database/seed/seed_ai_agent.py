@@ -280,10 +280,11 @@ def seed_ai_agent_components(session: Session):
         release_stage=base_ai_agent_version.release_stage,
         component_version_id=base_ai_agent_version.id,
     )
+
     upsert_component_categories(
         session=session,
         component_id=base_ai_agent_component.id,
-        category_ids=[CATEGORY_UUIDS["most_used"]],
+        category_ids=[CATEGORY_UUIDS["most_used"], CATEGORY_UUIDS["ai"]],
     )
 
 

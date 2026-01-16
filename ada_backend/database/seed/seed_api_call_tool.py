@@ -118,11 +118,6 @@ def seed_api_call_components(session: Session):
     ]
 
     upsert_components_parameter_definitions(session, api_call_parameter_definitions)
-    upsert_component_categories(
-        session=session,
-        component_id=api_call_component.id,
-        category_ids=[CATEGORY_UUIDS["action"], CATEGORY_UUIDS["query"]],
-    )
 
     # Create release stage mapping
     upsert_release_stage_to_current_version_mapping(
@@ -130,4 +125,10 @@ def seed_api_call_components(session: Session):
         component_id=api_call_component_version.component_id,
         release_stage=api_call_component_version.release_stage,
         component_version_id=api_call_component_version.id,
+    )
+
+    upsert_component_categories(
+        session=session,
+        component_id=api_call_component.id,
+        category_ids=[CATEGORY_UUIDS["integrations"], CATEGORY_UUIDS["information_retrieval"]],
     )

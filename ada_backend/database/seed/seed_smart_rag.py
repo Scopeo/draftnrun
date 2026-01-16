@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 
 from ada_backend.database import models as db
 from ada_backend.database.component_definition_seeding import (
+    upsert_component_categories,
     upsert_component_versions,
     upsert_components,
     upsert_components_parameter_child_relationships,
@@ -16,6 +17,7 @@ from ada_backend.database.models import (
     UIComponentProperties,
 )
 from ada_backend.database.seed.constants import COMPLETION_MODEL_IN_DB
+from ada_backend.database.seed.seed_categories import CATEGORY_UUIDS
 from ada_backend.database.seed.seed_tool_description import TOOL_DESCRIPTION_UUIDS
 from ada_backend.database.seed.utils import (
     COMPONENT_UUIDS,
@@ -279,4 +281,10 @@ def seed_smart_rag_components(session: Session):
         component_id=document_react_loader_agent_version.component_id,
         release_stage=document_react_loader_agent_version.release_stage,
         component_version_id=document_react_loader_agent_version.id,
+    )
+
+    upsert_component_categories(
+        session=session,
+        component_id=document_search.id,
+        category_ids=[CATEGORY_UUIDS["search_engine"], CATEGORY_UUIDS["ai"]],
     )

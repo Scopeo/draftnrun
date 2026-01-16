@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 
 from ada_backend.database import models as db
 from ada_backend.database.component_definition_seeding import (
+    upsert_component_categories,
     upsert_component_versions,
     upsert_components,
     upsert_components_parameter_child_relationships,
@@ -12,6 +13,7 @@ from ada_backend.database.component_definition_seeding import (
 )
 from ada_backend.database.models import ParameterType
 from ada_backend.database.seed.constants import COMPLETION_MODEL_IN_DB
+from ada_backend.database.seed.seed_categories import CATEGORY_UUIDS
 from ada_backend.database.seed.seed_tool_description import TOOL_DESCRIPTION_UUIDS
 from ada_backend.database.seed.utils import (
     COMPONENT_UUIDS,
@@ -149,4 +151,16 @@ def seed_sql_tool_components(session: Session):
         component_id=run_sql_query_tool_version.component_id,
         release_stage=run_sql_query_tool_version.release_stage,
         component_version_id=run_sql_query_tool_version.id,
+    )
+
+    upsert_component_categories(
+        session=session,
+        component_id=run_sql_query_tool.id,
+        category_ids=[CATEGORY_UUIDS["information_retrieval"]],
+    )
+
+    upsert_component_categories(
+        session=session,
+        component_id=sql_tool.id,
+        category_ids=[CATEGORY_UUIDS["information_retrieval"]],
     )

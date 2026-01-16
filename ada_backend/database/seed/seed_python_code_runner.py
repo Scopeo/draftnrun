@@ -68,11 +68,6 @@ def seed_python_code_runner_components(session: Session):
     ]
 
     upsert_components_parameter_definitions(session, python_code_runner_parameter_definitions)
-    upsert_component_categories(
-        session=session,
-        component_id=python_code_runner_component.id,
-        category_ids=[CATEGORY_UUIDS["action"], CATEGORY_UUIDS["processing"]],
-    )
 
     # Create release stage mapping
     upsert_release_stage_to_current_version_mapping(
@@ -80,4 +75,10 @@ def seed_python_code_runner_components(session: Session):
         component_id=python_code_runner_component_version.component_id,
         release_stage=python_code_runner_component_version.release_stage,
         component_version_id=python_code_runner_component_version.id,
+    )
+
+    upsert_component_categories(
+        session=session,
+        component_id=python_code_runner_component.id,
+        category_ids=[CATEGORY_UUIDS["run_code"]],
     )

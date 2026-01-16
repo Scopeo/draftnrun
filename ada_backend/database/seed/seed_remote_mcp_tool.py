@@ -70,14 +70,19 @@ def seed_remote_mcp_tool_components(session: Session):
         ),
     ]
     upsert_components_parameter_definitions(session, parameter_definitions)
-    upsert_component_categories(
-        session=session,
-        component_id=remote_mcp_component.id,
-        category_ids=[CATEGORY_UUIDS["action"], CATEGORY_UUIDS["query"]],
-    )
     upsert_release_stage_to_current_version_mapping(
         session=session,
         component_id=remote_mcp_component_version.component_id,
         release_stage=remote_mcp_component_version.release_stage,
         component_version_id=remote_mcp_component_version.id,
+    )
+
+    upsert_component_categories(
+        session=session,
+        component_id=remote_mcp_component.id,
+        category_ids=[
+            CATEGORY_UUIDS["integrations"],
+            CATEGORY_UUIDS["information_retrieval"],
+            CATEGORY_UUIDS["most_used"]
+        ],
     )

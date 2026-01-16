@@ -83,11 +83,6 @@ def seed_web_search_components(session: Session):
             ),
         ],
     )
-    upsert_component_categories(
-        session=session,
-        component_id=web_search_openai_agent.id,
-        category_ids=[CATEGORY_UUIDS["query"]],
-    )
 
     # Create release stage mapping
     upsert_release_stage_to_current_version_mapping(
@@ -95,4 +90,10 @@ def seed_web_search_components(session: Session):
         component_id=web_search_openai_agent_version.component_id,
         release_stage=web_search_openai_agent_version.release_stage,
         component_version_id=web_search_openai_agent_version.id,
+    )
+
+    upsert_component_categories(
+        session=session,
+        component_id=web_search_openai_agent.id,
+        category_ids=[CATEGORY_UUIDS["search_engine"]],
     )
