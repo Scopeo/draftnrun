@@ -132,6 +132,17 @@ class ResponseFormat(StrEnum):
     S3_KEY = "s3_key"
 
 
+class WebhookStatus(StrEnum):
+    ACTIVE = "active"
+    DISABLED = "disabled"
+
+
+class WebhookProvider(StrEnum):
+    RESEND = "resend"
+    AIRCALL = "aircall"
+    SLACK = "slack"
+
+
 class UIComponent(StrEnum):
     AUTOCOMPLETE = "Autocomplete"
     CHECKBOX = "Checkbox"
@@ -1800,3 +1811,61 @@ class Widget(Base):
 
     def __str__(self):
         return f"Widget(id={self.id}, name={self.name}, project_id={self.project_id})"
+
+
+class Webhook(Base):
+    """
+    Stores webhook configurations and routing information.
+    Each webhook is associated with an integration and has a unique routing_key.
+    Each webhook can have its own secret integration for storing webhook-specific secrets.
+    """
+
+    __tablename__ = "webhooks"
+
+    id = mapped_column(UUID(as_uuid=True), primary_key=True, index=True, default=uuid.uuid4)
+    organization_id = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
+    provider = mapped_column(make_pg_enum(WebhookProvider), nullable=False)
+    external_client_id = mapped_column(String, nullable=False)
+    created_at = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    triggers = relationship("IntegrationTrigger", back_populates="webhook", cascade="all, delete-orphan")
+
+    __table_args__ = (Index("ix_webhooks_provider_external_client_id", "provider", "external_client_id"),)
+
+    def __str__(self):
+        return f"Webhook(id={self.id}, provider={self.provider}, external_client_id={self.external_client_id[:4]}...)`"
+
+
+class IntegrationTrigger(Base):
+    """
+    Maps webhook events to workflows/agents.
+    Each trigger links a webhook event type to a project (workflow or agent).
+    """
+
+    __tablename__ = "integration_triggers"
+
+    id = mapped_column(UUID(as_uuid=True), primary_key=True, index=True, default=uuid.uuid4)
+    webhook_id = mapped_column(
+        UUID(as_uuid=True), ForeignKey("webhooks.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    project_id = mapped_column(
+        UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    events = mapped_column(JSONB, nullable=True)
+    events_hash = mapped_column(String, nullable=False)
+    enabled = mapped_column(Boolean, nullable=False, default=True)
+    filter_options = mapped_column(JSONB, nullable=True)
+    created_at = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    webhook = relationship("Webhook", back_populates="triggers")
+    project = relationship("Project", backref="integration_triggers")
+
+    __table_args__ = (
+        Index("ix_integration_triggers_webhook_event", "webhook_id", "events_hash"),
+        UniqueConstraint("webhook_id", "events_hash", "project_id", name="uq_webhook_event_project"),
+    )
+
+    def __str__(self):
+        return f"IntegrationTrigger(id={self.id}, events={self.events}, project_id={self.project_id})"

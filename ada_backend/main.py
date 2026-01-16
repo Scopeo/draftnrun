@@ -32,6 +32,8 @@ from ada_backend.routers.s3_files_router import router as s3_files_router
 from ada_backend.routers.source_router import router as source_router
 from ada_backend.routers.template_router import router as template_router
 from ada_backend.routers.trace_router import router as trace_router
+from ada_backend.routers.webhooks.aircall_webhook_router import router as aircall_webhook_router
+from ada_backend.routers.webhooks.webhook_internal_router import router as webhook_internal_router
 from ada_backend.routers.widget_router import router as widget_router
 from engine.trace.trace_context import set_trace_manager
 from engine.trace.trace_manager import TraceManager
@@ -139,6 +141,10 @@ app = FastAPI(
             "name": "Widget",
             "description": "Endpoints for embeddable chat widgets",
         },
+        {
+            "name": "Webhooks",
+            "description": "Endpoints for receiving webhook events from external providers",
+        },
     ],
 )
 
@@ -176,6 +182,8 @@ app.include_router(ingestion_database_router)
 app.include_router(llm_models_router)
 app.include_router(credits_router)
 app.include_router(widget_router)
+app.include_router(aircall_webhook_router)
+app.include_router(webhook_internal_router)
 
 app.add_middleware(RequestContextMiddleware)
 app.add_middleware(
