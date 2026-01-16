@@ -2,6 +2,7 @@ import logging
 from typing import Any, Optional, Type
 
 from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttributes
+from opentelemetry.trace import get_current_span
 from pydantic import BaseModel, Field
 
 from engine.components.build_context import build_context_from_vocabulary_chunks
@@ -13,6 +14,7 @@ from engine.components.rag.vocabulary_search import VocabularySearch
 from engine.components.synthesizer import Synthesizer
 from engine.components.types import ComponentAttributes, ToolDescription
 from engine.components.utils import merge_qdrant_filters_with_and_conditions
+from engine.trace.serializer import serialize_to_json
 from engine.trace.trace_manager import TraceManager
 
 LOGGER = logging.getLogger(__name__)
@@ -75,6 +77,14 @@ class RAG(Component):
     async def _run_without_io_trace(self, inputs: RAGInputs, ctx: dict) -> RAGOutputs:
         if not inputs.query_text:
             raise ValueError("No query_text provided for the RAG tool.")
+
+        span = get_current_span()
+        trace_input = {"query_text": inputs.query_text, "filters": inputs.filters}
+        span.set_attributes({
+            SpanAttributes.OPENINFERENCE_SPAN_KIND: self.TRACE_SPAN_KIND,
+            SpanAttributes.INPUT_VALUE: serialize_to_json(trace_input, shorten_string=True),
+        })
+
         filter_to_process = inputs.filters
         if "rag_filter" in ctx and ctx["rag_filter"]:
             if inputs.filters:
