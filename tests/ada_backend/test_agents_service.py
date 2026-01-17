@@ -10,10 +10,12 @@ from ada_backend.services import agents_service
 
 
 class DummyAgent:
-    def __init__(self, id, name, description=None):
+    def __init__(self, id, name, description=None, icon=None, icon_color=None):
         self.id = id
         self.name = name
         self.description = description
+        self.icon = icon
+        self.icon_color = icon_color
 
 
 class DummyProject:

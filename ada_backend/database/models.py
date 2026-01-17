@@ -1124,6 +1124,8 @@ class Project(Base):
     type = mapped_column(make_pg_enum(ProjectType), nullable=False, default=ProjectType.WORKFLOW)
     description = mapped_column(Text, nullable=True)
     organization_id = mapped_column(UUID(as_uuid=True), nullable=False)
+    icon = mapped_column(String, nullable=True)
+    icon_color = mapped_column(String, nullable=True)
     created_at = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
