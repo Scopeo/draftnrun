@@ -419,10 +419,6 @@ class DocxTemplateInputs(BaseModel):
     output_filename: str = Field(
         description=DOCX_TEMPLATE_TOOL_DESCRIPTION.tool_properties["output_filename"]["description"],
     )
-    additional_instructions: Optional[str] = Field(
-        default=None,
-        description="Additional instructions for the template filling process.",
-    )
     model_config = {"extra": "allow"}
 
 
@@ -475,7 +471,6 @@ class DocxTemplateAgent(Component):
         response_model: type[BaseModel],
         brief: str,
         image_specs: dict[str, dict] = None,
-        additional_instructions: Optional[str] = None,
     ) -> BaseModel:
         image_specs = image_specs or {}
 
@@ -489,8 +484,6 @@ class DocxTemplateAgent(Component):
             brief=brief,
             image_descriptions=image_descriptions_str,
         )
-        if additional_instructions:
-            user += f"\n\nAdditional instructions:\n{additional_instructions}"
         messages = [{"role": "system", "content": SYSTEM}, {"role": "user", "content": user}]
 
         return await self._completion_service.constrained_complete_with_pydantic_async(
@@ -508,8 +501,6 @@ class DocxTemplateAgent(Component):
         template_base64 = self.template_base64 or ctx.get("template_base64")
         template_information_brief = inputs.template_information_brief
         output_filename = inputs.output_filename
-        additional_instructions = inputs.additional_instructions
-
 
         try:
             if not template_input_path and not template_base64:
@@ -568,7 +559,6 @@ class DocxTemplateAgent(Component):
                 response_model=ResponseModel,
                 brief=template_information_brief,
                 image_specs=image_specs,
-                additional_instructions=additional_instructions,
             )
             context = resp_obj.context.model_dump()
             images = resp_obj.images.model_dump()
