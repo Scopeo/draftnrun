@@ -4,13 +4,13 @@ from typing import Any, Dict
 from fastapi import APIRouter, Body, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from ada_backend.database.models import EnvType, WebhookProvider
+from ada_backend.database.models import WebhookProvider
 from ada_backend.database.setup_db import get_db
 from ada_backend.schemas.webhook_schema import WebhookProcessingStatus
 from ada_backend.services.webhooks.aircall_service import (
     get_aircall_webhook_service,
 )
-from ada_backend.services.webhooks.errors import WebhookEmptyTokenError, WebhookNotFoundError
+from ada_backend.services.webhooks.errors import WebhookEmptyTokenError, WebhookNotFoundError, WebhookQueueError
 from ada_backend.services.webhooks.webhook_service import process_webhook_event
 
 router = APIRouter(tags=["Webhooks"])
@@ -26,19 +26,17 @@ async def receive_aircall_webhook(
     try:
         webhook = get_aircall_webhook_service(session, payload.get("token"))
         result = await process_webhook_event(
-            session=session,
             provider=WebhookProvider.AIRCALL,
             payload=payload,
             webhook=webhook,
-            env=EnvType.PRODUCTION,
         )
 
         if result.status not in [
             WebhookProcessingStatus.DUPLICATE,
             WebhookProcessingStatus.RECEIVED,
         ]:
-            error_message = result.get("error", "Failed to process webhook")
-            LOGGER.error(f"Failed to process Aircall webhook: {error_message}")
+            error_message = "Failed to process Aircall webhook"
+            LOGGER.error(f"Failed to process Aircall webhook: {result.status}", exc_info=True)
             raise HTTPException(status_code=400, detail=error_message)
         return {"status": "ok"}
     except WebhookEmptyTokenError as e:
@@ -47,6 +45,9 @@ async def receive_aircall_webhook(
     except WebhookNotFoundError as e:
         LOGGER.error(f"Error processing Aircall webhook: {str(e)}", exc_info=True)
         raise HTTPException(status_code=401, detail="Invalid Aircall token")
+    except WebhookQueueError as e:
+        LOGGER.error(f"Error processing Aircall webhook: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to queue Aircall webhook")
     except Exception as e:
         LOGGER.error(f"Error processing Aircall webhook: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error") from e

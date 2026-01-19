@@ -4,7 +4,7 @@ from uuid import UUID
 
 from sqlalchemy.orm.session import Session
 
-from ada_backend.database.models import EnvType, Webhook, WebhookProvider
+from ada_backend.database.models import Webhook, WebhookProvider
 from ada_backend.repositories.webhook_repository import get_enabled_webhook_triggers
 from ada_backend.schemas.webhook_schema import (
     IntegrationTriggerResponse,
@@ -36,11 +36,9 @@ def get_webhook_event_id(payload: Dict[str, Any], provider: WebhookProvider) -> 
 
 
 async def process_webhook_event(
-    session: Session,
     provider: WebhookProvider,
     payload: Dict[str, Any],
     webhook: Webhook,
-    env: EnvType = EnvType.PRODUCTION,
 ) -> WebhookProcessingResponseSchema:
     try:
         event_id = get_webhook_event_id(payload, provider)
