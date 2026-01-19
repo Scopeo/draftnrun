@@ -364,7 +364,8 @@ class AIAgent(Component):
         # Prepare system prompt content
         system_prompt_content = initial_prompt
 
-        # TODO: Instruction enhancement via retrieval tool
+        # TODO: Refactor logic. AI Agent is coupled to Retriever tool here. Tools should inject their own instructions
+        # without AI Agent knowing the specifics
         if self._has_retriever_tool:
             system_prompt_content = f"{initial_prompt}\n{RETRIEVER_CITATION_INSTRUCTION}"
 
