@@ -278,17 +278,33 @@ jobs:
             PREFIX=$(echo "${{ env.IMAGE_NAME }}" | tr '[:upper:]' '[:lower:]')
             TAG="sha-$(echo '${{ github.sha }}' | cut -c1-7)"
             NS="${{ steps.k8s.outputs.namespace }}"
+            ENV="${{ needs.setup.outputs.environment }}"
 
             echo "🚀 Deploying images tagged: ${TAG}"
 
-            kubectl set image deployment/ada-api -n ${NS} \
-              ada-api=${REGISTRY}/${PREFIX}-api:${TAG}
-            kubectl set image deployment/ada-worker -n ${NS} \
-              ada-worker=${REGISTRY}/${PREFIX}-worker:${TAG}
-            kubectl set image deployment/ada-webhook-worker -n ${NS} \
-              ada-webhook-worker=${REGISTRY}/${PREFIX}-webhook-worker:${TAG}
-            kubectl set image deployment/ada-scheduler -n ${NS} \
+            # Clone/update repo to get latest manifests
+            REPO_DIR="/tmp/draftnrun-deploy"
+            if [ -d "$REPO_DIR" ]; then
+              cd "$REPO_DIR"
+              git fetch origin
+              git checkout ${{ github.sha }}
+            else
+              git clone https://github.com/${{ github.repository }}.git "$REPO_DIR"
+              cd "$REPO_DIR"
+              git checkout ${{ github.sha }}
+            fi
+
+            # Update kustomization with correct images and tags
+            cd infra/k8s/${ENV}
+            kustomize edit set image \
+              ada-api=${REGISTRY}/${PREFIX}-api:${TAG} \
+              ada-worker=${REGISTRY}/${PREFIX}-worker:${TAG} \
+              ada-webhook-worker=${REGISTRY}/${PREFIX}-webhook-worker:${TAG} \
               ada-scheduler=${REGISTRY}/${PREFIX}-scheduler:${TAG}
+
+            # Apply all manifests (creates or updates deployments)
+            echo "📦 Applying Kubernetes manifests..."
+            kubectl apply -k .
 
             echo "⏳ Waiting for API rollout..."
             kubectl rollout status deployment/ada-api -n ${NS} --timeout=10m
