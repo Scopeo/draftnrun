@@ -364,6 +364,7 @@ class AIAgent(Component):
         # Prepare system prompt content
         system_prompt_content = initial_prompt
 
+        # TODO: Instruction enhancement via retrieval tool
         if self._has_retriever_tool:
             system_prompt_content = f"{initial_prompt}\n{RETRIEVER_CITATION_INSTRUCTION}"
 
