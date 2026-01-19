@@ -395,7 +395,7 @@ DOCX_TEMPLATE_TOOL_DESCRIPTION = ToolDescription(
                 "Base64 encoded DOCX template content. Either this or template_input_path must be provided."
             ),
         },
-        "template_information_brief": {
+        "template_filling_instructions": {
             "type": "string",
             "description": "Business brief or context description used to generate content for the template.",
         },
@@ -404,7 +404,7 @@ DOCX_TEMPLATE_TOOL_DESCRIPTION = ToolDescription(
             "description": "Filename where the filled DOCX file should be saved.",
         },
     },
-    required_tool_properties=["output_filename", "template_information_brief"],
+    required_tool_properties=["output_filename", "template_filling_instructions"],
 )
 
 
@@ -416,8 +416,8 @@ class DocxTemplateInputs(BaseModel):
             "Either this or Template (Docx) must be provided."
         ),
     )
-    template_information_brief: str = Field(
-        description="Description used to generate content for the template variables.",
+    template_filling_instructions: str = Field(
+        description="Instructions describing what content to inject in the template placeholders.",
     )
     output_filename: str = Field(
         description="Filename for the filled DOCX file.",
@@ -445,7 +445,7 @@ class DocxTemplateAgent(Component):
 
     @classmethod
     def get_canonical_ports(cls) -> dict[str, str | None]:
-        return {"input": "template_information_brief", "output": "output_message"}
+        return {"input": "template_filling_instructions", "output": "output_message"}
 
     def __init__(
         self,
@@ -507,7 +507,7 @@ class DocxTemplateAgent(Component):
 
         template_input_path = inputs.template_input_path
         template_base64 = self.template_base64 or ctx.get("template_base64")
-        template_information_brief = inputs.template_information_brief
+        template_filling_instructions = inputs.template_filling_instructions
         output_filename = inputs.output_filename
 
         try:
@@ -587,7 +587,7 @@ class DocxTemplateAgent(Component):
             ResponseModel = build_context_response_model(analysis, image_keys)
             resp_obj = await self._llm_generate_context(
                 response_model=ResponseModel,
-                brief=template_information_brief,
+                brief=template_filling_instructions,
                 image_specs=image_specs,
             )
             context = resp_obj.context.model_dump()
@@ -633,9 +633,9 @@ class DocxTemplateAgent(Component):
                     {
                         "template": template_type,
                         "brief": (
-                            template_information_brief[:100]
-                            if len(template_information_brief) > 100
-                            else template_information_brief
+                            template_filling_instructions[:100]
+                            if len(template_filling_instructions) > 100
+                            else template_filling_instructions
                         ),
                         "output_filename": output_filename,
                     },
