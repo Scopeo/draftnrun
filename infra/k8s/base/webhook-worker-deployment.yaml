@@ -1,0 +1,44 @@
+# Webhook Worker Deployment for webhook events
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ada-webhook-worker
+  labels:
+    app: ada-webhook-worker
+spec:
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: ada-webhook-worker
+  template:
+    metadata:
+      labels:
+        app: ada-webhook-worker
+    spec:
+      terminationGracePeriodSeconds: 1800
+      containers:
+        - name: ada-webhook-worker
+          image: ada-webhook-worker  # Replaced by Kustomize
+          imagePullPolicy: IfNotPresent
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "1Gi"
+            limits:
+              cpu: "2000m"
+              memory: "4Gi"
+          envFrom:
+            - secretRef:
+                name: ada-secrets
+          env:
+            - name: MAX_CONCURRENT_WEBHOOKS
+              value: "2"
+            - name: API_BASE_URL
+              value: "http://ada-api"  # Resolves within same namespace
+            - name: ADA_URL
+              value: "http://ada-api"  # Resolves within same namespace

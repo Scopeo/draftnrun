@@ -48,7 +48,7 @@ jobs:
             git reset --hard FETCH_HEAD
             echo "Code updated successfully."
 
-      - name: Restart ada-worker Service
+      - name: Restart ada-worker and ada-webhook-worker Service
         if: steps.check_changes.outputs.should_restart == 'true'
         uses: appleboy/ssh-action@v1.0.3
         with:
@@ -62,10 +62,13 @@ jobs:
             cd $APP_DIR 
             echo "Restarting ada-worker service..."
             sudo systemctl restart ada-worker.service
+            echo "Restarting ada-webhook-worker service..."
+            sudo systemctl restart ada-webhook-worker.service
+
             echo "Waiting for service to restart..."
             sleep 30
 
-      - name: Check ada-worker Service Status
+      - name: Check ada-worker and ada-webhook-worker Service Status
         if: steps.check_changes.outputs.should_restart == 'true'
         uses: appleboy/ssh-action@v1.0.3
         with:

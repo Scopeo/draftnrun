@@ -18,6 +18,9 @@ images:
   - name: ada-worker
     newName: ghcr.io/scopeo/draftnrun-worker
     newTag: latest
+  - name: ada-webhook-worker
+    newName: ghcr.io/scopeo/draftnrun-webhook-worker
+    newTag: latest
   - name: ada-scheduler
     newName: ghcr.io/scopeo/draftnrun-scheduler
     newTag: latest

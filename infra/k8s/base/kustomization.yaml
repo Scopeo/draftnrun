@@ -6,4 +6,5 @@ resources:
   - api-deployment.yaml
   - api-ingress.yaml
   - worker-deployment.yaml
+  - webhook-worker-deployment.yaml
   - scheduler-deployment.yaml
