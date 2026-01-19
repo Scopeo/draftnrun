@@ -139,17 +139,13 @@ spec:
           env:
             - name: MAX_CONCURRENT_WEBHOOKS
               value: "2"
-            - name: API_BASE_URL
-              value: "http://ada-api"
-            - name: ADA_URL
-              value: "http://ada-api"
           resources:
             requests:
-              memory: "1Gi"
+              memory: "512Mi"
               cpu: "250m"
             limits:
-              memory: "4Gi"
-              cpu: "2000m"
+              memory: "2Gi"
+              cpu: "1000m"
 
 ---
 apiVersion: v1

@@ -28,17 +28,14 @@ spec:
           resources:
             requests:
               cpu: "250m"
-              memory: "1Gi"
+              memory: "512Mi"
             limits:
-              cpu: "2000m"
-              memory: "4Gi"
+              cpu: "1000m"
+              memory: "2Gi"
           envFrom:
             - secretRef:
                 name: ada-secrets
           env:
             - name: MAX_CONCURRENT_WEBHOOKS
               value: "2"
-            - name: API_BASE_URL
-              value: "http://ada-api"  # Resolves within same namespace
-            - name: ADA_URL
-              value: "http://ada-api"  # Resolves within same namespace
+
