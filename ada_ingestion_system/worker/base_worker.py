@@ -10,6 +10,7 @@ import redis
 import structlog
 from dotenv import load_dotenv
 
+# TODO: use same logging as the rest of the code
 structlog.configure(
     processors=[structlog.processors.TimeStamper(fmt="iso"), structlog.processors.JSONRenderer()],
     wrapper_class=structlog.make_filtering_bound_logger(logging.INFO),

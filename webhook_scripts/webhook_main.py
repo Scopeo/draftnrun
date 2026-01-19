@@ -114,6 +114,7 @@ async def webhook_main_async(
 
     async with httpx.AsyncClient() as client:
         try:
+            # TODO: Add filter options to the request
             triggers_response = await client.get(
                 f"{api_base_url}/internal/webhooks/{webhook_id}/triggers",
                 headers={
