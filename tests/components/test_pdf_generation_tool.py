@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, Mock, patch
 import pytest
 
 from engine.components.component import ComponentAttributes
-from engine.components.pdf_generation_tool import DEFAULT_CSS_FORMATTING, PDFGenerationTool
+from engine.components.pdf_generation_tool import DEFAULT_CSS_FORMATTING, PDFGenerationTool, PDFGenerationToolInputs
 from engine.temps_folder_utils import get_output_dir
 from engine.trace.trace_manager import TraceManager
 
@@ -50,17 +50,16 @@ def test_pdf_generation_and_cleanup(pdf_tool, tmp_path):
     ):
         mock_css_instance = MockCSS.return_value
         # Call async function from sync test
-        result = asyncio.run(pdf_tool._run_without_io_trace(markdown_content=MARKDOWN_CONTENT))
+        inputs = PDFGenerationToolInputs(markdown_content=MARKDOWN_CONTENT, output_filename=None)
+        result = asyncio.run(pdf_tool._run_without_io_trace(inputs=inputs, ctx={}))
 
         # Verify result structure
-        assert result.is_final is True
-        assert result.error is None
-        assert len(result.messages) == 1
-        assert "PDF generated successfully" in result.messages[0].content
+        assert hasattr(result, "output_message")
+        assert hasattr(result, "artifacts")
+        assert "file has been generated successfully" in result.output_message
 
         # Get the PDF filename from artifacts
-        artifacts = getattr(result, "artifacts", None) or result.__dict__.get("artifacts", {})
-        pdf_filename = artifacts.get("pdf_filename")
+        pdf_filename = result.artifacts.get("pdf_filename")
         assert pdf_filename is not None
         pdf_path = get_output_dir() / pdf_filename
 
@@ -87,17 +86,16 @@ def test_pdf_generation_with_actual_pdf(pdf_tool, tmp_path):
 
     with patch("engine.temps_folder_utils.get_tracing_span", return_value=mock_params):
         # Call async function from sync test
-        result = asyncio.run(pdf_tool._run_without_io_trace(markdown_content=MARKDOWN_CONTENT))
+        inputs = PDFGenerationToolInputs(markdown_content=MARKDOWN_CONTENT, output_filename=None)
+        result = asyncio.run(pdf_tool._run_without_io_trace(inputs=inputs, ctx={}))
 
         # Verify result structure
-        assert result.is_final is True
-        assert result.error is None
-        assert len(result.messages) == 1
-        assert "PDF generated successfully" in result.messages[0].content
+        assert hasattr(result, "output_message")
+        assert hasattr(result, "artifacts")
+        assert "file has been generated successfully" in result.output_message
 
         # Get the PDF filename from artifacts
-        artifacts = getattr(result, "artifacts", None) or result.__dict__.get("artifacts", {})
-        pdf_filename = artifacts.get("pdf_filename")
+        pdf_filename = result.artifacts.get("pdf_filename")
         assert pdf_filename is not None
         pdf_path = get_output_dir() / pdf_filename
 

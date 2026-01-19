@@ -1,12 +1,13 @@
 import logging
-from typing import Any
+from typing import Any, Optional, Type
 
 import markdown2
 from openinference.semconv.trace import OpenInferenceSpanKindValues
+from pydantic import BaseModel, Field
 from weasyprint import CSS, HTML
 
 from engine.components.component import Component
-from engine.components.types import AgentPayload, ChatMessage, ComponentAttributes, ToolDescription
+from engine.components.types import ComponentAttributes, ToolDescription
 from engine.components.utils import prepare_markdown_output_path
 from engine.temps_folder_utils import get_output_dir
 from engine.trace.trace_manager import TraceManager
@@ -25,7 +26,7 @@ DEFAULT_PDF_GENERATION_TOOL_DESCRIPTION = ToolDescription(
                 'images with a style like this: style="width:80%; max-width:100%; height:auto;"'
             ),
         },
-        "filename": {
+        "output_filename": {
             "type": "string",
             "description": (
                 "Optional. The desired filename for the generated PDF file. If not provided, a default "
@@ -109,8 +110,32 @@ DEFAULT_CSS_FORMATTING = """
 """
 
 
+class PDFGenerationToolInputs(BaseModel):
+    markdown_content: str = Field(description="The markdown text to convert to PDF.")
+    output_filename: Optional[str] = Field(description="The desired filename for the generated PDF file.")
+
+
+class PDFGenerationToolOutputs(BaseModel):
+    output_message: str = Field(description="The output message to be returned to the user.")
+    # TODO: Make simple pdf_filename field instead of artifacts dictionary
+    artifacts: dict[str, Any] = Field(description="The artifacts to be returned to the user.")
+
+
 class PDFGenerationTool(Component):
     TRACE_SPAN_KIND = OpenInferenceSpanKindValues.TOOL.value
+    migrated = True
+
+    @classmethod
+    def get_inputs_schema(cls) -> Type[BaseModel]:
+        return PDFGenerationToolInputs
+
+    @classmethod
+    def get_outputs_schema(cls) -> Type[BaseModel]:
+        return PDFGenerationToolOutputs
+
+    @classmethod
+    def get_canonical_ports(cls) -> dict[str, str | None]:
+        return {"input": "markdown_content", "output": "output_message"}
 
     def __init__(
         self,
@@ -128,31 +153,29 @@ class PDFGenerationTool(Component):
 
     async def _run_without_io_trace(
         self,
-        *inputs: AgentPayload,
-        **kwargs: Any,
-    ) -> AgentPayload:
+        inputs: PDFGenerationToolInputs,
+        ctx: dict,
+    ) -> PDFGenerationToolOutputs:
         try:
             markdown_content, output_path, filename = prepare_markdown_output_path(
-                markdown_content=kwargs.get("markdown_content", ""),
-                filename=kwargs.get("filename", None),
+                markdown_content=inputs.markdown_content,
+                filename=inputs.output_filename,
                 output_dir_getter=get_output_dir,
                 default_extension=".pdf",
             )
         except ValueError as ve:
             error_msg = str(ve)
             LOGGER.error(error_msg)
-            return AgentPayload(
-                messages=[ChatMessage(role="assistant", content=error_msg)],
-                error=error_msg,
-                is_final=True,
+            return PDFGenerationToolOutputs(
+                output_message=error_msg,
+                artifacts={},
             )
         except Exception as e:
             error_msg = f"Failed to prepare output path: {e}"
             LOGGER.error(error_msg)
-            return AgentPayload(
-                messages=[ChatMessage(role="assistant", content=error_msg)],
-                error=error_msg,
-                is_final=True,
+            return PDFGenerationToolOutputs(
+                output_message=error_msg,
+                artifacts={},
             )
 
         html = markdown2.markdown(
@@ -182,11 +205,10 @@ class PDFGenerationTool(Component):
                 except Exception:
                     pass
 
-        success_msg = f"PDF generated successfully: {filename}"
+        success_msg = f"{filename} file has been generated successfully"
         LOGGER.info(success_msg)
 
-        return AgentPayload(
-            messages=[ChatMessage(role="assistant", content=success_msg)],
+        return PDFGenerationToolOutputs(
+            output_message=success_msg,
             artifacts={"pdf_filename": str(filename)},
-            is_final=True,
         )
