@@ -6,11 +6,9 @@ from sqlalchemy import and_, exists, or_
 from sqlalchemy.orm import Session, joinedload
 
 from ada_backend.database import models as db
+from ada_backend.repositories.cron_repository import delete_cron_job_by_project_id
 from ada_backend.repositories.template_repository import TEMPLATE_ORGANIZATION_ID
-from ada_backend.schemas.project_schema import (
-    GraphRunnerEnvDTO,
-    ProjectWithGraphRunnersSchema,
-)
+from ada_backend.schemas.project_schema import GraphRunnerEnvDTO, ProjectWithGraphRunnersSchema
 
 LOGGER = logging.getLogger(__name__)
 
@@ -263,6 +261,11 @@ def delete_project(
     project = get_project(session, project_id=project_id)
     if not project:
         raise ValueError(f"Project {project_id} not found.")
+    deleted_cron_jobs = delete_cron_job_by_project_id(session, project_id)
+    if deleted_cron_jobs > 0:
+        LOGGER.info(f"Deleted {deleted_cron_jobs} cron jobs for project {project_id}")
+    else:
+        LOGGER.info(f"No cron jobs found for project {project_id}")
     LOGGER.info(f"Deleting project with id {project_id} and name {project.name}")
     session.delete(project)
     session.commit()

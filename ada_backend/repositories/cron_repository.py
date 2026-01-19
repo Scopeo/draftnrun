@@ -122,6 +122,16 @@ def delete_cron_job(session: Session, cron_id: UUID) -> bool:
     return True
 
 
+def delete_cron_job_by_project_id(session: Session, project_id: UUID) -> int:
+    deleted_cron_jobs = (
+        session.query(db.CronJob).filter(db.CronJob.project_id == project_id, db.CronJob.deleted_at.is_(None)).all()
+    )
+    for deleted_cron_job in deleted_cron_jobs:
+        deleted_cron_job.deleted_at = datetime.utcnow()
+    session.commit()
+    return len(deleted_cron_jobs)
+
+
 def insert_cron_run(
     session: Session,
     cron_id: UUID,
