@@ -10,7 +10,7 @@ import requests
 from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttributes
 from opentelemetry.trace import get_current_span
 from PIL import Image
-from pydantic import BaseModel, ConfigDict, Field, create_model, model_validator
+from pydantic import BaseModel, ConfigDict, Field, create_model
 
 from engine.components.component import Component
 from engine.components.types import ComponentAttributes, ToolDescription
@@ -543,10 +543,9 @@ class DocxTemplateAgent(Component):
 
             output_path = output_dir / Path(output_filename)
             output_path.parent.mkdir(parents=True, exist_ok=True)
-            
+
             if output_path.exists() and output_path.is_dir():
                 raise ValueError(f"Output path '{output_filename}' is a directory, not a file")
-            
 
             LOGGER.info("Analyzing DOCX template...")
             analysis = analyze_docx_template(template_path)
@@ -621,7 +620,7 @@ class DocxTemplateAgent(Component):
                 is_final=True,
             )
 
-        except Exception as e:
+        except Exception:
             if "temp_template_file" in locals() and temp_template_file:
                 try:
                     Path(temp_template_file.name).unlink()
