@@ -1,7 +1,7 @@
 """add webhook trigger system
 
 Revision ID: 475546bc2802
-Revises: abc123def456
+Revises: e0e47d35b398
 Create Date: 2026-01-16 12:07:43.420481
 
 """
@@ -16,7 +16,7 @@ from ada_backend.database.utils import create_enum_if_not_exists, drop_enum_if_e
 
 # revision identifiers, used by Alembic.
 revision: str = "475546bc2802"
-down_revision: Union[str, None] = "abc123def456"
+down_revision: Union[str, None] = "e0e47d35b398"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
