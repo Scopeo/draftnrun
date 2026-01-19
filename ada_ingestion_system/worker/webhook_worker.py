@@ -41,8 +41,8 @@ class WebhookWorker(BaseWorker):
             )
 
             # Get the ada_backend path - assumes a standard structure
-            ada_backend_path = Path(__file__).parents[2] / "ada_backend"
-            script_path = ada_backend_path / "scripts" / "webhook_main.py"
+            ada_backend_path = Path(__file__).parents[2]
+            script_path = ada_backend_path / "webhook_scripts" / "webhook_main.py"
             if not script_path.exists():
                 logger.error("script_not_found", path=str(script_path))
                 return
@@ -58,7 +58,7 @@ class WebhookWorker(BaseWorker):
                 logger.info("using_default_api_base_url", url=DEFAULT_API_BASE_URL)
 
             # Create command to run the script as a separate process
-            module_path = "ada_backend.scripts.webhook_main"
+            module_path = "webhook_scripts.webhook_main"
             cmd = [
                 python_cmd,
                 "-c",

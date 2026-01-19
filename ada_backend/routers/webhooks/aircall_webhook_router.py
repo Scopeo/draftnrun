@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from ada_backend.database.models import EnvType, WebhookProvider
 from ada_backend.database.setup_db import get_db
-from ada_backend.schemas.webhook_schema import WebhookProcessingResponseSchema, WebhookProcessingStatus
+from ada_backend.schemas.webhook_schema import WebhookProcessingStatus
 from ada_backend.services.webhooks.aircall_service import (
     get_aircall_webhook_service,
 )
@@ -18,7 +18,7 @@ router = APIRouter(tags=["Webhooks"])
 LOGGER = logging.getLogger(__name__)
 
 
-@router.post("/webhooks/aircall", response_model=WebhookProcessingResponseSchema)
+@router.post("/webhooks/aircall")
 async def receive_aircall_webhook(
     payload: Dict[str, Any] = Body(...),
     session: Session = Depends(get_db),
