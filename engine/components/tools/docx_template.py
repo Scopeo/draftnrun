@@ -544,8 +544,6 @@ class DocxTemplateAgent(Component):
             output_path = output_dir / Path(output_filename)
             output_path.parent.mkdir(parents=True, exist_ok=True)
 
-            if output_path.exists() and output_path.is_dir():
-                raise ValueError(f"Output path '{output_filename}' is a directory, not a file")
 
             LOGGER.info("Analyzing DOCX template...")
             analysis = analyze_docx_template(template_path)
