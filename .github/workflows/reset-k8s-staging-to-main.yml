@@ -107,7 +107,7 @@ jobs:
             set -e
             echo "🗄️ Running migrations and seed..."
             kubectl exec deployment/ada-api -n ada-staging -- \
-              sh -c "alembic -c ada_backend/database/alembic.ini upgrade head && python -m ada_backend.scripts.seed_db"
+              sh -c "alembic -c ada_backend/database/alembic.ini upgrade head && python -m ada_backend.database.seed_db"
 
       - name: Wait for all rollouts
         uses: appleboy/ssh-action@master
