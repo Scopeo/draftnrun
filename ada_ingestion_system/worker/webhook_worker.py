@@ -11,9 +11,6 @@ from ada_ingestion_system.worker.base_worker import BaseWorker, logger
 WEBHOOK_QUEUE_NAME = os.getenv("REDIS_WEBHOOK_QUEUE_NAME", "ada_webhook_queue")
 MAX_CONCURRENT_WEBHOOKS = int(os.getenv("MAX_CONCURRENT_WEBHOOKS", 2))
 
-# Default API base URL - use HTTP for localhost
-DEFAULT_API_BASE_URL = "http://localhost:8000"
-
 
 class WebhookWorker(BaseWorker):
     def __init__(self):
@@ -51,11 +48,6 @@ class WebhookWorker(BaseWorker):
             python_cmd = "python"  # Use the system Python runner
             # Create a custom environment with required variables
             env = os.environ.copy()
-
-            # Set API_BASE_URL to http for localhost connections
-            if "API_BASE_URL" not in env:
-                env["API_BASE_URL"] = DEFAULT_API_BASE_URL
-                logger.info("using_default_api_base_url", url=DEFAULT_API_BASE_URL)
 
             # Create command to run the script as a separate process
             module_path = "webhook_scripts.webhook_main"
