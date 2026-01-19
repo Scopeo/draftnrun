@@ -544,7 +544,6 @@ class DocxTemplateAgent(Component):
             output_path = output_dir / Path(output_filename)
             output_path.parent.mkdir(parents=True, exist_ok=True)
 
-
             LOGGER.info("Analyzing DOCX template...")
             analysis = analyze_docx_template(template_path)
             image_specs = infer_image_keys(analysis)
