@@ -8,7 +8,6 @@ from typing import Any, Dict, List, Optional, Set, Tuple, Type
 
 import requests
 from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttributes
-from opentelemetry import trace as trace_api
 from opentelemetry.trace import get_current_span
 from PIL import Image
 from pydantic import BaseModel, ConfigDict, Field, create_model
