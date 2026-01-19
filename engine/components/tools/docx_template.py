@@ -8,6 +8,7 @@ from typing import Any, Dict, List, Optional, Set, Tuple, Type
 
 import requests
 from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttributes
+from opentelemetry import trace as trace_api
 from opentelemetry.trace import get_current_span
 from PIL import Image
 from pydantic import BaseModel, ConfigDict, Field, create_model
@@ -411,22 +412,24 @@ DOCX_TEMPLATE_TOOL_DESCRIPTION = ToolDescription(
 class DocxTemplateInputs(BaseModel):
     template_input_path: Optional[str] = Field(
         default=None,
-        description=DOCX_TEMPLATE_TOOL_DESCRIPTION.tool_properties["template_input_path"]["description"],
+        description=(
+            "Path to the DOCX template file (.docx) that contains placeholders. "
+            "Either this or Template (Docx) must be provided."
+        ),
     )
     template_information_brief: str = Field(
-        description=DOCX_TEMPLATE_TOOL_DESCRIPTION.tool_properties["template_information_brief"]["description"],
+        description="Description used to generate content for the template variables.",
     )
     output_filename: str = Field(
-        description=DOCX_TEMPLATE_TOOL_DESCRIPTION.tool_properties["output_filename"]["description"],
+        description="Filename for the filled DOCX file.",
     )
     model_config = {"extra": "allow"}
 
 
 class DocxTemplateOutputs(BaseModel):
-    output: str = Field(description="The success or error message from the DOCX template processing.")
-    docx_filename: str = Field(description="The filename where the filled DOCX file was saved.")
-    artifacts: dict[str, Any] = Field(default_factory=dict, description="Artifacts produced by the component.")
-    is_final: bool = Field(default=True, description="Indicates if this is the final output of the component.")
+    output_message: str = Field(description="The success or error message from the DOCX template processing.")
+    # TODO: Make simple docx_filename field instead of artifacts dictionary
+    artifacts: dict[str, Any] = Field(description="The artifacts to be returned to the user.")
 
 
 class DocxTemplateAgent(Component):
@@ -443,13 +446,14 @@ class DocxTemplateAgent(Component):
 
     @classmethod
     def get_canonical_ports(cls) -> dict[str, str | None]:
-        return {"input": "template_information_brief", "output": "output"}
+        return {"input": "template_information_brief", "output": "output_message"}
 
     def __init__(
         self,
         trace_manager: TraceManager,
         component_attributes: ComponentAttributes,
         completion_service: CompletionService,
+        additional_instructions: Optional[str] = None,
         template_base64: Optional[str] = None,
         tool_description: ToolDescription = DOCX_TEMPLATE_TOOL_DESCRIPTION,
     ):
@@ -464,6 +468,7 @@ class DocxTemplateAgent(Component):
                 "docxtpl library is required for DOCX template functionality. "
                 "Install it with: pip install python-docx-template"
             )
+        self.additional_instructions = additional_instructions
         self.template_base64 = template_base64
 
     async def _llm_generate_context(
@@ -484,6 +489,8 @@ class DocxTemplateAgent(Component):
             brief=brief,
             image_descriptions=image_descriptions_str,
         )
+        if self.additional_instructions:
+            user += f"\n\nAdditional instructions:\n{self.additional_instructions}"
         messages = [{"role": "system", "content": SYSTEM}, {"role": "user", "content": user}]
 
         return await self._completion_service.constrained_complete_with_pydantic_async(
@@ -497,6 +504,8 @@ class DocxTemplateAgent(Component):
         inputs: DocxTemplateInputs,
         ctx: dict,
     ) -> DocxTemplateOutputs:
+        span = get_current_span()
+
         template_input_path = inputs.template_input_path
         template_base64 = self.template_base64 or ctx.get("template_base64")
         template_information_brief = inputs.template_information_brief
@@ -506,14 +515,22 @@ class DocxTemplateAgent(Component):
             if not template_input_path and not template_base64:
                 error_msg = "Either template_input_path or template_base64 must be provided"
                 LOGGER.error(error_msg)
-                raise ValueError(error_msg)
+                span.set_attributes({SpanAttributes.OUTPUT_VALUE: error_msg})
+                return DocxTemplateOutputs(
+                    output_message=error_msg,
+                    artifacts={},
+                )
 
             template_sources = [template_input_path, template_base64]
             provided_sources = [source for source in template_sources if source is not None]
             if len(provided_sources) > 1:
                 error_msg = "Only one of template_input_path or template_base64 should be provided, not multiple"
                 LOGGER.error(error_msg)
-                raise ValueError(error_msg)
+                span.set_attributes({SpanAttributes.OUTPUT_VALUE: error_msg})
+                return DocxTemplateOutputs(
+                    output_message=error_msg,
+                    artifacts={},
+                )
 
             output_dir = get_output_dir()
             template_path = None
@@ -522,10 +539,22 @@ class DocxTemplateAgent(Component):
             if template_input_path:
                 template_path = output_dir / Path(template_input_path)
                 if not template_path.exists():
-                    raise FileNotFoundError(f"Template file not found: {template_input_path}")
+                    error_msg = f"Template file not found: {template_input_path}"
+                    LOGGER.error(error_msg)
+                    span.set_attributes({SpanAttributes.OUTPUT_VALUE: error_msg})
+                    return DocxTemplateOutputs(
+                        output_message=error_msg,
+                        artifacts={},
+                    )
 
                 if not template_path.suffix.lower() == ".docx":
-                    raise ValueError(f"Template file must be a .docx file: {template_input_path}")
+                    error_msg = f"Template file must be a .docx file: {template_input_path}"
+                    LOGGER.error(error_msg)
+                    span.set_attributes({SpanAttributes.OUTPUT_VALUE: error_msg})
+                    return DocxTemplateOutputs(
+                        output_message=error_msg,
+                        artifacts={},
+                    )
 
             elif template_base64:
                 try:
@@ -539,7 +568,13 @@ class DocxTemplateAgent(Component):
                     LOGGER.info(f"Created temporary template file from base64: {template_path}")
 
                 except Exception as e:
-                    raise ValueError(f"Failed to decode base64 template: {str(e)}") from e
+                    error_msg = f"Failed to decode base64 template: {str(e)}"
+                    LOGGER.error(error_msg)
+                    span.set_attributes({SpanAttributes.OUTPUT_VALUE: error_msg})
+                    return DocxTemplateOutputs(
+                        output_message=error_msg,
+                        artifacts={},
+                    )
 
             output_path = output_dir / Path(output_filename)
             output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -592,8 +627,8 @@ class DocxTemplateAgent(Component):
             )
             LOGGER.info(success_msg)
 
-            span = get_current_span()
             template_type = "base64" if template_base64 else "input_path"
+
             span.set_attributes({
                 SpanAttributes.INPUT_VALUE: serialize_to_json(
                     {
@@ -611,16 +646,20 @@ class DocxTemplateAgent(Component):
             })
 
             return DocxTemplateOutputs(
-                output=success_msg,
-                docx_filename=output_filename,
+                output_message=success_msg,
                 artifacts={"docx_filename": str(output_filename)},
-                is_final=True,
             )
 
-        except Exception:
+        except Exception as e:
+            error_msg = f"Error processing DOCX template: {str(e)}"
+            LOGGER.exception(error_msg)
             if "temp_template_file" in locals() and temp_template_file:
                 try:
                     Path(temp_template_file.name).unlink()
                 except Exception:
                     pass
-            raise
+            span.set_attributes({SpanAttributes.OUTPUT_VALUE: error_msg})
+            return DocxTemplateOutputs(
+                output_message=error_msg,
+                artifacts={},
+            )

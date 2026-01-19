@@ -57,6 +57,18 @@ def seed_docx_template_components(session: Session):
         session=session,
         component_parameter_definitions=[
             db.ComponentParameterDefinition(
+                id=UUID("12345678-90ab-cdef-1234-567890abcdef"),
+                component_version_id=docx_template_component_version.id,
+                name="additional_instructions",
+                type=ParameterType.STRING,
+                nullable=True,
+                ui_component=UIComponent.TEXTAREA,
+                ui_component_properties=UIComponentProperties(
+                    label="Additional Instructions",
+                    placeholder="Enter any additional instructions for the template filling process.",
+                ).model_dump(exclude_unset=True, exclude_none=True),
+            ),
+            db.ComponentParameterDefinition(
                 id=UUID("87654321-cdef-ab90-4321-987654321fed"),
                 component_version_id=docx_template_component_version.id,
                 name="template_base64",
