@@ -83,15 +83,15 @@ jobs:
             REGISTRY="${{ env.REGISTRY }}"
             PREFIX="${{ env.IMAGE_PREFIX }}"
 
-            echo "🚀 Deploying with :main tag (existing image, no rebuild)"
+            echo "🚀 Deploying with :latest tag (existing image, no rebuild)"
 
-            # Use the :main tagged images (already built on last push to main)
+            # Use the :latest tagged images (built on last push to main)
             kubectl set image deployment/ada-api -n ada-staging \
-              ada-api=${REGISTRY}/${PREFIX}-api:main
+              ada-api=${REGISTRY}/${PREFIX}-api:latest
             kubectl set image deployment/ada-worker -n ada-staging \
-              ada-worker=${REGISTRY}/${PREFIX}-worker:main
+              ada-worker=${REGISTRY}/${PREFIX}-worker:latest
             kubectl set image deployment/ada-scheduler -n ada-staging \
-              ada-scheduler=${REGISTRY}/${PREFIX}-scheduler:main
+              ada-scheduler=${REGISTRY}/${PREFIX}-scheduler:latest
 
             echo "⏳ Waiting for API rollout..."
             kubectl rollout status deployment/ada-api -n ada-staging --timeout=10m
