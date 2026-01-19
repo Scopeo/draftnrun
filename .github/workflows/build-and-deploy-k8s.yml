@@ -294,17 +294,21 @@ jobs:
               git checkout ${{ github.sha }}
             fi
 
-            # Update kustomization with correct images and tags
-            cd infra/k8s/${ENV}
-            kustomize edit set image \
-              ada-api=${REGISTRY}/${PREFIX}-api:${TAG} \
-              ada-worker=${REGISTRY}/${PREFIX}-worker:${TAG} \
-              ada-webhook-worker=${REGISTRY}/${PREFIX}-webhook-worker:${TAG} \
-              ada-scheduler=${REGISTRY}/${PREFIX}-scheduler:${TAG}
-
-            # Apply all manifests (creates or updates deployments)
+            # Apply all manifests (creates or updates deployments with default images)
             echo "📦 Applying Kubernetes manifests..."
+            cd infra/k8s/${ENV}
             kubectl apply -k .
+
+            # Update images to the specific tagged versions
+            echo "🔄 Updating images to ${TAG}..."
+            kubectl set image deployment/ada-api -n ${NS} \
+              ada-api=${REGISTRY}/${PREFIX}-api:${TAG}
+            kubectl set image deployment/ada-worker -n ${NS} \
+              ada-worker=${REGISTRY}/${PREFIX}-worker:${TAG}
+            kubectl set image deployment/ada-webhook-worker -n ${NS} \
+              ada-webhook-worker=${REGISTRY}/${PREFIX}-webhook-worker:${TAG}
+            kubectl set image deployment/ada-scheduler -n ${NS} \
+              ada-scheduler=${REGISTRY}/${PREFIX}-scheduler:${TAG}
 
             echo "⏳ Waiting for API rollout..."
             kubectl rollout status deployment/ada-api -n ${NS} --timeout=10m
