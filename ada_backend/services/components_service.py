@@ -4,6 +4,7 @@ from typing import Optional
 from sqlalchemy.orm import Session
 
 from ada_backend.database.models import ParameterType, PortType, ReleaseStage
+from ada_backend.repositories.categories_repository import get_all_categories
 from ada_backend.repositories.component_repository import (
     count_component_instances,
     delete_component_by_id,
@@ -14,6 +15,7 @@ from ada_backend.repositories.component_repository import (
     process_components_with_versions,
 )
 from ada_backend.repositories.release_stage_repository import _STAGE_ORDER, STAGE_HIERARCHY
+from ada_backend.schemas.category_schema import CategoryResponse
 from ada_backend.schemas.components_schema import ComponentsResponse, PortDefinitionSchema
 from ada_backend.schemas.parameter_schema import ComponentParamDefDTO, ParameterKind
 from ada_backend.services.errors import EntityInUseDeletionError
@@ -78,7 +80,19 @@ def _process_components_with_ports(
             )
         )
 
-    return ComponentsResponse(components=components)
+    categories = get_all_categories(session)
+    categories_list = [
+        CategoryResponse(
+            id=cat.id,
+            name=cat.name,
+            description=cat.description,
+            icon=cat.icon,
+            display_order=cat.display_order,
+        )
+        for cat in categories
+    ]
+
+    return ComponentsResponse(components=components, categories=categories_list)
 
 
 def _get_allowed_stages(release_stage: Optional[ReleaseStage]) -> list[ReleaseStage]:

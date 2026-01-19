@@ -43,38 +43,48 @@ def get_project_with_details(
     session: Session,
     project_id: UUID,
 ) -> Optional[ProjectWithGraphRunnersSchema]:
-    project = session.query(db.Project).filter(db.Project.id == project_id).first()
+    project = (
+        session.query(db.Project)
+        .options(
+            joinedload(db.Project.envs)
+            .joinedload(db.ProjectEnvironmentBinding.graph_runner)
+            .load_only(
+                db.GraphRunner.id,
+                db.GraphRunner.tag_version,
+                db.GraphRunner.version_name,
+                db.GraphRunner.change_log,
+                db.GraphRunner.created_at,
+            )
+        )
+        .filter(db.Project.id == project_id)
+        .first()
+    )
 
     if not project:
         return None
 
-    graph_runner_rows = (
-        session.query(db.GraphRunner, db.ProjectEnvironmentBinding)
-        .outerjoin(
-            db.ProjectEnvironmentBinding,
-            (db.GraphRunner.id == db.ProjectEnvironmentBinding.graph_runner_id)
-            & (db.ProjectEnvironmentBinding.project_id == project_id),
+    graph_runners_data = [
+        (
+            env_binding.graph_runner,
+            env_binding,
+            GraphRunnerEnvDTO(
+                graph_runner_id=env_binding.graph_runner.id,
+                env=env_binding.environment,
+                tag_version=env_binding.graph_runner.tag_version,
+                version_name=env_binding.graph_runner.version_name,
+                change_log=env_binding.graph_runner.change_log,
+            ),
         )
-        .filter(
-            db.GraphRunner.id.in_(
-                session.query(db.ProjectEnvironmentBinding.graph_runner_id).filter(
-                    db.ProjectEnvironmentBinding.project_id == project_id
-                )
-            )
-        )
-        .order_by(db.GraphRunner.created_at, db.ProjectEnvironmentBinding.created_at, db.GraphRunner.id)
-    ).all()
-
-    graph_runners_with_env = [
-        GraphRunnerEnvDTO(
-            graph_runner_id=graph_runner.id,
-            env=env_binding.environment if env_binding else None,
-            tag_version=graph_runner.tag_version,
-            version_name=graph_runner.version_name,
-            change_log=graph_runner.change_log,
-        )
-        for graph_runner, env_binding in graph_runner_rows
+        for env_binding in project.envs
+        if env_binding.graph_runner
     ]
+
+    # Sort by GraphRunner.created_at, ProjectEnvironmentBinding.created_at, GraphRunner.id
+    graph_runners_data.sort(
+        key=lambda x: (x[0].created_at, x[1].created_at, x[0].id)
+    )
+
+    graph_runners_with_env = [dto for _, _, dto in graph_runners_data]
 
     return ProjectWithGraphRunnersSchema(
         project_id=project.id,
@@ -109,7 +119,14 @@ def get_projects_by_organization_with_details(
     """
 
     query = session.query(db.Project).options(
-        joinedload(db.Project.envs).joinedload(db.ProjectEnvironmentBinding.graph_runner)
+        joinedload(db.Project.envs)
+        .joinedload(db.ProjectEnvironmentBinding.graph_runner)
+        .load_only(
+            db.GraphRunner.id,
+            db.GraphRunner.tag_version,
+            db.GraphRunner.version_name,
+            db.GraphRunner.change_log,
+        )
     )
 
     if include_templates:

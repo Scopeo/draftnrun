@@ -5,6 +5,7 @@ from pydantic import BaseModel, field_validator
 
 from ada_backend.database import models as db
 from ada_backend.database.models import ReleaseStage
+from ada_backend.schemas.category_schema import CategoryResponse
 from ada_backend.schemas.integration_schema import IntegrationSchema
 from ada_backend.schemas.parameter_schema import ComponentParamDefDTO, ParameterGroupSchema
 
@@ -56,6 +57,7 @@ class ComponentWithParametersDTO(ComponentVersionUseInfoSchema, ComponentSchema)
 
 class ComponentsResponse(BaseModel):
     components: list[ComponentWithParametersDTO]
+    categories: list[CategoryResponse]
 
 
 class UpdateComponentReleaseStageRequest(BaseModel):
