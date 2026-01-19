@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, Mock, patch
 import pytest
 
 from engine.components.component import ComponentAttributes
-from engine.components.docx_generation_tool import DOCXGenerationTool
+from engine.components.docx_generation_tool import DOCXGenerationTool, DOCXGenerationToolInputs
 from engine.temps_folder_utils import get_output_dir
 from engine.trace.trace_manager import TraceManager
 
@@ -48,17 +48,16 @@ def test_docx_generation_real_file(docx_tool, tmp_path):
 
     with patch("engine.temps_folder_utils.get_tracing_span", return_value=mock_params):
         # Call async function from sync test
-        result = asyncio.run(docx_tool._run_without_io_trace(markdown_content=MARKDOWN_CONTENT))
+        inputs = DOCXGenerationToolInputs(markdown_content=MARKDOWN_CONTENT, output_filename=None)
+        result = asyncio.run(docx_tool._run_without_io_trace(inputs=inputs, ctx={}))
 
         # Verify result structure
-        assert result.is_final is True
-        assert result.error is None
-        assert len(result.messages) == 1
-        assert "DOCX generated successfully" in result.messages[0].content
+        assert hasattr(result, "output_message")
+        assert hasattr(result, "artifacts")
+        assert "file has been generated successfully" in result.output_message
 
         # Get the DOCX filename from artifacts
-        artifacts = getattr(result, "artifacts", None) or result.__dict__.get("artifacts", {})
-        docx_filename = artifacts.get("docx_filename")
+        docx_filename = result.artifacts.get("docx_filename")
         assert docx_filename is not None
         assert docx_filename.endswith(".docx")
 
@@ -85,17 +84,16 @@ def test_docx_generation_with_actual_conversion(docx_tool, tmp_path):
 
     with patch("engine.temps_folder_utils.get_tracing_span", return_value=mock_params):
         # Call async function from sync test
-        result = asyncio.run(docx_tool._run_without_io_trace(markdown_content=MARKDOWN_CONTENT))
+        inputs = DOCXGenerationToolInputs(markdown_content=MARKDOWN_CONTENT, output_filename=None)
+        result = asyncio.run(docx_tool._run_without_io_trace(inputs=inputs, ctx={}))
 
         # Verify result structure
-        assert result.is_final is True
-        assert result.error is None
-        assert len(result.messages) == 1
-        assert "DOCX generated successfully" in result.messages[0].content
+        assert hasattr(result, "output_message")
+        assert hasattr(result, "artifacts")
+        assert "file has been generated successfully" in result.output_message
 
         # Get the DOCX filename from artifacts
-        artifacts = getattr(result, "artifacts", None) or result.__dict__.get("artifacts", {})
-        docx_filename = artifacts.get("docx_filename")
+        docx_filename = result.artifacts.get("docx_filename")
         assert docx_filename is not None
         docx_path = get_output_dir() / docx_filename
 
@@ -118,27 +116,23 @@ def test_docx_generation_with_actual_conversion(docx_tool, tmp_path):
 def test_docx_generation_empty_content(docx_tool):
     """Test error handling when no markdown content is provided."""
     # Call async function from sync test with empty content
-    result = asyncio.run(docx_tool._run_without_io_trace(markdown_content=""))
+    inputs = DOCXGenerationToolInputs(markdown_content="", output_filename=None)
+    result = asyncio.run(docx_tool._run_without_io_trace(inputs=inputs, ctx={}))
 
     # Verify error handling
-    assert result.is_final is True
-    assert result.error is not None
-    assert "No markdown content provided" in result.error
-    assert len(result.messages) == 1
-    assert "No markdown content provided" in result.messages[0].content
+    assert hasattr(result, "output_message")
+    assert "No markdown content provided" in result.output_message
 
 
 def test_docx_generation_no_content_kwarg(docx_tool):
-    """Test error handling when markdown_content kwarg is missing."""
-    # Call async function from sync test without markdown_content kwarg
-    result = asyncio.run(docx_tool._run_without_io_trace())
+    """Test error handling when markdown_content is empty (Pydantic validation)."""
+    # With Pydantic, we test empty string handling (missing field would fail at validation)
+    inputs = DOCXGenerationToolInputs(markdown_content="", output_filename=None)
+    result = asyncio.run(docx_tool._run_without_io_trace(inputs=inputs, ctx={}))
 
     # Verify error handling
-    assert result.is_final is True
-    assert result.error is not None
-    assert "No markdown content provided" in result.error
-    assert len(result.messages) == 1
-    assert "No markdown content provided" in result.messages[0].content
+    assert hasattr(result, "output_message")
+    assert "No markdown content provided" in result.output_message
 
 
 def test_docx_generation_temp_file_cleanup(docx_tool, tmp_path):
@@ -149,16 +143,16 @@ def test_docx_generation_temp_file_cleanup(docx_tool, tmp_path):
 
     with patch("engine.temps_folder_utils.get_tracing_span", return_value=mock_params):
         # Call async function from sync test
-        result = asyncio.run(docx_tool._run_without_io_trace(markdown_content=MARKDOWN_CONTENT))
+        inputs = DOCXGenerationToolInputs(markdown_content=MARKDOWN_CONTENT, output_filename=None)
+        result = asyncio.run(docx_tool._run_without_io_trace(inputs=inputs, ctx={}))
 
         # Verify successful result
-        assert result.is_final is True
-        assert result.error is None
-        assert "DOCX generated successfully" in result.messages[0].content
+        assert hasattr(result, "output_message")
+        assert hasattr(result, "artifacts")
+        assert "file has been generated successfully" in result.output_message
 
         # Verify the file was created
-        artifacts = getattr(result, "artifacts", None) or result.__dict__.get("artifacts", {})
-        docx_filename = artifacts.get("docx_filename")
+        docx_filename = result.artifacts.get("docx_filename")
         assert docx_filename is not None
 
         docx_path = get_output_dir() / docx_filename

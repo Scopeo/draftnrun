@@ -17,7 +17,7 @@ def seed_docx_generation_components(session: Session):
     docx_generation_component = Component(
         id=COMPONENT_UUIDS["docx_generation"],
         name="DOCX Generation Tool",
-        is_agent=False,
+        is_agent=True,
         function_callable=True,
         can_use_function_calling=False,
         icon="tabler-file-type-docx",

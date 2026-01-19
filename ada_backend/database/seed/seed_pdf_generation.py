@@ -21,7 +21,7 @@ def seed_pdf_generation_components(session: Session):
     pdf_generation_component = Component(
         id=COMPONENT_UUIDS["pdf_generation"],
         name="PDF Generation Tool",
-        is_agent=False,
+        is_agent=True,
         function_callable=True,
         can_use_function_calling=False,
         icon="tabler-file-type-pdf",
