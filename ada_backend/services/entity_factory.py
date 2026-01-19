@@ -310,7 +310,7 @@ def build_source_metadata_extractor_processor() -> ParameterProcessor:
     return processor
 
 
-# TODO: Remove this processor when the retriever is migrated to the new component architecture
+# TODO: Remove this processor when the AI Agent is migrated to the new component architecture
 def build_retriever_params_translator_processor() -> ParameterProcessor:
     source_metadata_extractor = build_source_metadata_extractor_processor()
 

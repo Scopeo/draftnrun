@@ -177,7 +177,6 @@ def seed_retriever_tool_components(session: Session):
         ],
     )
 
-    # Create release stage mapping
     upsert_release_stage_to_current_version_mapping(
         session=session,
         component_id=retriever_tool_version.component_id,
