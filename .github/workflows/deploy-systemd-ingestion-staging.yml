@@ -4,8 +4,9 @@ on:
   workflow_dispatch:
   push:
     branches: [staging]
-    paths:
-      - 'infra/systemd/**'
+#TODO: Add paths when the systemd files are in the repo
+    #    paths:
+#      - 'infra/systemd/**'
 
 jobs:
   deploy:
