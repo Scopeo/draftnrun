@@ -129,10 +129,7 @@ def delete_cron_job_by_project_id(session: Session, project_id: UUID) -> int:
             db.CronJob.payload["project_id"].astext == str(project_id),
             db.CronJob.deleted_at.is_(None),
         )
-        .update(
-            {db.CronJob.deleted_at: datetime.utcnow()},
-            synchronize_session=False,
-        )
+        .delete(synchronize_session=False)
     )
     session.commit()
     return deleted_cron_jobs
