@@ -122,7 +122,7 @@ def delete_cron_job(session: Session, cron_id: UUID) -> bool:
     return True
 
 
-def delete_cron_job_by_project_id(session: Session, project_id: UUID) -> int:
+def permanently_delete_cron_job_by_project_id(session: Session, project_id: UUID) -> int:
     deleted_cron_jobs = (
         session.query(db.CronJob)
         .filter(

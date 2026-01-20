@@ -7,7 +7,10 @@ from sqlalchemy.orm import Session, joinedload
 
 from ada_backend.database import models as db
 from ada_backend.repositories.template_repository import TEMPLATE_ORGANIZATION_ID
-from ada_backend.schemas.project_schema import GraphRunnerEnvDTO, ProjectWithGraphRunnersSchema
+from ada_backend.schemas.project_schema import (
+    GraphRunnerEnvDTO,
+    ProjectWithGraphRunnersSchema,
+)
 
 LOGGER = logging.getLogger(__name__)
 
@@ -260,7 +263,6 @@ def delete_project(
     project = get_project(session, project_id=project_id)
     if not project:
         raise ValueError(f"Project {project_id} not found.")
-
     LOGGER.info(f"Deleting project with id {project_id} and name {project.name}")
     session.delete(project)
     session.commit()
