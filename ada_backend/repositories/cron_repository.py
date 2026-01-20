@@ -122,14 +122,24 @@ def delete_cron_job(session: Session, cron_id: UUID) -> bool:
     return True
 
 
-def permanently_delete_cron_job_by_project_id(session: Session, project_id: UUID) -> int:
-    deleted_cron_jobs = (
+def get_cron_jobs_by_project_id(session: Session, project_id: UUID) -> List[db.CronJob]:
+
+    return (
         session.query(db.CronJob)
         .filter(
             db.CronJob.payload["project_id"].astext == str(project_id),
             db.CronJob.deleted_at.is_(None),
         )
-        .delete(synchronize_session=False)
+        .all()
+    )
+
+
+def permanently_delete_cron_jobs_by_ids(session: Session, cron_job_ids: List[UUID]) -> int:
+    if not cron_job_ids:
+        return 0
+
+    deleted_cron_jobs = (
+        session.query(db.CronJob).filter(db.CronJob.id.in_(cron_job_ids)).delete(synchronize_session=False)
     )
     session.commit()
     return deleted_cron_jobs

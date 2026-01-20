@@ -13,11 +13,13 @@ from ada_backend.repositories.cron_repository import (
     delete_cron_job,
     get_cron_job,
     get_cron_jobs_by_organization,
+    get_cron_jobs_by_project_id,
     get_cron_runs_by_cron_id,
     insert_cron_job,
-    permanently_delete_cron_job_by_project_id,
+    permanently_delete_cron_jobs_by_ids,
     update_cron_job,
 )
+from ada_backend.scheduler.service import remove_job_from_scheduler
 from ada_backend.schemas.cron_schema import (
     CronEntrypoint,
     CronJobCreate,
@@ -289,13 +291,22 @@ def delete_cron_job_service(
     return None
 
 
-def permanently_delete_cron_jobs_by_project_service(session: Session, project_id: UUID) -> int:
-    deleted_cron_jobs = permanently_delete_cron_job_by_project_id(session, project_id)
+def permanently_delete_cron_jobs_by_project_service(session: Session, project_id: UUID) -> None:
+    cron_jobs = get_cron_jobs_by_project_id(session, project_id)
+    if not cron_jobs:
+        return
+    for cron_job in cron_jobs:
+        try:
+            remove_job_from_scheduler(cron_job.id)
+            LOGGER.debug(f"Removed cron job {cron_job.id} from scheduler")
+        except Exception as e:
+            LOGGER.warning(f"Failed to remove cron job {cron_job.id} from scheduler: {e}")
+
+    cron_job_ids = [cron_job.id for cron_job in cron_jobs]
+    deleted_cron_jobs = permanently_delete_cron_jobs_by_ids(session, cron_job_ids)
 
     if deleted_cron_jobs > 0:
         LOGGER.info(f"Deleted {deleted_cron_jobs} cron jobs for project {project_id}")
-
-    return deleted_cron_jobs
 
 
 def pause_cron_job(session: Session, cron_id: UUID, organization_id: UUID) -> Optional[CronJobPauseResponse]:
