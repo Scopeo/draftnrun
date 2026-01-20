@@ -1,0 +1,18 @@
+[Unit]
+Description=ADA Webhook Worker
+After=network.target
+
+[Service]
+Type=simple
+User=${SERVICE_USER}
+Group=${SERVICE_USER}
+WorkingDirectory=/home/ec2-user/ingestion
+ExecStart=/bin/bash -c 'cd /home/ec2-user/ingestion && ~/.local/bin/uv sync && ~/.local/bin/uv run python3 -m ada_ingestion_system.worker.webhook_worker'
+StandardOutput=append:/home/ec2-user/ingestion/webhook-worker.log
+StandardError=append:/home/ec2-user/ingestion/webhook-worker.log
+Restart=always
+RestartSec=10
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target

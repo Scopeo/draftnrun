@@ -113,6 +113,41 @@ spec:
               cpu: "500m"
 
 ---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ada-webhook-worker
+  labels:
+    app: ada-webhook-worker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ada-webhook-worker
+  template:
+    metadata:
+      labels:
+        app: ada-webhook-worker
+    spec:
+      terminationGracePeriodSeconds: 1800
+      containers:
+        - name: ada-webhook-worker
+          image: ghcr.io/scopeo/draftnrun-webhook-worker:latest
+          envFrom:
+            - secretRef:
+                name: ada-secrets
+          env:
+            - name: MAX_CONCURRENT_WEBHOOKS
+              value: "2"
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: "250m"
+            limits:
+              memory: "2Gi"
+              cpu: "1000m"
+
+---
 apiVersion: v1
 kind: Service
 metadata:

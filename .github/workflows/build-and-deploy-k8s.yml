@@ -196,10 +196,49 @@ jobs:
           cache-from: type=gha,scope=scheduler
           cache-to: type=gha,mode=max,scope=scheduler
 
+  build-webhook-worker:
+    runs-on: ubuntu-latest
+    needs: setup
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-webhook-worker
+          tags: |
+            type=sha
+            type=raw,value=${{ needs.setup.outputs.environment }}
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: Dockerfile.webhook-worker
+          platforms: linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=webhook-worker
+          cache-to: type=gha,mode=max,scope=webhook-worker
+
   # --- DEPLOY JOB ---
   deploy:
     runs-on: ubuntu-latest
-    needs: [setup, build-api, build-worker, build-scheduler]
+    needs: [setup, build-api, build-worker, build-webhook-worker, build-scheduler]
     steps:
       - name: Set K8s variables
         id: k8s
@@ -239,13 +278,35 @@ jobs:
             PREFIX=$(echo "${{ env.IMAGE_NAME }}" | tr '[:upper:]' '[:lower:]')
             TAG="sha-$(echo '${{ github.sha }}' | cut -c1-7)"
             NS="${{ steps.k8s.outputs.namespace }}"
+            ENV="${{ needs.setup.outputs.environment }}"
 
             echo "🚀 Deploying images tagged: ${TAG}"
 
+            # Clone/update repo to get latest manifests
+            REPO_DIR="/tmp/draftnrun-deploy"
+            if [ -d "$REPO_DIR" ]; then
+              cd "$REPO_DIR"
+              git fetch origin
+              git checkout ${{ github.sha }}
+            else
+              git clone https://github.com/${{ github.repository }}.git "$REPO_DIR"
+              cd "$REPO_DIR"
+              git checkout ${{ github.sha }}
+            fi
+
+            # Apply all manifests (creates or updates deployments with default images)
+            echo "📦 Applying Kubernetes manifests..."
+            cd infra/k8s/${ENV}
+            kubectl apply -k .
+
+            # Update images to the specific tagged versions
+            echo "🔄 Updating images to ${TAG}..."
             kubectl set image deployment/ada-api -n ${NS} \
               ada-api=${REGISTRY}/${PREFIX}-api:${TAG}
             kubectl set image deployment/ada-worker -n ${NS} \
               ada-worker=${REGISTRY}/${PREFIX}-worker:${TAG}
+            kubectl set image deployment/ada-webhook-worker -n ${NS} \
+              ada-webhook-worker=${REGISTRY}/${PREFIX}-webhook-worker:${TAG}
             kubectl set image deployment/ada-scheduler -n ${NS} \
               ada-scheduler=${REGISTRY}/${PREFIX}-scheduler:${TAG}
 
@@ -260,8 +321,9 @@ jobs:
             kubectl exec deployment/ada-api -n ${NS} -- \
               python -m ada_backend.database.seed_db
 
-            echo "⏳ Waiting for worker and scheduler..."
+            echo "⏳ Waiting for worker, webhook-worker, and scheduler..."
             kubectl rollout status deployment/ada-worker -n ${NS} --timeout=10m
+            kubectl rollout status deployment/ada-webhook-worker -n ${NS} --timeout=10m
             kubectl rollout status deployment/ada-scheduler -n ${NS} --timeout=10m
 
             echo "✅ Deploy complete!"
@@ -280,4 +342,5 @@ jobs:
             echo "⬆️ Scaling back up..."
             kubectl scale deployment/ada-api -n ${NS} --replicas=1
             kubectl scale deployment/ada-worker -n ${NS} --replicas=1
+            kubectl scale deployment/ada-webhook-worker -n ${NS} --replicas=1
             kubectl scale deployment/ada-scheduler -n ${NS} --replicas=1

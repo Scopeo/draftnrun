@@ -1,0 +1,78 @@
+"""add webhook trigger system
+
+Revision ID: 475546bc2802
+Revises: e0e47d35b398
+Create Date: 2026-01-16 12:07:43.420481
+
+"""
+
+from typing import Sequence, Union
+
+import sqlalchemy as sa
+from alembic import op
+from sqlalchemy.dialects import postgresql
+
+from ada_backend.database.utils import create_enum_if_not_exists, drop_enum_if_exists
+
+# revision identifiers, used by Alembic.
+revision: str = "475546bc2802"
+down_revision: Union[str, None] = "e0e47d35b398"
+branch_labels: Union[str, Sequence[str], None] = None
+depends_on: Union[str, Sequence[str], None] = None
+
+
+def upgrade() -> None:
+    create_enum_if_not_exists(op.get_bind(), ["resend", "aircall", "slack"], "webhook_provider")
+    webhook_provider_enum = postgresql.ENUM("resend", "aircall", "slack", name="webhook_provider", create_type=False)
+
+    op.create_table(
+        "webhooks",
+        sa.Column("id", sa.UUID(), nullable=False),
+        sa.Column("organization_id", sa.UUID(), nullable=False),
+        sa.Column("provider", webhook_provider_enum, nullable=False),
+        sa.Column("external_client_id", sa.String(), nullable=False),
+        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=True),
+        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=True),
+        sa.PrimaryKeyConstraint("id"),
+    )
+    op.create_index(op.f("ix_webhooks_id"), "webhooks", ["id"], unique=False)
+    op.create_index(op.f("ix_webhooks_organization_id"), "webhooks", ["organization_id"], unique=False)
+    op.create_index(
+        "ix_webhooks_provider_external_client_id", "webhooks", ["provider", "external_client_id"], unique=False
+    )
+    op.create_table(
+        "integration_triggers",
+        sa.Column("id", sa.UUID(), nullable=False),
+        sa.Column("webhook_id", sa.UUID(), nullable=False),
+        sa.Column("project_id", sa.UUID(), nullable=False),
+        sa.Column("events", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
+        sa.Column("events_hash", sa.String(), nullable=False),
+        sa.Column("enabled", sa.Boolean(), nullable=False),
+        sa.Column("filter_options", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
+        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=True),
+        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=True),
+        sa.ForeignKeyConstraint(["project_id"], ["projects.id"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(["webhook_id"], ["webhooks.id"], ondelete="CASCADE"),
+        sa.PrimaryKeyConstraint("id"),
+        sa.UniqueConstraint("webhook_id", "events_hash", "project_id", name="uq_webhook_event_project"),
+    )
+    op.create_index(op.f("ix_integration_triggers_id"), "integration_triggers", ["id"], unique=False)
+    op.create_index(op.f("ix_integration_triggers_project_id"), "integration_triggers", ["project_id"], unique=False)
+    op.create_index(
+        "ix_integration_triggers_webhook_event", "integration_triggers", ["webhook_id", "events_hash"], unique=False
+    )
+    op.create_index(op.f("ix_integration_triggers_webhook_id"), "integration_triggers", ["webhook_id"], unique=False)
+
+
+def downgrade() -> None:
+    op.drop_index(op.f("ix_integration_triggers_webhook_id"), table_name="integration_triggers")
+    op.drop_index("ix_integration_triggers_webhook_event", table_name="integration_triggers")
+    op.drop_index(op.f("ix_integration_triggers_project_id"), table_name="integration_triggers")
+    op.drop_index(op.f("ix_integration_triggers_id"), table_name="integration_triggers")
+    op.drop_table("integration_triggers")
+    op.drop_index("ix_webhooks_provider_external_client_id", table_name="webhooks")
+    op.drop_index(op.f("ix_webhooks_organization_id"), table_name="webhooks")
+    op.drop_index(op.f("ix_webhooks_id"), table_name="webhooks")
+    op.drop_table("webhooks")
+    # Drop webhook_provider enum type
+    drop_enum_if_exists(op.get_bind(), "webhook_provider")

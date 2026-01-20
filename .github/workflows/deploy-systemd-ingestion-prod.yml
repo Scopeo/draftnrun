@@ -1,0 +1,68 @@
+name: Deploy systemd service Ingestion Prod
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'infra/systemd/**'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repo
+      uses: actions/checkout@v3
+
+    - name: Install envsubst (gettext)
+      run: sudo apt-get update && sudo apt-get install -y gettext
+
+    - name: Export secrets as env vars
+      run: |
+        echo "SERVICE_USER=${{ vars.SERVICE_USER }}" >> $GITHUB_ENV
+    
+    - name: Fill in webhook-worker.service template
+      run: |
+        envsubst < infra/systemd/webhook-worker.service > filled-webhook-worker.service
+        cat filled-webhook-worker.service
+
+    - name: Upload Webhook Worker service to EC2
+      uses: appleboy/scp-action@master
+      with:
+        host: ${{ secrets.EC2_HOST_INGESTION_PROD }}
+        username: ec2-user
+        key: ${{ secrets.SSH_PRIVATE_KEY }}
+        source: "filled-webhook-worker.service"
+        target: "/tmp/"
+
+    - name: Deploy Webhook Worker systemd service
+      uses: appleboy/ssh-action@master
+      with:
+        host: ${{ secrets.EC2_HOST_INGESTION_PROD }}
+        username: ec2-user
+        key: ${{ secrets.SSH_PRIVATE_KEY }}
+        port: 22
+        script: |
+            sudo mv /tmp/filled-webhook-worker.service /etc/systemd/system/webhook-worker.service
+            sudo chmod 644 /etc/systemd/system/webhook-worker.service
+            sudo systemctl daemon-reload
+            sudo systemctl restart webhook-worker.service
+
+    - name: Healthcheck - Verify Webhook Worker is running
+      uses: appleboy/ssh-action@master
+      with:
+        host: ${{ secrets.EC2_HOST_INGESTION_PROD }}
+        username: ec2-user
+        key: ${{ secrets.SSH_PRIVATE_KEY }}
+        port: 22
+        script: |
+            echo "Waiting 5s before checking Webhook Worker..."
+            sleep 5
+            if sudo systemctl is-active --quiet webhook-worker.service; then
+            echo "✅ Webhook Worker service is running"
+            else
+            echo "❌ Webhook Worker service is not running"
+            sudo systemctl status webhook-worker.service
+            exit 1
+            fi

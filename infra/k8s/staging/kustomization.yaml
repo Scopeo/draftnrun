@@ -20,6 +20,9 @@ images:
   - name: ada-worker
     newName: draftnrun-worker
     newTag: test
+  - name: ada-webhook-worker
+    newName: draftnrun-webhook-worker
+    newTag: test
   - name: ada-scheduler
     newName: draftnrun-scheduler
     newTag: test

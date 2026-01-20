@@ -376,15 +376,42 @@ async def verify_api_key_dependency(
         raise HTTPException(status_code=401, detail="Invalid API key") from e
 
 
-async def verify_ingestion_api_key_dependency(
-    ingestion_api_key: str = Header(..., alias="X-Ingestion-API-Key"),
-) -> None:
+def _create_api_key_dependency(header_name: str, expected_hash: str | None, error_detail: str):
     """
-    Dependency to verify an ingestion API key from the 'X-Ingestion-API-Key' header.
+    Factory function to create an API key verification dependency.
+
+    Args:
+        header_name: Name of the header to read the API key from
+        expected_hash: Expected hashed API key value from settings
+        error_detail: Error message to return if verification fails
+    Returns:
+        A FastAPI dependency function that verifies the API key
     """
-    hashed_key = verify_ingestion_api_key(private_key=ingestion_api_key)
-    if hashed_key != settings.INGESTION_API_KEY_HASHED:
-        raise HTTPException(status_code=401, detail="Invalid ingestion API key")
+
+    async def verify_api_key_dependency(
+        api_key: str = Header(..., alias=header_name),
+    ) -> None:
+        if not expected_hash:
+            raise HTTPException(status_code=401, detail=f"{error_detail} (not configured)")
+        hashed_key = verify_ingestion_api_key(private_key=api_key)
+        if hashed_key != expected_hash:
+            raise HTTPException(status_code=401, detail=error_detail)
+
+    return verify_api_key_dependency
+
+
+# Create API key dependencies using the factory function
+verify_ingestion_api_key_dependency = _create_api_key_dependency(
+    header_name="X-Ingestion-API-Key",
+    expected_hash=settings.INGESTION_API_KEY_HASHED,
+    error_detail="Invalid ingestion API key",
+)
+
+verify_webhook_api_key_dependency = _create_api_key_dependency(
+    header_name="X-Webhook-API-Key",
+    expected_hash=settings.WEBHOOK_API_KEY_HASHED,
+    error_detail="Invalid webhook API key",
+)
 
 
 async def super_admin_or_admin_api_key_dependency(

@@ -1,59 +1,32 @@
 import json
-import logging
 import os
 import subprocess
-import threading
-import time
 from pathlib import Path
 from typing import Any, Dict
 
-import redis
 import requests
-import structlog
-from dotenv import load_dotenv
 
 from ada_backend.database import models as db
 from ada_backend.schemas.ingestion_task_schema import IngestionTaskUpdate, ResultType, TaskResultMetadata
-
-# Configure structured logging
-structlog.configure(
-    processors=[structlog.processors.TimeStamper(fmt="iso"), structlog.processors.JSONRenderer()],
-    wrapper_class=structlog.make_filtering_bound_logger(logging.INFO),
-    context_class=dict,
-    logger_factory=structlog.PrintLoggerFactory(),
-    cache_logger_on_first_use=True,
-)
-
-logger = structlog.get_logger()
-
-# Define the path to the .env file relative to this script
-dotenv_path = Path(__file__).parent.parent / ".env"
-
-# Load environment variables from the specific .env file
-logger.info(f"Loading environment variables from {dotenv_path}")
-load_dotenv(dotenv_path=dotenv_path)
+from ada_ingestion_system.worker.base_worker import BaseWorker, logger, redis_client
 
 # Redis configuration
-REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
-REDIS_PORT = int(os.getenv("REDIS_PORT", 6379))
-REDIS_PASSWORD = os.getenv("REDIS_PASSWORD", None)
 QUEUE_NAME = "ada_ingestion_queue"
 MAX_CONCURRENT_INGESTIONS = int(os.getenv("MAX_CONCURRENT_INGESTIONS", 2))
-
-# Initialize Redis connection
-redis_client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, password=REDIS_PASSWORD, decode_responses=True)
 
 # Default API base URL - use HTTP for localhost
 DEFAULT_API_BASE_URL = "http://localhost:8000"
 
 
-class Worker:
+class Worker(BaseWorker):
     def __init__(self):
-        self.max_concurrent = MAX_CONCURRENT_INGESTIONS
-        self.current_threads = 0
-        self.lock = threading.Lock()
+        super().__init__(queue_name=QUEUE_NAME, max_concurrent=MAX_CONCURRENT_INGESTIONS)
 
-    def process_ingestion(self, payload: Dict[str, Any]) -> None:
+    def get_required_fields(self) -> list[str]:
+        """Get required fields for ingestion task payload."""
+        return ["ingestion_id"]
+
+    def process_task(self, payload: Dict[str, Any]) -> None:
         """Process a single ingestion task."""
         try:
             ingestion_id = payload["ingestion_id"]
@@ -297,9 +270,6 @@ class Worker:
                 )
             except Exception as update_error:
                 logger.error("failed_to_update_task_status", error=str(update_error))
-        finally:
-            with self.lock:
-                self.current_threads -= 1
 
     def _parse_error_message(self, stderr_text: str) -> dict:
         """Parse error messages to provide a cleaner summary."""
@@ -411,11 +381,11 @@ class Worker:
             logger.info("Redis connectivity test: {}".format(ping_result))
 
             # Get queue length
-            queue_length = redis_client.llen(QUEUE_NAME)
+            queue_length = redis_client.llen(self.queue_name)
             logger.info("Current queue length: {}".format(queue_length))
 
             # Get queue contents (up to 10 items)
-            queue_items = redis_client.lrange(QUEUE_NAME, 0, 9)
+            queue_items = redis_client.lrange(self.queue_name, 0, 9)
             logger.info("Queue items retrieved: {}".format(len(queue_items)))
 
             if queue_items:
@@ -438,58 +408,20 @@ class Worker:
             except Exception as key_error:
                 logger.error("Failed to get Redis keys: {}".format(str(key_error)))
 
-        except redis.ConnectionError as ce:
-            logger.error("Redis connection error during state logging: {}".format(str(ce)))
-        except redis.AuthenticationError as ae:
-            logger.error("Redis authentication error during state logging: {}".format(str(ae)))
         except Exception as e:
             logger.error("Error logging Redis state: {}".format(str(e)), exc_info=True)
 
         logger.info("End Redis state logging")
 
-    def should_process_locally(self) -> bool:
-        """Determine if the current worker should process the task locally."""
-        with self.lock:
-            if self.current_threads < self.max_concurrent:
-                self.current_threads += 1
-                return True
-            return False
+    def _log_queued_task(self, payload: Dict[str, Any]) -> None:
+        """Log queued ingestion task."""
+        logger.info("task_queued_for_external_processing", ingestion_id=payload.get("ingestion_id"))
 
     def spawn_external_worker(self, payload: Dict[str, Any]) -> None:
         """Spawn an external worker (EC2/Fargate) for the task."""
         logger.info("Spawning external worker")
         # TODO: Implement AWS EC2 spawning
         pass
-
-    def run(self) -> None:
-        """Main worker loop."""
-        while True:
-            try:
-                # Block until a task is available
-                _, data = redis_client.blpop(QUEUE_NAME)
-
-                try:
-                    payload = json.loads(data)
-                except json.JSONDecodeError as e:
-                    logger.error("invalid_json", error=str(e))
-                    continue
-
-                if not isinstance(payload, dict) or "ingestion_id" not in payload:
-                    logger.error("invalid_task_format", data=data)
-                    continue
-
-                if self.should_process_locally():
-                    # Process in a new thread
-                    thread = threading.Thread(target=self.process_ingestion, args=(payload,))
-                    thread.start()
-                else:
-                    logger.info("task_queued_for_external_processing", ingestion_id=payload["ingestion_id"])
-
-            except redis.ConnectionError:
-                time.sleep(5)
-            except Exception as e:
-                logger.error("unexpected_error", error=str(e))
-                time.sleep(1)
 
 
 if __name__ == "__main__":

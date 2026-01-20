@@ -74,6 +74,11 @@ Here are the env variables with the default values that work for Docker Compose:
 
   # Worker configuration
   MAX_CONCURRENT_INGESTIONS=2
+
+  # Webhook queue configuration
+  REDIS_WEBHOOK_QUEUE_NAME=ada_webhook_queue
+  REDIS_WEBHOOK_DEDUP_TTL=86400
+  MAX_CONCURRENT_WEBHOOKS=2
   ```
 
 - In `credentials.env`:
@@ -87,6 +92,11 @@ Here are the env variables with the default values that work for Docker Compose:
   REDIS_PORT=6379
   REDIS_PASSWORD=redis_password
   REDIS_QUEUE_NAME=ada_ingestion_queue
+
+  # FOR WEBHOOK QUEUE
+  REDIS_WEBHOOK_QUEUE_NAME=ada_webhook_queue
+  REDIS_WEBHOOK_DEDUP_TTL=86400
+  MAX_CONCURRENT_WEBHOOKS=2
 
   # DB for the backend
   ADA_DB_URL=postgresql://postgres:ada_password@localhost:5432/ada_backend
@@ -159,6 +169,9 @@ REDIS_HOST=xxxx
 REDIS_PORT=6379
 REDIS_PASSWORD=xxxx
 REDIS_QUEUE_NAME=ada_ingestion_queue
+REDIS_WEBHOOK_QUEUE_NAME=ada_webhook_queue
+REDIS_WEBHOOK_DEDUP_TTL=86400
+MAX_CONCURRENT_WEBHOOKS=2
 
 
 # Ingestion
@@ -330,15 +343,21 @@ SUPABASE_PASSWORD=xxx
 SUPABASE_BUCKET_NAME=ada-backend
 ```
 
-Finally, generate with this script the INGESTION_API_KEY and the INGESTION_API_KEY_HASHED and put it in the credentials.env file:
+Finally, generate with this script the INGESTION_API_KEY and WEBHOOK_API_KEY and their hashed versions, and put them in the credentials.env file:
 
-```
+```bash
+# Generate ingestion API key (for ingestion endpoints)
 uv run python -c "from ada_backend.services.api_key_service import _generate_api_key, _hash_key; key = _generate_api_key(); print('INGESTION_API_KEY =', key); print('INGESTION_API_KEY_HASHED =', _hash_key(key))"
+
+# Generate webhook API key (for webhook internal endpoints)
+uv run python -c "from ada_backend.services.api_key_service import _generate_api_key, _hash_key; key = _generate_api_key(); print('WEBHOOK_API_KEY =', key); print('WEBHOOK_API_KEY_HASHED =', _hash_key(key))"
 ```
 
 ```env
 INGESTION_API_KEY=xxxx
 INGESTION_API_KEY_HASHED=xxxx
+WEBHOOK_API_KEY=xxxx
+WEBHOOK_API_KEY_HASHED=xxxx
 ```
 
 ## Optional configurations
