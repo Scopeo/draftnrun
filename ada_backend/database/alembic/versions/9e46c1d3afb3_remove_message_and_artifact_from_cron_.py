@@ -35,10 +35,10 @@ def upgrade() -> None:
         SET result = jsonb_set(
             result,
             '{workflows_triggered}',
-            (
+            COALESCE((
                 SELECT jsonb_agg(elem - 'message')
                 FROM jsonb_array_elements(result->'workflows_triggered') elem
-            ),
+            ), '[]'::jsonb),
             true
         )
         WHERE result ? 'workflows_triggered'
