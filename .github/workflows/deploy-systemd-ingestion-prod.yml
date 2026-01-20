@@ -1,9 +1,9 @@
-name: Deploy systemd service Ingestion Staging
+name: Deploy systemd service Ingestion Prod
 
 on:
   workflow_dispatch:
   push:
-    branches: [staging]
+    branches: [main]
     paths:
       - 'infra/systemd/**'
 
@@ -30,7 +30,7 @@ jobs:
     - name: Upload Webhook Worker service to EC2
       uses: appleboy/scp-action@master
       with:
-        host: ${{ secrets.EC2_HOST_INGESTION_STAGING }}
+        host: ${{ secrets.EC2_HOST_INGESTION_PROD }}
         username: ec2-user
         key: ${{ secrets.SSH_PRIVATE_KEY }}
         source: "filled-webhook-worker.service"
@@ -39,7 +39,7 @@ jobs:
     - name: Deploy Webhook Worker systemd service
       uses: appleboy/ssh-action@master
       with:
-        host: ${{ secrets.EC2_HOST_INGESTION_STAGING }}
+        host: ${{ secrets.EC2_HOST_INGESTION_PROD }}
         username: ec2-user
         key: ${{ secrets.SSH_PRIVATE_KEY }}
         port: 22
@@ -52,7 +52,7 @@ jobs:
     - name: Healthcheck - Verify Webhook Worker is running
       uses: appleboy/ssh-action@master
       with:
-        host: ${{ secrets.EC2_HOST_INGESTION_STAGING }}
+        host: ${{ secrets.EC2_HOST_INGESTION_PROD }}
         username: ec2-user
         key: ${{ secrets.SSH_PRIVATE_KEY }}
         port: 22
