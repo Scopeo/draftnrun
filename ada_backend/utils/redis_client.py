@@ -111,44 +111,27 @@ def push_ingestion_task(
         return False
 
 
-def check_webhook_event_dedup(provider: str, event_id: str) -> bool:
+def check_and_set_webhook_event(provider: str, event_id: str, ttl: int) -> bool:
     """
-    Check if a webhook event has already been processed (deduplication).
+    Atomically check and set a webhook event ID for deduplication.
+
+    Returns:
+        bool: True if the event is new and was set, False if it was a duplicate.
     """
     client = get_redis_client()
     if not client:
-        LOGGER.warning("Redis client unavailable. Cannot check webhook deduplication.")
-        return False
+        LOGGER.warning("Redis client unavailable. Cannot perform webhook deduplication. Allowing event to proceed.")
+        return True
 
     try:
         key = f"webhook:dedup:{provider}:{event_id}"
-        exists = client.exists(key)
-        if exists:
+        is_new = client.set(key, "1", ex=ttl, nx=True)
+        if not is_new:
             LOGGER.debug(f"Duplicate webhook event detected: provider={provider}, event_id={event_id}")
-        return bool(exists)
+        return bool(is_new)
     except Exception as e:
-        LOGGER.error(f"Failed to check webhook deduplication: {str(e)}")
-        return False
-
-
-def set_webhook_event_dedup(provider: str, event_id: str, ttl: int) -> bool:
-    """
-    Store a webhook event ID in Redis for deduplication with TTL.
-    """
-    client = get_redis_client()
-    if not client:
-        LOGGER.warning("Redis client unavailable. Cannot set webhook deduplication.")
-        return False
-
-    try:
-        key = f"webhook:dedup:{provider}:{event_id}"
-        result = client.set(key, "1", ex=ttl)
-        if result:
-            LOGGER.debug(f"Stored webhook dedup: provider={provider}, event_id={event_id}, ttl={ttl}s")
-        return bool(result)
-    except Exception as e:
-        LOGGER.error(f"Failed to set webhook deduplication: {str(e)}")
-        return False
+        LOGGER.error(f"Failed to perform webhook deduplication. Allowing event to proceed: {str(e)}")
+        return True
 
 
 def push_webhook_event(

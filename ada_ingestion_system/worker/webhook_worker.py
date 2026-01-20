@@ -18,7 +18,7 @@ class WebhookWorker(BaseWorker):
 
     def get_required_fields(self) -> list[str]:
         """Get required fields for webhook payload."""
-        return ["webhook_id"]
+        return ["webhook_id", "provider", "event_id", "organization_id", "payload"]
 
     def process_task(self, payload: Dict[str, Any]) -> None:
         """Process a single webhook event by executing the webhook script."""

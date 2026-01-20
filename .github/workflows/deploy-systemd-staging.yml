@@ -112,7 +112,3 @@ jobs:
             exit 1
           fi
 
-          - name: Fill in webhook-worker.service template
-          run: |
-            envsubst < infra/systemd/webhook-worker.service > filled-webhook-worker.service
-            cat filled-webhook-worker.service

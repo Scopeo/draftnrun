@@ -1834,7 +1834,7 @@ class Webhook(Base):
     __table_args__ = (Index("ix_webhooks_provider_external_client_id", "provider", "external_client_id"),)
 
     def __str__(self):
-        return f"Webhook(id={self.id}, provider={self.provider}, external_client_id={self.external_client_id[:4]}...)`"
+        return f"Webhook(id={self.id}, provider={self.provider}, external_client_id={self.external_client_id[:4]}...)"
 
 
 class IntegrationTrigger(Base):

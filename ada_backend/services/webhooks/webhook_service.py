@@ -18,9 +18,8 @@ from ada_backend.services.webhooks.errors import (
     WebhookQueueError,
 )
 from ada_backend.utils.redis_client import (
-    check_webhook_event_dedup,
+    check_and_set_webhook_event,
     push_webhook_event,
-    set_webhook_event_dedup,
 )
 from settings import settings
 
@@ -44,16 +43,14 @@ async def process_webhook_event(
         event_id = get_webhook_event_id(payload, provider)
         provider_value = provider.value
 
-        is_duplicate = check_webhook_event_dedup(provider_value, event_id)
-        if is_duplicate:
+        is_new = check_and_set_webhook_event(provider_value, event_id, ttl=settings.REDIS_WEBHOOK_DEDUP_TTL)
+        if not is_new:
             LOGGER.info(
                 f"Duplicate {provider_value} webhook event detected: event_id={event_id}, webhook_id={webhook.id}"
             )
             return WebhookProcessingResponseSchema(
                 status=WebhookProcessingStatus.DUPLICATE, processed=False, event_id=event_id
             )
-
-        set_webhook_event_dedup(provider=provider_value, event_id=event_id, ttl=settings.REDIS_WEBHOOK_DEDUP_TTL)
 
         LOGGER.info(f"{provider_value} webhook event validated: event_id={event_id}, webhook_id={webhook.id}")
 
@@ -79,6 +76,8 @@ async def process_webhook_event(
             status=WebhookProcessingStatus.RECEIVED, processed=False, event_id=event_id
         )
 
+    except WebhookQueueError as e:
+        raise e
     except Exception as e:
         LOGGER.error(f"Error processing {provider.value} webhook: {str(e)}", exc_info=True)
         raise WebhookProcessingError(webhook=webhook, error=e)

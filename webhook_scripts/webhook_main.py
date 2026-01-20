@@ -107,6 +107,9 @@ async def webhook_main_async(
     )
 
     api_base_url = settings.ADA_URL
+    if not api_base_url:
+        LOGGER.error("[WEBHOOK_MAIN] ADA_URL not set in environment")
+        raise ValueError("ADA_URL environment variable is required")
     webhook_api_key = settings.WEBHOOK_API_KEY
     if not webhook_api_key:
         LOGGER.error("[WEBHOOK_MAIN] WEBHOOK_API_KEY not set in environment")
