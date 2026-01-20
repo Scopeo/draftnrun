@@ -218,7 +218,7 @@ class Retriever(Component):
             SpanAttributes.INPUT_VALUE: serialize_to_json(trace_input, shorten_string=False),
         })
 
-        chunks = await self.get_chunks(
+        chunks = await self._get_chunks_without_trace(
             query_text=query_str,
             filters=inputs.filters,
         )
