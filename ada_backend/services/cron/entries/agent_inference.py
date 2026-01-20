@@ -119,8 +119,7 @@ async def execute(execution_payload: AgentInferenceExecutionPayload, **kwargs) -
     )
 
     return {
-        "message": result.message,
-        "artifacts": result.artifacts,
+        "trace_id": str(result.trace_id),
         "project_id": str(execution_payload.project_id),
         "env": execution_payload.env,
     }
