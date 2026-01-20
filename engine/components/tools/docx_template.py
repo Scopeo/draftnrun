@@ -411,11 +411,7 @@ DOCX_TEMPLATE_TOOL_DESCRIPTION = ToolDescription(
 class DocxTemplateInputs(BaseModel):
     template_input_path: Optional[str] = Field(
         default=None,
-        description=(
-            "Absolute path to the DOCX template file. \n"
-            "Either this or Template (Docx) must be provided. \n"
-            "Example: /Users/username/Documents/test_files/template.docx"
-        ),
+        json_schema_extra={"disabled_as_input": True},
     )
     template_information_brief: str = Field(
         description="Instructions describing what content to inject in the template placeholders.",
@@ -428,9 +424,10 @@ class DocxTemplateInputs(BaseModel):
 
 
 class DocxTemplateOutputs(BaseModel):
-    output_message: str = Field(description="The success or error message from the DOCX template processing.")
+    output: str = Field(description="The success or error message from the DOCX template processing.")
     # TODO: Make simple docx_filename field instead of artifacts dictionary
     artifacts: dict[str, Any] = Field(description="The artifacts to be returned to the user.")
+    is_final: bool = Field(default=True, description="Indicates if this is the final output of the component.")
 
 
 class DocxTemplateAgent(Component):
@@ -447,7 +444,7 @@ class DocxTemplateAgent(Component):
 
     @classmethod
     def get_canonical_ports(cls) -> dict[str, str | None]:
-        return {"input": "template_information_brief", "output": "output_message"}
+        return {"input": "template_information_brief", "output": "output"}
 
     def __init__(
         self,
@@ -508,7 +505,9 @@ class DocxTemplateAgent(Component):
         span = get_current_span()
 
         template_input_path = inputs.template_input_path
-        template_base64 = self.template_base64 or ctx.get("template_base64")
+        template_base64 = (
+            getattr(inputs, "template_base64", None) or self.template_base64 or ctx.get("template_base64")
+        )
         template_information_brief = inputs.template_information_brief
         output_filename = inputs.output_filename
 
@@ -518,8 +517,9 @@ class DocxTemplateAgent(Component):
                 LOGGER.error(error_msg)
                 span.set_attributes({SpanAttributes.OUTPUT_VALUE: error_msg})
                 return DocxTemplateOutputs(
-                    output_message=error_msg,
+                    output=error_msg,
                     artifacts={},
+                    is_final=False,
                 )
 
             template_sources = [template_input_path, template_base64]
@@ -529,8 +529,9 @@ class DocxTemplateAgent(Component):
                 LOGGER.error(error_msg)
                 span.set_attributes({SpanAttributes.OUTPUT_VALUE: error_msg})
                 return DocxTemplateOutputs(
-                    output_message=error_msg,
+                    output=error_msg,
                     artifacts={},
+                    is_final=False,
                 )
 
             output_dir = get_output_dir()
@@ -544,8 +545,9 @@ class DocxTemplateAgent(Component):
                     LOGGER.error(error_msg)
                     span.set_attributes({SpanAttributes.OUTPUT_VALUE: error_msg})
                     return DocxTemplateOutputs(
-                        output_message=error_msg,
+                        output=error_msg,
                         artifacts={},
+                        is_final=False,
                     )
 
                 if not template_path.suffix.lower() == ".docx":
@@ -553,8 +555,9 @@ class DocxTemplateAgent(Component):
                     LOGGER.error(error_msg)
                     span.set_attributes({SpanAttributes.OUTPUT_VALUE: error_msg})
                     return DocxTemplateOutputs(
-                        output_message=error_msg,
+                        output=error_msg,
                         artifacts={},
+                        is_final=False,
                     )
 
             elif template_base64:
@@ -573,8 +576,9 @@ class DocxTemplateAgent(Component):
                     LOGGER.error(error_msg)
                     span.set_attributes({SpanAttributes.OUTPUT_VALUE: error_msg})
                     return DocxTemplateOutputs(
-                        output_message=error_msg,
+                        output=error_msg,
                         artifacts={},
+                        is_final=False,
                     )
 
             output_path = output_dir / Path(output_filename)
@@ -647,8 +651,9 @@ class DocxTemplateAgent(Component):
             })
 
             return DocxTemplateOutputs(
-                output_message=success_msg,
+                output=success_msg,
                 artifacts={"docx_filename": str(output_filename)},
+                is_final=True,
             )
 
         except Exception as e:
@@ -661,6 +666,7 @@ class DocxTemplateAgent(Component):
                     pass
             span.set_attributes({SpanAttributes.OUTPUT_VALUE: error_msg})
             return DocxTemplateOutputs(
-                output_message=error_msg,
+                output=error_msg,
                 artifacts={},
+                is_final=False,
             )
