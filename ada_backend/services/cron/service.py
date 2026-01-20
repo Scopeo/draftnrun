@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from ada_backend.database.models import CronJob
 from ada_backend.repositories.cron_repository import (
     delete_cron_job,
+    delete_cron_job_by_project_id,
     get_cron_job,
     get_cron_jobs_by_organization,
     get_cron_runs_by_cron_id,
@@ -29,11 +30,7 @@ from ada_backend.schemas.cron_schema import (
     CronRunListResponse,
 )
 from ada_backend.services.cron.constants import CRON_MIN_INTERVAL_MINUTES
-from ada_backend.services.cron.errors import (
-    CronJobAccessDenied,
-    CronJobNotFound,
-    CronValidationError,
-)
+from ada_backend.services.cron.errors import CronJobAccessDenied, CronJobNotFound, CronValidationError
 from ada_backend.services.cron.registry import CRON_REGISTRY
 
 LOGGER = logging.getLogger(__name__)
@@ -290,6 +287,15 @@ def delete_cron_job_service(
         return CronJobDeleteResponse(id=cron_id)
 
     return None
+
+
+def delete_cron_jobs_by_project_service(session: Session, project_id: UUID) -> int:
+    deleted_count = delete_cron_job_by_project_id(session, project_id)
+
+    if deleted_count > 0:
+        LOGGER.info(f"Deleted {deleted_count} cron jobs for project {project_id}")
+
+    return deleted_count
 
 
 def pause_cron_job(session: Session, cron_id: UUID, organization_id: UUID) -> Optional[CronJobPauseResponse]:
