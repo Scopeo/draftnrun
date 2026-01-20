@@ -274,6 +274,83 @@ class NonToolCallableBlockFactory(EntityFactory):
         )
 
 
+def build_source_metadata_extractor_processor() -> ParameterProcessor:
+    """
+    Extracts source_id, collection_name, embedding model info, and qdrant_schema from data_source
+    in a single database query. Leaves data_source intact for downstream processors.
+    """
+
+    def processor(params: dict, constructor_params: dict[str, Any]) -> dict:
+        data_source = params.get("data_source", None)
+        if data_source is None:
+            component_attrs = params.get("component_attributes")
+            component_name = getattr(component_attrs, "component_instance_name", None)
+            raise MissingDataSourceError(component_name)
+
+        if isinstance(data_source, str):
+            data_source = json.loads(data_source)
+
+        source_id_str = data_source.get("id") if isinstance(data_source, dict) else None
+        if not source_id_str:
+            raise ValueError("data_source must contain an 'id' field")
+        source_id = UUID(source_id_str)
+
+        with get_db_session() as session:
+            source = get_data_source_by_id(session, source_id)
+            if source is None:
+                raise ValueError(f"Source with id {source_id} not found")
+            collection_name = source.qdrant_collection_name
+            provider, model_name = get_llm_provider_and_model(llm_model=source.embedding_model_reference)
+            qdrant_schema = QdrantCollectionSchema(**source.qdrant_schema)
+
+        params["source_id"] = source_id
+        params["collection_name"] = collection_name
+        params["embedding_provider"] = provider
+        params["embedding_model_name"] = model_name
+        params["qdrant_schema"] = qdrant_schema
+
+        return params
+
+    return processor
+
+
+# TODO: Remove this processor when the AI Agent is migrated to the new component architecture
+def build_retriever_params_translator_processor() -> ParameterProcessor:
+    source_metadata_extractor = build_source_metadata_extractor_processor()
+
+    def processor(params: dict, constructor_params: dict[str, Any]) -> dict:
+        params = source_metadata_extractor(params, constructor_params)
+        params.pop("embedding_provider", None)
+        params.pop("embedding_model_name", None)
+        params.pop("qdrant_schema", None)
+
+        list_of_params_to_pop = [
+            ParameterToValidate(argument="number_of_chunks", type=int, optional=False),
+            ParameterToValidate(argument="enable_date_penalty_for_chunks", type=bool, optional=False),
+            ParameterToValidate(argument="chunk_age_penalty_rate", type=float, optional=True),
+            ParameterToValidate(argument="default_penalty_rate", type=float, optional=True),
+            ParameterToValidate(argument="retrieved_chunks_before_applying_penalty", type=int, optional=True),
+            ParameterToValidate(argument="metadata_date_key", type=str, optional=True),
+        ]
+        validated_params = _pop_and_validate_parameters(list_of_params_to_pop, params)
+
+        number_of_chunks = validated_params.pop("number_of_chunks")
+        enable_date_penalty = validated_params.pop("enable_date_penalty_for_chunks")
+        retrieved_chunks_before_penalty = validated_params.pop("retrieved_chunks_before_applying_penalty", None)
+
+        max_retrieved_chunks = retrieved_chunks_before_penalty if enable_date_penalty else number_of_chunks
+        max_retrieved_chunks_after_penalty = number_of_chunks if enable_date_penalty else None
+
+        params["max_retrieved_chunks"] = max_retrieved_chunks
+        params["enable_date_penalty_for_chunks"] = enable_date_penalty
+        params["max_retrieved_chunks_after_penalty"] = max_retrieved_chunks_after_penalty
+        params.update(validated_params)
+
+        return params
+
+    return processor
+
+
 def build_dataclass_processor(dataclass_type: Type[Any], param_name: str) -> ParameterProcessor:
     """
     Creates a processor for converting a specific parameter to a specific dataclass type.
@@ -691,31 +768,16 @@ def build_retriever_processor(target_name: str = "retriever") -> ParameterProces
         ParameterProcessor: A processor function that handles Retriever creation
     """
 
+    source_metadata_extractor = build_source_metadata_extractor_processor()
+
     def processor(params: dict, constructor_params: dict[str, Any]) -> dict:
-        data_source = params.pop("data_source", None)
-        if data_source is None:
-            component_attrs = params.get("component_attributes")
-            component_name = getattr(component_attrs, "component_instance_name", None)
-            raise MissingDataSourceError(component_name)
-
-        if isinstance(data_source, str):
-            import json
-
-            data_source = json.loads(data_source)
-
-        source_id_str = data_source.get("id") if isinstance(data_source, dict) else None
-        if not source_id_str:
-            raise ValueError("data_source must contain an 'id' field")
-        source_id = UUID(source_id_str)
-
-        with get_db_session() as session:
-            source = get_data_source_by_id(session, source_id)
-            if source is None:
-                raise ValueError(f"Source with id {source_id} not found")
-
-            provider, model_name = get_llm_provider_and_model(llm_model=source.embedding_model_reference)
-            collection_name = source.qdrant_collection_name
-            qdrant_schema = QdrantCollectionSchema(**source.qdrant_schema)
+        params = source_metadata_extractor(params, constructor_params)
+        source_id = params.pop("source_id")
+        collection_name = params.pop("collection_name")
+        provider = params.pop("embedding_provider")
+        model_name = params.pop("embedding_model_name")
+        qdrant_schema = params.pop("qdrant_schema")
+        params.pop("data_source", None)
 
         embedding_service = EmbeddingService(
             trace_manager=get_trace_manager(),

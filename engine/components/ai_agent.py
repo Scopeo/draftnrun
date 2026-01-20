@@ -12,14 +12,11 @@ from pydantic import BaseModel, Field
 
 from engine.components.component import Component
 from engine.components.history_message_handling import HistoryMessageHandler
+from engine.components.rag.formatter import Formatter
+from engine.components.rag.retriever import RETRIEVER_CITATION_INSTRUCTION, RETRIEVER_TOOL_DESCRIPTION
 from engine.components.tools.python_code_runner import PYTHON_CODE_RUNNER_TOOL_DESCRIPTION
 from engine.components.tools.terminal_command_runner import TERMINAL_COMMAND_RUNNER_TOOL_DESCRIPTION
-from engine.components.types import (
-    AgentPayload,
-    ChatMessage,
-    ComponentAttributes,
-    ToolDescription,
-)
+from engine.components.types import AgentPayload, ChatMessage, ComponentAttributes, SourcedResponse, ToolDescription
 from engine.components.utils import load_str_to_json
 from engine.components.utils_prompt import fill_prompt_template
 from engine.graph_runner.runnable import Runnable
@@ -33,6 +30,7 @@ INITIAL_PROMPT = (
     "Don't make assumptions about what values to plug into functions. Ask for "
     "clarification if a user request is ambiguous. "
 )
+
 DEFAULT_FALLBACK_REACT_ANSWER = "I couldn't find a solution to your problem."
 CODE_RUNNER_TOOLS = [PYTHON_CODE_RUNNER_TOOL_DESCRIPTION.name, TERMINAL_COMMAND_RUNNER_TOOL_DESCRIPTION.name]
 
@@ -191,6 +189,8 @@ class AIAgent(Component):
         self._output_tool_agent_description = self._get_output_tool_description(output_format)
         # Tool cache is snapshotted at init; provide agent_tools up front.
         self._build_tool_cache()
+        self._formatter = Formatter(add_sources=False, component_attributes=component_attributes)
+        self._has_retriever_tool = self._check_for_retriever_tool()
 
     @staticmethod
     def _get_output_tool_description(output_format: str | dict | None) -> Optional[ToolDescription]:
@@ -264,6 +264,9 @@ class AIAgent(Component):
                 if desc.name in self._tool_registry:
                     LOGGER.warning(f"Duplicate tool name '{desc.name}' - overriding previous mapping")
                 self._tool_registry[desc.name] = (tool, desc)
+
+    def _check_for_retriever_tool(self) -> bool:
+        return RETRIEVER_TOOL_DESCRIPTION.name in self._tool_registry
 
     def _get_tool_descriptions_for_llm(self) -> list[ToolDescription]:
         """Return tool descriptions for LLM function calling."""
@@ -360,10 +363,16 @@ class AIAgent(Component):
 
         # Prepare system prompt content
         system_prompt_content = initial_prompt
+
+        # TODO: Refactor logic. AI Agent is coupled to Retriever tool here. Tools should inject their own instructions
+        # without AI Agent knowing the specifics
+        if self._has_retriever_tool:
+            system_prompt_content = f"{initial_prompt}\n{RETRIEVER_CITATION_INSTRUCTION}"
+
         if self._date_in_system_prompt:
             # TODO: add the timezone of the user
             current_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            system_prompt_content = f"Current date and time: {current_date}\n\n{initial_prompt}"
+            system_prompt_content = f"Current date and time: {current_date}\n\n{system_prompt_content}"
 
         inputs_dict = inputs_dict or {}
         if kwargs:
@@ -422,14 +431,30 @@ class AIAgent(Component):
             if not all_tool_calls:
                 self.log_trace_event("No tool calls found in the response. Returning the chat response.")
                 imgs = get_images_from_message(history_messages_handled)
-                artifacts = {}
+
+                artifacts = (
+                    dict(agent_input.artifacts) if hasattr(agent_input, "artifacts") and agent_input.artifacts else {}
+                )
+
+                response_content = chat_response.choices[0].message.content or ""
+                # TODO Make sources a first-class typed output (instead of going through artifacts)
+                if "sources" in artifacts and artifacts["sources"]:
+                    sourced_response = SourcedResponse(
+                        response=response_content,
+                        sources=artifacts["sources"],
+                        is_successful=True,
+                    )
+                    filtered_response = self._formatter._renumber_sources(sourced_response)
+                    artifacts["sources"] = filtered_response.sources
+                    response_content = filtered_response.response
+
                 if imgs:
                     artifacts["images"] = imgs
                 else:
                     LOGGER.debug("No images found in the response.")
                 await self._cleanup_shared_sandbox()
                 return AgentPayload(
-                    messages=[ChatMessage(role="assistant", content=chat_response.choices[0].message.content)],
+                    messages=[ChatMessage(role="assistant", content=response_content)],
                     is_final=True,
                     artifacts=artifacts,
                 )
@@ -439,6 +464,8 @@ class AIAgent(Component):
             tool_calls=all_tool_calls,
             ctx=ctx,
         )
+
+        collected_artifacts = _collect_output_artifacts(agent_outputs)
 
         agent_input.messages.append(
             ChatMessage(
@@ -456,6 +483,8 @@ class AIAgent(Component):
                 )
             )
 
+        agent_input.artifacts.update(collected_artifacts)
+
         # If there's 0 or more than 1 final outputs, run the agent again
         successful_output_count = sum(agent_output.is_final for agent_output in agent_outputs.values())
         if successful_output_count == 1 and self._allow_tool_shortcuts:
@@ -468,6 +497,9 @@ class AIAgent(Component):
             final_output: AgentPayload = next(
                 agent_output for agent_output in agent_outputs.values() if agent_output.is_final
             )
+
+            if collected_artifacts:
+                final_output.artifacts.update(collected_artifacts)
             await self._cleanup_shared_sandbox()
             return final_output
 
@@ -559,3 +591,25 @@ def get_images_from_message(messages: list[ChatMessage]) -> list[str]:
                 imgs = []
             return imgs
     return []
+
+
+def _collect_output_artifacts(agent_outputs: dict[str, AgentPayload]) -> dict[str, Any]:
+    # TODO: Refactor to use typed approach instead of dict-based artifacts
+
+    collected_artifacts = {}
+    all_sources = []
+
+    for tool_call_id, agent_output in agent_outputs.items():
+        if agent_output.artifacts:
+            if "sources" in agent_output.artifacts:
+                sources = agent_output.artifacts["sources"]
+                all_sources.extend(sources)
+
+            for key, value in agent_output.artifacts.items():
+                if key != "sources":
+                    collected_artifacts[key] = value
+
+    if all_sources:
+        collected_artifacts["sources"] = all_sources
+
+    return collected_artifacts

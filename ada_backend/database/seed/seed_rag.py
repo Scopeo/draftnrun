@@ -12,12 +12,7 @@ from ada_backend.database.component_definition_seeding import (
     upsert_components_parameter_definitions,
     upsert_release_stage_to_current_version_mapping,
 )
-from ada_backend.database.models import (
-    ParameterType,
-    SelectOption,
-    UIComponent,
-    UIComponentProperties,
-)
+from ada_backend.database.models import ParameterType, SelectOption, UIComponent, UIComponentProperties
 from ada_backend.database.seed.constants import (
     COMPLETION_MODEL_IN_DB,
     REASONING_IN_DB,
@@ -156,7 +151,7 @@ def seed_rag_components(session: Session):
 
     rag_agent = db.Component(
         id=COMPONENT_UUIDS["rag_agent"],
-        name="Knowledge Search",
+        name="Knowledge Agent (RAG)",
         is_agent=True,
         function_callable=True,
         icon="tabler-report-search",
@@ -286,7 +281,11 @@ def seed_rag_components(session: Session):
         id=COMPONENT_VERSION_UUIDS["rag_agent_v3"],
         component_id=COMPONENT_UUIDS["rag_agent"],
         version_tag="0.2.0",
-        description="RAG Agent for retrieving information from knowledge bases",
+        description=(
+            "Knowledge Agent (RAG) for retrieving relevant information from knowledge bases "
+            "using a single query input."
+            "Not designed for multi-turn conversations."
+        ),
         default_tool_description_id=TOOL_DESCRIPTION_UUIDS["default_rag_tool_description"],
         release_stage=db.ReleaseStage.INTERNAL,
     )
