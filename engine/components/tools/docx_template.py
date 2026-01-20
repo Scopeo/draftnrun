@@ -395,7 +395,7 @@ DOCX_TEMPLATE_TOOL_DESCRIPTION = ToolDescription(
                 "Base64 encoded DOCX template content. Either this or template_input_path must be provided."
             ),
         },
-        "template_filling_instructions": {
+        "template_information_brief": {
             "type": "string",
             "description": "Business brief or context description used to generate content for the template.",
         },
@@ -404,7 +404,7 @@ DOCX_TEMPLATE_TOOL_DESCRIPTION = ToolDescription(
             "description": "Filename where the filled DOCX file should be saved.",
         },
     },
-    required_tool_properties=["output_filename", "template_filling_instructions"],
+    required_tool_properties=["output_filename", "template_information_brief"],
 )
 
 
@@ -412,14 +412,16 @@ class DocxTemplateInputs(BaseModel):
     template_input_path: Optional[str] = Field(
         default=None,
         description=(
-            "Path to the DOCX template file (.docx) that contains placeholders. "
-            "Either this or Template (Docx) must be provided."
+            "Absolute path to the DOCX template file. \n"
+            "Either this or Template (Docx) must be provided. \n"
+            "Example: /Users/username/Documents/test_files/template.docx"
         ),
     )
-    template_filling_instructions: str = Field(
+    template_information_brief: str = Field(
         description="Instructions describing what content to inject in the template placeholders.",
     )
     output_filename: str = Field(
+        default="filled_template.docx",
         description="Filename for the filled DOCX file.",
     )
     model_config = {"extra": "allow"}
@@ -445,7 +447,7 @@ class DocxTemplateAgent(Component):
 
     @classmethod
     def get_canonical_ports(cls) -> dict[str, str | None]:
-        return {"input": "template_filling_instructions", "output": "output_message"}
+        return {"input": "template_information_brief", "output": "output_message"}
 
     def __init__(
         self,
@@ -507,7 +509,7 @@ class DocxTemplateAgent(Component):
 
         template_input_path = inputs.template_input_path
         template_base64 = self.template_base64 or ctx.get("template_base64")
-        template_filling_instructions = inputs.template_filling_instructions
+        template_information_brief = inputs.template_information_brief
         output_filename = inputs.output_filename
 
         try:
@@ -587,7 +589,7 @@ class DocxTemplateAgent(Component):
             ResponseModel = build_context_response_model(analysis, image_keys)
             resp_obj = await self._llm_generate_context(
                 response_model=ResponseModel,
-                brief=template_filling_instructions,
+                brief=template_information_brief,
                 image_specs=image_specs,
             )
             context = resp_obj.context.model_dump()
@@ -633,9 +635,9 @@ class DocxTemplateAgent(Component):
                     {
                         "template": template_type,
                         "brief": (
-                            template_filling_instructions[:100]
-                            if len(template_filling_instructions) > 100
-                            else template_filling_instructions
+                            template_information_brief[:100]
+                            if len(template_information_brief) > 100
+                            else template_information_brief
                         ),
                         "output_filename": output_filename,
                     },
