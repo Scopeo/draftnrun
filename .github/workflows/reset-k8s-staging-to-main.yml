@@ -10,6 +10,8 @@ env:
 jobs:
   reset:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: Checkout main (to get migration files list)
         uses: actions/checkout@v4
@@ -107,7 +109,7 @@ jobs:
             set -e
             echo "🗄️ Running migrations and seed..."
             kubectl exec deployment/ada-api -n ada-staging -- \
-              sh -c "alembic -c ada_backend/database/alembic.ini upgrade head && python -m ada_backend.scripts.seed_db"
+              sh -c "alembic -c ada_backend/database/alembic.ini upgrade head && python -m ada_backend.database.seed_db"
 
       - name: Wait for all rollouts
         uses: appleboy/ssh-action@master
@@ -122,5 +124,14 @@ jobs:
             kubectl rollout status deployment/ada-worker -n ada-staging --timeout=10m
             kubectl rollout status deployment/ada-scheduler -n ada-staging --timeout=10m
 
-            echo "✅ Reset to main complete!"
+            echo "✅ K8s deployment complete!"
             kubectl get pods -n ada-staging
+
+      - name: Reset staging branch to main
+        run: |
+          echo "🔀 Resetting staging branch to main..."
+          git fetch origin main staging
+          git checkout staging
+          git reset --hard origin/main
+          git push --force origin staging
+          echo "✅ Staging branch reset to main (push uses GITHUB_TOKEN, won't trigger workflows)"

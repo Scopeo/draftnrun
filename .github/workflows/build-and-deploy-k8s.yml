@@ -256,6 +256,10 @@ jobs:
             kubectl exec deployment/ada-api -n ${NS} -- \
               alembic -c ada_backend/database/alembic.ini upgrade head
 
+            echo "🌱 Running seed..."
+            kubectl exec deployment/ada-api -n ${NS} -- \
+              python -m ada_backend.database.seed_db
+
             echo "⏳ Waiting for worker and scheduler..."
             kubectl rollout status deployment/ada-worker -n ${NS} --timeout=10m
             kubectl rollout status deployment/ada-scheduler -n ${NS} --timeout=10m
