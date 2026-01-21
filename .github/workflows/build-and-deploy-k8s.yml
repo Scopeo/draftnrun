@@ -303,8 +303,8 @@ jobs:
             echo "🔄 Updating images to ${TAG}..."
             kubectl set image deployment/ada-api -n ${NS} \
               ada-api=${REGISTRY}/${PREFIX}-api:${TAG}
-            kubectl set image deployment/ada-worker -n ${NS} \
-              ada-worker=${REGISTRY}/${PREFIX}-worker:${TAG}
+            kubectl set image deployment/ada-ingestion-worker -n ${NS} \
+              ada-ingestion-worker=${REGISTRY}/${PREFIX}-worker:${TAG}
             kubectl set image deployment/ada-webhook-worker -n ${NS} \
               ada-webhook-worker=${REGISTRY}/${PREFIX}-webhook-worker:${TAG}
             kubectl set image deployment/ada-scheduler -n ${NS} \
@@ -322,7 +322,7 @@ jobs:
               python -m ada_backend.database.seed_db
 
             echo "⏳ Waiting for worker, webhook-worker, and scheduler..."
-            kubectl rollout status deployment/ada-worker -n ${NS} --timeout=10m
+            kubectl rollout status deployment/ada-ingestion-worker -n ${NS} --timeout=10m
             kubectl rollout status deployment/ada-webhook-worker -n ${NS} --timeout=10m
             kubectl rollout status deployment/ada-scheduler -n ${NS} --timeout=10m
 
@@ -341,6 +341,6 @@ jobs:
             NS="${{ steps.k8s.outputs.namespace }}"
             echo "⬆️ Scaling back up..."
             kubectl scale deployment/ada-api -n ${NS} --replicas=1
-            kubectl scale deployment/ada-worker -n ${NS} --replicas=1
+            kubectl scale deployment/ada-ingestion-worker -n ${NS} --replicas=1
             kubectl scale deployment/ada-webhook-worker -n ${NS} --replicas=1
             kubectl scale deployment/ada-scheduler -n ${NS} --replicas=1
