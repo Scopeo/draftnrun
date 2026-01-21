@@ -14,29 +14,56 @@ import anyio
 import httpx
 import mcp.types as types
 from anyio.streams.memory import MemoryObjectReceiveStream, MemoryObjectSendStream
+from mcp.shared.message import SessionMessage
 
 LOGGER = logging.getLogger(__name__)
 
 
+def _serialize_message_to_json(session_message: SessionMessage) -> dict:
+    """
+    Serialize SessionMessage to JSON dict for HTTP transport.
+
+    Extracts the inner JSONRPCMessage and serializes it, exactly as the SDK
+    does for SSE transport (see mcp.client.sse:141-145).
+    """
+    return session_message.message.model_dump(by_alias=True, mode="json", exclude_none=True)
+
+
+def _deserialize_message_from_json(json_data: dict) -> SessionMessage:
+    """
+    Deserialize JSON dict to SessionMessage for SDK compatibility.
+
+    Parses JSON to JSONRPCMessage and wraps it in SessionMessage, exactly as
+    the SDK does for SSE transport (see mcp.client.sse:112-122).
+    """
+    message = types.JSONRPCMessage.model_validate(json_data)
+    return SessionMessage(message=message)
+
+
 def _parse_sse_response(sse_text: str) -> dict:
     """
-    Parse SSE format response to extract JSON data.
+    Parse SSE format response to extract JSON data from the first message.
 
     SSE format:
         event: message
         data: {"jsonrpc": "2.0", ...}
 
+    Current implementation assumes one data message per SSE response, which matches
+    observed behavior from Linear, HubSpot, and Rube MCP servers. If a server sends
+    multiple messages in one response, only the first message will be processed.
+
     Args:
         sse_text: Raw SSE formatted text
 
     Returns:
-        Parsed JSON data from the 'data:' line
+        Parsed JSON data from the first 'data:' line
     """
     for line in sse_text.strip().split("\n"):
         line = line.strip()
         if line.startswith("data:"):
             json_str = line[5:].strip()
-            return json.loads(json_str)
+            if json_str:
+                return json.loads(json_str)
 
     raise ValueError(f"No 'data:' line found in SSE response: {sse_text[:200]}")
 
@@ -58,10 +85,10 @@ async def streamable_http_client(
     Yields:
         Tuple of (read_stream, write_stream, get_session_id_callback)
     """
-    read_stream_writer: MemoryObjectSendStream[types.JSONRPCMessage | Exception]
-    read_stream: MemoryObjectReceiveStream[types.JSONRPCMessage | Exception]
-    write_stream: MemoryObjectSendStream[types.JSONRPCMessage]
-    write_stream_reader: MemoryObjectReceiveStream[types.JSONRPCMessage]
+    read_stream_writer: MemoryObjectSendStream[SessionMessage | Exception]
+    read_stream: MemoryObjectReceiveStream[SessionMessage | Exception]
+    write_stream: MemoryObjectSendStream[SessionMessage]
+    write_stream_reader: MemoryObjectReceiveStream[SessionMessage]
 
     read_stream_writer, read_stream = anyio.create_memory_object_stream(0)
     write_stream, write_stream_reader = anyio.create_memory_object_stream(0)
@@ -79,13 +106,9 @@ async def streamable_http_client(
     async def post_writer():
         nonlocal session_id
         try:
-            async for message in write_stream_reader:
+            async for session_message in write_stream_reader:
                 try:
-                    message_dict = (
-                        message.model_dump(by_alias=True, mode="json", exclude_none=True)
-                        if hasattr(message, "model_dump")
-                        else message
-                    )
+                    message_dict = _serialize_message_to_json(session_message)
 
                     headers = {"Content-Type": "application/json"}
                     if session_id:
@@ -100,15 +123,14 @@ async def streamable_http_client(
                     if response.text.strip():
                         try:
                             content_type = response.headers.get("content-type", "")
+
                             if "text/event-stream" in content_type:
-                                # Parse SSE format: "event: message\ndata: {...}\n\n"
                                 response_data = _parse_sse_response(response.text)
                             else:
-                                # Plain JSON response
                                 response_data = response.json()
 
-                            response_message = types.JSONRPCMessage.model_validate(response_data)
-                            await read_stream_writer.send(response_message)
+                            session_message = _deserialize_message_from_json(response_data)
+                            await read_stream_writer.send(session_message)
                         except Exception as e:
                             LOGGER.error(
                                 f"Error parsing MCP response: {e} "

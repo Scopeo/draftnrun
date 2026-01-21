@@ -1,6 +1,7 @@
 import logging
 from contextlib import asynccontextmanager
-from typing import Any, Literal, Optional
+from enum import StrEnum
+from typing import Any, Optional
 
 import httpx
 from mcp import ClientSession
@@ -23,7 +24,13 @@ from engine.trace.trace_manager import TraceManager
 
 LOGGER = logging.getLogger(__name__)
 
-TransportType = Literal["sse", "streamable_http"]
+
+class MCPTransport(StrEnum):
+    """Enum for MCP transport protocols."""
+
+    SSE = "sse"
+    STREAMABLE_HTTP = "streamable_http"
+
 
 class RemoteMCPTool(Component):
     """Expose tools from a remote MCP server as individual tool calls."""
@@ -41,7 +48,7 @@ class RemoteMCPTool(Component):
         headers: Optional[dict[str, Any]] = None,
         timeout: int = 30,
         tool_descriptions: list[ToolDescription] | None = None,
-        transport: TransportType = "sse",
+        transport: MCPTransport | str = MCPTransport.SSE,
     ):
         if not server_url:
             raise ValueError("server_url is required for RemoteMCPTool.")
@@ -51,7 +58,7 @@ class RemoteMCPTool(Component):
         else:
             self.headers = headers or {}
         self.timeout = timeout
-        self.transport = transport
+        self.transport = MCPTransport(transport) if isinstance(transport, str) else transport
         if tool_descriptions is None:
             raise ValueError("Provide tool_descriptions or use RemoteMCPTool.from_mcp_server for auto-discovery.")
         self._mcp_tool_descriptions = tool_descriptions
@@ -72,7 +79,7 @@ class RemoteMCPTool(Component):
     def _get_headers_for_transport(self) -> dict[str, str]:
         """Get headers appropriate for the selected transport."""
         headers = self.headers.copy()
-        if self.transport == "streamable_http":
+        if self.transport == MCPTransport.STREAMABLE_HTTP:
             headers["Accept"] = "application/json, text/event-stream"
         return headers
 
@@ -87,7 +94,7 @@ class RemoteMCPTool(Component):
         Raises:
             ValueError: If transport type is invalid.
         """
-        if self.transport == "streamable_http":
+        if self.transport == MCPTransport.STREAMABLE_HTTP:
             headers = self._get_headers_for_transport()
             http_client = httpx.AsyncClient(
                 headers=headers,
@@ -102,7 +109,7 @@ class RemoteMCPTool(Component):
                         yield session
             finally:
                 await http_client.aclose()
-        elif self.transport == "sse":
+        elif self.transport == MCPTransport.SSE:
             headers = self._get_headers_for_transport()
             async with sse_client(self.server_url, headers=headers, timeout=self.timeout) as (read, write):
                 async with ClientSession(read, write) as session:
@@ -124,7 +131,7 @@ class RemoteMCPTool(Component):
         server_url: str,
         headers: Optional[dict[str, Any]] = None,
         timeout: int = 30,
-        transport: TransportType = "sse",
+        transport: MCPTransport | str = MCPTransport.SSE,
     ) -> "RemoteMCPTool":
         """Convenience async constructor that fetches tool descriptions via MCP SDK."""
         temp = cls.__new__(cls)
@@ -136,7 +143,7 @@ class RemoteMCPTool(Component):
         else:
             temp.headers = headers or {}
         temp.timeout = timeout
-        temp.transport = transport
+        temp.transport = MCPTransport(transport) if isinstance(transport, str) else transport
         try:
             tools_result = await temp._list_tools_with_sdk()
         except Exception as exc:  # noqa: BLE001 - surface readable error to the user

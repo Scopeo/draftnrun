@@ -3,7 +3,12 @@ HubSpot MCP Tool - Connects to HubSpot's MCP server using Streamable HTTP transp
 
 This tool connects to https://mcp.hubspot.com/ using OAuth Bearer token authentication.
 Unlike RemoteMCPTool which uses SSE transport, HubSpot requires Streamable HTTP.
-# TODO: Quick and dirty implementation. Deduplicate with RemoteMCP
+
+TODO(DRA-XXX): Deprecate HubSpotMCPTool in favor of RemoteMCPTool(transport='streamable_http')
+Once we confirm all HubSpot use cases work with RemoteMCPTool, this class should be deleted.
+OAuth refresh should move to Integration System (see Gmail pattern in engine/integrations/).
+
+Legacy note: This was a quick implementation before RemoteMCPTool supported streamable_http.
 """
 
 import json
