@@ -106,7 +106,8 @@ COMPONENT_VERSION_UUIDS: dict[str, UUID] = {
     "table_lookup": UUID("4b5c6d7e-8f90-1234-5678-9abcdef01234"),
 }
 
-DEFAULT_MODEL = "openai:gpt-5-mini"
+DEFAULT_MODEL_WEB_SEARCH = "openai:gpt-5-mini"
+DEFAULT_MODEL = "anthropic:claude-haiku-4-5"
 DEFAULT_EMBEDDING_MODEL = "openai:text-embedding-3-large"
 DEFAULT_OCR_MODEL = "mistral:mistral-ocr-latest"
 
@@ -359,7 +360,7 @@ def build_web_service_config_definitions(
                     name=COMPLETION_MODEL_IN_DB,
                     type=ParameterType.LLM_MODEL,
                     nullable=False,
-                    default=DEFAULT_MODEL,
+                    default=DEFAULT_MODEL_WEB_SEARCH,
                     ui_component=UIComponent.SELECT,
                     ui_component_properties=UIComponentProperties(
                         label="Model Name",
