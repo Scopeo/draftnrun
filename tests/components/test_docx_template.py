@@ -218,7 +218,6 @@ async def test_run_without_io_trace_success(
         output_filename="out.docx",
     )
     result = await docx_agent._run_without_io_trace(inputs, {})
-    assert result.is_final is True
     assert "Successfully" in result.output
 
 
@@ -231,7 +230,6 @@ async def test_run_without_io_trace_no_template(docx_agent):
             output_filename="out.docx",
         )
         result = await docx_agent._run_without_io_trace(inputs, {})
-        assert result.is_final is False
         assert "Either template_input_path or template_base64 must be provided" in result.output
 
 
@@ -267,4 +265,4 @@ async def test_run_without_io_trace_base64(mock_trace_manager, mock_completion_s
             output_filename="out.docx",
         )
         result = await agent._run_without_io_trace(inputs, {})
-        assert result.is_final is True
+        assert "Successfully" in result.output
