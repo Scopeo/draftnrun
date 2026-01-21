@@ -154,6 +154,7 @@ def build_root_spans(df: pd.DataFrame) -> List[RootTraceSpan]:
                 graph_runner_id=row.get("graph_runner_id", None),
                 tag_name=row.get("tag_name", None),
                 conversation_id=attributes.get("conversation_id"),
+                total_credits=row.get("total_credits", None),
             )
         )
 

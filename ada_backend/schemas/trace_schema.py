@@ -78,6 +78,7 @@ class RootTraceSpan(BaseModel):
     graph_runner_id: UUID | None
     tag_name: str | None = None
     conversation_id: str | None = None
+    total_credits: float | None = None
 
 
 class Pagination(BaseModel):

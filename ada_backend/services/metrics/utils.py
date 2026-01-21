@@ -49,9 +49,32 @@ def query_root_trace_duration(project_id: UUID, duration_days: int) -> pd.DataFr
     start_time_offset_days = (datetime.now() - timedelta(days=duration_days)).isoformat()
 
     query = f"""
-    SELECT s.*, m.input_content, m.output_content
-    FROM traces.spans s
-    LEFT JOIN traces.span_messages m ON m.span_id = s.span_id
+    WITH span_credits AS (
+      SELECT 
+        su.span_id, 
+        ROUND(SUM(COALESCE(su.credits_input_token, 0) + COALESCE(su.credits_output_token, 0) + 
+            COALESCE(su.credits_per_call, 0))::numeric, 0) as credits 
+      FROM credits.span_usages su 
+      JOIN traces.spans s ON s.span_id = su.span_id 
+      WHERE s.project_id = '{project_id}'
+      AND s.start_time > '{start_time_offset_days}'
+      GROUP BY su.span_id 
+    ),
+    trace_total_credits AS (
+      SELECT 
+        s.trace_rowid,
+        ROUND(COALESCE(SUM(sc.credits), 0)::numeric, 0) as total_credits
+      FROM traces.spans s
+      LEFT JOIN span_credits sc ON sc.span_id = s.span_id
+      WHERE s.project_id = '{project_id}'
+      AND s.start_time > '{start_time_offset_days}'
+      GROUP BY s.trace_rowid
+    )
+    SELECT s.*, m.input_content, m.output_content,
+           COALESCE(ttc.total_credits, 0) as total_credits
+    FROM traces.spans s 
+    LEFT JOIN traces.span_messages m ON m.span_id = s.span_id 
+    LEFT JOIN trace_total_credits ttc ON ttc.trace_rowid = s.trace_rowid
     WHERE s.parent_id IS NULL
     AND s.project_id = '{project_id}'
     AND s.start_time > '{start_time_offset_days}'
