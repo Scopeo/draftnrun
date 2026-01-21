@@ -15,6 +15,8 @@ class ProjectAgentSchema(BaseModel):
     id: UUID
     name: str
     description: Optional[str] = None
+    icon: Optional[str] = None
+    icon_color: Optional[str] = None
     template: Optional[InputTemplate] = None
 
 

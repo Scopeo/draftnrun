@@ -60,6 +60,8 @@ def get_all_agents_service(session: Session, organization_id: UUID) -> list[Agen
             id=agent_data["agent"].id,
             name=agent_data["agent"].name,
             description=agent_data["agent"].description,
+            icon=agent_data["agent"].icon,
+            icon_color=agent_data["agent"].icon_color,
             graph_runners=agent_data["graph_runners"],
         )
         for agent_data in agents_grouped_by_id.values()
@@ -175,6 +177,8 @@ def create_new_agent_service(
         template=agent_data.template,
         graph_id=agent_data.id,
         add_input=False,
+        icon=agent_data.icon,
+        icon_color=agent_data.icon_color,
     )
 
     if agent_data.template is None:
@@ -192,6 +196,8 @@ def create_new_agent_service(
         project_id=project.id,
         project_name=project.name,
         description=project.description,
+        icon=project.icon,
+        icon_color=project.icon_color,
         organization_id=organization_id,
         project_type=project.type,
         created_at=str(project.created_at),

@@ -82,6 +82,8 @@ def get_project_with_details(
         project_type=project.type,
         graph_runners=graph_runners_with_env,
         description=project.description,
+        icon=project.icon,
+        icon_color=project.icon_color,
         organization_id=project.organization_id,
         created_at=str(project.created_at),
         updated_at=str(project.updated_at),
@@ -158,6 +160,8 @@ def get_projects_by_organization_with_details(
                 project_id=project.id,
                 project_name=project.name,
                 description=project.description,
+                icon=project.icon,
+                icon_color=project.icon_color,
                 organization_id=project.organization_id,
                 project_type=project.type,
                 created_at=str(project.created_at),
@@ -178,6 +182,8 @@ def insert_project(
     organization_id: UUID,
     description: Optional[str] = None,
     project_type: Optional[db.ProjectType] = db.ProjectType.WORKFLOW,
+    icon: Optional[str] = None,
+    icon_color: Optional[str] = None,
 ) -> db.Project:
     if project_type == db.ProjectType.WORKFLOW:
         project = db.WorkflowProject(
@@ -186,6 +192,8 @@ def insert_project(
             description=description,
             organization_id=organization_id,
             type=project_type,
+            icon=icon,
+            icon_color=icon_color,
         )
     elif project_type == db.ProjectType.AGENT:
         project = db.AgentProject(
@@ -194,6 +202,8 @@ def insert_project(
             description=description,
             organization_id=organization_id,
             type=project_type,
+            icon=icon,
+            icon_color=icon_color,
         )
     else:
         raise ValueError(f"Invalid project_type: {project_type!r}")
@@ -209,6 +219,8 @@ def update_project(
     project_id: UUID,
     project_name: Optional[str] = None,
     description: Optional[str] = None,
+    icon: Optional[str] = None,
+    icon_color: Optional[str] = None,
 ) -> db.Project:
     project = get_project(session, project_id=project_id)
     if not project:
@@ -217,6 +229,10 @@ def update_project(
         project.name = project_name
     if description:
         project.description = description
+    if icon is not None:
+        project.icon = icon
+    if icon_color is not None:
+        project.icon_color = icon_color
     session.commit()
     session.refresh(project)
     return project

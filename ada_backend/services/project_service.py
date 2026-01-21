@@ -107,6 +107,8 @@ def create_project_with_graph_runner(
     template: Optional[InputTemplate],
     graph_id: UUID,
     add_input: bool,
+    icon: Optional[str] = None,
+    icon_color: Optional[str] = None,
 ) -> tuple:
     """
     Shared helper function to create a project with a graph runner.
@@ -142,6 +144,8 @@ def create_project_with_graph_runner(
         project_name=project_name,
         description=description,
         project_type=project_type,
+        icon=icon,
+        icon_color=icon_color,
     )
 
     bind_graph_runner_to_project(
@@ -172,6 +176,8 @@ def create_workflow(
         template=project_schema.template,
         graph_id=uuid.uuid4(),
         add_input=True,
+        icon=project_schema.icon,
+        icon_color=project_schema.icon_color,
     )
 
     track_project_created(user_id, organization_id, project.id, project.name)
@@ -179,6 +185,8 @@ def create_workflow(
         project_id=project.id,
         project_name=project.name,
         description=project.description,
+        icon=project.icon,
+        icon_color=project.icon_color,
         organization_id=organization_id,
         project_type=project.type,
         created_at=str(project.created_at),
@@ -198,13 +206,21 @@ def update_project_service(
     project_id: UUID,
     project_schema: ProjectUpdateSchema,
 ) -> ProjectSchema:
-    update_project(
+    project = update_project(
         session=session,
         project_id=project_id,
         project_name=project_schema.project_name,
         description=project_schema.description,
+        icon=project_schema.icon,
+        icon_color=project_schema.icon_color,
     )
+    if not project:
+        raise ProjectNotFound(project_id)
     track_project_saved(user_id, project_id)
     return ProjectSchema(
-        project_id=project_id, project_name=project_schema.project_name, description=project_schema.description
+        project_id=project.id,
+        project_name=project.name,
+        description=project.description,
+        icon=project.icon,
+        icon_color=project.icon_color,
     )

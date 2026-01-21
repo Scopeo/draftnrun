@@ -27,6 +27,8 @@ class ProjectSchema(BaseModel):
     project_id: UUID
     project_name: str
     description: Optional[str] = None
+    icon: Optional[str] = None
+    icon_color: Optional[str] = None
 
 
 class ProjectCreateSchema(ProjectSchema):
@@ -36,6 +38,8 @@ class ProjectCreateSchema(ProjectSchema):
 class ProjectUpdateSchema(BaseModel):
     project_name: Optional[str] = None
     description: Optional[str] = None
+    icon: Optional[str] = None
+    icon_color: Optional[str] = None
 
 
 class ProjectResponse(ProjectSchema):
