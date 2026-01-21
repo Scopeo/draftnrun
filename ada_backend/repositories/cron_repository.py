@@ -122,6 +122,35 @@ def delete_cron_job(session: Session, cron_id: UUID) -> bool:
     return True
 
 
+def get_cron_jobs_by_project_id(session: Session, project_id: UUID) -> List[db.CronJob]:
+    return (
+        session.query(db.CronJob)
+        .filter(
+            db.CronJob.payload["project_id"].astext == str(project_id),
+            db.CronJob.deleted_at.is_(None),
+        )
+        .all()
+    )
+
+
+def permanently_delete_cron_jobs_by_ids(session: Session, cron_job_ids: List[UUID]) -> int:
+    """
+    Permanently delete cron jobs by their IDs.
+    Deletes associated cron_runs and then the cron jobs.
+    """
+    if not cron_job_ids:
+        return 0
+
+    session.query(db.CronRun).filter(db.CronRun.cron_id.in_(cron_job_ids)).delete(synchronize_session=False)
+
+    deleted_cron_jobs = (
+        session.query(db.CronJob).filter(db.CronJob.id.in_(cron_job_ids)).delete(synchronize_session=False)
+    )
+    session.commit()
+
+    return deleted_cron_jobs
+
+
 def insert_cron_run(
     session: Session,
     cron_id: UUID,

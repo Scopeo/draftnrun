@@ -31,6 +31,7 @@ from ada_backend.schemas.project_schema import (
 )
 from ada_backend.schemas.template_schema import InputTemplate
 from ada_backend.segment_analytics import track_project_created, track_project_saved, track_user_get_project_list
+from ada_backend.services.cron.service import permanently_delete_cron_jobs_by_project_service
 from ada_backend.services.errors import ProjectNotFound
 from ada_backend.services.graph.delete_graph_service import delete_graph_runner_service
 from ada_backend.services.graph.deploy_graph_service import clone_graph_runner
@@ -87,6 +88,7 @@ def get_projects_by_organization_with_details_service(
 
 
 def delete_project_service(session: Session, project_id: UUID) -> ProjectDeleteResponse:
+    permanently_delete_cron_jobs_by_project_service(session, project_id)
     graph_runners = get_graph_runners_by_project(session, project_id)
     for graph_runner in graph_runners:
         if graph_runner_exists(session, graph_runner.id):
