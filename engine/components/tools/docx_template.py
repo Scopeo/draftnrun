@@ -427,7 +427,6 @@ class DocxTemplateOutputs(BaseModel):
     output: str = Field(description="The success or error message from the DOCX template processing.")
     # TODO: Make simple docx_filename field instead of artifacts dictionary
     artifacts: dict[str, Any] = Field(description="The artifacts to be returned to the user.")
-    is_final: bool = Field(default=True, description="Indicates if this is the final output of the component.")
 
 
 class DocxTemplateAgent(Component):
@@ -504,7 +503,7 @@ class DocxTemplateAgent(Component):
     ) -> DocxTemplateOutputs:
         span = get_current_span()
 
-        template_input_path = inputs.template_input_path
+        template_input_path = inputs.template_input_path or ctx.get("template_input_path")
         template_base64 = (
             getattr(inputs, "template_base64", None) or self.template_base64 or ctx.get("template_base64")
         )
@@ -519,7 +518,6 @@ class DocxTemplateAgent(Component):
                 return DocxTemplateOutputs(
                     output=error_msg,
                     artifacts={},
-                    is_final=False,
                 )
 
             template_sources = [template_input_path, template_base64]
@@ -531,7 +529,6 @@ class DocxTemplateAgent(Component):
                 return DocxTemplateOutputs(
                     output=error_msg,
                     artifacts={},
-                    is_final=False,
                 )
 
             output_dir = get_output_dir()
@@ -547,7 +544,6 @@ class DocxTemplateAgent(Component):
                     return DocxTemplateOutputs(
                         output=error_msg,
                         artifacts={},
-                        is_final=False,
                     )
 
                 if not template_path.suffix.lower() == ".docx":
@@ -557,7 +553,6 @@ class DocxTemplateAgent(Component):
                     return DocxTemplateOutputs(
                         output=error_msg,
                         artifacts={},
-                        is_final=False,
                     )
 
             elif template_base64:
@@ -578,7 +573,6 @@ class DocxTemplateAgent(Component):
                     return DocxTemplateOutputs(
                         output=error_msg,
                         artifacts={},
-                        is_final=False,
                     )
 
             output_path = output_dir / Path(output_filename)
@@ -653,7 +647,6 @@ class DocxTemplateAgent(Component):
             return DocxTemplateOutputs(
                 output=success_msg,
                 artifacts={"docx_filename": str(output_filename)},
-                is_final=True,
             )
 
         except Exception as e:
@@ -668,5 +661,4 @@ class DocxTemplateAgent(Component):
             return DocxTemplateOutputs(
                 output=error_msg,
                 artifacts={},
-                is_final=False,
             )
