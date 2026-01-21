@@ -71,7 +71,7 @@ def _sort_dict_keys_recursively(obj):
 
 
 def _calculate_graph_hash(graph_project: GraphUpdateSchema) -> str:
-    graph_dict = graph_project.model_dump(mode="json")
+    graph_dict = graph_project.model_dump(mode="json", exclude={"port_mappings"})
     sorted_dict = _sort_dict_keys_recursively(graph_dict)
     json_str = json.dumps(sorted_dict, sort_keys=True, separators=(",", ":"))
     hash_obj = hashlib.sha256(json_str.encode("utf-8"))
