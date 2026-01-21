@@ -1177,6 +1177,7 @@ class ProjectEnvironmentBinding(Base):
         UUID(as_uuid=True),
         ForeignKey("graph_runners.id", ondelete="CASCADE"),
         nullable=True,
+        index=True,
     )
     created_at = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
