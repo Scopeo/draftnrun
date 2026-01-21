@@ -49,37 +49,29 @@ def query_root_trace_duration(project_id: UUID, duration_days: int) -> pd.DataFr
     start_time_offset_days = (datetime.now() - timedelta(days=duration_days)).isoformat()
 
     query = f"""
-    WITH span_credits AS (
-      SELECT
-        su.span_id,
-        ROUND(SUM(COALESCE(su.credits_input_token, 0) + COALESCE(su.credits_output_token, 0) +
-            COALESCE(su.credits_per_call, 0))::numeric, 0) as credits
-      FROM credits.span_usages su
-      JOIN traces.spans s ON s.span_id = su.span_id
-      WHERE s.project_id = '{project_id}'
-      AND s.start_time > '{start_time_offset_days}'
-      GROUP BY su.span_id
+    WITH relevant_spans AS (
+      SELECT *
+      FROM traces.spans
+      WHERE project_id = '{project_id}'
+      AND start_time > '{start_time_offset_days}'
     ),
     trace_total_credits AS (
       SELECT
-        s.trace_rowid,
-        ROUND(COALESCE(SUM(sc.credits), 0)::numeric, 0) as total_credits
-      FROM traces.spans s
-      LEFT JOIN span_credits sc ON sc.span_id = s.span_id
-      WHERE s.project_id = '{project_id}'
-      AND s.start_time > '{start_time_offset_days}'
-      GROUP BY s.trace_rowid
+        rs.trace_rowid,
+        ROUND(COALESCE(SUM(COALESCE(su.credits_input_token, 0) + COALESCE(su.credits_output_token, 0) +
+            COALESCE(su.credits_per_call, 0)), 0)::numeric, 0) as total_credits
+      FROM relevant_spans rs
+      LEFT JOIN credits.span_usages su ON su.span_id = rs.span_id
+      GROUP BY rs.trace_rowid
     )
-    SELECT s.*, m.input_content, m.output_content,
+    SELECT rs.*, m.input_content, m.output_content,
            COALESCE(ttc.total_credits, 0) as total_credits
-    FROM traces.spans s
-    LEFT JOIN traces.span_messages m ON m.span_id = s.span_id
-    LEFT JOIN trace_total_credits ttc ON ttc.trace_rowid = s.trace_rowid
-    WHERE s.parent_id IS NULL
-    AND s.project_id = '{project_id}'
-    AND s.start_time > '{start_time_offset_days}'
-    ORDER BY MAX(s.start_time) OVER (PARTITION BY s.trace_rowid) DESC,
-             s.trace_rowid, s.start_time ASC
+    FROM relevant_spans rs
+    LEFT JOIN traces.span_messages m ON m.span_id = rs.span_id
+    LEFT JOIN trace_total_credits ttc ON ttc.trace_rowid = rs.trace_rowid
+    WHERE rs.parent_id IS NULL
+    ORDER BY MAX(rs.start_time) OVER (PARTITION BY rs.trace_rowid) DESC,
+             rs.trace_rowid, rs.start_time ASC
     """
 
     session = get_session_trace()
