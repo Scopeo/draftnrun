@@ -18,7 +18,7 @@ from pydantic import BaseModel, Field
 
 from engine.components.component import Component
 from engine.components.errors import MCPConnectionError
-from engine.components.tools.hubspot_streamable_http import streamable_http_client
+from engine.components.tools.mcp_utils import streamable_http_client
 from engine.components.types import ComponentAttributes, ToolDescription
 from engine.trace.trace_manager import TraceManager
 from settings import settings

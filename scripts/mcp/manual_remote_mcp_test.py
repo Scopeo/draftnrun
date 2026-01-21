@@ -2,14 +2,21 @@
 Manual sanity script for RemoteMCPTool.
 
 What it does:
-- Connects to the given MCP server (SSE transport) using the provided headers.
+- Connects to the given MCP server using the specified transport (SSE or Streamable HTTP).
 - Auto-discovers available tools and prints their names/descriptions (first 10).
 - Optionally executes a single tool with JSON args and prints the raw output.
 
 Usage (hits the live MCP server; requires network/auth):
+    # Linear (SSE transport - default)
     uv run python scripts/mcp/manual_remote_mcp_test.py \
         --server-url https://mcp.linear.app/sse \
-        --api-key "$LINEAR_API_KEY"  # or use --headers-json for custom headers
+        --api-key "$LINEAR_API_KEY"
+
+    # Rube (Streamable HTTP transport)
+    uv run python scripts/mcp/manual_remote_mcp_test.py \
+        --server-url https://rube.app/mcp \
+        --api-key "$RUBE_API_KEY" \
+        --transport streamable_http
 
 Optional: call a specific tool
     uv run python scripts/mcp/manual_remote_mcp_test.py \
@@ -51,6 +58,12 @@ async def main():
         action="store_true",
         help="Prefix the API key with 'Bearer ' in the Authorization header (Linear expects raw token by default).",
     )
+    parser.add_argument(
+        "--transport",
+        choices=["sse", "streamable_http"],
+        default="sse",
+        help="Transport protocol to use (default: sse). Use 'streamable_http' for Rube.",
+    )
     parser.add_argument("--call-tool", help="Optional: tool name to invoke once.")
     parser.add_argument("--tool-args", help="Optional: JSON string of arguments to send with --call-tool.")
     args = parser.parse_args()
@@ -59,11 +72,13 @@ async def main():
     trace_manager = TraceManager(project_name="manual-remote-mcp-test")
     component_attributes = ComponentAttributes(component_instance_name="manual-remote-mcp-tool")
 
+    print(f"Connecting to {args.server_url} using {args.transport} transport...")
     tool = await RemoteMCPTool.from_mcp_server(
         trace_manager=trace_manager,
         component_attributes=component_attributes,
         server_url=args.server_url,
         headers=headers,
+        transport=args.transport,
     )
 
     descriptions = tool.get_tool_descriptions()

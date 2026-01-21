@@ -1,11 +1,12 @@
 """
-Streamable HTTP client implementation for HubSpot MCP.
+Streamable HTTP client implementation for MCP.
 
 MCP Streamable HTTP transport:
 - POST requests send JSON-RPC messages
-- Responses come in POST response body (not SSE)
+- Responses come in POST response body (JSON or SSE format)
 """
 
+import json
 import logging
 from contextlib import asynccontextmanager
 
@@ -15,6 +16,29 @@ import mcp.types as types
 from anyio.streams.memory import MemoryObjectReceiveStream, MemoryObjectSendStream
 
 LOGGER = logging.getLogger(__name__)
+
+
+def _parse_sse_response(sse_text: str) -> dict:
+    """
+    Parse SSE format response to extract JSON data.
+
+    SSE format:
+        event: message
+        data: {"jsonrpc": "2.0", ...}
+
+    Args:
+        sse_text: Raw SSE formatted text
+
+    Returns:
+        Parsed JSON data from the 'data:' line
+    """
+    for line in sse_text.strip().split("\n"):
+        line = line.strip()
+        if line.startswith("data:"):
+            json_str = line[5:].strip()
+            return json.loads(json_str)
+
+    raise ValueError(f"No 'data:' line found in SSE response: {sse_text[:200]}")
 
 
 @asynccontextmanager
@@ -75,11 +99,21 @@ async def streamable_http_client(
 
                     if response.text.strip():
                         try:
-                            response_data = response.json()
+                            content_type = response.headers.get("content-type", "")
+                            if "text/event-stream" in content_type:
+                                # Parse SSE format: "event: message\ndata: {...}\n\n"
+                                response_data = _parse_sse_response(response.text)
+                            else:
+                                # Plain JSON response
+                                response_data = response.json()
+
                             response_message = types.JSONRPCMessage.model_validate(response_data)
                             await read_stream_writer.send(response_message)
                         except Exception as e:
-                            LOGGER.error(f"Error parsing response: {e}")
+                            LOGGER.error(
+                                f"Error parsing MCP response: {e} "
+                                f"(Content-Type: {response.headers.get('content-type')})"
+                            )
                             await read_stream_writer.send(e)
                 except Exception as e:
                     LOGGER.error(f"Error sending POST request: {e}")
