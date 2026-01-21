@@ -291,3 +291,45 @@ class TestSaveVersionService:
 
             # Cleanup
             delete_project_service(session, project_id)
+
+    def test_raises_error_when_graph_bound_to_different_project(self):
+        """Test that saving a version with wrong project_id raises an error."""
+        with get_db_session() as session:
+            test_organization = uuid.uuid4()
+            correct_project_id = uuid.uuid4()
+            create_test_project(
+                session=session,
+                project_id=correct_project_id,
+                name="Test Project",
+                description="Test project",
+                organization_id=test_organization,
+            )
+
+            graph_runner_id = uuid.uuid4()
+            graph_runner = db.GraphRunner(id=graph_runner_id, tag_version=None)
+            session.add(graph_runner)
+            session.flush()
+
+            binding = db.ProjectEnvironmentBinding(
+                project_id=correct_project_id,
+                graph_runner_id=graph_runner_id,
+                environment=db.EnvType.DRAFT,
+            )
+            session.add(binding)
+            session.commit()
+
+            wrong_project_id = uuid.uuid4()
+            with pytest.raises(GraphNotBoundToProjectError) as exc_info:
+                save_graph_version_service(
+                    session=session,
+                    graph_runner_id=graph_runner_id,
+                    project_id=wrong_project_id,
+                )
+
+            error_message = str(exc_info.value)
+            assert str(graph_runner_id) in error_message
+            assert str(wrong_project_id) in error_message
+            assert str(correct_project_id) in error_message
+
+            # Cleanup
+            delete_project_service(session, correct_project_id)

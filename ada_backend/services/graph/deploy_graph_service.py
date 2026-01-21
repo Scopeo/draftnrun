@@ -352,6 +352,13 @@ def save_graph_version_service(
     if env_relationship is None:
         raise GraphNotBoundToProjectError(graph_runner_id, bound_project_id=None)
 
+    if env_relationship.project_id != project_id:
+        raise GraphNotBoundToProjectError(
+            graph_runner_id=graph_runner_id,
+            bound_project_id=env_relationship.project_id,
+            expected_project_id=project_id,
+        )
+
     if env_relationship.environment != EnvType.DRAFT:
         raise GraphVersionSavingFromNonDraftError(graph_runner_id, str(env_relationship.environment))
 
