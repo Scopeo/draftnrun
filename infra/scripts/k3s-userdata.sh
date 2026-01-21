@@ -23,10 +23,18 @@ NAMESPACE="ada-${ENV}"
 IMAGE_TAG="${ENV}"  # staging or main
 LOG_GROUP="/ada/${ENV}"
 
+# Set domain based on environment
+if [ "$ENV" == "prod" ]; then
+  DOMAIN="ada.scopeo.studio"
+else
+  DOMAIN="ada-staging.scopeo.studio"
+fi
+
 echo "========================================"
 echo "Configuring K3s for: $ENV"
 echo "Region: $REGION"
 echo "Namespace: $NAMESPACE"
+echo "Domain: $DOMAIN"
 echo "========================================"
 
 # Install dependencies
@@ -61,8 +69,22 @@ BASHRC
 /usr/local/bin/k3s kubectl create namespace $NAMESPACE || true
 
 # Auto-deploy manifests (K3s watches /var/lib/rancher/k3s/server/manifests/)
+# Resource budget for t4g.large (2 vCPU, 8GB RAM):
+# - 2x api: 200m CPU, 1Gi mem
+# - 1x worker: 100m CPU, 512Mi mem
+# - 1x scheduler: 50m CPU, 128Mi mem
+# - 1x webhook: 50m CPU, 128Mi mem
+# - Rolling update headroom: 100m CPU, 512Mi mem
+# - System (traefik, etc): ~300m CPU, 1Gi mem
+# Total requests: ~800m CPU, ~3.3Gi mem (leaves plenty of headroom)
 cat > /var/lib/rancher/k3s/server/manifests/ada-deployments.yaml << MANIFEST
 # Ada Deployments - Auto-deployed by K3s
+# Priority Classes (higher value = higher priority, won't be evicted):
+# - ada-critical (1000): API - must always run
+# - ada-high (500): Webhook worker - handles incoming requests
+# - ada-normal (100): Scheduler, Worker - can be delayed
+# NOTE: PriorityClasses are defined in infra/k8s/base/priority-classes.yaml
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -71,7 +93,7 @@ metadata:
   labels:
     app: ada-api
 spec:
-  replicas: 1
+  replicas: 2
   selector:
     matchLabels:
       app: ada-api
@@ -80,6 +102,7 @@ spec:
       labels:
         app: ada-api
     spec:
+      priorityClassName: ada-critical
       containers:
         - name: ada-api
           image: ghcr.io/scopeo/draftnrun-api:$IMAGE_TAG
@@ -92,42 +115,50 @@ spec:
           resources:
             requests:
               memory: "512Mi"
-              cpu: "250m"
+              cpu: "100m"
             limits:
-              memory: "2Gi"
-              cpu: "1000m"
+              memory: "1Gi"
+              cpu: "500m"
+          startupProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            failureThreshold: 30
+            periodSeconds: 10
           readinessProbe:
             httpGet:
               path: /health
               port: 8000
-            initialDelaySeconds: 10
             periodSeconds: 5
+            failureThreshold: 3
           livenessProbe:
             httpGet:
               path: /health
               port: 8000
-            initialDelaySeconds: 30
             periodSeconds: 10
+            failureThreshold: 3
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: ada-worker
+  name: ada-ingestion-worker
   namespace: $NAMESPACE
   labels:
-    app: ada-worker
+    app: ada-ingestion-worker
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: ada-worker
+      app: ada-ingestion-worker
   template:
     metadata:
       labels:
-        app: ada-worker
+        app: ada-ingestion-worker
     spec:
+      priorityClassName: ada-normal
+      terminationGracePeriodSeconds: 120
       containers:
-        - name: ada-worker
+        - name: ada-ingestion-worker
           image: ghcr.io/scopeo/draftnrun-worker:$IMAGE_TAG
           imagePullPolicy: Always
           envFrom:
@@ -143,10 +174,65 @@ spec:
           resources:
             requests:
               memory: "512Mi"
-              cpu: "250m"
+              cpu: "100m"
             limits:
-              memory: "4Gi"
-              cpu: "2000m"
+              memory: "1.5Gi"
+              cpu: "1000m"
+          livenessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - "kill -0 1"
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            failureThreshold: 3
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ada-webhook-worker
+  namespace: $NAMESPACE
+  labels:
+    app: ada-webhook-worker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ada-webhook-worker
+  template:
+    metadata:
+      labels:
+        app: ada-webhook-worker
+    spec:
+      priorityClassName: ada-high
+      terminationGracePeriodSeconds: 60
+      containers:
+        - name: ada-webhook-worker
+          image: ghcr.io/scopeo/draftnrun-webhook-worker:$IMAGE_TAG
+          imagePullPolicy: Always
+          envFrom:
+            - secretRef:
+                name: ada-secrets
+          env:
+            - name: MAX_CONCURRENT_WEBHOOKS
+              value: "2"
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "50m"
+            limits:
+              memory: "256Mi"
+              cpu: "250m"
+          livenessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - "kill -0 1"
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            failureThreshold: 3
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -167,6 +253,8 @@ spec:
       labels:
         app: ada-scheduler
     spec:
+      priorityClassName: ada-normal
+      terminationGracePeriodSeconds: 30
       containers:
         - name: ada-scheduler
           image: ghcr.io/scopeo/draftnrun-scheduler:$IMAGE_TAG
@@ -176,11 +264,20 @@ spec:
                 name: ada-secrets
           resources:
             requests:
-              memory: "256Mi"
-              cpu: "100m"
+              memory: "128Mi"
+              cpu: "50m"
             limits:
-              memory: "512Mi"
-              cpu: "500m"
+              memory: "256Mi"
+              cpu: "250m"
+          livenessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - "kill -0 1"
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            failureThreshold: 3
 ---
 apiVersion: v1
 kind: Service
@@ -198,16 +295,33 @@ spec:
       targetPort: 8000
       protocol: TCP
 ---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: https-headers
+  namespace: $NAMESPACE
+spec:
+  headers:
+    customRequestHeaders:
+      X-Forwarded-Proto: "https"
+---
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: ada-api
   namespace: $NAMESPACE
   annotations:
-    traefik.ingress.kubernetes.io/router.entrypoints: web
+    traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
+    traefik.ingress.kubernetes.io/router.middlewares: $NAMESPACE-https-headers@kubernetescrd
+    cert-manager.io/cluster-issuer: letsencrypt-prod
 spec:
+  tls:
+  - hosts:
+    - $DOMAIN
+    secretName: ada-tls
   rules:
-  - http:
+  - host: $DOMAIN
+    http:
       paths:
       - path: /
         pathType: Prefix
@@ -366,6 +480,7 @@ echo "========================================"
 echo "Environment: $ENV"
 echo "Region: $REGION"
 echo "Namespace: $NAMESPACE"
+echo "Domain: $DOMAIN"
 echo "CloudWatch Log Group: $LOG_GROUP"
 echo ""
 echo "Next steps:"
@@ -373,4 +488,7 @@ echo "1. SSH to this instance"
 echo "2. Create credentials.env with your secrets"
 echo "3. Run: kubectl create secret generic ada-secrets -n $NAMESPACE --from-env-file=credentials.env"
 echo "4. Add this IP to GitHub secret EC2_HOST_K8S_${ENV^^}"
+echo ""
+echo "IMPORTANT: Do NOT use 'kubectl apply' - K3s auto-deploys from /var/lib/rancher/k3s/server/manifests/"
+echo "To update config, edit the manifest file directly on the server."
 echo "========================================"

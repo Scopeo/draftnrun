@@ -1,4 +1,3 @@
-# Scheduler Deployment for cron jobs (APScheduler)
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -8,7 +7,7 @@ metadata:
 spec:
   replicas: 1
   strategy:
-    type: Recreate  # Only 1 scheduler at a time to avoid duplicate jobs
+    type: Recreate
   selector:
     matchLabels:
       app: ada-scheduler
@@ -17,18 +16,28 @@ spec:
       labels:
         app: ada-scheduler
     spec:
-      terminationGracePeriodSeconds: 1800
+      priorityClassName: ada-normal
+      terminationGracePeriodSeconds: 30
       containers:
         - name: ada-scheduler
-          image: ada-scheduler  # Replaced by Kustomize
-          imagePullPolicy: IfNotPresent
-          resources:
-            requests:
-              cpu: "250m"
-              memory: "512Mi"
-            limits:
-              cpu: "1000m"
-              memory: "2Gi"
+          image: ghcr.io/scopeo/draftnrun-scheduler:latest
+          imagePullPolicy: Always
           envFrom:
             - secretRef:
                 name: ada-secrets
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 250m
+              memory: 256Mi
+          livenessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - "kill -0 1"
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            failureThreshold: 3

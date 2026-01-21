@@ -63,4 +63,5 @@ EXPOSE 8000
 # - graceful-timeout matches terminationGracePeriodSeconds
 CMD ["gunicorn", "-w", "2", "-k", "uvicorn.workers.UvicornWorker", \
      "ada_backend.main:app", "--bind", "0.0.0.0:8000", \
-     "--timeout", "1800", "--graceful-timeout", "1800"]
+     "--timeout", "1800", "--graceful-timeout", "1800", \
+     "--forwarded-allow-ips", "*"]

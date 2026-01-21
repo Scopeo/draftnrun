@@ -1,0 +1,253 @@
+# Ada Deployments - Production - Auto-deployed by K3s
+# Resource budget for t4g.large (2 vCPU, 8GB RAM) SHARED with staging:
+# Prod allocation (~400m CPU, ~1.5Gi mem):
+# - 1x api: 100m CPU, 512Mi mem
+# - 1x worker: 100m CPU, 512Mi mem
+# - 1x scheduler: 50m CPU, 128Mi mem
+# - 1x webhook: 50m CPU, 128Mi mem
+# - Rolling update headroom: 100m CPU, 512Mi mem
+#
+# Priority: ada-critical (API) > ada-high (webhook) > ada-normal (worker/scheduler)
+# PriorityClasses defined in staging file (cluster-scoped)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ada-api
+  namespace: ada-prod
+  labels:
+    app: ada-api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ada-api
+  template:
+    metadata:
+      labels:
+        app: ada-api
+    spec:
+      priorityClassName: ada-critical
+      containers:
+        - name: ada-api
+          image: ghcr.io/scopeo/draftnrun-api:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8000
+          envFrom:
+            - secretRef:
+                name: ada-secrets
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: "100m"
+            limits:
+              memory: "1Gi"
+              cpu: "500m"
+          startupProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            failureThreshold: 30
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            periodSeconds: 5
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            periodSeconds: 10
+            failureThreshold: 3
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ada-ingestion-worker
+  namespace: ada-prod
+  labels:
+    app: ada-ingestion-worker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ada-ingestion-worker
+  template:
+    metadata:
+      labels:
+        app: ada-ingestion-worker
+    spec:
+      priorityClassName: ada-normal
+      terminationGracePeriodSeconds: 120
+      containers:
+        - name: ada-ingestion-worker
+          image: ghcr.io/scopeo/draftnrun-worker:latest
+          imagePullPolicy: Always
+          envFrom:
+            - secretRef:
+                name: ada-secrets
+          env:
+            - name: MAX_CONCURRENT_INGESTIONS
+              value: "2"
+            - name: API_BASE_URL
+              value: "http://ada-api"
+            - name: ADA_URL
+              value: "http://ada-api"
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: "100m"
+            limits:
+              memory: "1.5Gi"
+              cpu: "1000m"
+          livenessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - "kill -0 1"
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            failureThreshold: 3
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ada-webhook-worker
+  namespace: ada-prod
+  labels:
+    app: ada-webhook-worker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ada-webhook-worker
+  template:
+    metadata:
+      labels:
+        app: ada-webhook-worker
+    spec:
+      priorityClassName: ada-high
+      terminationGracePeriodSeconds: 60
+      containers:
+        - name: ada-webhook-worker
+          image: ghcr.io/scopeo/draftnrun-webhook-worker:latest
+          imagePullPolicy: Always
+          envFrom:
+            - secretRef:
+                name: ada-secrets
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "50m"
+            limits:
+              memory: "256Mi"
+              cpu: "250m"
+          livenessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - "kill -0 1"
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            failureThreshold: 3
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ada-scheduler
+  namespace: ada-prod
+  labels:
+    app: ada-scheduler
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: ada-scheduler
+  template:
+    metadata:
+      labels:
+        app: ada-scheduler
+    spec:
+      priorityClassName: ada-normal
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: ada-scheduler
+          image: ghcr.io/scopeo/draftnrun-scheduler:latest
+          imagePullPolicy: Always
+          envFrom:
+            - secretRef:
+                name: ada-secrets
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "50m"
+            limits:
+              memory: "256Mi"
+              cpu: "250m"
+          livenessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - "kill -0 1"
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            failureThreshold: 3
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ada-api
+  namespace: ada-prod
+  labels:
+    app: ada-api
+spec:
+  type: ClusterIP
+  selector:
+    app: ada-api
+  ports:
+    - port: 80
+      targetPort: 8000
+      protocol: TCP
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: https-headers
+  namespace: ada-prod
+spec:
+  headers:
+    customRequestHeaders:
+      X-Forwarded-Proto: "https"
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ada-api
+  namespace: ada-prod
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
+    traefik.ingress.kubernetes.io/router.middlewares: ada-prod-https-headers@kubernetescrd
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+spec:
+  tls:
+  - hosts:
+    - ada-prod.scopeo.studio
+    secretName: ada-prod-tls
+  rules:
+  - host: ada-prod.scopeo.studio
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: ada-api
+            port:
+              number: 80

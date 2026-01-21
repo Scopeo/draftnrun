@@ -1,7 +1,7 @@
-# Namespace for production environment
 apiVersion: v1
 kind: Namespace
 metadata:
   name: ada-prod
   labels:
-    environment: production
+    name: ada-prod
+    environment: prod
