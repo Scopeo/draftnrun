@@ -715,8 +715,7 @@ async def execute(execution_payload: EndpointPollingExecutionPayload, **kwargs) 
                 workflow_results.append({
                     "id": new_value,
                     "status": "success",
-                    "message": workflow_result.message,
-                    "trace_id": workflow_result.trace_id,
+                    "trace_id": str(workflow_result.trace_id),
                 })
                 successful_values.append(new_value)
                 LOGGER.info(f"Successfully triggered workflow for value {new_value}")
