@@ -7,12 +7,12 @@ What it does:
 - Optionally executes a single tool with JSON args and prints the raw output.
 
 Usage (hits the live MCP server; requires network/auth):
-    uv run python scripts/manual_remote_mcp_test.py \
+    uv run python scripts/mcp/manual_remote_mcp_test.py \
         --server-url https://mcp.linear.app/sse \
         --api-key "$LINEAR_API_KEY"  # or use --headers-json for custom headers
 
 Optional: call a specific tool
-    uv run python scripts/manual_remote_mcp_test.py \
+    uv run python scripts/mcp/manual_remote_mcp_test.py \
         --server-url https://mcp.linear.app/sse \
         --api-key "$LINEAR_API_KEY" \
         --call-tool some_tool_name \
@@ -26,7 +26,8 @@ import asyncio
 import json
 from typing import Any, Dict
 
-from engine.components.tools.remote_mcp_tool import RemoteMCPTool, RemoteMCPToolInputs
+from engine.components.tools.mcp.remote_mcp_tool import RemoteMCPTool
+from engine.components.tools.mcp.shared import MCPToolInputs
 from engine.components.types import ComponentAttributes
 from engine.trace.trace_manager import TraceManager
 
@@ -74,7 +75,7 @@ async def main():
 
     if args.call_tool:
         tool_args = json.loads(args.tool_args) if args.tool_args else {}
-        inputs = RemoteMCPToolInputs(tool_name=args.call_tool, tool_arguments=tool_args)
+        inputs = MCPToolInputs(tool_name=args.call_tool, tool_arguments=tool_args)
         result = await tool._run_without_io_trace(inputs=inputs, ctx={})
         print(f"\nTool '{args.call_tool}' response:\n{result.output}")
 

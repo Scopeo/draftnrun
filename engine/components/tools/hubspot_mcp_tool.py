@@ -17,7 +17,7 @@ from opentelemetry.trace import get_current_span
 from pydantic import BaseModel, Field
 
 from engine.components.component import Component
-from engine.components.errors import RemoteMCPConnectionError
+from engine.components.errors import MCPConnectionError
 from engine.components.tools.hubspot_streamable_http import streamable_http_client
 from engine.components.types import ComponentAttributes, ToolDescription
 from engine.trace.trace_manager import TraceManager
@@ -167,7 +167,7 @@ class HubSpotMCPTool(Component):
         try:
             tools_result = await temp._list_tools_with_sdk()
         except Exception as exc:  # noqa: BLE001 - surface readable error to the user
-            raise RemoteMCPConnectionError(temp.server_url, str(exc)) from exc
+            raise MCPConnectionError(temp.server_url, str(exc)) from exc
         tools = list(getattr(tools_result, "tools", []) or [])
 
         tool_descriptions: list[ToolDescription] = []
@@ -254,6 +254,6 @@ class HubSpotMCPTool(Component):
                     await session.initialize()
                     return await session.call_tool(tool_name, arguments=arguments)
         except Exception as exc:  # noqa: BLE001 - keep root cause attached
-            raise RemoteMCPConnectionError(self.server_url, str(exc)) from exc
+            raise MCPConnectionError(self.server_url, str(exc)) from exc
         finally:
             await client.aclose()

@@ -20,8 +20,8 @@ from engine.components.table_lookup import DEFAULT_TABLE_LOOKUP_TOOL_DESCRIPTION
 from engine.components.tools.api_call_tool import API_CALL_TOOL_DESCRIPTION
 from engine.components.tools.docx_template import DOCX_TEMPLATE_TOOL_DESCRIPTION
 from engine.components.tools.linkup_tool import LINKUP_TOOL_DESCRIPTION
+from engine.components.tools.mcp.remote_mcp_tool import DEFAULT_MCP_TOOL_DESCRIPTION
 from engine.components.tools.python_code_runner import PYTHON_CODE_RUNNER_TOOL_DESCRIPTION
-from engine.components.tools.remote_mcp_tool import DEFAULT_REMOTE_MCP_TOOL_DESCRIPTION
 from engine.components.tools.tavily_search_tool import TAVILY_TOOL_DESCRIPTION
 from engine.components.tools.terminal_command_runner import TERMINAL_COMMAND_RUNNER_TOOL_DESCRIPTION
 from engine.components.web_search_tool_openai import DEFAULT_WEB_SEARCH_OPENAI_TOOL_DESCRIPTION
@@ -126,7 +126,7 @@ def seed_tool_description(session: Session):
     )
     remote_mcp_tool_description = db.ToolDescription(
         id=TOOL_DESCRIPTION_UUIDS["remote_mcp_tool_description"],
-        **DEFAULT_REMOTE_MCP_TOOL_DESCRIPTION.model_dump(),
+        **DEFAULT_MCP_TOOL_DESCRIPTION.model_dump(),
     )
     default_table_lookup_tool_description = db.ToolDescription(
         id=TOOL_DESCRIPTION_UUIDS["default_table_lookup_tool_description"],

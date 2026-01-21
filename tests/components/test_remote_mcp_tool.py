@@ -5,12 +5,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from engine.components.errors import RemoteMCPConnectionError
-from engine.components.tools.remote_mcp_tool import (
-    RemoteMCPTool,
-    RemoteMCPToolInputs,
-    RemoteMCPToolOutputs,
-)
+from engine.components.errors import MCPConnectionError
+from engine.components.tools.mcp.remote_mcp_tool import RemoteMCPTool
+from engine.components.tools.mcp.shared import MCPToolInputs, MCPToolOutputs
 from engine.components.types import ComponentAttributes, ToolDescription
 from engine.trace.trace_manager import TraceManager
 
@@ -91,8 +88,8 @@ def mock_mcp_sdk(list_tools_result=None, call_tool_result=None):
         return mock_session_ctx
 
     with (
-        patch("engine.components.tools.remote_mcp_tool.sse_client", mock_sse_client),
-        patch("engine.components.tools.remote_mcp_tool.ClientSession", mock_client_session),
+        patch("engine.components.tools.mcp.remote_mcp_tool.sse_client", mock_sse_client),
+        patch("engine.components.tools.mcp.remote_mcp_tool.ClientSession", mock_client_session),
     ):
         yield mock_session
 
@@ -221,12 +218,12 @@ def test_run_executes_tool_successfully(mock_trace_manager, component_attributes
     async def run_test():
         with mock_mcp_sdk(call_tool_result=mock_call_result) as mock_session:
             result = await mcp_tool._run_without_io_trace(
-                inputs=RemoteMCPToolInputs(tool_name="list_issues", tool_arguments={"first": 10}),
+                inputs=MCPToolInputs(tool_name="list_issues", tool_arguments={"first": 10}),
                 ctx={},
             )
 
             # Verify result
-            assert isinstance(result, RemoteMCPToolOutputs)
+            assert isinstance(result, MCPToolOutputs)
             assert json.loads(result.output) == [{"id": "1", "title": "Issue 1"}]
             assert result.is_error is False
             assert len(result.content) == 1
@@ -268,7 +265,7 @@ def test_run_handles_multiple_content_items(mock_trace_manager, component_attrib
     async def run_test():
         with mock_mcp_sdk(call_tool_result=mock_result):
             result = await mcp_tool._run_without_io_trace(
-                inputs=RemoteMCPToolInputs(tool_name="get_data", tool_arguments={}),
+                inputs=MCPToolInputs(tool_name="get_data", tool_arguments={}),
                 ctx={},
             )
 
@@ -302,7 +299,7 @@ def test_run_handles_empty_content(mock_trace_manager, component_attributes):
     async def run_test():
         with mock_mcp_sdk(call_tool_result=mock_result):
             result = await mcp_tool._run_without_io_trace(
-                inputs=RemoteMCPToolInputs(tool_name="empty_tool", tool_arguments={}),
+                inputs=MCPToolInputs(tool_name="empty_tool", tool_arguments={}),
                 ctx={},
             )
 
@@ -335,7 +332,7 @@ def test_run_handles_error_response(mock_trace_manager, component_attributes):
     async def run_test():
         with mock_mcp_sdk(call_tool_result=mock_result):
             result = await mcp_tool._run_without_io_trace(
-                inputs=RemoteMCPToolInputs(tool_name="failing_tool", tool_arguments={}),
+                inputs=MCPToolInputs(tool_name="failing_tool", tool_arguments={}),
                 ctx={},
             )
 
@@ -366,7 +363,7 @@ def test_run_validates_tool_name_required(mock_trace_manager, component_attribut
     async def run_test():
         with pytest.raises(ValueError, match="tool_name is required"):
             await mcp_tool._run_without_io_trace(
-                inputs=RemoteMCPToolInputs(tool_name="", tool_arguments={}),
+                inputs=MCPToolInputs(tool_name="", tool_arguments={}),
                 ctx={},
             )
 
@@ -394,7 +391,7 @@ def test_run_validates_tool_exists(mock_trace_manager, component_attributes):
     async def run_test():
         with pytest.raises(ValueError, match="Tool nonexistent_tool not found in MCP registry"):
             await mcp_tool._run_without_io_trace(
-                inputs=RemoteMCPToolInputs(tool_name="nonexistent_tool", tool_arguments={}),
+                inputs=MCPToolInputs(tool_name="nonexistent_tool", tool_arguments={}),
                 ctx={},
             )
 
@@ -466,7 +463,7 @@ def test_from_mcp_server_wraps_connection_errors(mock_trace_manager, component_a
     async def run_test():
         with patch.object(RemoteMCPTool, "_list_tools_with_sdk", side_effect=RuntimeError("boom")):
             with pytest.raises(
-                RemoteMCPConnectionError, match="MCP Tool failed to connect to https://mcp.example.com: boom"
+                MCPConnectionError, match="MCP Tool failed to connect to https://mcp.example.com: boom"
             ):
                 await RemoteMCPTool.from_mcp_server(
                     trace_manager=mock_trace_manager,
@@ -496,13 +493,13 @@ def test_call_tool_wraps_connection_errors(mock_trace_manager, component_attribu
     )
 
     async def run_test():
-        with patch("engine.components.tools.remote_mcp_tool.sse_client", side_effect=RuntimeError("network down")):
+        with patch("engine.components.tools.mcp.remote_mcp_tool.sse_client", side_effect=RuntimeError("network down")):
             with pytest.raises(
-                RemoteMCPConnectionError,
+                MCPConnectionError,
                 match="MCP Tool failed to connect to https://mcp.example.com: network down",
             ):
                 await mcp_tool._run_without_io_trace(
-                    inputs=RemoteMCPToolInputs(tool_name="tool1", tool_arguments={}),
+                    inputs=MCPToolInputs(tool_name="tool1", tool_arguments={}),
                     ctx={},
                 )
 
