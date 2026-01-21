@@ -1,7 +1,7 @@
 """remove_message_and_artifact_from_cron_results
 
 Revision ID: 9e46c1d3afb3
-Revises: 475546bc2802
+Revises: 7aa8f5d4fe12
 Create Date: 2026-01-20 17:53:14.492197
 
 """
@@ -12,7 +12,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "9e46c1d3afb3"
-down_revision: Union[str, None] = "475546bc2802"
+down_revision: Union[str, None] = "7aa8f5d4fe12"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
