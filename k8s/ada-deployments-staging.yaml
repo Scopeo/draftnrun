@@ -1,0 +1,286 @@
+# Ada Deployments - Auto-deployed by K3s
+# Resource budget for t4g.large (2 vCPU, 8GB RAM):
+# - 2x api: 200m CPU, 1Gi mem
+# - 1x worker: 100m CPU, 512Mi mem
+# - 1x scheduler: 50m CPU, 128Mi mem
+# - 1x webhook: 50m CPU, 128Mi mem
+# - Rolling update headroom: 100m CPU, 512Mi mem
+# - System (traefik, etc): ~300m CPU, 1Gi mem
+# Total requests: ~800m CPU, ~3.3Gi mem (leaves plenty of headroom)
+#
+# Priority Classes (higher value = higher priority, won't be evicted):
+# - ada-critical (1000): API - must always run
+# - ada-high (500): Webhook worker - handles incoming requests
+# - ada-normal (100): Scheduler, Worker - can be delayed
+---
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: ada-critical
+value: 1000
+globalDefault: false
+description: "Critical pods like API that must always run"
+---
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: ada-high
+value: 500
+globalDefault: false
+description: "High priority pods like webhook workers"
+---
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: ada-normal
+value: 100
+globalDefault: false
+description: "Normal priority pods like workers and schedulers"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ada-api
+  namespace: ada-staging
+  labels:
+    app: ada-api
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: ada-api
+  template:
+    metadata:
+      labels:
+        app: ada-api
+    spec:
+      priorityClassName: ada-critical
+      containers:
+        - name: ada-api
+          image: ghcr.io/scopeo/draftnrun-api:staging
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8000
+          envFrom:
+            - secretRef:
+                name: ada-secrets
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: "100m"
+            limits:
+              memory: "1Gi"
+              cpu: "500m"
+          startupProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            failureThreshold: 30
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            periodSeconds: 5
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            periodSeconds: 10
+            failureThreshold: 3
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ada-ingestion-worker
+  namespace: ada-staging
+  labels:
+    app: ada-ingestion-worker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ada-ingestion-worker
+  template:
+    metadata:
+      labels:
+        app: ada-ingestion-worker
+    spec:
+      priorityClassName: ada-normal
+      terminationGracePeriodSeconds: 120
+      containers:
+        - name: ada-ingestion-worker
+          image: ghcr.io/scopeo/draftnrun-worker:staging
+          imagePullPolicy: Always
+          envFrom:
+            - secretRef:
+                name: ada-secrets
+          env:
+            - name: MAX_CONCURRENT_INGESTIONS
+              value: "2"
+            - name: API_BASE_URL
+              value: "http://ada-api"
+            - name: ADA_URL
+              value: "http://ada-api"
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: "100m"
+            limits:
+              memory: "1.5Gi"
+              cpu: "1000m"
+          livenessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - "kill -0 1"
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            failureThreshold: 3
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ada-webhook-worker
+  namespace: ada-staging
+  labels:
+    app: ada-webhook-worker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ada-webhook-worker
+  template:
+    metadata:
+      labels:
+        app: ada-webhook-worker
+    spec:
+      priorityClassName: ada-high
+      terminationGracePeriodSeconds: 60
+      containers:
+        - name: ada-webhook-worker
+          image: ghcr.io/scopeo/draftnrun-webhook-worker:staging
+          imagePullPolicy: Always
+          envFrom:
+            - secretRef:
+                name: ada-secrets
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "50m"
+            limits:
+              memory: "256Mi"
+              cpu: "250m"
+          livenessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - "kill -0 1"
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            failureThreshold: 3
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ada-scheduler
+  namespace: ada-staging
+  labels:
+    app: ada-scheduler
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: ada-scheduler
+  template:
+    metadata:
+      labels:
+        app: ada-scheduler
+    spec:
+      priorityClassName: ada-normal
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: ada-scheduler
+          image: ghcr.io/scopeo/draftnrun-scheduler:staging
+          imagePullPolicy: Always
+          envFrom:
+            - secretRef:
+                name: ada-secrets
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "50m"
+            limits:
+              memory: "256Mi"
+              cpu: "250m"
+          livenessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - "kill -0 1"
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            failureThreshold: 3
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ada-api
+  namespace: ada-staging
+  labels:
+    app: ada-api
+spec:
+  type: ClusterIP
+  selector:
+    app: ada-api
+  ports:
+    - port: 80
+      targetPort: 8000
+      protocol: TCP
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: https-headers
+  namespace: ada-staging
+spec:
+  headers:
+    customRequestHeaders:
+      X-Forwarded-Proto: "https"
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ada-api
+  namespace: ada-staging
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
+    traefik.ingress.kubernetes.io/router.middlewares: ada-staging-https-headers@kubernetescrd
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+spec:
+  tls:
+  - hosts:
+    - ada-staging.scopeo.studio
+    secretName: ada-staging-tls
+  rules:
+  - host: ada-staging.scopeo.studio
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: ada-api
+            port:
+              number: 80

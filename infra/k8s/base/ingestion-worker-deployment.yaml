@@ -1,9 +1,9 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: ada-webhook-worker
+  name: ada-ingestion-worker
   labels:
-    app: ada-webhook-worker
+    app: ada-ingestion-worker
 spec:
   replicas: 2
   strategy:
@@ -13,40 +13,35 @@ spec:
       maxUnavailable: 0
   selector:
     matchLabels:
-      app: ada-webhook-worker
+      app: ada-ingestion-worker
   template:
     metadata:
       labels:
-        app: ada-webhook-worker
+        app: ada-ingestion-worker
     spec:
-      priorityClassName: ada-high
-      terminationGracePeriodSeconds: 60
+      priorityClassName: ada-normal
+      terminationGracePeriodSeconds: 120
       containers:
-        - name: ada-webhook-worker
-          image: ghcr.io/scopeo/draftnrun-webhook-worker:latest
+        - name: ada-ingestion-worker
+          image: ghcr.io/scopeo/draftnrun-worker:latest
           imagePullPolicy: Always
           envFrom:
             - secretRef:
                 name: ada-secrets
           env:
-            - name: MAX_CONCURRENT_WEBHOOKS
+            - name: MAX_CONCURRENT_INGESTIONS
               value: "2"
+            - name: API_BASE_URL
+              value: "http://ada-api"
+            - name: ADA_URL
+              value: "http://ada-api"
           resources:
             requests:
-              cpu: 50m
-              memory: 128Mi
+              cpu: 100m
+              memory: 512Mi
             limits:
-              cpu: 250m
-              memory: 256Mi
-          readinessProbe:
-            exec:
-              command:
-                - /bin/sh
-                - -c
-                - "kill -0 1"
-            initialDelaySeconds: 5
-            periodSeconds: 10
-            failureThreshold: 3
+              cpu: 1000m
+              memory: 1536Mi
           livenessProbe:
             exec:
               command:
@@ -55,4 +50,13 @@ spec:
                 - "kill -0 1"
             initialDelaySeconds: 30
             periodSeconds: 30
+            failureThreshold: 3
+          readinessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - "kill -0 1"
+            initialDelaySeconds: 5
+            periodSeconds: 10
             failureThreshold: 3

@@ -1,48 +1,24 @@
-# Production overlay - inherits from base, applies prod-specific config
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
-# Inherit all resources from base
+namespace: ada-prod
+
 resources:
   - ../base
   - namespace.yaml
+  - middleware.yaml
+  - ingress.yaml
 
-# Apply to prod namespace
-namespace: ada-prod
-
-# Container images - update newTag on each deploy
 images:
-  - name: ada-api
-    newName: ghcr.io/scopeo/draftnrun-api
+  - name: ghcr.io/scopeo/draftnrun-api
     newTag: latest
-  - name: ada-worker
-    newName: ghcr.io/scopeo/draftnrun-worker
+  - name: ghcr.io/scopeo/draftnrun-worker
     newTag: latest
-  - name: ada-webhook-worker
-    newName: ghcr.io/scopeo/draftnrun-webhook-worker
+  - name: ghcr.io/scopeo/draftnrun-webhook-worker
     newTag: latest
-  - name: ada-scheduler
-    newName: ghcr.io/scopeo/draftnrun-scheduler
+  - name: ghcr.io/scopeo/draftnrun-scheduler
     newTag: latest
 
-# Production-specific patches
-patches:
-  # More replicas for production
-  - patch: |-
-      - op: replace
-        path: /spec/replicas
-        value: 2
-    target:
-      kind: Deployment
-      name: ada-api
-  # More resources for production worker
-  - patch: |-
-      - op: replace
-        path: /spec/template/spec/containers/0/resources/requests/memory
-        value: "4Gi"
-      - op: replace
-        path: /spec/template/spec/containers/0/resources/limits/memory
-        value: "12Gi"
-    target:
-      kind: Deployment
-      name: ada-worker
+labels:
+  - pairs:
+      environment: prod

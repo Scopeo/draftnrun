@@ -1,39 +1,25 @@
-# CloudWatch Logging with Fluent Bit
-# Ships all container logs to AWS CloudWatch
-#
-# Logs will appear in CloudWatch → Log Groups → /ada/staging/<service>
-
----
-# Namespace for logging components
+# CloudWatch Logging - Ships container logs to AWS CloudWatch
 apiVersion: v1
 kind: Namespace
 metadata:
   name: amazon-cloudwatch
   labels:
     name: amazon-cloudwatch
-
 ---
-# Service account for Fluent Bit
 apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: fluent-bit
   namespace: amazon-cloudwatch
-
 ---
-# Cluster role for reading pod logs
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
   name: fluent-bit-role
 rules:
   - apiGroups: [""]
-    resources:
-      - namespaces
-      - pods
-      - pods/logs
-    verbs: ["get", "list", "watch"]
-
+    resources: [namespaces, pods, pods/logs]
+    verbs: [get, list, watch]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
@@ -47,16 +33,12 @@ subjects:
   - kind: ServiceAccount
     name: fluent-bit
     namespace: amazon-cloudwatch
-
 ---
-# Fluent Bit configuration
 apiVersion: v1
 kind: ConfigMap
 metadata:
   name: fluent-bit-config
   namespace: amazon-cloudwatch
-  labels:
-    k8s-app: fluent-bit
 data:
   fluent-bit.conf: |
     [SERVICE]
@@ -81,18 +63,16 @@ data:
         Kube_URL            https://kubernetes.default.svc:443
         Kube_CA_File        /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
         Kube_Token_File     /var/run/secrets/kubernetes.io/serviceaccount/token
-        Kube_Tag_Prefix     kube.var.log.containers.
         Merge_Log           On
         Keep_Log            Off
-        K8S-Logging.Parser  On
-        K8S-Logging.Exclude Off
 
     [OUTPUT]
         Name                cloudwatch_logs
         Match               *
-        region              ${AWS_REGION}
-        log_group_name      /ada/staging/${HOSTNAME}
-        log_stream_prefix   ${HOSTNAME}-
+        region              eu-west-3
+        log_group_name      /ada/staging
+        log_stream_prefix   fallback-
+        log_stream_template $kubernetes['labels']['app']
         auto_create_group   true
         log_key             log
 
@@ -103,15 +83,7 @@ data:
         Time_Key    time
         Time_Format %Y-%m-%dT%H:%M:%S.%L
         Time_Keep   On
-
-    [PARSER]
-        Name        json
-        Format      json
-        Time_Key    timestamp
-        Time_Format %Y-%m-%dT%H:%M:%S.%L
-
 ---
-# Fluent Bit DaemonSet (runs on every node)
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
@@ -139,22 +111,7 @@ spec:
           imagePullPolicy: Always
           env:
             - name: AWS_REGION
-              value: "us-east-1"  # Change to your region
-            - name: HOSTNAME
-              valueFrom:
-                fieldRef:
-                  fieldPath: spec.nodeName
-            # If not using IAM role, uncomment and set these:
-            # - name: AWS_ACCESS_KEY_ID
-            #   valueFrom:
-            #     secretKeyRef:
-            #       name: fluent-bit-secrets
-            #       key: aws-access-key-id
-            # - name: AWS_SECRET_ACCESS_KEY
-            #   valueFrom:
-            #     secretKeyRef:
-            #       name: fluent-bit-secrets
-            #       key: aws-secret-access-key
+              value: "eu-west-3"
           resources:
             limits:
               memory: 200Mi
@@ -169,9 +126,6 @@ spec:
               readOnly: true
             - name: fluent-bit-config
               mountPath: /fluent-bit/etc/
-            - name: runlogjournal
-              mountPath: /run/log/journal
-              readOnly: true
       volumes:
         - name: varlog
           hostPath:
@@ -182,19 +136,3 @@ spec:
         - name: fluent-bit-config
           configMap:
             name: fluent-bit-config
-        - name: runlogjournal
-          hostPath:
-            path: /run/log/journal
-
----
-# Optional: Secret for AWS credentials (if not using IAM role)
-# Uncomment and fill in if your EC2 doesn't have an IAM role
-# apiVersion: v1
-# kind: Secret
-# metadata:
-#   name: fluent-bit-secrets
-#   namespace: amazon-cloudwatch
-# type: Opaque
-# stringData:
-#   aws-access-key-id: "YOUR_ACCESS_KEY"
-#   aws-secret-access-key: "YOUR_SECRET_KEY"

@@ -90,8 +90,10 @@ jobs:
             # Use the :latest tagged images (built on last push to main)
             kubectl set image deployment/ada-api -n ada-staging \
               ada-api=${REGISTRY}/${PREFIX}-api:latest
-            kubectl set image deployment/ada-worker -n ada-staging \
-              ada-worker=${REGISTRY}/${PREFIX}-worker:latest
+            kubectl set image deployment/ada-ingestion-worker -n ada-staging \
+              ada-ingestion-worker=${REGISTRY}/${PREFIX}-worker:latest
+            kubectl set image deployment/ada-webhook-worker -n ada-staging \
+              ada-webhook-worker=${REGISTRY}/${PREFIX}-webhook-worker:latest
             kubectl set image deployment/ada-scheduler -n ada-staging \
               ada-scheduler=${REGISTRY}/${PREFIX}-scheduler:latest
 
@@ -120,8 +122,9 @@ jobs:
           port: 22
           command_timeout: 15m
           script: |
-            echo "⏳ Waiting for worker and scheduler..."
-            kubectl rollout status deployment/ada-worker -n ada-staging --timeout=10m
+            echo "⏳ Waiting for worker, webhook-worker, and scheduler..."
+            kubectl rollout status deployment/ada-ingestion-worker -n ada-staging --timeout=10m
+            kubectl rollout status deployment/ada-webhook-worker -n ada-staging --timeout=10m
             kubectl rollout status deployment/ada-scheduler -n ada-staging --timeout=10m
 
             echo "✅ K8s deployment complete!"
