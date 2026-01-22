@@ -177,6 +177,50 @@ services:
     ports:
       - "3000:3000"
 
+  nango-db:
+    image: postgres:16.0-alpine
+    container_name: nango-db
+    environment:
+      POSTGRES_PASSWORD: nango
+      POSTGRES_USER: nango
+      POSTGRES_DB: nango
+    volumes:
+      - nango_db_data:/var/lib/postgresql/data
+    ports:
+      - "5435:5432"
+    networks:
+      - localprom
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nango"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  nango-server:
+    platform: linux/amd64
+    image: nangohq/nango-server:hosted-0.69.22
+    container_name: nango-server
+    env_file:
+      - ../credentials.env
+    environment:
+      - NANGO_DB_HOST=nango-db
+      - NANGO_DB_PORT=5432
+      - NANGO_DB_USER=nango
+      - NANGO_DB_PASSWORD=nango
+      - NANGO_DB_NAME=nango
+      - NANGO_DB_SSL=false
+      - SERVER_PORT=3003
+      - TELEMETRY=false
+      - FLAG_AUTH_ENABLED=false # override with True in production
+      - NANGO_DASHBOARD_USERNAME=admin@draftnrun.com
+    ports:
+      - "3003:3003"
+    networks:
+      - localprom
+    depends_on:
+      nango-db:
+        condition: service_healthy
+
 volumes:
   postgres_data:
   redis_data:
@@ -187,6 +231,7 @@ volumes:
   seaweed_filer_data:
   tempo_data:
   grafana_data:
+  nango_db_data:
 
 networks:
   localprom:
