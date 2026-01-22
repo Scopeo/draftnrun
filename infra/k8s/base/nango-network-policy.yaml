@@ -1,0 +1,85 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: nango-server
+  labels:
+    app: nango-server
+spec:
+  podSelector:
+    matchLabels:
+      app: nango-server
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Allow traffic from ada-api (internal API calls)
+    - from:
+        - podSelector:
+            matchLabels:
+              app: ada-api
+      ports:
+        - protocol: TCP
+          port: 3003
+    # Allow traffic from Traefik (for Ingress/public endpoints)
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: traefik
+      ports:
+        - protocol: TCP
+          port: 3003
+  egress:
+    # Allow DNS resolution (CoreDNS)
+    - ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # Allow connection to nango-db
+    - to:
+        - podSelector:
+            matchLabels:
+              app: nango-db
+      ports:
+        - protocol: TCP
+          port: 5432
+    # Allow HTTPS/HTTP to external OAuth providers (Slack, Google, HubSpot, etc.)
+    # No 'to' selector = allows egress to any external IP
+    - ports:
+        - protocol: TCP
+          port: 443
+        - protocol: TCP
+          port: 80
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: nango-db
+  labels:
+    app: nango-db
+spec:
+  podSelector:
+    matchLabels:
+      app: nango-db
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Only allow connections from nango-server
+    - from:
+        - podSelector:
+            matchLabels:
+              app: nango-server
+      ports:
+        - protocol: TCP
+          port: 5432
+  egress:
+    # Allow DNS resolution (CoreDNS)
+    - ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53

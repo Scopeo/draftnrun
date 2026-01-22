@@ -1,0 +1,101 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: nango-db
+  labels:
+    app: nango-db
+spec:
+  type: ClusterIP
+  clusterIP: None  # Headless service for StatefulSet
+  ports:
+    - port: 5432
+      targetPort: 5432
+      protocol: TCP
+      name: postgres
+  selector:
+    app: nango-db
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: nango-db
+  labels:
+    app: nango-db
+spec:
+  serviceName: nango-db
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nango-db
+  template:
+    metadata:
+      labels:
+        app: nango-db
+    spec:
+      priorityClassName: ada-high
+      # Schedule on AMD64 node with nango-server
+      nodeSelector:
+        kubernetes.io/arch: amd64
+      tolerations:
+      - key: "dedicated"
+        operator: "Equal"
+        value: "nango"
+        effect: "NoSchedule"
+      containers:
+        - name: postgres
+          image: postgres:16.0-alpine
+          ports:
+            - containerPort: 5432
+              name: postgres
+          env:
+            - name: POSTGRES_USER
+              value: "nango"
+            - name: POSTGRES_DB
+              value: "nango"
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+            # Password from secrets - REQUIRED in ada-secrets
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: ada-secrets
+                  key: NANGO_DB_PASSWORD
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          volumeMounts:
+            - name: nango-db-data
+              mountPath: /var/lib/postgresql/data
+          livenessProbe:
+            exec:
+              command:
+                - pg_isready
+                - -U
+                - nango
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            exec:
+              command:
+                - pg_isready
+                - -U
+                - nango
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+  volumeClaimTemplates:
+    - metadata:
+        name: nango-db-data
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 10Gi
