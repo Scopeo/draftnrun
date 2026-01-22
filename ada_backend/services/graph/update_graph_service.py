@@ -46,6 +46,7 @@ from ada_backend.segment_analytics import track_project_saved
 from ada_backend.services.agent_runner_service import get_agent_for_project
 from ada_backend.services.errors import GraphNotBoundToProjectError
 from ada_backend.services.graph.delete_graph_service import delete_component_instances_from_nodes
+from ada_backend.services.graph.playground_utils import extract_playground_configuration
 from ada_backend.services.pipeline.update_pipeline_service import create_or_update_component_instance
 from engine.field_expressions.ast import ExpressionNode, RefNode
 from engine.field_expressions.errors import FieldExpressionError, FieldExpressionParseError
@@ -184,8 +185,11 @@ async def update_graph_with_history_service(
 
     if not has_changed:
         LOGGER.info(f"Graph {graph_runner_id} hash unchanged, skipping updates")
+        playground_input_schema, playground_field_types = extract_playground_configuration(session, graph_runner_id)
         return GraphUpdateResponse(
             graph_id=graph_runner_id,
+            playground_input_schema=playground_input_schema,
+            playground_field_types=playground_field_types,
         )
 
     modification_history = None
@@ -396,8 +400,12 @@ async def update_graph_service(
     if user_id:
         track_project_saved(user_id, project_id)
 
+    playground_input_schema, playground_field_types = extract_playground_configuration(session, graph_runner_id)
+
     return GraphUpdateResponse(
         graph_id=graph_runner_id,
+        playground_input_schema=playground_input_schema,
+        playground_field_types=playground_field_types,
     )
 
 

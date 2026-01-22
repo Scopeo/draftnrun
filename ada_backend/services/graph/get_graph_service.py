@@ -1,4 +1,3 @@
-import json
 import logging
 from collections import defaultdict
 from uuid import UUID
@@ -6,7 +5,6 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from ada_backend.database.models import ParameterType, PortType
-from ada_backend.database.seed.seed_start import START_PAYLOAD_PARAMETER_NAME
 from ada_backend.repositories.component_repository import get_port_definitions_for_component_version_ids
 from ada_backend.repositories.edge_repository import get_edges
 from ada_backend.repositories.field_expression_repository import get_field_expressions_for_instances
@@ -17,9 +15,13 @@ from ada_backend.repositories.graph_runner_repository import (
 from ada_backend.repositories.port_mapping_repository import list_port_mappings_for_graph
 from ada_backend.schemas.parameter_schema import ParameterKind, PipelineParameterReadSchema
 from ada_backend.schemas.pipeline.field_expression_schema import FieldExpressionReadSchema
-from ada_backend.schemas.pipeline.graph_schema import EdgeSchema, GraphGetResponse, PlaygroundFieldType
+from ada_backend.schemas.pipeline.graph_schema import EdgeSchema, GraphGetResponse
 from ada_backend.schemas.pipeline.port_mapping_schema import PortMappingSchema
 from ada_backend.services.graph.graph_validation_utils import validate_graph_runner_belongs_to_project
+from ada_backend.services.graph.playground_utils import (
+    classify_schema_fields,
+    extract_playground_schema_from_component,
+)
 from ada_backend.services.parameter_synthesis_utils import filter_conflicting_parameters
 from ada_backend.services.pipeline.get_pipeline_service import get_component_instance, get_relationships
 from ada_backend.services.tag_service import compose_tag_name
@@ -27,34 +29,6 @@ from engine.field_expressions.parser import unparse_expression
 from engine.field_expressions.serializer import from_json as expr_from_json
 
 LOGGER = logging.getLogger(__name__)
-
-
-def get_nesting_depth(obj, current_depth=0):
-    """Calculate the maximum nesting depth of a dict or list."""
-    if not isinstance(obj, (dict, list)):
-        return current_depth
-
-    if isinstance(obj, dict):
-        if not obj:  # Empty dict
-            return current_depth
-        return max(get_nesting_depth(v, current_depth + 1) for v in obj.values())
-
-    if isinstance(obj, list):
-        if not obj:  # Empty list
-            return current_depth
-        return max(get_nesting_depth(item, current_depth + 1) for item in obj)
-
-    return current_depth
-
-
-def classify_playground_field(key, value) -> PlaygroundFieldType:
-    if key == "messages":
-        return PlaygroundFieldType.MESSAGES
-
-    depth = get_nesting_depth(value)
-    if depth > 2:
-        return PlaygroundFieldType.JSON
-    return PlaygroundFieldType.SIMPLE
 
 
 def get_graph_service(
@@ -83,23 +57,7 @@ def get_graph_service(
         component_instances_with_definitions.append(component_instance)
 
         if component_node.is_start_node and playground_input_schema is None:
-            for param in component_instance.parameters:
-                if param.name == START_PAYLOAD_PARAMETER_NAME:
-                    if param.value and isinstance(param.value, dict):
-                        playground_input_schema = param.value
-                    try:
-                        if param.value and isinstance(param.value, str):
-                            playground_input_schema = json.loads(param.value)
-                    except json.JSONDecodeError:
-                        LOGGER.warning(
-                            f"Failed to parse payload_schema for start node {component_node.id}. "
-                            f"Invalid JSON in parameter value."
-                        )
-                    except Exception as e:
-                        LOGGER.warning(
-                            f"Unexpected error parsing payload_schema for start node {component_node.id}: {e}"
-                        )
-                    break
+            playground_input_schema = extract_playground_schema_from_component(component_instance)
 
         relationships += [
             rel
@@ -194,9 +152,7 @@ def get_graph_service(
 
     playground_field_types = None
     if playground_input_schema:
-        playground_field_types = {
-            key: classify_playground_field(key, value) for key, value in playground_input_schema.items()
-        }
+        playground_field_types = classify_schema_fields(playground_input_schema)
 
     # Build response, omitting change_log if unset (None)
     response = GraphGetResponse(

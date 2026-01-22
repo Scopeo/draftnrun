@@ -65,6 +65,8 @@ class GraphUpdateResponse(BaseModel):
     graph_id: UUID
     last_edited_time: Optional[datetime] = None
     last_edited_user_id: Optional[UUID] = None
+    playground_input_schema: Optional[dict] = None
+    playground_field_types: Optional[dict[str, PlaygroundFieldType]] = None
 
 
 class ComponentNodeDTO(BaseModel):
