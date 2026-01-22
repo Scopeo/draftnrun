@@ -1,0 +1,125 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nango-server
+  labels:
+    app: nango-server
+spec:
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  minReadySeconds: 10
+  selector:
+    matchLabels:
+      app: nango-server
+  template:
+    metadata:
+      labels:
+        app: nango-server
+    spec:
+      priorityClassName: ada-high
+      nodeSelector:
+        kubernetes.io/arch: amd64
+      # Toleration to allow scheduling on dedicated Nango node
+      tolerations:
+      - key: "dedicated"
+        operator: "Equal"
+        value: "nango"
+        effect: "NoSchedule"
+      containers:
+        - name: nango-server
+          image: nangohq/nango-server:hosted-0.69.22
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 3003
+              name: http
+          env:
+            # Database connection
+            - name: NANGO_DB_HOST
+              value: "nango-db"
+            - name: NANGO_DB_PORT
+              value: "5432"
+            - name: NANGO_DB_USER
+              value: "nango"
+            - name: NANGO_DB_NAME
+              value: "nango"
+            - name: NANGO_DB_SSL
+              value: "false"
+            # DB password from secrets - REQUIRED in ada-secrets
+            - name: NANGO_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: ada-secrets
+                  key: NANGO_DB_PASSWORD
+            # Server configuration
+            - name: SERVER_PORT
+              value: "3003"
+            - name: TELEMETRY
+              value: "false"
+            # Set to "false" for Basic Auth; "true" enables multi-tenant DB+SMTP auth (not for self-hosted).
+            - name: FLAG_AUTH_ENABLED
+              value: "false"
+            - name: NANGO_ENCRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: ada-secrets
+                  key: NANGO_ENCRYPTION_KEY
+            - name: NANGO_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: ada-secrets
+                  key: NANGO_SECRET_KEY
+            - name: NANGO_DASHBOARD_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: ada-secrets
+                  key: NANGO_DASHBOARD_PASSWORD
+            - name: NANGO_DASHBOARD_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: ada-secrets
+                  key: NANGO_DASHBOARD_USERNAME
+            - name: NANGO_SERVER_URL
+              valueFrom:
+                secretKeyRef:
+                  name: ada-secrets
+                  key: NANGO_PUBLIC_URL
+            - name: NANGO_PUBLIC_SERVER_URL
+              valueFrom:
+                secretKeyRef:
+                  name: ada-secrets
+                  key: NANGO_PUBLIC_URL
+          envFrom:
+            - secretRef:
+                name: ada-secrets
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          startupProbe:
+            httpGet:
+              path: /health
+              port: 3003
+            failureThreshold: 30
+            periodSeconds: 10
+            timeoutSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 3003
+            periodSeconds: 5
+            failureThreshold: 3
+            timeoutSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 3003
+            periodSeconds: 10
+            failureThreshold: 3
+            timeoutSeconds: 5
