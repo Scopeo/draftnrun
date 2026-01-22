@@ -34,7 +34,7 @@ def seed_docx_template_components(session: Session):
     docx_template_component = Component(
         id=COMPONENT_UUIDS["docx_template"],
         name="DOCX Template Tool",
-        is_agent=False,
+        is_agent=True,
         function_callable=True,
         can_use_function_calling=False,
     )
