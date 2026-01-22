@@ -145,15 +145,12 @@ def build_root_spans(df: pd.DataFrame) -> List[RootTraceSpan]:
                 input=input,
                 output=output,
                 status_code=row["status_code"],
-                cumulative_llm_token_count_prompt=row["cumulative_llm_token_count_prompt"],
-                cumulative_llm_token_count_completion=row["cumulative_llm_token_count_completion"],
-                llm_token_count_prompt=row.get("llm_token_count_prompt", None),
-                llm_token_count_completion=row.get("llm_token_count_completion", None),
                 environment=row.get("environment", None),
                 call_type=row.get("call_type", None),
                 graph_runner_id=row.get("graph_runner_id", None),
                 tag_name=row.get("tag_name", None),
                 conversation_id=attributes.get("conversation_id"),
+                total_credits=row.get("total_credits", None),
             )
         )
 

@@ -49,12 +49,27 @@ def query_root_trace_duration(project_id: UUID, duration_days: int) -> pd.DataFr
     start_time_offset_days = (datetime.now() - timedelta(days=duration_days)).isoformat()
 
     query = f"""
-    SELECT s.*, m.input_content, m.output_content
-    FROM traces.spans s
+    WITH relevant_spans AS (
+      SELECT *
+      FROM traces.spans
+      WHERE project_id = '{project_id}'
+      AND start_time > '{start_time_offset_days}'
+    ),
+    trace_total_credits AS (
+      SELECT
+        s.trace_rowid,
+        ROUND(COALESCE(SUM(COALESCE(su.credits_input_token, 0) + COALESCE(su.credits_output_token, 0) +
+            COALESCE(su.credits_per_call, 0)), 0)::numeric, 0) as total_credits
+      FROM relevant_spans s
+      LEFT JOIN credits.span_usages su ON su.span_id = s.span_id
+      GROUP BY s.trace_rowid
+    )
+    SELECT s.*, m.input_content, m.output_content,
+           COALESCE(ttc.total_credits, 0) as total_credits
+    FROM relevant_spans s
     LEFT JOIN traces.span_messages m ON m.span_id = s.span_id
+    LEFT JOIN trace_total_credits ttc ON ttc.trace_rowid = s.trace_rowid
     WHERE s.parent_id IS NULL
-    AND s.project_id = '{project_id}'
-    AND s.start_time > '{start_time_offset_days}'
     ORDER BY MAX(s.start_time) OVER (PARTITION BY s.trace_rowid) DESC,
              s.trace_rowid, s.start_time ASC
     """
