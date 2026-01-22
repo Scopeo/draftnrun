@@ -29,20 +29,32 @@ uv run python scripts/mcp/fastmcp_debug_server.py
 ## Remote MCP (HTTP/SSE transport)
 
 ### `manual_remote_mcp_test.py`
-Test RemoteMCPTool with any MCP server (e.g., Linear).
+Test RemoteMCPTool with any MCP server using presets or manual configuration.
 
+**Using presets (recommended):**
+```bash
+# Linear (SSE transport)
+uv run python scripts/mcp/manual_remote_mcp_test.py --preset linear
+
+# HubSpot (Streamable HTTP transport)
+uv run python scripts/mcp/manual_remote_mcp_test.py --preset hubspot
+
+# Rube (Streamable HTTP transport)
+uv run python scripts/mcp/manual_remote_mcp_test.py --preset rube
+```
+
+**Manual configuration (custom servers):**
 ```bash
 uv run python scripts/mcp/manual_remote_mcp_test.py \
-    --server-url https://mcp.linear.app/sse \
-    --api-key "$LINEAR_API_KEY"
+    --server-url https://custom.mcp.server/endpoint \
+    --api-key "$API_KEY" \
+    --transport streamable_http
 ```
 
-### `manual_hubspot_mcp_test.py`
-Test HubSpot MCP integration.
-
-```bash
-uv run python scripts/mcp/manual_hubspot_mcp_test.py
-```
+**Environment variables for presets:**
+- Linear: `LINEAR_API_KEY`
+- HubSpot: `HUBSPOT_MCP_ACCESS_TOKEN`
+- Rube: `RUBE_API_KEY`
 
 ### `get_hubspot_oauth_token.py`
 Helper to get HubSpot OAuth tokens for testing.

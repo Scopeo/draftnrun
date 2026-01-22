@@ -1,24 +1,37 @@
 """
 Script to obtain HubSpot OAuth access_token.
 
-This script helps exchange the OAuth 'code' for access_token and refresh_token
-after installing the HubSpot app using the Install URL.
+This script supports two modes:
+1. Exchange OAuth code for tokens (initial setup)
+2. Refresh access token using refresh_token (recommended for repeated use)
 
 Usage:
-    # Option 1: Use credentials from settings/.env (recommended):
-    uv run python scripts/get_hubspot_oauth_token.py
+    # Mode 1 - Initial OAuth flow (use credentials from settings/.env):
+    uv run python scripts/mcp/get_hubspot_oauth_token.py
 
-    # Option 2: Override with arguments:
-    uv run python scripts/get_hubspot_oauth_token.py --client-secret other_secret
+    # Mode 1 - Override with arguments:
+    uv run python scripts/mcp/get_hubspot_oauth_token.py --client-secret other_secret
 
-    # Option 3: Pass code directly:
-    uv run python scripts/get_hubspot_oauth_token.py --code abc123
+    # Mode 1 - Pass code directly:
+    uv run python scripts/mcp/get_hubspot_oauth_token.py --code abc123
 
-The script:
+    # Mode 2 - Refresh token (RECOMMENDED - no browser needed):
+    uv run python scripts/mcp/get_hubspot_oauth_token.py --refresh-token YOUR_REFRESH_TOKEN
+
+    # Mode 2 - Use refresh token from .env:
+    export HUBSPOT_MCP_REFRESH_TOKEN=your_refresh_token
+    uv run python scripts/mcp/get_hubspot_oauth_token.py --refresh
+
+Mode 1 flow:
 1. Shows the Install URL to open in your browser
 2. Waits for you to paste the 'code' from the redirect URL
 3. Exchanges the code for access_token and refresh_token
 4. Shows the obtained tokens
+
+Mode 2 flow (faster):
+1. Uses existing refresh_token (from .env or argument)
+2. Requests a new access_token
+3. Shows the new access_token (refresh_token stays the same)
 """
 
 import argparse
@@ -78,21 +91,49 @@ async def exchange_code_for_token(
         return response.json()
 
 
+async def refresh_access_token(
+    client_id: str,
+    client_secret: str,
+    refresh_token: str,
+) -> dict:
+    """Refresh access_token using refresh_token."""
+    token_url = "https://api.hubapi.com/oauth/v1/token"
+
+    data = {
+        "grant_type": "refresh_token",
+        "client_id": client_id,
+        "client_secret": client_secret,
+        "refresh_token": refresh_token,
+    }
+
+    async with httpx.AsyncClient() as client:
+        response = await client.post(token_url, data=data)
+        response.raise_for_status()
+        return response.json()
+
+
 def main():
     # Read default credentials from settings
     parser = argparse.ArgumentParser(
         description="Obtain HubSpot OAuth access_token for MCP server",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
-Examples:
-  # Use credentials from settings/.env (recommended):
-  uv run python scripts/get_hubspot_oauth_token.py
+Examples (Mode 1 - Initial OAuth flow):
+  # Use credentials from settings/.env:
+  uv run python scripts/mcp/get_hubspot_oauth_token.py
 
   # Override with arguments:
-  uv run python scripts/get_hubspot_oauth_token.py --client-secret other_secret
+  uv run python scripts/mcp/get_hubspot_oauth_token.py --client-secret other_secret
 
   # Pass code directly:
-  uv run python scripts/get_hubspot_oauth_token.py --code abc123
+  uv run python scripts/mcp/get_hubspot_oauth_token.py --code abc123
+
+Examples (Mode 2 - Refresh token - RECOMMENDED):
+  # Use refresh token from .env (fastest):
+  uv run python scripts/mcp/get_hubspot_oauth_token.py --refresh
+
+  # Pass refresh token directly:
+  uv run python scripts/mcp/get_hubspot_oauth_token.py --refresh-token YOUR_REFRESH_TOKEN
         """,
     )
     parser.add_argument(
@@ -119,6 +160,16 @@ Examples:
         "--url",
         help="Full redirect URL with code (optional, script will extract the code)",
     )
+    parser.add_argument(
+        "--refresh-token",
+        default=settings.HUBSPOT_MCP_REFRESH_TOKEN if hasattr(settings, "HUBSPOT_MCP_REFRESH_TOKEN") else None,
+        help="Refresh token to obtain new access_token (default: from settings HUBSPOT_MCP_REFRESH_TOKEN)",
+    )
+    parser.add_argument(
+        "--refresh",
+        action="store_true",
+        help="Use refresh_token from settings/.env to get new access_token (shortcut for --refresh-token from env)",
+    )
 
     args = parser.parse_args()
 
@@ -134,7 +185,52 @@ Examples:
         print("   or pass it as argument: --client-secret YOUR_SECRET")
         sys.exit(1)
 
-    # Show Install URL
+    # MODE 2: Refresh token flow (faster, no browser needed)
+    if args.refresh or args.refresh_token:
+        refresh_token = args.refresh_token
+        if not refresh_token:
+            print("❌ Error: --refresh-token is required when using --refresh")
+            print("   Configure it in credentials.env as HUBSPOT_MCP_REFRESH_TOKEN")
+            print("   or pass it as argument: --refresh-token YOUR_REFRESH_TOKEN")
+            sys.exit(1)
+
+        print("\n🔄 Refreshing access_token using refresh_token...")
+        try:
+            result = asyncio.run(
+                refresh_access_token(
+                    client_id=args.client_id,
+                    client_secret=args.client_secret,
+                    refresh_token=refresh_token,
+                )
+            )
+
+            access_token = result.get("access_token")
+            expires_in = result.get("expires_in")
+
+            print("\n" + "=" * 80)
+            print("✅ Access token refreshed successfully!")
+            print("=" * 80)
+            print("\n📝 New Access Token:")
+            print(f"   {access_token}")
+            print(f"\n⏰ Expires in: {expires_in} seconds ({expires_in // 3600 if expires_in else 'N/A'} hours)")
+            print("\n" + "=" * 80)
+            print("\n💾 Update your credentials.env:")
+            print(f"   HUBSPOT_MCP_ACCESS_TOKEN={access_token}")
+            print("\n💡 Your refresh token stays the same (no need to update it)")
+            print("\n" + "=" * 80)
+            return
+
+        except httpx.HTTPStatusError as e:
+            print(f"\n❌ HTTP Error: {e.response.status_code}")
+            print(f"   Response: {e.response.text}")
+            print("\n💡 Tip: Your refresh_token might be expired or invalid.")
+            print("   Run the script without --refresh to get a new refresh_token")
+            sys.exit(1)
+        except Exception as e:
+            print(f"\n❌ Error: {e}")
+            sys.exit(1)
+
+    # MODE 1: OAuth code flow (initial setup, requires browser)
     install_url = build_install_url(args.client_id, args.redirect_uri)
     print("\n" + "=" * 80)
     print("📋 STEP 1: Install the app using this URL:")

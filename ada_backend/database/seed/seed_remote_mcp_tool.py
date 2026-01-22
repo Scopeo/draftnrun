@@ -68,6 +68,22 @@ def seed_remote_mcp_tool_components(session: Session):
                 placeholder='{"Authorization": "Bearer <token>"}',
             ).model_dump(exclude_unset=True, exclude_none=True),
         ),
+        ComponentParameterDefinition(
+            id=UUID("0d18f13c-e64f-4484-a035-307fac16e590"),
+            component_version_id=remote_mcp_component_version.id,
+            name="transport",
+            type=ParameterType.STRING,
+            nullable=True,
+            ui_component=UIComponent.SELECT,
+            ui_component_properties=UIComponentProperties(
+                label="Transport Protocol",
+                placeholder="sse",
+                options=[
+                    {"label": "SSE (Server-Sent Events)", "value": "sse"},
+                    {"label": "Streamable HTTP (POST-based)", "value": "streamable_http"},
+                ],
+            ).model_dump(exclude_unset=True, exclude_none=True),
+        ),
     ]
     upsert_components_parameter_definitions(session, parameter_definitions)
     upsert_release_stage_to_current_version_mapping(
