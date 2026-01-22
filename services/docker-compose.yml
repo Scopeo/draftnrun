@@ -210,9 +210,11 @@ services:
       - NANGO_DB_NAME=nango
       - NANGO_DB_SSL=false
       - SERVER_PORT=3003
+      # CRITICAL: public URL for OAuth callbacks (use ngrok in dev, real domain in prod)
+      - NANGO_SERVER_URL=${NANGO_PUBLIC_URL:-http://localhost:3003}
       - TELEMETRY=false
-      - FLAG_AUTH_ENABLED=false # override with True in production
-      - NANGO_DASHBOARD_USERNAME=admin@draftnrun.com
+      - FLAG_AUTH_ENABLED=${FLAG_AUTH_ENABLED:-false}
+      - NANGO_DASHBOARD_USERNAME=${NANGO_DASHBOARD_USERNAME:-admin@draftnrun.com}
     ports:
       - "3003:3003"
     networks:

@@ -38,6 +38,7 @@ LOGGER = logging.getLogger(__name__)
 
 @router.get("/oauth/health", summary="Check OAuth service health")
 async def oauth_health() -> dict:
+    """Check if Nango is healthy."""
     nango_healthy = await get_nango_client().health_check()
     return {"status": "ok" if nango_healthy else "degraded"}
 
