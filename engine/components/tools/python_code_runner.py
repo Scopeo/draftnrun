@@ -257,7 +257,6 @@ class PythonCodeRunner(Component):
         content = serialize_to_json(execution_result_dict)
 
         images_paths = self._save_images_from_results(execution_result_dict, records)
-
         artifacts = {"execution_result": execution_result_dict}
         if images_paths:
             artifacts["images"] = images_paths
