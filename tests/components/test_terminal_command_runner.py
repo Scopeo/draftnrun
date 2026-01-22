@@ -141,8 +141,7 @@ class TestTerminalCommandE2BTool:
         assert content["command"] == "pwd"
         assert content["exit_code"] == 0
 
-        assert hasattr(result, "execution_result")
-        assert result.execution_result is not None
+        assert "execution_result" in result.artifacts
 
     @pytest.mark.asyncio
     @patch("engine.components.tools.terminal_command_runner.AsyncSandbox")

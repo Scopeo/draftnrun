@@ -38,15 +38,17 @@ class TerminalCommandRunnerToolInputs(BaseModel):
     shared_sandbox: Optional[AsyncSandbox] = Field(
         default=None,
         description="The sandbox to use for code execution",
+        json_schema_extra={"disabled_as_input": True}
     )
     model_config = ConfigDict(
         extra="allow", arbitrary_types_allowed=True
-    )  # For backward compatibility and AsyncSandbox support
+    )
 
 
 class TerminalCommandRunnerToolOutputs(BaseModel):
     output: str = Field(description="The result of the executed command on the terminal.")
-    execution_result: dict[str, Any] = Field(description="The full execution result from the sandbox.")
+    artifacts: dict[str, Any] = Field(default_factory=dict, description="Artifacts produced by "
+                                                                        "the terminal code runner.")
 
 
 class TerminalCommandRunner(Component):
@@ -120,13 +122,15 @@ class TerminalCommandRunner(Component):
         span = get_current_span()
         command = inputs.command
         shared_sandbox = inputs.shared_sandbox
-        trace_input = command
         span.set_attributes({
             SpanAttributes.OPENINFERENCE_SPAN_KIND: self.TRACE_SPAN_KIND,
-            SpanAttributes.INPUT_VALUE: trace_input,
+            SpanAttributes.INPUT_VALUE: str(command),
         })
 
         execution_result_dict = await self.execute_terminal_command(command=command, shared_sandbox=shared_sandbox)
         content = json.dumps(execution_result_dict, indent=2)
+        artifacts = {"execution_result": execution_result_dict}
 
-        return TerminalCommandRunnerToolOutputs(output=content, execution_result=execution_result_dict)
+        return TerminalCommandRunnerToolOutputs(output=content,
+                                                artifacts=artifacts
+                                                )

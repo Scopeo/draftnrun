@@ -79,17 +79,17 @@ class PythonCodeRunnerToolInputs(BaseModel):
     shared_sandbox: Optional[AsyncSandbox] = Field(
         default=None,
         description="The sandbox to use for code execution",
+        json_schema_extra={"disabled_as_input": True}
     )
     model_config = ConfigDict(
         extra="allow", arbitrary_types_allowed=True
-    )  # For backward compatibility and AsyncSandbox support
+    )
 
 
 class PythonCodeRunnerToolOutputs(BaseModel):
     output: str = Field(description="The result of the executed python code.")
-    images: list[str] = Field(description="List of image file paths generated during code execution.")
-    execution_result: dict[str, Any] = Field(description="The full execution result from the sandbox.")
-    error: Optional[str] = Field(description="Error message if execution failed.")
+    artifacts: dict[str, Any] = Field(default_factory=dict, description="Artifacts produced by "
+                                                                        "the python code runner.")
 
 
 class PythonCodeRunner(Component):
@@ -246,10 +246,9 @@ class PythonCodeRunner(Component):
         span = get_current_span()
         python_code = inputs.python_code
         shared_sandbox = inputs.shared_sandbox
-        trace_input = python_code
         span.set_attributes({
             SpanAttributes.OPENINFERENCE_SPAN_KIND: self.TRACE_SPAN_KIND,
-            SpanAttributes.INPUT_VALUE: trace_input,
+            SpanAttributes.INPUT_VALUE: str(python_code),
         })
 
         execution_result_dict, records = await self.execute_python_code(
@@ -258,6 +257,7 @@ class PythonCodeRunner(Component):
         content = serialize_to_json(execution_result_dict)
 
         images_paths = self._save_images_from_results(execution_result_dict, records)
+
         artifacts = {"execution_result": execution_result_dict}
         if images_paths:
             artifacts["images"] = images_paths
@@ -267,7 +267,5 @@ class PythonCodeRunner(Component):
 
         return PythonCodeRunnerToolOutputs(
             output=content,
-            images=images_paths,
-            execution_result=execution_result_dict,
-            error=execution_result_dict.get("error", None),
+            artifacts=artifacts,
         )

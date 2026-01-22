@@ -405,13 +405,12 @@ print("Async image test completed!")
 
     assert isinstance(result, PythonCodeRunnerToolOutputs)
 
-    # Check that execution_result is present
-    assert hasattr(result, "execution_result")
-    assert result.execution_result is not None
+    # Check that execution_result is in artifacts
+    assert "execution_result" in result.artifacts
 
-    # Check that images are present
-    assert hasattr(result, "images")
-    images = result.images
+    # Check that images are in artifacts
+    assert "images" in result.artifacts
+    images = result.artifacts["images"]
     assert isinstance(images, list)
     assert len(images) == 1
 
@@ -447,9 +446,9 @@ print("Two async plots generated!")
 
     assert isinstance(result, PythonCodeRunnerToolOutputs)
 
-    # Check that images are present
-    assert hasattr(result, "images")
-    images = result.images
+    # Check that images are in artifacts
+    assert "images" in result.artifacts
+    images = result.artifacts["images"]
     assert isinstance(images, list)
     assert len(images) == 2
 
@@ -471,13 +470,11 @@ def test_run_without_io_trace_no_images(e2b_tool, e2b_api_key):
 
     assert isinstance(result, PythonCodeRunnerToolOutputs)
 
-    # Check that execution_result is present
-    assert hasattr(result, "execution_result")
-    assert result.execution_result is not None
+    # Check that execution_result is in artifacts
+    assert "execution_result" in result.artifacts
 
-    # Check that images list is empty (since no images were generated)
-    assert hasattr(result, "images")
-    assert len(result.images) == 0
+    # Check that images are NOT in artifacts (since no images were generated)
+    assert "images" not in result.artifacts
 
     # Check that the response output doesn't mention images
     assert "image(s) generated" not in result.output
@@ -509,14 +506,14 @@ def test_run_without_io_trace_simple_code(e2b_tool, e2b_api_key):
     assert len(execution_data["results"]) > 0
     assert "4" in execution_data["results"][0]
 
-    # Check execution_result
-    assert hasattr(result, "execution_result")
-    # The execution result is stored as a dict (with non-serialized objects)
-    artifacts_execution_data = result.execution_result
+    # Check artifacts
+    assert "execution_result" in result.artifacts
+    # The execution result is stored as a dict in artifacts (with non-serialized objects)
+    artifacts_execution_data = result.artifacts["execution_result"]
     assert artifacts_execution_data["error"] == execution_data["error"]
     assert artifacts_execution_data["stdout"] == execution_data["stdout"]
     assert artifacts_execution_data["stderr"] == execution_data["stderr"]
-    # Note: execution_result has Result objects while execution_data has serialized strings
+    # Note: artifacts has Result objects while execution_data has serialized strings
 
 
 def test_run_without_io_trace_complex_code(e2b_tool, e2b_api_key):
