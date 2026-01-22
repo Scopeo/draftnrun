@@ -57,21 +57,21 @@ def query_root_trace_duration(project_id: UUID, duration_days: int) -> pd.DataFr
     ),
     trace_total_credits AS (
       SELECT
-        rs.trace_rowid,
+        s.trace_rowid,
         ROUND(COALESCE(SUM(COALESCE(su.credits_input_token, 0) + COALESCE(su.credits_output_token, 0) +
             COALESCE(su.credits_per_call, 0)), 0)::numeric, 0) as total_credits
-      FROM relevant_spans rs
-      LEFT JOIN credits.span_usages su ON su.span_id = rs.span_id
-      GROUP BY rs.trace_rowid
+      FROM relevant_spans s
+      LEFT JOIN credits.span_usages su ON su.span_id = s.span_id
+      GROUP BY s.trace_rowid
     )
-    SELECT rs.*, m.input_content, m.output_content,
+    SELECT s.*, m.input_content, m.output_content,
            COALESCE(ttc.total_credits, 0) as total_credits
-    FROM relevant_spans rs
-    LEFT JOIN traces.span_messages m ON m.span_id = rs.span_id
-    LEFT JOIN trace_total_credits ttc ON ttc.trace_rowid = rs.trace_rowid
-    WHERE rs.parent_id IS NULL
-    ORDER BY MAX(rs.start_time) OVER (PARTITION BY rs.trace_rowid) DESC,
-             rs.trace_rowid, rs.start_time ASC
+    FROM relevant_spans s
+    LEFT JOIN traces.span_messages m ON m.span_id = s.span_id
+    LEFT JOIN trace_total_credits ttc ON ttc.trace_rowid = s.trace_rowid
+    WHERE s.parent_id IS NULL
+    ORDER BY MAX(s.start_time) OVER (PARTITION BY s.trace_rowid) DESC,
+             s.trace_rowid, s.start_time ASC
     """
 
     session = get_session_trace()
