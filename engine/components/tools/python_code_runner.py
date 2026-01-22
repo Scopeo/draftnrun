@@ -5,7 +5,7 @@ import os
 from dataclasses import dataclass
 from io import BytesIO
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Optional, Type
 from uuid import uuid4
 
 from e2b import EntryInfo
@@ -13,11 +13,10 @@ from e2b_code_interpreter import AsyncSandbox
 from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttributes
 from opentelemetry.trace import get_current_span
 from PIL import Image
+from pydantic import BaseModel, ConfigDict, Field
 
 from engine.components.component import Component
 from engine.components.types import (
-    AgentPayload,
-    ChatMessage,
     ComponentAttributes,
     ToolDescription,
 )
@@ -72,8 +71,42 @@ def fp_pixel_from_bytes(data: bytes) -> str:
     return hashlib.sha256(payload).hexdigest()
 
 
+class PythonCodeRunnerToolInputs(BaseModel):
+    python_code: str = Field(
+        default="",
+        description="The code python to run",
+    )
+    shared_sandbox: Optional[AsyncSandbox] = Field(
+        default=None,
+        description="The sandbox to use for code execution",
+    )
+    model_config = ConfigDict(
+        extra="allow", arbitrary_types_allowed=True
+    )  # For backward compatibility and AsyncSandbox support
+
+
+class PythonCodeRunnerToolOutputs(BaseModel):
+    output: str = Field(description="The result of the executed python code.")
+    images: list[str] = Field(description="List of image file paths generated during code execution.")
+    execution_result: dict[str, Any] = Field(description="The full execution result from the sandbox.")
+    error: Optional[str] = Field(description="Error message if execution failed.")
+
+
 class PythonCodeRunner(Component):
     TRACE_SPAN_KIND = OpenInferenceSpanKindValues.TOOL.value
+    migrated = True
+
+    @classmethod
+    def get_inputs_schema(cls) -> Type[BaseModel]:
+        return PythonCodeRunnerToolInputs
+
+    @classmethod
+    def get_outputs_schema(cls) -> Type[BaseModel]:
+        return PythonCodeRunnerToolOutputs
+
+    @classmethod
+    def get_canonical_ports(cls) -> dict[str, str | None]:
+        return {"input": "python_code", "output": "output"}
 
     def __init__(
         self,
@@ -207,18 +240,17 @@ class PythonCodeRunner(Component):
 
     async def _run_without_io_trace(
         self,
-        *inputs: AgentPayload,
-        **kwargs: Any,
-    ) -> AgentPayload:
+        inputs: PythonCodeRunnerToolInputs,
+        ctx: dict,
+    ) -> PythonCodeRunnerToolOutputs:
         span = get_current_span()
-        trace_input = str(kwargs.get("python_code", ""))
+        python_code = inputs.python_code
+        shared_sandbox = inputs.shared_sandbox
+        trace_input = python_code
         span.set_attributes({
             SpanAttributes.OPENINFERENCE_SPAN_KIND: self.TRACE_SPAN_KIND,
             SpanAttributes.INPUT_VALUE: trace_input,
         })
-
-        python_code = kwargs["python_code"]
-        shared_sandbox = kwargs.get("shared_sandbox")
 
         execution_result_dict, records = await self.execute_python_code(
             python_code=python_code, shared_sandbox=shared_sandbox
@@ -233,9 +265,9 @@ class PythonCodeRunner(Component):
                 f"\n\n[{len(images_paths)} image(s) generated and included in artifacts : {', '.join(images_paths)}]"
             )
 
-        return AgentPayload(
-            messages=[ChatMessage(role="assistant", content=content)],
-            artifacts=artifacts,
+        return PythonCodeRunnerToolOutputs(
+            output=content,
+            images=images_paths,
+            execution_result=execution_result_dict,
             error=execution_result_dict.get("error", None),
-            is_final=False,
         )
