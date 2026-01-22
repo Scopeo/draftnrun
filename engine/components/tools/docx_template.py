@@ -499,13 +499,13 @@ class DocxTemplateAgent(Component):
     async def _run_without_io_trace(
         self,
         inputs: DocxTemplateInputs,
-        ctx: dict,
+        ctx: Optional[dict] = None,
     ) -> DocxTemplateOutputs:
         span = get_current_span()
 
-        template_input_path = inputs.template_input_path or ctx.get("template_input_path")
+        template_input_path = inputs.template_input_path or (ctx or {}).get("template_input_path")
         template_base64 = (
-            getattr(inputs, "template_base64", None) or self.template_base64 or ctx.get("template_base64")
+            getattr(inputs, "template_base64", None) or self.template_base64 or (ctx or {}).get("template_base64")
         )
         template_information_brief = inputs.template_information_brief
         output_filename = inputs.output_filename
