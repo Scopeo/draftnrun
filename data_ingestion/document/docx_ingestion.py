@@ -1,6 +1,5 @@
 import logging
 import re
-import tempfile
 from pathlib import Path
 from typing import Callable, Optional
 
@@ -8,7 +7,7 @@ import pypandoc
 
 from data_ingestion.document.folder_management.folder_management import FileChunk, FileDocument
 from data_ingestion.document.markdown_ingestion import CHUNK_OVERLAP, CHUNK_SIZE, chunk_markdown
-from data_ingestion.utils import get_image_description_prompt
+from data_ingestion.utils import content_as_temporary_file_path, get_image_description_prompt
 from engine.llm_services.llm_service import VisionService
 
 LOGGER = logging.getLogger(__name__)
@@ -34,51 +33,19 @@ def extract_sections_around_images(markdown_text: str) -> dict:
     return results
 
 
-def _docx_to_md(file_content: bytes, extract_image: bool = False) -> str:
-    """
-    Convert DOCX file content (given as bytes) to Markdown using pypandoc.
-
-    Args:
-        file_content (bytes): Raw .docx file content.
-        extract_image (bool): Whether to extract embedded images to a temp folder.
-
-    Returns:
-        str: Markdown content.
-    """
-    extra_args = []
-    if extract_image:
-        folder_path = tempfile.mkdtemp()
-        extra_args = ["--extract-media", folder_path]
-
-    with tempfile.NamedTemporaryFile(suffix=".docx", delete=False) as temp_file:
-        temp_file.write(file_content)
-        temp_file.flush()
-        temp_file_path = Path(temp_file.name)
-
-        markdown_content = pypandoc.convert_file(str(temp_file_path), "md", extra_args=extra_args)
-
-    return markdown_content
-
-
-def _docx_to_md_safe_mode(file_content: bytes, extract_image: bool = False) -> Optional[str]:
-    """
-    Safe mode function to convert DOCX file content (given as bytes) to Markdown.
-    If an error occurs, logs the error and returns None.
-
-    Args:
-        file_content (bytes): Raw .docx file content.
-        extract_image (bool): Whether to extract embedded images to a temp folder.
-
-    Returns:
-        Optional[str]: Markdown content if successful, None if an error occurs.
-    """
+def _docx_to_md(file_path: str, extract_image: bool = False) -> Optional[str]:
     try:
-        markdown_content = _docx_to_md(file_content, extract_image=extract_image)
-    except Exception as e:
-        LOGGER.error(f"Error converting docx to markdown: {e}")
-        return None
+        extra_args = []
+        if extract_image:
+            folder_path = Path(file_path).parent / Path(file_path).stem / "media"
+            folder_path.mkdir(parents=True, exist_ok=True)
+            extra_args = ["--extract-media", str(folder_path.parent)]
 
-    return markdown_content
+        markdown_content = pypandoc.convert_file(file_path, "md", extra_args=extra_args)
+        return markdown_content
+    except Exception as e:
+        LOGGER.error(f"Error converting docx to markdown: {e}", exc_info=True)
+        return None
 
 
 def get_image_content_from_path(image_path: Path) -> bytes:
@@ -87,60 +54,75 @@ def get_image_content_from_path(image_path: Path) -> bytes:
     return image_content
 
 
-def parse_docx_to_md(
-    docx_to_process: FileDocument,
-    get_file_content_func: Callable[[str], bytes | str],
-    include_images_descriptions: bool = False,
+async def _parse_docx_with_pandoc(
+    file_path: str,
     llm_service_images: Optional[VisionService] = None,
 ) -> str:
-    try:
-        docx_content = _docx_to_md(
-            get_file_content_func(docx_to_process.id),
-            extract_image=include_images_descriptions,
-        )
-    except Exception as e:
-        LOGGER.warning(f"Error converting DOCX to markdown: {e}")
-        docx_content = _docx_to_md_safe_mode(
-            get_file_content_func(docx_to_process.id),
-            extract_image=include_images_descriptions,
-        )
-        if docx_content is None:
-            return ""
+    extract_images = llm_service_images is not None
+    docx_content = _docx_to_md(file_path, extract_image=extract_images)
 
-    if include_images_descriptions and llm_service_images is None:
-        LOGGER.warning("No LLM service provided to get image descriptions. Skipping image descriptions.")
-    elif include_images_descriptions:
-        image_folder_path = Path(docx_to_process.id).parent / Path(docx_to_process.id).stem / "media"
-        image_paths = (
-            list(Path(image_folder_path).rglob("*.png"))
-            + list(Path(image_folder_path).rglob("*.jpg"))
-            + list(Path(image_folder_path).rglob("*.jpeg"))
-        )
+    if docx_content is None:
+        LOGGER.warning(f"Failed to convert DOCX at {file_path}, returning empty content")
+        return ""
 
-        image_paths_2_sections = extract_sections_around_images(docx_content)
-        for image_path in image_paths:
+    if llm_service_images is None:
+        return docx_content
+
+    image_folder_path = Path(file_path).parent / Path(file_path).stem / "media"
+    image_paths = (
+        list(image_folder_path.rglob("*.png"))
+        + list(image_folder_path.rglob("*.jpg"))
+        + list(image_folder_path.rglob("*.jpeg"))
+    )
+
+    if not image_paths:
+        return docx_content
+
+    image_paths_2_sections = extract_sections_around_images(docx_content)
+    for image_path in image_paths:
+        try:
             image_content = get_image_content_from_path(image_path)
             image_description = llm_service_images.get_image_description(
                 image_content_list=[image_content],
-                text_prompt=get_image_description_prompt(section=image_paths_2_sections[str(image_path)]),
+                text_prompt=get_image_description_prompt(section=image_paths_2_sections.get(str(image_path), "")),
             )
 
             image_path_str = str(image_path.relative_to(image_folder_path.parent))
             docx_content = re.sub(
                 rf"!\[.*?\]\({re.escape(image_path_str)}\)", f"![{image_description}]({image_path_str})", docx_content
             )
+        except Exception as e:
+            LOGGER.warning(f"Error processing image {image_path}: {e}")
+            continue
+
     return docx_content
 
 
-def get_chunks_from_docx(
-    docx_to_process: FileDocument,
-    get_file_content_func: Callable[[str], bytes | str],
-    include_images_descriptions: bool = False,
-    llm_service_images: Optional[VisionService] = None,
+async def get_chunks_from_docx(
+    document: FileDocument,
+    get_file_content: Callable[[str], bytes | str],
+    docx_parser: Callable[[str], str],
     chunk_size: int = CHUNK_SIZE,
     chunk_overlap: int = CHUNK_OVERLAP,
+    **kwargs,
 ) -> list[FileChunk]:
-    docx_content = parse_docx_to_md(
-        docx_to_process, get_file_content_func, include_images_descriptions, llm_service_images
-    )
-    return chunk_markdown(docx_to_process, docx_content, chunk_size, chunk_overlap)
+    try:
+        content_to_process = get_file_content(document.id)
+        with content_as_temporary_file_path(content_to_process, suffix=".docx") as file_path:
+            try:
+                markdown_text = await docx_parser(file_path, **kwargs)
+            except Exception as e:
+                LOGGER.error(
+                    f"Error parsing DOCX {document.file_name}: {e}",
+                    exc_info=True,
+                )
+                raise Exception(f"Error parsing DOCX {document.file_name}") from e
+        return chunk_markdown(
+            document_to_process=document,
+            content=markdown_text,
+            chunk_size=chunk_size,
+            chunk_overlap=chunk_overlap,
+        )
+    except Exception as e:
+        LOGGER.error(f"Error processing DOCX {document.file_name}: {e}", exc_info=True)
+        raise Exception(f"Error processing DOCX {document.file_name}") from e
