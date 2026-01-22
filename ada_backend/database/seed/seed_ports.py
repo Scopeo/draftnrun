@@ -88,6 +88,7 @@ def seed_port_definitions(session: Session):
                     ui_component_properties = {
                         "label": field_name.replace("_", " ").title(),
                     }
+                ui_component_properties["has_autocompletion"] = True
                 # TODO: Temporary patch to ensure 'messages' input is readonly. Clean later.
                 if field_name == "messages":
                     ui_component_properties["readonly"] = True
