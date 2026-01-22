@@ -69,10 +69,6 @@ class RootTraceSpan(BaseModel):
     input: list
     output: list
     status_code: str
-    cumulative_llm_token_count_prompt: int
-    cumulative_llm_token_count_completion: int
-    llm_token_count_prompt: int | None
-    llm_token_count_completion: int | None
     environment: EnvType | None
     call_type: CallType | None
     graph_runner_id: UUID | None
