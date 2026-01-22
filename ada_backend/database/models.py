@@ -480,6 +480,47 @@ class SecretIntegration(Base):
         return CIPHER.decrypt(self.encrypted_refresh_token.encode()).decode()
 
 
+class OAuthConnection(Base):
+    """
+    OAuth connections managed by Nango.
+
+    Represents an authorized connection to an external service (e.g., Slack, Gmail).
+    This it's completely parallel to Integration + SecretIntegration + IntegrationComponentInstanceRelationship system.
+    """
+
+    __tablename__ = "oauth_connections"
+
+    id = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
+
+    project_id = mapped_column(
+        UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+
+    # Nango connection ID is the source of truth for credentials.
+    # Current limitation: unique=True enforces 1 connection per provider per project.
+    nango_connection_id = mapped_column(
+        String(500),
+        nullable=False,
+        unique=True,
+        index=True,
+    )
+    provider_config_key = mapped_column(String(255), nullable=False, index=True)
+
+    name = mapped_column(String(255), nullable=False, server_default="")
+    created_by_user_id = mapped_column(UUID(as_uuid=True), nullable=True, index=True)
+    created_at = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+    deleted_at = mapped_column(DateTime(timezone=True), nullable=True, index=True)
+
+    project = relationship("Project")
+
+    def __repr__(self) -> str:
+        return (
+            f"OAuthConnection(id={self.id}, project_id={self.project_id}, "
+            f"provider={self.provider_config_key}, name={self.name})"
+        )
+
+
 class IntegrationComponentInstanceRelationship(Base):
     __tablename__ = "integration_component_instance_relationships"
 

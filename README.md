@@ -419,6 +419,28 @@ If you set these variables, your custom model will appear as an option in the mo
 Be careful. For now, when you have a local config, the first vision model and embedding model in your configuration will be used by default
 for the ingestion
 
+### Nango OAuth Management (Self-Hosted)
+
+Nango is used as a headless OAuth token vault to handle OAuth integrations (Slack, HubSpot, etc.). Generate encryption keys:
+
+```bash
+# Encryption key for tokens
+openssl rand -base64 32
+
+# Secret key for Nango API
+openssl rand -hex 32
+```
+
+Add to `credentials.env`:
+
+```env
+NANGO_ENCRYPTION_KEY=your-generated-encryption-key
+NANGO_SECRET_KEY=your-generated-secret-key
+NANGO_DASHBOARD_PASSWORD=your-secure-password
+```
+
+**For more details:** See [Nango documentation](https://docs.nango.dev/)
+
 ### Google OAuth Setup
 
 To enable Google login, set these in your credentials.env:
