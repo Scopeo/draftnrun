@@ -3,17 +3,14 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from ada_backend.database.models import SelectOption
-from ada_backend.repositories.credits_repository import (
-    delete_llm_cost,
-    upsert_llm_cost,
-)
+from ada_backend.repositories.credits_repository import delete_llm_cost, upsert_llm_cost
 from ada_backend.repositories.llm_models_repository import (
     create_llm_model,
     delete_llm_model,
     get_all_llm_models,
     get_llm_models_by_capability,
     get_model_id_by_name,
-    llm_model_exists,
+    llm_model_exists_exact_match,
     update_llm_model,
 )
 from ada_backend.schemas.llm_models_schema import (
@@ -168,13 +165,13 @@ def update_llm_model_service(
     return LLMModelResponse.model_validate(updated_llm_model)
 
 
-def llm_model_exists_service(
+def llm_model_exists_exact_match_service(
     session: Session,
     model_name: str,
     provider: str,
     model_capacity: list[str],
 ) -> bool:
-    return llm_model_exists(
+    return llm_model_exists_exact_match(
         session,
         model_name,
         provider,

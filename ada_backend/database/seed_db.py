@@ -40,7 +40,7 @@ from ada_backend.database.seed.seed_table_lookup import seed_table_lookup_compon
 from ada_backend.database.seed.seed_terminal_command_runner import seed_terminal_command_runner_components
 from ada_backend.database.seed.seed_tool_description import seed_tool_description
 from ada_backend.database.seed.seed_web_search import seed_web_search_components
-from ada_backend.database.seed.utils import COMPONENT_UUIDS, seed_custom_llm_models
+from ada_backend.database.seed.utils import COMPONENT_UUIDS, seed_anthropic_models, seed_custom_llm_models
 
 LOGGER = logging.getLogger(__name__)
 
@@ -85,6 +85,7 @@ def seed_db(session: Session):
         # Seed port definitions from code (with upsert)
         seed_port_definitions(session)
         seed_custom_llm_models(session)
+        seed_anthropic_models(session)
 
         # Verify components exist
         for name, uuid_value in COMPONENT_UUIDS.items():
