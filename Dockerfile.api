@@ -35,6 +35,7 @@ RUN apt-get update && apt-get install -y \
     libffi-dev \
     shared-mime-info \
     libglib2.0-0 \
+    pandoc \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy virtual environment from builder
