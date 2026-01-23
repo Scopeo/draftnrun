@@ -9,6 +9,7 @@ from engine.components.ai_agent import get_dummy_ai_agent_description
 from engine.components.document_enhanced_llm_call import DEFAULT_DOCUMENT_ENHANCED_LLM_CALL_TOOL_DESCRIPTION
 from engine.components.docx_generation_tool import DEFAULT_DOCX_GENERATION_TOOL_DESCRIPTION
 from engine.components.filter import DEFAULT_FILTER_TOOL_DESCRIPTION
+from engine.components.if_else import DEFAULT_IF_ELSE_TOOL_DESCRIPTION
 from engine.components.inputs_outputs.start import DEFAULT_START_TOOL_DESCRIPTION
 from engine.components.llm_call import DEFAULT_LLM_CALL_TOOL_DESCRIPTION
 from engine.components.pdf_generation_tool import DEFAULT_PDF_GENERATION_TOOL_DESCRIPTION
@@ -50,6 +51,7 @@ TOOL_DESCRIPTION_UUIDS = {
     "remote_mcp_tool_description": UUID("4c6ef0d2-53c0-4ab2-96cb-3c2b5f5b3e88"),
     "default_table_lookup_tool_description": UUID("5c6d7e8f-9012-3456-789a-bcdef0123456"),
     "default_retriever_tool_description": UUID("b1c2d3e4-f5a6-7b8c-9d0e-1f2a3b4c5d6e"),
+    "default_if_else_tool_description": UUID("f463e643-bf7d-4495-8717-8a82008a4e53"),
 }
 
 
@@ -136,6 +138,10 @@ def seed_tool_description(session: Session):
         id=TOOL_DESCRIPTION_UUIDS["default_retriever_tool_description"],
         **RETRIEVER_TOOL_DESCRIPTION.model_dump(),
     )
+    default_if_else_tool_description = db.ToolDescription(
+        id=TOOL_DESCRIPTION_UUIDS["default_if_else_tool_description"],
+        **DEFAULT_IF_ELSE_TOOL_DESCRIPTION.model_dump(),
+    )
     upsert_tool_descriptions(
         session=session,
         tool_descriptions=[
@@ -161,5 +167,6 @@ def seed_tool_description(session: Session):
             docx_template_tool_description,
             remote_mcp_tool_description,
             default_table_lookup_tool_description,
+            default_if_else_tool_description,
         ],
     )

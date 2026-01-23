@@ -170,8 +170,13 @@ class GraphRunner:
             self.run_context.update(result_packet.ctx or {})
             LOGGER.debug(f"Node '{node_id}' completed execution with result: {result_packet}")
 
-            for successor in self.graph.successors(node_id):
-                self.tasks[successor].decrement_pending_deps()
+            should_halt = result_packet.data.get("should_halt", False)
+            if should_halt:
+                LOGGER.info(f"Node '{node_id}' signaled to halt downstream execution")
+                self._halt_downstream_execution(node_id)
+            else:
+                for successor in self.graph.successors(node_id):
+                    self.tasks[successor].decrement_pending_deps()
 
         return legacy_compatibility.collect_legacy_outputs(self.graph, self.tasks, self._input_node_id, self.runnables)
 
@@ -399,3 +404,24 @@ class GraphRunner:
         self._mappings_by_target = {}
         for pm in self.port_mappings:
             self._mappings_by_target.setdefault(pm.target_instance_id, []).append(pm)
+
+    def _halt_downstream_execution(self, source_node_id: str) -> None:
+        """Mark all downstream nodes from source as completed without execution."""
+        visited = set()
+        queue = [source_node_id]
+
+        while queue:
+            current = queue.pop(0)
+            if current in visited:
+                continue
+            visited.add(current)
+
+            for successor in self.graph.successors(current):
+                if successor not in visited:
+                    task = self.tasks[successor]
+                    if task.state != TaskState.COMPLETED:
+                        LOGGER.debug(f"Halting execution for downstream node '{successor}'")
+                        # Mark as completed with empty result to prevent execution
+                        task.state = TaskState.COMPLETED
+                        task.result = NodeData(data={}, ctx=self.run_context)
+                    queue.append(successor)

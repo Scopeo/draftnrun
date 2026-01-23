@@ -161,6 +161,7 @@ class UIComponent(StrEnum):
     TEXTFIELD = "Textfield"
     FILE_UPLOAD = "FileUpload"
     JSON_BUILDER = "JSON Builder"
+    CONDITION_BUILDER = "ConditionBuilder"
 
 
 class SourceType(StrEnum):
@@ -255,6 +256,9 @@ class UIComponentProperties(BaseModel):
     # File upload property
     accept: Optional[str] = None
     multiple: Optional[bool] = None
+
+    # Condition builder property
+    available_operators: Optional[List[str]] = None
 
 
 def cast_value(
