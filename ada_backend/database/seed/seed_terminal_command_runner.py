@@ -26,7 +26,7 @@ def seed_terminal_command_runner_components(session: Session):
     terminal_command_runner_component = Component(
         id=COMPONENT_UUIDS["terminal_command_runner"],
         name="Terminal Code Execution",
-        is_agent=False,
+        is_agent=True,
         function_callable=True,
         can_use_function_calling=False,
         icon="tabler-terminal-2",

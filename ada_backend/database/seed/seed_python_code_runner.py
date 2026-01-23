@@ -26,7 +26,7 @@ def seed_python_code_runner_components(session: Session):
     python_code_runner_component = Component(
         id=COMPONENT_UUIDS["python_code_runner"],
         name="Code Execution (Python)",
-        is_agent=False,
+        is_agent=True,
         function_callable=True,
         can_use_function_calling=False,
         icon="logos-python",
