@@ -7,7 +7,7 @@ from typing import Callable, Optional
 import pandas as pd
 
 from data_ingestion.document.csv_ingestion import ingest_csv_file
-from data_ingestion.document.docx_ingestion import get_chunks_from_docx
+from data_ingestion.document.docx_ingestion import _parse_docx_with_pandoc, get_chunks_from_docx
 from data_ingestion.document.excel_ingestion import ingest_excel_file
 from data_ingestion.document.folder_management.folder_management import (
     BaseDocument,
@@ -15,14 +15,11 @@ from data_ingestion.document.folder_management.folder_management import (
     FileDocument,
     FileDocumentType,
 )
+from data_ingestion.document.llamaparser_ingestion import _parse_document_with_llamaparse
 from data_ingestion.document.markdown_ingestion import get_chunks_from_markdown
-from data_ingestion.document.pdf_ingestion import (
-    _parse_pdf_with_llamaparse,
-    _parse_pdf_without_llm,
-    create_chunks_from_pdf_document,
-)
+from data_ingestion.document.pdf_ingestion import _parse_pdf_without_llm, create_chunks_from_pdf_document
 from data_ingestion.document.pdf_vision_ingestion import create_chunks_from_document
-from data_ingestion.utils import PDFReadingMode
+from data_ingestion.utils import DocumentReadingMode
 from engine.llm_services.llm_service import CompletionService, VisionService
 from ingestion_script.utils import ORDER_COLUMN_NAME
 
@@ -36,30 +33,48 @@ def document_chunking_mapping(
     get_file_content_func: Optional[Callable[[FileDocument], str]] = None,
     overlapping_size: int = 50,
     chunk_size: Optional[int] = 1024,
-    pdf_reading_mode: PDFReadingMode = PDFReadingMode.STANDARD,
+    document_reading_mode: DocumentReadingMode = DocumentReadingMode.STANDARD,
     llamaparse_api_key: Optional[str] = None,
 ) -> dict[FileDocumentType, FileProcessor]:
-    if pdf_reading_mode == PDFReadingMode.LLM_VISION:
+    if document_reading_mode == DocumentReadingMode.LLM_VISION:
         pdf_processor = partial(
             create_chunks_from_document,
             google_llm_service=vision_ingestion_service,
             openai_llm_service=llm_service,
             get_file_content=get_file_content_func,
         )
-        LOGGER.info("Using LLM-based vision PDF processing")
-
-    elif pdf_reading_mode == PDFReadingMode.LLAMAPARSE:
-        if not llamaparse_api_key:
-            raise ValueError("llamaparse_api_key is required for LLAMAPARSE mode")
-        pdf_parser = partial(_parse_pdf_with_llamaparse, llamaparse_api_key=llamaparse_api_key)
-        pdf_processor = partial(
-            create_chunks_from_pdf_document,
+        docx_parser_with_images = partial(
+            _parse_docx_with_pandoc,
+            llm_service_images=vision_ingestion_service,
+        )
+        docx_processor = partial(
+            get_chunks_from_docx,
             get_file_content=get_file_content_func,
-            pdf_parser=pdf_parser,
+            docx_parser=docx_parser_with_images,
             chunk_size=chunk_size,
             chunk_overlap=overlapping_size,
         )
-        LOGGER.info("Using LlamaParse for PDF processing")
+        LOGGER.info("Using LLM-based vision for PDF and DOCX processing (with image descriptions)")
+
+    elif document_reading_mode == DocumentReadingMode.LLAMAPARSE:
+        if not llamaparse_api_key:
+            raise ValueError("llamaparse_api_key is required for LLAMAPARSE mode")
+        document_parser = partial(_parse_document_with_llamaparse, llamaparse_api_key=llamaparse_api_key)
+        pdf_processor = partial(
+            create_chunks_from_pdf_document,
+            get_file_content=get_file_content_func,
+            pdf_parser=document_parser,
+            chunk_size=chunk_size,
+            chunk_overlap=overlapping_size,
+        )
+        docx_processor = partial(
+            get_chunks_from_docx,
+            get_file_content=get_file_content_func,
+            docx_parser=document_parser,
+            chunk_size=chunk_size,
+            chunk_overlap=overlapping_size,
+        )
+        LOGGER.info("Using LlamaParse for PDF and DOCX processing")
 
     else:
         pdf_processor = partial(
@@ -69,15 +84,18 @@ def document_chunking_mapping(
             chunk_size=chunk_size,
             chunk_overlap=overlapping_size,
         )
-        LOGGER.info("Using pymupdf4llm for standard PDF processing")
+        docx_processor = partial(
+            get_chunks_from_docx,
+            get_file_content=get_file_content_func,
+            docx_parser=_parse_docx_with_pandoc,
+            chunk_size=chunk_size,
+            chunk_overlap=overlapping_size,
+        )
+        LOGGER.info("Using pymupdf4llm for standard PDF processing and pypandoc for DOCX processing")
 
     document_chunking_mapping = {
         FileDocumentType.PDF.value: pdf_processor,
-        FileDocumentType.DOCX.value: partial(
-            get_chunks_from_docx,
-            get_file_content_func=get_file_content_func,
-            chunk_overlap=overlapping_size,
-        ),
+        FileDocumentType.DOCX.value: docx_processor,
         FileDocumentType.MARKDOWN.value: partial(
             get_chunks_from_markdown,
             get_file_content_func=get_file_content_func,

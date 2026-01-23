@@ -4,7 +4,7 @@ import pytest
 
 from data_ingestion.document.docx_ingestion import (
     _docx_to_md,
-    _docx_to_md_safe_mode,
+    _parse_docx_with_pandoc,
     extract_sections_around_images,
     get_chunks_from_docx,
 )
@@ -26,36 +26,90 @@ def mock_file_document():
 @mock.patch("data_ingestion.document.docx_ingestion.pypandoc.convert_file")
 def test_docx_to_md(mock_convert_file):
     mock_convert_file.return_value = "mock markdown content"
-    fake_docx_content = b"PK\x03\x04 fake docx content"
-    result = _docx_to_md(fake_docx_content)
+    file_path = "/path/to/file.docx"
+    result = _docx_to_md(file_path, extract_image=False)
     assert result == "mock markdown content"
-    mock_convert_file.assert_called_once()
-
-    called_args, called_kwargs = mock_convert_file.call_args
-    assert called_args[0].endswith(".docx")
-    assert called_args[1] == "md"
-    assert called_kwargs["extra_args"] == []
+    mock_convert_file.assert_called_once_with(file_path, "md", extra_args=[])
 
 
 @mock.patch("data_ingestion.document.docx_ingestion.pypandoc.convert_file")
-@mock.patch("data_ingestion.document.docx_ingestion.tempfile.NamedTemporaryFile")
-def test_docx_to_md_safe_mode(mock_tempfile, mock_convert_file):
-    mock_tempfile.return_value.__enter__.return_value.name = "/path/to/temp/file.docx"
-    mock_convert_file.return_value = "mock markdown content"
+def test_docx_to_md_with_error(mock_convert_file):
+    """Test that _docx_to_md returns None on error"""
+    mock_convert_file.side_effect = Exception("mock error")
+    file_path = "/path/to/file.docx"
+    result = _docx_to_md(file_path, extract_image=False)
+    assert result is None
 
-    fake_docx_content = b"mock docx content"
 
-    result = _docx_to_md_safe_mode(fake_docx_content)
+@pytest.mark.asyncio
+@mock.patch("data_ingestion.document.docx_ingestion._docx_to_md")
+async def test_parse_docx_with_pandoc_no_llm(mock_docx_to_md):
+    """Test _parse_docx_with_pandoc without LLM service"""
+    mock_docx_to_md.return_value = "mock markdown content"
+    file_path = "/path/to/file.docx"
+
+    result = await _parse_docx_with_pandoc(file_path, llm_service_images=None)
+
     assert result == "mock markdown content"
+    mock_docx_to_md.assert_called_once_with(file_path, extract_image=False)
 
-    mock_convert_file.assert_called_once_with("/path/to/temp/file.docx", "md", extra_args=[])
 
-
+@pytest.mark.asyncio
 @mock.patch("data_ingestion.document.docx_ingestion._docx_to_md")
-def test_get_chunks_from_docx(mock_docx_to_md, mock_file_document):
-    mock_docx_to_md.return_value = "mock markdown content"
+async def test_parse_docx_with_pandoc_conversion_fails(mock_docx_to_md):
+    """Test _parse_docx_with_pandoc returns empty string when conversion fails"""
+    mock_docx_to_md.return_value = None
+    file_path = "/path/to/file.docx"
+
+    result = await _parse_docx_with_pandoc(file_path, llm_service_images=None)
+
+    assert result == ""
+
+
+@pytest.mark.asyncio
+@mock.patch("data_ingestion.document.docx_ingestion.extract_sections_around_images")
+@mock.patch("data_ingestion.document.docx_ingestion.get_image_content_from_path")
+@mock.patch("data_ingestion.document.docx_ingestion._docx_to_md")
+async def test_parse_docx_with_pandoc_with_llm(mock_docx_to_md, mock_get_image, mock_extract_sections):
+    """Test _parse_docx_with_pandoc with LLM service for image descriptions"""
+    mock_docx_to_md.return_value = "markdown with ![image](media/image1.png)"
+    mock_extract_sections.return_value = {"media/image1.png": {"context": "test context"}}
+    mock_get_image.return_value = b"fake image content"
+
+    mock_llm_service = mock.Mock()
+    mock_llm_service.get_image_description.return_value = "AI generated description"
+
+    file_path = "/path/to/file.docx"
+
+    with mock.patch("data_ingestion.document.docx_ingestion.Path") as mock_path:
+        # Mock the path.rglob to return empty list (no images found on disk)
+        mock_path.return_value.parent = mock.MagicMock()
+        mock_path.return_value.stem = "file"
+        mock_folder = mock.MagicMock()
+        mock_folder.rglob.return_value = []
+        mock_path.return_value.parent.__truediv__.return_value.__truediv__.return_value = mock_folder
+
+        result = await _parse_docx_with_pandoc(file_path, llm_service_images=mock_llm_service)
+
+        # Since no images are found on disk, result should be the original markdown
+        assert result == "markdown with ![image](media/image1.png)"
+        mock_docx_to_md.assert_called_once_with(file_path, extract_image=True)
+
+
+@pytest.mark.asyncio
+async def test_get_chunks_from_docx(mock_file_document):
+    """Test get_chunks_from_docx with successful parsing"""
+    mock_parser = mock.AsyncMock(return_value="mock markdown content")
     mock_get_file_content = mock.Mock(return_value=b"fake docx content")
-    chunks = get_chunks_from_docx(mock_file_document, mock_get_file_content)
+
+    chunks = await get_chunks_from_docx(
+        mock_file_document,
+        mock_get_file_content,
+        docx_parser=mock_parser,
+        chunk_size=1024,
+        chunk_overlap=0,
+    )
+
     assert len(chunks) == 1
     assert chunks[0].content == "\nmock markdown content"
     assert chunks[0].order == 0
@@ -64,25 +118,36 @@ def test_get_chunks_from_docx(mock_docx_to_md, mock_file_document):
     assert chunks[0].last_edited_ts == "2024-11-26 10:40:40"
 
 
-@mock.patch("data_ingestion.document.docx_ingestion._docx_to_md")
-def test_get_chunks_from_docx_with_error(mock_docx_to_md, mock_file_document):
-    mock_docx_to_md.side_effect = [Exception("mock error"), "mock markdown content"]
-    mock_docx_to_md.return_value = "mock markdown content"
+@pytest.mark.asyncio
+async def test_get_chunks_from_docx_with_error(mock_file_document):
+    """Test get_chunks_from_docx raises exception on error"""
+    mock_parser = mock.AsyncMock(side_effect=Exception("mock error"))
     mock_get_file_content = mock.Mock(return_value=b"fake docx content")
-    chunks = get_chunks_from_docx(mock_file_document, mock_get_file_content)
-    assert len(chunks) == 1
-    assert chunks[0].content == "\nmock markdown content"
-    assert chunks[0].order == 0
-    assert chunks[0].file_id == "/path/to/mock/file.docx"
-    assert chunks[0].document_title == "file.docx"
-    assert chunks[0].last_edited_ts == "2024-11-26 10:40:40"
+
+    with pytest.raises(Exception, match="Error processing DOCX file.docx"):
+        await get_chunks_from_docx(
+            mock_file_document,
+            mock_get_file_content,
+            docx_parser=mock_parser,
+            chunk_size=1024,
+            chunk_overlap=0,
+        )
 
 
-@mock.patch("data_ingestion.document.docx_ingestion._docx_to_md")
-def test_get_chunks_from_docx_multiple_chunks(mock_docx_to_md, mock_file_document):
-    mock_docx_to_md.return_value = "# mock markdown content " * 1000
+@pytest.mark.asyncio
+async def test_get_chunks_from_docx_multiple_chunks(mock_file_document):
+    """Test get_chunks_from_docx with content that creates multiple chunks"""
+    mock_parser = mock.AsyncMock(return_value="# mock markdown content " * 1000)
     mock_get_file_content = mock.Mock(return_value=b"fake docx content")
-    chunks = get_chunks_from_docx(mock_file_document, mock_get_file_content)
+
+    chunks = await get_chunks_from_docx(
+        mock_file_document,
+        mock_get_file_content,
+        docx_parser=mock_parser,
+        chunk_size=1024,
+        chunk_overlap=0,
+    )
+
     assert len(chunks) > 1
     for i, chunk in enumerate(chunks):
         assert chunk.order == i

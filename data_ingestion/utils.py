@@ -50,7 +50,7 @@ class Chunk(BaseModel):
 
 
 @contextmanager
-def get_file_path_from_content(content: bytes | str, suffix: str = ".pdf"):
+def content_as_temporary_file_path(content: bytes | str, suffix: str = ".pdf"):
     if isinstance(content, bytes):
         temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
         temp_path = Path(temp_file.name)
@@ -146,7 +146,7 @@ def split_df_by_token_limit(
     return chunks
 
 
-class PDFReadingMode(str, Enum):
+class DocumentReadingMode(str, Enum):
     """PDF processing mode options"""
 
     LLM_VISION = "llm_vision"
