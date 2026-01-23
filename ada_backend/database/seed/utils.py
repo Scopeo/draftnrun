@@ -14,7 +14,7 @@ from ada_backend.database.seed.constants import (
     VERBOSITY_IN_DB,
 )
 from ada_backend.schemas.llm_models_schema import LLMModelCreate, ModelCapabilityEnum
-from ada_backend.services.llm_models_service import create_llm_model_service, llm_model_exists_service
+from ada_backend.services.llm_models_service import create_llm_model_service, llm_model_exists_exact_match_service
 from settings import settings
 
 LOGGER = logging.getLogger(__name__)
@@ -110,6 +110,11 @@ DEFAULT_MODEL_WEB_SEARCH = "openai:gpt-5-mini"
 DEFAULT_MODEL = "anthropic:claude-haiku-4-5"
 DEFAULT_EMBEDDING_MODEL = "openai:text-embedding-3-large"
 DEFAULT_OCR_MODEL = "mistral:mistral-ocr-latest"
+ANTHROPIC_MODELS = [
+    {"display_name": "Claude Haiku 4.5", "model_name": "claude-haiku-4-5"},
+    {"display_name": "Claude Opus 4.5", "model_name": "claude-opus-4-5"},
+    {"display_name": "Claude Sonnet 4.5", "model_name": "claude-sonnet-4-5"},
+]
 
 
 class ParameterLLMConfig(BaseModel):
@@ -469,7 +474,9 @@ def seed_custom_llm_models(session: Session):
         return
     for provider, models in settings.custom_models["custom_models"].items():
         for model in models:
-            if llm_model_exists_service(session, model.get("model_name"), provider, model.get("model_capacity", [])):
+            if llm_model_exists_exact_match_service(
+                session, model.get("model_name"), provider, model.get("model_capacity", [])
+            ):
                 LOGGER.warning(f"Model {model.get('model_name')} already exists")
                 continue
 
@@ -483,3 +490,36 @@ def seed_custom_llm_models(session: Session):
                     model_capacity=model.get("model_capacity", []),
                 ),
             )
+
+
+def seed_anthropic_models(session: Session):
+    for model in ANTHROPIC_MODELS:
+        if llm_model_exists_exact_match_service(
+            session,
+            model.get("model_name"),
+            "anthropic",
+            [
+                ModelCapabilityEnum.COMPLETION.value,
+                ModelCapabilityEnum.FUNCTION_CALLING.value,
+                ModelCapabilityEnum.IMAGE.value,
+                ModelCapabilityEnum.CONSTRAINED_OUTPUT.value,
+            ],
+        ):
+            LOGGER.warning(f"Model {model.get('model_name')} already exists")
+            continue
+        LOGGER.info(f"Creating model {model.get('model_name')}")
+        create_llm_model_service(
+            session=session,
+            llm_model_data=LLMModelCreate(
+                display_name=model.get("display_name"),
+                model_name=model.get("model_name"),
+                description="",
+                provider="anthropic",
+                model_capacity=[
+                    ModelCapabilityEnum.COMPLETION.value,
+                    ModelCapabilityEnum.FUNCTION_CALLING.value,
+                    ModelCapabilityEnum.IMAGE.value,
+                    ModelCapabilityEnum.CONSTRAINED_OUTPUT.value,
+                ],
+            ),
+        )

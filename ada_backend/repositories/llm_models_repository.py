@@ -99,14 +99,18 @@ def update_llm_model(
     return existing_llm_model
 
 
-def llm_model_exists(session: Session, model_name: str, provider: str, model_capacity: list[str]) -> bool:
-    return (
+def llm_model_exists_exact_match(
+    session: Session, model_name: str, provider: str, model_capacity: list[str]
+) -> bool:
+    model = (
         session.query(db.LLMModel)
         .filter(
             db.LLMModel.model_name == model_name,
             db.LLMModel.provider == provider,
-            db.LLMModel.model_capacity == model_capacity,
         )
         .first()
-        is not None
     )
+    if model is None:
+        return False
+
+    return set(model.model_capacity) == set(model_capacity)
