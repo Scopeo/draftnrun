@@ -29,11 +29,12 @@ from ada_backend.repositories.port_mapping_repository import insert_port_mapping
 from ada_backend.repositories.tag_repository import update_graph_runner_tag_fields
 from ada_backend.schemas.parameter_schema import PipelineParameterSchema
 from ada_backend.schemas.pipeline.base import ComponentInstanceSchema
-from ada_backend.schemas.pipeline.graph_schema import GraphDeployResponse
+from ada_backend.schemas.pipeline.graph_schema import GraphDeployResponse, GraphSaveVersionResponse
 from ada_backend.services.errors import (
     GraphNotBoundToProjectError,
     GraphNotFound,
     GraphRunnerAlreadyInEnvironmentError,
+    GraphVersionSavingFromNonDraftError,
 )
 from ada_backend.services.field_expression_remap_service import remap_field_expressions_for_cloning
 from ada_backend.services.graph.delete_graph_service import delete_graph_runner_service
@@ -334,3 +335,57 @@ def load_version_as_draft_service(
     if previous_draft_graph is not None:
         delete_graph_runner_service(session, previous_draft_graph.id)
         LOGGER.info(f"Deleted previous draft graph {previous_draft_graph.id}")
+
+
+def save_graph_version_service(
+    session: Session,
+    graph_runner_id: UUID,
+    project_id: UUID,
+) -> GraphSaveVersionResponse:
+    """
+    Create a versioned snapshot from a draft graph runner.
+    """
+    if not graph_runner_exists(session, graph_id=graph_runner_id):
+        raise GraphNotFound(graph_runner_id)
+
+    env_relationship = get_env_relationship_by_graph_runner_id(session=session, graph_runner_id=graph_runner_id)
+    if env_relationship is None:
+        raise GraphNotBoundToProjectError(graph_runner_id, bound_project_id=None)
+
+    if env_relationship.project_id != project_id:
+        raise GraphNotBoundToProjectError(
+            graph_runner_id=graph_runner_id,
+            bound_project_id=env_relationship.project_id,
+            expected_project_id=project_id,
+        )
+
+    if env_relationship.environment != EnvType.DRAFT:
+        raise GraphVersionSavingFromNonDraftError(graph_runner_id, str(env_relationship.environment))
+
+    versioned_graph_runner_id = clone_graph_runner(
+        session=session,
+        graph_runner_id_to_copy=graph_runner_id,
+        project_id=project_id,
+    )
+    LOGGER.info(f"Cloned graph runner {graph_runner_id} to {versioned_graph_runner_id}")
+
+    version_tag = compute_next_tag_version(session, project_id)
+    update_graph_runner_tag_fields(session, versioned_graph_runner_id, tag_version=version_tag)
+    LOGGER.info(f"Assigned version tag {version_tag} to versioned graph runner {versioned_graph_runner_id}")
+
+    bind_graph_runner_to_project(
+        session,
+        graph_runner_id=versioned_graph_runner_id,
+        project_id=project_id,
+        env=None,
+    )
+    LOGGER.info(
+        f"Bound versioned graph runner {versioned_graph_runner_id} to project {project_id} with None environment"
+    )
+
+    return GraphSaveVersionResponse(
+        project_id=project_id,
+        saved_graph_runner_id=versioned_graph_runner_id,
+        tag_version=version_tag,
+        draft_graph_runner_id=graph_runner_id,
+    )

@@ -173,6 +173,18 @@ class GraphNotBoundToProjectError(Exception):
         super().__init__(message)
 
 
+class GraphVersionSavingFromNonDraftError(Exception):
+    """Raised when attempting to save a version from a graph runner that is not in DRAFT environment."""
+
+    def __init__(self, graph_runner_id: UUID, current_environment: str):
+        self.graph_runner_id = graph_runner_id
+        self.current_environment = current_environment
+        super().__init__(
+            f"Can only save versions from DRAFT. Graph runner {graph_runner_id} "
+            f"is currently in environment: {current_environment}"
+        )
+
+
 class WidgetNotFound(Exception):
     def __init__(self, widget_id: UUID | None = None, widget_key: str | None = None):
         if widget_id:

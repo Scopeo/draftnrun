@@ -18,6 +18,7 @@ from ada_backend.schemas.pipeline.graph_schema import (
     GraphGetResponse,
     GraphLoadResponse,
     GraphModificationHistoryResponse,
+    GraphSaveVersionResponse,
     GraphUpdateResponse,
     GraphUpdateSchema,
 )
@@ -25,6 +26,7 @@ from ada_backend.services.errors import (
     GraphNotBoundToProjectError,
     GraphNotFound,
     GraphRunnerAlreadyInEnvironmentError,
+    GraphVersionSavingFromNonDraftError,
     MissingDataSourceError,
     ProjectNotFound,
 )
@@ -33,6 +35,7 @@ from ada_backend.services.graph.deploy_graph_service import (
     bind_graph_to_env_service,
     deploy_graph_service,
     load_version_as_draft_service,
+    save_graph_version_service,
 )
 from ada_backend.services.graph.get_graph_modification_history_service import (
     get_graph_modification_history_service,
@@ -270,6 +273,56 @@ def deploy_graph(
             f"Failed to deploy graph for project {project_id} runner {graph_runner_id}: {str(e)}", exc_info=True
         )
         raise HTTPException(status_code=400, detail="Bad request") from e
+
+
+@router.post(
+    "/{graph_runner_id}/save-version",
+    summary="Save Version from Draft",
+    response_model=GraphSaveVersionResponse,
+    tags=["Graph"],
+)
+def save_graph_version(
+    project_id: UUID,
+    graph_runner_id: UUID,
+    user: Annotated[
+        SupabaseUser, Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.DEVELOPER.value))
+    ],
+    session: Session = Depends(get_db),
+) -> GraphSaveVersionResponse:
+    project = get_project(session, project_id=project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    try:
+        return save_graph_version_service(
+            session=session,
+            graph_runner_id=graph_runner_id,
+            project_id=project_id,
+        )
+    except GraphNotFound as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    except GraphNotBoundToProjectError as e:
+        raise HTTPException(status_code=403, detail=str(e)) from e
+    except GraphVersionSavingFromNonDraftError as e:
+        LOGGER.error(
+            "Attempted to save version from non-draft graph runner for "
+            f"project {project_id} runner {graph_runner_id}: {str(e)}"
+        )
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except ConnectionError as e:
+        LOGGER.error(
+            f"Database connection failed for project {project_id} runner {graph_runner_id}: {str(e)}", exc_info=True
+        )
+    except ValueError as e:
+        LOGGER.error(
+            f"Failed to save version for project {project_id} runner {graph_runner_id}: {str(e)}", exc_info=True
+        )
+        raise HTTPException(status_code=400, detail="Bad request") from e
+    except Exception as e:
+        LOGGER.error(
+            f"Failed to save version for project {project_id} runner {graph_runner_id}: {str(e)}", exc_info=True
+        )
+        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @router.get(

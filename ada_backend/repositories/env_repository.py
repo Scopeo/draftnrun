@@ -60,15 +60,19 @@ def bind_graph_runner_to_project(
     session: Session,
     graph_runner_id: UUID,
     project_id: UUID,
-    env: EnvType,
+    env: Optional[EnvType] = None,
 ) -> db.ProjectEnvironmentBinding:
     existing_binding = (
-        session.query(db.ProjectEnvironmentBinding)
-        .filter(
-            db.ProjectEnvironmentBinding.project_id == project_id,
-            db.ProjectEnvironmentBinding.environment == env,
+        (
+            session.query(db.ProjectEnvironmentBinding)
+            .filter(
+                db.ProjectEnvironmentBinding.project_id == project_id,
+                db.ProjectEnvironmentBinding.environment == env,
+            )
+            .first()
         )
-        .first()
+        if env is not None
+        else None
     )
 
     if existing_binding:
