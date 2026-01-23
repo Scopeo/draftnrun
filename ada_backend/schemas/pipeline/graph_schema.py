@@ -1,4 +1,5 @@
 from datetime import datetime
+from enum import Enum
 from typing import Optional
 from uuid import UUID
 
@@ -7,6 +8,14 @@ from pydantic import BaseModel, Field
 from ada_backend.schemas.pipeline.base import ComponentInstanceSchema, ComponentRelationshipSchema
 from ada_backend.schemas.pipeline.get_pipeline_schema import ComponentInstanceReadSchema
 from ada_backend.schemas.pipeline.port_mapping_schema import PortMappingSchema
+
+
+class PlaygroundFieldType(str, Enum):
+    """Types for playground input field rendering."""
+
+    MESSAGES = "messages"
+    JSON = "json"
+    SIMPLE = "simple"
 
 
 class EdgeSchema(BaseModel):
@@ -29,6 +38,8 @@ class GraphGetResponse(BaseModel):
     change_log: Optional[str] = None
     last_edited_time: Optional[datetime] = None
     last_edited_user_id: Optional[UUID] = None
+    playground_input_schema: Optional[dict] = None
+    playground_field_types: Optional[dict[str, PlaygroundFieldType]] = None
 
 
 class GraphLoadResponse(BaseModel):
@@ -54,6 +65,8 @@ class GraphUpdateResponse(BaseModel):
     graph_id: UUID
     last_edited_time: Optional[datetime] = None
     last_edited_user_id: Optional[UUID] = None
+    playground_input_schema: Optional[dict] = None
+    playground_field_types: Optional[dict[str, PlaygroundFieldType]] = None
 
 
 class ComponentNodeDTO(BaseModel):

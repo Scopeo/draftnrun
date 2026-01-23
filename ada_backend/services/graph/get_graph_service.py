@@ -18,6 +18,10 @@ from ada_backend.schemas.pipeline.field_expression_schema import FieldExpression
 from ada_backend.schemas.pipeline.graph_schema import EdgeSchema, GraphGetResponse
 from ada_backend.schemas.pipeline.port_mapping_schema import PortMappingSchema
 from ada_backend.services.graph.graph_validation_utils import validate_graph_runner_belongs_to_project
+from ada_backend.services.graph.playground_utils import (
+    classify_schema_fields,
+    extract_playground_schema_from_component,
+)
 from ada_backend.services.parameter_synthesis_utils import filter_conflicting_parameters
 from ada_backend.services.pipeline.get_pipeline_service import get_component_instance, get_relationships
 from ada_backend.services.tag_service import compose_tag_name
@@ -42,15 +46,19 @@ def get_graph_service(
     edges = []
     port_mappings = []
     field_expressions_by_instance: dict[UUID, list[FieldExpressionReadSchema]] = defaultdict(list)
+    playground_input_schema = None
 
     for component_node in component_nodes:
-        component_instances_with_definitions.append(
-            get_component_instance(
-                session,
-                component_node.id,
-                is_start_node=component_node.is_start_node,
-            )
+        component_instance = get_component_instance(
+            session,
+            component_node.id,
+            is_start_node=component_node.is_start_node,
         )
+        component_instances_with_definitions.append(component_instance)
+
+        if component_node.is_start_node and playground_input_schema is None:
+            playground_input_schema = extract_playground_schema_from_component(component_instance)
+
         relationships += [
             rel
             for rel in get_relationships(
@@ -142,6 +150,10 @@ def get_graph_service(
 
     latest_modification_history = get_latest_modification_history(session, graph_runner_id)
 
+    playground_field_types = None
+    if playground_input_schema:
+        playground_field_types = classify_schema_fields(playground_input_schema)
+
     # Build response, omitting change_log if unset (None)
     response = GraphGetResponse(
         component_instances=component_instances_with_definitions,
@@ -155,5 +167,7 @@ def get_graph_service(
         change_log=project_env_binding.graph_runner.change_log,
         last_edited_time=latest_modification_history.created_at if latest_modification_history else None,
         last_edited_user_id=latest_modification_history.user_id if latest_modification_history else None,
+        playground_input_schema=playground_input_schema,
+        playground_field_types=playground_field_types,
     )
     return response
