@@ -50,8 +50,8 @@ def get_mime_type(file_path: Path) -> str:
 
 def collect_file_paths_from_temp_folder(temp_folder_path: str) -> List[Path]:
     """
-    Recursively collect all files from the temporary folder.
-    Excludes hidden files and directories.
+    Recursively collect all OUTPUT files from the temporary folder.
+    Excludes hidden files, directories, and the 'input/' subfolder.
     Returns sorted list of file paths.
     """
     if not temp_folder_exists(temp_folder_path):
@@ -59,10 +59,14 @@ def collect_file_paths_from_temp_folder(temp_folder_path: str) -> List[Path]:
         return []
 
     temp_folder = Path(temp_folder_path)
+    input_folder = temp_folder / "input"
 
     file_paths = []
     try:
         for item in temp_folder.rglob("*"):
+            if input_folder in item.parents or item == input_folder:
+                continue
+
             if item.is_file() and not item.name.startswith(".") and item.suffix.lower() in WHITELISTED_FILE_EXTENSIONS:
                 file_paths.append(item)
     except Exception as e:

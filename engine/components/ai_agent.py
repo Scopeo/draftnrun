@@ -272,6 +272,22 @@ class AIAgent(Component):
         """Return tool descriptions for LLM function calling."""
         return [desc for _, desc in self._tool_registry.values()]
 
+    @staticmethod
+    def _extract_file_metadata(ctx: Optional[dict]) -> list[dict[str, str]]:
+        if not ctx:
+            return []
+
+        files_info = []
+        for key, value in ctx.items():
+            if isinstance(value, dict) and value.get("type") == "file":
+                filename = value.get("filename", "")
+                if filename:
+                    files_info.append({
+                        "key": key,
+                        "filename": filename,
+                    })
+        return files_info
+
     # --- ORIGINAL CORE LOGIC (unchanged) ---
     async def _run_tool_call(
         self,
@@ -373,6 +389,17 @@ class AIAgent(Component):
             # TODO: add the timezone of the user
             current_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             system_prompt_content = f"Current date and time: {current_date}\n\n{system_prompt_content}"
+
+        files_metadata = self._extract_file_metadata(ctx)
+        if files_metadata:
+            file_list = "\n".join([f"- {f['filename']}" for f in files_metadata])
+            files_instruction = (
+                "\n\nAvailable input files:\n"
+                f"{file_list}\n\n"
+                "You can reference these files directly by filename in your Python code "
+                "(using the input_filepaths parameter)."
+            )
+            system_prompt_content += files_instruction
 
         inputs_dict = inputs_dict or {}
         if kwargs:

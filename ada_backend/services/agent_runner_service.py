@@ -1,7 +1,9 @@
+import base64
 import logging
 import traceback
 import uuid
 from datetime import datetime
+from pathlib import Path
 from typing import Optional
 from uuid import UUID
 
@@ -38,6 +40,36 @@ from engine.trace.span_context import get_tracing_span, set_tracing_span
 from engine.trace.trace_context import get_trace_manager
 
 LOGGER = logging.getLogger(__name__)
+
+
+def _save_input_files_to_temp_folder(input_data: dict, uuid_for_temp_folder: str) -> None:
+    """Extract files from input_data and save them to the temp folder's input subfolder."""
+    temp_folder = Path(uuid_for_temp_folder)
+    input_folder_name = "input"
+    input_folder = temp_folder / input_folder_name
+    input_folder.mkdir(parents=True, exist_ok=True)
+
+    for key, value in input_data.items():
+        if isinstance(value, dict) and value.get("type") == "file":
+            file_obj = value.get("file", {})
+            filename = file_obj.get("filename", "")
+            file_data_b64 = file_obj.get("file_data", "")
+
+            if filename and file_data_b64:
+                try:
+                    safe_filename = Path(filename).name
+                    if not safe_filename:
+                        LOGGER.error("Skipping file with empty or invalid filename", filename=filename)
+                        continue
+                    file_bytes = base64.b64decode(file_data_b64)
+                    root_file_path = input_folder / safe_filename
+                    with open(root_file_path, "wb") as f:
+                        f.write(file_bytes)
+                    LOGGER.info(f"Saved input file to temp folder: {root_file_path}")
+
+                    input_data[key] = {"type": "file", "filename": input_folder_name + "/" + safe_filename}
+                except Exception as e:
+                    LOGGER.error(f"Failed to save input file {filename}: {str(e)}")
 
 
 def get_organization_llm_providers(session: Session, organization_id: UUID) -> list[str]:
@@ -230,6 +262,8 @@ async def run_agent(
     conversation_id = input_data.get("conversation_id")
     if not conversation_id:
         conversation_id = str(uuid.uuid4())
+
+    _save_input_files_to_temp_folder(input_data, uuid_for_temp_folder)
 
     setup_tracing_context(
         session=session,

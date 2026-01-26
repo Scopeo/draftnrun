@@ -38,6 +38,13 @@ PYTHON_CODE_RUNNER_TOOL_DESCRIPTION = ToolDescription(
             "type": "string",
             "description": "The Python code to execute in the sandbox.",
         },
+        "input_filepaths": {
+            "type": "array",
+            "description": (
+                "Optional list of filepaths to load. You need to load files so the sandbox has access to them."
+            ),
+            "items": {"type": "string"},
+        },
     },
     required_tool_properties=["python_code"],
 )
@@ -79,17 +86,20 @@ class PythonCodeRunnerToolInputs(BaseModel):
     shared_sandbox: Optional[AsyncSandbox] = Field(
         default=None,
         description="The sandbox to use for code execution",
-        json_schema_extra={"disabled_as_input": True}
+        json_schema_extra={"disabled_as_input": True},
     )
-    model_config = ConfigDict(
-        extra="allow", arbitrary_types_allowed=True
+    input_filepaths: Optional[list[str]] = Field(
+        default=None,
+        description="The filepaths to load into the sandbox",
     )
+    model_config = ConfigDict(extra="allow", arbitrary_types_allowed=True)
 
 
 class PythonCodeRunnerToolOutputs(BaseModel):
     output: str = Field(description="The result of the executed python code.")
-    artifacts: dict[str, Any] = Field(default_factory=dict, description="Artifacts produced by "
-                                                                        "the python code runner.")
+    artifacts: dict[str, Any] = Field(
+        default_factory=dict, description="Artifacts produced by the python code runner."
+    )
 
 
 class PythonCodeRunner(Component):
@@ -127,6 +137,30 @@ class PythonCodeRunner(Component):
     @staticmethod
     def _is_file_to_save(path: str) -> bool:
         return Path(path).suffix.lower() in VALID_E2B_FILE_EXTS
+
+    @staticmethod
+    def _get_input_files_from_temp_folder(input_filepaths: list[str]) -> list[tuple[str, bytes]]:
+        if not input_filepaths:
+            return []
+
+        try:
+            temp_dir = get_output_dir()
+
+            files = []
+            for input_filepath in input_filepaths:
+                file_path = temp_dir / input_filepath
+                if file_path.is_file():
+                    with open(file_path, "rb") as f:
+                        file_bytes = f.read()
+                    files.append((input_filepath, file_bytes))
+                    LOGGER.info(f"Found input file in temp folder: {input_filepath} at {file_path}")
+                else:
+                    LOGGER.warning(f"Input file not found: {input_filepath}")
+
+            return files
+        except Exception as e:
+            LOGGER.warning(f"Could not read files from temp folder: {str(e)}")
+            return []
 
     def _save_images_from_results(self, execution_result: dict, files_records: list[SandboxFileRecord]) -> list[str]:
         """Extract all images from E2B execution results if any exist."""
@@ -196,8 +230,53 @@ class PythonCodeRunner(Component):
         LOGGER.info(f"E2B execution completed with {len(new_entries)} new files created.")
         return records
 
+    async def _redownload_input_files(
+        self,
+        sandbox: AsyncSandbox,
+        input_filenames: list[str],
+    ) -> list[SandboxFileRecord]:
+        """Re-download input files after execution to capture any modifications."""
+
+        output_dir = get_output_dir()
+        records = []
+
+        for filename in input_filenames:
+            try:
+                file_bytes = await sandbox.files.read(filename, format="bytes")
+                local_path = output_dir / filename
+
+                LOGGER.info(f"Re-downloading input file: {filename}")
+                local_path.parent.mkdir(parents=True, exist_ok=True)
+                with open(local_path, "wb") as f:
+                    f.write(file_bytes)
+
+                # Calculate fingerprint if it's an image
+                fp_pixel = None
+                if os.path.splitext(filename)[1].lower() in SUPPORTED_PIXEL_EXTS:
+                    try:
+                        fp_pixel = fp_pixel_from_bytes(file_bytes)
+                    except Exception as e:
+                        LOGGER.error(f"Failed to get pixel hash for {filename}: {str(e)}")
+
+                record = SandboxFileRecord(
+                    name=filename,
+                    remote_path=filename,
+                    local_path=local_path,
+                    fp_pixel=fp_pixel,
+                )
+                records.append(record)
+
+            except Exception as e:
+                LOGGER.error(f"Failed to re-download input file {filename}: {str(e)}")
+
+        LOGGER.info(f"Re-downloaded {len(records)} input files")
+        return records
+
     async def execute_python_code(
-        self, python_code: str, shared_sandbox: Optional[AsyncSandbox] = None
+        self,
+        python_code: str,
+        input_filepaths: Optional[list[str]] = None,
+        shared_sandbox: Optional[AsyncSandbox] = None,
     ) -> tuple[dict, list[SandboxFileRecord]]:
         """Execute Python code in E2B sandbox and return the result."""
         if not self.e2b_api_key:
@@ -207,6 +286,18 @@ class PythonCodeRunner(Component):
         if not sandbox:
             sandbox = await AsyncSandbox.create(api_key=self.e2b_api_key)
         try:
+            uploaded_filenames = []
+            if input_filepaths:
+                temp_files = self._get_input_files_from_temp_folder(input_filepaths)
+                for filename, file_bytes in temp_files:
+                    try:
+                        await sandbox.files.write(filename, file_bytes)
+                        uploaded_filenames.append(filename)
+                        LOGGER.info(f"Uploaded input file to sandbox: {filename}")
+                    except Exception as e:
+                        LOGGER.error(f"Failed to upload input file {filename}: {str(e)}")
+                        raise
+
             before = await sandbox.files.list(".", depth=1)
             before_map = {e.path: e for e in before}
 
@@ -223,7 +314,13 @@ class PythonCodeRunner(Component):
                 "error": str(execution.error) if hasattr(execution, "error") and execution.error else None,
                 "execution_count": getattr(execution, "execution_count", 1),
             }
+
             records = await self._collect_new_files(sandbox, before_map)
+
+            if uploaded_filenames:
+                input_records = await self._redownload_input_files(sandbox, uploaded_filenames)
+                records.extend(input_records)
+
         except Exception as e:
             LOGGER.error(f"E2B sandbox execution failed: {str(e)}")
             result = {
@@ -246,13 +343,16 @@ class PythonCodeRunner(Component):
         span = get_current_span()
         python_code = inputs.python_code
         shared_sandbox = inputs.shared_sandbox
+        input_filepaths = inputs.input_filepaths
         span.set_attributes({
             SpanAttributes.OPENINFERENCE_SPAN_KIND: self.TRACE_SPAN_KIND,
             SpanAttributes.INPUT_VALUE: str(python_code),
         })
 
         execution_result_dict, records = await self.execute_python_code(
-            python_code=python_code, shared_sandbox=shared_sandbox
+            python_code=python_code,
+            input_filepaths=input_filepaths,
+            shared_sandbox=shared_sandbox,
         )
         content = serialize_to_json(execution_result_dict)
 
