@@ -104,10 +104,7 @@ def _process_component_version_query_result(
     component_ids = [comp.id for comp, _ in result]
     category_map = _fetch_category_ids_for_components(session, component_ids)
 
-    return [
-        _build_component_with_version_dto(comp, ver, category_map.get(comp.id, []))
-        for comp, ver in result
-    ]
+    return [_build_component_with_version_dto(comp, ver, category_map.get(comp.id, [])) for comp, ver in result]
 
 
 def get_global_parameters_by_component_version_id(
@@ -636,6 +633,21 @@ def get_port_definitions_for_component_version_ids(
     return (
         session.query(db.PortDefinition)
         .filter(db.PortDefinition.component_version_id.in_(component_version_ids))
+        .all()
+    )
+
+
+def get_output_ports_for_component_version(
+    session: Session,
+    component_version_id: UUID,
+) -> list[db.PortDefinition]:
+    """Get all output port definitions for a component version."""
+    return (
+        session.query(db.PortDefinition)
+        .filter(
+            db.PortDefinition.component_version_id == component_version_id,
+            db.PortDefinition.port_type == db.PortType.OUTPUT,
+        )
         .all()
     )
 
