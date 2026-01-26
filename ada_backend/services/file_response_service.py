@@ -38,6 +38,35 @@ WHITELISTED_FILE_EXTENSIONS = [
 INPUT_FOLDER_NAME = "input"
 
 
+def save_input_files_to_temp_folder(input_data: dict, uuid_for_temp_folder: str) -> None:
+    """Extract files from input_data and save them to the temp folder's input subfolder."""
+    temp_folder = Path(uuid_for_temp_folder)
+    input_folder = temp_folder / INPUT_FOLDER_NAME
+    input_folder.mkdir(parents=True, exist_ok=True)
+
+    for key, value in input_data.items():
+        if isinstance(value, dict) and value.get("type") == "file":
+            file_obj = value.get("file", {})
+            filename = file_obj.get("filename", "")
+            file_data_b64 = file_obj.get("file_data", "")
+
+            if filename and file_data_b64:
+                try:
+                    safe_filename = Path(filename).name
+                    if not safe_filename:
+                        LOGGER.error("Skipping file with empty or invalid filename", filename=filename)
+                        continue
+                    file_bytes = base64.b64decode(file_data_b64)
+                    root_file_path = input_folder / safe_filename
+                    with open(root_file_path, "wb") as f:
+                        f.write(file_bytes)
+                    LOGGER.info(f"Saved input file to temp folder: {root_file_path}")
+
+                    input_data[key] = {"type": "file", "filename": INPUT_FOLDER_NAME + "/" + safe_filename}
+                except Exception as e:
+                    LOGGER.error(f"Failed to save input file {filename}: {str(e)}")
+
+
 def temp_folder_exists(temp_folder_path: str) -> bool:
     temp_folder = Path(temp_folder_path)
     return temp_folder.is_dir()
