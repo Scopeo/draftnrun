@@ -1,13 +1,14 @@
 import json
 import logging
-from typing import Any, Optional
+from typing import Any, Optional, Type
 
 from e2b_code_interpreter import AsyncSandbox
 from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttributes
 from opentelemetry.trace import get_current_span
+from pydantic import BaseModel, ConfigDict, Field
 
 from engine.components.component import Component
-from engine.components.types import AgentPayload, ChatMessage, ComponentAttributes, ToolDescription
+from engine.components.types import ComponentAttributes, ToolDescription
 from engine.trace.trace_manager import TraceManager
 from settings import settings
 
@@ -29,8 +30,42 @@ TERMINAL_COMMAND_RUNNER_TOOL_DESCRIPTION = ToolDescription(
 )
 
 
+class TerminalCommandRunnerToolInputs(BaseModel):
+    command: str = Field(
+        default="",
+        description="The command to run on the terminal",
+    )
+    shared_sandbox: Optional[AsyncSandbox] = Field(
+        default=None,
+        description="The sandbox to use for code execution",
+        json_schema_extra={"disabled_as_input": True}
+    )
+    model_config = ConfigDict(
+        extra="allow", arbitrary_types_allowed=True
+    )
+
+
+class TerminalCommandRunnerToolOutputs(BaseModel):
+    output: str = Field(description="The result of the executed command on the terminal.")
+    artifacts: dict[str, Any] = Field(default_factory=dict, description="Artifacts produced by "
+                                                                        "the terminal code runner.")
+
+
 class TerminalCommandRunner(Component):
     TRACE_SPAN_KIND = OpenInferenceSpanKindValues.TOOL.value
+    migrated = True
+
+    @classmethod
+    def get_inputs_schema(cls) -> Type[BaseModel]:
+        return TerminalCommandRunnerToolInputs
+
+    @classmethod
+    def get_outputs_schema(cls) -> Type[BaseModel]:
+        return TerminalCommandRunnerToolOutputs
+
+    @classmethod
+    def get_canonical_ports(cls) -> dict[str, str | None]:
+        return {"input": "command", "output": "output"}
 
     def __init__(
         self,
@@ -81,27 +116,21 @@ class TerminalCommandRunner(Component):
 
     async def _run_without_io_trace(
         self,
-        *inputs: AgentPayload,
-        **kwargs: Any,
-    ) -> AgentPayload:
+        inputs: TerminalCommandRunnerToolInputs,
+        ctx: dict,
+    ) -> TerminalCommandRunnerToolOutputs:
         span = get_current_span()
-        trace_input = str(kwargs["command"])
+        command = inputs.command
+        shared_sandbox = inputs.shared_sandbox
         span.set_attributes({
             SpanAttributes.OPENINFERENCE_SPAN_KIND: self.TRACE_SPAN_KIND,
-            SpanAttributes.INPUT_VALUE: trace_input,
+            SpanAttributes.INPUT_VALUE: str(command),
         })
-
-        # Extract only the parameters that execute_terminal_command accepts
-        command = kwargs["command"]
-        shared_sandbox = kwargs.get("shared_sandbox")
 
         execution_result_dict = await self.execute_terminal_command(command=command, shared_sandbox=shared_sandbox)
         content = json.dumps(execution_result_dict, indent=2)
-
         artifacts = {"execution_result": execution_result_dict}
 
-        return AgentPayload(
-            messages=[ChatMessage(role="assistant", content=content)],
-            artifacts=artifacts,
-            is_final=False,
-        )
+        return TerminalCommandRunnerToolOutputs(output=content,
+                                                artifacts=artifacts
+                                                )

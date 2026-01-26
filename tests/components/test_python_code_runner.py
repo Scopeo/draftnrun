@@ -11,8 +11,10 @@ import pytest_asyncio
 from engine.components.tools.python_code_runner import (
     PYTHON_CODE_RUNNER_TOOL_DESCRIPTION,
     PythonCodeRunner,
+    PythonCodeRunnerToolInputs,
+    PythonCodeRunnerToolOutputs,
 )
-from engine.components.types import AgentPayload, ChatMessage, ComponentAttributes
+from engine.components.types import ComponentAttributes
 from engine.trace.span_context import set_tracing_span
 from engine.trace.trace_manager import TraceManager
 
@@ -398,12 +400,10 @@ plt.show()
 print("Async image test completed!")
 """
 
-    result = asyncio.run(e2b_tool._run_without_io_trace(python_code=python_code))
+    inputs = PythonCodeRunnerToolInputs(python_code=python_code)
+    result = asyncio.run(e2b_tool._run_without_io_trace(inputs, {}))
 
-    assert isinstance(result, AgentPayload)
-    assert len(result.messages) == 1
-    assert isinstance(result.messages[0], ChatMessage)
-    assert result.messages[0].role == "assistant"
+    assert isinstance(result, PythonCodeRunnerToolOutputs)
 
     # Check that execution_result is in artifacts
     assert "execution_result" in result.artifacts
@@ -414,20 +414,13 @@ print("Async image test completed!")
     assert isinstance(images, list)
     assert len(images) == 1
 
-    # Verify the image is valid base64
+    # Verify the image is a valid file path string
     image_data = images[0]
     assert isinstance(image_data, str)
     assert len(image_data) > 0
 
-    try:
-        decoded = base64.b64decode(image_data)
-        assert len(decoded) > 0
-    except Exception:
-        pytest.fail("Image data in artifacts is not valid base64")
-
-    # Check that the response message mentions the image
-    content = result.messages[0].content
-    assert "[1 image(s) generated and included in artifacts" in content
+    # Check that the response output mentions the image
+    assert "[1 image(s) generated and included in artifacts" in result.output
 
 
 def test_run_without_io_trace_with_multiple_images(e2b_tool, e2b_api_key):
@@ -448,10 +441,10 @@ for i, func in enumerate([np.sin, np.cos]):
 print("Two async plots generated!")
 """
 
-    result = asyncio.run(e2b_tool._run_without_io_trace(python_code=python_code))
+    inputs = PythonCodeRunnerToolInputs(python_code=python_code)
+    result = asyncio.run(e2b_tool._run_without_io_trace(inputs, {}))
 
-    assert isinstance(result, AgentPayload)
-    assert len(result.messages) == 1
+    assert isinstance(result, PythonCodeRunnerToolOutputs)
 
     # Check that images are in artifacts
     assert "images" in result.artifacts
@@ -459,30 +452,23 @@ print("Two async plots generated!")
     assert isinstance(images, list)
     assert len(images) == 2
 
-    # Verify both images are valid base64
+    # Verify both images are valid file path strings
     for i, image_data in enumerate(images):
         assert isinstance(image_data, str)
         assert len(image_data) > 0
 
-        try:
-            decoded = base64.b64decode(image_data)
-            assert len(decoded) > 0
-        except Exception:
-            pytest.fail(f"Image {i + 1} data in artifacts is not valid base64")
-
-    # Check that the response message mentions the correct number of images
-    content = result.messages[0].content
-    assert "[2 image(s) generated and included in artifacts" in content
+    # Check that the response output mentions the correct number of images
+    assert "[2 image(s) generated and included in artifacts" in result.output
 
 
 def test_run_without_io_trace_no_images(e2b_tool, e2b_api_key):
     """Test the async _run_without_io_trace method with no image generation."""
     python_code = "print('No images here!'); result = {'value': 42}; result"
 
-    result = asyncio.run(e2b_tool._run_without_io_trace(python_code=python_code))
+    inputs = PythonCodeRunnerToolInputs(python_code=python_code)
+    result = asyncio.run(e2b_tool._run_without_io_trace(inputs, {}))
 
-    assert isinstance(result, AgentPayload)
-    assert len(result.messages) == 1
+    assert isinstance(result, PythonCodeRunnerToolOutputs)
 
     # Check that execution_result is in artifacts
     assert "execution_result" in result.artifacts
@@ -490,27 +476,22 @@ def test_run_without_io_trace_no_images(e2b_tool, e2b_api_key):
     # Check that images are NOT in artifacts (since no images were generated)
     assert "images" not in result.artifacts
 
-    # Check that the response message doesn't mention images
-    content = result.messages[0].content
-    assert "image(s) generated" not in content
+    # Check that the response output doesn't mention images
+    assert "image(s) generated" not in result.output
 
 
 def test_run_without_io_trace_simple_code(e2b_tool, e2b_api_key):
     """Test the async _run_without_io_trace method with simple code."""
     python_code = "print('Async test'); 2 + 2"
 
-    result = asyncio.run(e2b_tool._run_without_io_trace(python_code=python_code))
+    inputs = PythonCodeRunnerToolInputs(python_code=python_code)
+    result = asyncio.run(e2b_tool._run_without_io_trace(inputs, {}))
 
-    assert isinstance(result, AgentPayload)
-    assert len(result.messages) == 1
-    assert isinstance(result.messages[0], ChatMessage)
-    assert result.messages[0].role == "assistant"
+    assert isinstance(result, PythonCodeRunnerToolOutputs)
 
-    # Parse the content
-    content = result.messages[0].content
-
-    # The content is a JSON string
-    execution_data = json.loads(content)
+    # Parse the output content
+    # The output is a JSON string
+    execution_data = json.loads(result.output)
 
     assert "error" in execution_data
     assert "stdout" in execution_data
@@ -565,17 +546,14 @@ print(f"Processed {len(data['numbers'])} numbers")
 json.dumps(result)
 """
 
-    result = asyncio.run(e2b_tool._run_without_io_trace(python_code=python_code))
+    inputs = PythonCodeRunnerToolInputs(python_code=python_code)
+    result = asyncio.run(e2b_tool._run_without_io_trace(inputs, {}))
 
-    assert isinstance(result, AgentPayload)
-    assert len(result.messages) == 1
-    assert result.messages[0].role == "assistant"
+    assert isinstance(result, PythonCodeRunnerToolOutputs)
 
-    # Parse the content
-    content = result.messages[0].content
-
-    # The content is a JSON string
-    execution_data = json.loads(content)
+    # Parse the output content
+    # The output is a JSON string
+    execution_data = json.loads(result.output)
 
     assert "error" in execution_data
     assert "stdout" in execution_data

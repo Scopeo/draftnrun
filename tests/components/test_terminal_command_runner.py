@@ -6,8 +6,9 @@ import pytest
 from engine.components.tools.terminal_command_runner import (
     TERMINAL_COMMAND_RUNNER_TOOL_DESCRIPTION,
     TerminalCommandRunner,
+    TerminalCommandRunnerToolInputs,
+    TerminalCommandRunnerToolOutputs,
 )
-from engine.components.types import AgentPayload, ChatMessage
 from tests.mocks.trace_manager import MockTraceManager
 
 
@@ -130,20 +131,17 @@ class TestTerminalCommandE2BTool:
         """Test the basic _run_without_io_trace functionality."""
         mock_sandbox_class.create = AsyncMock(return_value=mock_sandbox)
 
-        input_payload = AgentPayload(messages=[ChatMessage(role="user", content="test input")])
+        inputs = TerminalCommandRunnerToolInputs(command="pwd")
+        result = await terminal_command_tool._run_without_io_trace(inputs, {})
 
-        result = await terminal_command_tool._run_without_io_trace(input_payload, command="pwd")
+        assert isinstance(result, TerminalCommandRunnerToolOutputs)
 
-        assert len(result.messages) == 1
-        assert result.messages[0].role == "assistant"
-
-        content = json.loads(result.messages[0].content)
+        content = json.loads(result.output)
         assert content["stdout"] == "Hello World\n"
         assert content["command"] == "pwd"
         assert content["exit_code"] == 0
 
         assert "execution_result" in result.artifacts
-        assert result.is_final is False
 
     @pytest.mark.asyncio
     @patch("engine.components.tools.terminal_command_runner.AsyncSandbox")
@@ -156,11 +154,12 @@ class TestTerminalCommandE2BTool:
         mock_sandbox.commands.run.return_value = mock_execution
         mock_sandbox_class.create = AsyncMock(return_value=mock_sandbox)
 
-        input_payload = AgentPayload(messages=[ChatMessage(role="user", content="test input")])
+        inputs = TerminalCommandRunnerToolInputs(command="invalid_cmd")
+        result = await terminal_command_tool._run_without_io_trace(inputs, {})
 
-        result = await terminal_command_tool._run_without_io_trace(input_payload, command="invalid_cmd")
+        assert isinstance(result, TerminalCommandRunnerToolOutputs)
 
-        content = json.loads(result.messages[0].content)
+        content = json.loads(result.output)
         assert content["stderr"] == "command not found"
         assert content["exit_code"] == 127
         assert content["command"] == "invalid_cmd"
@@ -174,11 +173,12 @@ class TestTerminalCommandE2BTool:
         mock_sandbox.commands.run.side_effect = Exception("Sandbox error")
         mock_sandbox_class.create = AsyncMock(return_value=mock_sandbox)
 
-        input_payload = AgentPayload(messages=[ChatMessage(role="user", content="test input")])
+        inputs = TerminalCommandRunnerToolInputs(command="test_cmd")
+        result = await terminal_command_tool._run_without_io_trace(inputs, {})
 
-        result = await terminal_command_tool._run_without_io_trace(input_payload, command="test_cmd")
+        assert isinstance(result, TerminalCommandRunnerToolOutputs)
 
-        content = json.loads(result.messages[0].content)
+        content = json.loads(result.output)
         assert content["stderr"] == "Sandbox error"
         assert content["exit_code"] == -1
         assert content["error"] == "Sandbox error"
