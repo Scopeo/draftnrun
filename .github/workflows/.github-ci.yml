@@ -8,11 +8,14 @@ on:
       - main
 
 concurrency:
-  group: ec2-runner-tests
-  cancel-in-progress: false
+  group: backend-ci-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   ci-pipeline:
+    concurrency:
+      group: ec2-runner-tests
+      cancel-in-progress: false
     runs-on: ubuntu-latest
     timeout-minutes: 15
 

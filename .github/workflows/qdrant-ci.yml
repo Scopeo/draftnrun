@@ -11,11 +11,14 @@ on:
       - "tests/qdrant/**"
 
 concurrency:
-  group: qdrant-ci
-  cancel-in-progress: false
+  group: qdrant-ci-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   ci-pipeline:
+    concurrency:
+      group: qdrant-ci
+      cancel-in-progress: false
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
