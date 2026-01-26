@@ -35,6 +35,7 @@ WHITELISTED_FILE_EXTENSIONS = [
     ".html",
     ".xml",
 ]
+INPUT_FOLDER_NAME = "input"
 
 
 def temp_folder_exists(temp_folder_path: str) -> bool:
@@ -59,7 +60,7 @@ def collect_file_paths_from_temp_folder(temp_folder_path: str) -> List[Path]:
         return []
 
     temp_folder = Path(temp_folder_path)
-    input_folder = temp_folder / "input"
+    input_folder = temp_folder / INPUT_FOLDER_NAME
 
     file_paths = []
     try:

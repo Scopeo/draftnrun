@@ -27,7 +27,11 @@ from ada_backend.repositories.project_repository import get_project, get_project
 from ada_backend.schemas.project_schema import ChatResponse
 from ada_backend.services.agent_builder_service import instantiate_component
 from ada_backend.services.errors import EnvironmentNotFound, OrganizationLimitExceededError, ProjectNotFound
-from ada_backend.services.file_response_service import process_files_for_response, temp_folder_exists
+from ada_backend.services.file_response_service import (
+    INPUT_FOLDER_NAME,
+    process_files_for_response,
+    temp_folder_exists,
+)
 from ada_backend.services.tag_service import compose_tag_name
 from engine.components.errors import (
     KeyTypePromptTemplateError,
@@ -45,8 +49,7 @@ LOGGER = logging.getLogger(__name__)
 def _save_input_files_to_temp_folder(input_data: dict, uuid_for_temp_folder: str) -> None:
     """Extract files from input_data and save them to the temp folder's input subfolder."""
     temp_folder = Path(uuid_for_temp_folder)
-    input_folder_name = "input"
-    input_folder = temp_folder / input_folder_name
+    input_folder = temp_folder / INPUT_FOLDER_NAME
     input_folder.mkdir(parents=True, exist_ok=True)
 
     for key, value in input_data.items():
@@ -67,7 +70,7 @@ def _save_input_files_to_temp_folder(input_data: dict, uuid_for_temp_folder: str
                         f.write(file_bytes)
                     LOGGER.info(f"Saved input file to temp folder: {root_file_path}")
 
-                    input_data[key] = {"type": "file", "filename": input_folder_name + "/" + safe_filename}
+                    input_data[key] = {"type": "file", "filename": INPUT_FOLDER_NAME + "/" + safe_filename}
                 except Exception as e:
                     LOGGER.error(f"Failed to save input file {filename}: {str(e)}")
 

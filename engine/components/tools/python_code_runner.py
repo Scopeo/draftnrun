@@ -1,7 +1,6 @@
 import base64
 import hashlib
 import logging
-import os
 from dataclasses import dataclass
 from io import BytesIO
 from pathlib import Path
@@ -213,7 +212,7 @@ class PythonCodeRunner(Component):
                 f.write(file_bytes)
 
             fp_pixel = None
-            if os.path.splitext(entry.name)[1].lower() in SUPPORTED_PIXEL_EXTS:
+            if Path(entry.name).suffix.lower() in SUPPORTED_PIXEL_EXTS:
                 try:
                     fp_pixel = fp_pixel_from_bytes(file_bytes)
                 except Exception as e:
@@ -252,7 +251,7 @@ class PythonCodeRunner(Component):
 
                 # Calculate fingerprint if it's an image
                 fp_pixel = None
-                if os.path.splitext(filename)[1].lower() in SUPPORTED_PIXEL_EXTS:
+                if Path(filename).suffix.lower() in SUPPORTED_PIXEL_EXTS:
                     try:
                         fp_pixel = fp_pixel_from_bytes(file_bytes)
                     except Exception as e:
