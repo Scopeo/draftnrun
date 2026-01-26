@@ -83,7 +83,7 @@ jobs:
           script: |
             set -e
             REGISTRY="${{ env.REGISTRY }}"
-            PREFIX="${{ env.IMAGE_PREFIX }}"
+            PREFIX=$(echo "${{ env.IMAGE_PREFIX }}" | tr '[:upper:]' '[:lower:]')
 
             echo "🚀 Deploying with :latest tag (existing image, no rebuild)"
 
