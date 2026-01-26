@@ -51,7 +51,7 @@ PYTHON_CODE_RUNNER_TOOL_DESCRIPTION = ToolDescription(
 
 BASIC_IMAGE_EXTS = {".png", ".jpeg", ".svg"}
 BASIC_IMAGE_SUFFIXES = {ext[1:] for ext in BASIC_IMAGE_EXTS}
-VALID_E2B_FILE_EXTS = BASIC_IMAGE_EXTS | {".webp", ".csv", ".md", ".json", ".txt", ".pdf"}
+VALID_E2B_FILE_EXTS = BASIC_IMAGE_EXTS | {".webp", ".csv", ".md", ".json", ".txt", ".pdf", ".docx", ".xlsx"}
 SUPPORTED_PIXEL_EXTS = BASIC_IMAGE_EXTS | {".jpg", ".webp", ".gif", ".bmp", ".tiff"}
 
 
