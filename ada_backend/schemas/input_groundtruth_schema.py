@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import List, Optional
+from typing import Dict, List, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, field_validator
@@ -20,6 +20,7 @@ class InputGroundtruthCreate(BaseModel):
     input: dict
     groundtruth: Optional[str] = None
     position: Optional[int] = None
+    custom_columns: Optional[Dict[str, Optional[str]]] = None
 
     @field_validator("position")
     @classmethod
@@ -120,6 +121,7 @@ class InputGroundtruthUpdateWithId(BaseModel):
     id: UUID
     input: Optional[dict] = None
     groundtruth: Optional[str] = None
+    custom_columns: Optional[Dict[str, Optional[str]]] = None
 
 
 class InputGroundtruthUpdateList(BaseModel):
@@ -142,6 +144,7 @@ class InputGroundtruthResponse(BaseModel):
     position: int
     input: dict
     groundtruth: Optional[str] = None
+    custom_columns: Optional[Dict[str, Optional[str]]] = None
     created_at: datetime
     updated_at: datetime
 

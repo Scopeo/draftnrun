@@ -8,10 +8,7 @@ from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 from ada_backend.database.setup_db import get_db
-from ada_backend.routers.auth_router import (
-    UserRights,
-    user_has_access_to_project_dependency,
-)
+from ada_backend.routers.auth_router import UserRights, user_has_access_to_project_dependency
 from ada_backend.schemas.auth_schema import SupabaseUser
 from ada_backend.schemas.dataset_schema import (
     DatasetCreateList,
@@ -29,6 +26,12 @@ from ada_backend.schemas.input_groundtruth_schema import (
     QARunRequest,
     QARunResponse,
 )
+from ada_backend.schemas.qa_metadata_schema import (
+    QAColumnCreate,
+    QAColumnListResponse,
+    QAColumnRename,
+    QAColumnResponse,
+)
 from ada_backend.services.errors import GraphNotBoundToProjectError
 from ada_backend.services.qa.qa_error import (
     CSVEmptyFileError,
@@ -37,8 +40,20 @@ from ada_backend.services.qa.qa_error import (
     CSVInvalidPositionError,
     CSVMissingColumnError,
     CSVNonUniquePositionError,
+    QAColumnNotFoundError,
+    QADatasetCreateCustomColumnError,
+    QADatasetDeleteCustomColumnError,
+    QADatasetGetCustomColumnsError,
+    QADatasetNotInProjectError,
+    QADatasetRenameCustomColumnError,
     QADuplicatePositionError,
     QAPartialPositionError,
+)
+from ada_backend.services.qa.qa_metadata_service import (
+    create_qa_column_service,
+    delete_qa_column_service,
+    get_qa_columns_by_dataset_service,
+    rename_qa_column_service,
 )
 from ada_backend.services.qa.quality_assurance_service import (
     create_datasets_service,
@@ -196,6 +211,163 @@ def delete_dataset_endpoint(
     except Exception as e:
         LOGGER.error(f"Failed to delete datasets for project {project_id}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error") from e
+
+
+# QA Metadata (Custom Columns) endpoints
+@router.get(
+    "/projects/{project_id}/qa/datasets/{dataset_id}/columns",
+    response_model=QAColumnListResponse,
+    summary="Get Custom Columns for Dataset",
+    tags=["Quality Assurance"],
+)
+def get_columns_by_dataset_endpoint(
+    project_id: UUID,
+    dataset_id: UUID,
+    user: Annotated[
+        SupabaseUser,
+        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.MEMBER.value)),
+    ],
+    session: Session = Depends(get_db),
+) -> QAColumnListResponse:
+    if not user.id:
+        raise HTTPException(status_code=400, detail="User ID not found")
+
+    try:
+        return get_qa_columns_by_dataset_service(session, project_id, dataset_id)
+    except QADatasetNotInProjectError as e:
+        LOGGER.error(
+            f"Failed to get columns for dataset {dataset_id} in project {project_id}: {str(e)}", exc_info=True
+        )
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except QADatasetGetCustomColumnsError as e:
+        LOGGER.error(
+            f"Failed to get columns for dataset {dataset_id} in project {project_id}: {str(e)}", exc_info=True
+        )
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@router.post(
+    "/projects/{project_id}/qa/datasets/{dataset_id}/columns",
+    response_model=QAColumnResponse,
+    summary="Add Custom Column to Dataset",
+    tags=["Quality Assurance"],
+)
+def add_column_to_dataset_endpoint(
+    project_id: UUID,
+    dataset_id: UUID,
+    column_data: QAColumnCreate,
+    user: Annotated[
+        SupabaseUser,
+        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.DEVELOPER.value)),
+    ],
+    session: Session = Depends(get_db),
+) -> QAColumnResponse:
+    if not user.id:
+        raise HTTPException(status_code=400, detail="User ID not found")
+
+    try:
+        return create_qa_column_service(session, project_id, dataset_id, column_data.column_name)
+    except QADatasetNotInProjectError as e:
+        LOGGER.error(f"Failed to add column to dataset {dataset_id} for project {project_id}: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except QADatasetCreateCustomColumnError as e:
+        LOGGER.error(f"Failed to add column to dataset {dataset_id} for project {project_id}: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@router.patch(
+    "/projects/{project_id}/qa/datasets/{dataset_id}/columns/{column_id}",
+    response_model=QAColumnResponse,
+    summary="Rename Custom Column",
+    tags=["Quality Assurance"],
+)
+def rename_column_endpoint(
+    project_id: UUID,
+    dataset_id: UUID,
+    column_id: UUID,
+    column_data: QAColumnRename,
+    user: Annotated[
+        SupabaseUser,
+        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.DEVELOPER.value)),
+    ],
+    session: Session = Depends(get_db),
+) -> QAColumnResponse:
+    """
+    Rename a custom column in a dataset.
+
+    This endpoint allows users to rename an existing custom column.
+    The column_id remains unchanged, only the display name is updated.
+    """
+    if not user.id:
+        raise HTTPException(status_code=400, detail="User ID not found")
+
+    try:
+        return rename_qa_column_service(session, project_id, dataset_id, column_id, column_data.column_name)
+    except QADatasetNotInProjectError as e:
+        LOGGER.error(
+            f"Failed to rename column {column_id} in dataset {dataset_id} for project {project_id}: {str(e)}",
+            exc_info=True,
+        )
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except QAColumnNotFoundError as e:
+        LOGGER.error(
+            f"Failed to rename column {column_id} in dataset {dataset_id} for project {project_id}: {str(e)}",
+            exc_info=True,
+        )
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    except QADatasetRenameCustomColumnError as e:
+        LOGGER.error(
+            f"Failed to rename column {column_id} in dataset {dataset_id} for project {project_id}: {str(e)}",
+            exc_info=True,
+        )
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@router.delete(
+    "/projects/{project_id}/qa/datasets/{dataset_id}/columns/{column_id}",
+    summary="Delete Custom Column",
+    tags=["Quality Assurance"],
+)
+def delete_column_endpoint(
+    project_id: UUID,
+    dataset_id: UUID,
+    column_id: UUID,
+    user: Annotated[
+        SupabaseUser,
+        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.DEVELOPER.value)),
+    ],
+    session: Session = Depends(get_db),
+) -> dict:
+    """
+    Delete a custom column from a dataset.
+
+    This endpoint allows users to delete a custom column from a QA dataset.
+    This will also remove all values for this column from all rows in the dataset.
+    This action cannot be undone.
+    """
+    if not user.id:
+        raise HTTPException(status_code=400, detail="User ID not found")
+
+    try:
+        return delete_qa_column_service(session, project_id, dataset_id, column_id)
+    except QADatasetNotInProjectError as e:
+        LOGGER.error(
+            f"Failed to delete column {column_id} from dataset {dataset_id} for project {project_id}: {str(e)}",
+            exc_info=True,
+        )
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except QAColumnNotFoundError as e:
+        LOGGER.error(
+            f"Failed to delete column {column_id} from dataset {dataset_id} for project {project_id}: {str(e)}",
+            exc_info=True,
+        )
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    except QADatasetDeleteCustomColumnError as e:
+        LOGGER.error(
+            f"Failed to delete column {column_id} from dataset {dataset_id} for project {project_id}: {str(e)}",
+            exc_info=True,
+        )
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 # Input Groundtruth endpoints

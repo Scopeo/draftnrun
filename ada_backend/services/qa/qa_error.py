@@ -96,3 +96,65 @@ class InvalidFormatError(Exception):
 
     def __init__(self, field_name: str, expected_format: str = "JSON"):
         super().__init__(f"Invalid {expected_format} format in {field_name}")
+
+class QADatasetNotInProjectError(Exception):
+    """Raised when a dataset is not linked to the given project"""
+
+    def __init__(self, project_id: UUID, dataset_id: UUID):
+        self.project_id = project_id
+        self.dataset_id = dataset_id
+        super().__init__(f"Dataset {dataset_id} not found in project {project_id}")
+
+
+class QADatasetCreateCustomColumnError(Exception):
+    def __init__(self, project_id: UUID, dataset_id: UUID, column_name: str, error_trace: str):
+        self.project_id = project_id
+        self.dataset_id = dataset_id
+        self.column_name = column_name
+        self.error_trace = error_trace
+        super().__init__(
+            f"Could not create column {column_name} in dataset {dataset_id} "
+            f"for project {project_id} due to error: {error_trace}"
+        )
+
+
+class QAColumnNotFoundError(Exception):
+    def __init__(self, dataset_id: UUID, column_id: UUID):
+        self.dataset_id = dataset_id
+        self.column_id = column_id
+        super().__init__(f"Column {column_id} not found in dataset {dataset_id}")
+
+
+class QADatasetRenameCustomColumnError(Exception):
+    def __init__(self, project_id: UUID, dataset_id: UUID, column_id: UUID, column_name: str, error_trace: str):
+        self.project_id = project_id
+        self.dataset_id = dataset_id
+        self.column_id = column_id
+        self.column_name = column_name
+        self.error_trace = error_trace
+        super().__init__(
+            f"Could not rename column {column_id} to {column_name} in dataset"
+            f" {dataset_id} for project {project_id} due to error: {error_trace}"
+        )
+
+
+class QADatasetDeleteCustomColumnError(Exception):
+    def __init__(self, project_id: UUID, dataset_id: UUID, column_id: UUID, error_trace: str):
+        self.project_id = project_id
+        self.dataset_id = dataset_id
+        self.column_id = column_id
+        self.error_trace = error_trace
+        super().__init__(
+            f"Could not delete column {column_id} in dataset {dataset_id} "
+            f"for project {project_id} due to error: {error_trace}"
+        )
+
+
+class QADatasetGetCustomColumnsError(Exception):
+    def __init__(self, project_id: UUID, dataset_id: UUID, error_trace: str):
+        self.project_id = project_id
+        self.dataset_id = dataset_id
+        self.error_trace = error_trace
+        super().__init__(
+            f"Could not get columns for dataset {dataset_id} in project {project_id} due to error: {error_trace}"
+        )
