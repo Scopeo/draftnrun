@@ -35,6 +35,36 @@ WHITELISTED_FILE_EXTENSIONS = [
     ".html",
     ".xml",
 ]
+INPUT_FOLDER_NAME = "input"
+
+
+def save_input_files_to_temp_folder(input_data: dict, uuid_for_temp_folder: str) -> None:
+    """Extract files from input_data and save them to the temp folder's input subfolder."""
+    temp_folder = Path(uuid_for_temp_folder)
+    input_folder = temp_folder / INPUT_FOLDER_NAME
+    input_folder.mkdir(parents=True, exist_ok=True)
+
+    for key, value in input_data.items():
+        if isinstance(value, dict) and value.get("type") == "file":
+            file_obj = value.get("file", {})
+            filename = file_obj.get("filename", "")
+            file_data_b64 = file_obj.get("file_data", "")
+
+            if filename and file_data_b64:
+                try:
+                    safe_filename = Path(filename).name
+                    if not safe_filename:
+                        LOGGER.error("Skipping file with empty or invalid filename", filename=filename)
+                        continue
+                    file_bytes = base64.b64decode(file_data_b64)
+                    root_file_path = input_folder / safe_filename
+                    with open(root_file_path, "wb") as f:
+                        f.write(file_bytes)
+                    LOGGER.info(f"Saved input file to temp folder: {root_file_path}")
+
+                    input_data[key] = {"type": "file", "filename": INPUT_FOLDER_NAME + "/" + safe_filename}
+                except Exception as e:
+                    LOGGER.error(f"Failed to save input file {filename}: {str(e)}")
 
 
 def temp_folder_exists(temp_folder_path: str) -> bool:
@@ -50,8 +80,8 @@ def get_mime_type(file_path: Path) -> str:
 
 def collect_file_paths_from_temp_folder(temp_folder_path: str) -> List[Path]:
     """
-    Recursively collect all files from the temporary folder.
-    Excludes hidden files and directories.
+    Recursively collect all OUTPUT files from the temporary folder.
+    Excludes hidden files, directories, and the 'input/' subfolder.
     Returns sorted list of file paths.
     """
     if not temp_folder_exists(temp_folder_path):
@@ -59,10 +89,14 @@ def collect_file_paths_from_temp_folder(temp_folder_path: str) -> List[Path]:
         return []
 
     temp_folder = Path(temp_folder_path)
+    input_folder = temp_folder / INPUT_FOLDER_NAME
 
     file_paths = []
     try:
         for item in temp_folder.rglob("*"):
+            if input_folder in item.parents or item == input_folder:
+                continue
+
             if item.is_file() and not item.name.startswith(".") and item.suffix.lower() in WHITELISTED_FILE_EXTENSIONS:
                 file_paths.append(item)
     except Exception as e:

@@ -35,6 +35,10 @@ def classify_playground_field(key, value) -> PlaygroundFieldType:
     if key == "messages":
         return PlaygroundFieldType.MESSAGES
 
+    # Detect OpenAI file format: {"type": "file", "file": {...}}
+    if isinstance(value, dict) and value.get("type") == "file" and "file" in value:
+        return PlaygroundFieldType.FILE
+
     depth = get_nesting_depth(value)
     if depth > 2:
         return PlaygroundFieldType.JSON

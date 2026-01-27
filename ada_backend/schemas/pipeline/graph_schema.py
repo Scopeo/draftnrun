@@ -16,6 +16,7 @@ class PlaygroundFieldType(str, Enum):
     MESSAGES = "messages"
     JSON = "json"
     SIMPLE = "simple"
+    FILE = "file"
 
 
 class EdgeSchema(BaseModel):

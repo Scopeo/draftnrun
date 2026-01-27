@@ -25,7 +25,11 @@ from ada_backend.repositories.project_repository import get_project, get_project
 from ada_backend.schemas.project_schema import ChatResponse
 from ada_backend.services.agent_builder_service import instantiate_component
 from ada_backend.services.errors import EnvironmentNotFound, OrganizationLimitExceededError, ProjectNotFound
-from ada_backend.services.file_response_service import process_files_for_response, temp_folder_exists
+from ada_backend.services.file_response_service import (
+    process_files_for_response,
+    save_input_files_to_temp_folder,
+    temp_folder_exists,
+)
 from ada_backend.services.tag_service import compose_tag_name
 from engine.components.errors import (
     KeyTypePromptTemplateError,
@@ -230,6 +234,8 @@ async def run_agent(
     conversation_id = input_data.get("conversation_id")
     if not conversation_id:
         conversation_id = str(uuid.uuid4())
+
+    save_input_files_to_temp_folder(input_data, uuid_for_temp_folder)
 
     setup_tracing_context(
         session=session,
