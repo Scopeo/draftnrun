@@ -47,9 +47,6 @@ def seed_if_else_components(session: Session):
         component_versions=[if_else_version],
     )
 
-    # Note: Parameter definitions are now auto-seeded from the Pydantic schema
-    # with json_schema_extra in engine/components/if_else.py
-
     upsert_component_categories(
         session=session,
         component_id=if_else.id,

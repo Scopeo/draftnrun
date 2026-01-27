@@ -188,10 +188,9 @@ class CoercionMatrix:
 
     def _get_type_name(self, type_hint: Type) -> str:
         """Get a string representation of a type, handling Union types and other complex types."""
-        if hasattr(type_hint, '__name__'):
+        if hasattr(type_hint, "__name__"):
             return type_hint.__name__
         else:
-            # Handle Union types, generics, and other complex types
             return str(type_hint)
 
     def register_coercer(self, source_type: Type, target_type: Type, coercer: Callable[[Any], Any]):
