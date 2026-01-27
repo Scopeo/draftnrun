@@ -20,8 +20,8 @@ def seed_if_else_components(session: Session):
         id=COMPONENT_UUIDS["if_else"],
         name="If/Else",
         is_agent=True,
-        function_callable=True,
-        is_protected=True,
+        function_callable=False,
+        is_protected=False,
         icon="tabler-git-branch",
     )
     upsert_components(
@@ -40,7 +40,7 @@ def seed_if_else_components(session: Session):
             "with AND/OR logic. "
             "If the conditions evaluate to true, downstream nodes continue. If false, downstream execution is halted."
         ),
-        default_tool_description_id=TOOL_DESCRIPTION_UUIDS["default_if_else_tool_description"],
+        default_tool_description_id=TOOL_DESCRIPTION_UUIDS["default_tool_description"],
     )
     upsert_component_versions(
         session=session,

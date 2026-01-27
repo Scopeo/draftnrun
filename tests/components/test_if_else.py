@@ -3,7 +3,6 @@ from unittest.mock import MagicMock
 import pytest
 
 from engine.components.if_else import (
-    DEFAULT_IF_ELSE_TOOL_DESCRIPTION,
     Condition,
     IfElse,
     IfElseInputs,
@@ -24,10 +23,6 @@ def if_else_component(mock_trace_manager):
         trace_manager=mock_trace_manager,
         component_attributes=ComponentAttributes(component_instance_name="test_if_else"),
     )
-
-
-def test_if_else_initialization(if_else_component):
-    assert if_else_component.tool_description == DEFAULT_IF_ELSE_TOOL_DESCRIPTION
 
 
 @pytest.mark.asyncio

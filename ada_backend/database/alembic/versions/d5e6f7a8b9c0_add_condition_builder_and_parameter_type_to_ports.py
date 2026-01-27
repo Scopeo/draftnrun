@@ -67,6 +67,23 @@ def upgrade() -> None:
         ),
     )
 
+    # Backfill existing rows with default value 'string'
+    op.execute(
+        """
+        UPDATE port_definitions
+        SET parameter_type = 'string'
+        WHERE parameter_type IS NULL
+        """
+    )
+
+    # Make the column non-nullable with server default
+    op.alter_column(
+        "port_definitions",
+        "parameter_type",
+        nullable=False,
+        server_default="string",
+    )
+
 
 def downgrade() -> None:
     # PostgreSQL does not support removing enum values.

@@ -6,6 +6,7 @@ from openinference.semconv.trace import OpenInferenceSpanKindValues
 from pydantic import BaseModel, Field, field_validator
 
 from ada_backend.database.models import ParameterType, UIComponent
+from ada_backend.database.utils import DEFAULT_TOOL_DESCRIPTION
 from engine.components.component import Component
 from engine.components.types import ComponentAttributes, ToolDescription
 from engine.trace.trace_manager import TraceManager
@@ -62,22 +63,6 @@ OPERATOR_METADATA = [
 ]
 
 
-DEFAULT_IF_ELSE_TOOL_DESCRIPTION = ToolDescription(
-    name="If_Else_Tool",
-    description=(
-        "A conditional tool that evaluates multiple conditions with AND/OR logic to control workflow execution. "
-        "Supports field expressions like @{{instance_id.output}}."
-    ),
-    tool_properties={
-        "conditions": {
-            "type": "array",
-            "description": "Array of conditions to evaluate with AND/OR logic",
-        },
-    },
-    required_tool_properties=["conditions"],
-)
-
-
 class Condition(BaseModel):
     value_a: Any = Field(description="First value to compare. Supports field expressions like @{{instance_id.output}}")
     operator: str = Field(description="Comparison operator to use")
@@ -111,7 +96,7 @@ class IfElseInputs(BaseModel):
             "ui_component": UIComponent.CONDITION_BUILDER,
             "ui_component_properties": {
                 "label": "Conditions",
-                "description": "Define conditions with AND/OR logic.",
+                "description": "Define conditions with AND/OR logic. Evaluate from the first condition to the last.",
                 "placeholder": (
                     '[{"value_a": "@{{instance_id.output}}", "operator": "number_greater_than", "value_b": '
                     '10, "next_logic": "AND"}]'
@@ -122,7 +107,7 @@ class IfElseInputs(BaseModel):
     )
     output_value_if_true: Any | None = Field(
         default=None,
-        description="Value to output when all conditions evaluate to true",
+        description="Value to output when the whole condition evaluate to true",
         json_schema_extra={
             "parameter_type": ParameterType.JSON,
         },
@@ -145,7 +130,7 @@ class IfElseOutputs(BaseModel):
 
 
 class IfElse(Component):
-    TRACE_SPAN_KIND = OpenInferenceSpanKindValues.TOOL.value
+    TRACE_SPAN_KIND = OpenInferenceSpanKindValues.CHAIN.value
     migrated = True
 
     @classmethod
@@ -164,7 +149,7 @@ class IfElse(Component):
         self,
         trace_manager: TraceManager,
         component_attributes: ComponentAttributes,
-        tool_description: ToolDescription = DEFAULT_IF_ELSE_TOOL_DESCRIPTION,
+        tool_description: ToolDescription = DEFAULT_TOOL_DESCRIPTION,
     ):
         super().__init__(
             trace_manager=trace_manager,
