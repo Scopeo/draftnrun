@@ -36,6 +36,7 @@ def document_chunking_mapping(
     document_reading_mode: DocumentReadingMode = DocumentReadingMode.STANDARD,
     llamaparse_api_key: Optional[str] = None,
 ) -> dict[FileDocumentType, FileProcessor]:
+    excel_processor = None
     if document_reading_mode == DocumentReadingMode.LLM_VISION:
         pdf_processor = partial(
             create_chunks_from_document,
@@ -96,7 +97,6 @@ def document_chunking_mapping(
             chunk_size=chunk_size,
             chunk_overlap=overlapping_size,
         )
-        excel_processor = None
         LOGGER.info("Using pymupdf4llm for standard PDF processing and pypandoc for DOCX processing")
 
     document_chunking_mapping = {
