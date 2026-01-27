@@ -411,6 +411,7 @@ class GraphRunner:
         for pm in self.port_mappings:
             self._mappings_by_target.setdefault(pm.target_instance_id, []).append(pm)
 
+    # TODO: Add a ControlFlowManager to handle the control flow of the graph
     def _halt_downstream_execution(self, source_node_id: str) -> None:
         """Mark all downstream nodes from source as completed without execution."""
         visited = set()

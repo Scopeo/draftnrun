@@ -30,6 +30,7 @@ class IfElseOperator(str, Enum):
     TEXT_DOES_NOT_EQUAL = "text_does_not_equal"
 
 
+# TODO: Add parameter value check for the operators
 OPERATOR_METADATA = [
     # Unary operators
     {"value": IfElseOperator.IS_EMPTY.value, "label": "Is empty", "requires_value_b": False},
