@@ -198,7 +198,7 @@ def process_files_for_response(
                             size=file_size,
                             data=None,
                             url=presigned_url,
-                            s3_key=s3_key,
+                            s3_key=None,
                         )
                     )
             elif response_format == ResponseFormat.S3_KEY:
