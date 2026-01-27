@@ -1,61 +1,49 @@
 import logging
 import uuid
-from io import BytesIO
-from typing import Callable, Optional
-
-import pandas as pd
+from typing import Callable
 
 from data_ingestion.document.folder_management.folder_management import FileChunk, FileDocument
-from data_ingestion.utils import get_chunk_token_count, split_df_by_token_limit
+from data_ingestion.document.llamaparser_ingestion import _parse_document_with_llamaparse
+from data_ingestion.utils import content_as_temporary_file_path
 
 LOGGER = logging.getLogger(__name__)
 
 
-def ingest_excel_file(
+async def create_chunks_from_excel_file_with_llamaparse(
     document: FileDocument,
     get_file_content_func: Callable[[str], bytes],
-    chunk_size: Optional[int] = 1024,
+    llamaparse_api_key: str,
     **kwargs,
 ) -> list[FileChunk]:
-    result_chunks = []
-    content_to_process = BytesIO(get_file_content_func(document.id))
-    xls = pd.ExcelFile(content_to_process)
-    LOGGER.info(f"File {document.file_name} loaded.")
-    sheet_names = xls.sheet_names
-    for sheet_name in sheet_names:
-        df = pd.read_excel(content_to_process, sheet_name=sheet_name, header=None)
-        df = df.dropna(how="all")
-        if df.empty:
-            LOGGER.warning(f"Sheet {sheet_name} is empty. Skipping.")
-            continue
-        if all(isinstance(col, int) for col in df.columns) and list(df.columns) == list(range(len(df.columns))):
-            first_row = df.iloc[0]
-            if not all(pd.api.types.is_numeric_dtype(type(cell)) for cell in first_row):
-                df.columns = first_row
-                df = df.iloc[1:]
-
-        total_token_count = get_chunk_token_count(chunk_df=df)
-        if total_token_count > chunk_size:
-            LOGGER.info(f"Splitting {sheet_name} into chunks")
-            df_chunks = split_df_by_token_limit(df=df, max_tokens=chunk_size)
-        else:
-            LOGGER.info(f"No need to split {sheet_name} into chunks")
-            df_chunks = [df]
-
-        for idx, chunk_df in enumerate(df_chunks):
-            markdown_content = chunk_df.to_markdown(index=False)
-            result_chunks.append(
-                FileChunk(
-                    chunk_id=str(uuid.uuid4()),
-                    order=idx,
-                    file_id=document.id,
-                    content=markdown_content,
-                    last_edited_ts=document.last_edited_ts,
-                    document_title=document.file_name,
-                    bounding_boxes=None,
-                    url=document.url,
-                    metadata={"sheet_name": sheet_name, **document.metadata},
+    try:
+        result_chunks = []
+        content_to_process = get_file_content_func(document.id)
+        with content_as_temporary_file_path(content_to_process, suffix=".xlsx") as file_path:
+            try:
+                markdown_documents = await _parse_document_with_llamaparse(
+                    file_path, llamaparse_api_key, split_by_page=True
                 )
-            )
-
+                for i, (markdown_content, page_number) in enumerate(markdown_documents):
+                    result_chunks.append(
+                        FileChunk(
+                            chunk_id=str(uuid.uuid4()),
+                            order=i,
+                            file_id=document.id,
+                            content=markdown_content,
+                            last_edited_ts=document.last_edited_ts,
+                            document_title=document.file_name,
+                            bounding_boxes=None,
+                            url=document.url,
+                            metadata={
+                                "page_number": page_number,
+                                **document.metadata,
+                            },
+                        )
+                    )
+            except Exception as e:
+                LOGGER.error(f"Error parsing Excel file {document.file_name}: {e}", exc_info=True)
+                raise Exception(f"Error parsing Excel file {document.file_name}") from e
+    except Exception as e:
+        LOGGER.error(f"Error parsing Excel file {document.file_name}: {e}", exc_info=True)
+        raise Exception(f"Error parsing Excel file {document.file_name}") from e
     return result_chunks

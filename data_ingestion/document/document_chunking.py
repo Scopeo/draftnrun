@@ -8,7 +8,7 @@ import pandas as pd
 
 from data_ingestion.document.csv_ingestion import ingest_csv_file
 from data_ingestion.document.docx_ingestion import _parse_docx_with_pandoc, get_chunks_from_docx
-from data_ingestion.document.excel_ingestion import ingest_excel_file
+from data_ingestion.document.excel_ingestion import create_chunks_from_excel_file_with_llamaparse
 from data_ingestion.document.folder_management.folder_management import (
     BaseDocument,
     FileChunk,
@@ -36,6 +36,7 @@ def document_chunking_mapping(
     document_reading_mode: DocumentReadingMode = DocumentReadingMode.STANDARD,
     llamaparse_api_key: Optional[str] = None,
 ) -> dict[FileDocumentType, FileProcessor]:
+    excel_processor = None
     if document_reading_mode == DocumentReadingMode.LLM_VISION:
         pdf_processor = partial(
             create_chunks_from_document,
@@ -74,6 +75,11 @@ def document_chunking_mapping(
             chunk_size=chunk_size,
             chunk_overlap=overlapping_size,
         )
+        excel_processor = partial(
+            create_chunks_from_excel_file_with_llamaparse,
+            get_file_content_func=get_file_content_func,
+            llamaparse_api_key=llamaparse_api_key,
+        )
         LOGGER.info("Using LlamaParse for PDF and DOCX processing")
 
     else:
@@ -101,16 +107,8 @@ def document_chunking_mapping(
             get_file_content_func=get_file_content_func,
             chunk_overlap=overlapping_size,
         ),
-        FileDocumentType.EXCEL.value: partial(
-            ingest_excel_file,
-            get_file_content_func=get_file_content_func,
-            chunk_size=chunk_size,
-        ),
-        FileDocumentType.GOOGLE_SHEET.value: partial(
-            ingest_excel_file,
-            get_file_content_func=get_file_content_func,
-            chunk_size=chunk_size,
-        ),
+        FileDocumentType.EXCEL.value: excel_processor,
+        FileDocumentType.GOOGLE_SHEET.value: excel_processor,
         FileDocumentType.CSV.value: partial(
             ingest_csv_file,
             get_file_content_func=get_file_content_func,
