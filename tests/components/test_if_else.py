@@ -33,7 +33,7 @@ def test_if_else_initialization(if_else_component):
 @pytest.mark.asyncio
 async def test_if_else_equals_true(if_else_component):
     conditions = [Condition(value_a=5, operator="number_equal_to", value_b=5, next_logic=None)]
-    inputs = IfElseInputs(conditions=conditions, pass_through_data="test data")
+    inputs = IfElseInputs(conditions=conditions, output_value_if_true="test data")
     result = await if_else_component._run_without_io_trace(inputs, {})
 
     assert isinstance(result, IfElseOutputs)
@@ -45,7 +45,7 @@ async def test_if_else_equals_true(if_else_component):
 @pytest.mark.asyncio
 async def test_if_else_equals_false(if_else_component):
     conditions = [Condition(value_a=5, operator="number_equal_to", value_b=10, next_logic=None)]
-    inputs = IfElseInputs(conditions=conditions, pass_through_data="test data")
+    inputs = IfElseInputs(conditions=conditions, output_value_if_true="test data")
     result = await if_else_component._run_without_io_trace(inputs, {})
 
     assert isinstance(result, IfElseOutputs)
@@ -61,7 +61,7 @@ async def test_if_else_not_equals_true(mock_trace_manager):
         component_attributes=ComponentAttributes(component_instance_name="test_if_else"),
     )
     conditions = [Condition(value_a=5, operator="text_does_not_equal", value_b=10, next_logic=None)]
-    inputs = IfElseInputs(conditions=conditions, pass_through_data="data")
+    inputs = IfElseInputs(conditions=conditions, output_value_if_true="data")
     result = await component._run_without_io_trace(inputs, {})
 
     assert result.result is True
@@ -87,7 +87,7 @@ async def test_if_else_not_equals_false(mock_trace_manager):
 @pytest.mark.asyncio
 async def test_if_else_greater_than_true(if_else_component):
     conditions = [Condition(value_a=10, operator="number_greater_than", value_b=5, next_logic=None)]
-    inputs = IfElseInputs(conditions=conditions, pass_through_data="greater")
+    inputs = IfElseInputs(conditions=conditions, output_value_if_true="greater")
     result = await if_else_component._run_without_io_trace(inputs, {})
 
     assert result.result is True
@@ -108,7 +108,7 @@ async def test_if_else_greater_than_false(if_else_component):
 @pytest.mark.asyncio
 async def test_if_else_less_than_true(if_else_component):
     conditions = [Condition(value_a=5, operator="number_less_than", value_b=10, next_logic=None)]
-    inputs = IfElseInputs(conditions=conditions, pass_through_data="less")
+    inputs = IfElseInputs(conditions=conditions, output_value_if_true="less")
     result = await if_else_component._run_without_io_trace(inputs, {})
 
     assert result.result is True
@@ -129,7 +129,7 @@ async def test_if_else_less_than_false(if_else_component):
 @pytest.mark.asyncio
 async def test_if_else_greater_or_equal_true_equal(if_else_component):
     conditions = [Condition(value_a=10, operator="number_greater_or_equal", value_b=10, next_logic=None)]
-    inputs = IfElseInputs(conditions=conditions, pass_through_data="equal")
+    inputs = IfElseInputs(conditions=conditions, output_value_if_true="equal")
     result = await if_else_component._run_without_io_trace(inputs, {})
 
     assert result.result is True
@@ -140,7 +140,7 @@ async def test_if_else_greater_or_equal_true_equal(if_else_component):
 @pytest.mark.asyncio
 async def test_if_else_greater_or_equal_true_greater(if_else_component):
     conditions = [Condition(value_a=15, operator="number_greater_or_equal", value_b=10, next_logic=None)]
-    inputs = IfElseInputs(conditions=conditions, pass_through_data="greater")
+    inputs = IfElseInputs(conditions=conditions, output_value_if_true="greater")
     result = await if_else_component._run_without_io_trace(inputs, {})
 
     assert result.result is True
@@ -161,7 +161,7 @@ async def test_if_else_greater_or_equal_false(if_else_component):
 @pytest.mark.asyncio
 async def test_if_else_less_or_equal_true_equal(if_else_component):
     conditions = [Condition(value_a=10, operator="number_less_or_equal", value_b=10, next_logic=None)]
-    inputs = IfElseInputs(conditions=conditions, pass_through_data="equal")
+    inputs = IfElseInputs(conditions=conditions, output_value_if_true="equal")
     result = await if_else_component._run_without_io_trace(inputs, {})
 
     assert result.result is True
@@ -172,7 +172,7 @@ async def test_if_else_less_or_equal_true_equal(if_else_component):
 @pytest.mark.asyncio
 async def test_if_else_less_or_equal_true_less(if_else_component):
     conditions = [Condition(value_a=5, operator="number_less_or_equal", value_b=10, next_logic=None)]
-    inputs = IfElseInputs(conditions=conditions, pass_through_data="less")
+    inputs = IfElseInputs(conditions=conditions, output_value_if_true="less")
     result = await if_else_component._run_without_io_trace(inputs, {})
 
     assert result.result is True
@@ -193,7 +193,7 @@ async def test_if_else_less_or_equal_false(if_else_component):
 @pytest.mark.asyncio
 async def test_if_else_string_comparison(if_else_component):
     conditions = [Condition(value_a="hello", operator="text_equals", value_b="hello", next_logic=None)]
-    inputs = IfElseInputs(conditions=conditions, pass_through_data="match")
+    inputs = IfElseInputs(conditions=conditions, output_value_if_true="match")
     result = await if_else_component._run_without_io_trace(inputs, {})
 
     assert result.result is True
@@ -215,7 +215,7 @@ async def test_if_else_string_inequality(if_else_component):
 async def test_if_else_numeric_string_coercion(if_else_component):
     """Test that numeric strings are coerced to numbers for comparison"""
     conditions = [Condition(value_a="5", operator="number_equal_to", value_b=5, next_logic=None)]
-    inputs = IfElseInputs(conditions=conditions, pass_through_data="coerced")
+    inputs = IfElseInputs(conditions=conditions, output_value_if_true="coerced")
     result = await if_else_component._run_without_io_trace(inputs, {})
 
     assert result.result is True
@@ -226,7 +226,7 @@ async def test_if_else_numeric_string_coercion(if_else_component):
 @pytest.mark.asyncio
 async def test_if_else_float_comparison(if_else_component):
     conditions = [Condition(value_a=5.5, operator="number_greater_than", value_b=5.2, next_logic=None)]
-    inputs = IfElseInputs(conditions=conditions, pass_through_data="float")
+    inputs = IfElseInputs(conditions=conditions, output_value_if_true="float")
     result = await if_else_component._run_without_io_trace(inputs, {})
 
     assert result.result is True
@@ -237,7 +237,7 @@ async def test_if_else_float_comparison(if_else_component):
 @pytest.mark.asyncio
 async def test_if_else_mixed_int_float_comparison(if_else_component):
     conditions = [Condition(value_a=5, operator="number_less_than", value_b=5.1, next_logic=None)]
-    inputs = IfElseInputs(conditions=conditions, pass_through_data="mixed")
+    inputs = IfElseInputs(conditions=conditions, output_value_if_true="mixed")
     result = await if_else_component._run_without_io_trace(inputs, {})
 
     assert result.result is True
@@ -262,7 +262,7 @@ async def test_if_else_complex_pass_through_data(if_else_component):
     """Test that complex data structures can be passed through"""
     complex_data = {"key": "value", "nested": {"data": [1, 2, 3]}}
     conditions = [Condition(value_a=1, operator="number_equal_to", value_b=1, next_logic=None)]
-    inputs = IfElseInputs(conditions=conditions, pass_through_data=complex_data)
+    inputs = IfElseInputs(conditions=conditions, output_value_if_true=complex_data)
     result = await if_else_component._run_without_io_trace(inputs, {})
 
     assert result.result is True
@@ -278,7 +278,7 @@ async def test_if_else_is_empty_true(if_else_component):
     """Test is_empty operator with empty values"""
     # Test with None
     conditions = [Condition(value_a=None, operator="is_empty", value_b=None, next_logic=None)]
-    inputs = IfElseInputs(conditions=conditions, pass_through_data="empty")
+    inputs = IfElseInputs(conditions=conditions, output_value_if_true="empty")
     result = await if_else_component._run_without_io_trace(inputs, {})
     assert result.result is True
 
@@ -310,7 +310,7 @@ async def test_if_else_boolean_is_true(if_else_component):
     """Test boolean_is_true operator"""
     # Test with boolean True
     conditions = [Condition(value_a=True, operator="boolean_is_true", value_b=None, next_logic=None)]
-    inputs = IfElseInputs(conditions=conditions, pass_through_data="is true")
+    inputs = IfElseInputs(conditions=conditions, output_value_if_true="is true")
     result = await if_else_component._run_without_io_trace(inputs, {})
     assert result.result is True
     assert result.output == "is true"
@@ -333,7 +333,7 @@ async def test_if_else_text_contains(if_else_component):
     """Test text_contains operator"""
     # Test positive case
     conditions = [Condition(value_a="Hello world!", operator="text_contains", value_b="world", next_logic=None)]
-    inputs = IfElseInputs(conditions=conditions, pass_through_data="contains")
+    inputs = IfElseInputs(conditions=conditions, output_value_if_true="contains")
     result = await if_else_component._run_without_io_trace(inputs, {})
     assert result.result is True
     assert result.output == "contains"
@@ -352,7 +352,7 @@ async def test_if_else_text_does_not_contain(if_else_component):
     conditions = [
         Condition(value_a="Hello world!", operator="text_does_not_contain", value_b="goodbye", next_logic=None)
     ]
-    inputs = IfElseInputs(conditions=conditions, pass_through_data="no contain")
+    inputs = IfElseInputs(conditions=conditions, output_value_if_true="no contain")
     result = await if_else_component._run_without_io_trace(inputs, {})
     assert result.result is True
     assert result.output == "no contain"
@@ -374,7 +374,7 @@ async def test_if_else_multiple_conditions_and(mock_trace_manager):
         Condition(value_a=10, operator="number_less_than", value_b=20, next_logic=None),
     ]
 
-    inputs = IfElseInputs(conditions=conditions, pass_through_data="both true")
+    inputs = IfElseInputs(conditions=conditions, output_value_if_true="both true")
     result = await component._run_without_io_trace(inputs, {})
 
     assert result.result is True
@@ -431,7 +431,7 @@ async def test_if_else_multiple_conditions_or(mock_trace_manager):
         ),
     ]
 
-    inputs = IfElseInputs(conditions=conditions, pass_through_data="one true")
+    inputs = IfElseInputs(conditions=conditions, output_value_if_true="one true")
     result = await component._run_without_io_trace(inputs, {})
 
     assert result.result is True
@@ -455,7 +455,7 @@ async def test_if_else_multiple_conditions_mixed_logic(mock_trace_manager):
         Condition(value_a="test", operator="text_equals", value_b="wrong", next_logic=None),
     ]
 
-    inputs = IfElseInputs(conditions=conditions, pass_through_data="mixed logic")
+    inputs = IfElseInputs(conditions=conditions, output_value_if_true="mixed logic")
     result = await component._run_without_io_trace(inputs, {})
 
     assert result.result is True

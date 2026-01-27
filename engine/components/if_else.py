@@ -118,6 +118,10 @@ class IfElseInputs(BaseModel):
             },
         },
     )
+    output_value_if_true: Any | None = Field(
+        default=None,
+        description="Value to output when all conditions evaluate to true",
+    )
 
 
 class IfElseOutputs(BaseModel):
@@ -287,7 +291,7 @@ class IfElse(Component):
         comparison_result = self._evaluate_conditions(inputs.conditions, ctx)
 
         if comparison_result:
-            output_data = inputs.pass_through_data
+            output_data = inputs.output_value_if_true
             should_halt = False
         else:
             output_data = None
