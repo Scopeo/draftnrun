@@ -73,13 +73,15 @@ def parse_expression_flexible(value: Union[str, dict]) -> ExpressionNode:
     if isinstance(value, dict):
         # Import here to avoid circular dependency
         from engine.field_expressions.serializer import from_json
+
         try:
             return from_json(value)
         except Exception as e:
             raise FieldExpressionParseError(f"Invalid JSON expression structure: {e}") from e
+    elif isinstance(value, str):
+        return parse_expression(value)
     else:
-        # Treat as text expression
-        return parse_expression(str(value))
+        raise FieldExpressionParseError(f"Expected str or dict, got {type(value).__name__}: {value!r}")
 
 
 def unparse_expression(expression: ExpressionNode) -> str:
