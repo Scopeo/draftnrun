@@ -1,8 +1,15 @@
 """Field expression schemas for API requests and responses."""
 
+from enum import StrEnum
 from typing import Optional
+from uuid import UUID
 
 from pydantic import BaseModel
+
+
+class SuggestionKind(StrEnum):
+    MODULE = "module"
+    PROPERTY = "property"
 
 
 class FieldExpressionUpdateSchema(BaseModel):
@@ -18,3 +25,19 @@ class FieldExpressionReadSchema(BaseModel):
     field_name: str
     expression_json: dict
     expression_text: Optional[str] = None
+
+
+class FieldExpressionAutocompleteRequest(BaseModel):
+    target_instance_id: UUID
+    query: str
+
+
+class FieldExpressionSuggestion(BaseModel):
+    id: str
+    label: str
+    insert_text: str
+    kind: SuggestionKind
+
+
+class FieldExpressionAutocompleteResponse(BaseModel):
+    suggestions: list[FieldExpressionSuggestion] = []

@@ -145,6 +145,18 @@ def get_component_nodes(session: Session, graph_runner_id: UUID) -> list[Compone
     ]
 
 
+def get_component_instances_for_graph_runner(session: Session, graph_runner_id: UUID) -> list[db.ComponentInstance]:
+    return (
+        session.query(db.ComponentInstance)
+        .join(
+            db.GraphRunnerNode,
+            db.ComponentInstance.id == db.GraphRunnerNode.node_id,
+        )
+        .filter(db.GraphRunnerNode.graph_runner_id == graph_runner_id)
+        .all()
+    )
+
+
 def get_graph_runner_nodes(session: Session, graph_runner_id: UUID) -> list[db.GraphRunner]:
     """
     Retrieves the graph runner nodes associated with a graph.

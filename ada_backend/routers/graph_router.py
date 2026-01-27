@@ -13,6 +13,10 @@ from ada_backend.routers.auth_router import (
     user_has_access_to_project_dependency,
 )
 from ada_backend.schemas.auth_schema import SupabaseUser
+from ada_backend.schemas.pipeline.field_expression_schema import (
+    FieldExpressionAutocompleteRequest,
+    FieldExpressionAutocompleteResponse,
+)
 from ada_backend.schemas.pipeline.graph_schema import (
     GraphDeployResponse,
     GraphGetResponse,
@@ -36,6 +40,9 @@ from ada_backend.services.graph.deploy_graph_service import (
     deploy_graph_service,
     load_version_as_draft_service,
     save_graph_version_service,
+)
+from ada_backend.services.graph.field_expression_autocomplete_service import (
+    autocomplete_field_expression,
 )
 from ada_backend.services.graph.get_graph_modification_history_service import (
     get_graph_modification_history_service,
@@ -219,6 +226,42 @@ async def update_project_pipeline(
         if "only draft versions" in error_msg.lower():
             raise HTTPException(status_code=403, detail="Only the draft version can be modified") from e
         raise HTTPException(status_code=400, detail=f"Error: {error_msg}") from e
+
+
+@router.get(
+    "/{graph_runner_id}/field-expressions/autocomplete",
+    summary="Autocomplete Field Expression References",
+    response_model=FieldExpressionAutocompleteResponse,
+    tags=["Graph"],
+)
+def autocomplete_field_expressions_endpoint(
+    project_id: UUID,
+    graph_runner_id: UUID,
+    target_instance_id: UUID,
+    query: str = "",
+    user: Annotated[
+        SupabaseUser, Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.MEMBER.value))
+    ] = None,
+    session: Session = Depends(get_db),
+) -> FieldExpressionAutocompleteResponse:
+    if not user or not user.id:
+        raise HTTPException(status_code=400, detail="User ID not found")
+    try:
+        request = FieldExpressionAutocompleteRequest(
+            target_instance_id=target_instance_id,
+            query=query,
+        )
+        return autocomplete_field_expression(session, project_id, graph_runner_id, request)
+    except GraphNotFound as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    except GraphNotBoundToProjectError as e:
+        raise HTTPException(status_code=403, detail=str(e)) from e
+    except Exception as e:
+        LOGGER.error(
+            f"Failed to autocomplete field expressions for project {project_id} runner {graph_runner_id}: {str(e)}",
+            exc_info=True,
+        )
+        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @router.post(
