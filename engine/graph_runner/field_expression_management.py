@@ -25,7 +25,7 @@ def evaluate_expression(
     """Evaluate a field expression AST and return the result.
 
     Uses structural pattern matching over AST node classes.
-    
+
     Returns:
         - str for LiteralNode, RefNode (stringified), and ConcatNode
         - dict or list for JsonBuildNode (preserves structure)
@@ -54,9 +54,7 @@ def evaluate_expression(
                     f"port value is not a dict, got {type(raw_value)}"
                 )
             if ref.key not in raw_value:
-                raise FieldExpressionError(
-                    f"Key '{ref.key}' not found in dict from {ref.instance}.{ref.port}"
-                )
+                raise FieldExpressionError(f"Key '{ref.key}' not found in dict from {ref.instance}.{ref.port}")
             raw_value = raw_value[ref.key]
 
         return raw_value
@@ -89,21 +87,17 @@ def evaluate_expression(
             case _:
                 raise FieldExpressionError(f"Unknown node type: {node}")
 
-    # Handle JsonBuildNode specially (returns object, not string)
     match expression:
         case JsonBuildNode(template=template, refs=ref_nodes):
-            # Evaluate all refs to their actual values (preserving types)
             evaluated_refs = {}
             for placeholder, ref_node in ref_nodes.items():
                 evaluated_refs[placeholder] = evaluate_ref_as_object(ref_node)
-            
-            # Substitute placeholders in template
+
             result = substitute_in_template(template, evaluated_refs)
             LOGGER.debug(f"Evaluated JSON build expression for {target_field_name}")
             return result
-        
+
         case _:
-            # For all other nodes, evaluate to string
             result = evaluate_node(expression)
             LOGGER.debug(f"Evaluated expression for {target_field_name}: {result}")
             return result

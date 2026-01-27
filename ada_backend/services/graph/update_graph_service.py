@@ -338,7 +338,6 @@ async def update_graph_service(
 
             field_name = param.name
 
-            # Handle empty/null values
             if param.value is None or param.value == "":
                 LOGGER.warning(
                     f"No expression value for input parameter {field_name} on instance {instance.id}, skipping"
@@ -353,7 +352,6 @@ async def update_graph_service(
 
             incoming_field_expressions_by_instance[instance.id].add(field_name)
 
-            # Handle both dict (JSON expression) and string (text expression)
             if isinstance(param.value, dict):
                 # JSON expression structure (like JsonBuildNode)
                 try:
