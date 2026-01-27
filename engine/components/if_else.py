@@ -28,6 +28,39 @@ class IfElseOperator(str, Enum):
     TEXT_DOES_NOT_EQUAL = "text_does_not_equal"
 
 
+OPERATOR_METADATA = [
+    # Unary operators
+    {"value": IfElseOperator.IS_EMPTY.value, "label": "Is empty", "requires_value_b": False},
+    {"value": IfElseOperator.IS_NOT_EMPTY.value, "label": "Is not empty", "requires_value_b": False},
+    # Number operators
+    {"value": IfElseOperator.NUMBER_GREATER_THAN.value, "label": "[Number] Is greater than", "requires_value_b": True},
+    {"value": IfElseOperator.NUMBER_LESS_THAN.value, "label": "[Number] Is less than", "requires_value_b": True},
+    {"value": IfElseOperator.NUMBER_EQUAL_TO.value, "label": "[Number] Is equal to", "requires_value_b": True},
+    {
+        "value": IfElseOperator.NUMBER_GREATER_OR_EQUAL.value,
+        "label": "[Number] Is greater than or equal to",
+        "requires_value_b": True,
+    },
+    {
+        "value": IfElseOperator.NUMBER_LESS_OR_EQUAL.value,
+        "label": "[Number] Is less than or equal to",
+        "requires_value_b": True,
+    },
+    # Boolean operators
+    {"value": IfElseOperator.BOOLEAN_IS_TRUE.value, "label": "[Boolean] Is true", "requires_value_b": False},
+    {"value": IfElseOperator.BOOLEAN_IS_FALSE.value, "label": "[Boolean] Is false", "requires_value_b": False},
+    # Text operators
+    {"value": IfElseOperator.TEXT_CONTAINS.value, "label": "[Text] Contains", "requires_value_b": True},
+    {
+        "value": IfElseOperator.TEXT_DOES_NOT_CONTAIN.value,
+        "label": "[Text] Does not contain",
+        "requires_value_b": True,
+    },
+    {"value": IfElseOperator.TEXT_EQUALS.value, "label": "[Text] Equals", "requires_value_b": True},
+    {"value": IfElseOperator.TEXT_DOES_NOT_EQUAL.value, "label": "[Text] Does not equal", "requires_value_b": True},
+]
+
+
 DEFAULT_IF_ELSE_TOOL_DESCRIPTION = ToolDescription(
     name="If_Else_Tool",
     description=(
@@ -71,11 +104,19 @@ class IfElseInputs(BaseModel):
         description=(
             "Array of conditions to evaluate with AND/OR logic. "
             "Supports field expressions like @{{instance_id.output}}."
-        )
-    )
-    pass_through_data: Any = Field(
-        default=None,
-        description="Data to pass through when condition is true.",
+        ),
+        json_schema_extra={
+            "ui_component": "ConditionBuilder",
+            "ui_component_properties": {
+                "label": "Conditions",
+                "description": "Define conditions with AND/OR logic.",
+                "placeholder": (
+                    '[{"value_a": "@{{instance_id.output}}", "operator": "number_greater_than", "value_b": '
+                    '10, "next_logic": "AND"}]'
+                ),
+                "available_operators": OPERATOR_METADATA,
+            },
+        },
     )
 
 
@@ -99,7 +140,7 @@ class IfElse(Component):
 
     @classmethod
     def get_canonical_ports(cls) -> dict[str, str | None]:
-        return {"input": "value_a", "output": "output"}
+        return {"input": "conditions", "output": "output"}
 
     def __init__(
         self,

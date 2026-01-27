@@ -2,7 +2,7 @@ import json
 import logging
 import uuid
 from enum import StrEnum
-from typing import List, Optional, Type, Union
+from typing import Any, List, Optional, Type, Union
 
 import sqlalchemy as sa
 from cryptography.fernet import Fernet
@@ -258,7 +258,7 @@ class UIComponentProperties(BaseModel):
     multiple: Optional[bool] = None
 
     # Condition builder property
-    available_operators: Optional[List[str]] = None
+    available_operators: Optional[List[dict[str, Any]]] = None
 
 
 def cast_value(

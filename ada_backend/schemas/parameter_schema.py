@@ -22,14 +22,14 @@ class ParameterDefinition(ParameterBase):
     id: UUID
     type: ParameterType
     nullable: bool = False
-    default: Optional[str | int | float | bool | dict] = None
+    default: Optional[str | int | float | bool | dict | list] = None
     ui_component: Optional[UIComponent] = None
     ui_component_properties: Optional[dict] = None
     is_advanced: bool = False
 
 
 class WithValue(BaseModel):
-    value: str | int | float | bool | dict | None = None
+    value: str | int | float | bool | dict | list | None = None
 
 
 class PipelineParameterReadSchema(ParameterDefinition, WithValue):
