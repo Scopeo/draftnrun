@@ -96,6 +96,7 @@ def document_chunking_mapping(
             chunk_size=chunk_size,
             chunk_overlap=overlapping_size,
         )
+        excel_processor = None
         LOGGER.info("Using pymupdf4llm for standard PDF processing and pypandoc for DOCX processing")
 
     document_chunking_mapping = {
