@@ -1,4 +1,5 @@
 import re
+from typing import Union
 
 from engine.field_expressions.ast import ConcatNode, ExpressionNode, JsonBuildNode, LiteralNode, RefNode
 from engine.field_expressions.errors import FieldExpressionParseError
@@ -52,6 +53,33 @@ def parse_expression(expression_text: str) -> ExpressionNode:
         return parts[0] if parts else LiteralNode(value="")
 
     return ConcatNode(parts=parts)
+
+
+def parse_expression_flexible(value: Union[str, dict]) -> ExpressionNode:
+    """Parse an expression from either text or JSON format.
+
+    This is a unified entry point that handles both text expressions
+    (e.g., "@{{comp.port}}") and JSON/dict structures (e.g., {"type": "ref", ...}).
+
+    Args:
+        value: Either a string expression or a dict/JSON structure
+
+    Returns:
+        The parsed ExpressionNode
+
+    Raises:
+        FieldExpressionParseError: If parsing fails
+    """
+    if isinstance(value, dict):
+        # Import here to avoid circular dependency
+        from engine.field_expressions.serializer import from_json
+        try:
+            return from_json(value)
+        except Exception as e:
+            raise FieldExpressionParseError(f"Invalid JSON expression structure: {e}") from e
+    else:
+        # Treat as text expression
+        return parse_expression(str(value))
 
 
 def unparse_expression(expression: ExpressionNode) -> str:

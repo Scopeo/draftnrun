@@ -89,6 +89,7 @@ class IfElseInputs(BaseModel):
     conditions: list[Condition] = Field(
         description=(
             "Array of conditions to evaluate with AND/OR logic. "
+            "AND has higher precedence than OR (e.g., 'A or B and C' = 'A or (B and C)'). "
             "Supports field expressions like @{{instance_id.output}}."
         ),
         json_schema_extra={
@@ -96,7 +97,10 @@ class IfElseInputs(BaseModel):
             "ui_component": UIComponent.CONDITION_BUILDER,
             "ui_component_properties": {
                 "label": "Conditions",
-                "description": "Define conditions with AND/OR logic. Evaluate from the first condition to the last.",
+                "description": (
+                    "Define conditions with AND/OR logic. "
+                    "AND has higher precedence than OR: 'A or B and C' evaluates as 'A or (B and C)'."
+                ),
                 "placeholder": (
                     '[{"value_a": "@{{instance_id.output}}", "operator": "number_greater_than", "value_b": '
                     '10, "next_logic": "AND"}]'
@@ -240,45 +244,51 @@ class IfElse(Component):
         raise ValueError(f"Unsupported operator: {operator}")
 
     def _evaluate_conditions(self, conditions: list[Condition], ctx: dict) -> bool:
-        """Evaluate multiple conditions with AND/OR logic in sequence."""
+        """
+        Evaluate multiple conditions with AND/OR logic with proper precedence.
+        AND has higher precedence than OR (e.g., 'A or B and C' = 'A or (B and C)').
+        """
         if not conditions:
             raise ValueError("No conditions provided for evaluation")
 
-        LOGGER.info(f"Evaluating {len(conditions)} condition(s)")
+        LOGGER.info(f"Evaluating {len(conditions)} condition(s) with AND precedence over OR")
 
-        # Evaluate first condition
-        first_cond = conditions[0]
-        operator = IfElseOperator(first_cond.operator)
+        or_groups: list[list[Condition]] = []
+        current_group: list[Condition] = []
 
-        result = self._compare_single(first_cond.value_a, first_cond.value_b, operator)
-        LOGGER.debug(f"Condition 1: {first_cond.value_a} {operator.value} {first_cond.value_b} = {result}")
+        for cond in conditions:
+            current_group.append(cond)
 
-        # Evaluate remaining conditions with their logic operators
-        for i in range(1, len(conditions)):
-            prev_logic = conditions[i - 1].next_logic
-
-            if prev_logic is None:
-                LOGGER.warning(f"Condition {i} has no logic operator from previous condition, stopping evaluation")
+            if cond.next_logic == "OR":
+                or_groups.append(current_group)
+                current_group = []
+            elif cond.next_logic == "AND":
+                continue
+            elif cond.next_logic is None:
+                or_groups.append(current_group)
                 break
+        LOGGER.debug(f"Split into {len(or_groups)} OR-separated group(s)")
 
-            current_cond = conditions[i]
-            operator = IfElseOperator(current_cond.operator)
+        group_results = []
+        for group_idx, group in enumerate(or_groups):
+            group_result = True
+            for cond_idx, cond in enumerate(group):
+                operator = IfElseOperator(cond.operator)
+                cond_result = self._compare_single(cond.value_a, cond.value_b, operator)
 
-            current_result = self._compare_single(current_cond.value_a, current_cond.value_b, operator)
-            LOGGER.debug(
-                f"Condition {i + 1}: {current_cond.value_a} {operator.value} {current_cond.value_b} = {current_result}"
-            )
+                LOGGER.debug(
+                    f"Group {group_idx + 1}, Condition {cond_idx + 1}: "
+                    f"{cond.value_a} {operator.value} {cond.value_b} = {cond_result}"
+                )
 
-            # Apply logic operator
-            if prev_logic == "AND":
-                result = result and current_result
-                LOGGER.debug(f"Applied AND: {result}")
-            elif prev_logic == "OR":
-                result = result or current_result
-                LOGGER.debug(f"Applied OR: {result}")
+                group_result = group_result and cond_result
 
-        LOGGER.info(f"Final evaluation result: {result}")
-        return result
+            LOGGER.debug(f"Group {group_idx + 1} result: {group_result}")
+            group_results.append(group_result)
+
+        final_result = any(group_results)
+        LOGGER.info(f"Final evaluation result: {final_result}")
+        return final_result
 
     async def _run_without_io_trace(
         self,

@@ -13,7 +13,14 @@ LOGGER = logging.getLogger(__name__)
 def get_parameter_type(field_info: FieldInfo) -> db.ParameterType:
     extra = getattr(field_info, "json_schema_extra", None)
     if isinstance(extra, dict) and "parameter_type" in extra:
-        return extra["parameter_type"]
+        param_type_value = extra["parameter_type"]
+        try:
+            return db.ParameterType(param_type_value)
+        except ValueError:
+            LOGGER.warning(
+                "Invalid parameter_type found in component metadata. Falling back to STRING.",
+                invalid_parameter_type=param_type_value,
+            )
 
     return db.ParameterType.STRING
 
