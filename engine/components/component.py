@@ -1,4 +1,6 @@
+import ast
 import asyncio
+import json
 import logging
 from abc import ABC, abstractmethod
 from typing import Any, Dict, Optional, Type
@@ -9,6 +11,7 @@ from opentelemetry.util.types import Attributes
 from pydantic import BaseModel, ValidationError
 from tenacity import RetryError
 
+from ada_backend.database.models import ParameterType
 from engine import legacy_compatibility
 from engine.coercion_matrix import CoercionError
 from engine.components.types import (
@@ -68,6 +71,83 @@ class Component(ABC):
     def get_canonical_ports(cls) -> Dict[str, Optional[str]]:
         """Logic to define default ports for simple A->B connections"""
         return {"input": "input", "output": "output"}
+
+    @classmethod
+    def _cast_input_data(cls, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Cast input data values based on parameter_type from json_schema_extra."""
+        inputs_schema = cls.get_inputs_schema()
+        casted_data = {}
+
+        for field_name, value in data.items():
+            if field_name not in inputs_schema.model_fields:
+                casted_data[field_name] = value
+                continue
+
+            field_info = inputs_schema.model_fields[field_name]
+            extra = getattr(field_info, "json_schema_extra", None)
+
+            if not isinstance(extra, dict) or "parameter_type" not in extra:
+                casted_data[field_name] = value
+                continue
+
+            parameter_type = extra["parameter_type"]
+
+            # If value is a string and parameter_type is JSON, parse it
+            if isinstance(value, str) and parameter_type == ParameterType.JSON:
+                # Skip empty or whitespace-only strings
+                if not value or not value.strip():
+                    casted_data[field_name] = None
+                    continue
+
+                try:
+                    # Try JSON parsing first (standard)
+                    casted_data[field_name] = json.loads(value)
+                    LOGGER.debug(f"Cast {field_name} from JSON string to object")
+                except (json.JSONDecodeError, TypeError):
+                    # If JSON fails, try Python literal syntax (handles single quotes)
+                    try:
+                        casted_data[field_name] = ast.literal_eval(value.strip())
+                        LOGGER.debug(f"Cast {field_name} from Python literal string to object")
+                    except (ValueError, SyntaxError):
+                        # Last resort: aggressive parsing for field expression concatenation
+                        # This handles cases where expressions concatenate literals with refs
+                        try:
+                            stripped = value.strip()
+                            if (
+                                (stripped.startswith('[') or stripped.startswith('{'))
+                                and (stripped.endswith(']') or stripped.endswith('}'))
+                            ):
+                                # Try simple global quote replacement
+                                # This works for field expressions that stringify nested structures
+                                temp_value = stripped.replace("'", '"')
+                                casted_data[field_name] = json.loads(temp_value)
+                                LOGGER.debug(f"Cast {field_name} after quote replacement")
+                            else:
+                                # Not a structure, pass as-is
+                                LOGGER.warning(f"Could not parse {field_name}, passing as-is")
+                                casted_data[field_name] = value
+                        except (json.JSONDecodeError, ValueError, AttributeError) as e:
+                            LOGGER.warning(
+                                f"Failed to parse {field_name} after all attempts: {e}"
+                            )
+                            casted_data[field_name] = value
+            elif isinstance(value, str) and parameter_type == ParameterType.BOOLEAN:
+                casted_data[field_name] = value.lower() in ("true", "1", "yes")
+            elif isinstance(value, str) and parameter_type == ParameterType.INTEGER:
+                try:
+                    casted_data[field_name] = int(value)
+                except (ValueError, TypeError):
+                    casted_data[field_name] = value
+            elif isinstance(value, str) and parameter_type == ParameterType.FLOAT:
+                try:
+                    casted_data[field_name] = float(value)
+                except (ValueError, TypeError):
+                    casted_data[field_name] = value
+            else:
+                # Pass through as-is for other types
+                casted_data[field_name] = value
+
+        return casted_data
 
     @abstractmethod
     async def _run_without_io_trace(self, inputs: BaseModel, ctx: Dict[str, Any]) -> BaseModel:
@@ -145,7 +225,9 @@ class Component(ABC):
 
                     if self.migrated:
                         InputModel = self.get_inputs_schema()
-                        validated_inputs = InputModel(**input_node_data.data)
+                        # Cast input data based on parameter_type before validation
+                        casted_data = self._cast_input_data(input_node_data.data)
+                        validated_inputs = InputModel(**casted_data)
                         output_model_instance = await self._run_without_io_trace(
                             inputs=validated_inputs, ctx=input_node_data.ctx
                         )
@@ -229,7 +311,9 @@ class Component(ABC):
                             data[input_port_name] = last_message.get("content", "")
 
                     try:
-                        validated_inputs = InputModel(**data)
+                        # Cast input data based on parameter_type before validation
+                        casted_data = self._cast_input_data(data)
+                        validated_inputs = InputModel(**casted_data)
                     except ValidationError as e:
                         component_name = self.component_attributes.component_instance_name or self.__class__.__name__
                         raise CoercionError(

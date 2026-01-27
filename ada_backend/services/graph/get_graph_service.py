@@ -129,7 +129,7 @@ def get_graph_service(
                     kind=ParameterKind.INPUT,
                     id=input_port.id,
                     name=input_port.name,
-                    type=ParameterType.STRING,
+                    type=input_port.parameter_type or ParameterType.STRING,
                     nullable=True,
                     default=None,
                     ui_component=input_port.ui_component,

@@ -186,15 +186,23 @@ class CoercionMatrix:
 
         LOGGER.debug(f"Registered {len(self._fallbacks)} primitive fallbacks")
 
+    def _get_type_name(self, type_hint: Type) -> str:
+        """Get a string representation of a type, handling Union types and other complex types."""
+        if hasattr(type_hint, '__name__'):
+            return type_hint.__name__
+        else:
+            # Handle Union types, generics, and other complex types
+            return str(type_hint)
+
     def register_coercer(self, source_type: Type, target_type: Type, coercer: Callable[[Any], Any]):
         """Register a custom coercer for a specific type pair."""
         self._coercers[(source_type, target_type)] = coercer
-        LOGGER.debug(f"Registered coercer: {source_type.__name__} -> {target_type.__name__}")
+        LOGGER.debug(f"Registered coercer: {self._get_type_name(source_type)} -> {self._get_type_name(target_type)}")
 
     def register_fallback(self, target_type: Type, fallback: Callable[[Any], Any]):
         """Register a fallback coercer for a target type."""
         self._fallbacks[target_type] = fallback
-        LOGGER.debug(f"Registered fallback: {target_type.__name__}")
+        LOGGER.debug(f"Registered fallback: {self._get_type_name(target_type)}")
 
     def coerce(self, value: Any, target_type: Type | str, source_type: Optional[Type | str] = None) -> Any:
         if source_type is None:
@@ -242,7 +250,7 @@ class CoercionMatrix:
         # 5. Fail-Open: If no explicit coercion is found, return the value for downstream validation.
         # This lets unhandled types (enums, dates, etc.) pass through for later checks.
         LOGGER.debug(
-            f"No coercion path from {source_type.__name__} to {target_type.__name__}. "
+            f"No coercion path from {self._get_type_name(source_type)} to {self._get_type_name(target_type)}. "
             "Returning value as-is for downstream validation."
         )
         return value

@@ -51,6 +51,7 @@ from ada_backend.services.pipeline.update_pipeline_service import create_or_upda
 from engine.field_expressions.ast import ExpressionNode, RefNode
 from engine.field_expressions.errors import FieldExpressionError, FieldExpressionParseError
 from engine.field_expressions.parser import parse_expression
+from engine.field_expressions.serializer import from_json as expr_from_json
 from engine.field_expressions.serializer import to_json as expr_to_json
 from engine.field_expressions.traversal import get_pure_ref, select_nodes
 
@@ -336,11 +337,11 @@ async def update_graph_service(
                 raise ValueError(f"Invalid field expression target: component instance {instance.id} not in update")
 
             field_name = param.name
-            expression_text = "" if param.value is None else str(param.value)
 
-            if expression_text == "":
+            # Handle empty/null values
+            if param.value is None or param.value == "":
                 LOGGER.warning(
-                    f"No expression text for input parameter {field_name} on instance {instance.id}, skipping"
+                    f"No expression value for input parameter {field_name} on instance {instance.id}, skipping"
                 )
                 continue
 
@@ -352,11 +353,24 @@ async def update_graph_service(
 
             incoming_field_expressions_by_instance[instance.id].add(field_name)
 
-            try:
-                ast = parse_expression(expression_text)
-            except FieldExpressionParseError:
-                LOGGER.error(f"Failed to parse field expression from parameter input: {expression_text}")
-                raise
+            # Handle both dict (JSON expression) and string (text expression)
+            if isinstance(param.value, dict):
+                # JSON expression structure (like JsonBuildNode)
+                try:
+                    ast = expr_from_json(param.value)
+                    LOGGER.debug(f"Parsed JSON expression for {field_name}: {param.value}")
+                except Exception as e:
+                    LOGGER.error(f"Failed to parse JSON expression for {field_name}: {e}")
+                    raise FieldExpressionParseError(f"Invalid JSON expression structure: {e}") from e
+            else:
+                # Text expression (like "@{{comp.port}}")
+                expression_text = str(param.value)
+                try:
+                    ast = parse_expression(expression_text)
+                    LOGGER.debug(f"Parsed text expression for {field_name}: {expression_text}")
+                except FieldExpressionParseError:
+                    LOGGER.error(f"Failed to parse field expression from parameter input: {expression_text}")
+                    raise
 
             _validate_expression_references(session, ast)
 

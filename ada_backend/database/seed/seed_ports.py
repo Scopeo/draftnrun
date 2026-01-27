@@ -1,5 +1,6 @@
 import logging
 
+from pydantic.fields import FieldInfo
 from sqlalchemy.orm import Session
 
 from ada_backend.database import models as db
@@ -7,6 +8,14 @@ from ada_backend.services.registry import FACTORY_REGISTRY
 from engine.components.component import Component
 
 LOGGER = logging.getLogger(__name__)
+
+
+def get_parameter_type(field_info: FieldInfo) -> db.ParameterType:
+    extra = getattr(field_info, "json_schema_extra", None)
+    if isinstance(extra, dict) and "parameter_type" in extra:
+        return extra["parameter_type"]
+
+    return db.ParameterType.STRING
 
 
 def seed_port_definitions(session: Session):
@@ -77,6 +86,7 @@ def seed_port_definitions(session: Session):
                 ui_component_properties = extra.get("ui_component_properties")
 
             port_description = field_info.description
+            parameter_type = get_parameter_type(field_info)
 
             # Every input should have a UI component and at least a basic label,
             # so synthesized input-parameters are always renderable in the UI.
@@ -100,6 +110,7 @@ def seed_port_definitions(session: Session):
             if port:
                 port.is_canonical = is_canonical
                 port.description = port_description
+                port.parameter_type = parameter_type
                 port.ui_component = ui_component
                 port.ui_component_properties = ui_component_properties
                 LOGGER.info(f"  - Updating INPUT port: {field_name}")
@@ -110,6 +121,7 @@ def seed_port_definitions(session: Session):
                     port_type=db.PortType.INPUT,
                     is_canonical=is_canonical,
                     description=port_description,
+                    parameter_type=parameter_type,
                     ui_component=ui_component,
                     ui_component_properties=ui_component_properties,
                 )
@@ -124,9 +136,12 @@ def seed_port_definitions(session: Session):
                 .first()
             )
             is_canonical = canonical_ports.get("output") == field_name
+            parameter_type = get_parameter_type(field_info)
+
             if port:
                 port.is_canonical = is_canonical
                 port.description = field_info.description
+                port.parameter_type = parameter_type
                 LOGGER.info(f"  - Updating OUTPUT port: {field_name}")
             else:
                 port = db.PortDefinition(
@@ -135,6 +150,7 @@ def seed_port_definitions(session: Session):
                     port_type=db.PortType.OUTPUT,
                     is_canonical=is_canonical,
                     description=field_info.description,
+                    parameter_type=parameter_type,
                 )
                 session.add(port)
                 LOGGER.info(f"  - Creating OUTPUT port: {field_name}")

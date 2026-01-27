@@ -5,6 +5,7 @@ from typing import Any, Literal, Type
 from openinference.semconv.trace import OpenInferenceSpanKindValues
 from pydantic import BaseModel, Field, field_validator
 
+from ada_backend.database.models import ParameterType, UIComponent
 from engine.components.component import Component
 from engine.components.types import ComponentAttributes, ToolDescription
 from engine.trace.trace_manager import TraceManager
@@ -106,7 +107,8 @@ class IfElseInputs(BaseModel):
             "Supports field expressions like @{{instance_id.output}}."
         ),
         json_schema_extra={
-            "ui_component": "ConditionBuilder",
+            "parameter_type": ParameterType.JSON,
+            "ui_component": UIComponent.CONDITION_BUILDER,
             "ui_component_properties": {
                 "label": "Conditions",
                 "description": "Define conditions with AND/OR logic.",
@@ -121,13 +123,25 @@ class IfElseInputs(BaseModel):
     output_value_if_true: Any | None = Field(
         default=None,
         description="Value to output when all conditions evaluate to true",
+        json_schema_extra={
+            "parameter_type": ParameterType.JSON,
+        },
     )
 
 
 class IfElseOutputs(BaseModel):
-    result: bool = Field(description="The result of the comparison.")
-    output: Any = Field(description="Pass-through data when condition is true, None otherwise.")
-    should_halt: bool = Field(description="Signal to halt downstream execution (true when condition is false).")
+    result: bool = Field(
+        description="The result of the comparison.",
+        json_schema_extra={"parameter_type": ParameterType.BOOLEAN},
+    )
+    output: Any = Field(
+        description="Pass-through data when condition is true, None otherwise.",
+        json_schema_extra={"parameter_type": ParameterType.JSON},
+    )
+    should_halt: bool = Field(
+        description="Signal to halt downstream execution (true when condition is false).",
+        json_schema_extra={"parameter_type": ParameterType.BOOLEAN},
+    )
 
 
 class IfElse(Component):

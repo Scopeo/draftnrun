@@ -1,6 +1,6 @@
 import re
 
-from engine.field_expressions.ast import ConcatNode, ExpressionNode, LiteralNode, RefNode
+from engine.field_expressions.ast import ConcatNode, ExpressionNode, JsonBuildNode, LiteralNode, RefNode
 from engine.field_expressions.errors import FieldExpressionParseError
 
 # Matches @{{instance.port}} where instance and port allow [a-zA-Z0-9_-]. An optional key can be provided after ::.
@@ -55,7 +55,11 @@ def parse_expression(expression_text: str) -> ExpressionNode:
 
 
 def unparse_expression(expression: ExpressionNode) -> str:
-    """Convert an AST to normalized text using structural pattern matching."""
+    """Convert an AST to normalized text using structural pattern matching.
+
+    Note: JsonBuildNode cannot be unparsed to simple text syntax since it represents
+    a structured JSON template. It will be rendered as a placeholder.
+    """
     match expression:
         case LiteralNode(value=v):
             return v
@@ -65,5 +69,7 @@ def unparse_expression(expression: ExpressionNode) -> str:
             return "@{{" + i + "." + p + "::" + k + "}}"
         case ConcatNode(parts=parts):
             return "".join(unparse_expression(p) for p in parts)
+        case JsonBuildNode():
+            return "[JSON_BUILD]"  # Placeholder - cannot represent in simple text
         case _:
             return ""
