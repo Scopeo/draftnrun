@@ -340,7 +340,9 @@ def update_inputs_groundtruths_service(
     """
     try:
         # Prepare updates data
-        updates_data = [(ig.id, ig.input, ig.groundtruth) for ig in inputs_groundtruths_data.inputs_groundtruths]
+        updates_data = [
+            (ig.id, ig.input, ig.groundtruth, ig.custom_columns) for ig in inputs_groundtruths_data.inputs_groundtruths
+        ]
 
         updated_inputs_groundtruths = update_inputs_groundtruths(
             session,
