@@ -6,6 +6,7 @@ from openinference.semconv.trace import OpenInferenceSpanKindValues
 from pydantic import BaseModel, Field
 from weasyprint import CSS, HTML
 
+from ada_backend.database.models import UIComponent
 from engine.components.component import Component
 from engine.components.types import ComponentAttributes, ToolDescription
 from engine.components.utils import prepare_markdown_output_path
@@ -111,7 +112,11 @@ DEFAULT_CSS_FORMATTING = """
 
 
 class PDFGenerationToolInputs(BaseModel):
-    markdown_content: str = Field(description="The markdown text to convert to PDF.")
+
+    markdown_content: str = Field(
+        description="The markdown text to convert to PDF.",
+        json_schema_extra={"ui_component": UIComponent.TEXTAREA},
+    )
     filename: Optional[str] = Field(description="The desired filename for the generated PDF file.")
 
 

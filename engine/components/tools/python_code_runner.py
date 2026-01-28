@@ -14,11 +14,9 @@ from opentelemetry.trace import get_current_span
 from PIL import Image
 from pydantic import BaseModel, ConfigDict, Field
 
+from ada_backend.database.models import UIComponent
 from engine.components.component import Component
-from engine.components.types import (
-    ComponentAttributes,
-    ToolDescription,
-)
+from engine.components.types import ComponentAttributes, ToolDescription
 from engine.temps_folder_utils import get_output_dir
 from engine.trace.serializer import serialize_to_json
 from engine.trace.trace_manager import TraceManager
@@ -81,6 +79,7 @@ class PythonCodeRunnerToolInputs(BaseModel):
     python_code: str = Field(
         default="",
         description="The code python to run",
+        json_schema_extra={"ui_component": UIComponent.TEXTAREA},
     )
     shared_sandbox: Optional[AsyncSandbox] = Field(
         default=None,
