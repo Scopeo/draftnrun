@@ -30,6 +30,7 @@ from ada_backend.repositories.graph_runner_repository import (
     graph_runner_exists,
     insert_graph_runner_and_bind_to_project,
     insert_modification_history,
+    is_start_node,
     upsert_component_node,
 )
 from ada_backend.repositories.port_mapping_repository import (
@@ -46,7 +47,11 @@ from ada_backend.segment_analytics import track_project_saved
 from ada_backend.services.agent_runner_service import get_agent_for_project
 from ada_backend.services.errors import GraphNotBoundToProjectError
 from ada_backend.services.graph.delete_graph_service import delete_component_instances_from_nodes
-from ada_backend.services.graph.playground_utils import extract_playground_configuration
+from ada_backend.services.graph.playground_utils import (
+    extract_playground_configuration,
+    extract_playground_schema_from_component,
+)
+from ada_backend.services.pipeline.get_pipeline_service import get_component_instance
 from ada_backend.services.pipeline.update_pipeline_service import create_or_update_component_instance
 from engine.field_expressions.ast import ExpressionNode, RefNode
 from engine.field_expressions.errors import FieldExpressionError, FieldExpressionParseError
@@ -359,7 +364,7 @@ async def update_graph_service(
                 LOGGER.error(f"Failed to parse field expression from parameter input: {param.value}")
                 raise
 
-            _validate_expression_references(session, ast)
+            _validate_expression_references(session, graph_runner_id, ast)
 
             upsert_field_expression(
                 session=session,
@@ -591,11 +596,12 @@ def _create_port_mappings_for_pure_ref_expressions(
     )
 
 
-def _validate_expression_references(session: Session, ast: ExpressionNode) -> None:
+def _validate_expression_references(session: Session, graph_runner_id: UUID, ast: ExpressionNode) -> None:
     """Perform static validation of expression references at save-time.
 
     - Instance IDs must be valid UUIDs and exist in DB.
     - Referenced output ports must exist on the source component version.
+    - For start nodes, also accepts input fields from payload_schema.
     """
 
     ref_nodes: Iterator[RefNode] = select_nodes(ast, lambda n: isinstance(n, RefNode))
@@ -612,8 +618,27 @@ def _validate_expression_references(session: Session, ast: ExpressionNode) -> No
             raise FieldExpressionError(f"Referenced component instance not found: {ref_node.instance}")
 
         source_component_version_id = resolve_component_version_id_from_instance_id(session, source_instance_uuid)
-        source_port_def_id = get_output_port_definition_id(session, source_component_version_id, ref_node.port)
-        if not source_port_def_id:
-            raise FieldExpressionError(
-                f"Output port '{ref_node.port}' not found for component version '{source_component_version_id}'"
-            )
+
+        is_start = is_start_node(session, graph_runner_id, source_instance_uuid)
+
+        if is_start:
+            try:
+                component_instance_schema = get_component_instance(session, source_instance_uuid, is_start_node=True)
+                playground_schema = extract_playground_schema_from_component(component_instance_schema)
+                if playground_schema and ref_node.port in playground_schema and ref_node.port != "messages":
+                    continue  # Valid start node input field
+            except Exception:
+                pass  # If we can't get the schema, fall through to check output ports
+
+            source_port_def_id = get_output_port_definition_id(session, source_component_version_id, ref_node.port)
+            if not source_port_def_id:
+                raise FieldExpressionError(
+                    f"Port '{ref_node.port}' not found for start node '{source_component_version_id}' "
+                    f"(checked both input fields and output ports)"
+                )
+        else:
+            source_port_def_id = get_output_port_definition_id(session, source_component_version_id, ref_node.port)
+            if not source_port_def_id:
+                raise FieldExpressionError(
+                    f"Output port '{ref_node.port}' not found for component version '{source_component_version_id}'"
+                )

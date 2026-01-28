@@ -40,12 +40,17 @@ def evaluate_expression(
                 f"Upstream result missing while evaluating '{target_field_name}': "
                 f"{ref.instance}.{ref.port} has no completed result"
             )
-        if ref.port not in task_result.data:
+
+        # Check both data and ctx for the port value
+        if ref.port in task_result.data:
+            raw_value = task_result.data[ref.port]
+        elif ref.port in task_result.ctx:
+            raw_value = task_result.ctx[ref.port]
+        else:
             raise FieldExpressionError(
                 f"Upstream port missing while evaluating '{target_field_name}': "
                 f"'{ref.port}' not found in output of {ref.instance}"
             )
-        raw_value = task_result.data[ref.port]
 
         if ref.key:
             if not isinstance(raw_value, dict):
