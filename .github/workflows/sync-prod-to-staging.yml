@@ -54,10 +54,3 @@ jobs:
             echo "🔄 Re-setup the database"
             make db-upgrade
             make db-seed
-
-            echo "Reload Gunicorn with zero downtime"
-            sudo systemctl restart gunicorn
-
-            #TODO: Remove this once when we fix the problem on the copy of cron jobs from prod to staging
-            echo "Reload APScheduler with zero downtime"
-            sudo systemctl restart apscheduler.service
