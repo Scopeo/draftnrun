@@ -11,14 +11,12 @@ from ada_backend.database.component_definition_seeding import (
     upsert_components_parameter_definitions,
     upsert_release_stage_to_current_version_mapping,
 )
-from ada_backend.database.models import (
-    ParameterType,
-    UIComponent,
-    UIComponentProperties,
-)
+from ada_backend.database.models import ParameterType, UIComponent, UIComponentProperties
 from ada_backend.database.seed.constants import (
     COMPLETION_MODEL_IN_DB,
+    REASONING_IN_DB,
     TEMPERATURE_IN_DB,
+    VERBOSITY_IN_DB,
 )
 from ada_backend.database.seed.seed_categories import CATEGORY_UUIDS
 from ada_backend.database.seed.seed_tool_description import TOOL_DESCRIPTION_UUIDS
@@ -36,6 +34,8 @@ AI_MODEL_PARAMETER_IDS = {
     "output_format": UUID("e5282ccb-dcaa-4970-93c1-f6ef5018492d"),
     "max_iterations": UUID("89efb2e1-9228-44db-91d6-871a41042067"),
     TEMPERATURE_IN_DB: UUID("5bdece0d-bbc1-4cc7-a192-c4b7298dc163"),
+    VERBOSITY_IN_DB: UUID("a897bbaa-f6cd-46a2-90d2-22b239d757cb"),
+    REASONING_IN_DB: UUID("2f127c19-1e60-4bc1-aad6-9d459dc762e3"),
     "date_in_system_prompt": UUID("f7dbbe12-e6ff-5bfe-b006-f6bf0e9cbf4d"),
     "allow_tool_shortcuts": UUID("3f8aa317-215a-4075-80ba-efca2a3d83ca"),
     "input_data_field_for_messages_history": UUID("bf56e90a-5e2b-4777-9ef4-34838b8973b6"),
@@ -268,6 +268,14 @@ def seed_ai_agent_components(session: Session):
                         param_name=TEMPERATURE_IN_DB,
                         param_id=AI_MODEL_PARAMETER_IDS[TEMPERATURE_IN_DB],
                     ),
+                    ParameterLLMConfig(
+                        param_name=VERBOSITY_IN_DB,
+                        param_id=AI_MODEL_PARAMETER_IDS[VERBOSITY_IN_DB],
+                    ),
+                    ParameterLLMConfig(
+                        param_name=REASONING_IN_DB,
+                        param_id=AI_MODEL_PARAMETER_IDS[REASONING_IN_DB],
+                    ),
                 ],
             ),
         ],
@@ -356,6 +364,14 @@ def seed_ai_agent_parameter_groups(session: Session):
         AI_MODEL_PARAMETER_IDS[TEMPERATURE_IN_DB]: {
             "parameter_group_id": PARAMETER_GROUP_UUIDS["agent_behavior_settings"],
             "parameter_order_within_group": 4,
+        },
+        AI_MODEL_PARAMETER_IDS[VERBOSITY_IN_DB]: {
+            "parameter_group_id": PARAMETER_GROUP_UUIDS["agent_behavior_settings"],
+            "parameter_order_within_group": 5,
+        },
+        AI_MODEL_PARAMETER_IDS[REASONING_IN_DB]: {
+            "parameter_group_id": PARAMETER_GROUP_UUIDS["agent_behavior_settings"],
+            "parameter_order_within_group": 6,
         },
         # History Management Group
         AI_MODEL_PARAMETER_IDS["input_data_field_for_messages_history"]: {

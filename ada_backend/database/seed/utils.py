@@ -213,10 +213,9 @@ def build_completion_service_config_definitions(
                     ui_component_properties=UIComponentProperties(
                         label="Reasoning",
                         options=[
-                            SelectOption(value="minimal", label="Minimal"),
+                            SelectOption(value="low", label="Low"),
                             SelectOption(value="medium", label="Medium"),
                             SelectOption(value="high", label="High"),
-                            SelectOption(value="low", label="Low"),
                         ],
                         placeholder="Select reasoning level useful only for GPT 5 models",
                     ).model_dump(exclude_unset=True, exclude_none=True),
@@ -246,6 +245,8 @@ def build_function_calling_service_config_definitions(
     options: [
         "completion_model",
         "temperature",
+        "verbosity",
+        "reasoning",
         "api_key",
     ]
     """
@@ -284,6 +285,50 @@ def build_function_calling_service_config_definitions(
                         max=2,
                         step=0.01,
                         marks=True,
+                    ).model_dump(exclude_unset=True, exclude_none=True),
+                    is_advanced=True,
+                )
+            )
+        if param.param_name == VERBOSITY_IN_DB:
+            definitions.append(
+                db.ComponentParameterDefinition(
+                    id=param.param_id,
+                    component_version_id=component_version_id,
+                    name=VERBOSITY_IN_DB,
+                    type=ParameterType.STRING,
+                    nullable=True,
+                    default=None,
+                    ui_component=UIComponent.SELECT,
+                    ui_component_properties=UIComponentProperties(
+                        label="Verbosity",
+                        options=[
+                            SelectOption(value="low", label="Low"),
+                            SelectOption(value="medium", label="Medium"),
+                            SelectOption(value="high", label="High"),
+                        ],
+                        placeholder="Select verbosity level useful only for GPT 5 models",
+                    ).model_dump(exclude_unset=True, exclude_none=True),
+                    is_advanced=True,
+                )
+            )
+        if param.param_name == REASONING_IN_DB:
+            definitions.append(
+                db.ComponentParameterDefinition(
+                    id=param.param_id,
+                    component_version_id=component_version_id,
+                    name=REASONING_IN_DB,
+                    type=ParameterType.STRING,
+                    nullable=True,
+                    default=None,
+                    ui_component=UIComponent.SELECT,
+                    ui_component_properties=UIComponentProperties(
+                        label="Reasoning",
+                        options=[
+                            SelectOption(value="low", label="Low"),
+                            SelectOption(value="medium", label="Medium"),
+                            SelectOption(value="high", label="High"),
+                        ],
+                        placeholder="Select reasoning level useful only for GPT 5 models",
                     ).model_dump(exclude_unset=True, exclude_none=True),
                     is_advanced=True,
                 )
