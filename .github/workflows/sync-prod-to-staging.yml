@@ -57,7 +57,22 @@ jobs:
               --target-qdrant-key "${{ secrets.STAGING_QDRANT_API_KEY }}" \
               $FORCE_SYNC_FLAG
 
-      - name: Upgrade database schema and seed
+      - name: Scale down pods
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.EC2_HOST_K8S_STAGING }}
+          username: ec2-user
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          script: |
+            set -e
+            NS="ada-staging"
+            
+            echo "⬇️ Scaling down all deployments..."
+            kubectl scale deployment --all -n ${NS} --replicas=0
+            kubectl wait --for=delete pod -l app -n ${NS} --timeout=300s || true
+
+      - name: Run migrations and seed as Jobs
         uses: appleboy/ssh-action@master
         with:
           host: ${{ secrets.EC2_HOST_K8S_STAGING }}
@@ -69,12 +84,42 @@ jobs:
             set -e
             NS="ada-staging"
 
-            echo "🗄️ Running migrations in Kubernetes pod..."
-            kubectl exec deployment/ada-api -n ${NS} -- \
-              alembic -c ada_backend/database/alembic.ini upgrade head
+            # Get the current image from the deployment
+            IMAGE=$(kubectl get deployment/ada-api -n ${NS} -o jsonpath='{.spec.template.spec.containers[0].image}')
 
-            echo "🌱 Running seed in Kubernetes pod..."
-            kubectl exec deployment/ada-api -n ${NS} -- \
-              python -m ada_backend.database.seed_db
+            echo "🗄️ Running migrations as Kubernetes Job..."
+            kubectl create job db-migrate -n ${NS} \
+              --image=${IMAGE} \
+              -- alembic -c ada_backend/database/alembic.ini upgrade head
+
+            kubectl wait --for=condition=complete job/db-migrate -n ${NS} --timeout=300s
+            kubectl delete job db-migrate -n ${NS}
+
+            echo "🌱 Running seed as Kubernetes Job..."
+            kubectl create job db-seed -n ${NS} \
+              --image=${IMAGE} \
+              -- python -m ada_backend.database.seed_db
+
+            kubectl wait --for=condition=complete job/db-seed -n ${NS} --timeout=300s
+            kubectl delete job db-seed -n ${NS}
+
+            echo "✅ Database migrations and seed complete!"
+
+      - name: Scale up pods
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.EC2_HOST_K8S_STAGING }}
+          username: ec2-user
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          script: |
+            set -e
+            NS="ada-staging"
+            
+            echo "⬆️ Scaling back up..."
+            kubectl scale deployment/ada-api -n ${NS} --replicas=1
+            kubectl scale deployment/ada-ingestion-worker -n ${NS} --replicas=1
+            kubectl scale deployment/ada-webhook-worker -n ${NS} --replicas=1
+            kubectl scale deployment/ada-scheduler -n ${NS} --replicas=1
             
             echo "✅ Database sync complete!"
