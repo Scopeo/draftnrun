@@ -31,6 +31,7 @@ from ada_backend.services.charts_service import get_charts_by_project
 from ada_backend.services.errors import (
     EnvironmentNotFound,
     MissingDataSourceError,
+    MissingIntegrationError,
     OrganizationLimitExceededError,
     ProjectNotFound,
 )
@@ -233,6 +234,9 @@ async def run_env_agent_endpoint(
             f"Key type error in prompt template for project {project_id} in environment {env}: {str(e)}",
             exc_info=True,
         )
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except MissingIntegrationError as e:
+        LOGGER.error(f"Missing integration for project {project_id} in environment {env}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=400, detail=str(e)) from e
     except ConnectionError as e:
         LOGGER.error(
@@ -447,7 +451,9 @@ async def chat_env(
             exc_info=True,
         )
         raise HTTPException(status_code=400, detail=str(e)) from e
-
+    except MissingIntegrationError as e:
+        LOGGER.error(f"Missing integration for project {project_id} in environment {env}: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except ConnectionError as e:
         LOGGER.error(
             f"Database connection failed for project {project_id} in environment {env}: {str(e)}", exc_info=True

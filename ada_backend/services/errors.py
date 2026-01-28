@@ -205,3 +205,16 @@ class GraphRunnerAlreadyInEnvironmentError(Exception):
         self.graph_runner_id = graph_runner_id
         self.environment = environment
         super().__init__(f"Graph runner {graph_runner_id} is already in {environment}")
+
+
+class MissingIntegrationError(Exception):
+    """Raised when a component instance requires an integration but none is configured."""
+
+    def __init__(self, integration_name: str, integration_service: str, component_instance_name: str):
+        self.integration_name = integration_name
+        self.integration_service = integration_service
+        self.component_instance_name = component_instance_name
+        super().__init__(
+            f"Please add integration {integration_name}:{integration_service} "
+            f"for component instance {component_instance_name}"
+        )
