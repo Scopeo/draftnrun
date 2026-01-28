@@ -192,6 +192,18 @@ def get_start_components(session: Session, graph_runner_id: UUID) -> list[db.Com
     )
 
 
+def is_start_node(session: Session, graph_runner_id: UUID, node_id: UUID) -> bool:
+    graph_runner_node = (
+        session.query(db.GraphRunnerNode)
+        .filter(
+            db.GraphRunnerNode.graph_runner_id == graph_runner_id,
+            db.GraphRunnerNode.node_id == node_id,
+        )
+        .first()
+    )
+    return graph_runner_node.is_start_node if graph_runner_node else False
+
+
 def get_input_component(session: Session, graph_runner_id: UUID) -> db.ComponentInstance:
     """
     Retrieve input nodes of a graph.

@@ -25,14 +25,10 @@ def evaluate_expression(
     """Evaluate a field expression AST and return the result.
 
     Uses structural pattern matching over AST node classes.
-
-    Returns:
-        - str for LiteralNode, RefNode (stringified), and ConcatNode
-        - dict or list for JsonBuildNode (preserves structure)
     """
 
     def evaluate_ref_as_object(ref: RefNode) -> Any:
-        """Evaluate a RefNode and return the raw value (not stringified)."""
+        """Evaluate a RefNode and return the raw value (possibly dict/list/str)."""
         task = tasks.get(ref.instance)
         task_result = task.result if task else None
         if not task_result:
@@ -40,12 +36,17 @@ def evaluate_expression(
                 f"Upstream result missing while evaluating '{target_field_name}': "
                 f"{ref.instance}.{ref.port} has no completed result"
             )
-        if ref.port not in task_result.data:
+
+        # Check both data and ctx for the port value
+        if ref.port in task_result.data:
+            raw_value = task_result.data[ref.port]
+        elif ref.port in task_result.ctx:
+            raw_value = task_result.ctx[ref.port]
+        else:
             raise FieldExpressionError(
                 f"Upstream port missing while evaluating '{target_field_name}': "
                 f"'{ref.port}' not found in output of {ref.instance}"
             )
-        raw_value = task_result.data[ref.port]
 
         if ref.key:
             if not isinstance(raw_value, dict):
