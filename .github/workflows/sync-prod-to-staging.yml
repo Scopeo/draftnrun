@@ -16,7 +16,7 @@ jobs:
       - name: Sync data from prod to staging (with TTL cache)
         uses: appleboy/ssh-action@master
         with:
-          host: ${{ secrets.EC2_HOST_SCOPEO_STAGING }}
+          host: ${{ secrets.EC2_HOST_K8S_STAGING }}
           username: ec2-user
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: 22
@@ -43,7 +43,7 @@ jobs:
       - name: Upgrade database schema
         uses: appleboy/ssh-action@master
         with:
-          host: ${{ secrets.EC2_HOST_SCOPEO_STAGING }}
+          host: ${{ secrets.EC2_HOST_K8S_STAGING }}
           username: ec2-user
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: 22
