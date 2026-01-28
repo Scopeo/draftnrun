@@ -6,40 +6,40 @@ from typing import Any
 
 from openai.types.chat import ChatCompletion, ChatCompletionMessage
 from openai.types.chat.chat_completion import Choice
+from openai.types.chat.chat_completion_message_tool_call import ChatCompletionMessageToolCall, Function
+from openai.types.responses.response import Response
 
 LOGGER = logging.getLogger(__name__)
 
 
-def convert_tool_messages_to_assistant_messages(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """
-    Convert tool messages to assistant messages for response API compatibility.
-    Tool messages are not supported in the response API, so we convert them to assistant messages.
-    """
-    converted_messages = []
+def convert_tool_messages_to_responses_input(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    converted_input = []
+
     for message in messages:
         role = message.get("role")
         content = message.get("content")
         tool_calls = message.get("tool_calls")
 
-        # Skip assistant messages with None content and non-empty tool_calls
-        if role == "assistant" and content is None and tool_calls:
-            continue
+        if role in ["system", "user"] or (role == "assistant" and not tool_calls):
+            converted_input.append({"role": role, "content": content or ""})
 
-        # Handle tool messages - convert to assistant messages
-        if role == "tool":
-            if content is None:
-                raise ValueError("Tool message cannot have None content")
-            # Convert tool response to assistant message
-            # Tool messages are not handled for json_constrained response API call
-            assistant_message = {"role": "assistant", "content": content}
-            converted_messages.append(assistant_message)
-            continue
+        elif role == "assistant" and tool_calls:
+            for tool_call in tool_calls:
+                converted_input.append({
+                    "type": "function_call",
+                    "call_id": tool_call["id"],
+                    "name": tool_call["function"]["name"],
+                    "arguments": tool_call["function"]["arguments"],
+                })
 
-        # Clean the message by removing tool-related fields
-        clean_message = {k: v for k, v in message.items() if k not in ["tool_calls", "tool_call_id"]}
-        converted_messages.append(clean_message)
+        elif role == "tool":
+            converted_input.append({
+                "type": "function_call_output",
+                "call_id": message.get("tool_call_id"),
+                "output": content or "",
+            })
 
-    return converted_messages
+    return converted_input
 
 
 def chat_completion_to_response(
@@ -52,15 +52,12 @@ def chat_completion_to_response(
     if isinstance(chat_completion_messages, str):
         return chat_completion_messages
 
-    response_messages = chat_completion_messages.copy()
+    response_input = convert_tool_messages_to_responses_input(chat_completion_messages)
 
-    # Remove tools messages/additional provider api response parameters and make them as assistant messages
-    response_messages = convert_tool_messages_to_assistant_messages(response_messages)
-
-    for message in response_messages:
-        if "content" in message and isinstance(message["content"], list) and "role" in message:
-            prefix = "output_" if message["role"] == "assistant" else "input_"
-            for content in message["content"]:
+    for item in response_input:
+        if "content" in item and isinstance(item["content"], list) and "role" in item:
+            prefix = "output_" if item["role"] == "assistant" else "input_"
+            for content in item["content"]:
                 if "type" in content and content["type"] in ["text", "image", "file"]:
                     if content["type"] == "file":
                         if "file" in content and isinstance(content["file"], dict):
@@ -75,14 +72,72 @@ def chat_completion_to_response(
                         url = content["image_url"].get("url")
                         if url:
                             content["image_url"] = url
-        elif "content" in message and isinstance(message["content"], str):
-            continue
+
+    return response_input
+
+
+def convert_tools_to_responses_format(tools: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    responses_tools = []
+    for tool in tools:
+        if tool["type"] == "function":
+            func = tool["function"]
+            responses_tools.append({
+                "type": "function",
+                "name": func["name"],
+                "description": func.get("description", ""),
+                "parameters": func.get("parameters", {}),
+            })
         else:
-            LOGGER.error(f"Error converting to response format: Here is the full payload {chat_completion_messages}")
-            raise ValueError(
-                (f"Invalid message format: 'content' must be a list or a string. Received: {type(message['content'])}")
+            responses_tools.append(tool)
+    return responses_tools
+
+
+def convert_response_to_chat_completion(response: Response, model_name: str) -> ChatCompletion:
+    tool_calls = []
+    content = None
+
+    for item in response.output:
+        if item.type == "function_call":
+            tool_calls.append(
+                ChatCompletionMessageToolCall(
+                    id=item.call_id,
+                    type="function",
+                    function=Function(
+                        name=item.name,
+                        arguments=item.arguments,
+                    ),
+                )
             )
-    return response_messages
+        elif item.type == "message":
+            for content_item in item.content:
+                if content_item.type == "output_text":
+                    content = content_item.text
+                    break
+
+    message = ChatCompletionMessage(
+        role="assistant",
+        content=content if not tool_calls else None,
+        tool_calls=tool_calls if tool_calls else None,
+    )
+
+    return ChatCompletion(
+        id=response.id,
+        choices=[
+            Choice(
+                index=0,
+                message=message,
+                finish_reason="tool_calls" if tool_calls else "stop",
+            )
+        ],
+        created=int(time.time()),
+        model=model_name,
+        object="chat.completion",
+        usage={
+            "prompt_tokens": response.usage.input_tokens,
+            "completion_tokens": response.usage.output_tokens,
+            "total_tokens": response.usage.total_tokens,
+        },
+    )
 
 
 # TODO: Quick fix for GPT-5 models, remove when we have better solution
