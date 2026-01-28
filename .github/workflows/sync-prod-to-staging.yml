@@ -23,7 +23,7 @@ jobs:
           username: ec2-user
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: 22
-          command_timeout: 30m
+          command_timeout: 15m
           script: |
             set -e
             NS="ada-staging"
