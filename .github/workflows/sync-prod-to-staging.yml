@@ -13,6 +13,9 @@ jobs:
   sync-database:
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
       - name: Sync data from prod to staging (with TTL cache)
         uses: appleboy/ssh-action@master
         with:
@@ -20,15 +23,29 @@ jobs:
           username: ec2-user
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: 22
+          command_timeout: 30m
           script: |
             set -e
-            cd /home/ec2-user/draftnrun
+            NS="ada-staging"
+            
+            # Clone/update repo to get latest sync scripts
+            REPO_DIR="/tmp/draftnrun-sync"
+            if [ -d "$REPO_DIR" ]; then
+              cd "$REPO_DIR"
+              git fetch origin
+              git checkout ${{ github.sha }}
+            else
+              git clone https://github.com/${{ github.repository }}.git "$REPO_DIR"
+              cd "$REPO_DIR"
+              git checkout ${{ github.sha }}
+            fi
 
             FORCE_SYNC_FLAG=""
             if [ "${{ inputs.force_sync }}" = "true" ]; then
               FORCE_SYNC_FLAG="--force-sync"
             fi
 
+            echo "📦 Running sync script from temporary directory..."
             ./scripts/copy_data/sync_data.sh \
               --source-db-url "${{ secrets.PROD_DB_URL }}" \
               --source-ingestion-db-url "${{ secrets.PROD_INGESTION_DB_URL }}" \
@@ -40,17 +57,24 @@ jobs:
               --target-qdrant-key "${{ secrets.STAGING_QDRANT_API_KEY }}" \
               $FORCE_SYNC_FLAG
 
-      - name: Upgrade database schema
+      - name: Upgrade database schema and seed
         uses: appleboy/ssh-action@master
         with:
           host: ${{ secrets.EC2_HOST_K8S_STAGING }}
           username: ec2-user
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: 22
+          command_timeout: 15m
           script: |
             set -e
-            cd /home/ec2-user/draftnrun
+            NS="ada-staging"
 
-            echo "🔄 Re-setup the database"
-            make db-upgrade
-            make db-seed
+            echo "🗄️ Running migrations in Kubernetes pod..."
+            kubectl exec deployment/ada-api -n ${NS} -- \
+              alembic -c ada_backend/database/alembic.ini upgrade head
+
+            echo "🌱 Running seed in Kubernetes pod..."
+            kubectl exec deployment/ada-api -n ${NS} -- \
+              python -m ada_backend.database.seed_db
+            
+            echo "✅ Database sync complete!"
