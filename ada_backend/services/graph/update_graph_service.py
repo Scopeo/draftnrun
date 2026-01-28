@@ -50,7 +50,7 @@ from ada_backend.services.graph.playground_utils import extract_playground_confi
 from ada_backend.services.pipeline.update_pipeline_service import create_or_update_component_instance
 from engine.field_expressions.ast import ExpressionNode, RefNode
 from engine.field_expressions.errors import FieldExpressionError, FieldExpressionParseError
-from engine.field_expressions.parser import parse_expression
+from engine.field_expressions.parser import parse_expression_flexible
 from engine.field_expressions.serializer import to_json as expr_to_json
 from engine.field_expressions.traversal import get_pure_ref, select_nodes
 
@@ -336,11 +336,10 @@ async def update_graph_service(
                 raise ValueError(f"Invalid field expression target: component instance {instance.id} not in update")
 
             field_name = param.name
-            expression_text = "" if param.value is None else str(param.value)
 
-            if expression_text == "":
+            if param.value is None or param.value == "":
                 LOGGER.warning(
-                    f"No expression text for input parameter {field_name} on instance {instance.id}, skipping"
+                    f"No expression value for input parameter {field_name} on instance {instance.id}, skipping"
                 )
                 continue
 
@@ -352,10 +351,12 @@ async def update_graph_service(
 
             incoming_field_expressions_by_instance[instance.id].add(field_name)
 
+            # Parse expression (handles both text and JSON formats)
             try:
-                ast = parse_expression(expression_text)
+                ast = parse_expression_flexible(param.value)
+                LOGGER.debug(f"Parsed expression for {field_name}: {param.value}")
             except FieldExpressionParseError:
-                LOGGER.error(f"Failed to parse field expression from parameter input: {expression_text}")
+                LOGGER.error(f"Failed to parse field expression from parameter input: {param.value}")
                 raise
 
             _validate_expression_references(session, ast)

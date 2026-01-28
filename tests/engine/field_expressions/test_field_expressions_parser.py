@@ -2,7 +2,7 @@ import pytest
 
 from engine.field_expressions.ast import ConcatNode, LiteralNode, RefNode
 from engine.field_expressions.errors import FieldExpressionParseError
-from engine.field_expressions.parser import parse_expression, unparse_expression
+from engine.field_expressions.parser import parse_expression, parse_expression_flexible, unparse_expression
 from engine.field_expressions.serializer import from_json, to_json
 
 
@@ -127,3 +127,42 @@ def test_parse_concat_with_key():
     # unparse preserves key
     unparsed = unparse_expression(ast)
     assert unparsed == "prefix: @{{comp1.output::key}} suffix"
+
+
+def test_parse_expression_flexible_with_string():
+    """Test that parse_expression_flexible accepts string input."""
+    ast = parse_expression_flexible("hello @{{comp.port}}")
+    assert isinstance(ast, ConcatNode)
+    unparsed = unparse_expression(ast)
+    assert unparsed == "hello @{{comp.port}}"
+
+
+def test_parse_expression_flexible_with_dict():
+    """Test that parse_expression_flexible accepts dict/JSON input."""
+    json_expr = {"type": "literal", "value": "test"}
+    ast = parse_expression_flexible(json_expr)
+    assert isinstance(ast, LiteralNode)
+    assert ast.value == "test"
+
+
+def test_parse_expression_flexible_with_list_raises_error():
+    """Test that parse_expression_flexible raises error for list input."""
+    with pytest.raises(FieldExpressionParseError) as exc_info:
+        parse_expression_flexible([1, 2, 3])
+    assert "Expected str or dict, got list" in str(exc_info.value)
+    assert "[1, 2, 3]" in str(exc_info.value)
+
+
+def test_parse_expression_flexible_with_int_raises_error():
+    """Test that parse_expression_flexible raises error for int input."""
+    with pytest.raises(FieldExpressionParseError) as exc_info:
+        parse_expression_flexible(42)
+    assert "Expected str or dict, got int" in str(exc_info.value)
+    assert "42" in str(exc_info.value)
+
+
+def test_parse_expression_flexible_with_none_raises_error():
+    """Test that parse_expression_flexible raises error for None input."""
+    with pytest.raises(FieldExpressionParseError) as exc_info:
+        parse_expression_flexible(None)
+    assert "Expected str or dict, got NoneType" in str(exc_info.value)

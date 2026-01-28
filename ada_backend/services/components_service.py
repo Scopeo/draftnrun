@@ -58,7 +58,7 @@ def _process_components_with_ports(
                     id=input_port.id,
                     component_version_id=input_port.component_version_id,
                     name=input_port.name,
-                    type=ParameterType.STRING,
+                    type=input_port.parameter_type or ParameterType.STRING,
                     nullable=True,
                     default=None,
                     ui_component=input_port.ui_component,

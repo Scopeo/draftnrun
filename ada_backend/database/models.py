@@ -2,7 +2,7 @@ import json
 import logging
 import uuid
 from enum import StrEnum
-from typing import List, Optional, Type, Union
+from typing import Any, List, Optional, Type, Union
 
 import sqlalchemy as sa
 from cryptography.fernet import Fernet
@@ -161,6 +161,7 @@ class UIComponent(StrEnum):
     TEXTFIELD = "Textfield"
     FILE_UPLOAD = "FileUpload"
     JSON_BUILDER = "JSON Builder"
+    CONDITION_BUILDER = "ConditionBuilder"
 
 
 class SourceType(StrEnum):
@@ -255,6 +256,9 @@ class UIComponentProperties(BaseModel):
     # File upload property
     accept: Optional[str] = None
     multiple: Optional[bool] = None
+
+    # Condition builder property
+    available_operators: Optional[List[dict[str, Any]]] = None
 
 
 def cast_value(
@@ -1007,6 +1011,7 @@ class PortDefinition(Base):
     port_type = mapped_column(make_pg_enum(PortType), nullable=False)
     is_canonical = mapped_column(Boolean, nullable=False, default=False)
     description = mapped_column(Text, nullable=True)
+    parameter_type = mapped_column(make_pg_enum(ParameterType), nullable=False, default=ParameterType.STRING)
     ui_component = mapped_column(make_pg_enum(UIComponent), nullable=True)
     ui_component_properties = mapped_column(JSONB, nullable=True)
     component_version = relationship("ComponentVersion", back_populates="port_definitions")

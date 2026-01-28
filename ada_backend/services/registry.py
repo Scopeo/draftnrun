@@ -40,6 +40,7 @@ from engine.components.docx_generation_tool import DOCXGenerationTool
 from engine.components.filter import Filter
 from engine.components.graph_runner_block import GraphRunnerBlock
 from engine.components.hybrid_synthesizer import HybridSynthesizer
+from engine.components.if_else import IfElse
 from engine.components.inputs_outputs.start import Start
 from engine.components.llm_call import LLMCallAgent
 from engine.components.ocr_call import OCRCall
@@ -533,6 +534,13 @@ def create_factory_registry() -> FactoryRegistry:
         component_version_id=COMPONENT_VERSION_UUIDS["table_lookup"],
         factory=AgentFactory(
             entity_class=TableLookup,
+        ),
+    )
+
+    registry.register(
+        component_version_id=COMPONENT_VERSION_UUIDS["if_else"],
+        factory=AgentFactory(
+            entity_class=IfElse,
         ),
     )
 

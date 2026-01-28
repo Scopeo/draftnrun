@@ -9,6 +9,7 @@ from typing import Any, Dict, List, Union
 from engine.field_expressions.ast import (
     ConcatNode,
     ExpressionNode,
+    JsonBuildNode,
     LiteralNode,
     RefNode,
 )
@@ -26,6 +27,12 @@ def to_json(expression: ExpressionNode) -> Dict[str, Any]:
             return result
         case ConcatNode(parts=parts):
             return {"type": "concat", "parts": [to_json(p) for p in parts]}
+        case JsonBuildNode(template=template, refs=refs):
+            return {
+                "type": "json_build",
+                "template": template,
+                "refs": {key: to_json(ref) for key, ref in refs.items()},
+            }
         case _:
             return {"type": "literal", "value": ""}
 
@@ -44,5 +51,15 @@ def from_json(ast_dict: Dict[str, Any]) -> ExpressionNode:
                 n for n in hydrated if isinstance(n, (LiteralNode, RefNode))
             ]
             return ConcatNode(parts=filtered)
+        case {"type": "json_build", "template": template, "refs": refs}:
+            parsed_refs = {}
+            for key, ref_json in refs.items():
+                parsed_ref = from_json(ref_json)
+                if isinstance(parsed_ref, RefNode):
+                    parsed_refs[key] = parsed_ref
+                else:
+                    # If not a RefNode, skip it (only RefNodes allowed in json_build)
+                    pass
+            return JsonBuildNode(template=template, refs=parsed_refs)
         case _:
             return LiteralNode(value="")
