@@ -121,11 +121,11 @@ def get_monitoring_kpis_by_project(
                 title="Total Tokens Usage",
                 color="primary",
                 icon="tabler-coin",
-                stats=str(trace_kpis.tokens_count) if trace_kpis.tokens_count is not None else "N/A",
+                stats=str(trace_kpis.tokens_count) if trace_kpis.tokens_count is not None else "",
                 change=(
                     str(trace_kpis.token_comparison_percentage) + "%"
                     if trace_kpis.token_comparison_percentage is not None
-                    else "N/A"
+                    else ""
                 ),
             ),
             KPI(
@@ -136,18 +136,18 @@ def get_monitoring_kpis_by_project(
                 change=(
                     str(trace_kpis.nb_request_comparison_percentage) + "%"
                     if trace_kpis.nb_request_comparison_percentage is not None
-                    else "N/A"
+                    else ""
                 ),
             ),
             KPI(
                 title="Average Latency",
                 color="warning",
                 icon="tabler-clock",
-                stats=str(trace_kpis.average_latency) + "s" if trace_kpis.average_latency is not None else "N/A",
+                stats=str(trace_kpis.average_latency) + "s" if trace_kpis.average_latency is not None else "",
                 change=(
                     str(trace_kpis.latency_comparison_percentage) + "%"
                     if trace_kpis.latency_comparison_percentage is not None
-                    else "N/A"
+                    else ""
                 ),
             ),
         ]
