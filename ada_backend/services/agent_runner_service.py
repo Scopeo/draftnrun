@@ -24,7 +24,12 @@ from ada_backend.repositories.port_mapping_repository import list_port_mappings_
 from ada_backend.repositories.project_repository import get_project, get_project_with_details
 from ada_backend.schemas.project_schema import ChatResponse
 from ada_backend.services.agent_builder_service import instantiate_component
-from ada_backend.services.errors import EnvironmentNotFound, OrganizationLimitExceededError, ProjectNotFound
+from ada_backend.services.errors import (
+    EnvironmentNotFound,
+    GraphNotFound,
+    OrganizationLimitExceededError,
+    ProjectNotFound,
+)
 from ada_backend.services.file_response_service import (
     process_files_for_response,
     save_input_files_to_temp_folder,
@@ -163,7 +168,7 @@ async def get_agent_for_project(
             project_id,
         )
     else:
-        raise ValueError("Graph runner does not exist")
+        raise GraphNotFound(graph_runner_id)
 
 
 async def run_env_agent(

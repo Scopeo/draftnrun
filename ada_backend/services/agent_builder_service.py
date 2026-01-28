@@ -22,7 +22,7 @@ from ada_backend.repositories.integration_repository import (
 )
 from ada_backend.repositories.organization_repository import get_organization_secrets_from_project_id
 from ada_backend.schemas.pipeline.base import ToolDescriptionSchema
-from ada_backend.services.errors import MissingDataSourceError
+from ada_backend.services.errors import MissingDataSourceError, MissingIntegrationError
 from ada_backend.services.registry import FACTORY_REGISTRY
 from ada_backend.utils.secret_resolver import replace_secret_placeholders
 from engine.components.errors import (
@@ -141,9 +141,10 @@ def instantiate_component(
         if integration_relationship:
             input_params["secret_integration_id"] = integration_relationship.secret_integration_id
         else:
-            raise ValueError(
-                f"Please add integration {component_integration.name}:{component_integration.service} "
-                f"for component instance {component_instance.name}"
+            raise MissingIntegrationError(
+                integration_name=component_integration.name,
+                integration_service=component_integration.service,
+                component_instance_name=component_instance.name,
             )
 
     # Resolve sub-components
@@ -170,15 +171,24 @@ def instantiate_component(
             MissingKeyPromptTemplateError,
             KeyTypePromptTemplateError,
             MCPConnectionError,
+            MissingIntegrationError,
         ):
             raise
         except Exception as e:
-            raise ValueError(
+            error_msg = (
                 f"Failed to instantiate sub-component '{param_name}' "
-                f"for component instance {component_instance.ref}: {e}"
-                f"Input parameters: {input_params}\n"
-                f"Grouped sub-components: {grouped_sub_components}"
-            ) from e
+                f"for component instance {component_instance.name} "
+                f"({component_instance.id}): {e}\n"
+            )
+            LOGGER.error(
+                error_msg,
+                exc_info=True,
+                extra={
+                    "input_params": input_params,
+                    "grouped_sub_components": grouped_sub_components,
+                },
+            )
+            raise ValueError(error_msg) from e
     LOGGER.debug(f"Resolved sub-components: {grouped_sub_components}\n")
     # Merge grouped sub-components into input parameters
     for parameter_name, sub_component_list in grouped_sub_components.items():
@@ -266,11 +276,17 @@ def instantiate_component(
     except (MissingDataSourceError, MCPConnectionError):
         raise
     except Exception as e:
+        LOGGER.error(
+            f"Failed to instantiate component '{component_name}' "
+            f"with version ID {component_instance.component_version_id} "
+            f"and instance ID {component_instance.id}: {e}",
+            f"Input parameters: {input_params}",
+            exc_info=True,
+        )
         raise ValueError(
             f"Failed to instantiate component '{component_name}' "
             f"with version ID {component_instance.component_version_id} "
-            f"and instance ID {component_instance.id}: {e}\n"
-            f"Input parameters: {input_params}"
+            f"and instance ID {component_instance.id}: {e}"
         ) from e
 
 

@@ -32,6 +32,7 @@ from ada_backend.services.errors import (
     GraphRunnerAlreadyInEnvironmentError,
     GraphVersionSavingFromNonDraftError,
     MissingDataSourceError,
+    MissingIntegrationError,
     ProjectNotFound,
 )
 from ada_backend.services.graph.delete_graph_service import delete_graph_runner_service
@@ -216,6 +217,9 @@ async def update_project_pipeline(
             f"MCP connection failed for project {project_id} runner {graph_runner_id}: {str(e)}",
             exc_info=True,
         )
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except MissingIntegrationError as e:
+        LOGGER.error(f"Missing integration for project {project_id} runner {graph_runner_id}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=400, detail=str(e)) from e
     except ValueError as e:
         error_msg = str(e)
