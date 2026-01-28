@@ -106,7 +106,22 @@ jobs:
           script: |
             set -e
             cat /etc/os-release
-
+      
+      - name: Clear API keys from database
+        uses: appleboy/ssh-action@v1.2.4
+        with:
+          host: ${{ secrets.EC2_HOST_TEST }}
+          username: ${{ env.EC2_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          script: |
+            set -e
+            cd ${{ env.EC2_PATH_BASE }}/${{env.EC2_FOLDER_NAME}}${{ env.RUN_ID }}
+            echo "===> Clearing all global secrets from database"
+            # Delete all rows from global_secrets table to ensure tests use credentials.env
+            PGPASSWORD=ada_password psql -h localhost -U postgres -d ada_backend -c "
+              DELETE FROM global_secrets;
+            " || echo "Warning: Failed to clear global secrets (continuing anyway)"
 
       - name: Run external API call tests
         uses: appleboy/ssh-action@master

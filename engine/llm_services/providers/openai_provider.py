@@ -11,6 +11,8 @@ from engine.llm_services.providers.base_provider import BaseProvider
 from engine.llm_services.utils import (
     build_openai_responses_kwargs,
     chat_completion_to_response,
+    convert_response_to_chat_completion,
+    convert_tools_to_responses_format,
     wrap_str_content_into_chat_completion_message,
 )
 from settings import settings
@@ -171,7 +173,6 @@ class OpenAIProvider(BaseProvider):
         stream: bool,
         **kwargs,
     ) -> tuple[ChatCompletion, int, int, int]:
-        # When tools is empty or tool_choice is "none", make a simple completion call
         if len(tools) == 0 or tool_choice == "none":
             LOGGER.info("Making simple completion call without tools")
             content, prompt_tokens, completion_tokens, total_tokens = await self.complete(
@@ -182,17 +183,37 @@ class OpenAIProvider(BaseProvider):
             response = wrap_str_content_into_chat_completion_message(content, self._model_name)
             return response, prompt_tokens, completion_tokens, total_tokens
 
-        client = openai.AsyncOpenAI(api_key=self._api_key, base_url=self._base_url)
-        response = await client.chat.completions.create(
-            model=self._model_name,
-            messages=messages,
-            tools=tools,
-            temperature=temperature,
-            stream=stream,
-            tool_choice=tool_choice,
+        messages_for_responses = chat_completion_to_response(messages)
+        responses_tools = convert_tools_to_responses_format(tools)
+
+        base_kwargs = {
+            "temperature": temperature,
+            "model": self._model_name,
+            "input": messages_for_responses,
+            "tools": responses_tools,
+            "stream": stream,
+            "tool_choice": tool_choice,
+        }
+
+        kwargs_create = build_openai_responses_kwargs(
+            self._model_name,
+            self._verbosity,
+            self._reasoning,
+            temperature,
+            base_kwargs,
         )
 
-        return response, response.usage.prompt_tokens, response.usage.completion_tokens, response.usage.total_tokens
+        client = openai.AsyncOpenAI(api_key=self._api_key, base_url=self._base_url)
+        response = await client.responses.create(**kwargs_create)
+
+        chat_completion = convert_response_to_chat_completion(response, self._model_name)
+
+        return (
+            chat_completion,
+            response.usage.input_tokens,
+            response.usage.output_tokens,
+            response.usage.total_tokens,
+        )
 
     async def function_call_with_structured_output(
         self,
@@ -228,28 +249,41 @@ class OpenAIProvider(BaseProvider):
             response = wrap_str_content_into_chat_completion_message(structured_content, self._model_name)
             return response, prompt_tokens, completion_tokens, total_tokens
 
-        client = openai.AsyncOpenAI(api_key=self._api_key, base_url=self._base_url)
-        tool_choice_value = "required"
+        messages_for_responses = chat_completion_to_response(messages)
+        responses_tools = convert_tools_to_responses_format(tools_with_structured)
 
-        response = await client.chat.completions.create(
-            model=self._model_name,
-            messages=messages,
-            tools=tools_with_structured,
-            temperature=temperature,
-            stream=stream,
-            tool_choice=tool_choice_value,
+        base_kwargs = {
+            "temperature": temperature,
+            "model": self._model_name,
+            "input": messages_for_responses,
+            "tools": responses_tools,
+            "stream": stream,
+            "tool_choice": "required",
+        }
+
+        kwargs_create = build_openai_responses_kwargs(
+            self._model_name,
+            self._verbosity,
+            self._reasoning,
+            temperature,
+            base_kwargs,
         )
 
-        prompt_tokens = response.usage.prompt_tokens
-        completion_tokens = response.usage.completion_tokens
+        client = openai.AsyncOpenAI(api_key=self._api_key, base_url=self._base_url)
+        response = await client.responses.create(**kwargs_create)
+
+        chat_completion = convert_response_to_chat_completion(response, self._model_name)
+
+        prompt_tokens = response.usage.input_tokens
+        completion_tokens = response.usage.output_tokens
         total_tokens = response.usage.total_tokens
 
-        response = self._filter_and_convert_structured_output_tool(
-            response=response,
+        chat_completion = self._filter_and_convert_structured_output_tool(
+            response=chat_completion,
             structured_output_tool=structured_output_tool,
         )
 
-        return response, prompt_tokens, completion_tokens, total_tokens
+        return chat_completion, prompt_tokens, completion_tokens, total_tokens
 
     async def web_search(
         self, query: str, allowed_domains: Optional[list[str]], **kwargs
