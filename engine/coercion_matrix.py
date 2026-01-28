@@ -267,6 +267,8 @@ class CoercionMatrix:
         # Handle typing.Any - always can coerce (delete after migration)
         if target_type is Any or str(target_type) == "typing.Any":
             return True
+        if source_type is Any or str(source_type) == "typing.Any":
+            return True
 
         # Check if already correct type
         if source_type == target_type:
