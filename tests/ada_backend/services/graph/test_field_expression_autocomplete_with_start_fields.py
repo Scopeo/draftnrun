@@ -3,8 +3,6 @@
 from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
-import pytest
-
 from ada_backend.schemas.pipeline.field_expression_schema import SuggestionKind
 from ada_backend.services.graph.field_expression_autocomplete_service import _build_port_suggestions_with_start_fields
 
@@ -26,9 +24,7 @@ def test_start_node_includes_input_fields_as_properties():
     mock_graph_runner_node.is_start_node = True
     session.query.return_value.filter.return_value.first.return_value = mock_graph_runner_node
 
-    with patch(
-        "ada_backend.services.graph.field_expression_autocomplete_service.get_component_instance"
-    ) as mock_get_instance:
+    with patch("ada_backend.services.graph.field_expression_autocomplete_service.get_component_instance") as _:
         with patch(
             "ada_backend.services.graph.field_expression_autocomplete_service.extract_playground_schema_from_component"
         ) as mock_extract:

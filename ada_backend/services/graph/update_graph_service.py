@@ -628,6 +628,11 @@ def _validate_expression_references(session: Session, graph_runner_id: UUID, ast
                 if playground_schema and ref_node.port in playground_schema and ref_node.port != "messages":
                     continue  # Valid start node input field
             except Exception:
+                LOGGER.warning(
+                    f"Could not retrieve playground schema for start node {source_instance_uuid}. "
+                    "Falling back to output port validation.",
+                    exc_info=True,
+                )
                 pass  # If we can't get the schema, fall through to check output ports
 
             source_port_def_id = get_output_port_definition_id(session, source_component_version_id, ref_node.port)

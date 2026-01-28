@@ -25,14 +25,10 @@ def evaluate_expression(
     """Evaluate a field expression AST and return the result.
 
     Uses structural pattern matching over AST node classes.
-
-    Returns:
-        - str for LiteralNode, RefNode (stringified), and ConcatNode
-        - dict or list for JsonBuildNode (preserves structure)
     """
 
     def evaluate_ref_as_object(ref: RefNode) -> Any:
-        """Evaluate a RefNode and return the raw value (not stringified)."""
+        """Evaluate a RefNode and return the raw value (possibly dict/list/str)."""
         task = tasks.get(ref.instance)
         task_result = task.result if task else None
         if not task_result:
