@@ -127,7 +127,7 @@ def update_inputs_groundtruths(
             if groundtruth is not None:
                 input_groundtruth.groundtruth = groundtruth
             if custom_columns is not None:
-                current_custom_columns = input_groundtruth.custom_columns or {}
+                current_custom_columns = (input_groundtruth.custom_columns or {}).copy()
                 for key, value in custom_columns.items():
                     if value is None:
                         current_custom_columns.pop(key, None)
