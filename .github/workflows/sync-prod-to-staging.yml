@@ -12,8 +12,13 @@ on:
 jobs:
   sync-database:
     runs-on: ubuntu-latest
+    outputs:
+      sync_performed: ${{ steps.sync.outputs.sync_performed }}
     steps:
-      - name: Sync data from prod to staging (with TTL cache)
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Scale down pods
         uses: appleboy/ssh-action@master
         with:
           host: ${{ secrets.EC2_HOST_K8S_STAGING }}
@@ -22,14 +27,44 @@ jobs:
           port: 22
           script: |
             set -e
-            cd /home/ec2-user/draftnrun
+            NS="ada-staging"
+            
+            echo "⬇️ Scaling down all deployments..."
+            kubectl scale deployment --all -n ${NS} --replicas=0
+            kubectl wait --for=delete pod -l app -n ${NS} --timeout=300s || true
+
+      - name: Sync data from prod to staging (with TTL cache)
+        id: sync
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.EC2_HOST_K8S_STAGING }}
+          username: ec2-user
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          command_timeout: 15m
+          script: |
+            set -e
+            NS="ada-staging"
+            
+            # Clone/update repo to get latest sync scripts
+            REPO_DIR="/tmp/draftnrun-sync"
+            if [ -d "$REPO_DIR" ]; then
+              cd "$REPO_DIR"
+              git fetch origin
+              git checkout ${{ github.sha }}
+            else
+              git clone https://github.com/${{ github.repository }}.git "$REPO_DIR"
+              cd "$REPO_DIR"
+              git checkout ${{ github.sha }}
+            fi
 
             FORCE_SYNC_FLAG=""
             if [ "${{ inputs.force_sync }}" = "true" ]; then
               FORCE_SYNC_FLAG="--force-sync"
             fi
 
-            ./scripts/copy_data/sync_data.sh \
+            echo "📦 Running sync script from temporary directory..."
+            OUTPUT=$(./scripts/copy_data/sync_data.sh \
               --source-db-url "${{ secrets.PROD_DB_URL }}" \
               --source-ingestion-db-url "${{ secrets.PROD_INGESTION_DB_URL }}" \
               --target-db-url "${{ secrets.STAGING_DB_URL }}" \
@@ -38,9 +73,57 @@ jobs:
               --source-qdrant-key "${{ secrets.PROD_QDRANT_API_KEY }}" \
               --target-qdrant-url "${{ secrets.STAGING_QDRANT_CLUSTER_URL }}" \
               --target-qdrant-key "${{ secrets.STAGING_QDRANT_API_KEY }}" \
-              $FORCE_SYNC_FLAG
+              $FORCE_SYNC_FLAG 2>&1)
+            
+            echo "$OUTPUT"
+            
+            # Check if sync was actually performed or skipped due to TTL
+            if echo "$OUTPUT" | grep -qi "skip\|cache.*valid\|already.*synced"; then
+              echo "sync_performed=false" >> $GITHUB_OUTPUT
+              echo "⏭️ Sync skipped due to valid TTL cache"
+            else
+              echo "sync_performed=true" >> $GITHUB_OUTPUT
+              echo "✅ Sync completed"
+            fi
 
-      - name: Upgrade database schema
+      - name: Run migrations and seed as Jobs
+        if: steps.sync.outputs.sync_performed == 'true'
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.EC2_HOST_K8S_STAGING }}
+          username: ec2-user
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          command_timeout: 15m
+          script: |
+            set -e
+            NS="ada-staging"
+
+            # Get the current image from the deployment
+            IMAGE=$(kubectl get deployment/ada-api -n ${NS} -o jsonpath='{.spec.template.spec.containers[0].image}')
+
+            echo "🗄️ Running migrations as Kubernetes Job..."
+            kubectl create job db-migrate -n ${NS} \
+              --image=${IMAGE} \
+              --from=deployment/ada-api \
+              -- alembic -c ada_backend/database/alembic.ini upgrade head
+
+            kubectl wait --for=condition=complete job/db-migrate -n ${NS} --timeout=300s
+            kubectl delete job db-migrate -n ${NS}
+
+            echo "🌱 Running seed as Kubernetes Job..."
+            kubectl create job db-seed -n ${NS} \
+              --image=${IMAGE} \
+              --from=deployment/ada-api \
+              -- python -m ada_backend.database.seed_db
+
+            kubectl wait --for=condition=complete job/db-seed -n ${NS} --timeout=300s
+            kubectl delete job db-seed -n ${NS}
+
+            echo "✅ Database migrations and seed complete!"
+
+      - name: Scale up pods
+        if: always()
         uses: appleboy/ssh-action@master
         with:
           host: ${{ secrets.EC2_HOST_K8S_STAGING }}
@@ -49,8 +132,12 @@ jobs:
           port: 22
           script: |
             set -e
-            cd /home/ec2-user/draftnrun
-
-            echo "🔄 Re-setup the database"
-            make db-upgrade
-            make db-seed
+            NS="ada-staging"
+            
+            echo "⬆️ Scaling back up..."
+            kubectl scale deployment/ada-api -n ${NS} --replicas=1
+            kubectl scale deployment/ada-ingestion-worker -n ${NS} --replicas=1
+            kubectl scale deployment/ada-webhook-worker -n ${NS} --replicas=1
+            kubectl scale deployment/ada-scheduler -n ${NS} --replicas=1
+            
+            echo "✅ Pods scaled back up!"
