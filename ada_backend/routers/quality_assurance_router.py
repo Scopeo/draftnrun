@@ -41,11 +41,7 @@ from ada_backend.services.qa.qa_error import (
     CSVMissingDatasetColumnError,
     CSVNonUniquePositionError,
     QAColumnNotFoundError,
-    QADatasetCreateCustomColumnError,
-    QADatasetDeleteCustomColumnError,
-    QADatasetGetCustomColumnsError,
     QADatasetNotInProjectError,
-    QADatasetRenameCustomColumnError,
     QADuplicatePositionError,
     QAPartialPositionError,
 )
@@ -239,11 +235,11 @@ def get_columns_by_dataset_endpoint(
             f"Failed to get columns for dataset {dataset_id} in project {project_id}: {str(e)}", exc_info=True
         )
         raise HTTPException(status_code=400, detail=str(e)) from e
-    except QADatasetGetCustomColumnsError as e:
+    except Exception as e:
         LOGGER.error(
             f"Failed to get columns for dataset {dataset_id} in project {project_id}: {str(e)}", exc_info=True
         )
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @router.post(
@@ -270,9 +266,9 @@ def add_column_to_dataset_endpoint(
     except QADatasetNotInProjectError as e:
         LOGGER.error(f"Failed to add column to dataset {dataset_id} for project {project_id}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=400, detail=str(e)) from e
-    except QADatasetCreateCustomColumnError as e:
+    except Exception as e:
         LOGGER.error(f"Failed to add column to dataset {dataset_id} for project {project_id}: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @router.patch(
@@ -292,12 +288,6 @@ def rename_column_endpoint(
     ],
     session: Session = Depends(get_db),
 ) -> QAColumnResponse:
-    """
-    Rename a custom column in a dataset.
-
-    This endpoint allows users to rename an existing custom column.
-    The column_id remains unchanged, only the display name is updated.
-    """
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
 
@@ -315,12 +305,12 @@ def rename_column_endpoint(
             exc_info=True,
         )
         raise HTTPException(status_code=404, detail=str(e)) from e
-    except QADatasetRenameCustomColumnError as e:
+    except Exception as e:
         LOGGER.error(
             f"Failed to rename column {column_id} in dataset {dataset_id} for project {project_id}: {str(e)}",
             exc_info=True,
         )
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @router.delete(
@@ -338,13 +328,6 @@ def delete_column_endpoint(
     ],
     session: Session = Depends(get_db),
 ) -> dict:
-    """
-    Delete a custom column from a dataset.
-
-    This endpoint allows users to delete a custom column from a QA dataset.
-    This will also remove all values for this column from all rows in the dataset.
-    This action cannot be undone.
-    """
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
 
@@ -362,12 +345,12 @@ def delete_column_endpoint(
             exc_info=True,
         )
         raise HTTPException(status_code=404, detail=str(e)) from e
-    except QADatasetDeleteCustomColumnError as e:
+    except Exception as e:
         LOGGER.error(
             f"Failed to delete column {column_id} from dataset {dataset_id} for project {project_id}: {str(e)}",
             exc_info=True,
         )
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 # Input Groundtruth endpoints
@@ -750,6 +733,11 @@ async def import_qa_data_from_csv_endpoint(
         CSVNonUniquePositionError,
         CSVInvalidPositionError,
     ) as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except QADatasetNotInProjectError as e:
+        LOGGER.error(
+            f"Failed to import QA data for dataset {dataset_id} in project {project_id}: {str(e)}", exc_info=True
+        )
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
         LOGGER.error(f"Failed to import QA data for dataset {dataset_id}: {str(e)}", exc_info=True)
