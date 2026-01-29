@@ -50,7 +50,7 @@ def test_pdf_generation_and_cleanup(pdf_tool, tmp_path):
     ):
         mock_css_instance = MockCSS.return_value
         # Call async function from sync test
-        inputs = PDFGenerationToolInputs(markdown_content=MARKDOWN_CONTENT, output_filename=None)
+        inputs = PDFGenerationToolInputs(markdown_content=MARKDOWN_CONTENT, filename=None)
         result = asyncio.run(pdf_tool._run_without_io_trace(inputs=inputs, ctx={}))
 
         # Verify result structure
@@ -86,7 +86,7 @@ def test_pdf_generation_with_actual_pdf(pdf_tool, tmp_path):
 
     with patch("engine.temps_folder_utils.get_tracing_span", return_value=mock_params):
         # Call async function from sync test
-        inputs = PDFGenerationToolInputs(markdown_content=MARKDOWN_CONTENT, output_filename=None)
+        inputs = PDFGenerationToolInputs(markdown_content=MARKDOWN_CONTENT, filename=None)
         result = asyncio.run(pdf_tool._run_without_io_trace(inputs=inputs, ctx={}))
 
         # Verify result structure
