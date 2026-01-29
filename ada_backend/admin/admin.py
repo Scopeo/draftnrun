@@ -146,6 +146,27 @@ class SecretIntegrationAdmin(EnhancedModelView, model=db.SecretIntegration):
     ]
 
 
+class OAuthConnectionAdmin(EnhancedModelView, model=db.OAuthConnection):
+    category = AdminCategory.PROJECTS
+    icon = "fas fa-link"
+    column_list = [
+        "id",
+        "project_id",
+        "provider_config_key",
+        "nango_connection_id",
+        "name",
+        "created_by_user_id",
+        "created_at",
+        "updated_at",
+        "deleted_at",
+    ]
+    column_searchable_list = ["name", "provider_config_key", "nango_connection_id"]
+    column_filters = ["provider_config_key", "project_id", "created_by_user_id", "deleted_at"]
+    can_create = False
+    can_edit = False
+    can_delete = False
+
+
 class IntegrationComponentInstanceRelationshipAdmin(
     EnhancedModelView, model=db.IntegrationComponentInstanceRelationship
 ):
@@ -720,6 +741,7 @@ def setup_admin(app: FastAPI):
     admin.add_view(ApiKeyAdmin)
     admin.add_view(SecretIntegrationAdmin)
     admin.add_view(IntegrationAdmin)
+    admin.add_view(OAuthConnectionAdmin)
     admin.add_view(IntegrationComponentInstanceRelationshipAdmin)
 
     admin.add_view(GraphRunnerAdmin)

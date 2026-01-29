@@ -161,6 +161,11 @@ class BaseConfig(BaseSettings):
 
     LLAMACLOUD_API_KEY: Optional[str] = None
 
+    # Nango OAuth Management
+    NANGO_INTERNAL_URL: Optional[str] = None
+    NANGO_PUBLIC_URL: Optional[str] = None
+    NANGO_SECRET_KEY: Optional[str] = None
+
     @model_validator(mode="after")
     @classmethod
     def sync_db_settings(cls, values):
