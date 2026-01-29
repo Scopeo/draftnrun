@@ -1,7 +1,7 @@
 """add metadata columns for qa datasets
 
 Revision ID: 6c4f844151d9
-Revises: 9e46c1d3afb3
+Revises: d5e6f7a8b9c0
 Create Date: 2026-01-26 14:50:59.050977
 
 """
@@ -14,7 +14,7 @@ from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
 revision: str = "6c4f844151d9"
-down_revision: Union[str, None] = "9e46c1d3afb3"
+down_revision: Union[str, None] = "d5e6f7a8b9c0"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
