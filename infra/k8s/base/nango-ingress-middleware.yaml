@@ -1,0 +1,24 @@
+apiVersion: traefik.containo.us/v1alpha1
+kind: Middleware
+metadata:
+  name: nango-rate-limit
+spec:
+  rateLimit:
+    average: 100
+    burst: 50
+    period: 1m
+---
+apiVersion: traefik.containo.us/v1alpha1
+kind: Middleware
+metadata:
+  name: nango-headers
+spec:
+  headers:
+    customRequestHeaders:
+      X-Forwarded-Proto: "https"
+    customResponseHeaders:
+      X-Frame-Options: "DENY"
+      X-Content-Type-Options: "nosniff"
+      X-XSS-Protection: "1; mode=block"
+      Referrer-Policy: "strict-origin-when-cross-origin"
+    contentSecurityPolicy: "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'"

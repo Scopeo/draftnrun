@@ -8,6 +8,7 @@ resources:
   - namespace.yaml
   - middleware.yaml
   - ingress.yaml
+  - nango-ingress.yaml
 
 images:
   - name: ghcr.io/scopeo/draftnrun-api
