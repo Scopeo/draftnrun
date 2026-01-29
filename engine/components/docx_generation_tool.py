@@ -22,7 +22,7 @@ DEFAULT_DOCX_GENERATION_TOOL_DESCRIPTION = ToolDescription(
             "type": "string",
             "description": ("The markdown text to convert to DOCX."),
         },
-        "output_filename": {
+        "filename": {
             "type": "string",
             "description": (
                 "Optional. The desired filename for the generated DOCX file. If not provided, a default "
@@ -36,7 +36,7 @@ DEFAULT_DOCX_GENERATION_TOOL_DESCRIPTION = ToolDescription(
 
 class DOCXGenerationToolInputs(BaseModel):
     markdown_content: str = Field(description="The markdown text to convert to DOCX.")
-    output_filename: Optional[str] = Field(description="The desired filename for the generated DOCX file.")
+    filename: Optional[str] = Field(description="The desired filename for the generated DOCX file.")
 
 
 class DOCXGenerationToolOutputs(BaseModel):
@@ -82,7 +82,7 @@ class DOCXGenerationTool(Component):
         try:
             markdown_content, output_path, filename = prepare_markdown_output_path(
                 markdown_content=inputs.markdown_content,
-                filename=inputs.output_filename,
+                filename=inputs.filename,
                 output_dir_getter=get_output_dir,
                 default_extension=".docx",
             )
