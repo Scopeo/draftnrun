@@ -7,6 +7,7 @@ from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttribu
 from opentelemetry.trace import get_current_span
 from pydantic import BaseModel, ConfigDict, Field
 
+from ada_backend.database.models import UIComponent
 from engine.components.component import Component
 from engine.components.types import ComponentAttributes, ToolDescription
 from engine.trace.trace_manager import TraceManager
@@ -34,21 +35,21 @@ class TerminalCommandRunnerToolInputs(BaseModel):
     command: str = Field(
         default="",
         description="The command to run on the terminal",
+        json_schema_extra={"ui_component": UIComponent.TEXTAREA},
     )
     shared_sandbox: Optional[AsyncSandbox] = Field(
         default=None,
         description="The sandbox to use for code execution",
-        json_schema_extra={"disabled_as_input": True}
+        json_schema_extra={"disabled_as_input": True},
     )
-    model_config = ConfigDict(
-        extra="allow", arbitrary_types_allowed=True
-    )
+    model_config = ConfigDict(extra="allow", arbitrary_types_allowed=True)
 
 
 class TerminalCommandRunnerToolOutputs(BaseModel):
     output: str = Field(description="The result of the executed command on the terminal.")
-    artifacts: dict[str, Any] = Field(default_factory=dict, description="Artifacts produced by "
-                                                                        "the terminal code runner.")
+    artifacts: dict[str, Any] = Field(
+        default_factory=dict, description="Artifacts produced by the terminal code runner."
+    )
 
 
 class TerminalCommandRunner(Component):
@@ -131,6 +132,4 @@ class TerminalCommandRunner(Component):
         content = json.dumps(execution_result_dict, indent=2)
         artifacts = {"execution_result": execution_result_dict}
 
-        return TerminalCommandRunnerToolOutputs(output=content,
-                                                artifacts=artifacts
-                                                )
+        return TerminalCommandRunnerToolOutputs(output=content, artifacts=artifacts)
