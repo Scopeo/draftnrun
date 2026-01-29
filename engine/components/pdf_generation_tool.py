@@ -26,7 +26,7 @@ DEFAULT_PDF_GENERATION_TOOL_DESCRIPTION = ToolDescription(
                 'images with a style like this: style="width:80%; max-width:100%; height:auto;"'
             ),
         },
-        "output_filename": {
+        "filename": {
             "type": "string",
             "description": (
                 "Optional. The desired filename for the generated PDF file. If not provided, a default "
@@ -112,7 +112,7 @@ DEFAULT_CSS_FORMATTING = """
 
 class PDFGenerationToolInputs(BaseModel):
     markdown_content: str = Field(description="The markdown text to convert to PDF.")
-    output_filename: Optional[str] = Field(description="The desired filename for the generated PDF file.")
+    filename: Optional[str] = Field(description="The desired filename for the generated PDF file.")
 
 
 class PDFGenerationToolOutputs(BaseModel):
@@ -159,7 +159,7 @@ class PDFGenerationTool(Component):
         try:
             markdown_content, output_path, filename = prepare_markdown_output_path(
                 markdown_content=inputs.markdown_content,
-                filename=inputs.output_filename,
+                filename=inputs.filename,
                 output_dir_getter=get_output_dir,
                 default_extension=".pdf",
             )

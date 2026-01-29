@@ -48,7 +48,7 @@ def test_docx_generation_real_file(docx_tool, tmp_path):
 
     with patch("engine.temps_folder_utils.get_tracing_span", return_value=mock_params):
         # Call async function from sync test
-        inputs = DOCXGenerationToolInputs(markdown_content=MARKDOWN_CONTENT, output_filename=None)
+        inputs = DOCXGenerationToolInputs(markdown_content=MARKDOWN_CONTENT, filename=None)
         result = asyncio.run(docx_tool._run_without_io_trace(inputs=inputs, ctx={}))
 
         # Verify result structure
@@ -84,7 +84,7 @@ def test_docx_generation_with_actual_conversion(docx_tool, tmp_path):
 
     with patch("engine.temps_folder_utils.get_tracing_span", return_value=mock_params):
         # Call async function from sync test
-        inputs = DOCXGenerationToolInputs(markdown_content=MARKDOWN_CONTENT, output_filename=None)
+        inputs = DOCXGenerationToolInputs(markdown_content=MARKDOWN_CONTENT, filename=None)
         result = asyncio.run(docx_tool._run_without_io_trace(inputs=inputs, ctx={}))
 
         # Verify result structure
@@ -116,7 +116,7 @@ def test_docx_generation_with_actual_conversion(docx_tool, tmp_path):
 def test_docx_generation_empty_content(docx_tool):
     """Test error handling when no markdown content is provided."""
     # Call async function from sync test with empty content
-    inputs = DOCXGenerationToolInputs(markdown_content="", output_filename=None)
+    inputs = DOCXGenerationToolInputs(markdown_content="", filename=None)
     result = asyncio.run(docx_tool._run_without_io_trace(inputs=inputs, ctx={}))
 
     # Verify error handling
@@ -127,7 +127,7 @@ def test_docx_generation_empty_content(docx_tool):
 def test_docx_generation_no_content_kwarg(docx_tool):
     """Test error handling when markdown_content is empty (Pydantic validation)."""
     # With Pydantic, we test empty string handling (missing field would fail at validation)
-    inputs = DOCXGenerationToolInputs(markdown_content="", output_filename=None)
+    inputs = DOCXGenerationToolInputs(markdown_content="", filename=None)
     result = asyncio.run(docx_tool._run_without_io_trace(inputs=inputs, ctx={}))
 
     # Verify error handling
@@ -143,7 +143,7 @@ def test_docx_generation_temp_file_cleanup(docx_tool, tmp_path):
 
     with patch("engine.temps_folder_utils.get_tracing_span", return_value=mock_params):
         # Call async function from sync test
-        inputs = DOCXGenerationToolInputs(markdown_content=MARKDOWN_CONTENT, output_filename=None)
+        inputs = DOCXGenerationToolInputs(markdown_content=MARKDOWN_CONTENT, filename=None)
         result = asyncio.run(docx_tool._run_without_io_trace(inputs=inputs, ctx={}))
 
         # Verify successful result
