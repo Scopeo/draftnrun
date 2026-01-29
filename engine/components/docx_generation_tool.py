@@ -6,6 +6,7 @@ from md2docx_python.src.md2docx_python import markdown_to_word
 from openinference.semconv.trace import OpenInferenceSpanKindValues
 from pydantic import BaseModel, Field
 
+from ada_backend.database.models import UIComponent
 from engine.components.component import Component
 from engine.components.types import ComponentAttributes, ToolDescription
 from engine.components.utils import prepare_markdown_output_path
@@ -35,7 +36,12 @@ DEFAULT_DOCX_GENERATION_TOOL_DESCRIPTION = ToolDescription(
 
 
 class DOCXGenerationToolInputs(BaseModel):
-    markdown_content: str = Field(description="The markdown text to convert to DOCX.")
+    markdown_content: str = Field(
+        description="The markdown text to convert to DOCX.",
+        json_schema_extra={
+            "ui_component": UIComponent.TEXTAREA,
+        },
+    )
     filename: Optional[str] = Field(description="The desired filename for the generated DOCX file.")
 
 
