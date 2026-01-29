@@ -38,7 +38,7 @@ from ada_backend.services.qa.qa_error import (
     CSVExportError,
     CSVInvalidJSONError,
     CSVInvalidPositionError,
-    CSVMissingColumnError,
+    CSVMissingDatasetColumnError,
     CSVNonUniquePositionError,
     QAColumnNotFoundError,
     QADatasetCreateCustomColumnError,
@@ -737,6 +737,7 @@ async def import_qa_data_from_csv_endpoint(
 
         result = import_qa_data_from_csv_service(
             session=session,
+            project_id=project_id,
             dataset_id=dataset_id,
             csv_file=file.file,
         )
@@ -745,7 +746,7 @@ async def import_qa_data_from_csv_endpoint(
     except (
         CSVEmptyFileError,
         CSVInvalidJSONError,
-        CSVMissingColumnError,
+        CSVMissingDatasetColumnError,
         CSVNonUniquePositionError,
         CSVInvalidPositionError,
     ) as e:
