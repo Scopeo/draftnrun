@@ -341,7 +341,6 @@ def update_inputs_groundtruths_service(
         InputGroundtruthResponseList: The updated input-groundtruth entries
     """
     try:
-        # Prepare updates data
         updates_data = [
             (ig.id, ig.input, ig.groundtruth, ig.custom_columns) for ig in inputs_groundtruths_data.inputs_groundtruths
         ]
@@ -352,7 +351,6 @@ def update_inputs_groundtruths_service(
             dataset_id,
         )
 
-        # If any input texts were updated, clear corresponding version outputs across all versions
         input_ids_changed = [ig.id for ig in inputs_groundtruths_data.inputs_groundtruths if ig.input is not None]
         if input_ids_changed:
             cleared_count = clear_version_outputs_for_input_ids(session, input_ids_changed)
@@ -554,15 +552,12 @@ def export_qa_data_to_csv_service(
         input_entries = get_inputs_groundtruths_by_dataset(session, dataset_id, skip=0, limit=total_count)
         outputs_dict = dict(get_outputs_by_graph_runner(session, dataset_id, graph_runner_id))
 
-        # Get custom columns for the dataset (already sorted by index_position)
         custom_columns = get_qa_columns_by_dataset(session, dataset_id)
 
-        # Build header row: standard columns + custom column names
         header_row = ["position", "input", "expected_output", "actual_output"]
         custom_column_names = [col.column_name for col in custom_columns]
         header_row.extend(custom_column_names)
 
-        # Create mapping from column_name to column_id (as string) for value lookup
         column_name_to_id = {col.column_name: str(col.column_id) for col in custom_columns}
 
         output = io.StringIO()
