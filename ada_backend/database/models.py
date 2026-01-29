@@ -207,6 +207,7 @@ class EvaluationType(StrEnum):
     BOOLEAN = "boolean"
     SCORE = "score"
     FREE_TEXT = "free_text"
+    JSON_EQUALITY = "json_equality"
 
 
 class PortType(StrEnum):
