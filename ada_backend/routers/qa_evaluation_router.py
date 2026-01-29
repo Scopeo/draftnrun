@@ -8,7 +8,6 @@ from sqlalchemy.orm import Session
 from ada_backend.database.models import EvaluationType
 from ada_backend.database.setup_db import get_db
 from ada_backend.repositories.llm_judges_repository import get_llm_judge_by_id
-from ada_backend.repositories.quality_assurance_repository import get_version_output
 from ada_backend.routers.auth_router import (
     UserRights,
     user_has_access_to_project_dependency,
@@ -80,13 +79,13 @@ async def run_judge_evaluation_endpoint(
         if not judge:
             raise LLMJudgeNotFound(judge_id, project_id)
 
+        # TODO: Deterministic evaluations should have their own dedicated endpoint
         if judge.evaluation_type == EvaluationType.JSON_EQUALITY:
-            version_output_data = get_version_output(session=session, version_output_id=version_output_id)
             return run_deterministic_evaluation_service(
                 session=session,
                 judge=judge,
                 judge_id=judge_id,
-                version_output_data=version_output_data,
+                version_output_id=version_output_id,
             )
         else:
             return await run_judge_evaluation_service(

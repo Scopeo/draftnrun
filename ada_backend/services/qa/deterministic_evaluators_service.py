@@ -1,12 +1,13 @@
 import json
 import logging
-from typing import Optional, Tuple
+from typing import Optional
 from uuid import UUID
 
 from sqlalchemy.orm import Session
 
 from ada_backend.database.models import EvaluationType, LLMJudge
 from ada_backend.repositories.qa_evaluation_repository import upsert_judge_evaluation
+from ada_backend.repositories.quality_assurance_repository import get_version_output
 from ada_backend.schemas.qa_evaluation_schema import (
     BooleanEvaluationResult,
     ErrorEvaluationResult,
@@ -61,8 +62,9 @@ def run_deterministic_evaluation_service(
     session: Session,
     judge: LLMJudge,
     judge_id: UUID,
-    version_output_data: Tuple[UUID, dict, Optional[str], str],
+    version_output_id: UUID,
 ) -> JudgeEvaluationResponse:
+    version_output_data = get_version_output(session=session, version_output_id=version_output_id)
     version_output_id, input_data, groundtruth, output = version_output_data
     try:
         if not output:
