@@ -1,0 +1,87 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: nango-server
+  labels:
+    app: nango-server
+spec:
+  podSelector:
+    matchLabels:
+      app: nango-server
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Allow traffic from Traefik/Ingress Controller for OAuth callbacks
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: kube-system  # Traefik typically runs here
+      ports:
+        - protocol: TCP
+          port: 3003
+    # Allow traffic from ada-api for internal API calls
+    - from:
+        - podSelector:
+            matchLabels:
+              app: ada-api
+      ports:
+        - protocol: TCP
+          port: 3003
+  egress:
+    # Allow DNS resolution
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+    # Allow connection to nango-db
+    - to:
+        - podSelector:
+            matchLabels:
+              app: nango-db
+      ports:
+        - protocol: TCP
+          port: 5432
+    # Allow HTTPS to OAuth providers (Slack, Google, HubSpot, etc.)
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - protocol: TCP
+          port: 443
+        - protocol: TCP
+          port: 80
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: nango-db
+  labels:
+    app: nango-db
+spec:
+  podSelector:
+    matchLabels:
+      app: nango-db
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Only allow connections from nango-server
+    - from:
+        - podSelector:
+            matchLabels:
+              app: nango-server
+      ports:
+        - protocol: TCP
+          port: 5432
+  egress:
+    # Allow DNS resolution (for any internal queries)
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
