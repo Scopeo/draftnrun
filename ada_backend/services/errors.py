@@ -218,3 +218,55 @@ class MissingIntegrationError(Exception):
             f"Please add integration {integration_name}:{integration_service} "
             f"for component instance {component_instance_name}"
         )
+
+
+class OAuthConnectionNotFoundError(Exception):
+    """Raised when an OAuth connection is not found."""
+
+    def __init__(
+        self,
+        connection_id: UUID | None = None,
+        project_id: UUID | None = None,
+        provider: str | None = None,
+    ):
+        self.connection_id = connection_id
+        self.project_id = project_id
+        self.provider = provider
+        if connection_id:
+            message = f"OAuth connection {connection_id} not found"
+        elif project_id and provider:
+            message = f"No OAuth connection found for project {project_id} and provider {provider}"
+        else:
+            message = "OAuth connection not found"
+        super().__init__(message)
+
+
+class OAuthConnectionUnauthorizedError(Exception):
+    """Raised when attempting to access an OAuth connection that doesn't belong to the project."""
+
+    def __init__(self, connection_id: UUID, project_id: UUID):
+        self.connection_id = connection_id
+        self.project_id = project_id
+        super().__init__(f"OAuth connection {connection_id} does not belong to project {project_id}")
+
+
+class NangoConnectionNotFoundError(Exception):
+    """Raised when a connection is not found in Nango (OAuth flow incomplete)."""
+
+    def __init__(self, project_id: UUID, provider: str):
+        self.project_id = project_id
+        self.provider = provider
+        super().__init__(
+            f"Connection not found in Nango for project {project_id}, provider {provider}. "
+            "OAuth flow may not be complete."
+        )
+
+
+class NangoTokenMissingError(Exception):
+    """Raised when access token is not found in Nango credentials."""
+
+    def __init__(self, connection_id: UUID):
+        self.connection_id = connection_id
+        super().__init__(
+            f"Access token not found in Nango credentials for connection {connection_id}",
+        )
