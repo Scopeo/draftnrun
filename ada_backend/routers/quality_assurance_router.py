@@ -246,12 +246,12 @@ def get_columns_by_dataset_endpoint(
 def add_column_to_dataset_endpoint(
     project_id: UUID,
     dataset_id: UUID,
-    column_name: str = Body(..., embed=True),
     user: Annotated[
         SupabaseUser,
         Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.DEVELOPER.value)),
     ],
     session: Session = Depends(get_db),
+    column_name: str = Body(..., embed=True),
 ) -> QAColumnResponse:
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
@@ -276,12 +276,12 @@ def rename_column_endpoint(
     project_id: UUID,
     dataset_id: UUID,
     column_id: UUID,
-    column_name: str = Body(..., embed=True),
     user: Annotated[
         SupabaseUser,
         Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.DEVELOPER.value)),
     ],
     session: Session = Depends(get_db),
+    column_name: str = Body(..., embed=True),
 ) -> QAColumnResponse:
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
