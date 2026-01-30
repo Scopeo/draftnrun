@@ -70,10 +70,7 @@ def run_deterministic_evaluation_service(
         if not output:
             raise VersionOutputEmptyError(version_output_id)
 
-        if judge.evaluation_type == EvaluationType.JSON_EQUALITY:
-            evaluation_result = _compare_json_equality(output, groundtruth)
-        else:
-            raise ValueError(f"Unsupported deterministic evaluation type: {judge.evaluation_type}")
+        evaluation_result = _compare_json_equality(output, groundtruth)
 
     except Exception as e:
         error_msg = str(e)
