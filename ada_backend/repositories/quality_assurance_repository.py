@@ -2,10 +2,11 @@ import logging
 from typing import Dict, List, Optional, Tuple
 from uuid import UUID
 
-from sqlalchemy import func, select
+from sqlalchemy import case, func, select, update
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Session
 
-from ada_backend.database.models import DatasetProject, InputGroundtruth, VersionOutput
+from ada_backend.database.models import DatasetProject, InputGroundtruth, QAMetadata, VersionOutput
 from ada_backend.schemas.input_groundtruth_schema import InputGroundtruthCreate
 
 LOGGER = logging.getLogger(__name__)
@@ -91,6 +92,7 @@ def create_inputs_groundtruths(
             input=data.input,
             groundtruth=data.groundtruth,
             position=position,
+            custom_columns=data.custom_columns,
         )
         for data, position in zip(inputs_groundtruths_data, positions, strict=False)
     ]
@@ -107,13 +109,13 @@ def create_inputs_groundtruths(
 
 def update_inputs_groundtruths(
     session: Session,
-    updates_data: List[Tuple[UUID, Optional[str], Optional[str]]],
+    updates_data: List[Tuple[UUID, Optional[str], Optional[str], Optional[Dict[str, str]]]],
     dataset_id: UUID,
 ) -> List[InputGroundtruth]:
     """Update multiple input-groundtruth entries."""
     updated_inputs_groundtruths = []
 
-    for input_id, input_text, groundtruth in updates_data:
+    for input_id, input_text, groundtruth, custom_columns in updates_data:
         input_groundtruth = (
             session.query(InputGroundtruth)
             .filter(InputGroundtruth.id == input_id, InputGroundtruth.dataset_id == dataset_id)
@@ -125,6 +127,14 @@ def update_inputs_groundtruths(
                 input_groundtruth.input = input_text
             if groundtruth is not None:
                 input_groundtruth.groundtruth = groundtruth
+            if custom_columns is not None:
+                current_custom_columns = (input_groundtruth.custom_columns or {}).copy()
+                for key, value in custom_columns.items():
+                    if value is None:
+                        current_custom_columns.pop(key, None)
+                    else:
+                        current_custom_columns[key] = value
+                input_groundtruth.custom_columns = current_custom_columns if current_custom_columns else None
 
             updated_inputs_groundtruths.append(input_groundtruth)
 
@@ -363,3 +373,125 @@ def delete_datasets(
 
     LOGGER.info(f"Deleted {deleted_count} datasets for project {project_id}")
     return deleted_count
+
+
+def get_dataset_existence(session: Session, project_id: UUID, dataset_id: UUID) -> bool:
+    exists = session.query(
+        session.query(DatasetProject)
+        .filter(DatasetProject.id == dataset_id, DatasetProject.project_id == project_id)
+        .exists()
+    ).scalar()
+    return exists
+
+
+def get_qa_columns_by_dataset(session: Session, dataset_id: UUID) -> List[QAMetadata]:
+    return (
+        session.query(QAMetadata)
+        .filter(QAMetadata.dataset_id == dataset_id)
+        .order_by(QAMetadata.index_position.asc())
+        .all()
+    )
+
+
+def get_max_position_for_metadata_column(
+    session: Session,
+    dataset_id: UUID,
+) -> Optional[int]:
+    max_position = (
+        session.query(func.max(QAMetadata.index_position)).filter(QAMetadata.dataset_id == dataset_id).scalar()
+    )
+    return max_position
+
+
+def create_qa_column(
+    session: Session,
+    dataset_id: UUID,
+    column_id: UUID,
+    column_name: str,
+    index_position: int,
+) -> QAMetadata:
+    """Create a new QA metadata column."""
+    qa_metadata = QAMetadata(
+        dataset_id=dataset_id,
+        column_id=column_id,
+        column_name=column_name,
+        index_position=index_position,
+    )
+
+    session.add(qa_metadata)
+    session.commit()
+    session.refresh(qa_metadata)
+
+    LOGGER.info(
+        f"Created QA column '{column_name}' (column_id: {column_id}) "
+        f"at position {index_position} for dataset {dataset_id}"
+    )
+    return qa_metadata
+
+
+def get_column_existence(session: Session, dataset_id: UUID, column_id: UUID) -> bool:
+    exists = session.query(
+        session.query(QAMetadata)
+        .filter(QAMetadata.dataset_id == dataset_id, QAMetadata.column_id == column_id)
+        .exists()
+    ).scalar()
+    return exists
+
+
+def rename_qa_column(
+    session: Session,
+    dataset_id: UUID,
+    column_id: UUID,
+    column_name: str,
+) -> QAMetadata:
+    qa_metadata = (
+        session.query(QAMetadata)
+        .filter(QAMetadata.dataset_id == dataset_id, QAMetadata.column_id == column_id)
+        .first()
+    )
+
+    qa_metadata.column_name = column_name
+    session.commit()
+    session.refresh(qa_metadata)
+
+    LOGGER.info(f"Renamed QA column {column_id} to '{column_name}' for dataset {dataset_id}")
+    return qa_metadata
+
+
+def remove_column_content_from_custom_columns(session: Session, dataset_id: UUID, column_id: UUID) -> None:
+    column_id_str = str(column_id)
+
+    remove_key_from_jsonb = InputGroundtruth.custom_columns.op("-")(column_id_str)
+    jsonb_empty_dict = func.cast("{}", JSONB)
+
+    stmt = (
+        update(InputGroundtruth)
+        .where(
+            InputGroundtruth.dataset_id == dataset_id,
+            InputGroundtruth.custom_columns.isnot(None),
+            InputGroundtruth.custom_columns.has_key(column_id_str),
+        )
+        .values(
+            custom_columns=case(
+                (func.cast(remove_key_from_jsonb, JSONB) == jsonb_empty_dict, None),
+                else_=remove_key_from_jsonb,
+            )
+        )
+    )
+
+    result = session.execute(stmt)
+    updated_count = result.rowcount
+
+    session.commit()
+    LOGGER.info(f"Removed column_id {column_id} from {updated_count} rows in dataset {dataset_id}")
+
+
+def delete_qa_column(session: Session, dataset_id: UUID, column_id: UUID) -> None:
+    (
+        session.query(QAMetadata)
+        .filter(QAMetadata.dataset_id == dataset_id, QAMetadata.column_id == column_id)
+        .delete(synchronize_session=False)
+    )
+
+    session.commit()
+    LOGGER.info(f"Deleted QA column {column_id} from dataset {dataset_id}")

@@ -2,7 +2,7 @@ from typing import Optional
 from uuid import UUID
 
 
-class CSVMissingColumnError(Exception):
+class CSVMissingDatasetColumnError(Exception):
     """Raised when required column is missing from CSV header."""
 
     def __init__(self, column: str, found_columns: list[str], required_columns: list[str]):
@@ -82,3 +82,19 @@ class QAPartialPositionError(Exception):
 
     def __init__(self):
         super().__init__("Partial positioning is not allowed. Either provide positions for all entries or none.")
+
+
+class QADatasetNotInProjectError(Exception):
+    """Raised when a dataset is not linked to the given project"""
+
+    def __init__(self, project_id: UUID, dataset_id: UUID):
+        self.project_id = project_id
+        self.dataset_id = dataset_id
+        super().__init__(f"Dataset {dataset_id} not found in project {project_id}")
+
+
+class QAColumnNotFoundError(Exception):
+    def __init__(self, dataset_id: UUID, column_id: UUID):
+        self.dataset_id = dataset_id
+        self.column_id = column_id
+        super().__init__(f"Column {column_id} not found in dataset {dataset_id}")
