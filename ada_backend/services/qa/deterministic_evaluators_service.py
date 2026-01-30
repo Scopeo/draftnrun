@@ -1,11 +1,10 @@
 import json
 import logging
-from typing import Optional, Tuple
+from typing import Tuple
 from uuid import UUID
 
 from sqlalchemy.orm import Session
 
-from ada_backend.database.models import LLMJudge
 from ada_backend.repositories.qa_evaluation_repository import upsert_judge_evaluation
 from ada_backend.repositories.quality_assurance_repository import get_version_output
 from ada_backend.schemas.qa_evaluation_schema import (
@@ -15,8 +14,7 @@ from ada_backend.schemas.qa_evaluation_schema import (
 )
 from ada_backend.services.qa.qa_error import (
     GroundtruthMissingError,
-    InvalidGroundtruthFormatError,
-    InvalidOutputFormatError,
+    InvalidFormatError,
     VersionOutputEmptyError,
 )
 
@@ -27,12 +25,12 @@ def _parse_json_pair(output: str, groundtruth: str) -> Tuple[dict, dict]:
     try:
         output_json = json.loads(output)
     except json.JSONDecodeError:
-        raise InvalidOutputFormatError(expected_format="JSON")
+        raise InvalidFormatError(field_name="output", expected_format="JSON")
 
     try:
         groundtruth_json = json.loads(groundtruth)
     except json.JSONDecodeError:
-        raise InvalidGroundtruthFormatError(expected_format="JSON")
+        raise InvalidFormatError(field_name="groundtruth", expected_format="JSON")
 
     return output_json, groundtruth_json
 
@@ -56,7 +54,6 @@ def _compare_json_equality(output: str, groundtruth: str) -> BooleanEvaluationRe
 
 def run_deterministic_evaluation_service(
     session: Session,
-    judge: LLMJudge,
     judge_id: UUID,
     version_output_id: UUID,
 ) -> JudgeEvaluationResponse:

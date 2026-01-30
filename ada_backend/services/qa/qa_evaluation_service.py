@@ -153,7 +153,6 @@ async def run_judge_evaluation_service(
         if judge.evaluation_type == EvaluationType.JSON_EQUALITY:
             return run_deterministic_evaluation_service(
                 session=session,
-                judge=judge,
                 judge_id=judge_id,
                 version_output_id=version_output_id,
             )

@@ -91,15 +91,8 @@ class GroundtruthMissingError(Exception):
         super().__init__("No groundtruth provided for comparison")
 
 
-class InvalidOutputFormatError(Exception):
-    """Raised when output format is invalid for evaluation."""
+class InvalidFormatError(Exception):
+    """Raised when a field format is invalid for evaluation."""
 
-    def __init__(self, expected_format: str = "JSON"):
-        super().__init__(f"Invalid {expected_format} format in output")
-
-
-class InvalidGroundtruthFormatError(Exception):
-    """Raised when groundtruth format is invalid for evaluation."""
-
-    def __init__(self, expected_format: str = "JSON"):
-        super().__init__(f"Invalid {expected_format} format in groundtruth")
+    def __init__(self, field_name: str, expected_format: str = "JSON"):
+        super().__init__(f"Invalid {expected_format} format in {field_name}")
