@@ -1033,7 +1033,7 @@ def test_get_qa_columns_by_dataset_service():
 
         # Initially no columns
         columns_response = get_qa_columns_by_dataset_service(session, project_id, dataset_id)
-        assert len(columns_response.columns) == 0
+        assert len(columns_response) == 0
 
         # Create two columns
         create_qa_column_service(session, project_id, dataset_id, "Priority")
@@ -1041,11 +1041,11 @@ def test_get_qa_columns_by_dataset_service():
 
         # Get columns again
         columns_response = get_qa_columns_by_dataset_service(session, project_id, dataset_id)
-        assert len(columns_response.columns) == 2
+        assert len(columns_response) == 2
 
         # Verify columns are sorted by index_position
-        assert columns_response.columns[0].index_position < columns_response.columns[1].index_position
-        column_names = {col.column_name for col in columns_response.columns}
+        assert columns_response[0].index_position < columns_response[1].index_position
+        column_names = {col.column_name for col in columns_response}
         assert column_names == {"Priority", "Category"}
 
         # Test error case: dataset not in project
