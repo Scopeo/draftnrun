@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from typing import Annotated, Dict, List, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Body, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
@@ -26,12 +26,7 @@ from ada_backend.schemas.input_groundtruth_schema import (
     QARunRequest,
     QARunResponse,
 )
-from ada_backend.schemas.qa_metadata_schema import (
-    QAColumnCreate,
-    QAColumnListResponse,
-    QAColumnRename,
-    QAColumnResponse,
-)
+from ada_backend.schemas.qa_metadata_schema import QAColumnResponse
 from ada_backend.services.errors import GraphNotBoundToProjectError
 from ada_backend.services.qa.qa_error import (
     CSVEmptyFileError,
@@ -212,7 +207,7 @@ def delete_dataset_endpoint(
 # QA Metadata (Custom Columns) endpoints
 @router.get(
     "/projects/{project_id}/qa/datasets/{dataset_id}/columns",
-    response_model=QAColumnListResponse,
+    response_model=List[QAColumnResponse],
     summary="Get Custom Columns for Dataset",
     tags=["Quality Assurance"],
 )
@@ -224,7 +219,7 @@ def get_columns_by_dataset_endpoint(
         Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.MEMBER.value)),
     ],
     session: Session = Depends(get_db),
-) -> QAColumnListResponse:
+) -> List[QAColumnResponse]:
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
 
@@ -251,7 +246,7 @@ def get_columns_by_dataset_endpoint(
 def add_column_to_dataset_endpoint(
     project_id: UUID,
     dataset_id: UUID,
-    column_data: QAColumnCreate,
+    column_name: str = Body(..., embed=True),
     user: Annotated[
         SupabaseUser,
         Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.DEVELOPER.value)),
@@ -262,7 +257,7 @@ def add_column_to_dataset_endpoint(
         raise HTTPException(status_code=400, detail="User ID not found")
 
     try:
-        return create_qa_column_service(session, project_id, dataset_id, column_data.column_name)
+        return create_qa_column_service(session, project_id, dataset_id, column_name)
     except QADatasetNotInProjectError as e:
         LOGGER.error(f"Failed to add column to dataset {dataset_id} for project {project_id}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=400, detail=str(e)) from e
@@ -281,7 +276,7 @@ def rename_column_endpoint(
     project_id: UUID,
     dataset_id: UUID,
     column_id: UUID,
-    column_data: QAColumnRename,
+    column_name: str = Body(..., embed=True),
     user: Annotated[
         SupabaseUser,
         Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.DEVELOPER.value)),
@@ -292,7 +287,7 @@ def rename_column_endpoint(
         raise HTTPException(status_code=400, detail="User ID not found")
 
     try:
-        return rename_qa_column_service(session, project_id, dataset_id, column_id, column_data.column_name)
+        return rename_qa_column_service(session, project_id, dataset_id, column_id, column_name)
     except QADatasetNotInProjectError as e:
         LOGGER.error(
             f"Failed to rename column {column_id} in dataset {dataset_id} for project {project_id}: {str(e)}",
