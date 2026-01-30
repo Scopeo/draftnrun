@@ -13,36 +13,35 @@ from ada_backend.schemas.qa_evaluation_schema import (
     ErrorEvaluationResult,
     JudgeEvaluationResponse,
 )
-from ada_backend.services.qa.qa_error import VersionOutputEmptyError
+from ada_backend.services.qa.qa_error import (
+    GroundtruthMissingError,
+    InvalidGroundtruthFormatError,
+    InvalidOutputFormatError,
+    VersionOutputEmptyError,
+)
 
 LOGGER = logging.getLogger(__name__)
 
 
-def _compare_json_equality(output: str, groundtruth: Optional[str]) -> BooleanEvaluationResult:
+def _parse_json_pair(output: str, groundtruth: Optional[str]):
     if not groundtruth:
-        return BooleanEvaluationResult(
-            type="boolean",
-            result=False,
-            justification="No groundtruth provided",
-        )
+        raise GroundtruthMissingError()
 
     try:
         output_json = json.loads(output)
-    except json.JSONDecodeError:
-        return BooleanEvaluationResult(
-            type="boolean",
-            result=False,
-            justification="Invalid JSON format in output",
-        )
+    except json.JSONDecodeError as e:
+        raise InvalidOutputFormatError(expected_format="JSON")
 
     try:
         groundtruth_json = json.loads(groundtruth)
-    except json.JSONDecodeError:
-        return BooleanEvaluationResult(
-            type="boolean",
-            result=False,
-            justification="Invalid JSON format in groundtruth",
-        )
+    except json.JSONDecodeError as e:
+        raise InvalidGroundtruthFormatError(expected_format="JSON")
+
+    return output_json, groundtruth_json
+
+
+def _compare_json_equality(output: str, groundtruth: Optional[str]):
+    output_json, groundtruth_json = _parse_json_pair(output, groundtruth)
 
     if output_json == groundtruth_json:
         return BooleanEvaluationResult(
