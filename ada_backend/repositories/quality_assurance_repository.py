@@ -2,7 +2,8 @@ import logging
 from typing import Dict, List, Optional, Tuple
 from uuid import UUID
 
-from sqlalchemy import func, select, text
+from sqlalchemy import case, func, select, update
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Session
 
 from ada_backend.database.models import DatasetProject, InputGroundtruth, QAMetadata, VersionOutput
@@ -455,21 +456,28 @@ def rename_qa_column(
 
 
 def remove_column_content_from_custom_columns(session: Session, dataset_id: UUID, column_id: UUID) -> None:
-    updated_count = session.execute(
-        text(
-            """
-            UPDATE quality_assurance.input_groundtruth
-            SET custom_columns = CASE
-                WHEN (custom_columns - :column_id_str) = '{}'::jsonb THEN NULL
-                ELSE custom_columns - :column_id_str
-            END
-            WHERE dataset_id = :dataset_id
-            AND custom_columns IS NOT NULL
-            AND custom_columns ? :column_id_str
-            """
-        ),
-        {"dataset_id": str(dataset_id), "column_id_str": str(column_id)},
-    ).rowcount
+    column_id_str = str(column_id)
+
+    remove_key_from_jsonb = InputGroundtruth.custom_columns.op("-")(column_id_str)
+    jsonb_empty_dict = func.cast("{}", JSONB)
+
+    stmt = (
+        update(InputGroundtruth)
+        .where(
+            InputGroundtruth.dataset_id == dataset_id,
+            InputGroundtruth.custom_columns.isnot(None),
+            InputGroundtruth.custom_columns.has_key(column_id_str),
+        )
+        .values(
+            custom_columns=case(
+                (func.cast(remove_key_from_jsonb, JSONB) == jsonb_empty_dict, None),
+                else_=remove_key_from_jsonb,
+            )
+        )
+    )
+
+    result = session.execute(stmt)
+    updated_count = result.rowcount
 
     session.commit()
     LOGGER.info(f"Removed column_id {column_id} from {updated_count} rows in dataset {dataset_id}")
