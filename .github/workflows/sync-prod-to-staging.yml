@@ -16,39 +16,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Save replica counts and scale down pods
-        id: scale_down
-        uses: appleboy/ssh-action@master
-        with:
-          host: ${{ secrets.EC2_HOST_K8S_STAGING }}
-          username: ec2-user
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          port: 22
-          script: |
-            set -e
-            NS="ada-staging"
-            STATE_FILE="/tmp/ada-sync-replicas-${{ github.run_id }}.txt"
-            
-            # Save current replica counts
-            echo "💾 Saving current replica counts..."
-            kubectl get deployment -n ${NS} -o json | \
-              jq -r '.items[] | "\(.metadata.name)=\(.spec.replicas)"' > "$STATE_FILE"
-            
-            cat "$STATE_FILE"
-            
-            # Scale down with error handling
-            echo "⬇️ Scaling down all deployments..."
-            if ! kubectl scale deployment --all -n ${NS} --replicas=0; then
-              echo "❌ Failed to scale down deployments"
-              rm -f "$STATE_FILE"
-              exit 1
-            fi
-            
-            kubectl wait --for=delete pod -l app -n ${NS} --timeout=300s || {
-              echo "⚠️ Warning: Some pods did not terminate within timeout"
-            }
-
-      - name: Sync data from prod to staging (with TTL cache)
+      - name: Run sync as Kubernetes Job
         id: sync
         continue-on-error: true
         uses: appleboy/ssh-action@master
@@ -59,55 +27,111 @@ jobs:
           port: 22
           command_timeout: 15m
           script: |
+            set -e
             NS="ada-staging"
-            STATE_FILE="/tmp/ada-sync-replicas-${{ github.run_id }}.txt"
-            
-            # Clone/update repo to get latest sync scripts
-            REPO_DIR="/tmp/draftnrun-sync"
-            if [ -d "$REPO_DIR" ]; then
-              cd "$REPO_DIR"
-              git fetch origin
-              git checkout ${{ github.sha }}
-            else
-              git clone https://github.com/${{ github.repository }}.git "$REPO_DIR"
-              cd "$REPO_DIR"
-              git checkout ${{ github.sha }}
-            fi
+            STATE_FILE="/tmp/ada-sync-status-${{ github.run_id }}.txt"
+            JOB_NAME="data-sync-${{ github.run_id }}"
 
+            # Get the current image from the deployment
+            IMAGE=$(kubectl get deployment/ada-api -n ${NS} -o jsonpath='{.spec.template.spec.containers[0].image}')
+
+            echo "🔍 Running sync as Kubernetes Job using image: ${IMAGE}"
+            
+            # Build force sync flag
             FORCE_SYNC_FLAG=""
             if [ "${{ inputs.force_sync }}" = "true" ]; then
               FORCE_SYNC_FLAG="--force-sync"
             fi
 
-            echo "📦 Running sync script from temporary directory..."
-            
-            # Run sync and capture output
-            if ./scripts/copy_data/sync_data.sh \
-              --source-db-url "${{ secrets.PROD_DB_URL }}" \
-              --source-ingestion-db-url "${{ secrets.PROD_INGESTION_DB_URL }}" \
-              --target-db-url "${{ secrets.STAGING_DB_URL }}" \
-              --target-ingestion-db-url "${{ secrets.STAGING_INGESTION_DB_URL }}" \
-              --source-qdrant-url "${{ secrets.PROD_QDRANT_CLUSTER_URL }}" \
-              --source-qdrant-key "${{ secrets.PROD_QDRANT_API_KEY }}" \
-              --target-qdrant-url "${{ secrets.STAGING_QDRANT_CLUSTER_URL }}" \
-              --target-qdrant-key "${{ secrets.STAGING_QDRANT_API_KEY }}" \
-              $FORCE_SYNC_FLAG 2>&1 | tee /tmp/sync-output.log; then
+            # Create Job to run sync (code already exists in the image)
+            # Note: Using bash -c to run the script directly from the image
+            kubectl create job ${JOB_NAME} -n ${NS} \
+              --image=${IMAGE} \
+              -- bash -c "\
+                cd /app && \
+                ./scripts/copy_data/sync_data.sh \
+                  --source-db-url '${{ secrets.PROD_DB_URL }}' \
+                  --source-ingestion-db-url '${{ secrets.PROD_INGESTION_DB_URL }}' \
+                  --target-db-url '${{ secrets.STAGING_DB_URL }}' \
+                  --target-ingestion-db-url '${{ secrets.STAGING_INGESTION_DB_URL }}' \
+                  --source-qdrant-url '${{ secrets.PROD_QDRANT_CLUSTER_URL }}' \
+                  --source-qdrant-key '${{ secrets.PROD_QDRANT_API_KEY }}' \
+                  --target-qdrant-url '${{ secrets.STAGING_QDRANT_CLUSTER_URL }}' \
+                  --target-qdrant-key '${{ secrets.STAGING_QDRANT_API_KEY }}' \
+                  ${FORCE_SYNC_FLAG} \
+              "
+
+            # Wait for job to complete (or fail)
+            echo "⏳ Waiting for sync job to complete..."
+            if kubectl wait --for=condition=complete job/${JOB_NAME} -n ${NS} --timeout=15m 2>/dev/null; then
+              # Job completed successfully - check logs to see if it was skipped
+              echo "📋 Checking job logs..."
+              LOGS=$(kubectl logs job/${JOB_NAME} -n ${NS})
+              echo "$LOGS"
               
-              # Check if sync was actually performed or skipped
-              if grep -qi "skip\|cache.*valid\|already.*synced" /tmp/sync-output.log; then
-                echo "⏭️ Sync skipped due to valid TTL cache"
-                echo "SKIPPED" > "${STATE_FILE}.sync_status"
+              if echo "$LOGS" | grep -qi "skip\|cache.*valid\|already.*synced"; then
+                echo "⏭️ Sync not needed - TTL cache is valid"
+                echo "SKIPPED" > "$STATE_FILE"
+                kubectl delete job ${JOB_NAME} -n ${NS}
                 exit 0
               else
                 echo "✅ Sync completed successfully"
-                echo "SYNCED" > "${STATE_FILE}.sync_status"
+                echo "SYNCED" > "$STATE_FILE"
+                kubectl delete job ${JOB_NAME} -n ${NS}
                 exit 0
               fi
             else
-              echo "❌ Sync failed"
-              echo "FAILED" > "${STATE_FILE}.sync_status"
+              # Job failed
+              echo "❌ Sync job failed"
+              echo "📋 Job logs:"
+              kubectl logs job/${JOB_NAME} -n ${NS} || true
+              echo "FAILED" > "$STATE_FILE"
+              kubectl delete job ${JOB_NAME} -n ${NS} || true
               exit 1
             fi
+
+      - name: Save replica counts and scale down pods
+        if: success()
+        id: scale_down
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.EC2_HOST_K8S_STAGING }}
+          username: ec2-user
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          script: |
+            set -e
+            NS="ada-staging"
+            STATE_FILE="/tmp/ada-sync-status-${{ github.run_id }}.txt"
+            REPLICA_FILE="/tmp/ada-sync-replicas-${{ github.run_id }}.txt"
+            
+            # Check if sync was actually performed
+            if [ -f "$STATE_FILE" ]; then
+              SYNC_STATUS=$(cat "$STATE_FILE")
+              if [ "$SYNC_STATUS" = "SKIPPED" ]; then
+                echo "⏭️ Skipping scale down - sync was not needed"
+                exit 0
+              fi
+            fi
+            
+            # Save current replica counts
+            echo "💾 Saving current replica counts..."
+            kubectl get deployment -n ${NS} -o json | \
+              jq -r '.items[] | "\(.metadata.name)=\(.spec.replicas)"' > "$REPLICA_FILE"
+            
+            cat "$REPLICA_FILE"
+            
+            # Scale down with error handling
+            echo "⬇️ Scaling down all deployments..."
+            if ! kubectl scale deployment --all -n ${NS} --replicas=0; then
+              echo "❌ Failed to scale down deployments"
+              rm -f "$REPLICA_FILE"
+              exit 1
+            fi
+            
+            kubectl wait --for=delete pod -l app -n ${NS} --timeout=300s || {
+              echo "⚠️ Warning: Some pods did not terminate within timeout"
+            }
 
       - name: Run migrations and seed as Jobs
         if: success()
@@ -122,11 +146,11 @@ jobs:
           script: |
             set -e
             NS="ada-staging"
-            STATE_FILE="/tmp/ada-sync-replicas-${{ github.run_id }}.txt"
+            STATE_FILE="/tmp/ada-sync-status-${{ github.run_id }}.txt"
             
             # Check if sync was actually performed
-            if [ -f "${STATE_FILE}.sync_status" ]; then
-              SYNC_STATUS=$(cat "${STATE_FILE}.sync_status")
+            if [ -f "$STATE_FILE" ]; then
+              SYNC_STATUS=$(cat "$STATE_FILE")
               if [ "$SYNC_STATUS" = "SKIPPED" ]; then
                 echo "⏭️ Skipping migrations - sync was not performed"
                 exit 0
@@ -167,9 +191,21 @@ jobs:
           script: |
             set -e
             NS="ada-staging"
-            STATE_FILE="/tmp/ada-sync-replicas-${{ github.run_id }}.txt"
+            STATE_FILE="/tmp/ada-sync-status-${{ github.run_id }}.txt"
+            REPLICA_FILE="/tmp/ada-sync-replicas-${{ github.run_id }}.txt"
             
-            if [ ! -f "$STATE_FILE" ]; then
+            # Check if sync was skipped (no scale down happened)
+            if [ -f "$STATE_FILE" ]; then
+              SYNC_STATUS=$(cat "$STATE_FILE")
+              if [ "$SYNC_STATUS" = "SKIPPED" ]; then
+                echo "⏭️ No scale up needed - sync was skipped, pods never scaled down"
+                rm -f "$STATE_FILE" /tmp/sync-output.log
+                exit 0
+              fi
+            fi
+            
+            # Scale up was needed (sync happened)
+            if [ ! -f "$REPLICA_FILE" ]; then
               echo "⚠️ Warning: Replica state file not found, using defaults"
               kubectl scale deployment/ada-api -n ${NS} --replicas=1 || true
               kubectl scale deployment/ada-ingestion-worker -n ${NS} --replicas=1 || true
@@ -180,10 +216,10 @@ jobs:
               while IFS='=' read -r deployment replicas; do
                 echo "Scaling ${deployment} to ${replicas} replicas"
                 kubectl scale deployment/${deployment} -n ${NS} --replicas=${replicas} || true
-              done < "$STATE_FILE"
+              done < "$REPLICA_FILE"
               
               # Cleanup state files
-              rm -f "$STATE_FILE" "${STATE_FILE}.sync_status" /tmp/sync-output.log
+              rm -f "$REPLICA_FILE" "$STATE_FILE" /tmp/sync-output.log
             fi
             
             echo "✅ Pods scaled back up!"
