@@ -35,10 +35,33 @@ def _parse_json_pair(output: str, groundtruth: str) -> Tuple[dict, dict]:
     return output_json, groundtruth_json
 
 
+def _get_diff_details(output_json: dict, groundtruth_json: dict) -> list[str]:
+    output_keys = set(output_json.keys())
+    groundtruth_keys = set(groundtruth_json.keys())
+
+    missing_keys = groundtruth_keys - output_keys
+    extra_keys = output_keys - groundtruth_keys
+    common_keys = output_keys & groundtruth_keys
+
+    diff_keys = [key for key in common_keys if output_json[key] != groundtruth_json[key]]
+
+    details = []
+    if missing_keys:
+        details.append(f"Missing keys: {sorted(missing_keys)}")
+    if extra_keys:
+        details.append(f"Extra keys: {sorted(extra_keys)}")
+    if diff_keys:
+        details.append(f"{len(diff_keys)} key(s) with different values")
+
+    return details
+
+
 def _compare_json_equality(output: str, groundtruth: str) -> BooleanEvaluationResult:
     output_json, groundtruth_json = _parse_json_pair(output, groundtruth)
 
-    if output_json == groundtruth_json:
+    details = _get_diff_details(output_json, groundtruth_json)
+
+    if not details:
         return BooleanEvaluationResult(
             type="boolean",
             result=True,
@@ -48,7 +71,7 @@ def _compare_json_equality(output: str, groundtruth: str) -> BooleanEvaluationRe
         return BooleanEvaluationResult(
             type="boolean",
             result=False,
-            justification="JSON structures differ",
+            justification=f"JSON structures differ:\n{'\n'.join(details)}",
         )
 
 
