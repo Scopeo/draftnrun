@@ -1,5 +1,6 @@
 import logging
 import uuid
+from typing import List
 from uuid import UUID
 
 from sqlalchemy.orm import Session
@@ -14,7 +15,7 @@ from ada_backend.repositories.quality_assurance_repository import (
     remove_column_content_from_custom_columns,
     rename_qa_column,
 )
-from ada_backend.schemas.qa_metadata_schema import QAColumnListResponse, QAColumnResponse
+from ada_backend.schemas.qa_metadata_schema import QAColumnResponse
 from ada_backend.services.qa.qa_error import QAColumnNotFoundError, QADatasetNotInProjectError
 
 LOGGER = logging.getLogger(__name__)
@@ -24,7 +25,7 @@ def get_qa_columns_by_dataset_service(
     session: Session,
     project_id: UUID,
     dataset_id: UUID,
-) -> QAColumnListResponse:
+) -> List[QAColumnResponse]:
     try:
         dataset_existence = get_dataset_existence(session, project_id, dataset_id)
         if not dataset_existence:
@@ -32,7 +33,7 @@ def get_qa_columns_by_dataset_service(
 
         columns = get_qa_columns_by_dataset(session, dataset_id)
 
-        return QAColumnListResponse(columns=[QAColumnResponse.model_validate(col) for col in columns])
+        return [QAColumnResponse.model_validate(col) for col in columns]
     except QADatasetNotInProjectError:
         raise
 
