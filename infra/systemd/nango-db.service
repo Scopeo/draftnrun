@@ -1,0 +1,28 @@
+[Unit]
+Description=Nango PostgreSQL Database
+After=network.target docker.service
+Requires=docker.service
+
+[Service]
+Type=simple
+User=${SERVICE_USER}
+Group=${SERVICE_USER}
+WorkingDirectory=/home/ec2-user/nango
+ExecStartPre=-/usr/bin/docker stop nango-db
+ExecStartPre=-/usr/bin/docker rm nango-db
+ExecStart=/usr/bin/docker run --rm --name nango-db \
+  -e POSTGRES_USER=nango \
+  -e POSTGRES_PASSWORD=nango \
+  -e POSTGRES_DB=nango \
+  -v /home/ec2-user/nango/db-data:/var/lib/postgresql/data \
+  -p 5435:5432 \
+  postgres:16.0-alpine
+ExecStop=/usr/bin/docker stop nango-db
+StandardOutput=append:${LOG_DIR}/nango-db.log
+StandardError=append:${LOG_DIR}/nango-db.log
+Restart=always
+RestartSec=10
+Environment=DOCKER_HOST=unix:///var/run/docker.sock
+
+[Install]
+WantedBy=multi-user.target
