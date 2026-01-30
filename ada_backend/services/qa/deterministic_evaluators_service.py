@@ -1,11 +1,11 @@
 import json
 import logging
-from typing import Optional
+from typing import Optional, Tuple
 from uuid import UUID
 
 from sqlalchemy.orm import Session
 
-from ada_backend.database.models import EvaluationType, LLMJudge
+from ada_backend.database.models import LLMJudge
 from ada_backend.repositories.qa_evaluation_repository import upsert_judge_evaluation
 from ada_backend.repositories.quality_assurance_repository import get_version_output
 from ada_backend.schemas.qa_evaluation_schema import (
@@ -23,24 +23,21 @@ from ada_backend.services.qa.qa_error import (
 LOGGER = logging.getLogger(__name__)
 
 
-def _parse_json_pair(output: str, groundtruth: Optional[str]):
-    if not groundtruth:
-        raise GroundtruthMissingError()
-
+def _parse_json_pair(output: str, groundtruth: str) -> Tuple[dict, dict]:
     try:
         output_json = json.loads(output)
-    except json.JSONDecodeError as e:
+    except json.JSONDecodeError:
         raise InvalidOutputFormatError(expected_format="JSON")
 
     try:
         groundtruth_json = json.loads(groundtruth)
-    except json.JSONDecodeError as e:
+    except json.JSONDecodeError:
         raise InvalidGroundtruthFormatError(expected_format="JSON")
 
     return output_json, groundtruth_json
 
 
-def _compare_json_equality(output: str, groundtruth: Optional[str]):
+def _compare_json_equality(output: str, groundtruth: str) -> BooleanEvaluationResult:
     output_json, groundtruth_json = _parse_json_pair(output, groundtruth)
 
     if output_json == groundtruth_json:
@@ -68,6 +65,9 @@ def run_deterministic_evaluation_service(
     try:
         if not output:
             raise VersionOutputEmptyError(version_output_id)
+
+        if not groundtruth:
+            raise GroundtruthMissingError()
 
         evaluation_result = _compare_json_equality(output, groundtruth)
 
