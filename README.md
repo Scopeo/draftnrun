@@ -186,27 +186,33 @@ ADA_URL=http://localhost:8000
 
 ### Supabase configuration
 
-**This paragraph is only for those who want to run Supabase locally**
 
-Supabase is the service needed to link the FrontEnd and Backend and the local version is provided in the FrontEnd repository.
-To check how to make it work, please refer to the FrontEnd repository.
-
-Put in the `credentials.env` file the following variable:
+Supabase is the service needed to link the FrontEnd and Backend.
+To understand how to set up Supabase on local version, please check the FrontEnd repository.
+If you want to use the local version,
+put in the `credentials.env` file the following variable:
 
 ```bash
 OFFLINE_MODE=True
 OFFLINE_DEFAULT_ROLE="admin"
 ```
 
-This will enable the offline mode in the backend, very useful if you have trouble with the
-supabase edge runtime functions.
-Those edge runtime functions allow the front end to check the authentifications on your different organizations.
+If the following section, you will find instructions on how to set up Supabase information
+for the backend, both for local and cloud version.
 
 **How to set up Supabase env variables for the project (local and cloud version)**
 
-#### -> Put Supabase values in credentials.env file (Local or Cloud version)
+#### -> Put Supabase values in credentials.env file
 
-Here are two important variables that you need to get from your Supabase project settings:
+#### Supabase project url
+Define the Supabase project URL in the credentials.env file:
+```env
+SUPABASE_PROJECT_URL=http://localhost:54321 (or your cloud project url)
+```
+
+#### Supabase anon key and service_role key
+
+Here are also two important variables that you need to get from your Supabase project settings:
 
 - **anon key**: `ey_...`
 - **service_role key**: `eyJ...`
@@ -217,28 +223,29 @@ You need to use them to fill those environment variables:
 SUPABASE_PROJECT_KEY=*anon-key*
 SUPABASE_SERVICE_ROLE_SECRET_KEY=*service_role key*
 ```
+Please check the Supabase documentation if you run the cloud version or the FrontEnd repository
+if you use the local version to know where to find those keys.
 
-You can get them from your cloud version or your local version (for local version, see instructions on
-FrontEnd repository)
-
+#### Supabase bucket
 
 You also need to create a bucket in Supabase to store the documents. You can check instructions on
-the FrontEnd repository for that. We advise to create a bucket named `ada-backend` if you want to do minimal
+the FrontEnd repository for the local version, or the Supabase documentation for the cloud version.
+We advise to create a bucket named `ada-backend` if you want to do minimal
 changes to the credentials.env.example file. Here is the variable to fill:
 
 ```env
 SUPABASE_BUCKET_NAME=my_new_bucket
 ```
 
-
-Finally you can create an user name and password on supabase and fill those variables (See again FrontEnd repistory instructions):
+#### Supabase user credentials
+Finally you can create an user name and password on supabase and fill those variables (See again FrontEnd repistory instructions or Supabase cloud documentation):
 
 ```env
 SUPABASE_USERNAME=xxx
 SUPABASE_PASSWORD=xxx
 ```
 
-
+#### Summary of supabase env variables
 At the end of this part, you should have filled those variables in your `credentials.env`:
 
 ```env
