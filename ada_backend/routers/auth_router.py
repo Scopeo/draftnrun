@@ -6,6 +6,7 @@ from uuid import UUID
 from fastapi import APIRouter, Body, Depends, Header, HTTPException, Query
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
+from supabase import Client, create_client
 
 from ada_backend.context import get_request_context
 from ada_backend.database.models import ApiKeyType
@@ -30,7 +31,6 @@ from ada_backend.services.api_key_service import (
 )
 from ada_backend.services.user_roles_service import get_user_access_to_organization, is_user_super_admin
 from settings import settings
-from supabase import Client, create_client
 
 LOGGER = logging.getLogger(__name__)
 
