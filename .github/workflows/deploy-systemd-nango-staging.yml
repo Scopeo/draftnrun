@@ -1,0 +1,126 @@
+name: Deploy systemd Nango Services - Staging
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [staging]
+    paths:
+      - "infra/systemd/nango-*.service"
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Install envsubst (gettext)
+        run: sudo apt-get update && sudo apt-get install -y gettext
+
+      - name: Export secrets as env vars
+        run: |
+          echo "SERVICE_USER=${{ vars.SERVICE_USER }}" >> $GITHUB_ENV
+          echo "LOG_DIR=${{ vars.LOGFOLDER }}" >> $GITHUB_ENV
+          echo "NANGO_SECRET_KEY=${{ secrets.NANGO_SECRET_KEY_STAGING }}" >> $GITHUB_ENV
+          echo "NANGO_ENCRYPTION_KEY=${{ secrets.NANGO_ENCRYPTION_KEY_STAGING }}" >> $GITHUB_ENV
+          echo "NANGO_DASHBOARD_PASSWORD=${{ secrets.NANGO_DASHBOARD_PASSWORD_STAGING }}" >> $GITHUB_ENV
+          echo "NANGO_SERVER_URL=${{ secrets.NANGO_PUBLIC_URL_STAGING }}" >> $GITHUB_ENV
+
+      - name: Fill in nango-db.service template
+        run: |
+          envsubst < infra/systemd/nango-db.service > filled-nango-db.service
+          cat filled-nango-db.service
+
+      - name: Fill in nango-server.service template
+        run: |
+          envsubst < infra/systemd/nango-server.service > filled-nango-server.service
+          cat filled-nango-server.service
+
+      - name: Upload Nango DB service to EC2
+        uses: appleboy/scp-action@master
+        with:
+          host: ${{ secrets.EC2_HOST_INGESTION_STAGING }}
+          username: ec2-user
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          source: "filled-nango-db.service"
+          target: "/tmp/"
+
+      - name: Upload Nango Server service to EC2
+        uses: appleboy/scp-action@master
+        with:
+          host: ${{ secrets.EC2_HOST_INGESTION_STAGING }}
+          username: ec2-user
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          source: "filled-nango-server.service"
+          target: "/tmp/"
+
+      - name: Deploy Nango DB systemd service
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.EC2_HOST_INGESTION_STAGING }}
+          username: ec2-user
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          script: |
+            sudo mv /tmp/filled-nango-db.service /etc/systemd/system/nango-db.service
+            sudo chmod 644 /etc/systemd/system/nango-db.service
+            sudo systemctl daemon-reload
+            sudo systemctl restart nango-db.service
+
+      - name: Healthcheck - Verify Nango DB is running
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.EC2_HOST_INGESTION_STAGING }}
+          username: ec2-user
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          script: |
+            echo "Waiting 10s for Nango DB to start..."
+            sleep 10
+            if sudo systemctl is-active --quiet nango-db.service; then
+              echo "✅ Nango DB service is running"
+            else
+              echo "❌ Nango DB service is not running"
+              sudo systemctl status nango-db.service
+              exit 1
+            fi
+
+      - name: Deploy Nango Server systemd service
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.EC2_HOST_INGESTION_STAGING }}
+          username: ec2-user
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          script: |
+            sudo mv /tmp/filled-nango-server.service /etc/systemd/system/nango-server.service
+            sudo chmod 644 /etc/systemd/system/nango-server.service
+            sudo systemctl daemon-reload
+            sudo systemctl restart nango-server.service
+
+      - name: Healthcheck - Verify Nango Server is running
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.EC2_HOST_INGESTION_STAGING }}
+          username: ec2-user
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          script: |
+            echo "Waiting 10s for Nango Server to start..."
+            sleep 10
+            if sudo systemctl is-active --quiet nango-server.service; then
+              echo "✅ Nango Server service is running"
+            else
+              echo "❌ Nango Server service is not running"
+              sudo systemctl status nango-server.service
+              exit 1
+            fi
+
+            echo "Testing HTTP health endpoint..."
+            curl --fail --retry 3 --retry-delay 3 http://localhost:3003/health || {
+              echo "❌ Nango health endpoint failed"
+              sudo journalctl -u nango-server.service -n 50 --no-pager
+              exit 1
+            }
+            echo "✅ Nango health endpoint responding"

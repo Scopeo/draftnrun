@@ -8,6 +8,9 @@ resources:
   - webhook-worker-deployment.yaml
   - scheduler-deployment.yaml
   - service.yaml
+  - nango-db-statefulset.yaml
+  - nango-deployment.yaml
+  - nango-service.yaml
 
 labels:
   - pairs:
