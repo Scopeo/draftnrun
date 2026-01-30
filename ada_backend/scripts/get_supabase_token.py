@@ -1,7 +1,8 @@
 import argparse
 
-from settings import settings
 from supabase import Client, create_client
+
+from settings import settings
 
 
 def get_user_jwt(username: str, password: str) -> str:
