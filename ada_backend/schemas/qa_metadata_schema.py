@@ -5,18 +5,6 @@ from uuid import UUID
 from pydantic import BaseModel
 
 
-class QAColumnCreate(BaseModel):
-    """Schema for creating a new custom column."""
-
-    column_name: str
-
-
-class QAColumnRename(BaseModel):
-    """Schema for renaming a custom column."""
-
-    column_name: str
-
-
 class QAColumnResponse(BaseModel):
     """Schema for QA column response."""
 
@@ -30,9 +18,3 @@ class QAColumnResponse(BaseModel):
 
     class Config:
         from_attributes = True
-
-
-class QAColumnListResponse(BaseModel):
-    """Schema for multiple QA column responses."""
-
-    columns: List[QAColumnResponse]
