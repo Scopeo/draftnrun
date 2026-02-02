@@ -1,6 +1,6 @@
 import asyncio
 from unittest.mock import AsyncMock, patch
-from uuid import UUID
+from uuid import uuid4
 
 from openai.types.chat import ChatCompletion, ChatCompletionMessage
 from openai.types.chat.chat_completion import Choice
@@ -66,8 +66,8 @@ def test_monitor_service(
 
     trace_manager = TraceManager(project_name="ada-backend-test")
     set_trace_manager(trace_manager)
-    # test user id just used for the function, not linked to the project (offline mode on test)
-    user_id = UUID("00000000-0000-0000-0000-000000000001")
+
+    user_id = uuid4()
 
     with get_db_session() as session:
         data = {"messages": [{"role": "user", "content": "Hello, how are you?"}]}
