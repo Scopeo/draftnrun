@@ -44,10 +44,12 @@ jobs:
             fi
 
             # Create Job to run sync (code already exists in the image)
-            # Note: Using bash -c to run the script directly from the image
+            # Note: Setting PATH to include .venv for uv and Python packages
             kubectl create job ${JOB_NAME} -n ${NS} \
               --image=${IMAGE} \
               -- bash -c "\
+                export PATH=/app/.venv/bin:\$PATH && \
+                export PYTHONPATH=/app && \
                 cd /app && \
                 ./scripts/copy_data/sync_data.sh \
                   --source-db-url '${{ secrets.PROD_DB_URL }}' \
@@ -157,12 +159,8 @@ jobs:
               fi
             fi
 
-            # Get the current image from the deployment
-            IMAGE=$(kubectl get deployment/ada-api -n ${NS} -o jsonpath='{.spec.template.spec.containers[0].image}')
-
             echo "🗄️ Running migrations as Kubernetes Job..."
             kubectl create job db-migrate -n ${NS} \
-              --image=${IMAGE} \
               --from=deployment/ada-api \
               -- alembic -c ada_backend/database/alembic.ini upgrade head
 
@@ -171,7 +169,6 @@ jobs:
 
             echo "🌱 Running seed as Kubernetes Job..."
             kubectl create job db-seed -n ${NS} \
-              --image=${IMAGE} \
               --from=deployment/ada-api \
               -- python -m ada_backend.database.seed_db
 
