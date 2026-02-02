@@ -373,7 +373,7 @@ def delete_datasets(
     return deleted_count
 
 
-def check_dataset_exist(session: Session, project_id: UUID, dataset_id: UUID) -> bool:
+def check_dataset_belongs_to_project(session: Session, project_id: UUID, dataset_id: UUID) -> bool:
     exists = session.query(
         session.query(DatasetProject)
         .filter(DatasetProject.id == dataset_id, DatasetProject.project_id == project_id)
