@@ -6,6 +6,10 @@ from ada_backend.services.project_service import create_workflow, get_project_se
 
 ORGANIZATION_ID = UUID("37b7d67f-8f29-4fce-8085-19dea582f605")  # umbrella organization
 
+GRAPH_TEST_PROJECT_ID = UUID(
+    "f7ddbfcb-6843-4ae9-a15b-40aa565b955b"
+)  # graph test project (seeded in seed_project_db.py)
+
 
 def create_project_and_graph_runner(
     session,
