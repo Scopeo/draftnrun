@@ -5,15 +5,11 @@ from pydantic import BaseModel
 
 
 class QAColumnResponse(BaseModel):
-    """Schema for QA column response."""
-
     id: UUID
     dataset_id: UUID
     column_id: UUID
     column_name: str
-    index_position: int
-    created_at: datetime
-    updated_at: datetime
+    column_position: int
 
     class Config:
         from_attributes = True
