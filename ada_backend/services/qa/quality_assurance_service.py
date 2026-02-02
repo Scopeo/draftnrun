@@ -510,7 +510,8 @@ def delete_datasets_service(
     for dataset_id in delete_data.dataset_ids:
         if not check_dataset_exist(session, project_id, dataset_id):
             LOGGER.error(
-                f"Failed to delete datasets for project {project_id}: Dataset {dataset_id} not found in project {project_id}"
+                f"Failed to delete datasets for project {project_id}: "
+                f"Dataset {dataset_id} not found in project {project_id}"
             )
             raise QADatasetNotInProjectError(project_id, dataset_id)
 
