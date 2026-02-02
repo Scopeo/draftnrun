@@ -2,10 +2,11 @@ import logging
 from pathlib import Path
 from typing import Callable
 
+from supabase import Client, create_client
+
 from data_ingestion.document.folder_management.folder_management import FileDocument
 from data_ingestion.utils import sanitize_filename
 from settings import settings
-from supabase import Client, create_client
 
 LOGGER = logging.getLogger(__name__)
 

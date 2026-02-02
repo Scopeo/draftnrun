@@ -184,43 +184,35 @@ ADA_DB_URL=postgresql://postgres:ada_password@localhost:5432/ada_backend
 ADA_URL=http://localhost:8000
 ```
 
-### Set up and run Supabase service locally
+### Supabase configuration
 
-**This paragraph is only for those who want to run Supabase locally**
 
 Supabase is the service needed to link the FrontEnd and Backend.
-
-We provide a `supabase` folder with the configuration.
-
-Put in the `credentials.env` file the following variable:
+To understand how to set up Supabase on local version, please check the FrontEnd repository.
+If you want to use the local version,
+put in the `credentials.env` file the following variable:
 
 ```bash
 OFFLINE_MODE=True
 OFFLINE_DEFAULT_ROLE="admin"
 ```
 
-This will enable the offline mode in the backend, very useful if you have trouble with the
-supabase edge runtime functions (they are served with the command `supabase functions serve`)
-Those edge runtime functions allow the front end to check the authentifications on your different organizations.
+If the following section, you will find instructions on how to set up Supabase information
+for the backend, both for local and cloud version.
 
-Once Supabase-Cli is installed, go to the root of the repository and run:
-
-```bash
-supabase start
-```
-
-This will create and launch Supabase.  
-⚠️ **Warning:** The terminal will display secret values needed for the `.env` files of the Backend and FrontEnd. Store them.
-
-To view them again later:
-
-```bash
-supabase status
-```
+**How to set up Supabase env variables for the project (local and cloud version)**
 
 #### -> Put Supabase values in credentials.env file
 
-Here are two important variables that you get in the terminal when running supabase:
+#### Supabase project url
+Define the Supabase project URL in the credentials.env file:
+```env
+SUPABASE_PROJECT_URL=http://localhost:54321 (or your cloud project url)
+```
+
+#### Supabase anon key and service_role key
+
+Here are also two important variables that you need to get from your Supabase project settings:
 
 - **anon key**: `ey_...`
 - **service_role key**: `eyJ...`
@@ -231,95 +223,33 @@ You need to use them to fill those environment variables:
 SUPABASE_PROJECT_KEY=*anon-key*
 SUPABASE_SERVICE_ROLE_SECRET_KEY=*service_role key*
 ```
+Please check the Supabase documentation if you run the cloud version or the FrontEnd repository
+if you use the local version to know where to find those keys.
 
-You will also need to run the edge runtime Supabase service in another terminal:
+#### Supabase bucket
 
-```bash
-supabase functions serve
-```
-
-Expected output:
-
-```bash
-Setting up Edge Functions runtime...
-Serving functions on http://127.0.0.1:54321/functions/v1/<function-name>
-Using supabase-edge-runtime-1.67.4 (compatible with Deno v1.45.2)
-```
-
-Visit:
-
-```bash
-http://localhost:54323/
-```
-
-Then:
-
-- Create a bucket in the **Storage** tab.
-- Create a user in the **Authentication** tab.
-- Use the **Table Editor** to add your user to one of the existing organizations.
-
-#### -> Video tutorial
-
-[Here](https://youtu.be/m9WCJ5mMD6w) is a quick video tutorial on how to set up those three things
-
-#### -> Create a bucket in Supabase
-
-Go to the **Storage** tab → **New Bucket**, and set a name.
-
-⚠️ **Recommended:** Use `"ada-backend"` (default for `SUPABASE_BUCKET_NAME` in the backend).
-
-To use a different name, add:
+You also need to create a bucket in Supabase to store the documents. You can check instructions on
+the FrontEnd repository for the local version, or the Supabase documentation for the cloud version.
+We advise to create a bucket named `ada-backend` if you want to do minimal
+changes to the credentials.env.example file. Here is the variable to fill:
 
 ```env
 SUPABASE_BUCKET_NAME=my_new_bucket
 ```
 
-In your `credentials.env`.
-
-#### -> Create a user account
-
-Go to the **Authentication** tab and register a user (email/password).  
-In **Table Editor**, check the `auth_user_emails` table for your user’s ID.
-
-Store your username and password in credentials.env:
+#### Supabase user credentials
+Finally you can create an user name and password on supabase and fill those variables (See again FrontEnd repistory instructions or Supabase cloud documentation):
 
 ```env
 SUPABASE_USERNAME=xxx
 SUPABASE_PASSWORD=xxx
 ```
 
-#### -> Add user to an organization
-
-Use the **organization_members** table.
-
-- `user_id` = your user’s ID from `auth_user_emails`
-- `org_id` = the ID of the desired organization (e.g., `DraftNRun-test-organization` or `test2-organization`)
-- `role` = your role in the organization (put admin to have all the rights)
-
-#### -> Reset or stop Supabase
-
-Reset database (clears data and buckets):
-
-```bash
-supabase db reset
-```
-
-Stop Supabase:
-
-```bash
-supabase stop
-```
-
-Clean Docker volume:
-
-```bash
-docker volume prune
-```
-
-At the end of this part, you should have filled those variables:
+#### Summary of supabase env variables
+At the end of this part, you should have filled those variables in your `credentials.env`:
 
 ```env
-SUPABASE_PROJECT_URL=http://localhost:54321
+SUPABASE_PROJECT_URL=http://localhost:54321 (or your cloud project url)
 SUPABASE_PROJECT_KEY=*anon-key*
 SUPABASE_SERVICE_ROLE_SECRET_KEY=*service_role key*
 
@@ -328,20 +258,7 @@ SUPABASE_PASSWORD=xxx
 SUPABASE_BUCKET_NAME=ada-backend
 ```
 
-### Set up Supabase non-locally (cloud)
-
-**This paragraph is for those who already have a shared Supabase service that they want to use**
-
-Find these informations on your shared supabase service :
-
-```env
-SUPABASE_PROJECT_URL=http://localhost:54321
-SUPABASE_PROJECT_KEY=*anon-key*
-SUPABASE_SERVICE_ROLE_SECRET_KEY=xxxx
-SUPABASE_USERNAME=xxx@xxx.com
-SUPABASE_PASSWORD=xxx
-SUPABASE_BUCKET_NAME=ada-backend
-```
+### Configuration of env variables for ingestion and webhook API keys
 
 Finally, generate with this script the INGESTION_API_KEY and WEBHOOK_API_KEY and their hashed versions, and put them in the credentials.env file:
 
