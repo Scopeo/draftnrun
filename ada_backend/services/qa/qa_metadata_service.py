@@ -6,14 +6,14 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from ada_backend.repositories.quality_assurance_repository import (
-    create_qa_column,
-    delete_qa_column,
-    get_column_existence,
-    get_dataset_existence,
-    get_max_position_for_metadata_column,
+    check_column_exist,
+    check_dataset_exist,
+    create_custom_column,
+    delete_custom_column,
+    get_dataset_custom_columns_max_position,
     get_qa_columns_by_dataset,
-    remove_column_content_from_custom_columns,
-    rename_qa_column,
+    remove_column_value_from_custom_column,
+    rename_custom_column,
 )
 from ada_backend.schemas.qa_metadata_schema import QAColumnResponse
 from ada_backend.services.qa.qa_error import QAColumnNotFoundError, QADatasetNotInProjectError
@@ -27,7 +27,7 @@ def get_qa_columns_by_dataset_service(
     dataset_id: UUID,
 ) -> List[QAColumnResponse]:
     try:
-        dataset_existence = get_dataset_existence(session, project_id, dataset_id)
+        dataset_existence = check_dataset_exist(session, project_id, dataset_id)
         if not dataset_existence:
             raise QADatasetNotInProjectError(project_id, dataset_id)
 
@@ -45,26 +45,21 @@ def create_qa_column_service(
     column_name: str,
 ) -> QAColumnResponse:
     try:
-        dataset_existence = get_dataset_existence(session, project_id, dataset_id)
+        dataset_existence = check_dataset_exist(session, project_id, dataset_id)
         if not dataset_existence:
             raise QADatasetNotInProjectError(project_id, dataset_id)
 
-        max_position = get_max_position_for_metadata_column(session, dataset_id)
+        max_position = get_dataset_custom_columns_max_position(session, dataset_id)
         new_position = (max_position + 1) if max_position is not None else 0
 
         column_id = uuid.uuid4()
 
-        qa_metadata = create_qa_column(
+        qa_metadata = create_custom_column(
             session=session,
             dataset_id=dataset_id,
             column_id=column_id,
             column_name=column_name,
-            index_position=new_position,
-        )
-
-        LOGGER.info(
-            f"Created QA column '{column_name}' (column_id: {column_id}) at position {new_position} "
-            f"for dataset {dataset_id} in project {project_id}"
+            column_position=new_position,
         )
 
         return QAColumnResponse.model_validate(qa_metadata)
@@ -81,15 +76,15 @@ def rename_qa_column_service(
     column_name: str,
 ) -> QAColumnResponse:
     try:
-        dataset_existence = get_dataset_existence(session, project_id, dataset_id)
+        dataset_existence = check_dataset_exist(session, project_id, dataset_id)
         if not dataset_existence:
             raise QADatasetNotInProjectError(project_id, dataset_id)
 
-        column_existence = get_column_existence(session, dataset_id, column_id)
+        column_existence = check_column_exist(session, dataset_id, column_id)
         if not column_existence:
             raise QAColumnNotFoundError(dataset_id, column_id)
 
-        qa_metadata = rename_qa_column(
+        qa_metadata = rename_custom_column(
             session=session,
             dataset_id=dataset_id,
             column_id=column_id,
@@ -112,16 +107,16 @@ def delete_qa_column_service(
     column_id: UUID,
 ) -> dict:
     try:
-        dataset_existence = get_dataset_existence(session, project_id, dataset_id)
+        dataset_existence = check_dataset_exist(session, project_id, dataset_id)
         if not dataset_existence:
             raise QADatasetNotInProjectError(project_id, dataset_id)
 
-        column_existence = get_column_existence(session, dataset_id, column_id)
+        column_existence = check_column_exist(session, dataset_id, column_id)
         if not column_existence:
             raise QAColumnNotFoundError(dataset_id, column_id)
 
-        remove_column_content_from_custom_columns(session, dataset_id, column_id)
-        delete_qa_column(session, dataset_id, column_id)
+        remove_column_value_from_custom_column(session, dataset_id, column_id)
+        delete_custom_column(session, dataset_id, column_id)
 
         LOGGER.info(f"Deleted QA column {column_id} from dataset {dataset_id} in project {project_id}")
 
