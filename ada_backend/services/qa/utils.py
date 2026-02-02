@@ -71,3 +71,5 @@ DEFAULT_FREE_TEXT_PROMPT = (
     "Groundtruth: {{groundtruth}}\n"
     "Output: {{output}}"
 )
+
+DEFAULT_JSON_EQUALITY_PROMPT = "N/A - Deterministic rule: exact JSON equality comparison"
