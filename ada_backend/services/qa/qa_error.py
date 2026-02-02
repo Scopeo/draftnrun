@@ -82,3 +82,17 @@ class QAPartialPositionError(Exception):
 
     def __init__(self):
         super().__init__("Partial positioning is not allowed. Either provide positions for all entries or none.")
+
+
+class GroundtruthMissingError(Exception):
+    """Raised when groundtruth is missing for deterministic evaluation."""
+
+    def __init__(self):
+        super().__init__("No groundtruth provided for comparison")
+
+
+class InvalidFormatError(Exception):
+    """Raised when a field format is invalid for evaluation."""
+
+    def __init__(self, field_name: str, expected_format: str = "JSON"):
+        super().__init__(f"Invalid {expected_format} format in {field_name}")

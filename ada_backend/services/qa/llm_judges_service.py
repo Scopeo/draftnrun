@@ -21,6 +21,7 @@ from ada_backend.services.errors import LLMJudgeNotFound
 from ada_backend.services.qa.utils import (
     DEFAULT_BOOLEAN_PROMPT,
     DEFAULT_FREE_TEXT_PROMPT,
+    DEFAULT_JSON_EQUALITY_PROMPT,
     DEFAULT_SCORE_PROMPT,
 )
 
@@ -48,6 +49,8 @@ def get_llm_judge_defaults_service(
         prompt_template = DEFAULT_SCORE_PROMPT
     elif evaluation_type == EvaluationType.FREE_TEXT:
         prompt_template = DEFAULT_FREE_TEXT_PROMPT
+    elif evaluation_type == EvaluationType.JSON_EQUALITY:
+        prompt_template = DEFAULT_JSON_EQUALITY_PROMPT
 
     return LLMJudgeTemplate(
         evaluation_type=evaluation_type,
