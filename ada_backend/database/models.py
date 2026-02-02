@@ -1616,23 +1616,23 @@ class DatasetProject(Base):
     # Relationships
     project = relationship("Project", back_populates="datasets")
     input_groundtruths = relationship("InputGroundtruth", back_populates="dataset", cascade="all, delete-orphan")
-    qa_metadata = relationship("QAMetadata", back_populates="dataset", cascade="all, delete-orphan")
+    qa_metadata = relationship("QADatasetMetadata", back_populates="dataset", cascade="all, delete-orphan")
 
     def __str__(self):
         return f"DatasetProject(id={self.id}, name={self.dataset_name})"
 
 
-class QAMetadata(Base):
+class QADatasetMetadata(Base):
     """
     Represents custom column definitions for QA datasets.
     Each row defines a custom column with its name, ID, and display position.
     """
 
-    __tablename__ = "qa_metadata"
+    __tablename__ = "qa_dataset_metadata"
     __table_args__ = (
         sa.UniqueConstraint("dataset_id", "column_id", name="uq_qa_metadata_dataset_column_id"),
-        sa.UniqueConstraint("dataset_id", "index_position", name="uq_qa_metadata_dataset_index_position"),
-        sa.CheckConstraint("index_position >= 0", name="ck_qa_metadata_index_position_non_negative"),
+        sa.UniqueConstraint("dataset_id", "column_position", name="uq_qa_metadata_dataset_column_position"),
+        sa.CheckConstraint("column_position >= 0", name="ck_qa_metadata_column_position_non_negative"),
         {"schema": "quality_assurance"},
     )
 
@@ -1649,17 +1649,15 @@ class QAMetadata(Base):
 
     column_name = mapped_column(String, nullable=False)
 
-    index_position = mapped_column(Integer, nullable=False)
+    column_position = mapped_column(Integer, nullable=False)
 
-    created_at = mapped_column(DateTime(timezone=True), server_default=func.now())
-    updated_at = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
-
-    # Relationships
     dataset = relationship("DatasetProject", back_populates="qa_metadata")
 
     def __str__(self):
-        return f"QAMetadata(id={self.id}, dataset_id={self.dataset_id}, " \
-               f"column_name={self.column_name}, index_position={self.index_position})"
+        return (
+            f"QADatasetMetadata(id={self.id}, dataset_id={self.dataset_id}, "
+            f"column_name={self.column_name}, column_position={self.column_position})"
+        )
 
 
 class VersionOutput(Base):

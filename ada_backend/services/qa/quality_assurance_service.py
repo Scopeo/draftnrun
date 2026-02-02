@@ -12,6 +12,7 @@ from ada_backend.database.models import CallType
 from ada_backend.repositories.env_repository import get_env_relationship_by_graph_runner_id
 from ada_backend.repositories.qa_evaluation_repository import delete_evaluations_for_input_ids
 from ada_backend.repositories.quality_assurance_repository import (
+    check_dataset_exist,
     clear_version_outputs_for_input_ids,
     create_datasets,
     create_inputs_groundtruths,
@@ -60,6 +61,7 @@ from ada_backend.services.qa.qa_error import (
     CSVInvalidPositionError,
     CSVMissingDatasetColumnError,
     CSVNonUniquePositionError,
+    QADatasetNotInProjectError,
     QADuplicatePositionError,
     QAPartialPositionError,
 )
@@ -341,13 +343,9 @@ def update_inputs_groundtruths_service(
         InputGroundtruthResponseList: The updated input-groundtruth entries
     """
     try:
-        updates_data = [
-            (ig.id, ig.input, ig.groundtruth, ig.custom_columns) for ig in inputs_groundtruths_data.inputs_groundtruths
-        ]
-
         updated_inputs_groundtruths = update_inputs_groundtruths(
             session,
-            updates_data,
+            inputs_groundtruths_data,
             dataset_id,
         )
 
@@ -474,6 +472,10 @@ def update_dataset_service(
     Returns:
         DatasetResponse: The updated dataset
     """
+    if not check_dataset_exist(session, project_id, dataset_id):
+        LOGGER.error(f"Failed to update dataset {dataset_id}: Dataset {dataset_id} not found in project {project_id}")
+        raise QADatasetNotInProjectError(project_id, dataset_id)
+
     try:
         updated_dataset = update_dataset(
             session,
@@ -505,6 +507,13 @@ def delete_datasets_service(
     Returns:
         int: Number of deleted datasets
     """
+    for dataset_id in delete_data.dataset_ids:
+        if not check_dataset_exist(session, project_id, dataset_id):
+            LOGGER.error(
+                f"Failed to delete datasets for project {project_id}: Dataset {dataset_id} not found in project {project_id}"
+            )
+            raise QADatasetNotInProjectError(project_id, dataset_id)
+
     try:
         deleted_count = delete_datasets(
             session,

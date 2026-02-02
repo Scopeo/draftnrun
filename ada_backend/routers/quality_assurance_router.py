@@ -162,6 +162,9 @@ def update_dataset_endpoint(
 
     try:
         return update_dataset_service(session, project_id, dataset_id, dataset_name)
+    except QADatasetNotInProjectError as e:
+        LOGGER.error(f"Failed to update dataset {dataset_id}: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except ValueError as e:
         LOGGER.error(f"Failed to update dataset {dataset_id}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=400, detail="Bad request") from e
@@ -196,6 +199,9 @@ def delete_dataset_endpoint(
     try:
         deleted_count = delete_datasets_service(session, project_id, delete_data)
         return {"message": f"Deleted {deleted_count} datasets successfully"}
+    except QADatasetNotInProjectError as e:
+        LOGGER.error(f"Failed to delete datasets for project {project_id}: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except ValueError as e:
         LOGGER.error(f"Failed to delete datasets for project {project_id}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=400, detail="Bad request") from e
@@ -206,7 +212,7 @@ def delete_dataset_endpoint(
 
 # QA Metadata (Custom Columns) endpoints
 @router.get(
-    "/projects/{project_id}/qa/datasets/{dataset_id}/columns",
+    "/projects/{project_id}/qa/datasets/{dataset_id}/custom-columns",
     response_model=List[QAColumnResponse],
     summary="Get Custom Columns for Dataset",
     tags=["Quality Assurance"],
@@ -238,7 +244,7 @@ def get_columns_by_dataset_endpoint(
 
 
 @router.post(
-    "/projects/{project_id}/qa/datasets/{dataset_id}/columns",
+    "/projects/{project_id}/qa/datasets/{dataset_id}/custom-columns",
     response_model=QAColumnResponse,
     summary="Add Custom Column to Dataset",
     tags=["Quality Assurance"],
@@ -267,7 +273,7 @@ def add_column_to_dataset_endpoint(
 
 
 @router.patch(
-    "/projects/{project_id}/qa/datasets/{dataset_id}/columns/{column_id}",
+    "/projects/{project_id}/qa/datasets/{dataset_id}/custom-columns/{column_id}",
     response_model=QAColumnResponse,
     summary="Rename Custom Column",
     tags=["Quality Assurance"],
@@ -309,7 +315,7 @@ def rename_column_endpoint(
 
 
 @router.delete(
-    "/projects/{project_id}/qa/datasets/{dataset_id}/columns/{column_id}",
+    "/projects/{project_id}/qa/datasets/{dataset_id}/custom-columns/{column_id}",
     summary="Delete Custom Column",
     tags=["Quality Assurance"],
 )
