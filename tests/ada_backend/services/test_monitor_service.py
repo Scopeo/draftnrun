@@ -9,8 +9,6 @@ from openai.types.completion_usage import CompletionUsage
 from sqlalchemy.orm import Session
 
 from ada_backend.database.models import CallType, EnvType
-from ada_backend.database.seed_db import seed_db
-from ada_backend.database.seed_project_db import seed_projects_db
 from ada_backend.database.setup_db import SessionLocal
 from ada_backend.schemas.trace_schema import RootTraceSpan
 from ada_backend.services.agent_runner_service import run_env_agent
