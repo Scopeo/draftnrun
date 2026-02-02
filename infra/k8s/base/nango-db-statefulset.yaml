@@ -42,12 +42,16 @@ spec:
           env:
             - name: POSTGRES_USER
               value: "nango"
-            - name: POSTGRES_PASSWORD
-              value: "nango"
             - name: POSTGRES_DB
               value: "nango"
             - name: PGDATA
               value: /var/lib/postgresql/data/pgdata
+            # Password from secrets - REQUIRED in ada-secrets
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: ada-secrets
+                  key: NANGO_DB_PASSWORD
           resources:
             requests:
               cpu: 100m

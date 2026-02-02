@@ -29,19 +29,23 @@ spec:
             - containerPort: 3003
               name: http
           env:
-            # Database connection (nango-db is in same namespace via headless service)
+            # Database connection
             - name: NANGO_DB_HOST
               value: "nango-db"
             - name: NANGO_DB_PORT
               value: "5432"
             - name: NANGO_DB_USER
               value: "nango"
-            - name: NANGO_DB_PASSWORD
-              value: "nango"
             - name: NANGO_DB_NAME
               value: "nango"
             - name: NANGO_DB_SSL
               value: "false"
+            # DB password from secrets - REQUIRED in ada-secrets
+            - name: NANGO_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: ada-secrets
+                  key: NANGO_DB_PASSWORD
             # Server configuration
             - name: SERVER_PORT
               value: "3003"
@@ -49,7 +53,15 @@ spec:
               value: "false"
             - name: FLAG_AUTH_ENABLED
               value: "true"
-            # Secrets from ada-secrets (NANGO_ENCRYPTION_KEY, NANGO_SECRET_KEY, etc.)
+            # Callback URL - OAuth providers redirect here (goes to ada-api)
+            # This tells Nango what callback URL to register with OAuth providers
+            # REQUIRED in ada-secrets
+            - name: NANGO_CALLBACK_URL
+              valueFrom:
+                secretKeyRef:
+                  name: ada-secrets
+                  key: NANGO_CALLBACK_URL
+            # Additional secrets (NANGO_ENCRYPTION_KEY, NANGO_SECRET_KEY, etc.)
           envFrom:
             - secretRef:
                 name: ada-secrets

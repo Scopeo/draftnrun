@@ -21,13 +21,11 @@ spec:
         - protocol: TCP
           port: 3003
   egress:
-    # Allow DNS resolution
-    - to:
-        - namespaceSelector:
-            matchLabels:
-              name: kube-system
-      ports:
+    # Allow DNS resolution (CoreDNS)
+    - ports:
         - protocol: UDP
+          port: 53
+        - protocol: TCP
           port: 53
     # Allow connection to nango-db
     - to:
@@ -37,10 +35,9 @@ spec:
       ports:
         - protocol: TCP
           port: 5432
-    # Allow HTTPS to OAuth providers (Slack, Google, HubSpot, etc.)
-    - to:
-        - namespaceSelector: {}
-      ports:
+    # Allow HTTPS/HTTP to external OAuth providers (Slack, Google, HubSpot, etc.)
+    # No 'to' selector = allows egress to any external IP
+    - ports:
         - protocol: TCP
           port: 443
         - protocol: TCP
@@ -69,11 +66,9 @@ spec:
         - protocol: TCP
           port: 5432
   egress:
-    # Allow DNS resolution (for any internal queries)
-    - to:
-        - namespaceSelector:
-            matchLabels:
-              name: kube-system
-      ports:
+    # Allow DNS resolution (CoreDNS)
+    - ports:
         - protocol: UDP
+          port: 53
+        - protocol: TCP
           port: 53
