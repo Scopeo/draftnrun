@@ -29,8 +29,9 @@ spec:
             - containerPort: 3003
               name: http
           env:
+            # Database connection (nango-db is in same namespace via headless service)
             - name: NANGO_DB_HOST
-              value: "nango-db.$(NAMESPACE).svc.cluster.local"
+              value: "nango-db"
             - name: NANGO_DB_PORT
               value: "5432"
             - name: NANGO_DB_USER
@@ -41,16 +42,14 @@ spec:
               value: "nango"
             - name: NANGO_DB_SSL
               value: "false"
+            # Server configuration
             - name: SERVER_PORT
               value: "3003"
             - name: TELEMETRY
               value: "false"
             - name: FLAG_AUTH_ENABLED
               value: "true"
-            - name: NAMESPACE
-              valueFrom:
-                fieldRef:
-                  fieldPath: metadata.namespace
+            # Secrets from ada-secrets (NANGO_ENCRYPTION_KEY, NANGO_SECRET_KEY, etc.)
           envFrom:
             - secretRef:
                 name: ada-secrets

@@ -326,6 +326,10 @@ jobs:
             kubectl rollout status deployment/ada-webhook-worker -n ${NS} --timeout=10m
             kubectl rollout status deployment/ada-scheduler -n ${NS} --timeout=10m
 
+            echo "⏳ Waiting for nango-server and nango-db..."
+            kubectl rollout status deployment/nango-server -n ${NS} --timeout=10m
+            kubectl rollout status statefulset/nango-db -n ${NS} --timeout=10m
+
             echo "✅ Deploy complete!"
             kubectl get pods -n ${NS}
 

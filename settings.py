@@ -162,9 +162,10 @@ class BaseConfig(BaseSettings):
     LLAMACLOUD_API_KEY: Optional[str] = None
 
     # Nango OAuth Management
-    NANGO_INTERNAL_URL: Optional[str] = None
-    NANGO_PUBLIC_URL: Optional[str] = None
+    NANGO_INTERNAL_URL: Optional[str] = None  # URL ada-api uses to reach nango-server
+    NANGO_PUBLIC_URL: Optional[str] = None  # URL for user's browser to reach Nango OAuth (legacy)
     NANGO_SECRET_KEY: Optional[str] = None
+    NANGO_CALLBACK_URL: Optional[str] = None  # Public URL where OAuth callbacks arrive
 
     @model_validator(mode="after")
     @classmethod

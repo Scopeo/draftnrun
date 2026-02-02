@@ -12,7 +12,6 @@ resources:
   - nango-deployment.yaml
   - nango-service.yaml
   - nango-network-policy.yaml
-  - nango-ingress-middleware.yaml
 
 labels:
   - pairs:

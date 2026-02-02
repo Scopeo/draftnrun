@@ -12,15 +12,7 @@ spec:
     - Ingress
     - Egress
   ingress:
-    # Allow traffic from Traefik/Ingress Controller for OAuth callbacks
-    - from:
-        - namespaceSelector:
-            matchLabels:
-              name: kube-system  # Traefik typically runs here
-      ports:
-        - protocol: TCP
-          port: 3003
-    # Allow traffic from ada-api for internal API calls
+    # Only allow traffic from ada-api (internal only, no public ingress)
     - from:
         - podSelector:
             matchLabels:
