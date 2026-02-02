@@ -15,11 +15,12 @@ mkdir -p "$CACHE_DIR"
 ensure_pg_tools() {
   # Check for pg_dump in the specific PostgreSQL 16 path first, then in PATH
   if ! command -v /usr/pgsql-16/bin/pg_dump &> /dev/null && ! command -v pg_dump &> /dev/null; then
-    echo "===> Installing PostgreSQL 16 client tools"
-    sudo dnf remove -y postgresql15* || true
-    sudo dnf install -y postgresql16
+    echo "===> PostgreSQL client tools not found"
+    echo "===> ERROR: pg_dump is required but not installed"
+    echo "===> Please ensure postgresql-client is installed in the Docker image"
+    exit 1
   else
-    echo "===> PostgreSQL 16 client tools already installed"
+    echo "===> PostgreSQL client tools already installed"
   fi
 }
 
