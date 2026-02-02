@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from ada_backend.repositories.quality_assurance_repository import (
     check_column_exist,
-    check_dataset_exist,
+    check_dataset_belongs_to_project,
     create_custom_column,
     delete_custom_column,
     get_dataset_custom_columns_max_position,
@@ -27,7 +27,7 @@ def get_qa_columns_by_dataset_service(
     dataset_id: UUID,
 ) -> List[QAColumnResponse]:
     try:
-        dataset_existence = check_dataset_exist(session, project_id, dataset_id)
+        dataset_existence = check_dataset_belongs_to_project(session, project_id, dataset_id)
         if not dataset_existence:
             raise QADatasetNotInProjectError(project_id, dataset_id)
 
@@ -45,7 +45,7 @@ def create_qa_column_service(
     column_name: str,
 ) -> QAColumnResponse:
     try:
-        dataset_existence = check_dataset_exist(session, project_id, dataset_id)
+        dataset_existence = check_dataset_belongs_to_project(session, project_id, dataset_id)
         if not dataset_existence:
             raise QADatasetNotInProjectError(project_id, dataset_id)
 
@@ -76,7 +76,7 @@ def rename_qa_column_service(
     column_name: str,
 ) -> QAColumnResponse:
     try:
-        dataset_existence = check_dataset_exist(session, project_id, dataset_id)
+        dataset_existence = check_dataset_belongs_to_project(session, project_id, dataset_id)
         if not dataset_existence:
             raise QADatasetNotInProjectError(project_id, dataset_id)
 
@@ -107,7 +107,7 @@ def delete_qa_column_service(
     column_id: UUID,
 ) -> dict:
     try:
-        dataset_existence = check_dataset_exist(session, project_id, dataset_id)
+        dataset_existence = check_dataset_belongs_to_project(session, project_id, dataset_id)
         if not dataset_existence:
             raise QADatasetNotInProjectError(project_id, dataset_id)
 

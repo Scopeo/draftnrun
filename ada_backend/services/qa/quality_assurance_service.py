@@ -12,7 +12,7 @@ from ada_backend.database.models import CallType
 from ada_backend.repositories.env_repository import get_env_relationship_by_graph_runner_id
 from ada_backend.repositories.qa_evaluation_repository import delete_evaluations_for_input_ids
 from ada_backend.repositories.quality_assurance_repository import (
-    check_dataset_exist,
+    check_dataset_belongs_to_project,
     clear_version_outputs_for_input_ids,
     create_datasets,
     create_inputs_groundtruths,
@@ -472,7 +472,7 @@ def update_dataset_service(
     Returns:
         DatasetResponse: The updated dataset
     """
-    if not check_dataset_exist(session, project_id, dataset_id):
+    if not check_dataset_belongs_to_project(session, project_id, dataset_id):
         LOGGER.error(f"Failed to update dataset {dataset_id}: Dataset {dataset_id} not found in project {project_id}")
         raise QADatasetNotInProjectError(project_id, dataset_id)
 
@@ -508,7 +508,7 @@ def delete_datasets_service(
         int: Number of deleted datasets
     """
     for dataset_id in delete_data.dataset_ids:
-        if not check_dataset_exist(session, project_id, dataset_id):
+        if not check_dataset_belongs_to_project(session, project_id, dataset_id):
             LOGGER.error(
                 f"Failed to delete datasets for project {project_id}: "
                 f"Dataset {dataset_id} not found in project {project_id}"
