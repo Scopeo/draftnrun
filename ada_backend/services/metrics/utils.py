@@ -59,8 +59,8 @@ def query_root_trace_duration(project_id: UUID, duration_days: int) -> pd.DataFr
       SELECT
         s.trace_rowid,
         ROUND(COALESCE(SUM(
-            COALESCE((s.attributes->'credits'->>'input_token')::float, 0) + 
-            COALESCE((s.attributes->'credits'->>'output_token')::float, 0) + 
+            COALESCE((s.attributes->'credits'->>'input_token')::float, 0) +
+            COALESCE((s.attributes->'credits'->>'output_token')::float, 0) +
             COALESCE((s.attributes->'credits'->>'per_call')::float, 0)
         ), 0)::numeric, 0) as total_credits
       FROM relevant_spans s

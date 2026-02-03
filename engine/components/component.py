@@ -3,8 +3,7 @@ import logging
 from abc import ABC, abstractmethod
 from typing import Any, Dict, Optional, Type
 
-from openinference.semconv.trace import (OpenInferenceSpanKindValues,
-                                         SpanAttributes)
+from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttributes
 from opentelemetry import trace as trace_api
 from opentelemetry.util.types import Attributes
 from pydantic import BaseModel, ValidationError
@@ -12,9 +11,7 @@ from tenacity import RetryError
 
 from engine import legacy_compatibility
 from engine.coercion_matrix import CoercionError
-from engine.components.types import (AgentPayload, ChatMessage,
-                                     ComponentAttributes, NodeData,
-                                     ToolDescription)
+from engine.components.types import AgentPayload, ChatMessage, ComponentAttributes, NodeData, ToolDescription
 from engine.prometheus_metric import track_calls
 from engine.trace.credit_calculator import calculate_and_set_component_credits
 from engine.trace.serializer import serialize_to_json

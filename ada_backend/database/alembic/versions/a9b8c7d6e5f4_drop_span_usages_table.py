@@ -64,8 +64,8 @@ def upgrade() -> None:
         FROM credits.span_usages su
         WHERE s.span_id = su.span_id
         AND (
-            su.credits_input_token IS NOT NULL 
-            OR su.credits_output_token IS NOT NULL 
+            su.credits_input_token IS NOT NULL
+            OR su.credits_output_token IS NOT NULL
             OR su.credits_per_call IS NOT NULL
             OR su.credits_per IS NOT NULL
         )
@@ -111,8 +111,10 @@ def downgrade() -> None:
     connection = op.get_bind()
 
     rollback_query = text("""
-        INSERT INTO credits.span_usages (span_id, credits_input_token, credits_output_token, credits_per_call, credits_per)
-        SELECT 
+        INSERT INTO credits.span_usages (
+            span_id, credits_input_token, credits_output_token, credits_per_call, credits_per
+        )
+        SELECT
             s.span_id,
             (s.attributes->'credits'->>'input_token')::float,
             (s.attributes->'credits'->>'output_token')::float,
