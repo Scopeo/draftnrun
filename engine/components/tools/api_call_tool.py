@@ -153,7 +153,7 @@ class APICallTool(Component):
     async def _run_without_io_trace(
         self,
         inputs: APICallToolInputs,
-        ctx: dict,
+        ctx: Optional[dict] = None,
     ) -> APICallToolOutputs:
         dynamic_params = inputs.model_extra or {}
 
