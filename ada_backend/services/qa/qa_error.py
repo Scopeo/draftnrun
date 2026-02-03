@@ -97,6 +97,7 @@ class InvalidFormatError(Exception):
     def __init__(self, field_name: str, expected_format: str = "JSON"):
         super().__init__(f"Invalid {expected_format} format in {field_name}")
 
+
 class QADatasetNotInProjectError(Exception):
     """Raised when a dataset is not linked to the given project"""
 
