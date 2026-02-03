@@ -26,7 +26,7 @@ def seed_api_call_components(session: Session):
     api_call_component = Component(
         id=COMPONENT_UUIDS["api_call_tool"],
         name="API Call",
-        is_agent=False,
+        is_agent=True,
         function_callable=True,
         can_use_function_calling=False,
         icon="tabler-api",
