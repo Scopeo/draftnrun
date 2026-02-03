@@ -3,7 +3,8 @@ import logging
 from abc import ABC, abstractmethod
 from typing import Any, Dict, Optional, Type
 
-from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttributes
+from openinference.semconv.trace import (OpenInferenceSpanKindValues,
+                                         SpanAttributes)
 from opentelemetry import trace as trace_api
 from opentelemetry.util.types import Attributes
 from pydantic import BaseModel, ValidationError
@@ -11,14 +12,11 @@ from tenacity import RetryError
 
 from engine import legacy_compatibility
 from engine.coercion_matrix import CoercionError
-from engine.components.types import (
-    AgentPayload,
-    ChatMessage,
-    ComponentAttributes,
-    NodeData,
-    ToolDescription,
-)
+from engine.components.types import (AgentPayload, ChatMessage,
+                                     ComponentAttributes, NodeData,
+                                     ToolDescription)
 from engine.prometheus_metric import track_calls
+from engine.trace.credit_calculator import calculate_and_set_component_credits
 from engine.trace.serializer import serialize_to_json
 from engine.trace.trace_manager import TraceManager
 
@@ -114,6 +112,9 @@ class Component(ABC):
     async def _legacy_run_without_io_trace(self, *inputs: AgentPayload | dict, **kwargs) -> AgentPayload:
         raise NotImplementedError("Legacy components must implement this method or keep old signature with adapter.")
 
+    def _calculate_component_credits(self, span):
+        calculate_and_set_component_credits(span)
+
     @track_calls
     async def run(self, *args, **kwargs):
         # Dispatcher supporting both NodeData and legacy AgentPayload calls
@@ -160,6 +161,7 @@ class Component(ABC):
                             SpanAttributes.OUTPUT_VALUE: serialize_to_json(output_node_data.data, shorten_string=True)
                         })
                         self._set_trace_data(span)
+                        self._calculate_component_credits(span)
                         span.set_status(trace_api.StatusCode.OK)
                         return output_node_data
                     else:
@@ -182,6 +184,7 @@ class Component(ABC):
                             SpanAttributes.OUTPUT_VALUE: serialize_to_json(output_node_data.data, shorten_string=True)
                         })
                         self._set_trace_data(span)
+                        self._calculate_component_credits(span)
                         span.set_status(trace_api.StatusCode.OK)
                         return output_node_data
 
@@ -254,6 +257,7 @@ class Component(ABC):
                     SpanAttributes.OUTPUT_VALUE: serialize_to_json(legacy_output, shorten_string=True)
                 })
                 self._set_trace_data(span)
+                self._calculate_component_credits(span)
                 span.set_status(trace_api.StatusCode.OK)
                 return legacy_output
 

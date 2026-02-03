@@ -14,6 +14,7 @@ from engine.components.types import ToolDescription
 from engine.components.utils import load_str_to_json
 from engine.llm_services.constrained_output_models import OutputFormatModel
 from engine.llm_services.providers import create_provider
+from engine.trace.credit_calculator import calculate_llm_credits
 from engine.trace.trace_manager import TraceManager
 
 LOGGER = logging.getLogger(__name__)
@@ -40,6 +41,7 @@ class LLMService(ABC):
         self._base_url = base_url
         self._model_id = model_id
 
+    @calculate_llm_credits
     def _set_span_token_counts(self, span, prompt_tokens: int, completion_tokens: Optional[int], total_tokens: int):
         """Set token counts and provider on the current span"""
         attributes = {
