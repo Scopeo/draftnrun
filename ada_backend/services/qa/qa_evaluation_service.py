@@ -23,6 +23,7 @@ from ada_backend.schemas.qa_evaluation_schema import (
 from ada_backend.services.agent_runner_service import setup_tracing_context
 from ada_backend.services.entity_factory import get_llm_provider_and_model
 from ada_backend.services.errors import LLMJudgeNotFound
+from ada_backend.services.qa.deterministic_evaluators_service import run_deterministic_evaluation_service
 from ada_backend.services.qa.qa_error import VersionOutputEmptyError
 from engine.components.utils_prompt import fill_prompt_template
 from engine.llm_services.llm_service import CompletionService
@@ -142,24 +143,38 @@ async def run_judge_evaluation_service(
     version_output_id: UUID,
 ) -> JudgeEvaluationResponse:
     try:
-        judge, completion_service, version_output_data = _setup_judge_evaluation_context(
-            session=session,
-            project_id=project_id,
-            judge_id=judge_id,
-            version_output_id=version_output_id,
-        )
+        judge = get_llm_judge_by_id(session=session, judge_id=judge_id)
+        if not judge:
+            raise LLMJudgeNotFound(judge_id, project_id)
 
-        result = await _evaluate_single_version_output(
-            session=session,
-            judge=judge,
-            judge_id=judge_id,
-            completion_service=completion_service,
-            version_output_data=version_output_data,
-        )
+        # TODO: Deterministic evaluations will have their own dedicated service and endpoint
+        # - The function as it was before was EXACTLY what is in the "else" :
+        # - To revert to original function, delete everything that is not in the "else" or the "except"
+        if judge.evaluation_type == EvaluationType.JSON_EQUALITY:
+            return run_deterministic_evaluation_service(
+                session=session,
+                judge_id=judge_id,
+                version_output_id=version_output_id,
+            )
+        else:
+            judge, completion_service, version_output_data = _setup_judge_evaluation_context(
+                session=session,
+                project_id=project_id,
+                judge_id=judge_id,
+                version_output_id=version_output_id,
+            )
 
-        LOGGER.info(f"Judge evaluation completed for judge {judge_id} and version_output {version_output_id}")
+            result = await _evaluate_single_version_output(
+                session=session,
+                judge=judge,
+                judge_id=judge_id,
+                completion_service=completion_service,
+                version_output_data=version_output_data,
+            )
 
-        return result
+            LOGGER.info(f"Judge evaluation completed for judge {judge_id} and version_output {version_output_id}")
+
+            return result
     except Exception as e:
         LOGGER.error(f"Error in run_judge_evaluation_service: {str(e)}", exc_info=True)
         raise ValueError(f"Failed to run judge evaluation: {str(e)}") from e

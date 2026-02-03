@@ -204,9 +204,11 @@ class CronStatus(StrEnum):
 
 
 class EvaluationType(StrEnum):
+    # TODO: Split into LLMEvaluationType and DeterministicEvaluationType when refactoring to evaluator hierarchy
     BOOLEAN = "boolean"
     SCORE = "score"
     FREE_TEXT = "free_text"
+    JSON_EQUALITY = "json_equality"
 
 
 class PortType(StrEnum):
@@ -1614,6 +1616,8 @@ class VersionOutput(Base):
 
 
 class LLMJudge(Base):
+    # TODO: Refactor into a proper evaluator hierarchy
+    # - Create base Evaluator class from which LLMJudge and DeterministicEvaluator can inherit
     __tablename__ = "llm_judges"
     __table_args__ = {"schema": "quality_assurance"}
 
