@@ -94,8 +94,6 @@ class TerminalCommandRunner(Component):
 
         if params and params.shared_sandbox:
             sandbox = params.shared_sandbox
-        elif shared_sandbox:
-            sandbox = shared_sandbox
         else:
             sandbox = await AsyncSandbox.create(api_key=self.e2b_api_key)
             if params:
@@ -120,10 +118,6 @@ class TerminalCommandRunner(Component):
                 "command": command,
                 "error": str(e),
             }
-        finally:
-            # Only cleanup if sandbox was passed explicitly (not from context)
-            if shared_sandbox and not (params and params.shared_sandbox == sandbox):
-                await sandbox.kill()
 
         return result
 

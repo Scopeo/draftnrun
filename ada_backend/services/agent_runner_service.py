@@ -268,14 +268,15 @@ async def run_agent(
         tb = traceback.format_exc()
         raise ValueError(f"Error running agent: {tb}") from e
     finally:
+        # TODO: Rename the function
         params = get_tracing_span()
         if params and params.shared_sandbox:
             try:
                 await params.shared_sandbox.kill()
+                LOGGER.info("Successfully cleaned up shared sandbox")
             except Exception as e:
-                LOGGER.error(f"Failed to cleanup shared sandbox: {e}")
-            finally:
-                params.shared_sandbox = None
+                LOGGER.error(f"CRITICAL: Failed to cleanup shared sandbox (will leak resources): {e}")
+            params.shared_sandbox = None
 
         files = []
         if response_format is not None and temp_folder_exists(uuid_for_temp_folder):
