@@ -36,10 +36,7 @@ from ada_backend.services.file_response_service import (
     temp_folder_exists,
 )
 from ada_backend.services.tag_service import compose_tag_name
-from engine.components.errors import (
-    KeyTypePromptTemplateError,
-    MissingKeyPromptTemplateError,
-)
+from engine.components.errors import KeyTypePromptTemplateError, MissingKeyPromptTemplateError
 from engine.field_expressions.serializer import from_json as expression_from_json
 from engine.graph_runner.graph_runner import GraphRunner
 from engine.graph_runner.runnable import Runnable
@@ -271,6 +268,15 @@ async def run_agent(
         tb = traceback.format_exc()
         raise ValueError(f"Error running agent: {tb}") from e
     finally:
+        params = get_tracing_span()
+        if params and params.shared_sandbox:
+            try:
+                await params.shared_sandbox.kill()
+            except Exception as e:
+                LOGGER.error(f"Failed to cleanup shared sandbox: {e}")
+            finally:
+                params.shared_sandbox = None
+
         files = []
         if response_format is not None and temp_folder_exists(uuid_for_temp_folder):
             try:

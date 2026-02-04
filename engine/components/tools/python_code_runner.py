@@ -19,6 +19,7 @@ from engine.components.component import Component
 from engine.components.types import ComponentAttributes, ToolDescription
 from engine.temps_folder_utils import get_output_dir
 from engine.trace.serializer import serialize_to_json
+from engine.trace.span_context import get_tracing_span
 from engine.trace.trace_manager import TraceManager
 from settings import settings
 
@@ -280,9 +281,16 @@ class PythonCodeRunner(Component):
         if not self.e2b_api_key:
             raise ValueError("E2B API key not configured")
 
-        sandbox = shared_sandbox
-        if not sandbox:
+        params = get_tracing_span()
+
+        if params and params.shared_sandbox:
+            sandbox = params.shared_sandbox
+        elif shared_sandbox:
+            sandbox = shared_sandbox
+        else:
             sandbox = await AsyncSandbox.create(api_key=self.e2b_api_key)
+            if params:
+                params.shared_sandbox = sandbox
         try:
             uploaded_filenames = []
             if input_filepaths:
@@ -329,7 +337,8 @@ class PythonCodeRunner(Component):
             }
             records = []
         finally:
-            if not shared_sandbox:
+            # Only cleanup if sandbox was passed explicitly (not from context)
+            if shared_sandbox and not (params and params.shared_sandbox == sandbox):
                 await sandbox.kill()
         return result, records
 

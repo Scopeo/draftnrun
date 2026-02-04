@@ -10,6 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from ada_backend.database.models import UIComponent
 from engine.components.component import Component
 from engine.components.types import ComponentAttributes, ToolDescription
+from engine.trace.span_context import get_tracing_span
 from engine.trace.trace_manager import TraceManager
 from settings import settings
 
@@ -89,7 +90,17 @@ class TerminalCommandRunner(Component):
         if not self.e2b_api_key:
             raise ValueError("E2B API key not configured")
 
-        sandbox = shared_sandbox if shared_sandbox else await AsyncSandbox.create(api_key=self.e2b_api_key)
+        params = get_tracing_span()
+
+        if params and params.shared_sandbox:
+            sandbox = params.shared_sandbox
+        elif shared_sandbox:
+            sandbox = shared_sandbox
+        else:
+            sandbox = await AsyncSandbox.create(api_key=self.e2b_api_key)
+            if params:
+                params.shared_sandbox = sandbox
+
         try:
             # Use the sandbox's terminal capabilities
             execution = await sandbox.commands.run(command, timeout=self.command_timeout)
@@ -110,7 +121,8 @@ class TerminalCommandRunner(Component):
                 "error": str(e),
             }
         finally:
-            if not shared_sandbox:
+            # Only cleanup if sandbox was passed explicitly (not from context)
+            if shared_sandbox and not (params and params.shared_sandbox == sandbox):
                 await sandbox.kill()
 
         return result
