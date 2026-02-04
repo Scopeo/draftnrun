@@ -9,10 +9,10 @@ metadata:
 spec:
   tls:
     - hosts:
-        - ada.scopeo.studio
+        - ada-prod.scopeo.studio
       secretName: ada-tls
   rules:
-    - host: ada.scopeo.studio
+    - host: ada-prod.scopeo.studio
       http:
         paths:
           - path: /
