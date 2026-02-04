@@ -38,10 +38,13 @@ class ComponentVersionUseInfoSchema(BaseModel):
 
 
 class PortDefinitionSchema(BaseModel):
+    id: UUID
     name: str
     port_type: str
     is_canonical: bool
     description: Optional[str] = None
+    parameter_type: Optional[str] = None
+    nullable: Optional[bool] = None
 
 
 class ComponentWithParametersDTO(ComponentVersionUseInfoSchema, ComponentSchema):
