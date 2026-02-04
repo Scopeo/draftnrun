@@ -19,6 +19,7 @@ from ada_backend.repositories.integration_repository import (
     upsert_component_instance_integration,
 )
 from ada_backend.repositories.organization_repository import get_organization_secrets_from_project_id
+from ada_backend.repositories.port_configuration_repository import upsert_port_configurations
 from ada_backend.schemas.pipeline.base import ComponentInstanceSchema
 from ada_backend.services.entity_factory import get_llm_provider_and_model
 
@@ -32,14 +33,16 @@ def create_or_update_component_instance(
 ) -> UUID:
     """Creates or updates a component instance with its parameters"""
     # Create tool description if needed
+    # TODO: tool_properties and required_tool_properties are no longer sent from frontend
+    # They are now derived from port_configurations. Pass None to preserve existing DB values.
     tool_description = None
     if instance_data.tool_description:
         tool_description = get_or_create_tool_description(
             session=session,
             name=instance_data.tool_description.name,
             description=instance_data.tool_description.description,
-            tool_properties=instance_data.tool_description.tool_properties,
-            required_tool_properties=instance_data.tool_description.required_tool_properties,
+            tool_properties=None,  # Don't overwrite existing DB values
+            required_tool_properties=None,  # Don't overwrite existing DB values
             id=instance_data.tool_description.id if instance_data.tool_description.id else None,
         )
 
@@ -161,5 +164,14 @@ def create_or_update_component_instance(
                     ),  # Convert to string for storage
                     order=param.order,
                 )
+
+    if instance_data.port_configurations:
+        port_configs_data = [config.model_dump() for config in instance_data.port_configurations]
+        upsert_port_configurations(
+            session=session,
+            component_instance_id=instance_id,
+            configs_list=port_configs_data,
+        )
+        LOGGER.info(f"Upserted {len(port_configs_data)} port configurations for component instance {instance_id}")
 
     return instance_id

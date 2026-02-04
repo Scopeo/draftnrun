@@ -4,7 +4,6 @@ from uuid import UUID
 
 from sqlalchemy.orm import Session
 
-from ada_backend.database.models import ComponentInstance
 from ada_backend.database.seed.utils import COMPONENT_VERSION_UUIDS
 from ada_backend.repositories.component_repository import (
     get_base_component_from_version,
@@ -13,17 +12,18 @@ from ada_backend.repositories.component_repository import (
     get_component_name_from_instance,
     get_component_sub_components,
     get_global_parameters_by_component_version_id,
-    get_tool_description,
-    get_tool_description_component,
 )
 from ada_backend.repositories.integration_repository import (
     get_component_instance_integration_relationship,
     get_integration_from_component,
 )
 from ada_backend.repositories.organization_repository import get_organization_secrets_from_project_id
-from ada_backend.schemas.pipeline.base import ToolDescriptionSchema
 from ada_backend.services.errors import MissingDataSourceError, MissingIntegrationError
 from ada_backend.services.registry import FACTORY_REGISTRY
+from ada_backend.services.tool_description_generator import (
+    get_tool_description_schema,
+    get_tool_properties_from_ports,
+)
 from ada_backend.utils.secret_resolver import replace_secret_placeholders
 from engine.components.errors import (
     KeyTypePromptTemplateError,
@@ -238,14 +238,14 @@ def instantiate_component(
 
     input_params = replace_secret_placeholders(input_params, key_to_secret)
 
-    # Resolve tool description if required
-    tool_description_schema = _get_tool_description(session, component_instance)
+    tool_description_schema = get_tool_description_schema(session, component_instance)
     if tool_description_schema:
+        tool_props = get_tool_properties_from_ports(session, component_instance)
         input_params["tool_description"] = ToolDescription(
             name=tool_description_schema.name,
             description=tool_description_schema.description,
-            tool_properties=tool_description_schema.tool_properties,
-            required_tool_properties=tool_description_schema.required_tool_properties,
+            tool_properties=tool_props.tool_properties,
+            required_tool_properties=tool_props.required_tool_properties,
         )
     LOGGER.debug(f"Tool description: {tool_description_schema}\n")
     input_params["component_attributes"] = ComponentAttributes(
@@ -288,35 +288,3 @@ def instantiate_component(
             f"with version ID {component_instance.component_version_id} "
             f"and instance ID {component_instance.id}: {e}"
         ) from e
-
-
-def _get_tool_description(
-    session: Session,
-    component_instance: ComponentInstance,
-) -> Optional[ToolDescriptionSchema]:
-    """
-    Get the tool description for a component instance.
-
-    Args:
-        session (Session): SQLAlchemy session.
-        component_instance (ComponentInstance): Component instance to get the tool description for.
-
-    Returns:
-        Any: Tool description for the component instance.
-    """
-
-    db_tool_description = get_tool_description(session, component_instance.id)
-    if not db_tool_description:
-        db_tool_description = get_tool_description_component(session, component_instance.component_version_id)
-
-    if not db_tool_description:
-        LOGGER.warning(f"Tool description not found for agent component instance {component_instance.id}.")
-        return None
-
-    return ToolDescriptionSchema(
-        id=db_tool_description.id,
-        name=db_tool_description.name.replace(" ", "_"),
-        description=db_tool_description.description,
-        tool_properties=db_tool_description.tool_properties,
-        required_tool_properties=db_tool_description.required_tool_properties,
-    )
