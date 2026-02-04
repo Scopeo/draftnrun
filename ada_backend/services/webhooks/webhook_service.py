@@ -1,3 +1,4 @@
+import json
 import logging
 from typing import Any, Dict, List
 from uuid import UUID
@@ -17,6 +18,7 @@ from ada_backend.services.webhooks.errors import (
     WebhookProcessingError,
     WebhookQueueError,
 )
+from ada_backend.services.webhooks.resend_service import get_resend_event_id, prepare_resend_workflow_input
 from ada_backend.utils.redis_client import (
     check_and_set_webhook_event,
     push_webhook_event,
@@ -29,6 +31,8 @@ LOGGER = logging.getLogger(__name__)
 def get_webhook_event_id(payload: Dict[str, Any], provider: WebhookProvider) -> str:
     if provider == WebhookProvider.AIRCALL:
         return get_aircall_event_id(payload)
+    elif provider == WebhookProvider.RESEND:
+        return get_resend_event_id(payload)
     else:
         LOGGER.error(f"Webhook event id not found for provider: {provider}")
         raise WebhookEventIdNotFoundError(provider=provider, payload=payload)
@@ -81,6 +85,31 @@ async def process_webhook_event(
     except Exception as e:
         LOGGER.error(f"Error processing {provider.value} webhook: {str(e)}", exc_info=True)
         raise WebhookProcessingError(webhook=webhook, error=e)
+
+
+def prepare_workflow_input(payload: Dict[str, Any], provider: str) -> Dict[str, Any]:
+    """
+    Transform provider-specific webhook payload into workflow input format.
+    Delegates to provider-specific service functions.
+
+    Args:
+        payload: Raw webhook payload
+        provider: Webhook provider type
+
+    Returns:
+        Dict with formatted workflow input data
+    """
+    provider_enum = WebhookProvider(provider)
+    LOGGER.info(f"Preparing workflow input for provider: {provider_enum}")
+    match provider_enum:
+        case WebhookProvider.RESEND:
+            return prepare_resend_workflow_input(payload)
+        case _:
+            return {
+                "messages": [
+                    {"role": "user", "content": json.dumps(payload, default=str)},
+                ],
+            }
 
 
 def get_webhook_triggers_service(session: Session, webhook_id: UUID) -> List[IntegrationTriggerResponse]:
