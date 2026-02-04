@@ -8,18 +8,14 @@ from ada_backend.repositories.credits_repository import (
     delete_component_version_cost,
     delete_organization_limit,
     get_all_organization_limits_with_usage,
-    get_component_cost_for_calculation,
-    get_llm_cost_for_calculation,
     update_organization_limit,
     upsert_component_version_cost,
 )
 from ada_backend.schemas.credits_schema import (
-    ComponentVersionCost,
     ComponentVersionCostResponse,
     OrganizationLimitAndUsageResponse,
     OrganizationLimitResponse,
 )
-from ada_backend.schemas.llm_models_schema import LLMModelResponse
 from ada_backend.services.errors import ComponentVersionCostNotFound, OrganizationLimitNotFound
 
 
@@ -90,17 +86,3 @@ def get_all_organization_limits_and_usage_service(
         OrganizationLimitAndUsageResponse.model_validate(organization_limit_and_usage, from_attributes=True)
         for organization_limit_and_usage in organization_limits_and_usage
     ]
-
-
-def get_llm_cost_for_calculation_service(session: Session, model_id: UUID) -> Optional[LLMModelResponse]:
-    llm_cost = get_llm_cost_for_calculation(session, model_id)
-    return LLMModelResponse.model_validate(llm_cost, from_attributes=True) if llm_cost else None
-
-
-def get_component_cost_for_calculation_service(
-    session: Session, component_instance_id: UUID
-) -> Optional[ComponentVersionCost]:
-    component_cost = get_component_cost_for_calculation(session, component_instance_id)
-    return (
-        ComponentVersionCostResponse.model_validate(component_cost, from_attributes=True) if component_cost else None
-    )

@@ -1,6 +1,5 @@
 import json
 import logging
-from contextlib import contextmanager
 from datetime import datetime, timezone
 from typing import cast
 
@@ -26,16 +25,6 @@ def get_session_trace():
     Session = sessionmaker(bind=engine)
     session = Session()
     return session
-
-
-@contextmanager
-def trace_session():
-    """Context manager for trace DB session with automatic cleanup."""
-    session = get_session_trace()
-    try:
-        yield session
-    finally:
-        session.close()
 
 
 def event_to_dict(event: Event) -> dict:
