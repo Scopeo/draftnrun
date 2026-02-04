@@ -8,12 +8,6 @@ import httpx
 from ada_backend.services.webhooks.webhook_service import prepare_workflow_input
 from settings import settings
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    handlers=[logging.StreamHandler()],  # Output to stdout for worker to capture
-)
-
 LOGGER = logging.getLogger(__name__)
 
 WEBHOOK_WORKFLOW_TIMEOUT = 1800  # 30 minutes in seconds (for long-running workflows)

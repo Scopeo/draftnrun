@@ -7,22 +7,12 @@ from pathlib import Path
 from typing import Any, Dict
 
 import redis
-import structlog
 from dotenv import load_dotenv
 
-# TODO: use same logging as the rest of the code
-structlog.configure(
-    processors=[structlog.processors.TimeStamper(fmt="iso"), structlog.processors.JSONRenderer()],
-    wrapper_class=structlog.make_filtering_bound_logger(logging.INFO),
-    context_class=dict,
-    logger_factory=structlog.PrintLoggerFactory(),
-    cache_logger_on_first_use=True,
-)
-
-logger = structlog.get_logger()
+LOGGER = logging.getLogger(__name__)
 
 dotenv_path = Path(__file__).parent.parent / ".env"
-logger.info(f"Loading environment variables from {dotenv_path}")
+LOGGER.info(f"Loading environment variables from {dotenv_path}")
 load_dotenv(dotenv_path=dotenv_path)
 
 REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
@@ -85,11 +75,11 @@ class BaseWorker:
                 try:
                     payload = json.loads(data)
                 except json.JSONDecodeError as e:
-                    logger.error("invalid_json", error=str(e), queue=self.queue_name)
+                    LOGGER.error(f"Invalid JSON in queue {self.queue_name}: {str(e)}")
                     continue
 
                 if not self._validate_payload(payload, self.get_required_fields()):
-                    logger.error("invalid_payload_format", data=data, queue=self.queue_name)
+                    LOGGER.error(f"Invalid payload format in queue {self.queue_name}")
                     continue
 
                 if self.should_process_locally():
@@ -100,10 +90,10 @@ class BaseWorker:
                     self._log_queued_task(payload)
 
             except redis.ConnectionError:
-                logger.warning(f"Redis connection error for queue {self.queue_name}, retrying in 5 seconds...")
+                LOGGER.warning(f"Redis connection error for queue {self.queue_name}, retrying in 5 seconds...")
                 time.sleep(5)
             except Exception as e:
-                logger.error("unexpected_error", error=str(e), queue=self.queue_name)
+                LOGGER.error(f"Unexpected error in queue {self.queue_name}: {str(e)}", exc_info=True)
                 time.sleep(1)
 
     def _process_with_cleanup(self, payload: Dict[str, Any]) -> None:
@@ -125,4 +115,4 @@ class BaseWorker:
         Log when a task is queued for external processing.
         Can be overridden by subclasses for custom logging.
         """
-        logger.info("task_queued_for_external_processing", queue=self.queue_name)
+        LOGGER.info(f"Task queued for external processing in queue {self.queue_name}")
