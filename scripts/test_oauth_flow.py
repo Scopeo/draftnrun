@@ -41,12 +41,11 @@ def print_info(text: str):
     print(f"ℹ️  {text}")
 
 
-async def test_oauth_flow_headless(project_id: str, provider: str):
+async def test_oauth_flow_headless(project_id: str, provider: str, backend_url: str):
     """Test OAuth flow using headless endpoint."""
 
-    backend_url = "http://localhost:8000"
-
     print_header("OAuth Flow Test (Headless)")
+    print_info(f"Backend URL: {backend_url}")
     print_info(f"Provider: {provider}")
     print_info(f"Project ID: {project_id}")
 
@@ -173,18 +172,23 @@ def main():
     parser = argparse.ArgumentParser(description="Test OAuth flow headless")
     parser.add_argument("--project-id", required=True, help="Project UUID")
     parser.add_argument("--provider", default="slack", help="Provider key (slack, hubspot, etc)")
+    parser.add_argument(
+        "--backend-url",
+        default="http://localhost:8000",
+        help="Backend URL (default: http://localhost:8000, staging: https://ada-staging.draftnrun.com)",
+    )
 
     args = parser.parse_args()
 
     print_header("Headless OAuth Test")
     print_info("This test uses the headless OAuth flow (no Connect UI)")
     print_info("Make sure:")
-    print_info("  1. Backend running on localhost:8000")
-    print_info("  2. Nango running on localhost:3003")
-    print_info("  3. ngrok exposing port 3003")
-    print_info("  4. Provider app redirect URL configured with ngrok URL")
+    print_info(f"  1. Backend running on {args.backend_url}")
+    print_info("  2. Nango accessible (local: localhost:3003 + ngrok, staging: oauth-staging.draftnrun.com)")
+    print_info("  3. Provider app redirect URL configured correctly")
+    print_info("  4. TEST_USER_EMAIL and TEST_USER_PASSWORD set in credentials.env")
 
-    success = asyncio.run(test_oauth_flow_headless(args.project_id, args.provider))
+    success = asyncio.run(test_oauth_flow_headless(args.project_id, args.provider, args.backend_url))
     sys.exit(0 if success else 1)
 
 

@@ -344,3 +344,5 @@ jobs:
             kubectl scale deployment/ada-ingestion-worker -n ${NS} --replicas=1
             kubectl scale deployment/ada-webhook-worker -n ${NS} --replicas=1
             kubectl scale deployment/ada-scheduler -n ${NS} --replicas=1
+            kubectl scale deployment/nango-server -n ${NS} --replicas=1
+            kubectl scale statefulset/nango-db -n ${NS} --replicas=1
