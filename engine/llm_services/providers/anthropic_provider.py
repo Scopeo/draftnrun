@@ -213,7 +213,7 @@ class AnthropicProvider(BaseProvider):
             body["system"] = system_prompt
 
         try:
-            async with httpx.AsyncClient(timeout=30) as h:
+            async with httpx.AsyncClient(timeout=60) as h:
                 r = await h.post(endpoint, headers=headers, json=body)
         except (httpx.TimeoutException, httpx.NetworkError, httpx.HTTPError) as e:
             raise ValueError(f"Anthropic completion request failed: {type(e).__name__}: {e}") from e
@@ -410,8 +410,17 @@ class AnthropicProvider(BaseProvider):
         stream: bool,
         **kwargs,
     ) -> tuple[ChatCompletion, int, int, int]:
+        if isinstance(messages, str):
+            messages = [{"role": "user", "content": messages}]
+
         if len(tools) == 0 or tool_choice == "none":
-            LOGGER.info("Making simple completion call without tools")
+            LOGGER.info("No tools provided - making simple completion call")
+            messages_copy = messages.copy() if isinstance(messages, list) else [messages]
+            if messages_copy and isinstance(messages_copy[-1], dict) and messages_copy[-1].get("role") == "tool":
+                messages_copy.append({
+                    "role": "user",
+                    "content": "Please provide your final response."
+                })
             content, prompt_tokens, completion_tokens, total_tokens = await self.complete(
                 messages=messages,
                 temperature=temperature,
@@ -419,9 +428,6 @@ class AnthropicProvider(BaseProvider):
             )
             response = wrap_str_content_into_chat_completion_message(content, self._model_name)
             return response, prompt_tokens, completion_tokens, total_tokens
-
-        if isinstance(messages, str):
-            messages = [{"role": "user", "content": messages}]
 
         anthropic_messages, system_prompt = self._build_anthropic_text_messages(messages)
 
@@ -433,6 +439,8 @@ class AnthropicProvider(BaseProvider):
                 anthropic_tool_choice = {"type": "any"}
             elif tool_choice == "auto":
                 anthropic_tool_choice = {"type": "auto"}
+            elif tool_choice == "none":
+                anthropic_tool_choice = {"type": "none"}
             elif tool_choice and tool_choice not in ["none", "auto", "required"]:
                 anthropic_tool_choice = {"type": "tool", "name": tool_choice}
 
@@ -459,7 +467,7 @@ class AnthropicProvider(BaseProvider):
                 body["tool_choice"] = anthropic_tool_choice
 
         try:
-            async with httpx.AsyncClient(timeout=30) as h:
+            async with httpx.AsyncClient(timeout=60) as h:
                 r = await h.post(endpoint, headers=headers, json=body)
         except (httpx.TimeoutException, httpx.NetworkError, httpx.HTTPError) as e:
             raise ValueError(f"Anthropic function call request failed: {type(e).__name__}: {e}") from e
@@ -564,7 +572,7 @@ class AnthropicProvider(BaseProvider):
         }
 
         try:
-            async with httpx.AsyncClient(timeout=30) as h:
+            async with httpx.AsyncClient(timeout=60) as h:
                 r = await h.post(endpoint, headers=headers, json=body)
         except (httpx.TimeoutException, httpx.NetworkError, httpx.HTTPError) as e:
             raise ValueError(f"Anthropic vision request failed: {type(e).__name__}: {e}") from e
