@@ -109,9 +109,6 @@ class Component(ABC):
     async def _legacy_run_without_io_trace(self, *inputs: AgentPayload | dict, **kwargs) -> AgentPayload:
         raise NotImplementedError("Legacy components must implement this method or keep old signature with adapter.")
 
-    def _calculate_component_credits(self, span):
-        calculate_and_set_component_credits(span)
-
     @track_calls
     async def run(self, *args, **kwargs):
         # Dispatcher supporting both NodeData and legacy AgentPayload calls
@@ -158,7 +155,7 @@ class Component(ABC):
                             SpanAttributes.OUTPUT_VALUE: serialize_to_json(output_node_data.data, shorten_string=True)
                         })
                         self._set_trace_data(span)
-                        self._calculate_component_credits(span)
+                        calculate_and_set_component_credits(span)
                         span.set_status(trace_api.StatusCode.OK)
                         return output_node_data
                     else:
@@ -181,7 +178,7 @@ class Component(ABC):
                             SpanAttributes.OUTPUT_VALUE: serialize_to_json(output_node_data.data, shorten_string=True)
                         })
                         self._set_trace_data(span)
-                        self._calculate_component_credits(span)
+                        calculate_and_set_component_credits(span)
                         span.set_status(trace_api.StatusCode.OK)
                         return output_node_data
 
@@ -254,7 +251,7 @@ class Component(ABC):
                     SpanAttributes.OUTPUT_VALUE: serialize_to_json(legacy_output, shorten_string=True)
                 })
                 self._set_trace_data(span)
-                self._calculate_component_credits(span)
+                calculate_and_set_component_credits(span)
                 span.set_status(trace_api.StatusCode.OK)
                 return legacy_output
 

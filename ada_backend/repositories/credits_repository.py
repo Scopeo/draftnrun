@@ -285,20 +285,24 @@ def get_all_organization_limits_with_usage(
     ]
 
 
-def get_llm_cost_for_calculation(session: Session, model_id: UUID):
-
+def get_llm_cost_for_calculation(session: Session, model_id: UUID) -> tuple[Optional[float], Optional[float]]:
     llm_cost_aliased = aliased(db.LLMCost, flat=True)
-    return session.execute(
+    result = session.execute(
         select(db.Cost.credits_per_input_token, db.Cost.credits_per_output_token)
         .join(llm_cost_aliased, llm_cost_aliased.id == db.Cost.id)
         .where(llm_cost_aliased.llm_model_id == model_id)
     ).first()
 
+    if result is None:
+        return None, None
 
-def get_component_cost_for_calculation(session: Session, component_instance_id: UUID):
+    credits_per_input_token, credits_per_output_token = result
+    return credits_per_input_token, credits_per_output_token
 
+
+def get_component_cost_for_calculation(session: Session, component_instance_id: UUID) -> Optional[float]:
     component_cost_aliased = aliased(db.ComponentCost, flat=True)
-    return session.execute(
+    result = session.execute(
         select(db.Cost.credits_per_call)
         .join(component_cost_aliased, component_cost_aliased.id == db.Cost.id)
         .join(
@@ -307,3 +311,8 @@ def get_component_cost_for_calculation(session: Session, component_instance_id: 
         )
         .where(db.ComponentInstance.id == component_instance_id)
     ).first()
+
+    if result is None:
+        return None
+
+    return result[0]
