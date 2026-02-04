@@ -128,8 +128,6 @@ def update_inputs_groundtruths(
 
             updated_inputs_groundtruths.append(input_groundtruth)
 
-    session.commit()
-
     LOGGER.info(f"Updated {len(updated_inputs_groundtruths)} input-groundtruth entries for dataset {dataset_id}")
     return updated_inputs_groundtruths
 
@@ -273,7 +271,6 @@ def clear_version_outputs_for_input_ids(
         .update({VersionOutput.output: ""}, synchronize_session=False)
     )
 
-    session.commit()
     LOGGER.info(f"Cleared outputs for {updated_count} version output rows (inputs: {len(input_ids)})")
     return updated_count
 

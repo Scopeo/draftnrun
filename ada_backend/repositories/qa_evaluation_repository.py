@@ -3,7 +3,7 @@ from uuid import UUID
 
 from sqlalchemy.orm import Session
 
-from ada_backend.database.models import JudgeEvaluation
+from ada_backend.database.models import JudgeEvaluation, VersionOutput
 
 
 def get_evaluations_by_version_output(
@@ -63,4 +63,26 @@ def delete_judge_evaluations(
     )
 
     session.commit()
+    return deleted_count
+
+
+def delete_evaluations_for_input_ids(
+    session: Session,
+    input_ids: List[UUID],
+) -> int:
+    if not input_ids:
+        return 0
+
+    version_output_ids = (
+        session.query(VersionOutput.id)
+        .filter(VersionOutput.input_id.in_(input_ids))
+        .subquery()
+    )
+
+    deleted_count = (
+        session.query(JudgeEvaluation)
+        .filter(JudgeEvaluation.version_output_id.in_(version_output_ids))
+        .delete(synchronize_session=False)
+    )
+
     return deleted_count

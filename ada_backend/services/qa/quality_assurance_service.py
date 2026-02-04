@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from ada_backend.database.models import CallType
 from ada_backend.repositories.env_repository import get_env_relationship_by_graph_runner_id
+from ada_backend.repositories.qa_evaluation_repository import delete_evaluations_for_input_ids
 from ada_backend.repositories.quality_assurance_repository import (
     clear_version_outputs_for_input_ids,
     create_datasets,
@@ -350,7 +351,14 @@ def update_inputs_groundtruths_service(
         # If any input texts were updated, clear corresponding version outputs across all versions
         input_ids_changed = [ig.id for ig in inputs_groundtruths_data.inputs_groundtruths if ig.input is not None]
         if input_ids_changed:
-            clear_version_outputs_for_input_ids(session, input_ids_changed)
+            cleared_count = clear_version_outputs_for_input_ids(session, input_ids_changed)
+            deleted_evals = delete_evaluations_for_input_ids(session, input_ids_changed)
+            LOGGER.info(
+                f"Cleared {cleared_count} outputs and deleted {deleted_evals} evaluations "
+                f"for {len(input_ids_changed)} inputs"
+            )
+
+        session.commit()
 
         LOGGER.info(f"Updated {len(updated_inputs_groundtruths)} input-groundtruth entries for dataset {dataset_id}")
 
@@ -358,6 +366,7 @@ def update_inputs_groundtruths_service(
             inputs_groundtruths=[InputGroundtruthResponse.model_validate(ig) for ig in updated_inputs_groundtruths]
         )
     except Exception as e:
+        session.rollback()
         LOGGER.error(f"Error in update_inputs_groundtruths_service: {str(e)}")
         raise ValueError(f"Failed to update input-groundtruth entries: {str(e)}") from e
 
