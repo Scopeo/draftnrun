@@ -162,10 +162,7 @@ class APICallTool(Component):
         dynamic_params = {}
         
         if inputs.request_body is not None:
-            if isinstance(inputs.request_body, dict):
-                dynamic_params.update(inputs.request_body)
-            else:
-                dynamic_params["body"] = inputs.request_body
+            dynamic_params["body"] = inputs.request_body
         
         if inputs.model_extra:
             dynamic_params.update(inputs.model_extra)
