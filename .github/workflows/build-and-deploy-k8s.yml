@@ -2,7 +2,7 @@ name: Build and Deploy to K8s
 
 on:
   push:
-    branches: [staging]
+    branches: [staging, main]
   workflow_dispatch:
     inputs:
       environment:
@@ -17,7 +17,7 @@ on:
         type: boolean
 
 concurrency:
-  group: deploy-${{ github.event.inputs.environment || 'staging' }}
+  group: deploy-${{ github.event.inputs.environment || (github.ref == 'refs/heads/main' && 'prod') || 'staging' }}
   cancel-in-progress: false
 
 env:
