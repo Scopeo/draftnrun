@@ -47,8 +47,8 @@ def upgrade() -> None:
         # Polymorphic discriminator
         sa.Column("config_type", sa.String(), nullable=False),
         # Timestamps
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=True),
+        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=True),
         sa.PrimaryKeyConstraint("id"),
         sa.ForeignKeyConstraint(
             ["component_instance_id"],
@@ -79,14 +79,24 @@ def upgrade() -> None:
         sa.Column("ai_description_override", sa.Text(), nullable=True),
         # is_required_override: True=make optional port mandatory, False/None=use default
         # Cannot make required ports optional
-        sa.Column("is_required_override", sa.Boolean(), nullable=True),
+        sa.Column(
+            "is_required_override",
+            sa.Boolean(),
+            nullable=True,
+            comment="Override required status: True=mandatory, False=optional, None=use port definition default",
+        ),
         # Custom port fields (when port_definition_id IS NULL)
         sa.Column("custom_port_name", sa.String(), nullable=True),
         sa.Column("custom_port_description", sa.Text(), nullable=True),
         sa.Column("custom_parameter_type", json_schema_type_enum, nullable=True),
         sa.Column("custom_ui_component_properties", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
         # Full JSON Schema override for complex parameter types
-        sa.Column("json_schema_override", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
+        sa.Column(
+            "json_schema_override",
+            postgresql.JSONB(astext_type=sa.Text()),
+            nullable=True,
+            comment="Full JSON Schema for complex parameter types. Overrides simple type mapping.",
+        ),
         sa.PrimaryKeyConstraint("id"),
         sa.ForeignKeyConstraint(
             ["id"],
@@ -98,27 +108,11 @@ def upgrade() -> None:
         # Note: This will be enforced at application level since we can't easily reference parent table
     )
 
-    # Create unique constraint for port definitions
-    op.create_index(
-        "uq_port_config_instance_port_def",
-        "port_configurations",
-        ["component_instance_id", "port_definition_id"],
-        unique=True,
-        postgresql_where=sa.text("port_definition_id IS NOT NULL"),
-    )
-
     # Create index for queries by component_instance_id
     op.create_index(
         "ix_port_configurations_component_instance_id",
         "port_configurations",
         ["component_instance_id"],
-    )
-
-    # Create index on config_type for polymorphic queries
-    op.create_index(
-        "ix_port_configurations_config_type",
-        "port_configurations",
-        ["config_type"],
     )
 
     # Note: We don't create a global unique constraint on custom_port_name
@@ -163,7 +157,13 @@ def upgrade() -> None:
     # Add nullable column with default True (ports are optional by default)
     op.add_column(
         "port_definitions",
-        sa.Column("nullable", sa.Boolean(), nullable=False, server_default="true"),
+        sa.Column(
+            "nullable",
+            sa.Boolean(),
+            nullable=False,
+            server_default="true",
+            comment="True if port is optional, False if required",
+        ),
     )
 
     # Update port_definitions.nullable from parameter definitions
@@ -406,9 +406,7 @@ def downgrade() -> None:
     op.execute("DROP FUNCTION IF EXISTS validate_port_configuration_input_only();")
 
     # Drop parent table
-    op.drop_index("ix_port_configurations_config_type", table_name="port_configurations")
     op.drop_index("ix_port_configurations_component_instance_id", table_name="port_configurations")
-    op.drop_index("uq_port_config_instance_port_def", table_name="port_configurations")
     op.drop_table("port_configurations")
 
     drop_enum_if_exists(connection=op.get_bind(), enum_name="port_setup_mode")

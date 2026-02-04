@@ -33,7 +33,7 @@ def _process_components_with_ports(
     comp_id_to_output_ports: dict[str, list[PortDefinitionSchema]] = {}
     input_ports_by_component_version: dict = {}
     for port in ports:
-        comp_id_to_ports.setdefault(str(port.component_version_id), []).append(
+        comp_id_to_output_ports.setdefault(str(port.component_version_id), []).append(
             PortDefinitionSchema(
                 name=port.name,
                 port_type=port.port_type.value,
