@@ -217,7 +217,7 @@ def build_completion_service_config_definitions(
                             SelectOption(value="medium", label="Medium"),
                             SelectOption(value="high", label="High"),
                         ],
-                        placeholder="Select reasoning level useful only for GPT 5 models",
+                        placeholder="Select reasoning level useful only for GPT 5.X models",
                     ).model_dump(exclude_unset=True, exclude_none=True),
                     is_advanced=True,
                 )
@@ -306,7 +306,7 @@ def build_function_calling_service_config_definitions(
                             SelectOption(value="medium", label="Medium"),
                             SelectOption(value="high", label="High"),
                         ],
-                        placeholder="Select verbosity level useful only for GPT 5 models",
+                        placeholder="Select verbosity level useful only for GPT 5.X models",
                     ).model_dump(exclude_unset=True, exclude_none=True),
                     is_advanced=True,
                 )
@@ -328,7 +328,7 @@ def build_function_calling_service_config_definitions(
                             SelectOption(value="medium", label="Medium"),
                             SelectOption(value="high", label="High"),
                         ],
-                        placeholder="Select reasoning level useful only for GPT 5 models",
+                        placeholder="Select reasoning level useful only for GPT 5.X models",
                     ).model_dump(exclude_unset=True, exclude_none=True),
                     is_advanced=True,
                 )
