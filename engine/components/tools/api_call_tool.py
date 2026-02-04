@@ -35,6 +35,10 @@ API_CALL_TOOL_DESCRIPTION = ToolDescription(
 
 
 class APICallToolInputs(BaseModel):
+    request_body: Optional[Any] = Field(
+        default=None,
+        description="Data to send in the API request body or as query parameters",
+    )
     model_config = ConfigDict(extra="allow", arbitrary_types_allowed=True)
 
 
@@ -60,7 +64,7 @@ class APICallTool(Component):
 
     @classmethod
     def get_canonical_ports(cls) -> dict[str, str | None]:
-        return {"input": None, "output": "output"}
+        return {"input": "request_body", "output": "output"}
 
     def __init__(
         self,
@@ -155,7 +159,16 @@ class APICallTool(Component):
         inputs: APICallToolInputs,
         ctx: Optional[dict] = None,
     ) -> APICallToolOutputs:
-        dynamic_params = inputs.model_extra or {}
+        dynamic_params = {}
+        
+        if inputs.request_body is not None:
+            if isinstance(inputs.request_body, dict):
+                dynamic_params.update(inputs.request_body)
+            else:
+                dynamic_params["body"] = inputs.request_body
+        
+        if inputs.model_extra:
+            dynamic_params.update(inputs.model_extra)
 
         api_response = await self.make_api_call(**dynamic_params)
 
