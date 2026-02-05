@@ -139,12 +139,18 @@ class DBService(ABC):
             )
 
             # For UPDATE operations, use the filtered query if provided
+            # Also filter by source_id to avoid cross-source chunk_id collisions
             query = (
                 f"SELECT {id_column_name}, {timestamp_column_name} FROM {target_table_name}"
                 if timestamp_column_name
                 else f"SELECT {id_column_name} FROM {target_table_name}"
             )
-            final_query = f"{query} WHERE {sql_query_filter};" if sql_query_filter else f"{query};"
+            conditions = []
+            if sql_query_filter:
+                conditions.append(sql_query_filter)
+            if source_id:
+                conditions.append(f"source_id = '{source_id}'")
+            final_query = f"{query} WHERE {' AND '.join(conditions)};" if conditions else f"{query};"
             old_df = self._fetch_sql_query_as_dataframe(final_query)
             old_df = convert_to_correct_pandas_type(old_df, id_column_name, table_definition)
 
