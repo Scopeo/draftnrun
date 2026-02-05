@@ -160,10 +160,10 @@ class APICallTool(Component):
         ctx: Optional[dict] = None,
     ) -> APICallToolOutputs:
         dynamic_params = {}
-        
+
         if inputs.request_body is not None:
             dynamic_params["body"] = inputs.request_body
-        
+
         if inputs.model_extra:
             dynamic_params.update(inputs.model_extra)
 
