@@ -1,6 +1,6 @@
 import json
 import logging
-from typing import Any, Optional, Type
+from typing import Any, Type
 
 from e2b_code_interpreter import AsyncSandbox
 from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttributes
