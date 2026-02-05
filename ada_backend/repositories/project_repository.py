@@ -7,7 +7,10 @@ from sqlalchemy.orm import Session, joinedload
 
 from ada_backend.database import models as db
 from ada_backend.repositories.template_repository import TEMPLATE_ORGANIZATION_ID
-from ada_backend.schemas.project_schema import GraphRunnerEnvDTO, ProjectWithGraphRunnersSchema
+from ada_backend.schemas.project_schema import (
+    GraphRunnerEnvDTO,
+    ProjectWithGraphRunnersSchema,
+)
 
 LOGGER = logging.getLogger(__name__)
 
@@ -77,7 +80,9 @@ def get_project_with_details(
     ]
 
     # Sort by GraphRunner.created_at, ProjectEnvironmentBinding.created_at, GraphRunner.id
-    graph_runners_data.sort(key=lambda x: (x[0].created_at, x[1].created_at, x[0].id))
+    graph_runners_data.sort(
+        key=lambda x: (x[0].created_at, x[1].created_at, x[0].id)
+    )
 
     graph_runners_with_env = [dto for _, _, dto in graph_runners_data]
 
