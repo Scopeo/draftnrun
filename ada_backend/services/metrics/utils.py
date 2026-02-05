@@ -59,11 +59,12 @@ def query_root_trace_duration(project_id: UUID, duration_days: int) -> pd.DataFr
       SELECT
         s.trace_rowid,
         ROUND(COALESCE(SUM(
-            COALESCE((s.attributes->'credits'->>'input_token')::float, 0) +
-            COALESCE((s.attributes->'credits'->>'output_token')::float, 0) +
-            COALESCE((s.attributes->'credits'->>'per_call')::float, 0)
+            COALESCE(su.credits_input_token, 0) +
+            COALESCE(su.credits_output_token, 0) +
+            COALESCE(su.credits_per_call, 0)
         ), 0)::numeric, 0) as total_credits
       FROM relevant_spans s
+      LEFT JOIN credits.span_usages su ON su.span_id = s.span_id
       GROUP BY s.trace_rowid
     )
     SELECT s.*, m.input_content, m.output_content,
@@ -89,13 +90,14 @@ def query_trace_by_trace_id(trace_id: UUID) -> pd.DataFrame:
     query = (
         "WITH span_credits AS ("
         "  SELECT "
-        "    s.span_id, "
+        "    su.span_id, "
         "    ROUND(("
-        "      COALESCE((s.attributes->'credits'->>'input_token')::float, 0) + "
-        "      COALESCE((s.attributes->'credits'->>'output_token')::float, 0) + "
-        "      COALESCE((s.attributes->'credits'->>'per_call')::float, 0)"
+        "      COALESCE(su.credits_input_token, 0) + "
+        "      COALESCE(su.credits_output_token, 0) + "
+        "      COALESCE(su.credits_per_call, 0)"
         "    )::numeric, 0) as credits "
-        "  FROM traces.spans s "
+        "  FROM credits.span_usages su "
+        "  JOIN traces.spans s ON s.span_id = su.span_id "
         f"  WHERE s.trace_rowid = '{trace_id}' "
         ") "
         "SELECT s.*, m.input_content, m.output_content, "

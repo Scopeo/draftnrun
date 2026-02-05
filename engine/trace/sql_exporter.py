@@ -10,7 +10,7 @@ from opentelemetry.trace.status import StatusCode
 from sqlalchemy import create_engine, func, select, update
 from sqlalchemy.orm import sessionmaker
 
-from ada_backend.database.models import Usage
+from ada_backend.database.models import SpanUsage, Usage
 from ada_backend.database.setup_db import get_db_url
 from ada_backend.database.trace_models import Span, SpanMessage
 from engine.trace.nested_utils import split_nested_keys
@@ -87,16 +87,6 @@ class SQLSpanExporter(SpanExporter):
     def __init__(self):
         self.session = get_session_trace()
 
-    def _extract_credits_from_attributes(self, attributes: dict) -> float:
-        credits_dict = attributes.get("credits", {})
-
-        credits_input = credits_dict.get("input_token", 0) or 0
-        credits_output = credits_dict.get("output_token", 0) or 0
-        credits_per_call = credits_dict.get("per_call", 0) or 0
-
-        total_credits = credits_input + credits_output + credits_per_call
-        return total_credits
-
     def export(self, spans: list[ReadableSpan]) -> SpanExportResult:
         LOGGER.info(f"Exporting {len(spans)} spans to SQL database")
         for span in spans:
@@ -124,6 +114,12 @@ class SQLSpanExporter(SpanExporter):
             formatted_attributes = (
                 split_nested_keys(json_span["attributes"]) if isinstance(json_span["attributes"], dict) else {}
             )
+
+            credits_dict = formatted_attributes.pop("credits", {})
+            credits_input_token = credits_dict.get("input_token") if credits_dict else None
+            credits_output_token = credits_dict.get("output_token") if credits_dict else None
+            credits_per_call = credits_dict.get("per_call") if credits_dict else None
+            credits_per = credits_dict.get("per") if credits_dict else None
 
             environment = formatted_attributes.pop("environment", None)
             call_type = formatted_attributes.pop("call_type", None)
@@ -177,29 +173,54 @@ class SQLSpanExporter(SpanExporter):
                 )
             )
             self.session.add(span_row)
+            # Flush the span to ensure it exists before adding span_usage with foreign key reference
+            self.session.flush()
 
-            if project_id and formatted_attributes:
-                total_span_credits = self._extract_credits_from_attributes(formatted_attributes)
+            # Store credits in SpanUsage table if any credits exist
+            has_credits = (
+                credits_input_token is not None
+                or credits_output_token is not None
+                or credits_per_call is not None
+                or credits_per is not None
+            )
 
-                if total_span_credits > 0:
-                    current_date = datetime.now(tz=timezone.utc)
-                    year = current_date.year
-                    month = current_date.month
+            if has_credits:
+                span_usage = SpanUsage(
+                    span_id=span_row.span_id,
+                    credits_input_token=credits_input_token,
+                    credits_output_token=credits_output_token,
+                    credits_per_call=credits_per_call,
+                    credits_per=credits_per,
+                )
+                self.session.add(span_usage)
 
-                    usage_record = self.session.execute(
-                        select(Usage).where(Usage.project_id == project_id, Usage.year == year, Usage.month == month)
-                    ).scalar_one_or_none()
+                # Update Usage table with total credits
+                if project_id:
+                    total_span_credits = (
+                        (credits_input_token or 0) + (credits_output_token or 0) + (credits_per_call or 0)
+                    )
 
-                    if usage_record:
-                        usage_record.credits_used += total_span_credits
-                    else:
-                        new_usage = Usage(
-                            project_id=project_id,
-                            year=year,
-                            month=month,
-                            credits_used=total_span_credits,
-                        )
-                        self.session.add(new_usage)
+                    if total_span_credits > 0:
+                        current_date = datetime.now(tz=timezone.utc)
+                        year = current_date.year
+                        month = current_date.month
+
+                        usage_record = self.session.execute(
+                            select(Usage).where(
+                                Usage.project_id == project_id, Usage.year == year, Usage.month == month
+                            )
+                        ).scalar_one_or_none()
+
+                        if usage_record:
+                            usage_record.credits_used += total_span_credits
+                        else:
+                            new_usage = Usage(
+                                project_id=project_id,
+                                year=year,
+                                month=month,
+                                credits_used=total_span_credits,
+                            )
+                            self.session.add(new_usage)
 
             self.session.add(
                 SpanMessage(
