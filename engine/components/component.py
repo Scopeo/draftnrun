@@ -104,6 +104,15 @@ class Component(ABC):
         self._trace_attributes = {}
         self._trace_events = []
 
+    def _calculate_credits(self, span: trace_api.Span) -> None:
+        """
+        Calculate and set component credits on the span.
+
+        Override this method in subclasses to implement custom credit calculation logic.
+
+        """
+        calculate_and_set_component_credits(span)
+
     # Legacy adapter; subclasses with legacy signature do not need to override this.
     # TODO: Remove after I/O refactor migration
     async def _legacy_run_without_io_trace(self, *inputs: AgentPayload | dict, **kwargs) -> AgentPayload:
@@ -155,7 +164,7 @@ class Component(ABC):
                             SpanAttributes.OUTPUT_VALUE: serialize_to_json(output_node_data.data, shorten_string=True)
                         })
                         self._set_trace_data(span)
-                        calculate_and_set_component_credits(span)
+                        self._calculate_credits(span)
                         span.set_status(trace_api.StatusCode.OK)
                         return output_node_data
                     else:
@@ -178,7 +187,7 @@ class Component(ABC):
                             SpanAttributes.OUTPUT_VALUE: serialize_to_json(output_node_data.data, shorten_string=True)
                         })
                         self._set_trace_data(span)
-                        calculate_and_set_component_credits(span)
+                        self._calculate_credits(span)
                         span.set_status(trace_api.StatusCode.OK)
                         return output_node_data
 
@@ -251,7 +260,7 @@ class Component(ABC):
                     SpanAttributes.OUTPUT_VALUE: serialize_to_json(legacy_output, shorten_string=True)
                 })
                 self._set_trace_data(span)
-                calculate_and_set_component_credits(span)
+                self._calculate_credits(span)
                 span.set_status(trace_api.StatusCode.OK)
                 return legacy_output
 
