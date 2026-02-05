@@ -26,6 +26,7 @@ from engine.components.tools.tavily_search_tool import TAVILY_TOOL_DESCRIPTION
 from engine.components.tools.terminal_command_runner import TERMINAL_COMMAND_RUNNER_TOOL_DESCRIPTION
 from engine.components.web_search_tool_openai import DEFAULT_WEB_SEARCH_OPENAI_TOOL_DESCRIPTION
 from engine.integrations.gmail_sender import GMAIL_SENDER_TOOL_DESCRIPTION
+from engine.integrations.slack.slack_sender import SLACK_SENDER_TOOL_DESCRIPTION
 
 TOOL_DESCRIPTION_UUIDS = {
     "default_ai_agent_description": UUID("1a4d4098-c2b4-4078-96a6-0a8f9c7d018c"),
@@ -48,6 +49,7 @@ TOOL_DESCRIPTION_UUIDS = {
     "default_docx_generation_tool_description": UUID("d57c546b-9f9d-4207-bb6e-0e38b2a3bce5"),
     "docx_template_tool_description": UUID("e2b22222-3333-4444-5555-666666666666"),
     "remote_mcp_tool_description": UUID("4c6ef0d2-53c0-4ab2-96cb-3c2b5f5b3e88"),
+    "slack_sender_tool_description": UUID("60531feb-d38f-4843-bfbf-3e6bc22e030d"),
     "default_table_lookup_tool_description": UUID("5c6d7e8f-9012-3456-789a-bcdef0123456"),
     "default_retriever_tool_description": UUID("b1c2d3e4-f5a6-7b8c-9d0e-1f2a3b4c5d6e"),
 }
@@ -104,6 +106,10 @@ def seed_tool_description(session: Session):
         id=TOOL_DESCRIPTION_UUIDS["gmail_sender_tool_description"],
         **GMAIL_SENDER_TOOL_DESCRIPTION.model_dump(),
     )
+    slack_sender_tool_description = db.ToolDescription(
+        id=TOOL_DESCRIPTION_UUIDS["slack_sender_tool_description"],
+        **SLACK_SENDER_TOOL_DESCRIPTION.model_dump(),
+    )
     default_llm_call_tool_description = db.ToolDescription(
         id=TOOL_DESCRIPTION_UUIDS["default_llm_call_tool_description"],
         **DEFAULT_LLM_CALL_TOOL_DESCRIPTION.model_dump(),
@@ -151,6 +157,7 @@ def seed_tool_description(session: Session):
             default_start_tool_description,
             default_filter_tool_description,
             gmail_sender_tool_description,
+            slack_sender_tool_description,
             python_code_runner_tool_description,
             terminal_command_runner_tool_description,
             default_llm_call_tool_description,

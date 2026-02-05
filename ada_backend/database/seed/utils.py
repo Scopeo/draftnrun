@@ -61,6 +61,7 @@ COMPONENT_UUIDS: dict[str, UUID] = {
     "remote_mcp_tool": UUID("de3e606d-1f9d-4d74-b64f-bbde9ad6f0f4"),
     "table_lookup": UUID("3a4b5c6d-7e8f-9012-3456-789abcdef123"),
     "if_else": UUID("b3887e9d-9881-419c-ab7b-30b38409d34d"),
+    "slack_sender": UUID("a6e6b6b2-78ac-4b9d-a8aa-4fc0a8c13d5d"),
 }
 COMPONENT_VERSION_UUIDS: dict[str, UUID] = {
     "synthesizer": UUID("6f790dd1-06f6-4489-a655-1a618763a114"),
@@ -106,6 +107,7 @@ COMPONENT_VERSION_UUIDS: dict[str, UUID] = {
     "remote_mcp_tool": UUID("5e472b85-7601-4e5b-81c7-8b361b5c5c9a"),
     "table_lookup": UUID("4b5c6d7e-8f90-1234-5678-9abcdef01234"),
     "if_else": UUID("ce974746-4246-4300-828f-cf8553773616"),
+    "slack_sender": UUID("667acbfa-263a-4610-ae2e-354ce8d2e8e9"),
 }
 
 DEFAULT_MODEL_WEB_SEARCH = "openai:gpt-5-mini"

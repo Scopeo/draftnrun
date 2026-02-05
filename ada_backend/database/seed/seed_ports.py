@@ -105,6 +105,8 @@ def seed_port_definitions(session: Session):
                     ui_component_properties = {
                         "label": field_name.replace("_", " ").title(),
                     }
+                if port_description and "description" not in ui_component_properties:
+                    ui_component_properties["description"] = port_description
                 # TODO: Temporary patch to ensure 'messages' input is readonly. Clean later.
                 if field_name == "messages":
                     ui_component_properties["readonly"] = True

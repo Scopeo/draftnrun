@@ -13,6 +13,7 @@ from ada_backend.services.entity_factory import (
     AgentFactory,
     EntityFactory,
     NonToolCallableBlockFactory,
+    OAuthComponentFactory,
     RemoteMCPToolFactory,
     build_completion_service_processor,
     build_db_service_processor,
@@ -66,6 +67,8 @@ from engine.components.tools.python_code_runner import PythonCodeRunner
 from engine.components.tools.terminal_command_runner import TerminalCommandRunner
 from engine.components.web_search_tool_openai import WebSearchOpenAITool
 from engine.integrations.gmail_sender import GmailSender
+from engine.integrations.providers import OAuthProvider
+from engine.integrations.slack.slack_sender import SlackSender
 from engine.storage_service.local_service import SQLLocalService
 from engine.storage_service.snowflake_service.snowflake_service import SnowflakeService
 
@@ -517,6 +520,14 @@ def create_factory_registry() -> FactoryRegistry:
         component_version_id=COMPONENT_VERSION_UUIDS["gmail_sender"],
         factory=AgentFactory(
             entity_class=GmailSender,
+        ),
+    )
+
+    registry.register(
+        component_version_id=COMPONENT_VERSION_UUIDS["slack_sender"],
+        factory=OAuthComponentFactory(
+            entity_class=SlackSender,
+            provider_config_key=OAuthProvider.SLACK,
         ),
     )
 
