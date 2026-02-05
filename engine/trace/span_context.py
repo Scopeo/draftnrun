@@ -3,6 +3,8 @@ from dataclasses import dataclass
 from typing import Optional
 from uuid import UUID
 
+from e2b_code_interpreter import AsyncSandbox
+
 from ada_backend.database.models import CallType, EnvType
 
 
@@ -18,6 +20,7 @@ class TracingSpanParams:
     trace_id: Optional[str] = None
     graph_runner_id: Optional[UUID] = None
     tag_name: Optional[str] = None
+    shared_sandbox: Optional["AsyncSandbox"] = None
 
 
 _tracing_context: ContextVar[Optional[TracingSpanParams]] = ContextVar("_tracing_context", default=None)

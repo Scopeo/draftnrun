@@ -602,3 +602,49 @@ def test_sandbox_timeout_configuration():
     )
 
     assert tool.sandbox_timeout == 10
+
+
+def test_execute_python_code_with_shared_sandbox_from_context(e2b_api_key):
+    """Test that the tool uses shared sandbox from tracing context."""
+    import asyncio
+    from unittest.mock import AsyncMock, Mock, patch
+
+    from engine.trace.span_context import TracingSpanParams
+
+    tool = PythonCodeRunner(
+        trace_manager=MagicMock(spec=TraceManager),
+        component_attributes=ComponentAttributes(
+            component_instance_name="test_shared_sandbox",
+        ),
+    )
+
+    # Create a mock shared sandbox
+    mock_shared_sandbox = AsyncMock()
+    mock_execution = Mock()
+    mock_execution.error = None
+    mock_execution.results = []
+    mock_execution.logs = Mock(stdout=["Test output"], stderr=[])
+    mock_shared_sandbox.run_code.return_value = mock_execution
+
+    # Mock the tracing context with a shared sandbox
+    mock_params = TracingSpanParams(
+        project_id="test_project",
+        organization_id="test_org",
+        organization_llm_providers=["test_provider"],
+        uuid_for_temp_folder="/tmp/test",
+        shared_sandbox=mock_shared_sandbox,
+    )
+
+    with patch("engine.components.tools.python_code_runner.get_tracing_span", return_value=mock_params):
+        with patch("engine.components.tools.python_code_runner.AsyncSandbox") as mock_sandbox_class:
+            result_data, _ = asyncio.run(tool.execute_python_code("print('test')"))
+
+            # Should use the shared sandbox, not create a new one
+            mock_sandbox_class.create.assert_not_called()
+            mock_shared_sandbox.run_code.assert_called_once()
+
+            # Verify result structure
+            assert "error" in result_data
+            assert "stdout" in result_data
+            assert "stderr" in result_data
+            assert "results" in result_data
