@@ -4,7 +4,6 @@ import logging
 from datetime import datetime
 from typing import Any, Optional, Type
 
-from e2b_code_interpreter import AsyncSandbox
 from openai.types.chat import ChatCompletionMessageToolCall
 from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttributes
 from opentelemetry import trace as trace_api
@@ -14,15 +13,12 @@ from engine.components.component import Component
 from engine.components.history_message_handling import HistoryMessageHandler
 from engine.components.rag.formatter import Formatter
 from engine.components.rag.retriever import RETRIEVER_CITATION_INSTRUCTION, RETRIEVER_TOOL_DESCRIPTION
-from engine.components.tools.python_code_runner import PYTHON_CODE_RUNNER_TOOL_DESCRIPTION
-from engine.components.tools.terminal_command_runner import TERMINAL_COMMAND_RUNNER_TOOL_DESCRIPTION
 from engine.components.types import AgentPayload, ChatMessage, ComponentAttributes, SourcedResponse, ToolDescription
 from engine.components.utils import load_str_to_json
 from engine.components.utils_prompt import fill_prompt_template
 from engine.graph_runner.runnable import Runnable
 from engine.llm_services.llm_service import CompletionService
 from engine.trace.trace_manager import TraceManager
-from settings import settings
 
 LOGGER = logging.getLogger(__name__)
 
@@ -32,7 +28,6 @@ INITIAL_PROMPT = (
 )
 
 DEFAULT_FALLBACK_REACT_ANSWER = "I couldn't find a solution to your problem."
-CODE_RUNNER_TOOLS = [PYTHON_CODE_RUNNER_TOOL_DESCRIPTION.name, TERMINAL_COMMAND_RUNNER_TOOL_DESCRIPTION.name]
 
 OUTPUT_TOOL_NAME = "chat_formatting_output_tool"
 OUTPUT_TOOL_DESCRIPTION = (
@@ -181,8 +176,6 @@ class AIAgent(Component):
         self.input_data_field_for_messages_history = input_data_field_for_messages_history
         self._allow_tool_shortcuts = allow_tool_shortcuts
         self._date_in_system_prompt = date_in_system_prompt
-        self._shared_sandbox: Optional[AsyncSandbox] = None
-        self._e2b_api_key = getattr(settings, "E2B_API_KEY", None)
         self._tool_registry: dict[str, tuple[Runnable, ToolDescription]] = {}
 
         self._output_format = output_format
@@ -222,25 +215,6 @@ class AIAgent(Component):
             tool_properties=parsed_output_tool_properies,
             required_tool_properties=required_properties,
         )
-
-    # TODO: investigate if we can decouple the sandbox from the agent
-    async def _ensure_shared_sandbox(self) -> AsyncSandbox:
-        """Create and return a shared sandbox, validating API key first."""
-        if not self._shared_sandbox:
-            if not self._e2b_api_key:
-                raise ValueError("E2B API key not configured")
-            self._shared_sandbox = await AsyncSandbox.create(api_key=self._e2b_api_key)
-        return self._shared_sandbox
-
-    async def _cleanup_shared_sandbox(self) -> None:
-        """Safely clean up the shared sandbox."""
-        if self._shared_sandbox:
-            try:
-                await self._shared_sandbox.kill()
-            except Exception as e:
-                LOGGER.error(f"Failed to kill shared sandbox: {e}")
-            finally:
-                self._shared_sandbox = None
 
     def _build_tool_cache(self) -> None:
         """
@@ -304,8 +278,6 @@ class AIAgent(Component):
         if tool_entry is None:
             raise ValueError(f"Tool {tool_function_name} not found in agent_tools.")
         tool_to_use, _ = tool_entry
-        if tool_function_name in CODE_RUNNER_TOOLS:
-            tool_arguments["shared_sandbox"] = await self._ensure_shared_sandbox()
         # TODO: replace this flag-based wiring with a proper function-calling→input translation hook
         if getattr(tool_to_use, "requires_tool_name", False):
             tool_arguments["tool_name"] = tool_function_name
@@ -479,7 +451,6 @@ class AIAgent(Component):
                     artifacts["images"] = imgs
                 else:
                     LOGGER.debug("No images found in the response.")
-                await self._cleanup_shared_sandbox()
                 return AgentPayload(
                     messages=[ChatMessage(role="assistant", content=response_content)],
                     is_final=True,
@@ -527,7 +498,6 @@ class AIAgent(Component):
 
             if collected_artifacts:
                 final_output.artifacts.update(collected_artifacts)
-            await self._cleanup_shared_sandbox()
             return final_output
 
         elif self._current_iteration + 1 < self._max_iterations:
@@ -549,7 +519,6 @@ class AIAgent(Component):
                 " This should not happen."
             )
 
-            await self._cleanup_shared_sandbox()
             return AgentPayload(
                 messages=[ChatMessage(role="assistant", content=DEFAULT_FALLBACK_REACT_ANSWER)],
                 is_final=False,

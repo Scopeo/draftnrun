@@ -1,6 +1,6 @@
 import json
 import logging
-from typing import Any, Optional, Type
+from typing import Any, Type
 
 from e2b_code_interpreter import AsyncSandbox
 from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttributes
@@ -10,6 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from ada_backend.database.models import UIComponent
 from engine.components.component import Component
 from engine.components.types import ComponentAttributes, ToolDescription
+from engine.trace.span_context import get_tracing_span
 from engine.trace.trace_manager import TraceManager
 from settings import settings
 
@@ -36,11 +37,6 @@ class TerminalCommandRunnerToolInputs(BaseModel):
         default="",
         description="The command to run on the terminal",
         json_schema_extra={"ui_component": UIComponent.TEXTAREA},
-    )
-    shared_sandbox: Optional[AsyncSandbox] = Field(
-        default=None,
-        description="The sandbox to use for code execution",
-        json_schema_extra={"disabled_as_input": True},
     )
     model_config = ConfigDict(extra="allow", arbitrary_types_allowed=True)
 
@@ -84,12 +80,23 @@ class TerminalCommandRunner(Component):
         self.e2b_api_key = settings.E2B_API_KEY
         self.command_timeout = timeout
 
-    async def execute_terminal_command(self, command: str, shared_sandbox: Optional[AsyncSandbox] = None) -> dict:
+    async def execute_terminal_command(self, command: str) -> dict:
         """Execute terminal command in E2B sandbox and return the result."""
         if not self.e2b_api_key:
             raise ValueError("E2B API key not configured")
 
-        sandbox = shared_sandbox if shared_sandbox else await AsyncSandbox.create(api_key=self.e2b_api_key)
+        params = get_tracing_span()
+        should_cleanup_locally = False
+
+        if params and params.shared_sandbox:
+            sandbox = params.shared_sandbox
+        else:
+            sandbox = await AsyncSandbox.create(api_key=self.e2b_api_key)
+            if params:
+                params.shared_sandbox = sandbox
+            else:
+                should_cleanup_locally = True
+
         try:
             # Use the sandbox's terminal capabilities
             execution = await sandbox.commands.run(command, timeout=self.command_timeout)
@@ -110,8 +117,12 @@ class TerminalCommandRunner(Component):
                 "error": str(e),
             }
         finally:
-            if not shared_sandbox:
-                await sandbox.kill()
+            if should_cleanup_locally:
+                try:
+                    await sandbox.kill()
+                    LOGGER.info("Cleaned up locally created sandbox")
+                except Exception as e:
+                    LOGGER.error(f"Failed to cleanup locally created sandbox: {e}")
 
         return result
 
@@ -122,13 +133,12 @@ class TerminalCommandRunner(Component):
     ) -> TerminalCommandRunnerToolOutputs:
         span = get_current_span()
         command = inputs.command
-        shared_sandbox = inputs.shared_sandbox
         span.set_attributes({
             SpanAttributes.OPENINFERENCE_SPAN_KIND: self.TRACE_SPAN_KIND,
             SpanAttributes.INPUT_VALUE: str(command),
         })
 
-        execution_result_dict = await self.execute_terminal_command(command=command, shared_sandbox=shared_sandbox)
+        execution_result_dict = await self.execute_terminal_command(command=command)
         content = json.dumps(execution_result_dict, indent=2)
         artifacts = {"execution_result": execution_result_dict}
 

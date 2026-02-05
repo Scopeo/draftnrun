@@ -19,6 +19,7 @@ from engine.components.component import Component
 from engine.components.types import ComponentAttributes, ToolDescription
 from engine.temps_folder_utils import get_output_dir
 from engine.trace.serializer import serialize_to_json
+from engine.trace.span_context import get_tracing_span
 from engine.trace.trace_manager import TraceManager
 from settings import settings
 
@@ -80,11 +81,6 @@ class PythonCodeRunnerToolInputs(BaseModel):
         default="",
         description="The code python to run",
         json_schema_extra={"ui_component": UIComponent.TEXTAREA},
-    )
-    shared_sandbox: Optional[AsyncSandbox] = Field(
-        default=None,
-        description="The sandbox to use for code execution",
-        json_schema_extra={"disabled_as_input": True},
     )
     input_filepaths: Optional[list[str]] = Field(
         default=None,
@@ -274,15 +270,22 @@ class PythonCodeRunner(Component):
         self,
         python_code: str,
         input_filepaths: Optional[list[str]] = None,
-        shared_sandbox: Optional[AsyncSandbox] = None,
     ) -> tuple[dict, list[SandboxFileRecord]]:
         """Execute Python code in E2B sandbox and return the result."""
         if not self.e2b_api_key:
             raise ValueError("E2B API key not configured")
 
-        sandbox = shared_sandbox
-        if not sandbox:
+        params = get_tracing_span()
+        should_cleanup_locally = False
+
+        if params and params.shared_sandbox:
+            sandbox = params.shared_sandbox
+        else:
             sandbox = await AsyncSandbox.create(api_key=self.e2b_api_key)
+            if params:
+                params.shared_sandbox = sandbox
+            else:
+                should_cleanup_locally = True
         try:
             uploaded_filenames = []
             if input_filepaths:
@@ -329,8 +332,13 @@ class PythonCodeRunner(Component):
             }
             records = []
         finally:
-            if not shared_sandbox:
-                await sandbox.kill()
+            if should_cleanup_locally:
+                try:
+                    await sandbox.kill()
+                    LOGGER.info("Cleaned up locally created sandbox")
+                except Exception as e:
+                    LOGGER.error(f"Failed to cleanup locally created sandbox: {e}")
+
         return result, records
 
     async def _run_without_io_trace(
@@ -340,7 +348,6 @@ class PythonCodeRunner(Component):
     ) -> PythonCodeRunnerToolOutputs:
         span = get_current_span()
         python_code = inputs.python_code
-        shared_sandbox = inputs.shared_sandbox
         input_filepaths = inputs.input_filepaths
         span.set_attributes({
             SpanAttributes.OPENINFERENCE_SPAN_KIND: self.TRACE_SPAN_KIND,
@@ -350,7 +357,6 @@ class PythonCodeRunner(Component):
         execution_result_dict, records = await self.execute_python_code(
             python_code=python_code,
             input_filepaths=input_filepaths,
-            shared_sandbox=shared_sandbox,
         )
         content = serialize_to_json(execution_result_dict)
 
