@@ -22,6 +22,7 @@ from ada_backend.database.setup_db import get_db_session
 from ada_backend.repositories.project_repository import get_project
 from ada_backend.repositories.source_repository import get_data_source_by_id
 from ada_backend.services.errors import MissingDataSourceError
+from ada_backend.services.integration_service import get_oauth_access_token
 from ada_backend.services.llm_models_service import (
     get_llm_models_by_capability_select_options_service,
     get_model_id_by_name_service,
@@ -240,6 +241,103 @@ class HubSpotMCPToolFactory:
             kwargs["component_attributes"] = ComponentAttributes(component_instance_name=component_instance_name)
 
         coro = HubSpotMCPTool.from_mcp_server(**kwargs)
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            return asyncio.run(coro)
+
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            return executor.submit(asyncio.run, coro).result()
+
+
+class OAuthComponentFactory:
+    """
+    Generic async factory for components that require OAuth access tokens via Nango.
+
+    Resolves oauth_connection_id to access_token asynchronously before instantiating the component.
+    """
+
+    def __init__(
+        self,
+        entity_class: Type,
+        provider_config_key: str,
+        target_param_name: str = "access_token",
+        parameter_processors: list[ParameterProcessor] | None = None,
+    ):
+        """
+        Initialize the OAuth component factory.
+
+        Args:
+            entity_class: The component class to instantiate
+            provider_config_key: OAuth provider key (e.g., "slack", "gmail")
+            target_param_name: Parameter name for the resolved token (default: "access_token")
+            parameter_processors: Additional parameter processors to apply after token resolution
+        """
+        self.entity_class = entity_class
+        self.provider_config_key = provider_config_key
+        self.target_param_name = target_param_name
+        self.parameter_processors = parameter_processors or []
+
+        self.constructor_params = signature(entity_class.__init__).parameters
+
+    async def _create_async(self, **kwargs) -> Any:
+        """
+        Asynchronously resolve OAuth token and create component instance.
+
+        Args:
+            **kwargs: Component parameters including oauth_connection_id
+
+        Returns:
+            Instantiated component with resolved OAuth token
+
+        Raises:
+            ValueError: If oauth_connection_id is missing
+        """
+        oauth_connection_id = kwargs.pop("oauth_connection_id", None)
+        if not oauth_connection_id:
+            raise ValueError(f"oauth_connection_id required for {self.provider_config_key} OAuth integration")
+
+        LOGGER.info(
+            f"Resolving OAuth access token for {self.provider_config_key} with connection ID {oauth_connection_id}"
+        )
+
+        # TODO: Refactor to inject the session directly
+        with get_db_session() as session:
+            access_token = await get_oauth_access_token(
+                session=session,
+                oauth_connection_id=UUID(oauth_connection_id),
+                provider_config_key=self.provider_config_key,
+            )
+
+        LOGGER.info(
+            f"Resolved OAuth access token for {self.provider_config_key} with connection ID {oauth_connection_id}"
+        )
+
+        kwargs[self.target_param_name] = access_token
+
+        for processor in self.parameter_processors:
+            kwargs = processor(kwargs, self.constructor_params)
+
+        return self.entity_class(**kwargs)
+
+    def __call__(self, **kwargs) -> Any:
+        """
+        Create component instance, handling event loop scenarios.
+
+        Args:
+            **kwargs: Component parameters
+
+        Returns:
+            Instantiated component
+        """
+        if "trace_manager" not in kwargs:
+            trace_manager = get_trace_manager()
+            if trace_manager is None:
+                raise ValueError("Trace manager is required")
+            kwargs["trace_manager"] = trace_manager
+
+        # TODO: Refactor registry + entity factories to be async so this is not needed.
+        coro = self._create_async(**kwargs)
         try:
             asyncio.get_running_loop()
         except RuntimeError:

@@ -162,6 +162,7 @@ class UIComponent(StrEnum):
     FILE_UPLOAD = "FileUpload"
     JSON_BUILDER = "JSON Builder"
     CONDITION_BUILDER = "ConditionBuilder"
+    OAUTH_CONNECTION = "OAuthConnection"
 
 
 class SourceType(StrEnum):

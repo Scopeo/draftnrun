@@ -14,7 +14,7 @@ from ada_backend.services.errors import (
     OAuthConnectionNotFoundError,
     OAuthConnectionUnauthorizedError,
 )
-from ada_backend.services.nango_client import NangoClientError, get_nango_client
+from ada_backend.services.nango_client import NangoClient, NangoClientError, get_nango_client
 from engine.integrations.providers import OAuthProvider
 from settings import settings
 
@@ -293,7 +293,8 @@ async def get_oauth_access_token(
     if not connection:
         raise OAuthConnectionNotFoundError(connection_id=oauth_connection_id)
 
-    nango = get_nango_client()
+    # TODO: Refactor entity factories to be async so we can use the singleton.
+    nango = NangoClient()
     nango_connection = await nango.get_connection(
         provider_config_key=str(provider_config_key),
         connection_id=connection.nango_connection_id,

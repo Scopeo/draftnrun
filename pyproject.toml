@@ -22,6 +22,7 @@ dependencies = [
     "setuptools<=80.9.0",
     "pydantic-settings>=2.6.1",
     "requests==2.32.2",
+    "slack-sdk>=3.39.0",
     "llama-index>=0.12.38,<0.13",
     "itsdangerous>=2.2.0,<3",
     "qdrant-client>=1.10.0,<2",
@@ -158,7 +159,7 @@ ignore = [
 ]
 
 [tool.ruff.lint.isort]
-known-third-party = ["mcp"]
+known-third-party = ["mcp", "supabase"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/conftest.py" = ["F401", "E402"]
