@@ -276,6 +276,7 @@ class PythonCodeRunner(Component):
             raise ValueError("E2B API key not configured")
 
         params = get_tracing_span()
+        should_cleanup_locally = False
 
         if params and params.shared_sandbox:
             sandbox = params.shared_sandbox
@@ -283,6 +284,8 @@ class PythonCodeRunner(Component):
             sandbox = await AsyncSandbox.create(api_key=self.e2b_api_key)
             if params:
                 params.shared_sandbox = sandbox
+            else:
+                should_cleanup_locally = True
         try:
             uploaded_filenames = []
             if input_filepaths:
@@ -328,6 +331,13 @@ class PythonCodeRunner(Component):
                 "error": str(e),
             }
             records = []
+        finally:
+            if should_cleanup_locally:
+                try:
+                    await sandbox.kill()
+                    LOGGER.info("Cleaned up locally created sandbox")
+                except Exception as e:
+                    LOGGER.error(f"Failed to cleanup locally created sandbox: {e}")
 
         return result, records
 
