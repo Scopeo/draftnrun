@@ -314,12 +314,20 @@ jobs:
             kubectl rollout status deployment/ada-api -n ${NS} --timeout=10m
 
             echo "🗄️ Running migrations..."
-            kubectl exec deployment/ada-api -n ${NS} -- \
-              alembic -c ada_backend/database/alembic.ini upgrade head
+            kubectl delete job db-migrate -n ${NS} --ignore-not-found
+            kubectl create job db-migrate -n ${NS} \
+              --from=deployment/ada-api \
+              -- alembic -c ada_backend/database/alembic.ini upgrade head
+            kubectl wait --for=condition=complete job/db-migrate -n ${NS} --timeout=300s
+            kubectl delete job db-migrate -n ${NS}
 
             echo "🌱 Running seed..."
-            kubectl exec deployment/ada-api -n ${NS} -- \
-              python -m ada_backend.database.seed_db
+            kubectl delete job db-seed -n ${NS} --ignore-not-found
+            kubectl create job db-seed -n ${NS} \
+              --from=deployment/ada-api \
+              -- python -m ada_backend.database.seed_db
+            kubectl wait --for=condition=complete job/db-seed -n ${NS} --timeout=300s
+            kubectl delete job db-seed -n ${NS}
 
             echo "⏳ Waiting for worker, webhook-worker, and scheduler..."
             kubectl rollout status deployment/ada-ingestion-worker -n ${NS} --timeout=10m
