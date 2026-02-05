@@ -111,6 +111,19 @@ def track_project_monitoring_loaded(user_id: UUID, project_id: UUID):
 
 
 @non_breaking_track
+def track_organization_monitoring_loaded(user_id: UUID, organization_id: UUID, project_count: int):
+    analytics.track(
+        user_id=str(user_id),
+        event="Monitoring Loaded",
+        properties={
+            "env": settings.ENV,
+            "organization_id": str(organization_id),
+            "project_count": project_count,
+        },
+    )
+
+
+@non_breaking_track
 def track_project_observability_loaded(user_id: UUID, project_id: UUID):
     analytics.track(
         user_id=str(user_id),
