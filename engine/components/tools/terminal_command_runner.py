@@ -38,11 +38,6 @@ class TerminalCommandRunnerToolInputs(BaseModel):
         description="The command to run on the terminal",
         json_schema_extra={"ui_component": UIComponent.TEXTAREA},
     )
-    shared_sandbox: Optional[AsyncSandbox] = Field(
-        default=None,
-        description="The sandbox to use for code execution",
-        json_schema_extra={"disabled_as_input": True},
-    )
     model_config = ConfigDict(extra="allow", arbitrary_types_allowed=True)
 
 
@@ -85,7 +80,7 @@ class TerminalCommandRunner(Component):
         self.e2b_api_key = settings.E2B_API_KEY
         self.command_timeout = timeout
 
-    async def execute_terminal_command(self, command: str, shared_sandbox: Optional[AsyncSandbox] = None) -> dict:
+    async def execute_terminal_command(self, command: str) -> dict:
         """Execute terminal command in E2B sandbox and return the result."""
         if not self.e2b_api_key:
             raise ValueError("E2B API key not configured")
@@ -128,13 +123,12 @@ class TerminalCommandRunner(Component):
     ) -> TerminalCommandRunnerToolOutputs:
         span = get_current_span()
         command = inputs.command
-        shared_sandbox = inputs.shared_sandbox
         span.set_attributes({
             SpanAttributes.OPENINFERENCE_SPAN_KIND: self.TRACE_SPAN_KIND,
             SpanAttributes.INPUT_VALUE: str(command),
         })
 
-        execution_result_dict = await self.execute_terminal_command(command=command, shared_sandbox=shared_sandbox)
+        execution_result_dict = await self.execute_terminal_command(command=command)
         content = json.dumps(execution_result_dict, indent=2)
         artifacts = {"execution_result": execution_result_dict}
 

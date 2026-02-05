@@ -82,11 +82,6 @@ class PythonCodeRunnerToolInputs(BaseModel):
         description="The code python to run",
         json_schema_extra={"ui_component": UIComponent.TEXTAREA},
     )
-    shared_sandbox: Optional[AsyncSandbox] = Field(
-        default=None,
-        description="The sandbox to use for code execution",
-        json_schema_extra={"disabled_as_input": True},
-    )
     input_filepaths: Optional[list[str]] = Field(
         default=None,
         description="The filepaths to load into the sandbox",
@@ -275,7 +270,6 @@ class PythonCodeRunner(Component):
         self,
         python_code: str,
         input_filepaths: Optional[list[str]] = None,
-        shared_sandbox: Optional[AsyncSandbox] = None,
     ) -> tuple[dict, list[SandboxFileRecord]]:
         """Execute Python code in E2B sandbox and return the result."""
         if not self.e2b_api_key:
@@ -344,7 +338,6 @@ class PythonCodeRunner(Component):
     ) -> PythonCodeRunnerToolOutputs:
         span = get_current_span()
         python_code = inputs.python_code
-        shared_sandbox = inputs.shared_sandbox
         input_filepaths = inputs.input_filepaths
         span.set_attributes({
             SpanAttributes.OPENINFERENCE_SPAN_KIND: self.TRACE_SPAN_KIND,
@@ -354,7 +347,6 @@ class PythonCodeRunner(Component):
         execution_result_dict, records = await self.execute_python_code(
             python_code=python_code,
             input_filepaths=input_filepaths,
-            shared_sandbox=shared_sandbox,
         )
         content = serialize_to_json(execution_result_dict)
 
