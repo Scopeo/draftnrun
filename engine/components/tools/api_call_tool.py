@@ -162,18 +162,18 @@ class APICallTool(Component):
     ) -> APICallToolOutputs:
         dynamic_params = {}
         request_data = inputs.request_body
-        
+
         if isinstance(request_data, str):
             try:
                 request_data = ast.literal_eval(request_data)
             except (ValueError, SyntaxError):
                 pass
-        
+
         if isinstance(request_data, dict):
             dynamic_params.update(request_data)
         elif request_data is not None:
             dynamic_params["body"] = request_data
-        
+
         if inputs.model_extra:
             dynamic_params.update(inputs.model_extra)
 
