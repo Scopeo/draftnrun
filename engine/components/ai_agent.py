@@ -14,7 +14,7 @@ from engine.components.history_message_handling import HistoryMessageHandler
 from engine.components.rag.formatter import Formatter
 from engine.components.rag.retriever import RETRIEVER_CITATION_INSTRUCTION, RETRIEVER_TOOL_DESCRIPTION
 from engine.components.types import AgentPayload, ChatMessage, ComponentAttributes, SourcedResponse, ToolDescription
-from engine.components.utils import load_str_to_json
+from engine.components.utils import load_str_to_json, merge_constrained_output_to_root
 from engine.components.utils_prompt import fill_prompt_template
 from engine.graph_runner.runnable import Runnable
 from engine.llm_services.llm_service import CompletionService
@@ -58,6 +58,8 @@ class AIAgentOutputs(BaseModel):
     full_message: ChatMessage = Field(description="The full final message object from the agent.")
     is_final: bool = Field(default=False, description="Indicates if this is the final output of the agent.")
     artifacts: dict[str, Any] = Field(default_factory=dict, description="Artifacts produced by the agent.")
+
+    model_config = {"extra": "allow"}
 
 
 def format_output_tool_description(
@@ -552,12 +554,16 @@ class AIAgent(Component):
         final_message = (
             core_result.messages[-1] if core_result.messages else ChatMessage(role="assistant", content=None)
         )
-        return AIAgentOutputs(
+        outputs = AIAgentOutputs(
             output=final_message.content or "",
             full_message=final_message,
             is_final=core_result.is_final,
             artifacts=core_result.artifacts or {},
         )
+
+        merge_constrained_output_to_root(outputs, final_message.content, output_format)
+
+        return outputs
 
 
 def get_dummy_ai_agent_description() -> ToolDescription:

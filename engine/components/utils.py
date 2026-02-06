@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any, Callable, Optional, Tuple, Union
 
 from fuzzywuzzy import fuzz, process
+from pydantic import BaseModel
 
 from engine.temps_folder_utils import get_output_dir
 
@@ -146,3 +147,36 @@ def prepare_markdown_output_path(
 def merge_qdrant_filters_with_and_conditions(filter_1: dict, filter_2: dict) -> dict:
     merged_filter = {"must": [filter_1, filter_2]}
     return merged_filter
+
+
+def merge_constrained_output_to_root(
+    outputs: BaseModel,
+    response_content: Optional[str],
+    output_format: Optional[str | dict],
+) -> None:
+    """
+    Parse constrained output from JSON string and merge fields to the root level of outputs.
+
+    Args:
+        outputs: The BaseModel output object to merge fields into
+        response_content: The response content that may contain JSON
+        output_format: The output format configuration (if None, no merging occurs)
+
+    Note:
+        This function modifies the outputs object in place by setting attributes.
+        Parsing errors are logged but don't raise exceptions.
+    """
+    if not output_format or not response_content:
+        return
+
+    try:
+        parsed_output = json.loads(response_content)
+        if isinstance(parsed_output, dict):
+            # Merge constrained output fields to root level
+            for key, value in parsed_output.items():
+                if not key.startswith("_"):
+                    setattr(outputs, key, value)
+                else:
+                    LOGGER.warning(f"Skipped setting private attribute '{key}' from constrained output")
+    except (json.JSONDecodeError, TypeError) as e:
+        LOGGER.debug(f"Could not parse constrained output as JSON: {e}")
