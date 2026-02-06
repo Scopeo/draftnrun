@@ -59,6 +59,7 @@ class BaseConfig(BaseSettings):
     LINKUP_API_KEY: Optional[str] = None
     E2B_API_KEY: Optional[str] = None
     FIRECRAWL_API_KEY: Optional[str] = None
+    RESEND_API_KEY: Optional[str] = None
 
     SEGMENT_API_KEY: Optional[str] = None
     ENV: Optional[str] = None

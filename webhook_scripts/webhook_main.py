@@ -1,11 +1,12 @@
 import asyncio
-import json
 import logging
 from typing import Any, Dict
 from uuid import UUID
 
 import httpx
 
+from ada_backend.services.webhooks.resend_service import should_trigger_resend_workflow
+from ada_backend.services.webhooks.webhook_service import prepare_workflow_input
 from settings import settings
 
 logging.basicConfig(
@@ -46,11 +47,18 @@ async def _run_workflow_async(
                 f"project_id={project_id}, webhook_id={webhook_id}"
             )
 
+            workflow_input = prepare_workflow_input(payload, provider)
+
+            if provider == "resend":
+                if not should_trigger_resend_workflow(workflow_input, trigger):
+                    LOGGER.info(
+                        f"[WEBHOOK_MAIN] Trigger {trigger_id} recipient filter did not match, skipping. "
+                        f"Filter: {trigger.get('filter_options', {}).get('recipient_email')}"
+                    )
+                    return (trigger_id, False)
+
             input_data = {
-                "messages": [
-                    {"role": "user", "content": json.dumps(payload, default=str)},
-                ],
-                "webhook_payload": payload,
+                **workflow_input,
                 "event_id": event_id,
                 "provider": provider,
             }
