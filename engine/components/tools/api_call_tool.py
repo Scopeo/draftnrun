@@ -1,4 +1,3 @@
-import ast
 import json
 import logging
 import string
@@ -165,8 +164,8 @@ class APICallTool(Component):
 
         if isinstance(request_data, str):
             try:
-                request_data = ast.literal_eval(request_data)
-            except (ValueError, SyntaxError):
+                request_data = json.loads(request_data)
+            except json.JSONDecodeError:
                 pass
 
         if isinstance(request_data, dict):
