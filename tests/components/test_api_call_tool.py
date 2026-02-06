@@ -6,8 +6,13 @@ import pytest
 import pytest_asyncio
 from httpx import HTTPError
 
-from engine.components.tools.api_call_tool import API_CALL_TOOL_DESCRIPTION, APICallTool
-from engine.components.types import AgentPayload, ChatMessage, ComponentAttributes
+from engine.components.tools.api_call_tool import (
+    API_CALL_TOOL_DESCRIPTION,
+    APICallTool,
+    APICallToolInputs,
+    APICallToolOutputs,
+)
+from engine.components.types import ComponentAttributes
 from engine.trace.trace_manager import TraceManager
 
 
@@ -244,7 +249,6 @@ def test_make_api_call_non_json_response(mock_client_class, api_tool):
 
 
 def test_run_without_io_trace_with_dynamic_params(api_tool):
-    agent_input = AgentPayload(messages=[ChatMessage(role="user", content="test")])
     dynamic_params = {"query": "test", "page": 1, "filter": "active"}
 
     with patch.object(api_tool, "make_api_call") as mock_make_api_call:
@@ -255,28 +259,24 @@ def test_run_without_io_trace_with_dynamic_params(api_tool):
             "success": True,
         }
 
-        result = asyncio.run(api_tool._run_without_io_trace(agent_input, **dynamic_params))
+        inputs = APICallToolInputs(**dynamic_params)
+        result = asyncio.run(api_tool._run_without_io_trace(inputs, {}))
 
-        assert isinstance(result, AgentPayload)
-        assert len(result.messages) == 1
-        assert result.messages[0].role == "assistant"
-        assert "result" in result.messages[0].content
+        assert isinstance(result, APICallToolOutputs)
+        assert "result" in result.output
         assert result.artifacts["api_response"]["success"] is True
         mock_make_api_call.assert_called_once_with(**dynamic_params)
 
 
 def test_run_without_io_trace_error(api_tool):
-    agent_input = AgentPayload(messages=[ChatMessage(role="user", content="test")])
-
     with patch.object(api_tool, "make_api_call") as mock_make_api_call:
         mock_make_api_call.return_value = {"status_code": 500, "error": "Internal Server Error", "success": False}
 
-        result = asyncio.run(api_tool._run_without_io_trace(agent_input))
+        inputs = APICallToolInputs()
+        result = asyncio.run(api_tool._run_without_io_trace(inputs, {}))
 
-        assert isinstance(result, AgentPayload)
-        assert len(result.messages) == 1
-        assert result.messages[0].role == "assistant"
-        assert "API call failed" in result.messages[0].content
+        assert isinstance(result, APICallToolOutputs)
+        assert "API call failed" in result.output
         assert result.artifacts["api_response"]["success"] is False
 
 
