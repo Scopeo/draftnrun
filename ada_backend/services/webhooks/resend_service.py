@@ -10,24 +10,18 @@ from sqlalchemy.orm import Session
 
 from ada_backend.database.models import Webhook, WebhookProvider
 from ada_backend.services.webhooks.errors import (
+    WebhookConfigurationError,
     WebhookEventIdNotFoundError,
+    WebhookInvalidParameterError,
     WebhookNotFoundError,
+    WebhookSignatureVerificationError,
 )
+from settings import settings
 
 LOGGER = logging.getLogger(__name__)
 
 
 def _parse_data_field(data: Any) -> Dict[str, Any]:
-    """
-    Parse data field from webhook payload.
-    Handles case where data might be a string due to repr() serialization in worker.
-
-    Args:
-        data: Data field from webhook payload (dict or string)
-
-    Returns:
-        Parsed dict, or empty dict if parsing fails
-    """
     if isinstance(data, str):
         try:
             return ast.literal_eval(data)
@@ -37,17 +31,8 @@ def _parse_data_field(data: Any) -> Dict[str, Any]:
     return data if isinstance(data, dict) else {}
 
 
-class WebhookSignatureVerificationError(Exception):
-    """Raised when Svix signature verification fails."""
-
-    def __init__(self, message: str = "Invalid Svix signature"):
-        self.message = message
-        super().__init__(self.message)
-
-
 def get_resend_webhook_service(session: Session) -> Optional[Webhook]:
     """
-    Get the Resend webhook configuration.
     Currently supports single webhook per system (MVP).
     TODO: Add support for multiple webhooks (e.g., by recipient domain or custom identifier).
     """
@@ -92,39 +77,23 @@ def _hmac_sha256_base64(secret: str, message: str) -> str:
 
 
 def verify_svix_signature(headers: Dict[str, str], raw_body: bytes, signing_secret: str) -> None:
-    """
-    Verify Svix webhook signature.
+    svix_id = headers.get("svix-id")
+    svix_timestamp = headers.get("svix-timestamp")
+    svix_signature = headers.get("svix-signature")
 
-    Args:
-        headers: Request headers (case-insensitive dict)
-        raw_body: Raw request body bytes
-        signing_secret: Webhook signing secret (starts with whsec_)
-
-    Raises:
-        WebhookSignatureVerificationError: If signature verification fails
-    """
-    svix_id = headers.get("svix-id") or headers.get("Svix-Id") or ""
-    svix_timestamp = headers.get("svix-timestamp") or headers.get("Svix-Timestamp") or ""
-    svix_signature = headers.get("svix-signature") or headers.get("Svix-Signature") or ""
-
-    if not svix_id or not svix_timestamp or not svix_signature:
-        missing = []
-        if not svix_id:
-            missing.append("svix-id")
-        if not svix_timestamp:
-            missing.append("svix-timestamp")
-        if not svix_signature:
-            missing.append("svix-signature")
+    required = {
+        "svix-id": svix_id,
+        "svix-timestamp": svix_timestamp,
+        "svix-signature": svix_signature,
+    }
+    missing = [name for name, value in required.items() if not value]
+    if missing:
         raise WebhookSignatureVerificationError(f"Missing Svix headers: {', '.join(missing)}")
 
     message = f"{svix_id}.{svix_timestamp}.{raw_body.decode('utf-8')}"
     expected_signature = _hmac_sha256_base64(signing_secret, message)
 
-    signatures = []
-    for part in svix_signature.replace(",", " ").split():
-        part = part.strip()
-        if part:
-            signatures.append(part)
+    signatures = svix_signature.replace(",", " ").split()
 
     signature_valid = any(_timing_safe_equal(sig, expected_signature) for sig in signatures)
 
@@ -138,76 +107,59 @@ def verify_svix_signature(headers: Dict[str, str], raw_body: bytes, signing_secr
     LOGGER.info(f"Svix signature verified successfully for event {svix_id}")
 
 
+def _normalize_email_list(field: Any) -> list[str]:
+    if isinstance(field, list):
+        return [email if isinstance(email, str) else email.get("email", str(email)) for email in field]
+    return [str(field)] if field else []
+
+
 def fetch_resend_email_content(email_id: str) -> Dict[str, Any]:
-    """
-    Fetch full email content from Resend API.
-
-    Args:
-        email_id: Email ID from webhook payload
-
-    Returns:
-        Email data dict with subject, from, to, text, html
-
-    Raises:
-        ValueError: If RESEND_API_KEY not set
-        httpx.HTTPStatusError: If API call fails
-    """
-    from settings import settings
-
     if not settings.RESEND_API_KEY:
-        raise ValueError("RESEND_API_KEY not set in environment")
+        raise WebhookConfigurationError(
+            provider=WebhookProvider.RESEND,
+            message="RESEND_API_KEY not set in environment"
+        )
 
     url = f"https://api.resend.com/emails/receiving/{email_id}"
 
-    with httpx.Client() as client:
-        response = client.get(
-            url,
-            headers={
-                "Authorization": f"Bearer {settings.RESEND_API_KEY}",
-                "Accept": "application/json",
-            },
-            timeout=10,
-        )
-
-        if response.status_code != 200:
-            error_body = response.text
-            LOGGER.error(
-                f"Resend API error fetching email {email_id}: "
-                f"status={response.status_code}, response={error_body}"
+    try:
+        with httpx.Client() as client:
+            response = client.get(
+                url,
+                headers={
+                    "Authorization": f"Bearer {settings.RESEND_API_KEY}",
+                    "Accept": "application/json",
+                },
+                timeout=10,
             )
-
-        response.raise_for_status()
-        return response.json()
+            response.raise_for_status()
+            return response.json()
+    except httpx.HTTPStatusError as e:
+        LOGGER.error(
+            f"Resend API error fetching email {email_id}: "
+            f"status={e.response.status_code}, response={e.response.text}"
+        )
+        raise
+    except httpx.RequestError as e:
+        LOGGER.error(f"Resend API request error for email {email_id}: {str(e)}")
+        raise
 
 
 def prepare_resend_workflow_input(payload: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Transform Resend webhook payload into workflow input format.
-    Fetches full email content from Resend API and formats fields.
-
-    Args:
-        payload: Raw webhook payload from Resend
-
-    Returns:
-        Dict with formatted email data (subject, from, text, html)
-
-    Raises:
-        ValueError: If email_id not found in payload
-        httpx.HTTPStatusError: If API call fails
-    """
-    # Extract email ID from payload
     data = _parse_data_field(payload.get("data", {}) or {})
-
     email_id = data.get("email_id") or data.get("id") or payload.get("id")
 
     if not email_id:
         LOGGER.error("No email ID found in Resend webhook payload")
-        raise ValueError("Missing email ID in Resend webhook payload")
+        raise WebhookInvalidParameterError(
+            parameter="email_id",
+            value="",
+            reason="email_id not found in Resend webhook payload"
+        )
 
     LOGGER.info(f"Fetching email content for {email_id}")
     api_content = fetch_resend_email_content(email_id)
 
-    # Extract fields from API response
     subject = api_content.get("subject") or "(no subject)"
     from_field = api_content.get("from") or "(unknown)"
     to_field = api_content.get("to", [])
@@ -218,37 +170,15 @@ def prepare_resend_workflow_input(payload: Dict[str, Any]) -> Dict[str, Any]:
     html = api_content.get("html") or ""
     attachments = api_content.get("attachments", [])
 
-    # Handle from field (can be string or object)
     if isinstance(from_field, dict):
         from_email = from_field.get("email") or from_field.get("address") or str(from_field)
     else:
         from_email = str(from_field)
 
-    # Handle to field (array of email addresses)
-    if isinstance(to_field, list):
-        to_emails = [email if isinstance(email, str) else email.get("email", str(email)) for email in to_field]
-    else:
-        to_emails = [str(to_field)] if to_field else []
-
-    # Handle cc field
-    if isinstance(cc_field, list):
-        cc_emails = [email if isinstance(email, str) else email.get("email", str(email)) for email in cc_field]
-    else:
-        cc_emails = [str(cc_field)] if cc_field else []
-
-    # Handle bcc field
-    if isinstance(bcc_field, list):
-        bcc_emails = [email if isinstance(email, str) else email.get("email", str(email)) for email in bcc_field]
-    else:
-        bcc_emails = [str(bcc_field)] if bcc_field else []
-
-    # Handle reply_to field
-    if isinstance(reply_to_field, list):
-        reply_to_emails = [
-            email if isinstance(email, str) else email.get("email", str(email)) for email in reply_to_field
-        ]
-    else:
-        reply_to_emails = [str(reply_to_field)] if reply_to_field else []
+    to_emails = _normalize_email_list(to_field)
+    cc_emails = _normalize_email_list(cc_field)
+    bcc_emails = _normalize_email_list(bcc_field)
+    reply_to_emails = _normalize_email_list(reply_to_field)
 
     LOGGER.info("Successfully fetched and formatted email content from API")
 

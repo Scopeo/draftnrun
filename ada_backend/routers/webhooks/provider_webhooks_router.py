@@ -8,9 +8,13 @@ from ada_backend.database.models import WebhookProvider
 from ada_backend.database.setup_db import get_db
 from ada_backend.schemas.webhook_schema import WebhookProcessingStatus
 from ada_backend.services.webhooks.aircall_service import get_aircall_webhook_service
-from ada_backend.services.webhooks.errors import WebhookEmptyTokenError, WebhookNotFoundError, WebhookQueueError
-from ada_backend.services.webhooks.resend_service import (
+from ada_backend.services.webhooks.errors import (
+    WebhookEmptyTokenError,
+    WebhookNotFoundError,
+    WebhookQueueError,
     WebhookSignatureVerificationError,
+)
+from ada_backend.services.webhooks.resend_service import (
     get_resend_webhook_service,
     verify_svix_signature,
 )

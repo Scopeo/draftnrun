@@ -61,3 +61,29 @@ class WebhookQueueError(WebhookServiceError):
             f"Failed to queue webhook event {event_id} for webhook {webhook.id} "
             f"(provider: {webhook.provider}): {reason}"
         )
+
+
+class WebhookSignatureVerificationError(WebhookServiceError):
+    """Raised when Svix signature verification fails."""
+
+    def __init__(self, message: str = "Invalid Svix signature"):
+        self.message = message
+        super().__init__(self.message)
+
+
+class WebhookConfigurationError(WebhookServiceError):
+    """Raised when webhook configuration is invalid or missing."""
+
+    def __init__(self, provider: WebhookProvider, message: str):
+        self.provider = provider
+        super().__init__(f"Configuration error for {provider}: {message}")
+
+
+class WebhookInvalidParameterError(WebhookServiceError):
+    """Raised when a webhook parameter is invalid."""
+
+    def __init__(self, parameter: str, value: str, reason: str):
+        self.parameter = parameter
+        self.value = value
+        self.reason = reason
+        super().__init__(f"Invalid parameter '{parameter}' with value '{value}': {reason}")
