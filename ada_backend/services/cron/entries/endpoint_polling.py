@@ -99,6 +99,14 @@ class EndpointPollingUserPayload(BaseUserPayload):
     )
     headers: Optional[dict[str, str]] = Field(default=None, description="Optional HTTP headers for the request")
     timeout: int = Field(default=30, ge=1, le=300, description="Request timeout in seconds")
+    track_history: bool = Field(
+        default=True,
+        description=(
+            "Whether to save tracked values in history. "
+            "If True (default), values are saved to prevent reprocessing. "
+            "If False, the same values may be processed multiple times on each execution."
+        ),
+    )
     workflow_input: AgentInferenceUserPayload = Field(..., description="Agent inference input")
     workflow_input_template: Optional[str] = Field(
         default=None,
@@ -117,6 +125,7 @@ class EndpointPollingUserPayload(BaseUserPayload):
                 "filter_fields": {"data[].status": "processing"},
                 "headers": {"Authorization": "Bearer token"},
                 "timeout": 30,
+                "track_history": True,
                 "workflow_input": {
                     "project_id": "123e4567-e89b-12d3-a456-426614174000",
                     "env": "production",
@@ -139,6 +148,7 @@ class EndpointPollingExecutionPayload(BaseExecutionPayload):
     filter_fields: Optional[dict[str, str]] = None
     headers: Optional[dict[str, str]]
     timeout: int
+    track_history: bool = True
     workflow_input: AgentInferenceExecutionPayload
     workflow_input_template: Optional[str] = None
     initial_history_seed: Optional[list[str]] = Field(default=None, exclude=True)
@@ -276,6 +286,7 @@ def validate_registration(
         filter_fields=user_input.filter_fields,
         headers=user_input.headers,
         timeout=user_input.timeout,
+        track_history=user_input.track_history,
         workflow_input=agent_inference_execution_payload,
         workflow_input_template=user_input.workflow_input_template,
         initial_history_seed=sorted(initial_tracked_values) if initial_tracked_values else None,
@@ -294,6 +305,10 @@ def post_registration(execution_payload: EndpointPollingExecutionPayload, **kwar
     This ensures the first execution only processes truly new values,
     not all values that existed when the cron was created.
     """
+    if not execution_payload.track_history:
+        LOGGER.info("Skipping history seeding because track_history is False")
+        return
+
     seed_values = execution_payload.initial_history_seed
     if not seed_values:
         return
@@ -673,12 +688,17 @@ async def execute(execution_payload: EndpointPollingExecutionPayload, **kwargs) 
         polled_values = _extract_ids_from_response(endpoint_data, execution_payload.tracking_field_path)
         LOGGER.info(f"Found {len(polled_values)} values from endpoint")
 
-    stored_history = get_tracked_values_history(db, cron_id)
-    stored_ids = {str(record.tracked_value) for record in stored_history}
-    LOGGER.info(f"Found {len(stored_ids)} already processed values")
+    if execution_payload.track_history:
+        stored_history = get_tracked_values_history(db, cron_id)
+        stored_ids = {str(record.tracked_value) for record in stored_history}
+        LOGGER.info(f"Found {len(stored_ids)} already processed values")
 
-    new_values = polled_values - stored_ids
-    LOGGER.info(f"Identified {len(new_values)} new values")
+        new_values = polled_values - stored_ids
+        LOGGER.info(f"Identified {len(new_values)} new values")
+    else:
+        stored_ids = set()
+        new_values = polled_values
+        LOGGER.info(f"History tracking disabled - processing all {len(new_values)} polled values")
 
     workflow_results = []
     successful_values = []
@@ -727,13 +747,15 @@ async def execute(execution_payload: EndpointPollingExecutionPayload, **kwargs) 
                     "error": str(e),
                 })
 
-    if successful_values:
+    if successful_values and execution_payload.track_history:
         create_tracked_values_bulk(
             session=db,
             cron_id=cron_id,
             tracked_values=successful_values,
         )
         LOGGER.info(f"Added {len(successful_values)} successfully processed values to history")
+    elif successful_values and not execution_payload.track_history:
+        LOGGER.info(f"Processed {len(successful_values)} values (not saved to history - track_history is False)")
 
     return {
         "endpoint_url": execution_payload.endpoint_url,
