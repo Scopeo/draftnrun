@@ -114,16 +114,6 @@ def _normalize_email_list(field: Any) -> list[str]:
 
 
 def should_trigger_resend_workflow(workflow_input: Dict[str, Any], trigger: Dict[str, Any]) -> bool:
-    """
-    Check if trigger's recipient email filter matches the email data.
-
-    Args:
-        workflow_input: Workflow input containing email data (to, cc, bcc)
-        trigger: Trigger configuration with optional filter_options
-
-    Returns:
-        True if filter matches or no filter is set, False otherwise
-    """
     filter_options = trigger.get("filter_options") or {}
     recipient_email = filter_options.get("recipient_email")
 
