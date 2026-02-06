@@ -381,7 +381,7 @@ class SQLLocalService(DBService):
 
             update_stmt = table.update().where(table.c[id_column] == temp_table.c[id_column])
             # Also match on source_id to avoid cross-source collisions when PK is (chunk_id, source_id)
-            if "source_id" in table.c and "source_id" in temp_table.c:
+            if "source_id" in table.c and "source_id" in df.columns:
                 update_stmt = update_stmt.where(table.c["source_id"] == temp_table.c["source_id"])
             update_stmt = update_stmt.values(columns_to_update)
 
