@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 from ada_backend.database import models as db
 from ada_backend.database.seed.integrations.seed_gmail import seed_gmail_components
 from ada_backend.database.seed.integrations.seed_integration import seed_integrations
+from ada_backend.database.seed.integrations.seed_slack import seed_slack_components
 from ada_backend.database.seed.seed_ai_agent import seed_ai_agent_components, seed_ai_agent_parameter_groups
 from ada_backend.database.seed.seed_api_call_tool import seed_api_call_components
 from ada_backend.database.seed.seed_categories import seed_categories
@@ -76,6 +77,7 @@ def seed_db(session: Session):
         seed_filter_components(session)
         seed_if_else_components(session)
         seed_gmail_components(session)
+        seed_slack_components(session)
         seed_project_reference_components(session)
         seed_chunk_processor_components(session)
         seed_linkup_tool_components(session)
