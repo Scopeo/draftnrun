@@ -25,7 +25,6 @@ def test_get_tokens_chart(mock_query_trace_duration):
     chart = get_tokens_distribution_chart([project_id], duration_days)
 
     assert isinstance(chart, Chart)
-    assert chart.id == f"tokens_distribution_{project_id}"
     assert chart.type == ChartType.BAR
     assert chart.title == "Tokens Distribution"
     assert isinstance(chart.data, ChartData)

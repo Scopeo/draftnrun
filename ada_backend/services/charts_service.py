@@ -2,7 +2,7 @@ from calendar import monthrange
 from collections import OrderedDict
 from datetime import datetime, timedelta, timezone
 from typing import List
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import numpy as np
 import pandas as pd
@@ -132,11 +132,11 @@ def get_agent_usage_chart(
     token_usage = token_usage.sort_values(by="date", ascending=True)
     token_usage["date"] = token_usage["date"].astype(str)
 
-    chart_id_suffix = "_".join(str(project_id) for project_id in project_ids)[:40]
+    chart_id = str(uuid4())
 
     return [
         Chart(
-            id=f"agent_usage_{chart_id_suffix}",
+            id=f"agent_usage_{chart_id}",
             type=ChartType.LINE,
             title="Agent Usage",
             data=ChartData(
@@ -146,7 +146,7 @@ def get_agent_usage_chart(
             x_axis_type="datetime",
         ),
         Chart(
-            id=f"token_usage_{chart_id_suffix}",
+            id=f"token_usage_{chart_id}",
             type=ChartType.LINE,
             title="Token Usage",
             data=ChartData(
@@ -179,7 +179,7 @@ def get_latence_chart(project_ids: List[UUID], duration_days: int, call_type: Ca
     latency_hist, bins_edges = np.histogram(df["duration"], bins="fd")
     bin_centers = [np.round((bins_edges[i] + bins_edges[i + 1]) / 2, 1) for i in range(len(bins_edges) - 1)]
 
-    chart_id_suffix = "_".join(str(project_id) for project_id in project_ids)[:40]
+    chart_id_suffix = str(uuid4())
 
     return Chart(
         id=f"latency_distribution_{chart_id_suffix}",
@@ -208,10 +208,10 @@ def get_tokens_distribution_chart(
         for i in range(len(TOKENS_DISTRIBUTION_BINS) - 1)
     ]
 
-    chart_id_suffix = "_".join(str(project_id) for project_id in project_ids)[:40]
+    chart_id = str(uuid4())
 
     return Chart(
-        id=f"tokens_distribution_{chart_id_suffix}",
+        id=f"tokens_distribution_{chart_id}",
         type=ChartType.BAR,
         title="Tokens Distribution",
         data=ChartData(
