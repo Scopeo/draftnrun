@@ -1,13 +1,13 @@
 import logging
 from datetime import datetime, timedelta
-from typing import List, Optional
+from typing import List
 from uuid import UUID
 
 import pandas as pd
 
 from ada_backend.database.models import CallType
 from ada_backend.schemas.monitor_schema import KPI, KPISResponse, TraceKPIS
-from ada_backend.segment_analytics import track_organization_monitoring_loaded, track_project_monitoring_loaded
+from ada_backend.segment_analytics import track_project_monitoring_loaded
 from engine.trace.sql_exporter import get_session_trace
 
 LOGGER = logging.getLogger(__name__)
@@ -112,21 +112,15 @@ def get_monitoring_kpis_by_projects(
     user_id: UUID,
     project_ids: List[UUID],
     duration_days: int,
-    organization_id: Optional[UUID],
     call_type: CallType | None = None,
 ) -> KPISResponse:
     trace_kpis = get_trace_metrics(project_ids, duration_days, call_type)
-    if len(project_ids) == 1:
-        project_id = project_ids[0]
-        LOGGER.info(
-            f"Trace metrics for project {project_id} and duration {duration_days} days retrieved successfully."
-        )
+    for project_id in project_ids:
         track_project_monitoring_loaded(user_id, project_id)
-    else:
-        LOGGER.info(
-            f"Trace metrics for {len(project_ids)} projects and duration {duration_days} days retrieved successfully."
-        )
-        track_organization_monitoring_loaded(user_id, organization_id, len(project_ids))
+    project_ids_for_log = ", ".join([str(project_id) for project_id in project_ids])
+    LOGGER.info(
+        f"Trace metrics for projects {project_ids_for_log} and duration {duration_days} days retrieved successfully."
+    )
     return KPISResponse(
         kpis=[
             KPI(
