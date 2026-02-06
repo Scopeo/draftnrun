@@ -174,6 +174,9 @@ def merge_constrained_output_to_root(
         if isinstance(parsed_output, dict):
             # Merge constrained output fields to root level
             for key, value in parsed_output.items():
-                setattr(outputs, key, value)
+                if not key.startswith("_"):
+                    setattr(outputs, key, value)
+                else:
+                    LOGGER.warning(f"Skipped setting private attribute '{key}' from constrained output")
     except (json.JSONDecodeError, TypeError) as e:
         LOGGER.debug(f"Could not parse constrained output as JSON: {e}")
