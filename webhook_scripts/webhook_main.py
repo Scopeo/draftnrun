@@ -5,6 +5,7 @@ from uuid import UUID
 
 import httpx
 
+from ada_backend.services.webhooks.resend_service import should_trigger_resend_workflow
 from ada_backend.services.webhooks.webhook_service import prepare_workflow_input
 from settings import settings
 
@@ -18,34 +19,6 @@ LOGGER = logging.getLogger(__name__)
 
 WEBHOOK_WORKFLOW_TIMEOUT = 1800  # 30 minutes in seconds (for long-running workflows)
 WEBHOOK_MAX_CONCURRENT_WORKFLOWS = 5  # Maximum number of concurrent workflows to run
-
-
-def _matches_recipient_filter(trigger: Dict[str, Any], workflow_input: Dict[str, Any]) -> bool:
-    """
-    Check if trigger's recipient email filter matches the email data.
-
-    Args:
-        trigger: Trigger configuration with optional filter_options
-        workflow_input: Workflow input containing email data (to, cc, bcc)
-
-    Returns:
-        True if filter matches or no filter is set, False otherwise
-    """
-    filter_options = trigger.get("filter_options") or {}
-    recipient_email = filter_options.get("recipient_email")
-
-    if not recipient_email:
-        return True
-
-    all_recipients = []
-    all_recipients.extend(workflow_input.get("to", []))
-    all_recipients.extend(workflow_input.get("cc", []))
-    all_recipients.extend(workflow_input.get("bcc", []))
-
-    normalized_recipients = [r.lower().strip() for r in all_recipients]
-    normalized_filter = recipient_email.lower().strip()
-
-    return normalized_filter in normalized_recipients
 
 
 async def _run_workflow_async(
@@ -74,16 +47,15 @@ async def _run_workflow_async(
                 f"project_id={project_id}, webhook_id={webhook_id}"
             )
 
-            # Transform payload using provider-specific service
             workflow_input = prepare_workflow_input(payload, provider)
 
-            # Check if trigger's recipient filter matches
-            if not _matches_recipient_filter(trigger, workflow_input):
-                LOGGER.info(
-                    f"[WEBHOOK_MAIN] Trigger {trigger_id} recipient filter did not match, skipping. "
-                    f"Filter: {trigger.get('filter_options', {}).get('recipient_email')}"
-                )
-                return (trigger_id, False)
+            if provider == "resend":
+                if not should_trigger_resend_workflow(workflow_input, trigger):
+                    LOGGER.info(
+                        f"[WEBHOOK_MAIN] Trigger {trigger_id} recipient filter did not match, skipping. "
+                        f"Filter: {trigger.get('filter_options', {}).get('recipient_email')}"
+                    )
+                    return (trigger_id, False)
 
             input_data = {
                 **workflow_input,

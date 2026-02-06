@@ -88,17 +88,6 @@ async def process_webhook_event(
 
 
 def prepare_workflow_input(payload: Dict[str, Any], provider: str) -> Dict[str, Any]:
-    """
-    Transform provider-specific webhook payload into workflow input format.
-    Delegates to provider-specific service functions.
-
-    Args:
-        payload: Raw webhook payload
-        provider: Webhook provider type
-
-    Returns:
-        Dict with formatted workflow input data
-    """
     provider_enum = WebhookProvider(provider)
     LOGGER.info(f"Preparing workflow input for provider: {provider_enum}")
     match provider_enum:
@@ -109,6 +98,7 @@ def prepare_workflow_input(payload: Dict[str, Any], provider: str) -> Dict[str, 
                 "messages": [
                     {"role": "user", "content": json.dumps(payload, default=str)},
                 ],
+                "webhook_payload": payload,
             }
 
 

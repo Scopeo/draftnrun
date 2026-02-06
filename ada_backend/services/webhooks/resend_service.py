@@ -113,6 +113,34 @@ def _normalize_email_list(field: Any) -> list[str]:
     return [str(field)] if field else []
 
 
+def should_trigger_resend_workflow(workflow_input: Dict[str, Any], trigger: Dict[str, Any]) -> bool:
+    """
+    Check if trigger's recipient email filter matches the email data.
+
+    Args:
+        workflow_input: Workflow input containing email data (to, cc, bcc)
+        trigger: Trigger configuration with optional filter_options
+
+    Returns:
+        True if filter matches or no filter is set, False otherwise
+    """
+    filter_options = trigger.get("filter_options") or {}
+    recipient_email = filter_options.get("recipient_email")
+
+    if not recipient_email:
+        return True
+
+    all_recipients = []
+    all_recipients.extend(workflow_input.get("to", []))
+    all_recipients.extend(workflow_input.get("cc", []))
+    all_recipients.extend(workflow_input.get("bcc", []))
+
+    normalized_recipients = [r.lower().strip() for r in all_recipients]
+    normalized_filter = recipient_email.lower().strip()
+
+    return normalized_filter in normalized_recipients
+
+
 def fetch_resend_email_content(email_id: str) -> Dict[str, Any]:
     if not settings.RESEND_API_KEY:
         raise WebhookConfigurationError(
