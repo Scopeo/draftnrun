@@ -285,7 +285,7 @@ def get_all_organization_limits_with_usage(
     ]
 
 
-def get_llm_cost_for_calculation(session: Session, model_id: UUID) -> tuple[Optional[float], Optional[float]]:
+def get_llm_cost(session: Session, model_id: UUID) -> tuple[Optional[float], Optional[float]]:
     llm_cost_aliased = aliased(db.LLMCost, flat=True)
     result = session.execute(
         select(db.Cost.credits_per_input_token, db.Cost.credits_per_output_token)
@@ -300,7 +300,7 @@ def get_llm_cost_for_calculation(session: Session, model_id: UUID) -> tuple[Opti
     return credits_per_input_token, credits_per_output_token
 
 
-def get_component_cost_for_calculation(session: Session, component_instance_id: UUID) -> Optional[float]:
+def get_component_cost_per_call(session: Session, component_instance_id: UUID) -> Optional[float]:
     component_cost_aliased = aliased(db.ComponentCost, flat=True)
     result = session.execute(
         select(db.Cost.credits_per_call)

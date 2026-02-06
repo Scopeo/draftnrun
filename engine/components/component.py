@@ -1,7 +1,7 @@
 import asyncio
 import logging
 from abc import ABC, abstractmethod
-from typing import Any, Dict, Optional, Type
+from typing import Any, Callable, Dict, Optional, Type
 
 from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttributes
 from opentelemetry import trace as trace_api
@@ -11,7 +11,13 @@ from tenacity import RetryError
 
 from engine import legacy_compatibility
 from engine.coercion_matrix import CoercionError
-from engine.components.types import AgentPayload, ChatMessage, ComponentAttributes, NodeData, ToolDescription
+from engine.components.types import (
+    AgentPayload,
+    ChatMessage,
+    ComponentAttributes,
+    NodeData,
+    ToolDescription,
+)
 from engine.prometheus_metric import track_calls
 from engine.trace.credit_calculator import calculate_and_set_component_credits
 from engine.trace.serializer import serialize_to_json
@@ -32,11 +38,13 @@ class Component(ABC):
         trace_manager: TraceManager,
         tool_description: ToolDescription,
         component_attributes: ComponentAttributes,
+        credit_calculator: Optional[Callable[[trace_api.Span], None]] = None,
         **kwargs,
     ):
         self.trace_manager = trace_manager
         self.tool_description = tool_description
         self.component_attributes = component_attributes
+        self.credit_calculator = credit_calculator or calculate_and_set_component_credits
 
         self._trace_attributes: dict[str, Any] = {}
         self._trace_events: list[str] = []
@@ -104,15 +112,6 @@ class Component(ABC):
         self._trace_attributes = {}
         self._trace_events = []
 
-    def _calculate_credits(self, span: trace_api.Span) -> None:
-        """
-        Calculate and set component credits on the span.
-
-        Override this method in subclasses to implement custom credit calculation logic.
-
-        """
-        calculate_and_set_component_credits(span)
-
     # Legacy adapter; subclasses with legacy signature do not need to override this.
     # TODO: Remove after I/O refactor migration
     async def _legacy_run_without_io_trace(self, *inputs: AgentPayload | dict, **kwargs) -> AgentPayload:
@@ -164,7 +163,7 @@ class Component(ABC):
                             SpanAttributes.OUTPUT_VALUE: serialize_to_json(output_node_data.data, shorten_string=True)
                         })
                         self._set_trace_data(span)
-                        self._calculate_credits(span)
+                        self.credit_calculator(span)
                         span.set_status(trace_api.StatusCode.OK)
                         return output_node_data
                     else:
@@ -187,7 +186,7 @@ class Component(ABC):
                             SpanAttributes.OUTPUT_VALUE: serialize_to_json(output_node_data.data, shorten_string=True)
                         })
                         self._set_trace_data(span)
-                        self._calculate_credits(span)
+                        self.credit_calculator(span)
                         span.set_status(trace_api.StatusCode.OK)
                         return output_node_data
 
@@ -260,7 +259,7 @@ class Component(ABC):
                     SpanAttributes.OUTPUT_VALUE: serialize_to_json(legacy_output, shorten_string=True)
                 })
                 self._set_trace_data(span)
-                self._calculate_credits(span)
+                self.credit_calculator(span)
                 span.set_status(trace_api.StatusCode.OK)
                 return legacy_output
 
