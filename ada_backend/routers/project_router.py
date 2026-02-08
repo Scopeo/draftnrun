@@ -8,6 +8,13 @@ from sqlalchemy.orm import Session
 from ada_backend.database.models import CallType, EnvType, ProjectType, ResponseFormat
 from ada_backend.database.setup_db import get_db
 from ada_backend.repositories.env_repository import get_env_relationship_by_graph_runner_id
+from ada_backend.repositories.project_options_repository import (
+    delete_project_option,
+    get_project_option,
+    list_project_options,
+    upsert_project_option,
+)
+from ada_backend.repositories.project_repository import get_project
 from ada_backend.routers.auth_router import (
     UserRights,
     VerifiedApiKey,
@@ -18,13 +25,6 @@ from ada_backend.routers.auth_router import (
 from ada_backend.schemas.auth_schema import SupabaseUser
 from ada_backend.schemas.chart_schema import ChartsResponse
 from ada_backend.schemas.monitor_schema import KPISResponse
-from ada_backend.repositories.project_options_repository import (
-    delete_project_option,
-    get_project_option,
-    list_project_options,
-    upsert_project_option,
-)
-from ada_backend.repositories.project_repository import get_project
 from ada_backend.schemas.project_schema import (
     ChatResponse,
     ProjectCreateSchema,
