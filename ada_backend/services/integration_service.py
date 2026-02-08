@@ -24,14 +24,22 @@ _CACHE_EXPIRATION_MINUTES = 5
 _NANGO_TOKEN_CACHE = TTLCache(maxsize=1000, ttl=_CACHE_EXPIRATION_MINUTES * 60)
 
 
-def generate_nango_end_user_id(project_id: UUID, provider_config_key: str) -> str:
+def generate_nango_end_user_id(
+    project_id: UUID,
+    provider_config_key: str,
+    external_user_id: str | None = None,
+) -> str:
     """
     Generate Nango end_user_id for OAuth connections.
 
-    Format: proj_{project_id}_{provider_config_key}
+    Format without external_user_id: proj_{project_id}_{provider_config_key}
+    Format with external_user_id: proj_{project_id}_{external_user_id}_{provider_config_key}
 
-    Current limitation: This deterministic ID enforces 1 connection per provider per project.
+    When external_user_id is provided, supports multiple connections per provider per project
+    (one per external user).
     """
+    if external_user_id:
+        return f"proj_{project_id}_{external_user_id}_{provider_config_key}"
     return f"proj_{project_id}_{provider_config_key}"
 
 
@@ -39,6 +47,7 @@ async def create_oauth_authorization(
     project_id: UUID,
     provider_config_key: str | OAuthProvider,
     end_user_email: str | None = None,
+    external_user_id: str | None = None,
 ) -> OAuthAuthorizationResult:
     """
     Start OAuth authorization flow with Nango (headless mode).
@@ -54,6 +63,7 @@ async def create_oauth_authorization(
         project_id: The project UUID
         provider_config_key: The OAuth provider (e.g., 'slack', 'hubspot')
         end_user_email: Optional email for pre-filling in the OAuth flow
+        external_user_id: Optional external user ID for per-user connections
 
     Returns:
         OAuthAuthorizationResult with oauth_url, end_user_id, and expires_at
@@ -61,7 +71,7 @@ async def create_oauth_authorization(
     LOGGER.info(f"Creating OAuth authorization for project {project_id}, provider {provider_config_key}")
 
     nango = get_nango_client()
-    end_user_id = generate_nango_end_user_id(project_id, str(provider_config_key))
+    end_user_id = generate_nango_end_user_id(project_id, str(provider_config_key), external_user_id)
 
     session_data = await nango.create_connect_session(
         end_user_id=end_user_id,
@@ -90,6 +100,7 @@ async def confirm_oauth_connection(
     provider_config_key: str | OAuthProvider,
     created_by_user_id: UUID | None = None,
     name: str = "",
+    external_user_id: str | None = None,
 ) -> UUID:
     """
     Confirm OAuth connection after user completes flow.
@@ -106,6 +117,7 @@ async def confirm_oauth_connection(
         provider_config_key: The OAuth provider (e.g., 'slack', 'hubspot')
         created_by_user_id: User who initiated the OAuth flow
         name: Optional friendly name for the connection
+        external_user_id: Optional external user ID for per-user connections
 
     Returns:
         UUID of the OAuthConnection record
@@ -116,7 +128,7 @@ async def confirm_oauth_connection(
     LOGGER.info(f"Confirming OAuth connection for project {project_id}, provider {provider_config_key}")
 
     nango = get_nango_client()
-    end_user_id = generate_nango_end_user_id(project_id, str(provider_config_key))
+    end_user_id = generate_nango_end_user_id(project_id, str(provider_config_key), external_user_id)
 
     connections = await nango.list_connections(
         provider_config_key=str(provider_config_key),
@@ -154,23 +166,60 @@ async def check_connection_status(
     session: Session,
     project_id: UUID,
     provider_config_key: str | OAuthProvider,
+    external_user_id: str | None = None,
 ) -> OAuthConnectionStatus:
     """
     Check if OAuth connection is active for a project.
 
     Flow:
-    1. Queries our database for connections matching project and provider
-    2. Verifies the most recent connection still exists in Nango
-    3. Returns connection status with metadata
+    1. If external_user_id is provided, look up via Nango end_user_id filtering
+    2. Otherwise, queries our database for connections matching project and provider
+    3. Verifies the most recent connection still exists in Nango
+    4. Returns connection status with metadata
 
     Args:
         session: Database session
         project_id: The project UUID
         provider_config_key: The OAuth provider (e.g., 'slack', 'hubspot')
+        external_user_id: Optional external user ID for per-user lookup
 
     Returns:
         OAuthConnectionStatus with connected, provider_config_key, connection_id, and name
     """
+    if external_user_id:
+        # Per-user lookup: query Nango by end_user_id to find the user-specific connection
+        end_user_id = generate_nango_end_user_id(project_id, str(provider_config_key), external_user_id)
+        try:
+            nango = get_nango_client()
+            nango_connections = await nango.list_connections(
+                provider_config_key=str(provider_config_key),
+                end_user_id=end_user_id,
+            )
+            if not nango_connections:
+                return OAuthConnectionStatus(
+                    connected=False,
+                    provider_config_key=str(provider_config_key),
+                    connection_id=None,
+                )
+            real_nango_connection_id = nango_connections[0]["connection_id"]
+            # Find our DB record for this Nango connection
+            db_connection = oauth_connection_repository.get_oauth_connection_by_nango_id(
+                session, real_nango_connection_id
+            )
+            return OAuthConnectionStatus(
+                connected=True,
+                provider_config_key=str(provider_config_key),
+                connection_id=db_connection.id if db_connection else None,
+                name=db_connection.name if db_connection else None,
+            )
+        except NangoClientError as e:
+            LOGGER.warning(f"Failed to check Nango connection for user {external_user_id}: {e}")
+            return OAuthConnectionStatus(
+                connected=False,
+                provider_config_key=str(provider_config_key),
+                connection_id=None,
+            )
+
     connections = oauth_connection_repository.list_oauth_connections_by_project(
         session=session,
         project_id=project_id,
