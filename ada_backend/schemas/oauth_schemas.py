@@ -8,6 +8,7 @@ from engine.integrations.providers import OAuthProvider
 class CreateOAuthConnectionRequest(BaseModel):
     provider_config_key: OAuthProvider
     end_user_email: str | None = None
+    external_user_id: str | None = None
     name: str = ""
 
 
