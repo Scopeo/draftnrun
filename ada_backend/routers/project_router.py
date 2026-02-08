@@ -18,10 +18,20 @@ from ada_backend.routers.auth_router import (
 from ada_backend.schemas.auth_schema import SupabaseUser
 from ada_backend.schemas.chart_schema import ChartsResponse
 from ada_backend.schemas.monitor_schema import KPISResponse
+from ada_backend.repositories.project_options_repository import (
+    delete_project_option,
+    get_project_option,
+    list_project_options,
+    upsert_project_option,
+)
+from ada_backend.repositories.project_repository import get_project
 from ada_backend.schemas.project_schema import (
     ChatResponse,
     ProjectCreateSchema,
     ProjectDeleteResponse,
+    ProjectOptionListResponse,
+    ProjectOptionSchema,
+    ProjectOptionUpsertRequest,
     ProjectSchema,
     ProjectUpdateSchema,
     ProjectWithGraphRunnersSchema,
@@ -200,14 +210,28 @@ async def run_env_agent_endpoint(
     sqlaclhemy_db_session: Session = Depends(get_db),
     verified_api_key: VerifiedApiKey = Depends(verify_api_key_dependency),
 ) -> ChatResponse:
-    if verified_api_key.project_id != project_id:
-        raise HTTPException(status_code=403, detail="You don't have access to this project")
+    _verify_project_access(project_id, verified_api_key, sqlaclhemy_db_session)
 
     if response_format == ResponseFormat.S3_KEY:
         raise HTTPException(
             status_code=400,
             detail="'s3_key' is not allowed for this endpoint. Only 'base64' or 'url' are supported.",
         )
+
+    # Load and merge project options if option_key or options provided
+    option_key = input_data.pop("option_key", None)
+    inline_options = input_data.pop("options", None)
+    if option_key:
+        stored = get_project_option(sqlaclhemy_db_session, project_id, option_key)
+        if stored:
+            merged = {**stored.options}
+            if inline_options is not None:
+                merged.update(inline_options)
+            input_data["options"] = merged
+        elif inline_options is not None:
+            input_data["options"] = inline_options
+    elif inline_options is not None:
+        input_data["options"] = inline_options
 
     try:
         return await run_env_agent(
@@ -469,3 +493,116 @@ async def chat_env(
             f"Failed to run agent chat for project {project_id} in environment {env}: {str(e)}", exc_info=True
         )
         raise HTTPException(status_code=500, detail="Internal server error") from e
+
+
+# --- Project Options ---
+
+
+def _verify_project_access(
+    project_id: UUID,
+    verified_api_key: VerifiedApiKey,
+    session: Session,
+) -> None:
+    """Verify that the API key has access to the given project."""
+    if verified_api_key.project_id is not None:
+        if verified_api_key.project_id != project_id:
+            raise HTTPException(status_code=403, detail="You don't have access to this project")
+        return
+    if verified_api_key.organization_id is not None:
+        project = get_project(session, project_id=project_id)
+        if not project or project.organization_id != verified_api_key.organization_id:
+            raise HTTPException(status_code=403, detail="You don't have access to this project")
+        return
+    raise HTTPException(status_code=403, detail="API key has no valid scope")
+
+
+@router.get(
+    "/{project_id}/options",
+    response_model=ProjectOptionListResponse,
+    tags=["Project Options"],
+    summary="List all option keys for a project",
+)
+async def list_options_endpoint(
+    project_id: UUID,
+    session: Session = Depends(get_db),
+    verified_api_key: VerifiedApiKey = Depends(verify_api_key_dependency),
+) -> ProjectOptionListResponse:
+    _verify_project_access(project_id, verified_api_key, session)
+    options = list_project_options(session, project_id)
+    return ProjectOptionListResponse(
+        project_id=project_id,
+        options=[
+            ProjectOptionSchema(
+                option_key=o.option_key,
+                options=o.options,
+                created_at=o.created_at.isoformat() if o.created_at else None,
+                updated_at=o.updated_at.isoformat() if o.updated_at else None,
+            )
+            for o in options
+        ],
+    )
+
+
+@router.get(
+    "/{project_id}/options/{option_key}",
+    response_model=ProjectOptionSchema,
+    tags=["Project Options"],
+    summary="Get options for a specific key",
+)
+async def get_option_endpoint(
+    project_id: UUID,
+    option_key: str,
+    session: Session = Depends(get_db),
+    verified_api_key: VerifiedApiKey = Depends(verify_api_key_dependency),
+) -> ProjectOptionSchema:
+    _verify_project_access(project_id, verified_api_key, session)
+    option = get_project_option(session, project_id, option_key)
+    if not option:
+        raise HTTPException(status_code=404, detail=f"Option key '{option_key}' not found")
+    return ProjectOptionSchema(
+        option_key=option.option_key,
+        options=option.options,
+        created_at=option.created_at.isoformat() if option.created_at else None,
+        updated_at=option.updated_at.isoformat() if option.updated_at else None,
+    )
+
+
+@router.put(
+    "/{project_id}/options/{option_key}",
+    response_model=ProjectOptionSchema,
+    tags=["Project Options"],
+    summary="Create or update options for a key",
+)
+async def upsert_option_endpoint(
+    project_id: UUID,
+    option_key: str,
+    body: ProjectOptionUpsertRequest = Body(...),
+    session: Session = Depends(get_db),
+    verified_api_key: VerifiedApiKey = Depends(verify_api_key_dependency),
+) -> ProjectOptionSchema:
+    _verify_project_access(project_id, verified_api_key, session)
+    option = upsert_project_option(session, project_id, option_key, body.options)
+    return ProjectOptionSchema(
+        option_key=option.option_key,
+        options=option.options,
+        created_at=option.created_at.isoformat() if option.created_at else None,
+        updated_at=option.updated_at.isoformat() if option.updated_at else None,
+    )
+
+
+@router.delete(
+    "/{project_id}/options/{option_key}",
+    tags=["Project Options"],
+    summary="Delete options for a key",
+)
+async def delete_option_endpoint(
+    project_id: UUID,
+    option_key: str,
+    session: Session = Depends(get_db),
+    verified_api_key: VerifiedApiKey = Depends(verify_api_key_dependency),
+) -> dict:
+    _verify_project_access(project_id, verified_api_key, session)
+    deleted = delete_project_option(session, project_id, option_key)
+    if not deleted:
+        raise HTTPException(status_code=404, detail=f"Option key '{option_key}' not found")
+    return {"message": f"Option key '{option_key}' deleted"}

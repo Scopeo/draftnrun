@@ -74,3 +74,19 @@ class ChatResponse(BaseModel):
 class ProjectDeleteResponse(BaseModel):
     project_id: UUID
     graph_runner_ids: list[UUID] = Field(default_factory=list)
+
+
+class ProjectOptionSchema(BaseModel):
+    option_key: str
+    options: dict[str, Any]
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
+
+
+class ProjectOptionUpsertRequest(BaseModel):
+    options: dict[str, Any]
+
+
+class ProjectOptionListResponse(BaseModel):
+    project_id: UUID
+    options: List[ProjectOptionSchema]

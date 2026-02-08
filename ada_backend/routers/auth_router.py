@@ -320,6 +320,38 @@ async def create_org_api_key(
         raise HTTPException(status_code=500, detail="Failed to create Organization API key") from e
 
 
+@router.delete("/org-api-key", summary="Delete Organization API Key")
+async def delete_org_api_key_route(
+    user: Annotated[
+        SupabaseUser,
+        Depends(get_user_from_supabase_token),
+    ],
+    session: Session = Depends(get_db),
+    organization_id: UUID = Query(...),
+    api_key_delete: ApiKeyDeleteRequest = Body(...),
+) -> ApiKeyDeleteResponse:
+    if not user.id:
+        raise HTTPException(status_code=400, detail="User ID not found")
+
+    _is_user = user_has_access_to_organization_dependency(
+        allowed_roles=set(UserRights.ADMIN.value),
+    )
+    await _is_user(organization_id=organization_id, user=user)
+
+    try:
+        deactivate_api_key_service(
+            session,
+            key_id=api_key_delete.key_id,
+            revoker_user_id=user.id,
+        )
+        return ApiKeyDeleteResponse(
+            message="Organization API key deleted successfully",
+            key_id=api_key_delete.key_id,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Failed to delete Organization API key") from e
+
+
 @router.delete("/api-key", summary="Delete API Key")
 async def delete_api_key_route(
     user: Annotated[

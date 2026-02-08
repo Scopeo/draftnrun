@@ -1891,6 +1891,34 @@ class Webhook(Base):
         return f"Webhook(id={self.id}, provider={self.provider}, external_client_id={self.external_client_id[:4]}...)"
 
 
+class ProjectOption(Base):
+    """
+    Stores per-key options for a project.
+    Used by external consumers (e.g. NeverDrop) to store per-user configuration
+    that gets injected into workflow execution context.
+    """
+
+    __tablename__ = "project_options"
+
+    id = mapped_column(UUID(as_uuid=True), primary_key=True, index=True, default=uuid.uuid4)
+    project_id = mapped_column(
+        UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    option_key = mapped_column(String(255), nullable=False)
+    options = mapped_column(JSONB, nullable=False, default=dict)
+    created_at = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    project = relationship("Project", backref="project_options")
+
+    __table_args__ = (
+        UniqueConstraint("project_id", "option_key", name="uq_project_option_key"),
+    )
+
+    def __str__(self):
+        return f"ProjectOption(id={self.id}, project_id={self.project_id}, option_key={self.option_key})"
+
+
 class IntegrationTrigger(Base):
     """
     Maps webhook events to workflows/agents.
