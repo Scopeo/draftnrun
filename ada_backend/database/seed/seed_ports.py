@@ -1,4 +1,7 @@
 import logging
+import sys
+import types
+from typing import Union, get_args, get_origin
 
 from pydantic.fields import FieldInfo
 from sqlalchemy.orm import Session
@@ -23,6 +26,39 @@ def get_parameter_type(field_info: FieldInfo) -> db.ParameterType:
             )
 
     return db.ParameterType.STRING
+
+
+def is_field_nullable(field_info: FieldInfo) -> bool:
+    """Determine if a Pydantic field can accept None.
+
+    A field is nullable if its type annotation includes NoneType.
+    This is orthogonal to whether the field is required (has a default).
+
+    Handles both:
+    - typing.Union syntax: Optional[T] or Union[T, None]
+    - PEP 604 syntax (Python 3.10+): T | None
+    """
+
+    annotation = field_info.annotation
+
+    if annotation is type(None):
+        return True
+
+    origin = get_origin(annotation)
+
+    # typing.Union (for Optional[T] or Union[T, None])
+    if origin is Union:
+        args = get_args(annotation)
+        return type(None) in args
+
+    # types.UnionType (for X | None syntax on Python 3.10+)
+    if sys.version_info >= (3, 10):
+        if origin is types.UnionType:
+            args = get_args(annotation)
+            return type(None) in args
+
+    # For other types (e.g., str, int, list), they're not nullable
+    return False
 
 
 def seed_port_definitions(session: Session):
@@ -94,6 +130,7 @@ def seed_port_definitions(session: Session):
 
             port_description = field_info.description
             parameter_type = get_parameter_type(field_info)
+            is_nullable = is_field_nullable(field_info)
 
             # Every input should have a UI component and at least a basic label,
             # so synthesized input-parameters are always renderable in the UI.
@@ -122,6 +159,7 @@ def seed_port_definitions(session: Session):
                 port.parameter_type = parameter_type
                 port.ui_component = ui_component
                 port.ui_component_properties = ui_component_properties
+                port.nullable = is_nullable
                 LOGGER.info(f"  - Updating INPUT port: {field_name}")
             else:
                 port = db.PortDefinition(
@@ -133,6 +171,7 @@ def seed_port_definitions(session: Session):
                     parameter_type=parameter_type,
                     ui_component=ui_component,
                     ui_component_properties=ui_component_properties,
+                    nullable=is_nullable,
                 )
                 session.add(port)
                 LOGGER.info(f"  - Creating INPUT port: {field_name}")
@@ -146,11 +185,13 @@ def seed_port_definitions(session: Session):
             )
             is_canonical = canonical_ports.get("output") == field_name
             parameter_type = get_parameter_type(field_info)
+            is_nullable = is_field_nullable(field_info)
 
             if port:
                 port.is_canonical = is_canonical
                 port.description = field_info.description
                 port.parameter_type = parameter_type
+                port.nullable = is_nullable
                 LOGGER.info(f"  - Updating OUTPUT port: {field_name}")
             else:
                 port = db.PortDefinition(
@@ -160,6 +201,7 @@ def seed_port_definitions(session: Session):
                     is_canonical=is_canonical,
                     description=field_info.description,
                     parameter_type=parameter_type,
+                    nullable=is_nullable,
                 )
                 session.add(port)
                 LOGGER.info(f"  - Creating OUTPUT port: {field_name}")
