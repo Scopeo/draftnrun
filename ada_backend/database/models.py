@@ -1058,6 +1058,7 @@ class PortDefinition(Base):
     parameter_type = mapped_column(make_pg_enum(ParameterType), nullable=False, default=ParameterType.STRING)
     ui_component = mapped_column(make_pg_enum(UIComponent), nullable=True)
     ui_component_properties = mapped_column(JSONB, nullable=True)
+    nullable = mapped_column(Boolean, nullable=False, default=False)
     component_version = relationship("ComponentVersion", back_populates="port_definitions")
 
     __table_args__ = (

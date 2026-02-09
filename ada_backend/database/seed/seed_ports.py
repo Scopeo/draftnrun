@@ -25,6 +25,23 @@ def get_parameter_type(field_info: FieldInfo) -> db.ParameterType:
     return db.ParameterType.STRING
 
 
+def is_field_required(field_info: FieldInfo) -> bool:
+    """Determine if a Pydantic field is required (not nullable).
+
+    A field is required if it has no default value or default factory.
+    """
+    from pydantic_core import PydanticUndefined
+
+    # Field is required if it has no default value or factory
+    has_default = field_info.default is not PydanticUndefined
+    has_factory = (
+        hasattr(field_info, 'default_factory')
+        and field_info.default_factory is not None
+    )
+
+    return not (has_default or has_factory)
+
+
 def seed_port_definitions(session: Session):
     """
     Seeds or updates port definitions by introspecting Agent classes from the FACTORY_REGISTRY.
@@ -94,6 +111,7 @@ def seed_port_definitions(session: Session):
 
             port_description = field_info.description
             parameter_type = get_parameter_type(field_info)
+            is_required = is_field_required(field_info)
 
             # Every input should have a UI component and at least a basic label,
             # so synthesized input-parameters are always renderable in the UI.
@@ -122,6 +140,7 @@ def seed_port_definitions(session: Session):
                 port.parameter_type = parameter_type
                 port.ui_component = ui_component
                 port.ui_component_properties = ui_component_properties
+                port.nullable = not is_required
                 LOGGER.info(f"  - Updating INPUT port: {field_name}")
             else:
                 port = db.PortDefinition(
@@ -133,6 +152,7 @@ def seed_port_definitions(session: Session):
                     parameter_type=parameter_type,
                     ui_component=ui_component,
                     ui_component_properties=ui_component_properties,
+                    nullable=not is_required,
                 )
                 session.add(port)
                 LOGGER.info(f"  - Creating INPUT port: {field_name}")
@@ -146,11 +166,13 @@ def seed_port_definitions(session: Session):
             )
             is_canonical = canonical_ports.get("output") == field_name
             parameter_type = get_parameter_type(field_info)
+            is_required = is_field_required(field_info)
 
             if port:
                 port.is_canonical = is_canonical
                 port.description = field_info.description
                 port.parameter_type = parameter_type
+                port.nullable = not is_required
                 LOGGER.info(f"  - Updating OUTPUT port: {field_name}")
             else:
                 port = db.PortDefinition(
@@ -160,6 +182,7 @@ def seed_port_definitions(session: Session):
                     is_canonical=is_canonical,
                     description=field_info.description,
                     parameter_type=parameter_type,
+                    nullable=not is_required,
                 )
                 session.add(port)
                 LOGGER.info(f"  - Creating OUTPUT port: {field_name}")

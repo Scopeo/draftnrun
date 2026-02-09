@@ -39,6 +39,7 @@ def _process_components_with_ports(
                 port_type=port.port_type.value,
                 is_canonical=port.is_canonical,
                 description=port.description,
+                nullable=port.nullable,
             )
         )
         # Track input ports per component_version for input-parameter synthesis

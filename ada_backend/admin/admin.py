@@ -549,15 +549,17 @@ class PortDefinitionAdmin(EnhancedModelView, model=db.PortDefinition):
         "name",
         "port_type",
         "is_canonical",
+        "nullable",
         "description",
     ]
     column_searchable_list = ["name", "description"]
-    column_filters = ["port_type", "is_canonical", "component.name"]
+    column_filters = ["port_type", "is_canonical", "nullable", "component.name"]
     form_columns = [
         "component",
         "name",
         "port_type",
         "is_canonical",
+        "nullable",
         "description",
     ]
 

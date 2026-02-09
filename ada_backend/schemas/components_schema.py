@@ -42,6 +42,7 @@ class PortDefinitionSchema(BaseModel):
     port_type: str
     is_canonical: bool
     description: Optional[str] = None
+    nullable: bool
 
 
 class ComponentWithParametersDTO(ComponentVersionUseInfoSchema, ComponentSchema):
