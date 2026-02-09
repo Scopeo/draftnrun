@@ -44,6 +44,7 @@ from engine.components.graph_runner_block import GraphRunnerBlock
 from engine.components.hybrid_synthesizer import HybridSynthesizer
 from engine.components.if_else import IfElse
 from engine.components.inputs_outputs.start import Start
+from engine.components.router import Router
 from engine.components.llm_call import LLMCallAgent
 from engine.components.ocr_call import OCRCall
 from engine.components.pdf_generation_tool import PDFGenerationTool
@@ -564,6 +565,13 @@ def create_factory_registry() -> FactoryRegistry:
         component_version_id=COMPONENT_VERSION_UUIDS["if_else"],
         factory=AgentFactory(
             entity_class=IfElse,
+        ),
+    )
+
+    registry.register(
+        component_version_id=COMPONENT_VERSION_UUIDS["router"],
+        factory=AgentFactory(
+            entity_class=Router,
         ),
     )
 
