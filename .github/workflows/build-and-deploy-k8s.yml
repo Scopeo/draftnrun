@@ -282,19 +282,14 @@ jobs:
 
             echo "🚀 Deploying images tagged: ${TAG}"
 
-            # Clone/update repo to get latest manifests
+            # Fetch only k8s manifests
             REPO_DIR="/tmp/draftnrun-deploy"
-            if [ -d "$REPO_DIR" ]; then
-              cd "$REPO_DIR"
-              git fetch origin
-              git checkout ${{ github.sha }}
-            else
-              git clone https://github.com/${{ github.repository }}.git "$REPO_DIR"
-              cd "$REPO_DIR"
-              git checkout ${{ github.sha }}
-            fi
+            rm -rf "$REPO_DIR"
+            git clone --branch ${{ github.ref_name }} --depth 1 --sparse --filter=blob:none https://github.com/${{ github.repository }}.git "$REPO_DIR"
+            cd "$REPO_DIR"
+            git sparse-checkout set infra/k8s
 
-            # Apply all manifests (creates or updates deployments with default images)
+            # Apply all manifests
             echo "📦 Applying Kubernetes manifests..."
             cd infra/k8s/${ENV}
             kubectl apply -k .
