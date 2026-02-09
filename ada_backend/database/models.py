@@ -163,6 +163,7 @@ class UIComponent(StrEnum):
     JSON_BUILDER = "JSON Builder"
     CONDITION_BUILDER = "ConditionBuilder"
     OAUTH_CONNECTION = "OAuthConnection"
+    ROUTE_BUILDER = "RouteBuilder"
 
 
 class SourceType(StrEnum):

@@ -26,6 +26,18 @@ def get_component_port_type(component, port_name: str, is_input: bool) -> Type |
     if not component:
         return None
 
+    if not is_input and port_name.startswith("route_"):
+        if hasattr(component, "__class__") and (
+            component.__class__.__name__ == "Router"
+            or (
+                hasattr(component, "inputs_model")
+                and hasattr(component.inputs_model, "__name__")
+                and "Router" in component.inputs_model.__name__
+            )
+        ):
+            LOGGER.debug(f"Skipping type validation for Router port {port_name} (unwrapped at runtime)")
+            return None
+
     # Tier 1: Static type discovery (any component with schema methods)
     try:
         schema = component.get_inputs_schema() if is_input else component.get_outputs_schema()
