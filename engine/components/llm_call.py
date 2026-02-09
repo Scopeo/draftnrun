@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 
 from engine.components.component import Component
 from engine.components.types import ChatMessage, ComponentAttributes, ToolDescription
-from engine.components.utils import parse_openai_message_format
+from engine.components.utils import merge_constrained_output_to_root, parse_openai_message_format
 from engine.components.utils_prompt import fill_prompt_template
 from engine.llm_services.llm_service import CompletionService
 from engine.trace.serializer import serialize_to_json
@@ -86,6 +86,8 @@ class LLMCallInputs(BaseModel):
 class LLMCallOutputs(BaseModel):
     output: str = Field(description="The LLM response")
     artifacts: dict[str, Any] = Field(default_factory=dict)
+
+    model_config = {"extra": "allow"}
 
 
 class LLMCallAgent(Component):
@@ -240,7 +242,12 @@ class LLMCallAgent(Component):
             response = await self._completion_service.complete_async(
                 messages=[{"role": "user", "content": content}],
             )
-        return LLMCallOutputs(output=response, artifacts={})
+
+        outputs = LLMCallOutputs(output=response, artifacts={})
+
+        merge_constrained_output_to_root(outputs, response, output_format)
+
+        return outputs
 
     def _resolve_capabilities(self, capabilities: list[str]) -> set[str]:
         return self._capability_resolver(capabilities)

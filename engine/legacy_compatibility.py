@@ -217,11 +217,11 @@ def collect_legacy_outputs(graph, tasks: dict, input_node_id: str, runnables: di
         node_id, nd = leaf_pairs[0]
         content = pick_canonical_output(node_id, nd, runnables)
         data = nd.data or {}
-        return AgentPayload(
-            messages=[ChatMessage(role="assistant", content=content)],
-            is_final=bool(data.get("is_final", False)),
-            artifacts=data.get("artifacts", {}) or {},
-        )
+
+        payload_data = {**data}
+        payload_data["messages"] = [ChatMessage(role="assistant", content=content)]
+
+        return AgentPayload(**payload_data)
 
     # Multiple leaves: concatenate
     message_content = ""
