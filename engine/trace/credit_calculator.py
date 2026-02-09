@@ -19,7 +19,7 @@ _llm_cost_cache: TTLCache[tuple[UUID, UUID], tuple[Optional[float], Optional[flo
 _component_cost_cache: TTLCache[tuple[UUID, UUID], Optional[float]] = TTLCache(maxsize=1000, ttl=300)
 
 
-def _fetch_from_db(repository_func: Callable, *args, resource_name: str, **kwargs) -> Any:
+def _fetch_from_db_with_managed_session(repository_func: Callable, *args, resource_name: str, **kwargs) -> Any:
     try:
         context = get_request_context()
         LOGGER.info(f"Fetching {resource_name} in request_id {context.request_id}")
@@ -32,7 +32,7 @@ def _fetch_from_db(repository_func: Callable, *args, resource_name: str, **kwarg
 
 @cached(cache=_llm_cost_cache, key=lambda model_id: (get_request_context().request_id, model_id))
 def get_cached_llm_cost(model_id: UUID) -> tuple[Optional[float], Optional[float]]:
-    return _fetch_from_db(get_llm_cost, model_id, resource_name=f"LLM cost for model_id {model_id}")
+    return _fetch_from_db_with_managed_session(get_llm_cost, model_id, resource_name=f"LLM cost for model_id {model_id}")
 
 
 @cached(
@@ -40,7 +40,7 @@ def get_cached_llm_cost(model_id: UUID) -> tuple[Optional[float], Optional[float
     key=lambda component_instance_id: (get_request_context().request_id, component_instance_id),
 )
 def get_cached_component_cost(component_instance_id: UUID) -> Optional[float]:
-    return _fetch_from_db(
+    return _fetch_from_db_with_managed_session(
         get_component_cost_per_call,
         component_instance_id,
         resource_name=f"component cost for component_instance_id {component_instance_id}",
@@ -86,17 +86,21 @@ def calculate_llm_credits(func: Callable) -> Callable:
             completion_tokens_value = completion_tokens if completion_tokens is not None else 0
 
             credits_per_input_token, credits_per_output_token = get_cached_llm_cost(self._model_id)
-            if credits_per_input_token and credits_per_output_token:
-                credits_input_token = prompt_tokens * credits_per_input_token / 1_000_000
-                credits_output_token = completion_tokens_value * credits_per_output_token / 1_000_000
 
-                span.set_attributes({
-                    "credits.input_token": credits_input_token,
-                    "credits.output_token": credits_output_token,
-                })
-                LOGGER.info(f"LLM credits calculated: input={credits_input_token}, output={credits_output_token}")
+            attributes = {}
+            if credits_per_input_token is not None:
+                credits_input_token = prompt_tokens * credits_per_input_token / 1_000_000
+                attributes["credits.input_token"] = credits_input_token
+
+            if credits_per_output_token is not None:
+                credits_output_token = completion_tokens_value * credits_per_output_token / 1_000_000
+                attributes["credits.output_token"] = credits_output_token
+
+            if attributes:
+                span.set_attributes(attributes)
+                LOGGER.info(f"LLM credits calculated: {attributes}")
             else:
-                LOGGER.info(f"No cost info found for model_id {self._model_id}")
+                LOGGER.warning(f"No cost info found for model_id {self._model_id}")
 
         except Exception as e:
             LOGGER.error(f"Error calculating LLM credits: {e}", exc_info=True)

@@ -173,10 +173,8 @@ class SQLSpanExporter(SpanExporter):
                 )
             )
             self.session.add(span_row)
-            # Flush the span to ensure it exists before adding span_usage with foreign key reference
             self.session.flush()
 
-            # Store credits in SpanUsage table if any credits exist
             has_credits = (
                 credits_input_token is not None
                 or credits_output_token is not None
