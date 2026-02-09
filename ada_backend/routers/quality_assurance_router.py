@@ -8,6 +8,7 @@ from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 from ada_backend.database.setup_db import get_db
+from ada_backend.repositories.project_repository import get_project
 from ada_backend.routers.auth_router import (
     UserRights,
     user_has_access_to_project_dependency,
@@ -41,19 +42,19 @@ from ada_backend.services.qa.qa_error import (
     QAPartialPositionError,
 )
 from ada_backend.services.qa.quality_assurance_service import (
-    create_datasets_service,
+    create_datasets_for_organization_service,
     create_inputs_groundtruths_service,
-    delete_datasets_service,
+    delete_datasets_from_organization_service,
     delete_inputs_groundtruths_service,
     export_qa_data_to_csv_service,
-    get_datasets_by_project_service,
+    get_datasets_by_organization_service,
     get_inputs_groundtruths_with_version_outputs_service,
     get_outputs_by_graph_runner_service,
     get_version_output_ids_by_input_ids_and_graph_runner_service,
     import_qa_data_from_csv_service,
     run_qa_service,
     save_conversation_to_groundtruth_service,
-    update_dataset_service,
+    update_dataset_in_organization_service,
     update_inputs_groundtruths_service,
 )
 
@@ -67,6 +68,7 @@ LOGGER = logging.getLogger(__name__)
     response_model=List[DatasetResponse],
     summary="Get Datasets by Project",
     tags=["Quality Assurance"],
+    deprecated=True,
 )
 def get_datasets_by_project_endpoint(
     project_id: UUID,
@@ -79,14 +81,22 @@ def get_datasets_by_project_endpoint(
     """
     Get all datasets for a project.
 
-    This endpoint allows users to retrieve all datasets associated with a specific project
-    for quality assurance purposes.
+    **DEPRECATED**: This endpoint is deprecated. Use `/organizations/{organization_id}/qa/datasets` instead.
+
+    This endpoint returns all datasets from the project's organization.
+    Datasets are now organization-scoped and shared across all projects in the organization.
     """
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
 
     try:
-        return get_datasets_by_project_service(session, project_id)
+        project = get_project(session, project_id)
+        if not project:
+            raise HTTPException(status_code=404, detail="Project not found")
+
+        return get_datasets_by_organization_service(session, project.organization_id)
+    except HTTPException:
+        raise
     except ValueError as e:
         LOGGER.error(f"Failed to get datasets for project {project_id}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=400, detail="Bad request") from e
@@ -100,6 +110,7 @@ def get_datasets_by_project_endpoint(
     response_model=DatasetListResponse,
     summary="Create Datasets",
     tags=["Quality Assurance"],
+    deprecated=True,
 )
 def create_dataset_endpoint(
     project_id: UUID,
@@ -113,14 +124,22 @@ def create_dataset_endpoint(
     """
     Create datasets for a project.
 
-    This endpoint allows users to create multiple datasets for quality assurance purposes.
-    All datasets will be associated with the specified project.
+    **DEPRECATED**: This endpoint is deprecated. Use `POST /organizations/{organization_id}/qa/datasets` instead.
+
+    This endpoint creates datasets at the organization level (using the project's organization).
+    Datasets are now organization-scoped and shared across all projects in the organization.
     """
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
 
     try:
-        return create_datasets_service(session, project_id, dataset_data)
+        project = get_project(session, project_id)
+        if not project:
+            raise HTTPException(status_code=404, detail="Project not found")
+
+        return create_datasets_for_organization_service(session, project.organization_id, dataset_data)
+    except HTTPException:
+        raise
     except ValueError as e:
         LOGGER.error(f"Failed to create datasets for project {project_id}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=400, detail="Bad request") from e
@@ -134,6 +153,7 @@ def create_dataset_endpoint(
     response_model=DatasetResponse,
     summary="Update Dataset",
     tags=["Quality Assurance"],
+    deprecated=True,
 )
 def update_dataset_endpoint(
     project_id: UUID,
@@ -148,14 +168,22 @@ def update_dataset_endpoint(
     """
     Update dataset.
 
-    This endpoint allows users to update a single dataset.
-    Only the fields provided in the request will be updated.
+    **DEPRECATED**: This endpoint is deprecated.
+    Use `PATCH /organizations/{organization_id}/qa/datasets/{dataset_id}` instead.
+
+    This endpoint updates datasets at the organization level.
     """
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
 
     try:
-        return update_dataset_service(session, project_id, dataset_id, dataset_name)
+        project = get_project(session, project_id)
+        if not project:
+            raise HTTPException(status_code=404, detail="Project not found")
+
+        return update_dataset_in_organization_service(session, project.organization_id, dataset_id, dataset_name)
+    except HTTPException:
+        raise
     except ValueError as e:
         LOGGER.error(f"Failed to update dataset {dataset_id}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=400, detail="Bad request") from e
@@ -168,6 +196,7 @@ def update_dataset_endpoint(
     "/projects/{project_id}/qa/datasets",
     summary="Delete Datasets",
     tags=["Quality Assurance"],
+    deprecated=True,
 )
 def delete_dataset_endpoint(
     project_id: UUID,
@@ -181,15 +210,23 @@ def delete_dataset_endpoint(
     """
     Delete datasets.
 
-    This endpoint allows users to delete multiple datasets at once.
+    **DEPRECATED**: This endpoint is deprecated. Use `DELETE /organizations/{organization_id}/qa/datasets` instead.
+
+    This endpoint deletes datasets at the organization level.
     This action cannot be undone.
     """
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
 
     try:
-        deleted_count = delete_datasets_service(session, project_id, delete_data)
+        project = get_project(session, project_id)
+        if not project:
+            raise HTTPException(status_code=404, detail="Project not found")
+
+        deleted_count = delete_datasets_from_organization_service(session, project.organization_id, delete_data)
         return {"message": f"Deleted {deleted_count} datasets successfully"}
+    except HTTPException:
+        raise
     except ValueError as e:
         LOGGER.error(f"Failed to delete datasets for project {project_id}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=400, detail="Bad request") from e
@@ -204,6 +241,7 @@ def delete_dataset_endpoint(
     response_model=PaginatedInputGroundtruthResponse,
     summary="Get Input-Groundtruth Entries by Dataset",
     tags=["Quality Assurance"],
+    deprecated=True,
 )
 def get_inputs_groundtruths_by_dataset_endpoint(
     project_id: UUID,
@@ -218,6 +256,9 @@ def get_inputs_groundtruths_by_dataset_endpoint(
 ) -> PaginatedInputGroundtruthResponse:
     """
     Get all input-groundtruth entries for a dataset WITHOUT outputs.
+
+    **DEPRECATED**: This endpoint is deprecated.
+    Use `GET /organizations/{organization_id}/qa/datasets/{dataset_id}/entries` instead.
 
     This endpoint returns only the base input-groundtruth pairs for a dataset.
     Use the /outputs endpoint to get outputs for a specific graph_runner.
@@ -310,6 +351,7 @@ def get_version_output_ids_endpoint(
     response_model=InputGroundtruthResponseList,
     summary="Create Input-Groundtruth Entries",
     tags=["Quality Assurance"],
+    deprecated=True,
 )
 def create_input_groundtruth_endpoint(
     project_id: UUID,
@@ -323,6 +365,9 @@ def create_input_groundtruth_endpoint(
 ) -> InputGroundtruthResponseList:
     """
     Create input-groundtruth entries.
+
+    **DEPRECATED**: This endpoint is deprecated.
+    Use `POST /organizations/{organization_id}/qa/datasets/{dataset_id}/entries` instead.
 
     This endpoint allows users to create multiple input-groundtruth pairs for quality assurance purposes.
     All entries will be associated with the specified dataset.
@@ -348,6 +393,7 @@ def create_input_groundtruth_endpoint(
     response_model=InputGroundtruthResponseList,
     summary="Update Input-Groundtruth Entries",
     tags=["Quality Assurance"],
+    deprecated=True,
 )
 def update_input_groundtruth_endpoint(
     project_id: UUID,
@@ -361,6 +407,9 @@ def update_input_groundtruth_endpoint(
 ) -> InputGroundtruthResponseList:
     """
     Update input-groundtruth entries.
+
+    **DEPRECATED**: This endpoint is deprecated.
+    Use `PATCH /organizations/{organization_id}/qa/datasets/{dataset_id}/entries` instead.
 
     This endpoint allows users to update multiple input-groundtruth pairs.
     Only the fields provided in the request will be updated.
@@ -382,6 +431,7 @@ def update_input_groundtruth_endpoint(
     "/projects/{project_id}/qa/datasets/{dataset_id}/entries",
     summary="Delete Input-Groundtruth Entries",
     tags=["Quality Assurance"],
+    deprecated=True,
 )
 def delete_input_groundtruth_endpoint(
     project_id: UUID,
@@ -395,6 +445,9 @@ def delete_input_groundtruth_endpoint(
 ) -> dict:
     """
     Delete input-groundtruth entries.
+
+    **DEPRECATED**: This endpoint is deprecated.
+    Use `DELETE /organizations/{organization_id}/qa/datasets/{dataset_id}/entries` instead.
 
     This endpoint allows users to delete multiple input-groundtruth pairs at once.
     This action cannot be undone.

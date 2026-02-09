@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from ada_backend.database.models import EvaluationType
 from ada_backend.database.setup_db import get_db
+from ada_backend.repositories.project_repository import get_project
 from ada_backend.routers.auth_router import (
     UserRights,
     get_user_from_supabase_token,
@@ -21,11 +22,11 @@ from ada_backend.schemas.llm_judges_schema import (
 )
 from ada_backend.services.errors import LLMJudgeNotFound
 from ada_backend.services.qa.llm_judges_service import (
-    create_llm_judge_service,
-    delete_llm_judges_service,
+    create_llm_judge_for_organization_service,
+    delete_llm_judges_from_organization_service,
     get_llm_judge_defaults_service,
-    get_llm_judges_by_project_service,
-    update_llm_judge_service,
+    get_llm_judges_by_organization_service,
+    update_llm_judge_in_organization_service,
 )
 
 router = APIRouter(tags=["QA Evaluation"])
@@ -36,6 +37,7 @@ LOGGER = logging.getLogger(__name__)
     "/projects/{project_id}/qa/llm-judges",
     response_model=List[LLMJudgeResponse],
     summary="Get LLM Judges by Project",
+    deprecated=True,
 )
 def get_llm_judges_by_project_endpoint(
     project_id: UUID,
@@ -45,11 +47,23 @@ def get_llm_judges_by_project_endpoint(
     ],
     session: Session = Depends(get_db),
 ) -> List[LLMJudgeResponse]:
+    """
+    **DEPRECATED**: This endpoint is deprecated. Use `GET /organizations/{organization_id}/qa/llm-judges` instead.
+
+    Returns all LLM judges from the project's organization.
+    LLM judges are now organization-scoped and shared across all projects in the organization.
+    """
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
 
     try:
-        return get_llm_judges_by_project_service(session=session, project_id=project_id)
+        project = get_project(session, project_id)
+        if not project:
+            raise HTTPException(status_code=404, detail="Project not found")
+
+        return get_llm_judges_by_organization_service(session=session, organization_id=project.organization_id)
+    except HTTPException:
+        raise
     except Exception as e:
         LOGGER.error(f"Failed to get LLM judges for project {project_id}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error") from e
@@ -74,6 +88,7 @@ def get_llm_judge_defaults(
     "/projects/{project_id}/qa/llm-judges",
     response_model=LLMJudgeResponse,
     summary="Create LLM Judge",
+    deprecated=True,
 )
 def create_llm_judge_endpoint(
     project_id: UUID,
@@ -84,11 +99,25 @@ def create_llm_judge_endpoint(
     ],
     session: Session = Depends(get_db),
 ) -> LLMJudgeResponse:
+    """
+    **DEPRECATED**: This endpoint is deprecated. Use `POST /organizations/{organization_id}/qa/llm-judges` instead.
+
+    Creates an LLM judge at the organization level (using the project's organization).
+    LLM judges are now organization-scoped and shared across all projects in the organization.
+    """
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
 
     try:
-        return create_llm_judge_service(session=session, project_id=project_id, judge_data=judge_data)
+        project = get_project(session, project_id)
+        if not project:
+            raise HTTPException(status_code=404, detail="Project not found")
+
+        return create_llm_judge_for_organization_service(
+            session=session, organization_id=project.organization_id, judge_data=judge_data
+        )
+    except HTTPException:
+        raise
     except ValueError as e:
         LOGGER.error(f"Failed to create LLM judge for project {project_id}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=400, detail="Bad request") from e
@@ -101,6 +130,7 @@ def create_llm_judge_endpoint(
     "/projects/{project_id}/qa/llm-judges/{judge_id}",
     response_model=LLMJudgeResponse,
     summary="Update LLM Judge",
+    deprecated=True,
 )
 def update_llm_judge_endpoint(
     project_id: UUID,
@@ -112,16 +142,28 @@ def update_llm_judge_endpoint(
     ],
     session: Session = Depends(get_db),
 ) -> LLMJudgeResponse:
+    """
+    **DEPRECATED**: This endpoint is deprecated.
+    Use `PATCH /organizations/{organization_id}/qa/llm-judges/{judge_id}` instead.
+
+    Updates an LLM judge at the organization level.
+    """
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
 
     try:
-        return update_llm_judge_service(
+        project = get_project(session, project_id)
+        if not project:
+            raise HTTPException(status_code=404, detail="Project not found")
+
+        return update_llm_judge_in_organization_service(
             session=session,
-            project_id=project_id,
+            organization_id=project.organization_id,
             judge_id=judge_id,
             judge_data=judge_data,
         )
+    except HTTPException:
+        raise
     except LLMJudgeNotFound as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
     except ValueError as e:
@@ -136,6 +178,7 @@ def update_llm_judge_endpoint(
     "/projects/{project_id}/qa/llm-judges",
     status_code=204,
     summary="Delete LLM Judges",
+    deprecated=True,
 )
 def delete_llm_judges_endpoint(
     project_id: UUID,
@@ -146,12 +189,25 @@ def delete_llm_judges_endpoint(
     session: Session = Depends(get_db),
     judge_ids: List[UUID] = Body(...),
 ):
+    """
+    **DEPRECATED**: This endpoint is deprecated. Use `DELETE /organizations/{organization_id}/qa/llm-judges` instead.
+
+    Deletes LLM judges at the organization level.
+    """
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
 
     try:
-        delete_llm_judges_service(session=session, project_id=project_id, judge_ids=judge_ids)
+        project = get_project(session, project_id)
+        if not project:
+            raise HTTPException(status_code=404, detail="Project not found")
+
+        delete_llm_judges_from_organization_service(
+            session=session, organization_id=project.organization_id, judge_ids=judge_ids
+        )
         return None
+    except HTTPException:
+        raise
     except ValueError as e:
         LOGGER.error(f"Failed to delete LLM judges for project {project_id}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=400, detail="Bad request") from e
