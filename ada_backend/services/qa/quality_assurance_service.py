@@ -14,11 +14,11 @@ from ada_backend.repositories.qa_evaluation_repository import delete_evaluations
 from ada_backend.repositories.quality_assurance_repository import (
     check_dataset_belongs_to_project,
     clear_version_outputs_for_input_ids,
-    create_datasets,
+    create_datasets_for_organization,
     create_inputs_groundtruths,
-    delete_datasets,
+    delete_datasets_from_organization,
     delete_inputs_groundtruths,
-    get_datasets_by_project,
+    get_datasets_by_organization,
     get_inputs_groundtruths_by_dataset,
     get_inputs_groundtruths_by_ids,
     get_inputs_groundtruths_count_by_dataset,
@@ -26,7 +26,7 @@ from ada_backend.repositories.quality_assurance_repository import (
     get_positions_of_dataset,
     get_qa_columns_by_dataset,
     get_version_output_ids_by_input_ids_and_graph_runner,
-    update_dataset,
+    update_dataset_in_organization,
     update_inputs_groundtruths,
     upsert_version_output,
 )
@@ -403,70 +403,49 @@ def delete_inputs_groundtruths_service(
         raise ValueError(f"Failed to delete input-groundtruth entries: {str(e)}") from e
 
 
-def get_datasets_by_project_service(
+def get_datasets_by_organization_service(
     session: Session,
-    project_id: UUID,
+    organization_id: UUID,
 ) -> List[DatasetResponse]:
-    """
-    Get all datasets for a project.
-
-    Args:
-        session (Session): SQLAlchemy session
-        project_id (UUID): ID of the project
-
-    Returns:
-        List[DatasetResponse]: List of datasets
-    """
     try:
-        datasets = get_datasets_by_project(session, project_id)
+        datasets = get_datasets_by_organization(session, organization_id)
         return [DatasetResponse.model_validate(dataset) for dataset in datasets]
     except Exception as e:
-        LOGGER.error(f"Error in get_datasets_by_project_service: {str(e)}")
+        LOGGER.error(f"Error in get_datasets_by_organization_service: {str(e)}")
         raise ValueError(f"Failed to get datasets: {str(e)}") from e
 
 
-def create_datasets_service(
+def create_datasets_for_organization_service(
     session: Session,
-    project_id: UUID,
+    organization_id: UUID,
     datasets_data: DatasetCreateList,
 ) -> DatasetListResponse:
-    """
-    Create datasets.
-
-    Args:
-        session (Session): SQLAlchemy session
-        project_id (UUID): ID of the project
-        datasets_data (DatasetCreateList): Dataset data to create
-
-    Returns:
-        DatasetListResponse: The created datasets
-    """
     try:
-        created_datasets = create_datasets(
+        created_datasets = create_datasets_for_organization(
             session,
-            project_id,
+            organization_id,
             datasets_data.datasets_name,
         )
 
-        LOGGER.info(f"Created {len(created_datasets)} datasets for project {project_id}")
+        LOGGER.info(f"Created {len(created_datasets)} datasets for organization {organization_id}")
         return DatasetListResponse(datasets=[DatasetResponse.model_validate(dataset) for dataset in created_datasets])
     except Exception as e:
-        LOGGER.error(f"Error in create_datasets_service: {str(e)}")
+        LOGGER.error(f"Error in create_datasets_for_organization_service: {str(e)}")
         raise ValueError(f"Failed to create datasets: {str(e)}") from e
 
 
-def update_dataset_service(
+def update_dataset_in_organization_service(
     session: Session,
-    project_id: UUID,
+    organization_id: UUID,
     dataset_id: UUID,
     dataset_name: str,
 ) -> DatasetResponse:
     """
-    Update a single dataset.
+    Update a single dataset in an organization.
 
     Args:
         session (Session): SQLAlchemy session
-        project_id (UUID): ID of the project
+        organization_id (UUID): ID of the organization
         dataset_id (UUID): ID of the dataset to update
         dataset_name (str): New name for the dataset
 
@@ -478,31 +457,31 @@ def update_dataset_service(
         raise QADatasetNotInProjectError(project_id, dataset_id)
 
     try:
-        updated_dataset = update_dataset(
+        updated_dataset = update_dataset_in_organization(
             session,
             dataset_id,
             dataset_name,
-            project_id,
+            organization_id,
         )
 
-        LOGGER.info(f"Updated dataset {dataset_id} with name '{dataset_name}' for project {project_id}")
+        LOGGER.info(f"Updated dataset {dataset_id} with name '{dataset_name}' for organization {organization_id}")
         return DatasetResponse.model_validate(updated_dataset)
     except Exception as e:
-        LOGGER.error(f"Error in update_dataset_service: {str(e)}")
+        LOGGER.error(f"Error in update_dataset_in_organization_service: {str(e)}")
         raise ValueError(f"Failed to update dataset: {str(e)}") from e
 
 
-def delete_datasets_service(
+def delete_datasets_from_organization_service(
     session: Session,
-    project_id: UUID,
+    organization_id: UUID,
     delete_data: DatasetDeleteList,
 ) -> int:
     """
-    Delete multiple datasets.
+    Delete multiple datasets from an organization.
 
     Args:
         session (Session): SQLAlchemy session
-        project_id (UUID): ID of the project
+        organization_id (UUID): ID of the organization
         delete_data (DatasetDeleteList): IDs of datasets to delete
 
     Returns:
@@ -517,16 +496,16 @@ def delete_datasets_service(
             raise QADatasetNotInProjectError(project_id, dataset_id)
 
     try:
-        deleted_count = delete_datasets(
+        deleted_count = delete_datasets_from_organization(
             session,
             delete_data.dataset_ids,
-            project_id,
+            organization_id,
         )
 
-        LOGGER.info(f"Deleted {deleted_count} datasets for project {project_id}")
+        LOGGER.info(f"Deleted {deleted_count} datasets for organization {organization_id}")
         return deleted_count
     except Exception as e:
-        LOGGER.error(f"Error in delete_datasets_service: {str(e)}")
+        LOGGER.error(f"Error in delete_datasets_from_organization_service: {str(e)}")
         raise ValueError(f"Failed to delete datasets: {str(e)}") from e
 
 

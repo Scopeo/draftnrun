@@ -20,7 +20,8 @@ class LLMJudgeResponse(LLMJudgeCreate):
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
-    project_id: UUID
+    organization_id: UUID
+    project_id: Optional[UUID] = None
     created_at: datetime
     updated_at: datetime
 

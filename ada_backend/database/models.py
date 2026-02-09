@@ -1618,8 +1618,9 @@ class DatasetProject(Base):
     __table_args__ = {"schema": "quality_assurance"}
 
     id = mapped_column(UUID(as_uuid=True), primary_key=True, index=True, server_default=func.gen_random_uuid())
+    organization_id = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
     project_id = mapped_column(
-        UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True
+        UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=True, index=True
     )
     dataset_name = mapped_column(String, nullable=False)
     created_at = mapped_column(DateTime(timezone=True), server_default=func.now())
@@ -1712,10 +1713,11 @@ class LLMJudge(Base):
     __table_args__ = {"schema": "quality_assurance"}
 
     id = mapped_column(UUID(as_uuid=True), primary_key=True, index=True, server_default=func.gen_random_uuid())
+    organization_id = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
     project_id = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("projects.id", ondelete="CASCADE"),
-        nullable=False,
+        nullable=True,
         index=True,
     )
     name = mapped_column(String, nullable=False)

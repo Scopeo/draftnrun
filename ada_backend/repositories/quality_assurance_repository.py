@@ -290,16 +290,16 @@ def clear_version_outputs_for_input_ids(
 
 
 # Dataset functions
-def get_datasets_by_project(
+def get_datasets_by_organization(
     session: Session,
-    project_id: UUID,
+    organization_id: UUID,
     skip: int = 0,
     limit: int = 100,
 ) -> List[DatasetProject]:
-    """Get datasets for a project with pagination."""
+    """Get datasets for an organization with pagination."""
     return (
         session.query(DatasetProject)
-        .filter(DatasetProject.project_id == project_id)
+        .filter(DatasetProject.organization_id == organization_id)
         .order_by(DatasetProject.created_at.desc())
         .offset(skip)
         .limit(limit)
@@ -307,17 +307,16 @@ def get_datasets_by_project(
     )
 
 
-def create_datasets(
+def create_datasets_for_organization(
     session: Session,
-    project_id: UUID,
+    organization_id: UUID,
     dataset_names: List[str],
 ) -> List[DatasetProject]:
-    """Create multiple datasets."""
     datasets = []
 
     for dataset_name in dataset_names:
         dataset = DatasetProject(
-            project_id=project_id,
+            organization_id=organization_id,
             dataset_name=dataset_name,
         )
         datasets.append(dataset)
@@ -329,47 +328,59 @@ def create_datasets(
     for dataset in datasets:
         session.refresh(dataset)
 
-    LOGGER.info(f"Created {len(datasets)} datasets for project {project_id}")
+    LOGGER.info(f"Created {len(datasets)} datasets for organization {organization_id}")
     return datasets
 
 
-def update_dataset(
+def get_dataset_by_id_and_organization(
+    session: Session,
+    dataset_id: UUID,
+    organization_id: UUID,
+) -> Optional[DatasetProject]:
+    """Get a dataset by ID and verify it belongs to the organization."""
+    return (
+        session.query(DatasetProject)
+        .filter(DatasetProject.id == dataset_id, DatasetProject.organization_id == organization_id)
+        .first()
+    )
+
+
+def update_dataset_in_organization(
     session: Session,
     dataset_id: UUID,
     dataset_name: Optional[str],
-    project_id: UUID,
+    organization_id: UUID,
 ) -> DatasetProject:
-    """Update a dataset"""
-    dataset = (
-        session.query(DatasetProject)
-        .filter(DatasetProject.id == dataset_id, DatasetProject.project_id == project_id)
-        .first()
-    )
+    """Update a dataset in an organization."""
+    dataset = get_dataset_by_id_and_organization(session, dataset_id, organization_id)
+
+    if not dataset:
+        raise ValueError(f"Dataset {dataset_id} not found in organization {organization_id}")
 
     if dataset_name is not None:
         dataset.dataset_name = dataset_name
 
     session.commit()
 
-    LOGGER.info(f"Updated dataset {dataset_id} with name '{dataset_name}' for project {project_id}")
+    LOGGER.info(f"Updated dataset {dataset_id} with name '{dataset_name}' for organization {organization_id}")
     return dataset
 
 
-def delete_datasets(
+def delete_datasets_from_organization(
     session: Session,
     dataset_ids: List[UUID],
-    project_id: UUID,
+    organization_id: UUID,
 ) -> int:
-    """Delete multiple datasets."""
+    """Delete multiple datasets from an organization."""
     deleted_count = (
         session.query(DatasetProject)
-        .filter(DatasetProject.id.in_(dataset_ids), DatasetProject.project_id == project_id)
+        .filter(DatasetProject.id.in_(dataset_ids), DatasetProject.organization_id == organization_id)
         .delete(synchronize_session=False)
     )
 
     session.commit()
 
-    LOGGER.info(f"Deleted {deleted_count} datasets for project {project_id}")
+    LOGGER.info(f"Deleted {deleted_count} datasets for organization {organization_id}")
     return deleted_count
 
 

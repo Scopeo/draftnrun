@@ -25,6 +25,7 @@ from ada_backend.routers.knowledge_router import router as knowledge_router
 from ada_backend.routers.llm_judges_router import router as llm_judges_router
 from ada_backend.routers.llm_models_router import router as llm_models_router
 from ada_backend.routers.oauth_router import router as oauth_router
+from ada_backend.routers.organization_qa_router import router as organization_qa_router
 from ada_backend.routers.organization_router import router as org_router
 from ada_backend.routers.project_router import router as project_router
 from ada_backend.routers.qa_evaluation_router import router as qa_evaluation_router
@@ -173,6 +174,7 @@ app.include_router(components_router)
 app.include_router(component_version_router)
 app.include_router(categories_router)
 app.include_router(graph_router)
+app.include_router(organization_qa_router)
 app.include_router(quality_assurance_router)
 app.include_router(llm_judges_router)
 app.include_router(qa_evaluation_router)
