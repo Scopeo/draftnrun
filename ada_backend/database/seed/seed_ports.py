@@ -1,4 +1,6 @@
 import logging
+import sys
+import types
 from typing import Union, get_args, get_origin
 
 from pydantic.fields import FieldInfo
@@ -31,6 +33,10 @@ def is_field_nullable(field_info: FieldInfo) -> bool:
 
     A field is nullable if its type annotation includes NoneType.
     This is orthogonal to whether the field is required (has a default).
+
+    Handles both:
+    - typing.Union syntax: Optional[T] or Union[T, None]
+    - PEP 604 syntax (Python 3.10+): T | None
     """
 
     annotation = field_info.annotation
@@ -38,11 +44,18 @@ def is_field_nullable(field_info: FieldInfo) -> bool:
     if annotation is type(None):
         return True
 
-    # Handle Optional[T] which is Union[T, None]
     origin = get_origin(annotation)
+
+    # typing.Union (for Optional[T] or Union[T, None])
     if origin is Union:
         args = get_args(annotation)
         return type(None) in args
+
+    # types.UnionType (for X | None syntax on Python 3.10+)
+    if sys.version_info >= (3, 10):
+        if origin is types.UnionType:
+            args = get_args(annotation)
+            return type(None) in args
 
     # For other types (e.g., str, int, list), they're not nullable
     return False
