@@ -32,9 +32,16 @@ def _fetch_from_db_with_managed_session(repository_func: Callable, *args, resour
 
 @cached(cache=_llm_cost_cache, key=lambda model_id: (get_request_context().request_id, model_id))
 def get_cached_llm_cost(model_id: UUID) -> tuple[Optional[float], Optional[float]]:
-    return _fetch_from_db_with_managed_session(get_llm_cost, model_id, resource_name=f"LLM cost for model_id {model_id}")
+    return _fetch_from_db_with_managed_session(
+        get_llm_cost, model_id, resource_name=f"LLM cost for model_id {model_id}"
+    )
 
 
+# TODO: Optimize component cost fetching to reduce DB calls
+# Current implementation: 1 DB call per request per component (cached per request)
+# Potential optimizations:
+#   1. Fetch all component costs for the current workflow
+#   2. Fetch all component definitions with grouping
 @cached(
     cache=_component_cost_cache,
     key=lambda component_instance_id: (get_request_context().request_id, component_instance_id),
