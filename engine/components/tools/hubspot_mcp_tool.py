@@ -13,7 +13,7 @@ Legacy note: This was a quick implementation before RemoteMCPTool supported stre
 
 import json
 import logging
-from typing import Any, Optional
+from typing import Any
 
 import httpx
 from mcp import ClientSession
@@ -26,7 +26,6 @@ from engine.components.errors import MCPConnectionError
 from engine.components.tools.mcp_utils import streamable_http_client
 from engine.components.types import ComponentAttributes, ToolDescription
 from engine.trace.trace_manager import TraceManager
-from settings import settings
 
 LOGGER = logging.getLogger(__name__)
 
@@ -69,19 +68,14 @@ class HubSpotMCPTool(Component):
         self,
         trace_manager: TraceManager,
         component_attributes: ComponentAttributes,
-        access_token: Optional[str] = None,
+        access_token: str,
         timeout: int = 30,
         tool_descriptions: list[ToolDescription] | None = None,
     ):
+        if not access_token:
+            raise ValueError("access_token is required")
         self.server_url = HUBSPOT_MCP_SERVER_URL
-        self.access_token = access_token or settings.HUBSPOT_MCP_ACCESS_TOKEN
-        self.refresh_token = settings.HUBSPOT_MCP_REFRESH_TOKEN
-        self.client_id = settings.HUBSPOT_MCP_CLIENT_ID
-        self.client_secret = settings.HUBSPOT_MCP_CLIENT_SECRET
-        if not (self.refresh_token and self.client_id and self.client_secret):
-            raise ValueError(
-                "HUBSPOT_MCP_REFRESH_TOKEN, HUBSPOT_MCP_CLIENT_ID, and HUBSPOT_MCP_CLIENT_SECRET are required."
-            )
+        self.access_token = access_token
         self.timeout = timeout
 
         if tool_descriptions is None:
@@ -114,7 +108,6 @@ class HubSpotMCPTool(Component):
 
     async def _list_tools_with_sdk(self):
         """Use MCP SDK with Streamable HTTP to list tools from HubSpot MCP server."""
-        await self._refresh_access_token()
         client = self._create_http_client()
         try:
             async with streamable_http_client(self.server_url, http_client=client, terminate_on_close=True) as (
@@ -128,46 +121,21 @@ class HubSpotMCPTool(Component):
         finally:
             await client.aclose()
 
-    async def _refresh_access_token(self) -> None:
-        token_url = "https://api.hubapi.com/oauth/v1/token"
-        data = {
-            "grant_type": "refresh_token",
-            "client_id": self.client_id,
-            "client_secret": self.client_secret,
-            "refresh_token": self.refresh_token,
-        }
-
-        async with httpx.AsyncClient() as client:
-            response = await client.post(token_url, data=data)
-            response.raise_for_status()
-            token_data = response.json()
-            self.access_token = token_data.get("access_token")
-            if not self.access_token:
-                raise ValueError("Failed to get access_token from refresh response")
-            if "refresh_token" in token_data:
-                self.refresh_token = token_data["refresh_token"]
-
     @classmethod
     async def from_mcp_server(
         cls,
         trace_manager: TraceManager,
         component_attributes: ComponentAttributes,
-        access_token: Optional[str] = None,
+        access_token: str,
         timeout: int = 30,
     ) -> "HubSpotMCPTool":
         """Convenience async constructor that fetches tool descriptions via MCP SDK."""
+        if not access_token:
+            raise ValueError("access_token is required")
         temp = cls.__new__(cls)
         temp.server_url = HUBSPOT_MCP_SERVER_URL
-        temp.access_token = access_token or settings.HUBSPOT_MCP_ACCESS_TOKEN
-        temp.refresh_token = settings.HUBSPOT_MCP_REFRESH_TOKEN
-        temp.client_id = settings.HUBSPOT_MCP_CLIENT_ID
-        temp.client_secret = settings.HUBSPOT_MCP_CLIENT_SECRET
+        temp.access_token = access_token
         temp.timeout = timeout
-        if not (temp.refresh_token and temp.client_id and temp.client_secret):
-            raise ValueError(
-                "HUBSPOT_MCP_REFRESH_TOKEN, HUBSPOT_MCP_CLIENT_ID, and HUBSPOT_MCP_CLIENT_SECRET are required."
-            )
-        await temp._refresh_access_token()
 
         try:
             tools_result = await temp._list_tools_with_sdk()
@@ -247,7 +215,6 @@ class HubSpotMCPTool(Component):
 
     async def _call_tool_with_sdk(self, tool_name: str, arguments: dict[str, Any]):
         """Use MCP SDK with Streamable HTTP to call a tool on HubSpot MCP server."""
-        await self._refresh_access_token()
         client = self._create_http_client()
         try:
             async with streamable_http_client(self.server_url, http_client=client, terminate_on_close=True) as (

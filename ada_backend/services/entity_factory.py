@@ -5,7 +5,7 @@ import json
 import logging
 from dataclasses import is_dataclass
 from inspect import signature
-from typing import Any, Callable, Optional, Type, Union, get_args, get_origin, get_type_hints
+from typing import Any, Callable, Coroutine, Optional, Type, Union, get_args, get_origin, get_type_hints
 from uuid import UUID
 
 from pydantic import BaseModel
@@ -33,9 +33,8 @@ from engine.components.rag.formatter import Formatter
 from engine.components.rag.retriever import Retriever
 from engine.components.rag.vocabulary_search import VocabularySearch
 from engine.components.synthesizer import Synthesizer
-from engine.components.tools.hubspot_mcp_tool import HubSpotMCPTool
 from engine.components.tools.mcp.remote_mcp_tool import RemoteMCPTool
-from engine.components.types import ComponentAttributes, ToolDescription
+from engine.components.types import ToolDescription
 from engine.llm_services.llm_service import CompletionService, EmbeddingService, OCRService, WebSearchService
 from engine.qdrant_service import QdrantCollectionSchema, QdrantService
 from engine.storage_service.local_service import SQLLocalService
@@ -189,6 +188,20 @@ class AgentFactory(EntityFactory):
         return args, kwargs
 
 
+def _run_coroutine_sync(coro: Coroutine) -> Any:
+    """
+    Run a coroutine synchronously, handling event loop scenarios.
+    Temporary patch until registry + entity factories are refactored to be async.
+    """
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return asyncio.run(coro)
+
+    with concurrent.futures.ThreadPoolExecutor() as executor:
+        return executor.submit(asyncio.run, coro).result()
+
+
 class RemoteMCPToolFactory:
     """
     Minimal factory to construct RemoteMCPTool via its async autodescovery constructor.
@@ -209,45 +222,42 @@ class RemoteMCPToolFactory:
             if trace_manager is None:
                 raise ValueError("Trace manager is required")
             kwargs["trace_manager"] = trace_manager
-        coro = RemoteMCPTool.from_mcp_server(**kwargs)
-        try:
-            asyncio.get_running_loop()
-        except RuntimeError:
-            return asyncio.run(coro)
-
-        with concurrent.futures.ThreadPoolExecutor() as executor:
-            return executor.submit(asyncio.run, coro).result()
+        return _run_coroutine_sync(RemoteMCPTool.from_mcp_server(**kwargs))
 
 
-class HubSpotMCPToolFactory:
+async def resolve_oauth_access_token(
+    oauth_connection_id: str,
+    provider_config_key: str,
+) -> str:
     """
-    Factory to construct HubSpotMCPTool via its async autodescovery constructor.
-    Similar to RemoteMCPToolFactory but for HubSpot-specific MCP server.
+    Resolve OAuth connection ID to access token via Nango.
+
+    Args:
+        oauth_connection_id: The OAuth connection ID to resolve
+        provider_config_key: The OAuth provider key (e.g., "slack", "gmail", "hubspot")
+
+    Returns:
+        The resolved access token
+
+    Raises:
+        ValueError: If oauth_connection_id is missing
     """
+    if not oauth_connection_id:
+        raise ValueError(f"oauth_connection_id required for {provider_config_key} OAuth integration")
 
-    entity_class = HubSpotMCPTool
+    LOGGER.info(f"Resolving OAuth access token for {provider_config_key} with connection ID {oauth_connection_id}")
 
-    def __call__(self, **kwargs):
-        kwargs.pop("tool_description", None)
+    # TODO: Refactor to inject the session directly
+    with get_db_session() as session:
+        access_token = await get_oauth_access_token(
+            session=session,
+            oauth_connection_id=UUID(oauth_connection_id),
+            provider_config_key=provider_config_key,
+        )
 
-        if "trace_manager" not in kwargs:
-            trace_manager = get_trace_manager()
-            if trace_manager is None:
-                raise ValueError("Trace manager is required")
-            kwargs["trace_manager"] = trace_manager
+    LOGGER.info(f"Resolved OAuth access token for {provider_config_key} with connection ID {oauth_connection_id}")
 
-        if "component_attributes" not in kwargs:
-            component_instance_name = kwargs.pop("component_instance_name", "hubspot_mcp_tool")
-            kwargs["component_attributes"] = ComponentAttributes(component_instance_name=component_instance_name)
-
-        coro = HubSpotMCPTool.from_mcp_server(**kwargs)
-        try:
-            asyncio.get_running_loop()
-        except RuntimeError:
-            return asyncio.run(coro)
-
-        with concurrent.futures.ThreadPoolExecutor() as executor:
-            return executor.submit(asyncio.run, coro).result()
+    return access_token
 
 
 class OAuthComponentFactory:
@@ -263,6 +273,7 @@ class OAuthComponentFactory:
         provider_config_key: str,
         target_param_name: str = "access_token",
         parameter_processors: list[ParameterProcessor] | None = None,
+        constructor_method: str = "__init__",
     ):
         """
         Initialize the OAuth component factory.
@@ -272,13 +283,21 @@ class OAuthComponentFactory:
             provider_config_key: OAuth provider key (e.g., "slack", "gmail")
             target_param_name: Parameter name for the resolved token (default: "access_token")
             parameter_processors: Additional parameter processors to apply after token resolution
+            constructor_method: Method to use for instantiation (default: "__init__")
         """
         self.entity_class = entity_class
         self.provider_config_key = provider_config_key
         self.target_param_name = target_param_name
         self.parameter_processors = parameter_processors or []
+        self.constructor_method = constructor_method
 
-        self.constructor_params = signature(entity_class.__init__).parameters
+        if constructor_method == "__init__":
+            self.constructor_params = signature(entity_class.__init__).parameters
+        else:
+            method = getattr(entity_class, constructor_method, None)
+            if method is None or not callable(method):
+                raise ValueError(f"Method '{constructor_method}' not found or not callable on {entity_class.__name__}")
+            self.constructor_params = signature(method).parameters
 
     async def _create_async(self, **kwargs) -> Any:
         """
@@ -294,31 +313,20 @@ class OAuthComponentFactory:
             ValueError: If oauth_connection_id is missing
         """
         oauth_connection_id = kwargs.pop("oauth_connection_id", None)
-        if not oauth_connection_id:
-            raise ValueError(f"oauth_connection_id required for {self.provider_config_key} OAuth integration")
-
-        LOGGER.info(
-            f"Resolving OAuth access token for {self.provider_config_key} with connection ID {oauth_connection_id}"
-        )
-
-        # TODO: Refactor to inject the session directly
-        with get_db_session() as session:
-            access_token = await get_oauth_access_token(
-                session=session,
-                oauth_connection_id=UUID(oauth_connection_id),
-                provider_config_key=self.provider_config_key,
-            )
-
-        LOGGER.info(
-            f"Resolved OAuth access token for {self.provider_config_key} with connection ID {oauth_connection_id}"
-        )
-
+        access_token = await resolve_oauth_access_token(oauth_connection_id, self.provider_config_key)
         kwargs[self.target_param_name] = access_token
 
         for processor in self.parameter_processors:
             kwargs = processor(kwargs, self.constructor_params)
 
-        return self.entity_class(**kwargs)
+        if self.constructor_method == "__init__":
+            return self.entity_class(**kwargs)
+        else:
+            constructor = getattr(self.entity_class, self.constructor_method)
+            if asyncio.iscoroutinefunction(constructor):
+                return await constructor(**kwargs)
+            else:
+                return constructor(**kwargs)
 
     def __call__(self, **kwargs) -> Any:
         """
@@ -336,15 +344,7 @@ class OAuthComponentFactory:
                 raise ValueError("Trace manager is required")
             kwargs["trace_manager"] = trace_manager
 
-        # TODO: Refactor registry + entity factories to be async so this is not needed.
-        coro = self._create_async(**kwargs)
-        try:
-            asyncio.get_running_loop()
-        except RuntimeError:
-            return asyncio.run(coro)
-
-        with concurrent.futures.ThreadPoolExecutor() as executor:
-            return executor.submit(asyncio.run, coro).result()
+        return _run_coroutine_sync(self._create_async(**kwargs))
 
 
 class NonToolCallableBlockFactory(EntityFactory):
@@ -521,6 +521,22 @@ def build_trace_manager_processor() -> ParameterProcessor:
         if "trace_manager" in constructor_params:
             trace_manager = get_trace_manager()
             params.setdefault("trace_manager", trace_manager)
+        return params
+
+    return processor
+
+
+def build_ignore_tool_description_processor() -> ParameterProcessor:
+    """
+    Remove tool_description from params (useful for MCP auto-discovery components).
+
+    TODO: Move tool description processing to param processors so this is not needed.
+    Currently tool_description is injected in instantiate_component() for ALL function_callable
+    components. This should be opt-in via a processor instead of opt-out.
+    """
+
+    def processor(params: dict, constructor_params: dict[str, Any]) -> dict:
+        params.pop("tool_description", None)
         return params
 
     return processor

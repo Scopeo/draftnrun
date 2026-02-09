@@ -19,6 +19,7 @@ from engine.components.sql.run_sql_query_tool import DEFAULT_RUN_SQL_QUERY_TOOL_
 from engine.components.table_lookup import DEFAULT_TABLE_LOOKUP_TOOL_DESCRIPTION
 from engine.components.tools.api_call_tool import API_CALL_TOOL_DESCRIPTION
 from engine.components.tools.docx_template import DOCX_TEMPLATE_TOOL_DESCRIPTION
+from engine.components.tools.hubspot_mcp_tool import DEFAULT_HUBSPOT_MCP_TOOL_DESCRIPTION
 from engine.components.tools.linkup_tool import LINKUP_TOOL_DESCRIPTION
 from engine.components.tools.mcp.remote_mcp_tool import DEFAULT_MCP_TOOL_DESCRIPTION
 from engine.components.tools.python_code_runner import PYTHON_CODE_RUNNER_TOOL_DESCRIPTION
@@ -52,6 +53,7 @@ TOOL_DESCRIPTION_UUIDS = {
     "slack_sender_tool_description": UUID("60531feb-d38f-4843-bfbf-3e6bc22e030d"),
     "default_table_lookup_tool_description": UUID("5c6d7e8f-9012-3456-789a-bcdef0123456"),
     "default_retriever_tool_description": UUID("b1c2d3e4-f5a6-7b8c-9d0e-1f2a3b4c5d6e"),
+    "hubspot_mcp_tool_description": UUID("1d6ce8b3-44ae-4c3d-a14b-2837a3a5717e"),
 }
 
 
@@ -142,6 +144,10 @@ def seed_tool_description(session: Session):
         id=TOOL_DESCRIPTION_UUIDS["default_retriever_tool_description"],
         **RETRIEVER_TOOL_DESCRIPTION.model_dump(),
     )
+    hubspot_mcp_tool_description = db.ToolDescription(
+        id=TOOL_DESCRIPTION_UUIDS["hubspot_mcp_tool_description"],
+        **DEFAULT_HUBSPOT_MCP_TOOL_DESCRIPTION.model_dump(),
+    )
     upsert_tool_descriptions(
         session=session,
         tool_descriptions=[
@@ -168,5 +174,6 @@ def seed_tool_description(session: Session):
             docx_template_tool_description,
             remote_mcp_tool_description,
             default_table_lookup_tool_description,
+            hubspot_mcp_tool_description,
         ],
     )
