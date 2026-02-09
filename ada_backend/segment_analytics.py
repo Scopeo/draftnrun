@@ -99,13 +99,13 @@ def track_project_saved(user_id: UUID, project_id: UUID):
 
 
 @non_breaking_track
-def track_project_monitoring_loaded(user_id: UUID, project_id: UUID):
+def track_projects_monitoring_loaded(user_id: UUID, project_ids: str):
     analytics.track(
         user_id=str(user_id),
         event="Monitoring Loaded",
         properties={
             "env": settings.ENV,
-            "project_id": str(project_id),
+            "projects_id": str(project_ids),
         },
     )
 
