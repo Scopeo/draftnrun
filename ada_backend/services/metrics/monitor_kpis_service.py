@@ -1,11 +1,12 @@
 import logging
 from datetime import datetime, timedelta
+from typing import List
 from uuid import UUID
 
 import pandas as pd
 
 from ada_backend.database.models import CallType
-from ada_backend.schemas.monitor_schema import KPI, KPISResponse, TraceKPIS
+from ada_backend.schemas.monitor_schema import KPI, CostKPI, KPISResponse, TraceKPIS
 from ada_backend.segment_analytics import track_project_monitoring_loaded
 from engine.trace.sql_exporter import get_session_trace
 
@@ -106,6 +107,85 @@ def get_trace_metrics(project_id: UUID, duration_days: int, call_type: CallType 
     )
 
 
+def get_trace_cost_kpis(project_ids: List[UUID], duration_days: int, call_type: CallType | None = None):
+    now = datetime.now()
+    start_date_query = now - timedelta(days=duration_days)
+    end_date_query = now
+
+    # Build the call_type filter clause
+    call_type_filter = ""
+    if call_type is not None:
+        call_type_filter = "AND call_type = %(call_type)s"
+
+    project_id_list = "', '".join(str(project_id) for project_id in project_ids)
+
+    query = f"""
+        WITH trace_costs AS (
+            -- Compute cost per workflow run (trace_rowid)
+            SELECT
+                s.attributes->>'conversation_id' as conversation_id,
+                s.trace_rowid,
+                ROUND(
+                    COALESCE(
+                        SUM(
+                            COALESCE(su.credits_input_token, 0) +
+                            COALESCE(su.credits_output_token, 0) +
+                            COALESCE(su.credits_per_call, 0)
+                        ),
+                        0
+                    )::numeric,
+                    2
+                ) as cost_per_run
+            FROM traces.spans s
+            LEFT JOIN credits.span_usages su ON su.span_id = s.span_id
+             WHERE project_id IN ('{project_id_list}')
+               AND s.start_time >= %(start_time)s
+               AND s.start_time < %(end_time)s
+               {call_type_filter}
+            GROUP BY
+                s.trace_rowid,
+                s.attributes
+            ORDER BY trace_rowid
+            ),
+           conversation_totals AS (
+                SELECT
+                   conversation_id,
+                   SUM(cost_per_run) as total_cost_per_conversation
+               FROM trace_costs
+            WHERE conversation_id IS NOT NULL
+               GROUP BY conversation_id
+          ),
+          run_totals AS (
+                SELECT SUM(cost_per_run) as total_cost_per_run
+          FROM trace_costs
+          GROUP BY trace_rowid
+          )
+      SELECT
+        (SELECT ROUND(COALESCE(AVG(total_cost_per_run), 0)::numeric, 2) FROM run_totals) as mean_cost_per_run,
+         (SELECT ROUND(COALESCE(AVG(total_cost_per_conversation), 0)::numeric, 2) FROM conversation_totals) as mean_cost_per_conversation
+    """
+
+    session = get_session_trace()
+    try:
+        params = {
+            "start_time": start_date_query,
+            "end_time": end_date_query,
+        }
+        if call_type is not None:
+            params["call_type"] = call_type.value
+
+        df = pd.read_sql_query(
+            query,
+            session.bind,
+            params=params,
+        )
+    finally:
+        session.close()
+    return CostKPI(
+        cost_per_call=df["mean_cost_per_run"].iloc[0], cost_per_conversation=df["mean_cost_per_conversation"].iloc[0]
+    )
+
+
 def get_monitoring_kpis_by_project(
     user_id: UUID,
     project_id: UUID,
@@ -115,6 +195,7 @@ def get_monitoring_kpis_by_project(
     trace_kpis = get_trace_metrics(project_id, duration_days, call_type)
     LOGGER.info(f"Trace metrics for project {project_id} and duration {duration_days} days retrieved successfully.")
     track_project_monitoring_loaded(user_id, project_id)
+    cost_kpis = get_trace_cost_kpis([project_id], duration_days, call_type)
     return KPISResponse(
         kpis=[
             KPI(
@@ -149,6 +230,20 @@ def get_monitoring_kpis_by_project(
                     if trace_kpis.latency_comparison_percentage is not None
                     else ""
                 ),
+            ),
+            KPI(
+                title="Mean cost per call",
+                color="primary",
+                icon="tabler-coin",
+                stats=str(cost_kpis.cost_per_call) if cost_kpis.cost_per_call is not None else "",
+                change="",
+            ),
+            KPI(
+                title="Mean cost per conversation",
+                color="primary",
+                icon="tabler-coin",
+                stats=str(cost_kpis.cost_per_conversation) if cost_kpis.cost_per_conversation is not None else "",
+                change="",
             ),
         ]
     )
