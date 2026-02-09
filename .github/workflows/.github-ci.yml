@@ -345,6 +345,9 @@ jobs:
             echo "===> Setting up basic database for tests"
             make db-upgrade
             make db-seed
+            echo "===> Seeding projects database"
+            uv run python -m ada_backend.database.seed_project_db
+
 
       - name: Start ada_backend server
         uses: appleboy/ssh-action@master
