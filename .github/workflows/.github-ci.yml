@@ -12,7 +12,24 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      migration-or-seed-changed: ${{ steps.filter.outputs.migration-or-seed }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Check for migration or seed changes
+        uses: dorny/paths-filter@v2
+        id: filter
+        with:
+          filters: |
+            migration-or-seed:
+              - 'ada_backend/database/**'
+
   ci-pipeline:
+    needs: detect-changes
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -208,6 +225,7 @@ jobs:
             timeout 30s bash -c 'until docker compose exec postgres pg_isready; do sleep 1; done'
 
       - name: Alembic migration checks
+        if: needs.detect-changes.outputs.migration-or-seed-changed == 'true' || github.event_name == 'workflow_dispatch'
         uses: appleboy/ssh-action@master
         with:
           host: ${{ secrets.EC2_HOST_TEST }}
@@ -222,6 +240,7 @@ jobs:
             uv run pytest -q -m alembic tests/alembic
 
       - name: Restore prod dump and seed
+        if: needs.detect-changes.outputs.migration-or-seed-changed == 'true' || github.event_name == 'workflow_dispatch'
         uses: appleboy/ssh-action@master
         with:
           host: ${{ secrets.EC2_HOST_TEST }}
@@ -309,6 +328,26 @@ jobs:
             cd ${{ env.EC2_PATH_BASE }}/${{env.EC2_FOLDER_NAME}}${{ env.RUN_ID }}
             make db-upgrade
             make db-seed
+
+      - name: Setup basic database (when no migration/seed changes)
+        if: needs.detect-changes.outputs.migration-or-seed-changed != 'true' && github.event_name != 'workflow_dispatch'
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.EC2_HOST_TEST }}
+          username: ${{ env.EC2_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          script: |
+            set -e
+            echo "===> Changing directory to ${{ env.EC2_PATH_BASE }}/${{env.EC2_FOLDER_NAME}}${{ env.RUN_ID }}"
+            cd ${{ env.EC2_PATH_BASE }}/${{env.EC2_FOLDER_NAME}}${{ env.RUN_ID }}
+            
+            echo "===> Setting up basic database for tests"
+            make db-upgrade
+            make db-seed
+            echo "===> Seeding projects database"
+            uv run python -m ada_backend.database.seed_project_db
+
 
       - name: Start ada_backend server
         uses: appleboy/ssh-action@master
