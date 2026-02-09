@@ -162,6 +162,7 @@ class UIComponent(StrEnum):
     CONDITION_BUILDER = "ConditionBuilder"
     OAUTH_CONNECTION = "OAuthConnection"
     CODE = "Code"
+    ROUTE_BUILDER = "RouteBuilder"
 
 
 class SourceType(StrEnum):
