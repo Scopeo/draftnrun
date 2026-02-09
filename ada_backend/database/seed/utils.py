@@ -187,7 +187,7 @@ def build_completion_service_config_definitions(
                     name=VERBOSITY_IN_DB,
                     type=ParameterType.STRING,
                     nullable=True,
-                    default=None,
+                    default="medium",
                     ui_component=UIComponent.SELECT,
                     ui_component_properties=UIComponentProperties(
                         label="Verbosity",
@@ -210,11 +210,12 @@ def build_completion_service_config_definitions(
                     name=REASONING_IN_DB,
                     type=ParameterType.STRING,
                     nullable=True,
-                    default=None,
+                    default="none",
                     ui_component=UIComponent.SELECT,
                     ui_component_properties=UIComponentProperties(
                         label="Reasoning",
                         options=[
+                            SelectOption(value="none", label="None"),
                             SelectOption(value="low", label="Low"),
                             SelectOption(value="medium", label="Medium"),
                             SelectOption(value="high", label="High"),
@@ -299,7 +300,7 @@ def build_function_calling_service_config_definitions(
                     name=VERBOSITY_IN_DB,
                     type=ParameterType.STRING,
                     nullable=True,
-                    default=None,
+                    default="medium",
                     ui_component=UIComponent.SELECT,
                     ui_component_properties=UIComponentProperties(
                         label="Verbosity",
@@ -321,11 +322,12 @@ def build_function_calling_service_config_definitions(
                     name=REASONING_IN_DB,
                     type=ParameterType.STRING,
                     nullable=True,
-                    default=None,
+                    default="none",
                     ui_component=UIComponent.SELECT,
                     ui_component_properties=UIComponentProperties(
                         label="Reasoning",
                         options=[
+                            SelectOption(value="none", label="None"),
                             SelectOption(value="low", label="Low"),
                             SelectOption(value="medium", label="Medium"),
                             SelectOption(value="high", label="High"),
