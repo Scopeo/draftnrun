@@ -1,7 +1,7 @@
 """add route builder ui component
 
 Revision ID: a1b2c3d4e5f7
-Revises: fe1c665d7821
+Revises: 67ec7c0706ec
 Create Date: 2026-02-06 12:20:00.000000
 
 """
@@ -12,7 +12,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "a1b2c3d4e5f7"
-down_revision: Union[str, None] = "fe1c665d7821"
+down_revision: Union[str, None] = "67ec7c0706ec"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
