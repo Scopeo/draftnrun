@@ -588,11 +588,53 @@ class PortMappingAdmin(EnhancedModelView, model=db.PortMapping):
     ]
 
 
+class DatasetProjectAdmin(EnhancedModelView, model=db.DatasetProject):
+    category = AdminCategory.QUALITY_ASSURANCE
+    icon = "fas fa-database"
+    column_list = [
+        "id",
+        "organization_id",
+        "project_id",
+        "dataset_name",
+        "created_at",
+        "updated_at",
+    ]
+    column_searchable_list = ["dataset_name"]
+    column_filters = ["organization_id", "project_id"]
+    form_columns = [
+        "organization_id",
+        "project_id",
+        "dataset_name",
+    ]
+
+
+class InputGroundtruthAdmin(EnhancedModelView, model=db.InputGroundtruth):
+    category = AdminCategory.QUALITY_ASSURANCE
+    icon = "fas fa-list-check"
+    column_list = [
+        "id",
+        "dataset_id",
+        "position",
+        "input",
+        "groundtruth",
+        "created_at",
+        "updated_at",
+    ]
+    column_filters = ["dataset_id"]
+    form_columns = [
+        "dataset_id",
+        "position",
+        "input",
+        "groundtruth",
+    ]
+
+
 class LLMJudgeAdmin(EnhancedModelView, model=db.LLMJudge):
     category = AdminCategory.QUALITY_ASSURANCE
     icon = "fas fa-balance-scale"
     column_list = [
         "id",
+        "organization_id",
         "project_id",
         "name",
         "description",
@@ -604,7 +646,9 @@ class LLMJudgeAdmin(EnhancedModelView, model=db.LLMJudge):
         "updated_at",
     ]
     column_searchable_list = ["name", "description", "llm_model_reference"]
+    column_filters = ["organization_id", "project_id"]
     form_columns = [
+        "organization_id",
         "project_id",
         "name",
         "description",
@@ -770,6 +814,8 @@ def setup_admin(app: FastAPI):
     admin.add_view(CronJobAdmin)
     admin.add_view(CronRunAdmin)
     admin.add_view(EndpointPollingHistoryAdmin)
+    admin.add_view(DatasetProjectAdmin)
+    admin.add_view(InputGroundtruthAdmin)
     admin.add_view(LLMJudgeAdmin)
     admin.add_view(JudgeEvaluationAdmin)
     admin.add_view(LLMModelsAdmin)
