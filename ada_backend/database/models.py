@@ -231,6 +231,7 @@ class VariableType(StrEnum):
     EMAIL = "email"
     NUMBER = "number"
     BOOLEAN = "boolean"
+    SECRET = "secret"
 
 
 class SelectOption(BaseModel):

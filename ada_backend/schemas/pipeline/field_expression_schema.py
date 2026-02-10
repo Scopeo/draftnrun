@@ -10,6 +10,7 @@ from pydantic import BaseModel
 class SuggestionKind(StrEnum):
     MODULE = "module"
     PROPERTY = "property"
+    VARIABLE = "variable"
 
 
 class FieldExpressionUpdateSchema(BaseModel):
@@ -37,6 +38,9 @@ class FieldExpressionSuggestion(BaseModel):
     label: str
     insert_text: str
     kind: SuggestionKind
+    description: Optional[str] = None
+    variable_type: Optional[str] = None
+    has_default: Optional[bool] = None
 
 
 class FieldExpressionAutocompleteResponse(BaseModel):
