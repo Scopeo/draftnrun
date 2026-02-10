@@ -377,7 +377,8 @@ async def chat(
         raise HTTPException(status_code=400, detail=str(e)) from e
     except NoMatchingRouteError as e:
         LOGGER.error(
-            f"No matching route in Router component for project {project_id}, graph_runner {graph_runner_id}: {str(e)}",
+            f"No matching route in Router component for project {project_id}, "
+            f"graph_runner {graph_runner_id}: {str(e)}",
             exc_info=True,
         )
         raise HTTPException(status_code=400, detail=str(e)) from e
