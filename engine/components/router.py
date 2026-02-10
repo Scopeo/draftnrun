@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field, create_model
 from ada_backend.database.models import ParameterType, UIComponent
 from ada_backend.database.utils import DEFAULT_TOOL_DESCRIPTION
 from engine.components.component import Component
+from engine.components.errors import NoMatchingRouteError
 from engine.components.types import ComponentAttributes, ToolDescription
 from engine.trace.trace_manager import TraceManager
 
@@ -109,25 +110,24 @@ class Router(Component):
             return cls._outputs_schema_cache
 
         num_routes = MAX_ROUTER_ROUTES
-
         fields: Dict[str, tuple] = {}
 
-        fields["matched_route"] = (
-            Optional[str],
+        fields["output"] = (
+            Any,
             Field(
                 default=None,
-                description="Name of matched route",
+                description="Full input data passed through",
                 json_schema_extra={
-                    "parameter_type": ParameterType.STRING,
+                    "parameter_type": ParameterType.JSON,
                     "disabled_as_input": True,
                 },
             ),
         )
-        fields["output"] = (
-            Optional[Any],
+        fields["execute_routes"] = (
+            list[str],
             Field(
-                default=None,
-                description="Full input data passed through",
+                default_factory=list,
+                description="List of route names that should execute (matched routes)",
                 json_schema_extra={
                     "parameter_type": ParameterType.JSON,
                     "disabled_as_input": True,
@@ -138,7 +138,7 @@ class Router(Component):
         for i in range(num_routes):
             route_name = get_route_port_name(i)
             fields[route_name] = (
-                Optional[Dict[str, Any]],
+                Any,
                 Field(
                     default=None,
                     description=f"Output for route {i}",
@@ -149,8 +149,10 @@ class Router(Component):
                 ),
             )
 
-        cls._outputs_schema_cache = create_model("RouterOutputs", **fields)
-        return cls._outputs_schema_cache
+        schema = create_model("RouterOutputs", **fields)
+        cls._outputs_schema_cache = schema
+
+        return schema
 
     @classmethod
     def get_canonical_input_port(cls) -> str | None:
@@ -171,15 +173,17 @@ class Router(Component):
         inputs: RouterInputs,
         ctx: dict,
     ) -> BaseModel:
-
         pass_through_data = inputs.input
         routes = inputs.routes
         num_routes = len(routes)
 
+        OutputModel = self.get_outputs_schema()
+
         matched_index = None
+        execute_routes = []
         output_data = {
-            "matched_route": None,
             "output": None,
+            "execute_routes": [],
         }
 
         for i, route in enumerate(routes):
@@ -188,27 +192,20 @@ class Router(Component):
             value_b = route.value_b if route.value_b is not None else route.value_a
 
             if self._compare_equal(value_a, value_b):
+                LOGGER.info(f"Route {i} matched")
                 matched_index = i
-                output_data[route_name] = {
-                    "data": pass_through_data,
-                    "should_halt": False,
-                }
-                if output_data["matched_route"] is None:
-                    output_data["matched_route"] = route_name
+                execute_routes.append(route_name)
+                output_data[route_name] = pass_through_data
+
+                if output_data["output"] is None:
                     output_data["output"] = pass_through_data
             else:
-                output_data[route_name] = {
-                    "data": None,
-                    "should_halt": True,
-                }
+                output_data[route_name] = None
+
+        output_data["execute_routes"] = execute_routes
 
         if matched_index is None:
-            LOGGER.warning(f"Router: No routes matched out of {num_routes} route(s)")
-            output_data["output"] = (
-                f"Router: No matching route found. "
-                f"Evaluated {num_routes} route(s) but none matched. "
-                f"Check your route conditions and input values."
-            )
+            LOGGER.error(f"Router: No routes matched out of {num_routes} configured route(s)")
+            raise NoMatchingRouteError(num_routes=num_routes)
 
-        OutputModel = self.get_outputs_schema()
         return OutputModel(**output_data)
