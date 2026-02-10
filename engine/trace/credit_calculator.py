@@ -30,6 +30,7 @@ def _fetch_from_db_with_managed_session(repository_func: Callable, *args, resour
         return repository_func(session, *args, **kwargs)
 
 
+# TODO: Optimize LLM cost fetching to reduce DB calls
 @cached(cache=_llm_cost_cache, key=lambda model_id: (get_request_context().request_id, model_id))
 def get_cached_llm_cost(model_id: UUID) -> tuple[Optional[float], Optional[float]]:
     return _fetch_from_db_with_managed_session(
