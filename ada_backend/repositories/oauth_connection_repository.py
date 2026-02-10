@@ -12,14 +12,16 @@ from ada_backend.database import models as db
 
 def create_oauth_connection(
     session: Session,
-    project_id: UUID,
+    connection_id: UUID,
+    organization_id: UUID,
     provider_config_key: str,
     nango_connection_id: str,
     name: str = "",
     created_by_user_id: UUID | None = None,
 ) -> db.OAuthConnection:
     connection = db.OAuthConnection(
-        project_id=project_id,
+        id=connection_id,
+        organization_id=organization_id,
         provider_config_key=provider_config_key,
         nango_connection_id=nango_connection_id,
         name=name,
@@ -54,13 +56,13 @@ def get_oauth_connection_by_nango_id(
     )
 
 
-def list_oauth_connections_by_project(
+def list_oauth_connections_by_organization(
     session: Session,
-    project_id: UUID,
+    organization_id: UUID,
     provider_config_key: str | None = None,
 ) -> list[db.OAuthConnection]:
     query = session.query(db.OAuthConnection).filter(
-        db.OAuthConnection.project_id == project_id, db.OAuthConnection.deleted_at.is_(None)
+        db.OAuthConnection.organization_id == organization_id, db.OAuthConnection.deleted_at.is_(None)
     )
 
     if provider_config_key:

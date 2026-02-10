@@ -2,23 +2,25 @@
 OAuth router.
 
 Endpoints for managing OAuth connections (provider agnostic).
+Connections are scoped to organizations.
 """
 
 import logging
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from ada_backend.database.setup_db import get_db
 from ada_backend.routers.auth_router import (
     UserRights,
-    user_has_access_to_project_dependency,
+    user_has_access_to_organization_dependency,
 )
 from ada_backend.schemas.auth_schema import SupabaseUser
 from ada_backend.schemas.oauth_schemas import (
     CreateOAuthConnectionRequest,
+    OAuthConnectionListItem,
     OAuthConnectionResponse,
     OAuthConnectionStatusResponse,
     OAuthURLResponse,
@@ -42,34 +44,56 @@ async def oauth_health() -> dict:
     return {"status": "ok" if nango_healthy else "degraded"}
 
 
+@router.get(
+    "/organizations/{organization_id}/oauth-connections",
+    response_model=list[OAuthConnectionListItem],
+    summary="List OAuth connections for organization",
+)
+async def list_oauth_connections(
+    organization_id: UUID,
+    user: Annotated[
+        SupabaseUser,
+        Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.DEVELOPER.value)),
+    ],
+    session: Session = Depends(get_db),
+    provider_config_key: Annotated[OAuthProvider | None, Query()] = None,
+) -> list[OAuthConnectionListItem]:
+    """List all OAuth connections for an organization, optionally filtered by provider."""
+    return integration_service.list_oauth_connections(
+        session=session,
+        organization_id=organization_id,
+        provider_config_key=str(provider_config_key) if provider_config_key else None,
+    )
+
+
 @router.post(
-    "/projects/{project_id}/oauth-connections/authorize",
+    "/organizations/{organization_id}/oauth-connections/authorize",
     response_model=OAuthURLResponse,
     summary="Start OAuth authorization flow (headless)",
 )
 async def start_oauth_authorization(
-    project_id: UUID,
+    organization_id: UUID,
     request: CreateOAuthConnectionRequest,
     user: Annotated[
         SupabaseUser,
-        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.DEVELOPER.value)),
+        Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.DEVELOPER.value)),
     ],
 ) -> OAuthURLResponse:
     """
     Generate OAuth URL for headless flow (no Connect UI).
 
-    Returns a direct URL to the provider's OAuth page.
+    Returns a direct URL to the provider's OAuth page and pending_connection_id to pass to confirm.
     """
     try:
         result = await integration_service.create_oauth_authorization(
-            project_id=project_id,
+            organization_id=organization_id,
             provider_config_key=request.provider_config_key.value,
             end_user_email=request.end_user_email,
         )
 
         return OAuthURLResponse(
             oauth_url=result.oauth_url,
-            end_user_id=result.end_user_id,
+            pending_connection_id=result.pending_connection_id,
         )
     except (OAuthConnectionNotFoundError, NangoConnectionNotFoundError) as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
@@ -82,28 +106,35 @@ async def start_oauth_authorization(
 
 
 @router.post(
-    "/projects/{project_id}/oauth-connections",
+    "/organizations/{organization_id}/oauth-connections",
     response_model=OAuthConnectionResponse,
     summary="Confirm OAuth connection after user completes flow",
 )
 async def create_oauth_connection(
-    project_id: UUID,
+    organization_id: UUID,
     request: CreateOAuthConnectionRequest,
     user: Annotated[
         SupabaseUser,
-        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.DEVELOPER.value)),
+        Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.DEVELOPER.value)),
     ],
     session: Session = Depends(get_db),
 ) -> OAuthConnectionResponse:
     """
     Confirm OAuth connection after user completes flow in browser.
 
+    Requires pending_connection_id from authorize response.
     Verifies connection exists in Nango and creates record in our DB.
     """
+    if not request.pending_connection_id:
+        raise HTTPException(
+            status_code=400,
+            detail="pending_connection_id is required. Obtain it from the authorize endpoint.",
+        )
     try:
         connection_id = await integration_service.confirm_oauth_connection(
             session=session,
-            project_id=project_id,
+            organization_id=organization_id,
+            pending_connection_id=request.pending_connection_id,
             provider_config_key=request.provider_config_key.value,
             created_by_user_id=user.id,
             name=request.name,
@@ -125,23 +156,25 @@ async def create_oauth_connection(
 
 
 @router.get(
-    "/projects/{project_id}/oauth-connections/status",
+    "/organizations/{organization_id}/oauth-connections/status",
     response_model=OAuthConnectionStatusResponse,
-    summary="Check OAuth connection status for a project",
+    summary="Check OAuth connection status",
 )
 async def get_oauth_connection_status(
-    project_id: UUID,
+    organization_id: UUID,
     provider_config_key: OAuthProvider,
+    connection_id: Annotated[UUID, Query(description="OAuth connection ID to check")],
     user: Annotated[
         SupabaseUser,
-        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.DEVELOPER.value)),
+        Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.DEVELOPER.value)),
     ],
     session: Session = Depends(get_db),
 ) -> OAuthConnectionStatusResponse:
-    """Check if an OAuth connection exists and is active for a project."""
+    """Check if a specific OAuth connection is active. organization_id validates ownership."""
     result = await integration_service.check_connection_status(
         session=session,
-        project_id=project_id,
+        organization_id=organization_id,
+        connection_id=connection_id,
         provider_config_key=provider_config_key.value,
     )
 
@@ -154,16 +187,16 @@ async def get_oauth_connection_status(
 
 
 @router.delete(
-    "/projects/{project_id}/oauth-connections/{connection_id}",
+    "/organizations/{organization_id}/oauth-connections/{connection_id}",
     summary="Revoke OAuth connection",
 )
 async def delete_oauth_connection(
-    project_id: UUID,
+    organization_id: UUID,
     connection_id: UUID,
     provider_config_key: OAuthProvider,
     user: Annotated[
         SupabaseUser,
-        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.DEVELOPER.value)),
+        Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.DEVELOPER.value)),
     ],
     session: Session = Depends(get_db),
 ) -> dict:
@@ -171,7 +204,7 @@ async def delete_oauth_connection(
     try:
         await integration_service.revoke_oauth_connection(
             session=session,
-            project_id=project_id,
+            organization_id=organization_id,
             connection_id=connection_id,
             provider_config_key=provider_config_key.value,
         )
