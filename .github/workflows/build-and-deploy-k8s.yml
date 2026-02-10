@@ -294,6 +294,21 @@ jobs:
             cd infra/k8s/${ENV}
             kubectl apply -k .
 
+            # Save previous image for rollback
+            PREV_IMAGE=$(kubectl get deployment/ada-api -n ${NS} -o jsonpath='{.spec.template.spec.containers[0].image}')
+            echo "📌 Previous image: ${PREV_IMAGE}"
+
+            rollback() {
+              echo "⚠️ Rolling back to ${PREV_IMAGE}..."
+              kubectl rollout undo deployment/ada-api -n ${NS}
+              kubectl rollout undo deployment/ada-ingestion-worker -n ${NS}
+              kubectl rollout undo deployment/ada-webhook-worker -n ${NS}
+              kubectl rollout undo deployment/ada-scheduler -n ${NS}
+              kubectl rollout status deployment/ada-api -n ${NS} --timeout=5m
+              echo "❌ Rollback complete"
+              exit 1
+            }
+
             # Update images to the specific tagged versions
             echo "🔄 Updating images to ${TAG}..."
             kubectl set image deployment/ada-api -n ${NS} \

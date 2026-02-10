@@ -5,9 +5,12 @@ from uuid import UUID
 from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
-from ada_backend.database.models import CallType, EnvType, ProjectType, ResponseFormat
+from ada_backend.database.models import CallType, EnvType, ProjectType, ResponseFormat, VariableType
 from ada_backend.database.setup_db import get_db
 from ada_backend.repositories.env_repository import get_env_relationship_by_graph_runner_id
+from ada_backend.repositories.project_repository import get_project
+from ada_backend.repositories import variable_definitions_repository
+from ada_backend.repositories import variable_sets_repository
 from ada_backend.routers.auth_router import (
     UserRights,
     VerifiedApiKey,
@@ -26,6 +29,14 @@ from ada_backend.schemas.project_schema import (
     ProjectUpdateSchema,
     ProjectWithGraphRunnersSchema,
 )
+from ada_backend.schemas.variable_schemas import (
+    VariableDefinitionBulkUpsertRequest,
+    VariableDefinitionResponse,
+    VariableDefinitionUpsertRequest,
+    VariableSetListResponse,
+    VariableSetResponse,
+    VariableSetUpsertRequest,
+)
 from ada_backend.services.agent_runner_service import run_agent, run_env_agent
 from ada_backend.services.charts_service import get_charts_by_project
 from ada_backend.services.errors import (
@@ -35,6 +46,7 @@ from ada_backend.services.errors import (
     OrganizationLimitExceededError,
     ProjectNotFound,
 )
+from ada_backend.services.integration_service import get_oauth_access_token
 from ada_backend.services.metrics.monitor_kpis_service import get_monitoring_kpis_by_project
 from ada_backend.services.project_service import (
     create_workflow,
@@ -208,6 +220,38 @@ async def run_env_agent_endpoint(
             status_code=400,
             detail="'s3_key' is not allowed for this endpoint. Only 'base64' or 'url' are supported.",
         )
+
+    # Variable resolution: if set_id is provided, resolve variable definitions + set values
+    set_id = input_data.pop("set_id", None)
+    if set_id:
+        project = get_project(sqlaclhemy_db_session, project_id=project_id)
+        if not project:
+            raise HTTPException(status_code=404, detail="Project not found")
+
+        defs = variable_definitions_repository.list_definitions(sqlaclhemy_db_session, project_id)
+        org_set = variable_sets_repository.get_org_variable_set(
+            sqlaclhemy_db_session, project.organization_id, set_id
+        )
+
+        resolved = {}
+        set_values = org_set.values if org_set else {}
+        for d in defs:
+            resolved[d.name] = set_values.get(d.name) or d.default_value
+
+        # OAuth resolution: resolve connection UUIDs to access tokens
+        for d in defs:
+            if d.type == VariableType.OAUTH and resolved.get(d.name):
+                provider = (d.variable_metadata or {}).get("provider_config_key")
+                if provider:
+                    try:
+                        token = await get_oauth_access_token(
+                            sqlaclhemy_db_session, UUID(resolved[d.name]), provider
+                        )
+                        resolved[d.name] = token
+                    except Exception as e:
+                        LOGGER.error(f"Failed to resolve OAuth token for variable {d.name}: {str(e)}", exc_info=True)
+
+        input_data.update(resolved)
 
     try:
         return await run_env_agent(
@@ -468,4 +512,367 @@ async def chat_env(
         LOGGER.error(
             f"Failed to run agent chat for project {project_id} in environment {env}: {str(e)}", exc_info=True
         )
+        raise HTTPException(status_code=500, detail="Internal server error") from e
+
+
+# --- Variable Definition Endpoints ---
+
+
+def _definition_to_response(d) -> VariableDefinitionResponse:
+    return VariableDefinitionResponse(
+        id=d.id,
+        project_id=d.project_id,
+        name=d.name,
+        type=d.type,
+        description=d.description,
+        required=d.required,
+        default_value=d.default_value,
+        metadata=d.variable_metadata,
+        editable=d.editable,
+        display_order=d.display_order,
+        created_at=str(d.created_at),
+        updated_at=str(d.updated_at),
+    )
+
+
+@router.get(
+    "/{project_id}/variable-definitions",
+    response_model=List[VariableDefinitionResponse],
+    tags=["Variable Definitions"],
+)
+def list_variable_definitions_endpoint(
+    project_id: UUID,
+    user: Annotated[
+        SupabaseUser,
+        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.MEMBER.value)),
+    ],
+    session: Session = Depends(get_db),
+):
+    try:
+        defs = variable_definitions_repository.list_definitions(session, project_id)
+        return [_definition_to_response(d) for d in defs]
+    except Exception as e:
+        LOGGER.error(f"Failed to list variable definitions for project {project_id}: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error") from e
+
+
+@router.get(
+    "/{project_id}/variable-definitions/{name}",
+    response_model=VariableDefinitionResponse,
+    tags=["Variable Definitions"],
+)
+def get_variable_definition_endpoint(
+    project_id: UUID,
+    name: str,
+    user: Annotated[
+        SupabaseUser,
+        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.MEMBER.value)),
+    ],
+    session: Session = Depends(get_db),
+):
+    try:
+        d = variable_definitions_repository.get_definition(session, project_id, name)
+        if not d:
+            raise HTTPException(status_code=404, detail=f"Variable definition '{name}' not found")
+        return _definition_to_response(d)
+    except HTTPException:
+        raise
+    except Exception as e:
+        LOGGER.error(f"Failed to get variable definition {name} for project {project_id}: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error") from e
+
+
+@router.put(
+    "/{project_id}/variable-definitions/{name}",
+    response_model=VariableDefinitionResponse,
+    tags=["Variable Definitions"],
+)
+def upsert_variable_definition_endpoint(
+    project_id: UUID,
+    name: str,
+    body: VariableDefinitionUpsertRequest,
+    user: Annotated[
+        SupabaseUser,
+        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.DEVELOPER.value)),
+    ],
+    session: Session = Depends(get_db),
+):
+    try:
+        fields = body.model_dump(exclude_none=True)
+        d = variable_definitions_repository.upsert_definition(session, project_id, name, **fields)
+        return _definition_to_response(d)
+    except ValueError as e:
+        LOGGER.error(f"Failed to upsert variable definition {name} for project {project_id}: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except Exception as e:
+        LOGGER.error(f"Failed to upsert variable definition {name} for project {project_id}: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error") from e
+
+
+@router.put(
+    "/{project_id}/variable-definitions",
+    response_model=List[VariableDefinitionResponse],
+    tags=["Variable Definitions"],
+)
+def bulk_upsert_variable_definitions_endpoint(
+    project_id: UUID,
+    body: VariableDefinitionBulkUpsertRequest,
+    user: Annotated[
+        SupabaseUser,
+        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.DEVELOPER.value)),
+    ],
+    session: Session = Depends(get_db),
+):
+    try:
+        defs = variable_definitions_repository.bulk_upsert_definitions(session, project_id, body.definitions)
+        return [_definition_to_response(d) for d in defs]
+    except ValueError as e:
+        LOGGER.error(
+            f"Failed to bulk upsert variable definitions for project {project_id}: {str(e)}", exc_info=True
+        )
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except Exception as e:
+        LOGGER.error(
+            f"Failed to bulk upsert variable definitions for project {project_id}: {str(e)}", exc_info=True
+        )
+        raise HTTPException(status_code=500, detail="Internal server error") from e
+
+
+@router.delete(
+    "/{project_id}/variable-definitions/{name}",
+    tags=["Variable Definitions"],
+)
+def delete_variable_definition_endpoint(
+    project_id: UUID,
+    name: str,
+    user: Annotated[
+        SupabaseUser,
+        Depends(user_has_access_to_project_dependency(allowed_roles=UserRights.DEVELOPER.value)),
+    ],
+    session: Session = Depends(get_db),
+):
+    try:
+        deleted = variable_definitions_repository.delete_definition(session, project_id, name)
+        if not deleted:
+            raise HTTPException(status_code=404, detail=f"Variable definition '{name}' not found")
+        return {"detail": "deleted"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        LOGGER.error(f"Failed to delete variable definition {name} for project {project_id}: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error") from e
+
+
+# --- JWT-Auth'd Variable Set Endpoints (for Scopeo dashboard) ---
+
+
+@router.get(
+    "/org/{organization_id}/variable-sets",
+    response_model=VariableSetListResponse,
+    tags=["Variable Sets"],
+)
+def list_variable_sets_jwt(
+    organization_id: UUID,
+    user: Annotated[
+        SupabaseUser,
+        Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.MEMBER.value)),
+    ],
+    session: Session = Depends(get_db),
+):
+    try:
+        sets = variable_sets_repository.list_org_variable_sets(session, organization_id)
+        return VariableSetListResponse(variable_sets=[_set_to_response(s) for s in sets])
+    except Exception as e:
+        LOGGER.error(f"Failed to list variable sets for org {organization_id}: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error") from e
+
+
+@router.get(
+    "/org/{organization_id}/variable-sets/{set_id}",
+    response_model=VariableSetResponse,
+    tags=["Variable Sets"],
+)
+def get_variable_set_jwt(
+    organization_id: UUID,
+    set_id: str,
+    user: Annotated[
+        SupabaseUser,
+        Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.MEMBER.value)),
+    ],
+    session: Session = Depends(get_db),
+):
+    try:
+        s = variable_sets_repository.get_org_variable_set(session, organization_id, set_id)
+        if not s:
+            raise HTTPException(status_code=404, detail=f"Variable set '{set_id}' not found")
+        return _set_to_response(s)
+    except HTTPException:
+        raise
+    except Exception as e:
+        LOGGER.error(f"Failed to get variable set {set_id} for org {organization_id}: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error") from e
+
+
+@router.put(
+    "/org/{organization_id}/variable-sets/{set_id}",
+    response_model=VariableSetResponse,
+    tags=["Variable Sets"],
+)
+def upsert_variable_set_jwt(
+    organization_id: UUID,
+    set_id: str,
+    body: VariableSetUpsertRequest,
+    user: Annotated[
+        SupabaseUser,
+        Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.MEMBER.value)),
+    ],
+    session: Session = Depends(get_db),
+):
+    try:
+        s = variable_sets_repository.upsert_org_variable_set(session, organization_id, set_id, body.values)
+        return _set_to_response(s)
+    except ValueError as e:
+        LOGGER.error(f"Failed to upsert variable set {set_id} for org {organization_id}: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except Exception as e:
+        LOGGER.error(f"Failed to upsert variable set {set_id} for org {organization_id}: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error") from e
+
+
+@router.delete(
+    "/org/{organization_id}/variable-sets/{set_id}",
+    tags=["Variable Sets"],
+)
+def delete_variable_set_jwt(
+    organization_id: UUID,
+    set_id: str,
+    user: Annotated[
+        SupabaseUser,
+        Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.MEMBER.value)),
+    ],
+    session: Session = Depends(get_db),
+):
+    try:
+        deleted = variable_sets_repository.delete_org_variable_set(session, organization_id, set_id)
+        if not deleted:
+            raise HTTPException(status_code=404, detail=f"Variable set '{set_id}' not found")
+        return {"detail": "deleted"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        LOGGER.error(f"Failed to delete variable set {set_id} for org {organization_id}: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error") from e
+
+
+# --- Org-Level Variable Set Endpoints (API Key auth) ---
+
+org_router = APIRouter(prefix="/org")
+
+
+def _verify_org_access(organization_id: UUID, verified_api_key: VerifiedApiKey):
+    if verified_api_key.organization_id != organization_id:
+        raise HTTPException(status_code=403, detail="You don't have access to this organization")
+    if verified_api_key.scope_type != "organization":
+        raise HTTPException(status_code=403, detail="Project-scoped API keys cannot access org-level resources")
+
+
+def _set_to_response(s) -> VariableSetResponse:
+    return VariableSetResponse(
+        id=s.id,
+        organization_id=s.organization_id,
+        project_id=s.project_id,
+        set_id=s.set_id,
+        values=s.values,
+        created_at=str(s.created_at),
+        updated_at=str(s.updated_at),
+    )
+
+
+@org_router.get(
+    "/{organization_id}/variable-sets",
+    response_model=VariableSetListResponse,
+    tags=["Variable Sets"],
+)
+def list_org_variable_sets_endpoint(
+    organization_id: UUID,
+    session: Session = Depends(get_db),
+    verified_api_key: VerifiedApiKey = Depends(verify_api_key_dependency),
+):
+    _verify_org_access(organization_id, verified_api_key)
+    try:
+        sets = variable_sets_repository.list_org_variable_sets(session, organization_id)
+        return VariableSetListResponse(variable_sets=[_set_to_response(s) for s in sets])
+    except Exception as e:
+        LOGGER.error(f"Failed to list variable sets for org {organization_id}: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error") from e
+
+
+@org_router.get(
+    "/{organization_id}/variable-sets/{set_id}",
+    response_model=VariableSetResponse,
+    tags=["Variable Sets"],
+)
+def get_org_variable_set_endpoint(
+    organization_id: UUID,
+    set_id: str,
+    session: Session = Depends(get_db),
+    verified_api_key: VerifiedApiKey = Depends(verify_api_key_dependency),
+):
+    _verify_org_access(organization_id, verified_api_key)
+    try:
+        s = variable_sets_repository.get_org_variable_set(session, organization_id, set_id)
+        if not s:
+            raise HTTPException(status_code=404, detail=f"Variable set '{set_id}' not found")
+        return _set_to_response(s)
+    except HTTPException:
+        raise
+    except Exception as e:
+        LOGGER.error(f"Failed to get variable set {set_id} for org {organization_id}: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error") from e
+
+
+@org_router.put(
+    "/{organization_id}/variable-sets/{set_id}",
+    response_model=VariableSetResponse,
+    tags=["Variable Sets"],
+)
+def upsert_org_variable_set_endpoint(
+    organization_id: UUID,
+    set_id: str,
+    body: VariableSetUpsertRequest,
+    session: Session = Depends(get_db),
+    verified_api_key: VerifiedApiKey = Depends(verify_api_key_dependency),
+):
+    _verify_org_access(organization_id, verified_api_key)
+    try:
+        s = variable_sets_repository.upsert_org_variable_set(session, organization_id, set_id, body.values)
+        return _set_to_response(s)
+    except ValueError as e:
+        LOGGER.error(f"Failed to upsert variable set {set_id} for org {organization_id}: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except Exception as e:
+        LOGGER.error(f"Failed to upsert variable set {set_id} for org {organization_id}: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error") from e
+
+
+@org_router.delete(
+    "/{organization_id}/variable-sets/{set_id}",
+    tags=["Variable Sets"],
+)
+def delete_org_variable_set_endpoint(
+    organization_id: UUID,
+    set_id: str,
+    session: Session = Depends(get_db),
+    verified_api_key: VerifiedApiKey = Depends(verify_api_key_dependency),
+):
+    _verify_org_access(organization_id, verified_api_key)
+    try:
+        deleted = variable_sets_repository.delete_org_variable_set(session, organization_id, set_id)
+        if not deleted:
+            raise HTTPException(status_code=404, detail=f"Variable set '{set_id}' not found")
+        return {"detail": "deleted"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        LOGGER.error(f"Failed to delete variable set {set_id} for org {organization_id}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error") from e

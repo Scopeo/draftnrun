@@ -26,6 +26,7 @@ from ada_backend.routers.llm_judges_router import router as llm_judges_router
 from ada_backend.routers.llm_models_router import router as llm_models_router
 from ada_backend.routers.oauth_router import router as oauth_router
 from ada_backend.routers.organization_router import router as org_router
+from ada_backend.routers.project_router import org_router as variable_sets_router
 from ada_backend.routers.project_router import router as project_router
 from ada_backend.routers.qa_evaluation_router import router as qa_evaluation_router
 from ada_backend.routers.quality_assurance_router import router as quality_assurance_router
@@ -160,6 +161,7 @@ setup_admin(app)
 app.include_router(auth_router)
 app.include_router(org_router)
 app.include_router(project_router)
+app.include_router(variable_sets_router)
 app.include_router(agent_router)
 app.include_router(integration_router)
 app.include_router(oauth_router)
