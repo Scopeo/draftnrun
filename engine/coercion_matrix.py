@@ -264,11 +264,6 @@ class CoercionMatrix:
         target_type = self._normalize_dict_type(target_type)
         source_type = self._normalize_dict_type(source_type)
 
-        if self._is_optional_type(source_type):
-            inner_source_type = self._get_optional_inner_type(source_type)
-            if inner_source_type is Any or str(inner_source_type) == "typing.Any":
-                return True
-
         # Handle typing.Any - always can coerce (delete after migration)
         if target_type is Any or str(target_type) == "typing.Any":
             return True

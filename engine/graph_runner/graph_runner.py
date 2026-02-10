@@ -177,15 +177,15 @@ class GraphRunner:
                 LOGGER.info(f"Node '{node_id}' signaled to halt downstream execution")
                 self._halt_downstream_execution(node_id)
             else:
-                port_halt_signals = {}
-                for port_name, port_value in result_packet.data.items():
-                    if isinstance(port_value, dict) and "should_halt" in port_value:
-                        port_halt_signals[port_name] = port_value["should_halt"]
+                # Check for Router's execute_routes list (which routes should execute)
+                execute_routes = result_packet.data.get("execute_routes", None)
 
-                if port_halt_signals:
-                    LOGGER.debug(f"Node '{node_id}' has per-port halt signals: {port_halt_signals}")
-                    self._selective_halt_downstream(node_id, port_halt_signals)
+                if execute_routes is not None:
+                    # Router component - selective execution based on execute_routes list
+                    LOGGER.debug(f"Node '{node_id}' has execute_routes: {execute_routes}")
+                    self._selective_execute_routes(node_id, execute_routes)
                 else:
+                    # Normal execution - decrement all successors
                     for successor in self.graph.successors(node_id):
                         self.tasks[successor].decrement_pending_deps()
 
@@ -255,9 +255,6 @@ class GraphRunner:
                 task_result = self.tasks[port_mapping.source_instance_id].result
                 if task_result and port_mapping.source_port_name in task_result.data:
                     source_value = task_result.data[port_mapping.source_port_name]
-
-                    if isinstance(source_value, dict) and "data" in source_value and "should_halt" in source_value:
-                        source_value = source_value["data"]
 
                     # Check if target component is unmigrated (doesn't have migrated attribute)
                     target_component = self.runnables.get(node_id)
@@ -463,79 +460,36 @@ class GraphRunner:
                         task.result = NodeData(data={}, ctx=self.run_context)
                     queue.append(successor)
 
-    def _should_halt_successor(
-        self,
-        successor: str,
-        source_node_id: str,
-        port_halt_signals: dict[str, bool],
-    ) -> bool:
+    def _selective_execute_routes(self, source_node_id: str, execute_routes: list[str]) -> None:
         """
-        Determine if a successor should be halted based on port mappings and halt signals.
+        Selectively execute downstream nodes based on Router's execute_routes list.
+        Only successors connected to routes in execute_routes will execute.
 
         Args:
-            successor: The successor node to check
-            source_node_id: The source node with halt signals
-            port_halt_signals: Dict mapping port names to their should_halt boolean values
-
-        Returns:
-            True if successor should be halted, False if it should continue
+            source_node_id: The Router node ID
+            execute_routes: List of route names that should execute (e.g., ["route_0", "route_2"])
         """
-        # Find port mappings from source to this successor
-        mappings = [
-            pm for pm in self._mappings_by_target.get(successor, []) if pm.source_instance_id == source_node_id
-        ]
-
-        # If there are no mappings from this router, halt by default
-        # (the successor shouldn't execute without explicit route connection)
-        if not mappings:
-            return True
-
-        # Check mappings to determine if successor should halt
-        has_route_port_mapping = False
-        has_output_port_mapping = False
-
-        for mapping in mappings:
-            source_port = mapping.source_port_name
-
-            # Check if this is a specific route port (route_0, route_1, etc.)
-            if source_port in port_halt_signals:
-                has_route_port_mapping = True
-                # Check if this route port is halted
-                if port_halt_signals[source_port]:
-                    return True
-            # Check if connected to default output port (matched route data)
-            elif source_port == "output":
-                has_output_port_mapping = True
-
-        # If connected to 'output' port and no specific route port, check if any route matched
-        if not has_route_port_mapping and has_output_port_mapping:
-            # If ALL routes are halted, halt this successor too
-            if all(port_halt_signals.values()):
-                return True
-            else:
-                return False
-        # If no route port mappings and no output port, halt by default
-        elif not has_route_port_mapping and not has_output_port_mapping:
-            return True
-
-        return False
-
-    def _selective_halt_downstream(self, source_node_id: str, port_halt_signals: dict[str, bool]) -> None:
-        """
-        Selectively halt or continue downstream nodes based on which output ports they connect to.
-
-        Args:
-            source_node_id: The node that produced the output with per-port halt signals
-            port_halt_signals: Dict mapping port names to their should_halt boolean values
-        """
-        LOGGER.debug(f"Selective halt for {source_node_id} with signals: {port_halt_signals}")
+        LOGGER.debug(f"Selective execution for {source_node_id} with routes: {execute_routes}")
 
         for successor in self.graph.successors(source_node_id):
-            should_halt = self._should_halt_successor(successor, source_node_id, port_halt_signals)
+            mappings = [
+                pm for pm in self._mappings_by_target.get(successor, []) if pm.source_instance_id == source_node_id
+            ]
 
-            if should_halt:
-                LOGGER.debug(f"Halting successor '{successor}'")
-                self._halt_downstream_execution(successor)
-            else:
-                LOGGER.debug(f"Continuing successor '{successor}'")
+            should_execute = False
+            for mapping in mappings:
+                source_port = mapping.source_port_name
+
+                if source_port in execute_routes:
+                    should_execute = True
+                    break
+                elif source_port == "output" and len(execute_routes) > 0:
+                    should_execute = True
+                    break
+
+            if should_execute:
+                LOGGER.debug(f"Executing successor '{successor}'")
                 self.tasks[successor].decrement_pending_deps()
+            else:
+                LOGGER.debug(f"Halting successor '{successor}' (not in execute_routes)")
+                self._halt_downstream_execution(successor)

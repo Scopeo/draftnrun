@@ -507,10 +507,8 @@ def _create_explicit_port_mappings(
     if not hasattr(graph_project, "port_mappings") or not graph_project.port_mappings:
         return explicitly_mapped_pairs, explicit_port_mapping_targets
 
-    LOGGER.info(
-        f"Frontend sent {len(graph_project.port_mappings)} port mappings: "
-        f"{[(pm.source_port_name, str(pm.target_instance_id)) for pm in graph_project.port_mappings]}"
-    )
+    LOGGER.info(f"Frontend sent {len(graph_project.port_mappings)} port mappings")
+
     new_mappings: list[db.PortMapping] = []
 
     for pm_schema in graph_project.port_mappings:
