@@ -44,7 +44,6 @@ from engine.components.graph_runner_block import GraphRunnerBlock
 from engine.components.hybrid_synthesizer import HybridSynthesizer
 from engine.components.if_else import IfElse
 from engine.components.inputs_outputs.start import Start
-from engine.components.router import Router
 from engine.components.llm_call import LLMCallAgent
 from engine.components.ocr_call import OCRCall
 from engine.components.pdf_generation_tool import PDFGenerationTool
@@ -56,6 +55,7 @@ from engine.components.rag.hybrid_rag import HybridRAG
 from engine.components.rag.rag import RAG
 from engine.components.rag.retriever import Retriever
 from engine.components.rag.vocabulary_search import VocabularySearch
+from engine.components.router import Router
 from engine.components.sql.react_sql_tool import ReactSQLAgent
 from engine.components.sql.run_sql_query_tool import RunSQLQueryTool
 from engine.components.sql.sql_tool import SQLTool
