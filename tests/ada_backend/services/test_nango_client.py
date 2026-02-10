@@ -3,11 +3,9 @@ Simple tests for Nango client.
 """
 
 from unittest.mock import AsyncMock, MagicMock, Mock, patch
-from uuid import uuid4
 
 import pytest
 
-from ada_backend.services.integration_service import generate_nango_end_user_id
 from ada_backend.services.nango_client import NangoClient
 
 
@@ -18,16 +16,6 @@ def _async_client(*, get: AsyncMock | None = None, post: AsyncMock | None = None
     client.delete = AsyncMock()
     client.request = AsyncMock()
     return client
-
-
-def test_generate_nango_end_user_id():
-    """Test end_user_id format for OAuth connections."""
-    project_id = uuid4()
-    provider_config_key = "slack"
-
-    end_user_id = generate_nango_end_user_id(project_id, provider_config_key)
-
-    assert end_user_id == f"proj_{project_id}_{provider_config_key}"
 
 
 @patch("ada_backend.services.nango_client.httpx.AsyncClient")

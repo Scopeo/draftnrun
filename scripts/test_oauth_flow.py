@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """
-Test OAuth flow headless (without Connect UI).
+Test OAuth flow headless
+
+OAuth connections are org-scoped. Requires organization_id.
 
 Usage:
-    uv run python -m scripts.test_oauth_flow --project-id <uuid> --provider slack
+    uv run python -m scripts.test_oauth_flow --org-id <uuid> --provider slack
 """
 
 import argparse
@@ -41,13 +43,13 @@ def print_info(text: str):
     print(f"ℹ️  {text}")
 
 
-async def test_oauth_flow_headless(project_id: str, provider: str, backend_url: str):
-    """Test OAuth flow using headless endpoint."""
+async def test_oauth_flow_headless(org_id: str, provider: str, backend_url: str):
+    """Test OAuth flow using headless endpoint (org-scoped)."""
 
     print_header("OAuth Flow Test (Headless)")
     print_info(f"Backend URL: {backend_url}")
     print_info(f"Provider: {provider}")
-    print_info(f"Project ID: {project_id}")
+    print_info(f"Organization ID: {org_id}")
 
     # Step 0: Authenticate
     print_header("Step 0: Authenticate with Supabase")
@@ -65,12 +67,12 @@ async def test_oauth_flow_headless(project_id: str, provider: str, backend_url: 
 
     # Step 1: Get OAuth URL (headless)
     print_header("Step 1: Get OAuth URL (Headless)")
-    print_info("Calling POST /projects/{project_id}/oauth-connections/authorize...")
+    print_info("Calling POST /organizations/{org_id}/oauth-connections/authorize...")
 
     async with httpx.AsyncClient(timeout=30.0) as client:
         try:
             response = await client.post(
-                f"{backend_url}/projects/{project_id}/oauth-connections/authorize",
+                f"{backend_url}/organizations/{org_id}/oauth-connections/authorize",
                 json={
                     "provider_config_key": provider,
                     "end_user_email": f"test-{provider}@draftnrun.com",
@@ -82,14 +84,17 @@ async def test_oauth_flow_headless(project_id: str, provider: str, backend_url: 
             data = response.json()
 
             oauth_url = data.get("oauth_url")
-            end_user_id = data.get("end_user_id")
+            pending_connection_id = data.get("pending_connection_id")
 
             if not oauth_url:
                 print_error("No oauth_url in response")
                 return False
+            if not pending_connection_id:
+                print_error("No pending_connection_id in response")
+                return False
 
             print_success("OAuth URL generated successfully")
-            print_info(f"End User ID: {end_user_id}")
+            print_info(f"Pending Connection ID: {pending_connection_id}")
             print_info(f"OAuth URL: {oauth_url}")
 
         except httpx.HTTPStatusError as e:
@@ -121,15 +126,16 @@ async def test_oauth_flow_headless(project_id: str, provider: str, backend_url: 
 
     # Step 3: Confirm connection
     print_header("Step 3: Confirm Connection")
-    print_info("Calling POST /projects/{project_id}/oauth-connections...")
+    print_info("Calling POST /organizations/{org_id}/oauth-connections...")
 
     async with httpx.AsyncClient(timeout=30.0) as client:
         try:
             response = await client.post(
-                f"{backend_url}/projects/{project_id}/oauth-connections",
+                f"{backend_url}/organizations/{org_id}/oauth-connections",
                 json={
                     "provider_config_key": provider,
                     "name": f"Test {provider.capitalize()} Connection",
+                    "pending_connection_id": pending_connection_id,
                 },
                 headers=headers,
             )
@@ -169,8 +175,14 @@ def main():
     """Main entry point."""
     load_dotenv("credentials.env")
 
+    DEFAULT_ORG_ID = "01b6554c-4884-409f-a0e1-22e394bee989"
+
     parser = argparse.ArgumentParser(description="Test OAuth flow headless")
-    parser.add_argument("--project-id", required=True, help="Project UUID")
+    parser.add_argument(
+        "--org-id",
+        default=DEFAULT_ORG_ID,
+        help=f"Organization UUID (default: {DEFAULT_ORG_ID})",
+    )
     parser.add_argument("--provider", default="slack", help="Provider key (slack, hubspot, etc)")
     parser.add_argument(
         "--backend-url",
@@ -182,13 +194,14 @@ def main():
 
     print_header("Headless OAuth Test")
     print_info("This test uses the headless OAuth flow (no Connect UI)")
+    print_info("OAuth connections are org-scoped.")
     print_info("Make sure:")
     print_info(f"  1. Backend running on {args.backend_url}")
     print_info("  2. Nango accessible (local: localhost:3003 + ngrok, staging: oauth-staging.draftnrun.com)")
     print_info("  3. Provider app redirect URL configured correctly")
     print_info("  4. TEST_USER_EMAIL and TEST_USER_PASSWORD set in credentials.env")
 
-    success = asyncio.run(test_oauth_flow_headless(args.project_id, args.provider, args.backend_url))
+    success = asyncio.run(test_oauth_flow_headless(args.org_id, args.provider, args.backend_url))
     sys.exit(0 if success else 1)
 
 
