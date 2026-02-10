@@ -22,7 +22,7 @@ def seed_router_components(session: Session):
         is_agent=True,
         function_callable=False,
         is_protected=False,
-        icon="tabler-route",
+        icon="tabler-arrows-split",
     )
     upsert_components(
         session=session,
