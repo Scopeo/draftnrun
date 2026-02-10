@@ -58,7 +58,10 @@ class RouterInputs(BaseModel):
 
     input: Any = Field(
         default=None,
-        description="Input data to pass through the matched route. Auto-populated from previous component if not provided.",
+        description=(
+            "Input data to pass through the matched route. "
+            "Auto-populated from previous component if not provided."
+        ),
         json_schema_extra={
             "parameter_type": ParameterType.JSON,
             "placeholder": "Auto-populated from previous component",
