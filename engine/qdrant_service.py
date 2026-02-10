@@ -394,6 +394,11 @@ class QdrantService:
         chunk_age_penalty_rate: float,
         max_retrieved_chunks_after_penalty: int,
     ) -> list[tuple[str, float, dict]]:
+        LOGGER.info(
+            f"Applying age penalty to {len(vector_results)} chunks. "
+            f"Date keys: {metadata_date_key}, default_penalty: {default_penalty_rate}, "
+            f"chunk_age_penalty_rate: {chunk_age_penalty_rate}"
+        )
         ordered_chunks = []
         current_year = datetime.today().year
         start_of_year = datetime(current_year, 1, 1)
@@ -418,6 +423,10 @@ class QdrantService:
             ordered_chunks.append((vector_id, penalized_score, payload))
         ordered_chunks.sort(key=lambda x: x[1], reverse=True)
         sorted_chunks = ordered_chunks[:max_retrieved_chunks_after_penalty]
+        LOGGER.info(
+            f"After sorting and limiting: returning top {len(sorted_chunks)} chunks "
+            f"(requested max: {max_retrieved_chunks_after_penalty})"
+        )
         vector_ids, scores, payloads = zip(*sorted_chunks, strict=False)
         return vector_ids, scores, payloads
 

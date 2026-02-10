@@ -10,13 +10,7 @@ from engine.components.rag.rag import RAG
 from engine.components.rag.reranker import Reranker
 from engine.components.rag.retriever import Retriever
 from engine.components.synthesizer import Synthesizer
-from engine.components.types import (
-    AgentPayload,
-    ChatMessage,
-    ComponentAttributes,
-    SourceChunk,
-    ToolDescription,
-)
+from engine.components.types import AgentPayload, ChatMessage, ComponentAttributes, SourceChunk, ToolDescription
 from engine.trace.trace_manager import TraceManager
 
 PATTERN = r"Image Description:.*?<END_IMAGE_DESCRIPTION>"
