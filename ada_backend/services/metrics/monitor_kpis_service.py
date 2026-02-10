@@ -7,7 +7,7 @@ import pandas as pd
 
 from ada_backend.database.models import CallType
 from ada_backend.schemas.monitor_schema import KPI, KPISResponse, TraceKPIS
-from ada_backend.segment_analytics import track_projects_monitoring_loaded,track_organization_monitoring_loaded
+from ada_backend.segment_analytics import track_projects_monitoring_loaded
 from engine.trace.sql_exporter import get_session_trace
 
 LOGGER = logging.getLogger(__name__)
