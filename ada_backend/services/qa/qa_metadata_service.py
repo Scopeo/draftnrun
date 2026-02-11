@@ -10,7 +10,7 @@ from ada_backend.repositories.quality_assurance_repository import (
     check_dataset_belongs_to_project,
     create_custom_column,
     delete_custom_column,
-    get_dataset_custom_columns_max_position,
+    get_dataset_custom_columns_display_max_position,
     get_qa_columns_by_dataset,
     remove_column_value_from_custom_column,
     rename_custom_column,
@@ -49,7 +49,7 @@ def create_qa_column_service(
         if not dataset_existence:
             raise QADatasetNotInProjectError(project_id, dataset_id)
 
-        max_position = get_dataset_custom_columns_max_position(session, dataset_id)
+        max_position = get_dataset_custom_columns_display_max_position(session, dataset_id)
         new_position = (max_position + 1) if max_position is not None else 0
 
         column_id = uuid.uuid4()

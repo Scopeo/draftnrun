@@ -1649,14 +1649,14 @@ class QADatasetMetadata(Base):
 
     column_name = mapped_column(String, nullable=False)
 
-    column_position = mapped_column(Integer, nullable=False)
+    column_display_position = mapped_column(Integer, nullable=False)
 
     dataset = relationship("DatasetProject", back_populates="qa_metadata")
 
     def __str__(self):
         return (
             f"QADatasetMetadata(id={self.id}, dataset_id={self.dataset_id}, "
-            f"column_name={self.column_name}, column_position={self.column_position})"
+            f"column_name={self.column_name}, column_position={self.column_display_position})"
         )
 
 

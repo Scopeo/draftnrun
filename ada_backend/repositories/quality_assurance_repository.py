@@ -386,17 +386,17 @@ def get_qa_columns_by_dataset(session: Session, dataset_id: UUID) -> List[QAData
     return (
         session.query(QADatasetMetadata)
         .filter(QADatasetMetadata.dataset_id == dataset_id)
-        .order_by(QADatasetMetadata.column_position.asc())
+        .order_by(QADatasetMetadata.column_display_position.asc())
         .all()
     )
 
 
-def get_dataset_custom_columns_max_position(
+def get_dataset_custom_columns_display_max_position(
     session: Session,
     dataset_id: UUID,
 ) -> Optional[int]:
     max_position = (
-        session.query(func.max(QADatasetMetadata.column_position))
+        session.query(func.max(QADatasetMetadata.column_display_position))
         .filter(QADatasetMetadata.dataset_id == dataset_id)
         .scalar()
     )
@@ -453,7 +453,6 @@ def rename_custom_column(
     session.commit()
     session.refresh(qa_metadata)
 
-    LOGGER.info(f"Renamed QA column {column_id} to '{column_name}' for dataset {dataset_id}")
     return qa_metadata
 
 
@@ -478,11 +477,8 @@ def remove_column_value_from_custom_column(session: Session, dataset_id: UUID, c
         )
     )
 
-    result = session.execute(stmt)
-    updated_count = result.rowcount
-
+    session.execute(stmt)
     session.commit()
-    LOGGER.info(f"Removed column_id {column_id} from {updated_count} rows in dataset {dataset_id}")
 
 
 def delete_custom_column(session: Session, dataset_id: UUID, column_id: UUID) -> None:
@@ -493,4 +489,3 @@ def delete_custom_column(session: Session, dataset_id: UUID, column_id: UUID) ->
     )
 
     session.commit()
-    LOGGER.info(f"Deleted QA column {column_id} from dataset {dataset_id}")

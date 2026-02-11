@@ -71,6 +71,7 @@ LOGGER = logging.getLogger(__name__)
 
 MAX_CSV_EXPORT_SIZE_MB = 10
 MAX_CSV_EXPORT_SIZE_BYTES = MAX_CSV_EXPORT_SIZE_MB * 1024 * 1024
+DEFAULT_HEADERS = ["position", "input", "expected_output", "actual_output"]
 
 
 def get_inputs_groundtruths_with_version_outputs_service(
@@ -564,7 +565,7 @@ def export_qa_data_to_csv_service(
 
         custom_columns = get_qa_columns_by_dataset(session, dataset_id)
 
-        header_row = ["position", "input", "expected_output", "actual_output"]
+        header_row = DEFAULT_HEADERS.copy()
         custom_column_names = [col.column_name for col in custom_columns]
         header_row.extend(custom_column_names)
 
@@ -586,8 +587,6 @@ def export_qa_data_to_csv_service(
             for column_name in custom_column_names:
                 column_id = column_name_to_id[column_name]
                 value = custom_columns_dict.get(column_id, "")
-                if value is None:
-                    value = ""
                 row.append(value)
 
             writer.writerow(row)
@@ -619,7 +618,7 @@ def import_qa_data_from_csv_service(
 ) -> InputGroundtruthResponseList:
     try:
         headers_from_csv = get_headers_from_csv(csv_file)
-        expected_columns = {"input", "expected_output", "actual_output", "position"}
+        expected_columns = set(DEFAULT_HEADERS.copy())
         custom_columns_from_csv = set(headers_from_csv) - expected_columns
         dataset_custom_columns = get_qa_columns_by_dataset(session, dataset_id)
         dataset_column_names = {col.column_name for col in dataset_custom_columns}
@@ -634,6 +633,7 @@ def import_qa_data_from_csv_service(
             )
 
         custom_columns_to_add = custom_columns_from_csv - dataset_column_names
+        # TODO: Create columns in batch instead of one by one
         for column_name in custom_columns_to_add:
             create_qa_column_service(
                 session=session,

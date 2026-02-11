@@ -1098,7 +1098,7 @@ def test_create_qa_column_service():
         # Verify all columns exist and positions are sequential
         columns = get_qa_columns_by_dataset(session, dataset_id)
         assert len(columns) == 3
-        positions = [col.column_position for col in columns]
+        positions = [col.column_display_position for col in columns]
         assert positions == [0, 1, 2]
 
         # Test error case: dataset not in project
