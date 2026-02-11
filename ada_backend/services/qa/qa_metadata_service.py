@@ -59,7 +59,7 @@ def create_qa_column_service(
             dataset_id=dataset_id,
             column_id=column_id,
             column_name=column_name,
-            column_position=new_position,
+            column_display_position=new_position,
         )
 
         return QAColumnResponse.model_validate(qa_metadata)

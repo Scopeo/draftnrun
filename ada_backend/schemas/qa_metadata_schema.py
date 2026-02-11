@@ -8,7 +8,7 @@ class QAColumnResponse(BaseModel):
     dataset_id: UUID
     column_id: UUID
     column_name: str
-    column_position: int
+    column_display_position: int
 
     class Config:
         from_attributes = True

@@ -408,13 +408,13 @@ def create_custom_column(
     dataset_id: UUID,
     column_id: UUID,
     column_name: str,
-    column_position: int,
+    column_display_position: int,
 ) -> QADatasetMetadata:
     qa_metadata = QADatasetMetadata(
         dataset_id=dataset_id,
         column_id=column_id,
         column_name=column_name,
-        column_position=column_position,
+        column_display_position=column_display_position,
     )
 
     session.add(qa_metadata)
@@ -423,7 +423,7 @@ def create_custom_column(
 
     LOGGER.info(
         f"Created QA column '{column_name}' (column_id: {column_id}) "
-        f"at position {column_position} for dataset {dataset_id}"
+        f"at position {column_display_position} for dataset {dataset_id}"
     )
     return qa_metadata
 
