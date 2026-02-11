@@ -2,8 +2,8 @@ from dataclasses import dataclass
 from typing import List, Optional
 from uuid import UUID
 
-from sqlalchemy import func, literal
-from sqlalchemy.orm import Session
+from sqlalchemy import func, literal, select
+from sqlalchemy.orm import Session, aliased
 
 import ada_backend.database.models as db
 
@@ -283,3 +283,36 @@ def get_all_organization_limits_with_usage(
         )
         for row in limit_usage_rows
     ]
+
+
+def get_llm_cost(session: Session, model_id: UUID) -> tuple[Optional[float], Optional[float]]:
+    llm_cost_aliased = aliased(db.LLMCost, flat=True)
+    result = session.execute(
+        select(db.Cost.credits_per_input_token, db.Cost.credits_per_output_token)
+        .join(llm_cost_aliased, llm_cost_aliased.id == db.Cost.id)
+        .where(llm_cost_aliased.llm_model_id == model_id)
+    ).first()
+
+    if result is None:
+        return None, None
+
+    credits_per_input_token, credits_per_output_token = result
+    return credits_per_input_token, credits_per_output_token
+
+
+def get_component_cost_per_call(session: Session, component_instance_id: UUID) -> Optional[float]:
+    component_cost_aliased = aliased(db.ComponentCost, flat=True)
+    result = session.execute(
+        select(db.Cost.credits_per_call)
+        .join(component_cost_aliased, component_cost_aliased.id == db.Cost.id)
+        .join(
+            db.ComponentInstance,
+            db.ComponentInstance.component_version_id == component_cost_aliased.component_version_id,
+        )
+        .where(db.ComponentInstance.id == component_instance_id)
+    ).first()
+
+    if result is None:
+        return None
+
+    return result[0]
