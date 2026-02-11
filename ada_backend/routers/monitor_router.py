@@ -74,6 +74,7 @@ async def get_organization_kpis(
         response = get_monitoring_kpis_by_projects(
             user_id=user.id,
             project_ids=project_ids,
+            organization_id=organization_id,
             duration_days=duration,
             call_type=call_type,
         )
