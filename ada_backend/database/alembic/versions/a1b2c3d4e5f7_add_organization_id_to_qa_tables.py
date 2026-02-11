@@ -106,6 +106,10 @@ def downgrade() -> None:
         schema="quality_assurance",
     )
 
+    # Delete records without project_id (created while organization_id was the primary reference)
+    op.execute("DELETE FROM quality_assurance.dataset_project WHERE project_id IS NULL")
+    op.execute("DELETE FROM quality_assurance.llm_judges WHERE project_id IS NULL")
+
     # Make project_id NOT NULL again
     op.alter_column(
         "llm_judges",
