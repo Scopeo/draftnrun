@@ -12,6 +12,8 @@ from engine.trace.sql_exporter import get_session_trace
 
 LOGGER = logging.getLogger(__name__)
 
+COST_ROUNDING_PRECISION = 2
+
 
 def get_trace_metrics(project_id: UUID, duration_days: int, call_type: CallType | None = None) -> TraceKPIS:
     """Get trace metrics with comparison between current and previous periods using SQL aggregation."""
@@ -107,7 +109,7 @@ def get_trace_metrics(project_id: UUID, duration_days: int, call_type: CallType 
     )
 
 
-def get_trace_cost_kpis(project_ids: List[UUID], duration_days: int, call_type: CallType | None = None):
+def get_trace_cost_kpis(project_ids: List[UUID], duration_days: int, call_type: CallType | None = None) -> CostKPI:
     now = datetime.now()
     start_date_query = now - timedelta(days=duration_days)
     end_date_query = now
@@ -117,7 +119,8 @@ def get_trace_cost_kpis(project_ids: List[UUID], duration_days: int, call_type: 
     if call_type is not None:
         call_type_filter = "AND call_type = %(call_type)s"
 
-    project_id_list = "', '".join(str(project_id) for project_id in project_ids)
+    # Build parameterized IN clause for project_ids
+    project_id_placeholders = ", ".join([f"%(project_id_{i})s" for i in range(len(project_ids))])
 
     query = f"""
         WITH trace_costs AS (
@@ -134,35 +137,47 @@ def get_trace_cost_kpis(project_ids: List[UUID], duration_days: int, call_type: 
                         ),
                         0
                     )::numeric,
-                    2
+                    {COST_ROUNDING_PRECISION}
                 ) as cost_per_run
             FROM traces.spans s
             LEFT JOIN credits.span_usages su ON su.span_id = s.span_id
-             WHERE project_id IN ('{project_id_list}')
-               AND s.start_time >= %(start_time)s
-               AND s.start_time < %(end_time)s
-               {call_type_filter}
+            WHERE project_id IN ({project_id_placeholders})
+                AND s.start_time >= %(start_time)s
+                AND s.start_time < %(end_time)s
+                {call_type_filter}
             GROUP BY
                 s.trace_rowid,
                 s.attributes
             ORDER BY trace_rowid
-            ),
-           conversation_totals AS (
-                SELECT
-                   conversation_id,
-                   SUM(cost_per_run) as total_cost_per_conversation
-               FROM trace_costs
+        ),
+        conversation_totals AS (
+            SELECT
+                conversation_id,
+                SUM(cost_per_run) as total_cost_per_conversation
+            FROM trace_costs
             WHERE conversation_id IS NOT NULL
-               GROUP BY conversation_id
-          ),
-          run_totals AS (
-                SELECT SUM(cost_per_run) as total_cost_per_run
-          FROM trace_costs
-          GROUP BY trace_rowid
-          )
-      SELECT
-        (SELECT ROUND(COALESCE(AVG(total_cost_per_run), 0)::numeric, 2) FROM run_totals) as mean_cost_per_run,
-         (SELECT ROUND(COALESCE(AVG(total_cost_per_conversation), 0)::numeric, 2) FROM conversation_totals) as mean_cost_per_conversation
+            GROUP BY conversation_id
+        ),
+        run_totals AS (
+            SELECT SUM(cost_per_run) as total_cost_per_run
+            FROM trace_costs
+            GROUP BY trace_rowid
+        )
+        SELECT
+            (
+                SELECT ROUND(
+                    COALESCE(AVG(total_cost_per_run), 0)::numeric,
+                    {COST_ROUNDING_PRECISION}
+                )
+                FROM run_totals
+            ) as mean_cost_per_run,
+            (
+                SELECT ROUND(
+                    COALESCE(AVG(total_cost_per_conversation), 0)::numeric,
+                    {COST_ROUNDING_PRECISION}
+                )
+                FROM conversation_totals
+            ) as mean_cost_per_conversation
     """
 
     session = get_session_trace()
@@ -171,6 +186,9 @@ def get_trace_cost_kpis(project_ids: List[UUID], duration_days: int, call_type: 
             "start_time": start_date_query,
             "end_time": end_date_query,
         }
+        # Add project_ids to params
+        for i, project_id in enumerate(project_ids):
+            params[f"project_id_{i}"] = str(project_id)
         if call_type is not None:
             params["call_type"] = call_type.value
 
@@ -181,9 +199,24 @@ def get_trace_cost_kpis(project_ids: List[UUID], duration_days: int, call_type: 
         )
     finally:
         session.close()
-    return CostKPI(
-        cost_per_call=df["mean_cost_per_run"].iloc[0], cost_per_conversation=df["mean_cost_per_conversation"].iloc[0]
-    )
+    mean_cost_per_run = 0.0
+    mean_cost_per_conversation = 0.0
+    if not df.empty:
+        mean_cost_per_run = df["mean_cost_per_run"].iloc[0]
+        mean_cost_per_conversation = df["mean_cost_per_conversation"].iloc[0]
+        if pd.isna(mean_cost_per_run):
+            LOGGER.warning(
+                f"Mean cost per run is NaN for projects requests {project_ids} "
+                f"and duration {duration_days} days with call type {call_type}"
+            )
+            mean_cost_per_conversation = 0.0
+        if pd.isna(mean_cost_per_conversation):
+            LOGGER.warning(
+                f"Mean cost per conversation is NaN for projects requests {project_ids} "
+                f"and duration {duration_days} days with call type {call_type}"
+            )
+            mean_cost_per_conversation = 0.0
+    return CostKPI(cost_per_call=mean_cost_per_run, cost_per_conversation=mean_cost_per_conversation)
 
 
 def get_monitoring_kpis_by_project(
@@ -196,6 +229,7 @@ def get_monitoring_kpis_by_project(
     LOGGER.info(f"Trace metrics for project {project_id} and duration {duration_days} days retrieved successfully.")
     track_project_monitoring_loaded(user_id, project_id)
     cost_kpis = get_trace_cost_kpis([project_id], duration_days, call_type)
+    LOGGER.info(f"Cost KPIs for project {project_id} and duration {duration_days} days retrieved successfully.")
     return KPISResponse(
         kpis=[
             KPI(
