@@ -1,6 +1,6 @@
 import logging
 from datetime import datetime, timedelta
-from typing import List
+from typing import List, Optional
 from uuid import UUID
 
 import pandas as pd
@@ -111,12 +111,13 @@ def get_trace_metrics(project_ids: List[UUID], duration_days: int, call_type: Ca
 def get_monitoring_kpis_by_projects(
     user_id: UUID,
     project_ids: List[UUID],
+    organization_id: Optional[UUID],
     duration_days: int,
     call_type: CallType | None = None,
 ) -> KPISResponse:
     trace_kpis = get_trace_metrics(project_ids, duration_days, call_type)
     project_ids_for_tracking = ", ".join([str(project_id) for project_id in project_ids])
-    track_projects_monitoring_loaded(user_id, project_ids_for_tracking)
+    track_projects_monitoring_loaded(user_id, project_ids_for_tracking, organization_id)
     project_ids_for_log = project_ids_for_tracking
     if len(project_ids) > 2:
         project_ids_for_log = f"{project_ids[0]}, {project_ids[1]} and {len(project_ids) - 2} projects"
