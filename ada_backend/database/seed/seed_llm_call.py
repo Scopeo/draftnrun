@@ -11,11 +11,7 @@ from ada_backend.database.component_definition_seeding import (
     upsert_components_parameter_definitions,
     upsert_release_stage_to_current_version_mapping,
 )
-from ada_backend.database.models import (
-    ParameterType,
-    UIComponent,
-    UIComponentProperties,
-)
+from ada_backend.database.models import ParameterType, UIComponent, UIComponentProperties
 from ada_backend.database.seed.constants import (
     COMPLETION_MODEL_IN_DB,
     REASONING_IN_DB,
@@ -29,6 +25,9 @@ from ada_backend.database.seed.utils import (
     COMPONENT_VERSION_UUIDS,
     ParameterLLMConfig,
     build_completion_service_config_definitions,
+    build_components_parameters_assignments_to_parameter_groups,
+    build_parameters_group,
+    build_parameters_group_definitions,
 )
 
 # Parameter IDs for LLM Call
@@ -216,24 +215,13 @@ def seed_llm_call_components(session: Session):
 def seed_llm_call_parameter_groups(session: Session):
     """Seed parameter groups for LLM Call component."""
 
-    # Create parameter group
     parameter_groups = [
         db.ParameterGroup(
             id=LLM_CALL_PARAMETER_GROUP_UUIDS["advanced_llm_parameters"], name="Advanced LLM Parameters"
         ),
     ]
+    build_parameters_group(session, parameter_groups)
 
-    # Upsert parameter groups
-    for group in parameter_groups:
-        existing_group = session.query(db.ParameterGroup).filter_by(id=group.id).first()
-        if existing_group:
-            existing_group.name = group.name
-        else:
-            session.add(group)
-
-    session.flush()  # Ensure groups are saved before creating relationships
-
-    # Create component version-parameter group relationships
     component_parameter_groups = [
         db.ComponentParameterGroup(
             component_version_id=COMPONENT_UUIDS["llm_call"],
@@ -241,26 +229,8 @@ def seed_llm_call_parameter_groups(session: Session):
             group_order_within_component=1,
         ),
     ]
+    build_parameters_group_definitions(session, component_parameter_groups)
 
-    # Upsert component parameter groups
-    for component_parameter_group in component_parameter_groups:
-        existing_cpg = (
-            session.query(db.ComponentParameterGroup)
-            .filter_by(
-                component_version_id=component_parameter_group.component_version_id,
-                parameter_group_id=component_parameter_group.parameter_group_id,
-            )
-            .first()
-        )
-        if existing_cpg:
-            existing_cpg.group_order_within_component = component_parameter_group.group_order_within_component
-        else:
-            session.add(component_parameter_group)
-
-    session.flush()  # Ensure relationships are saved before updating parameters
-
-    # Update existing parameter definitions to link them to groups
-    # Only assign temperature, verbosity, and reasoning to the Advanced LLM Parameters group
     parameter_group_assignments = {
         # Advanced LLM Parameters Group
         LLM_CALL_PARAMETER_IDS[TEMPERATURE_IN_DB]: {
@@ -276,12 +246,6 @@ def seed_llm_call_parameter_groups(session: Session):
             "parameter_order_within_group": 3,
         },
     }
-
-    # Update parameter definitions with group assignments
-    for param_id, group_info in parameter_group_assignments.items():
-        param_def = session.query(db.ComponentParameterDefinition).filter_by(id=param_id).first()
-        if param_def:
-            param_def.parameter_group_id = group_info["parameter_group_id"]
-            param_def.parameter_order_within_group = group_info["parameter_order_within_group"]
+    build_components_parameters_assignments_to_parameter_groups(session, parameter_group_assignments)
 
     session.commit()
