@@ -224,7 +224,7 @@ def seed_llm_call_parameter_groups(session: Session):
 
     component_parameter_groups = [
         db.ComponentParameterGroup(
-            component_version_id=COMPONENT_UUIDS["llm_call"],
+            component_version_id=COMPONENT_VERSION_UUIDS["llm_call"],
             parameter_group_id=LLM_CALL_PARAMETER_GROUP_UUIDS["advanced_llm_parameters"],
             group_order_within_component=1,
         ),
