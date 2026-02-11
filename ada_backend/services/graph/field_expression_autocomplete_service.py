@@ -12,7 +12,8 @@ from ada_backend.repositories.graph_runner_repository import (
     get_component_instances_for_graph_runner,
     is_start_node,
 )
-from ada_backend.repositories.variable_definitions_repository import list_definitions
+from ada_backend.repositories.project_repository import get_project
+from ada_backend.repositories.variable_definitions_repository import list_org_definitions
 from ada_backend.schemas.pipeline.field_expression_schema import (
     FieldExpressionAutocompleteRequest,
     FieldExpressionAutocompleteResponse,
@@ -37,8 +38,9 @@ def autocomplete_field_expression(
     query = request.query or ""
     phase = _get_phase_from_query(query)
 
-    # Variables are always available (project-scoped, not topology-dependent)
-    definitions = list_definitions(session, project_id)
+    # Variables are org-scoped — look up org from project
+    project = get_project(session, project_id=project_id)
+    definitions = list_org_definitions(session, project.organization_id) if project else []
 
     instances = get_component_instances_for_graph_runner(session, graph_runner_id)
     upstream_instance_ids = _get_upstream_instance_ids(session, graph_runner_id, request.target_instance_id)

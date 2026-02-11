@@ -1978,7 +1978,8 @@ class ProjectVariableDefinition(Base):
     __tablename__ = "project_variable_definitions"
 
     id = mapped_column(UUID(as_uuid=True), primary_key=True, index=True, default=uuid.uuid4)
-    project_id = mapped_column(UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True)
+    organization_id = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
+    project_id = mapped_column(UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=True, index=True)
     name = mapped_column(String, nullable=False)
     type = mapped_column(make_pg_enum(VariableType), nullable=False)
     description = mapped_column(Text, nullable=True)
@@ -1993,7 +1994,7 @@ class ProjectVariableDefinition(Base):
     project = relationship("Project", backref="variable_definitions")
 
     __table_args__ = (
-        UniqueConstraint("project_id", "name", name="uq_project_variable_definition"),
+        UniqueConstraint("organization_id", "name", name="uq_org_variable_definition"),
     )
 
 

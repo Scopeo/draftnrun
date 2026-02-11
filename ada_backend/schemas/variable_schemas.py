@@ -25,7 +25,8 @@ class VariableDefinitionBulkUpsertRequest(BaseModel):
 
 class VariableDefinitionResponse(BaseModel):
     id: UUID
-    project_id: UUID
+    organization_id: UUID
+    project_id: Optional[UUID] = None
     name: str
     type: VariableType
     description: Optional[str] = None

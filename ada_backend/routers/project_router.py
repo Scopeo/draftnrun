@@ -521,6 +521,7 @@ async def chat_env(
 def _definition_to_response(d) -> VariableDefinitionResponse:
     return VariableDefinitionResponse(
         id=d.id,
+        organization_id=d.organization_id,
         project_id=d.project_id,
         name=d.name,
         type=d.type,
@@ -660,6 +661,85 @@ def delete_variable_definition_endpoint(
         raise
     except Exception as e:
         LOGGER.error(f"Failed to delete variable definition {name} for project {project_id}: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error") from e
+
+
+# --- JWT-Auth'd Variable Definition Endpoints (org-level, for Scopeo dashboard) ---
+
+
+@router.get(
+    "/org/{organization_id}/variable-definitions",
+    response_model=List[VariableDefinitionResponse],
+    tags=["Variable Definitions"],
+)
+def list_org_variable_definitions_jwt(
+    organization_id: UUID,
+    user: Annotated[
+        SupabaseUser,
+        Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.MEMBER.value)),
+    ],
+    session: Session = Depends(get_db),
+):
+    try:
+        defs = variable_definitions_repository.list_org_definitions(session, organization_id)
+        return [_definition_to_response(d) for d in defs]
+    except Exception as e:
+        LOGGER.error(f"Failed to list variable definitions for org {organization_id}: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error") from e
+
+
+@router.put(
+    "/org/{organization_id}/variable-definitions/{name}",
+    response_model=VariableDefinitionResponse,
+    tags=["Variable Definitions"],
+)
+def upsert_org_variable_definition_jwt(
+    organization_id: UUID,
+    name: str,
+    body: VariableDefinitionUpsertRequest,
+    project_id: Optional[UUID] = Query(None),
+    user: Annotated[
+        SupabaseUser,
+        Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.MEMBER.value)),
+    ] = None,
+    session: Session = Depends(get_db),
+):
+    try:
+        fields = body.model_dump(exclude_none=True)
+        d = variable_definitions_repository.upsert_org_definition(
+            session, organization_id, name, project_id=project_id, **fields
+        )
+        return _definition_to_response(d)
+    except ValueError as e:
+        LOGGER.error(f"Failed to upsert variable definition {name} for org {organization_id}: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except Exception as e:
+        LOGGER.error(f"Failed to upsert variable definition {name} for org {organization_id}: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error") from e
+
+
+@router.delete(
+    "/org/{organization_id}/variable-definitions/{name}",
+    tags=["Variable Definitions"],
+)
+def delete_org_variable_definition_jwt(
+    organization_id: UUID,
+    name: str,
+    user: Annotated[
+        SupabaseUser,
+        Depends(user_has_access_to_organization_dependency(allowed_roles=UserRights.MEMBER.value)),
+    ],
+    session: Session = Depends(get_db),
+):
+    try:
+        deleted = variable_definitions_repository.delete_org_definition(session, organization_id, name)
+        if not deleted:
+            raise HTTPException(status_code=404, detail=f"Variable definition '{name}' not found")
+        return {"detail": "deleted"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        LOGGER.error(f"Failed to delete variable definition {name} for org {organization_id}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
