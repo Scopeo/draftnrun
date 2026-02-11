@@ -6,31 +6,11 @@ from sqlalchemy.orm import Session
 from ada_backend.database import models as db
 
 
-def upsert_field_expression(
+def create_field_expression(
     session: Session,
-    component_instance_id: UUID,
-    field_name: str,
     expression_json: dict,
 ) -> db.FieldExpression:
-    existing: Optional[db.FieldExpression] = (
-        session.query(db.FieldExpression)
-        .filter(
-            db.FieldExpression.component_instance_id == component_instance_id,
-            db.FieldExpression.field_name == field_name,
-        )
-        .first()
-    )
-
-    if existing:
-        existing.expression_json = expression_json
-        session.add(existing)
-        session.commit()
-        session.refresh(existing)
-        return existing
-
     expr = db.FieldExpression(
-        component_instance_id=component_instance_id,
-        field_name=field_name,
         expression_json=expression_json,
     )
     session.add(expr)
@@ -39,41 +19,35 @@ def upsert_field_expression(
     return expr
 
 
-def get_field_expressions_for_instances(
+def get_field_expression(
     session: Session,
-    component_instance_ids: list[UUID],
-) -> list[db.FieldExpression]:
-    return (
-        session.query(db.FieldExpression)
-        .filter(db.FieldExpression.component_instance_id.in_(component_instance_ids))
-        .all()
-    )
+    field_expression_id: UUID,
+) -> Optional[db.FieldExpression]:
+    return session.query(db.FieldExpression).filter(db.FieldExpression.id == field_expression_id).first()
 
 
-def delete_field_expressions_for_instance(
+def update_field_expression(
     session: Session,
-    component_instance_id: UUID,
-) -> None:
-    """Delete all field expressions for a component instance"""
-    session.query(db.FieldExpression).filter(
-        db.FieldExpression.component_instance_id == component_instance_id
-    ).delete()
+    field_expression_id: UUID,
+    expression_json: dict,
+) -> Optional[db.FieldExpression]:
+    expr = get_field_expression(session, field_expression_id)
+    if not expr:
+        return None
+
+    expr.expression_json = expression_json
+    session.add(expr)
     session.commit()
+    session.refresh(expr)
+    return expr
 
 
-def delete_field_expression(
+def delete_field_expression_by_id(
     session: Session,
-    component_instance_id: UUID,
-    field_name: str,
-) -> None:
-    """Delete a specific field expression for a component instance and field name"""
-    deleted_count = (
-        session.query(db.FieldExpression)
-        .filter(
-            db.FieldExpression.component_instance_id == component_instance_id,
-            db.FieldExpression.field_name == field_name,
-        )
-        .delete()
-    )
+    field_expression_id: UUID,
+) -> bool:
+    deleted_count = session.query(db.FieldExpression).filter(db.FieldExpression.id == field_expression_id).delete()
     if deleted_count > 0:
         session.commit()
+        return True
+    return False

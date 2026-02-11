@@ -17,7 +17,7 @@ from ada_backend.repositories.env_repository import (
     get_env_relationship_by_graph_runner_id,
     update_graph_runner_env,
 )
-from ada_backend.repositories.field_expression_repository import upsert_field_expression
+from ada_backend.repositories.field_expression_repository import create_field_expression
 from ada_backend.repositories.graph_runner_repository import (
     get_component_nodes,
     get_graph_runner_for_env,
@@ -25,6 +25,7 @@ from ada_backend.repositories.graph_runner_repository import (
     insert_graph_runner,
     upsert_component_node,
 )
+from ada_backend.repositories.input_port_instance_repository import create_input_port_instance
 from ada_backend.repositories.port_mapping_repository import insert_port_mapping, list_port_mappings_for_graph
 from ada_backend.repositories.tag_repository import update_graph_runner_tag_fields
 from ada_backend.schemas.parameter_schema import PipelineParameterSchema
@@ -199,11 +200,18 @@ def clone_graph_runner(
             target_instance_id = ids_map[source_instance_id]
             for remapped_expr in remapped_expressions:
                 remapped_ast = parse_expression(remapped_expr.expression_text)
-                upsert_field_expression(
+                expression_json = expr_to_json(remapped_ast)
+
+                field_expr = create_field_expression(
+                    session=session,
+                    expression_json=expression_json,
+                )
+
+                create_input_port_instance(
                     session=session,
                     component_instance_id=target_instance_id,
-                    field_name=remapped_expr.field_name,
-                    expression_json=expr_to_json(remapped_ast),
+                    name=remapped_expr.field_name,
+                    field_expression_id=field_expr.id,
                 )
         total_expressions = sum(len(exprs) for exprs in remapped_expressions_by_source_id.values())
         if total_expressions > 0:

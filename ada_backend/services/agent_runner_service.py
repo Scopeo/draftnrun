@@ -11,7 +11,6 @@ from sqlalchemy.orm import Session
 from ada_backend.database.models import CallType, EnvType, OrgSecretType, ResponseFormat
 from ada_backend.repositories.credits_repository import get_organization_limit, get_organization_total_credits
 from ada_backend.repositories.edge_repository import get_edges
-from ada_backend.repositories.field_expression_repository import get_field_expressions_for_instances
 from ada_backend.repositories.graph_runner_repository import (
     delete_temp_folder,
     get_component_nodes,
@@ -19,6 +18,7 @@ from ada_backend.repositories.graph_runner_repository import (
     get_start_components,
     graph_runner_exists,
 )
+from ada_backend.repositories.input_port_instance_repository import get_input_port_instances_for_component_instance
 from ada_backend.repositories.organization_repository import get_organization_secrets
 from ada_backend.repositories.port_mapping_repository import list_port_mappings_for_graph
 from ada_backend.repositories.project_repository import get_project, get_project_with_details
@@ -111,17 +111,17 @@ async def build_graph_runner(
     ]
 
     component_instance_ids = [node.id for node in component_nodes]
-    field_expressions = get_field_expressions_for_instances(session, component_instance_ids)
-    expressions = []
-    for expression in field_expressions:
-        expression_ast = None
-        if expression.expression_json:
-            expression_ast = expression_from_json(expression.expression_json)
-        expressions.append({
-            "target_instance_id": str(expression.component_instance_id),
-            "field_name": expression.field_name,
-            "expression_ast": expression_ast,
-        })
+    expressions: list[GraphRunner.ExpressionSpec] = []
+    for component_instance_id in component_instance_ids:
+        port_instances = get_input_port_instances_for_component_instance(session, component_instance_id)
+        for port_instance in port_instances:
+            if port_instance.field_expression and port_instance.field_expression.expression_json:
+                expression_ast = expression_from_json(port_instance.field_expression.expression_json)
+                expressions.append({
+                    "target_instance_id": str(component_instance_id),
+                    "field_name": port_instance.name,
+                    "expression_ast": expression_ast,
+                })
 
     runnables: dict[str, Runnable] = {}
     graph = nx.DiGraph()

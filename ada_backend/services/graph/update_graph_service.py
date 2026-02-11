@@ -19,9 +19,8 @@ from ada_backend.repositories.component_repository import (
 from ada_backend.repositories.edge_repository import delete_edge, get_edges, upsert_edge
 from ada_backend.repositories.env_repository import get_env_relationship_by_graph_runner_id
 from ada_backend.repositories.field_expression_repository import (
-    delete_field_expression,
-    get_field_expressions_for_instances,
-    upsert_field_expression,
+    create_field_expression,
+    update_field_expression,
 )
 from ada_backend.repositories.graph_runner_repository import (
     delete_node,
@@ -32,6 +31,13 @@ from ada_backend.repositories.graph_runner_repository import (
     insert_modification_history,
     is_start_node,
     upsert_component_node,
+)
+from ada_backend.repositories.input_port_instance_repository import (
+    create_input_port_instance,
+    delete_input_port_instance,
+    get_input_port_instance,
+    get_input_port_instances_for_component_instance,
+    update_input_port_instance,
 )
 from ada_backend.repositories.port_mapping_repository import (
     delete_port_mapping_for_target_input,
@@ -320,11 +326,12 @@ async def update_graph_service(
     # Port mappings: ensure explicit wiring for all edges (save-time defaults)
     _ensure_port_mappings_for_edges(session, graph_runner_id, graph_project)
 
-    # Field expressions (nested per component instance)
-    db_field_expressions_by_instance: dict[UUID, set[str]] = defaultdict(set)
-    existing_expressions = get_field_expressions_for_instances(session, list(instance_ids))
-    for expr in existing_expressions:
-        db_field_expressions_by_instance[expr.component_instance_id].add(expr.field_name)
+    db_port_instances_by_instance: dict[UUID, dict[str, UUID]] = defaultdict(dict)
+    for instance_id in instance_ids:
+        port_instances = get_input_port_instances_for_component_instance(session, instance_id)
+        for port in port_instances:
+            if port.field_expression_id:
+                db_port_instances_by_instance[instance_id][port.name] = port.id
 
     incoming_field_expressions_by_instance: dict[UUID, set[str]] = defaultdict(set)
     for instance in graph_project.component_instances:
@@ -366,12 +373,25 @@ async def update_graph_service(
 
             _validate_expression_references(session, graph_runner_id, ast)
 
-            upsert_field_expression(
-                session=session,
-                component_instance_id=instance.id,
-                field_name=field_name,
-                expression_json=expr_to_json(ast),
-            )
+            expression_json = expr_to_json(ast)
+
+            existing_port_id = db_port_instances_by_instance[instance.id].get(field_name)
+            if existing_port_id:
+                port = get_input_port_instance(session, existing_port_id)
+                if port and port.field_expression_id:
+                    update_field_expression(session, port.field_expression_id, expression_json)
+                else:
+                    # Create new field expression and link it
+                    expr = create_field_expression(session, expression_json)
+                    update_input_port_instance(session, existing_port_id, field_expression_id=expr.id)
+            else:
+                expr = create_field_expression(session, expression_json)
+                create_input_port_instance(
+                    session=session,
+                    component_instance_id=instance.id,
+                    name=field_name,
+                    field_expression_id=expr.id,
+                )
 
             ref_node = get_pure_ref(ast)
             if ref_node is not None:
@@ -384,10 +404,12 @@ async def update_graph_service(
                 )
 
     for instance_id, incoming_fields in incoming_field_expressions_by_instance.items():
-        if instance_id in db_field_expressions_by_instance:
-            fields_to_delete = db_field_expressions_by_instance[instance_id] - incoming_fields
+        if instance_id in db_port_instances_by_instance:
+            existing_fields = set(db_port_instances_by_instance[instance_id].keys())
+            fields_to_delete = existing_fields - incoming_fields
             for field_name in fields_to_delete:
-                delete_field_expression(session, instance_id, field_name)
+                port_id = db_port_instances_by_instance[instance_id][field_name]
+                delete_input_port_instance(session, port_id)
 
     nodes_to_delete = previous_graph_nodes - instance_ids
     if len(nodes_to_delete) > 0:
