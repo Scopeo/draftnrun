@@ -15,6 +15,7 @@ from ada_backend.routers.auth_router import (
     UserRights,
     VerifiedApiKey,
     user_has_access_to_organization_dependency,
+    user_has_access_to_organization_xor_verify_api_key,
     user_has_access_to_project_dependency,
     verify_api_key_dependency,
 )
@@ -69,10 +70,10 @@ router = APIRouter(prefix="/projects")
 @router.get("/org/{organization_id}", response_model=List[ProjectWithGraphRunnersSchema], tags=["Projects"])
 def get_projects_by_organization_endpoint(
     organization_id: UUID,
-    user: Annotated[
-        SupabaseUser,
+    auth: Annotated[
+        tuple[UUID | None, UUID | None],
         Depends(
-            user_has_access_to_organization_dependency(
+            user_has_access_to_organization_xor_verify_api_key(
                 allowed_roles=UserRights.MEMBER.value,
             )
         ),
@@ -81,20 +82,19 @@ def get_projects_by_organization_endpoint(
     type: Optional[ProjectType] = ProjectType.WORKFLOW,
     include_templates: Optional[bool] = False,
 ):
-    if not user.id:
-        raise HTTPException(status_code=400, detail="User ID not found")
+    user_id, _ = auth
     try:
         return get_projects_by_organization_with_details_service(
-            session, organization_id, user.id, type, include_templates
+            session, organization_id, user_id, type, include_templates
         )
     except ValueError as e:
         LOGGER.error(
-            f"Failed to list workflows for organization {organization_id} and user {user.id}: {str(e)}", exc_info=True
+            f"Failed to list workflows for organization {organization_id}: {str(e)}", exc_info=True
         )
         raise HTTPException(status_code=400, detail="Bad request") from e
     except Exception as e:
         LOGGER.error(
-            f"Failed to list workflows for organization {organization_id} and user {user.id}: {str(e)}", exc_info=True
+            f"Failed to list workflows for organization {organization_id}: {str(e)}", exc_info=True
         )
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
@@ -866,6 +866,21 @@ def _set_to_response(s) -> VariableSetResponse:
         created_at=str(s.created_at),
         updated_at=str(s.updated_at),
     )
+
+
+@org_router.get(
+    "/{organization_id}/variable-definitions",
+    response_model=List[VariableDefinitionResponse],
+    tags=["Variable Definitions"],
+)
+def list_org_variable_definitions_api_key(
+    organization_id: UUID,
+    session: Session = Depends(get_db),
+    verified_api_key: VerifiedApiKey = Depends(verify_api_key_dependency),
+):
+    _verify_org_access(organization_id, verified_api_key)
+    defs = variable_definitions_repository.list_org_definitions(session, organization_id)
+    return [_definition_to_response(d) for d in defs]
 
 
 @org_router.get(
