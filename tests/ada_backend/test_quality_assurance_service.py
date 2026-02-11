@@ -1043,8 +1043,8 @@ def test_get_qa_columns_by_dataset_service():
         columns_response = get_qa_columns_by_dataset_service(session, project_id, dataset_id)
         assert len(columns_response) == 2
 
-        # Verify columns are sorted by column_position
-        assert columns_response[0].column_position < columns_response[1].column_position
+        # Verify columns are sorted by column_display_position
+        assert columns_response[0].column_display_position < columns_response[1].column_display_position
         column_names = {col.column_name for col in columns_response}
         assert column_names == {"Priority", "Category"}
 
@@ -1081,19 +1081,19 @@ def test_create_qa_column_service():
         # Create first column
         col_response = create_qa_column_service(session, project_id, dataset_id, "Priority")
         assert col_response.column_name == "Priority"
-        assert col_response.column_position == 0
+        assert col_response.column_display_position == 0
         assert col_response.column_id is not None
         assert col_response.dataset_id == dataset_id
 
         # Create second column
         col2_response = create_qa_column_service(session, project_id, dataset_id, "Category")
         assert col2_response.column_name == "Category"
-        assert col2_response.column_position == 1
+        assert col2_response.column_display_position == 1
         assert col2_response.column_id != col_response.column_id
 
         # Create third column to verify sequential column positions
         col3_response = create_qa_column_service(session, project_id, dataset_id, "Third")
-        assert col3_response.column_position == 2
+        assert col3_response.column_display_position == 2
 
         # Verify all columns exist and positions are sequential
         columns = get_qa_columns_by_dataset(session, dataset_id)
@@ -1134,13 +1134,15 @@ def test_rename_qa_column_service():
         # Create a column
         original_col = create_qa_column_service(session, project_id, dataset_id, "OldName")
         original_column_id = original_col.column_id
-        original_column_position = original_col.column_position
+        original_column_display_position = original_col.column_display_position
 
         # Rename the column
         renamed_col = rename_qa_column_service(session, project_id, dataset_id, original_column_id, "NewName")
         assert renamed_col.column_name == "NewName"
         assert renamed_col.column_id == original_column_id  # column_id should not change
-        assert renamed_col.column_position == original_column_position  # column_position should not change
+        assert (
+            renamed_col.column_display_position == original_column_display_position
+        )  # column_display_position should not change
 
         # Verify the rename persisted
         columns = get_qa_columns_by_dataset(session, dataset_id)

@@ -1631,8 +1631,8 @@ class QADatasetMetadata(Base):
     __tablename__ = "qa_dataset_metadata"
     __table_args__ = (
         sa.UniqueConstraint("dataset_id", "column_id", name="uq_qa_metadata_dataset_column_id"),
-        sa.UniqueConstraint("dataset_id", "column_position", name="uq_qa_metadata_dataset_column_position"),
-        sa.CheckConstraint("column_position >= 0", name="ck_qa_metadata_column_position_non_negative"),
+        sa.UniqueConstraint("dataset_id", "column_display_position", name="uq_qa_metadata_dataset_column_position"),
+        sa.CheckConstraint("column_display_position >= 0", name="ck_qa_metadata_column_position_non_negative"),
         {"schema": "quality_assurance"},
     )
 
@@ -1656,7 +1656,7 @@ class QADatasetMetadata(Base):
     def __str__(self):
         return (
             f"QADatasetMetadata(id={self.id}, dataset_id={self.dataset_id}, "
-            f"column_name={self.column_name}, column_position={self.column_display_position})"
+            f"column_name={self.column_name}, column_display_position={self.column_display_position})"
         )
 
 
