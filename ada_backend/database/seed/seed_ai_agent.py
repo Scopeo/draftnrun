@@ -38,7 +38,6 @@ AI_MODEL_PARAMETER_IDS = {
     REASONING_IN_DB: UUID("2f127c19-1e60-4bc1-aad6-9d459dc762e3"),
     "date_in_system_prompt": UUID("f7dbbe12-e6ff-5bfe-b006-f6bf0e9cbf4d"),
     "allow_tool_shortcuts": UUID("3f8aa317-215a-4075-80ba-efca2a3d83ca"),
-    "input_data_field_for_messages_history": UUID("bf56e90a-5e2b-4777-9ef4-34838b8973b6"),
     "first_history_messages": UUID("4ca78b43-4484-4a9d-bdab-e6dbdaff6da1"),
     COMPLETION_MODEL_IN_DB: UUID("e2d157b4-f26d-41b4-9e47-62b5b041a9ff"),
     "last_history_messages": UUID("e6caae01-d5ee-4afd-a995-e5ae9dbf3fbc"),
@@ -145,20 +144,7 @@ def seed_ai_agent_components(session: Session):
                     ),
                 ).model_dump(exclude_unset=True, exclude_none=True),
             ),
-            db.ComponentParameterDefinition(
-                id=AI_MODEL_PARAMETER_IDS["input_data_field_for_messages_history"],
-                component_version_id=base_ai_agent_version.id,
-                name="input_data_field_for_messages_history",
-                type=ParameterType.STRING,
-                nullable=False,
-                default="messages",
-                ui_component=UIComponent.TEXTAREA,
-                ui_component_properties=UIComponentProperties(
-                    label="Messages history key from input",
-                    placeholder="Enter the key from your input data to access messages history",
-                ).model_dump(exclude_unset=True, exclude_none=True),
-                is_advanced=True,
-            ),
+
             db.ComponentParameterDefinition(
                 id=AI_MODEL_PARAMETER_IDS["first_history_messages"],
                 component_version_id=base_ai_agent_version.id,
@@ -374,10 +360,7 @@ def seed_ai_agent_parameter_groups(session: Session):
             "parameter_order_within_group": 6,
         },
         # History Management Group
-        AI_MODEL_PARAMETER_IDS["input_data_field_for_messages_history"]: {
-            "parameter_group_id": PARAMETER_GROUP_UUIDS["history_management"],
-            "parameter_order_within_group": 1,
-        },
+
         AI_MODEL_PARAMETER_IDS["first_history_messages"]: {
             "parameter_group_id": PARAMETER_GROUP_UUIDS["history_management"],
             "parameter_order_within_group": 2,
