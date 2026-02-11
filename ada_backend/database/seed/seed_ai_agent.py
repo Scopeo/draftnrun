@@ -46,6 +46,7 @@ AI_MODEL_PARAMETER_IDS = {
 # Parameter Group UUIDs
 PARAMETER_GROUP_UUIDS = {
     "agent_behavior_settings": UUID("b2c3d4e5-f6a7-8901-bcde-f12345678901"),
+    "advanced_llm_parameters": UUID("d4e5f6a7-b8c9-0123-def0-234567890123"),
     "history_management": UUID("c3d4e5f6-a7b8-9012-cdef-123456789012"),
 }
 
@@ -288,6 +289,7 @@ def seed_ai_agent_parameter_groups(session: Session):
     # Create parameter groups
     parameter_groups = [
         db.ParameterGroup(id=PARAMETER_GROUP_UUIDS["agent_behavior_settings"], name="Agent behavior settings"),
+        db.ParameterGroup(id=PARAMETER_GROUP_UUIDS["advanced_llm_parameters"], name="Advanced LLM Parameters"),
         db.ParameterGroup(id=PARAMETER_GROUP_UUIDS["history_management"], name="Management of conversation history"),
     ]
 
@@ -310,8 +312,13 @@ def seed_ai_agent_parameter_groups(session: Session):
         ),
         db.ComponentParameterGroup(
             component_version_id=COMPONENT_UUIDS["base_ai_agent"],
-            parameter_group_id=PARAMETER_GROUP_UUIDS["history_management"],
+            parameter_group_id=PARAMETER_GROUP_UUIDS["advanced_llm_parameters"],
             group_order_within_component=2,
+        ),
+        db.ComponentParameterGroup(
+            component_version_id=COMPONENT_UUIDS["base_ai_agent"],
+            parameter_group_id=PARAMETER_GROUP_UUIDS["history_management"],
+            group_order_within_component=3,
         ),
     ]
 
@@ -347,17 +354,18 @@ def seed_ai_agent_parameter_groups(session: Session):
             "parameter_group_id": PARAMETER_GROUP_UUIDS["agent_behavior_settings"],
             "parameter_order_within_group": 3,
         },
+        # Advanced LLM Parameters Group
         AI_MODEL_PARAMETER_IDS[TEMPERATURE_IN_DB]: {
-            "parameter_group_id": PARAMETER_GROUP_UUIDS["agent_behavior_settings"],
-            "parameter_order_within_group": 4,
+            "parameter_group_id": PARAMETER_GROUP_UUIDS["advanced_llm_parameters"],
+            "parameter_order_within_group": 1,
         },
         AI_MODEL_PARAMETER_IDS[VERBOSITY_IN_DB]: {
-            "parameter_group_id": PARAMETER_GROUP_UUIDS["agent_behavior_settings"],
-            "parameter_order_within_group": 5,
+            "parameter_group_id": PARAMETER_GROUP_UUIDS["advanced_llm_parameters"],
+            "parameter_order_within_group": 2,
         },
         AI_MODEL_PARAMETER_IDS[REASONING_IN_DB]: {
-            "parameter_group_id": PARAMETER_GROUP_UUIDS["agent_behavior_settings"],
-            "parameter_order_within_group": 6,
+            "parameter_group_id": PARAMETER_GROUP_UUIDS["advanced_llm_parameters"],
+            "parameter_order_within_group": 3,
         },
         # History Management Group
 

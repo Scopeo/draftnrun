@@ -31,6 +31,24 @@ from ada_backend.database.seed.utils import (
     build_completion_service_config_definitions,
 )
 
+# Parameter IDs for LLM Call
+LLM_CALL_PARAMETER_IDS = {
+    "prompt_template": UUID("e79b8f5f-d9cc-4a1f-a98a-4992f42a0196"),
+    "file_content_key": UUID("a12eb38c-a10e-46f8-bc31-01d3551d954c"),
+    "file_url_key": UUID("0dcee65b-d3b7-43e6-8cb4-2ec531c1875c"),
+    "output_format": UUID("d7ee43ab-80f8-4ee5-ac38-938163933610"),
+    COMPLETION_MODEL_IN_DB: UUID("1233f6b4-cfab-44f6-bf62-f6e0a1b95db1"),
+    TEMPERATURE_IN_DB: UUID("7645d690-45c1-4b3e-bcdc-babf0808f97d"),
+    VERBOSITY_IN_DB: UUID("76c4361d-06f4-41dd-9c6c-cf66292de155"),
+    REASONING_IN_DB: UUID("9863153f-d43c-46e5-bec9-9bef1deff2b4"),
+    "api_key": UUID("a9acc79a-bd8c-4406-89ef-9d3d88f50138"),
+}
+
+# Parameter Group UUIDs for LLM Call
+LLM_CALL_PARAMETER_GROUP_UUIDS = {
+    "advanced_llm_parameters": UUID("f6a7b8c9-d0e1-2345-f123-456789012345"),
+}
+
 
 def seed_llm_call_components(session: Session):
     llm_call = db.Component(
@@ -193,3 +211,77 @@ def seed_llm_call_components(session: Session):
         component_id=llm_call.id,
         category_ids=[CATEGORY_UUIDS["ai"]],
     )
+
+
+def seed_llm_call_parameter_groups(session: Session):
+    """Seed parameter groups for LLM Call component."""
+
+    # Create parameter group
+    parameter_groups = [
+        db.ParameterGroup(
+            id=LLM_CALL_PARAMETER_GROUP_UUIDS["advanced_llm_parameters"], name="Advanced LLM Parameters"
+        ),
+    ]
+
+    # Upsert parameter groups
+    for group in parameter_groups:
+        existing_group = session.query(db.ParameterGroup).filter_by(id=group.id).first()
+        if existing_group:
+            existing_group.name = group.name
+        else:
+            session.add(group)
+
+    session.flush()  # Ensure groups are saved before creating relationships
+
+    # Create component version-parameter group relationships
+    component_parameter_groups = [
+        db.ComponentParameterGroup(
+            component_version_id=COMPONENT_UUIDS["llm_call"],
+            parameter_group_id=LLM_CALL_PARAMETER_GROUP_UUIDS["advanced_llm_parameters"],
+            group_order_within_component=1,
+        ),
+    ]
+
+    # Upsert component parameter groups
+    for component_parameter_group in component_parameter_groups:
+        existing_cpg = (
+            session.query(db.ComponentParameterGroup)
+            .filter_by(
+                component_version_id=component_parameter_group.component_version_id,
+                parameter_group_id=component_parameter_group.parameter_group_id,
+            )
+            .first()
+        )
+        if existing_cpg:
+            existing_cpg.group_order_within_component = component_parameter_group.group_order_within_component
+        else:
+            session.add(component_parameter_group)
+
+    session.flush()  # Ensure relationships are saved before updating parameters
+
+    # Update existing parameter definitions to link them to groups
+    # Only assign temperature, verbosity, and reasoning to the Advanced LLM Parameters group
+    parameter_group_assignments = {
+        # Advanced LLM Parameters Group
+        LLM_CALL_PARAMETER_IDS[TEMPERATURE_IN_DB]: {
+            "parameter_group_id": LLM_CALL_PARAMETER_GROUP_UUIDS["advanced_llm_parameters"],
+            "parameter_order_within_group": 1,
+        },
+        LLM_CALL_PARAMETER_IDS[VERBOSITY_IN_DB]: {
+            "parameter_group_id": LLM_CALL_PARAMETER_GROUP_UUIDS["advanced_llm_parameters"],
+            "parameter_order_within_group": 2,
+        },
+        LLM_CALL_PARAMETER_IDS[REASONING_IN_DB]: {
+            "parameter_group_id": LLM_CALL_PARAMETER_GROUP_UUIDS["advanced_llm_parameters"],
+            "parameter_order_within_group": 3,
+        },
+    }
+
+    # Update parameter definitions with group assignments
+    for param_id, group_info in parameter_group_assignments.items():
+        param_def = session.query(db.ComponentParameterDefinition).filter_by(id=param_id).first()
+        if param_def:
+            param_def.parameter_group_id = group_info["parameter_group_id"]
+            param_def.parameter_order_within_group = group_info["parameter_order_within_group"]
+
+    session.commit()
