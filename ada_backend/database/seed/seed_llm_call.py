@@ -45,7 +45,7 @@ LLM_CALL_PARAMETER_IDS = {
 
 # Parameter Group UUIDs for LLM Call
 LLM_CALL_PARAMETER_GROUP_UUIDS = {
-    "advanced_llm_parameters": UUID("f6a7b8c9-d0e1-2345-f123-456789012345"),
+    "advanced_llm_parameters": UUID("5193c636-40ad-4203-971d-322802b51cc3"),
 }
 
 
@@ -79,7 +79,7 @@ def seed_llm_call_components(session: Session):
         session=session,
         component_parameter_definitions=[
             db.ComponentParameterDefinition(
-                id=UUID("e79b8f5f-d9cc-4a1f-a98a-4992f42a0196"),
+                id=LLM_CALL_PARAMETER_IDS["prompt_template"],
                 component_version_id=llm_call_version.id,
                 name="prompt_template",
                 type=ParameterType.STRING,
@@ -95,7 +95,7 @@ def seed_llm_call_components(session: Session):
                 ).model_dump(exclude_unset=True, exclude_none=True),
             ),
             db.ComponentParameterDefinition(
-                id=UUID("a12eb38c-a10e-46f8-bc31-01d3551d954c"),
+                id=LLM_CALL_PARAMETER_IDS["file_content_key"],
                 component_version_id=llm_call_version.id,
                 name="file_content_key",
                 type=ParameterType.STRING,
@@ -110,7 +110,7 @@ def seed_llm_call_components(session: Session):
                 ).model_dump(exclude_unset=True, exclude_none=True),
             ),
             db.ComponentParameterDefinition(
-                id=UUID("0dcee65b-d3b7-43e6-8cb4-2ec531c1875c"),
+                id=LLM_CALL_PARAMETER_IDS["file_url_key"],
                 component_version_id=llm_call_version.id,
                 name="file_url_key",
                 type=ParameterType.STRING,
@@ -123,7 +123,7 @@ def seed_llm_call_components(session: Session):
                 ).model_dump(exclude_unset=True, exclude_none=True),
             ),
             db.ComponentParameterDefinition(
-                id=UUID("d7ee43ab-80f8-4ee5-ac38-938163933610"),
+                id=LLM_CALL_PARAMETER_IDS["output_format"],
                 component_version_id=llm_call_version.id,
                 name="output_format",
                 type=ParameterType.STRING,
@@ -174,23 +174,23 @@ def seed_llm_call_components(session: Session):
                 params_to_seed=[
                     ParameterLLMConfig(
                         param_name=COMPLETION_MODEL_IN_DB,
-                        param_id=UUID("1233f6b4-cfab-44f6-bf62-f6e0a1b95db1"),
+                        param_id=LLM_CALL_PARAMETER_IDS[COMPLETION_MODEL_IN_DB],
                     ),
                     ParameterLLMConfig(
                         param_name=TEMPERATURE_IN_DB,
-                        param_id=UUID("7645d690-45c1-4b3e-bcdc-babf0808f97d"),
+                        param_id=LLM_CALL_PARAMETER_IDS[TEMPERATURE_IN_DB],
                     ),
                     ParameterLLMConfig(
                         param_name=VERBOSITY_IN_DB,
-                        param_id=UUID("76c4361d-06f4-41dd-9c6c-cf66292de155"),
+                        param_id=LLM_CALL_PARAMETER_IDS[VERBOSITY_IN_DB],
                     ),
                     ParameterLLMConfig(
                         param_name=REASONING_IN_DB,
-                        param_id=UUID("9863153f-d43c-46e5-bec9-9bef1deff2b4"),
+                        param_id=LLM_CALL_PARAMETER_IDS[REASONING_IN_DB],
                     ),
                     ParameterLLMConfig(
                         param_name="api_key",
-                        param_id=UUID("a9acc79a-bd8c-4406-89ef-9d3d88f50138"),
+                        param_id=LLM_CALL_PARAMETER_IDS["api_key"],
                     ),
                 ],
             ),
