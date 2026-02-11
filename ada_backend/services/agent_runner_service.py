@@ -113,13 +113,15 @@ async def build_graph_runner(
     component_instance_ids = [node.id for node in component_nodes]
     expressions: list[GraphRunner.ExpressionSpec] = []
     for component_instance_id in component_instance_ids:
-        port_instances = get_input_port_instances_for_component_instance(session, component_instance_id)
-        for port_instance in port_instances:
-            if port_instance.field_expression and port_instance.field_expression.expression_json:
-                expression_ast = expression_from_json(port_instance.field_expression.expression_json)
+        input_port_instances = get_input_port_instances_for_component_instance(
+            session, component_instance_id, eager_load_field_expression=True
+        )
+        for input_port_instance in input_port_instances:
+            if input_port_instance.field_expression and input_port_instance.field_expression.expression_json:
+                expression_ast = expression_from_json(input_port_instance.field_expression.expression_json)
                 expressions.append({
                     "target_instance_id": str(component_instance_id),
-                    "field_name": port_instance.name,
+                    "field_name": input_port_instance.name,
                     "expression_ast": expression_ast,
                 })
 

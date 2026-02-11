@@ -53,17 +53,19 @@ def remap_field_expressions_for_cloning(
     remapped_expressions_by_source_id: dict[UUID, list[FieldExpressionUpdateSchema]] = {}
 
     for source_instance_id in source_instance_ids:
-        port_instances = get_input_port_instances_for_component_instance(session, source_instance_id)
+        input_port_instances = get_input_port_instances_for_component_instance(
+            session, source_instance_id, eager_load_field_expression=True
+        )
 
         remapped_expressions: list[FieldExpressionUpdateSchema] = []
-        for port_instance in port_instances:
-            if port_instance.field_expression:
-                original_ast = expr_from_json(port_instance.field_expression.expression_json)
+        for input_port_instance in input_port_instances:
+            if input_port_instance.field_expression:
+                original_ast = expr_from_json(input_port_instance.field_expression.expression_json)
                 remapped_ast = remap_instance_ids_in_expression(original_ast, id_mapping_str)
                 expr_text = unparse_expression(remapped_ast)
                 remapped_expressions.append(
                     FieldExpressionUpdateSchema(
-                        field_name=port_instance.name,
+                        field_name=input_port_instance.name,
                         expression_text=expr_text,
                     )
                 )

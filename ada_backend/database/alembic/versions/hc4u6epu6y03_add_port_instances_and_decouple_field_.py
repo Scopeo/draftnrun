@@ -86,8 +86,6 @@ def upgrade() -> None:
         old_id = old_expr[0]
         component_instance_id = old_expr[1]
         field_name = old_expr[2]
-        expression_json = old_expr[3]
-        updated_at = old_expr[4]
 
         # Create new field expression with just the expression_json
         # We'll reuse the same ID to maintain the reference
@@ -96,9 +94,9 @@ def upgrade() -> None:
         # Create input_port_instance linking to the existing field_expression
         connection.execute(
             sa.text("""
-                INSERT INTO input_port_instances 
+                INSERT INTO input_port_instances
                     (id, component_instance_id, name, field_expression_id, created_at)
-                VALUES 
+                VALUES
                     (gen_random_uuid(), :component_instance_id, :field_name, :field_expression_id, now())
             """),
             {

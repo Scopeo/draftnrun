@@ -122,9 +122,7 @@ def test_get_input_port_instance(ada_backend_mock_session: Session, test_compone
     assert retrieved_port.name == "test_port"
 
 
-def test_get_input_port_instances_for_component_instance(
-    ada_backend_mock_session: Session, test_component_instance
-):
+def test_get_input_port_instances_for_component_instance(ada_backend_mock_session: Session, test_component_instance):
     """Test retrieving all input port instances for a component instance."""
     # Create multiple ports
     port1 = input_port_instance_repository.create_input_port_instance(
@@ -193,35 +191,162 @@ def test_delete_input_port_instance(ada_backend_mock_session: Session, test_comp
     assert retrieved is None
 
 
-def test_delete_input_port_instances_for_component_instance(
-    ada_backend_mock_session: Session, test_component_instance
+def test_update_clears_field_expression(
+    ada_backend_mock_session: Session,
+    test_component_instance,
+    test_field_expression,
 ):
-    """Test deleting all input port instances for a component instance."""
-    # Create multiple ports
-    input_port_instance_repository.create_input_port_instance(
+    """Test that explicitly setting field_expression_id to None clears it."""
+    # Create a port with a field expression
+    port = input_port_instance_repository.create_input_port_instance(
+        session=ada_backend_mock_session,
+        component_instance_id=test_component_instance.id,
+        name="test_port",
+        field_expression_id=test_field_expression.id,
+    )
+
+    assert port.field_expression_id == test_field_expression.id
+
+    # Explicitly clear the field expression by setting it to None
+    updated_port = input_port_instance_repository.update_input_port_instance(
+        session=ada_backend_mock_session,
+        input_port_instance_id=port.id,
+        field_expression_id=None,
+    )
+
+    assert updated_port is not None
+    assert updated_port.field_expression_id is None
+
+
+def test_update_without_parameters_changes_nothing(
+    ada_backend_mock_session: Session,
+    test_component_instance,
+    test_field_expression,
+):
+    """Test that calling update without parameters doesn't change anything."""
+    # Create a port with values
+    port = input_port_instance_repository.create_input_port_instance(
+        session=ada_backend_mock_session,
+        component_instance_id=test_component_instance.id,
+        name="original_name",
+        field_expression_id=test_field_expression.id,
+        description="Original description",
+    )
+
+    original_name = port.name
+    original_field_expr_id = port.field_expression_id
+    original_description = port.description
+
+    # Update without providing any parameters
+    updated_port = input_port_instance_repository.update_input_port_instance(
+        session=ada_backend_mock_session,
+        input_port_instance_id=port.id,
+    )
+
+    assert updated_port is not None
+    assert updated_port.name == original_name
+    assert updated_port.field_expression_id == original_field_expr_id
+    assert updated_port.description == original_description
+
+
+def test_cascade_delete_component_instance(ada_backend_mock_session: Session, test_component_instance):
+    """Test that deleting a component instance CASCADE deletes its input port instances."""
+    # Create input port instances
+    port1 = input_port_instance_repository.create_input_port_instance(
         session=ada_backend_mock_session,
         component_instance_id=test_component_instance.id,
         name="port1",
     )
-    input_port_instance_repository.create_input_port_instance(
+    port2 = input_port_instance_repository.create_input_port_instance(
         session=ada_backend_mock_session,
         component_instance_id=test_component_instance.id,
         name="port2",
     )
 
-    deleted_count = input_port_instance_repository.delete_input_port_instances_for_component_instance(
-        session=ada_backend_mock_session,
-        component_instance_id=test_component_instance.id,
-    )
-
-    assert deleted_count == 2
-
-    # Verify they're deleted
+    # Verify ports exist
     ports = input_port_instance_repository.get_input_port_instances_for_component_instance(
         session=ada_backend_mock_session,
         component_instance_id=test_component_instance.id,
     )
-    assert len(ports) == 0
+    assert len(ports) == 2
+
+    # Delete the component instance
+    ada_backend_mock_session.delete(test_component_instance)
+    ada_backend_mock_session.commit()
+
+    # Verify ports are CASCADE deleted
+    port1_after = input_port_instance_repository.get_input_port_instance(
+        session=ada_backend_mock_session,
+        input_port_instance_id=port1.id,
+    )
+    port2_after = input_port_instance_repository.get_input_port_instance(
+        session=ada_backend_mock_session,
+        input_port_instance_id=port2.id,
+    )
+    assert port1_after is None
+    assert port2_after is None
+
+
+def test_set_null_on_field_expression_delete(
+    ada_backend_mock_session: Session,
+    test_component_instance,
+    test_field_expression,
+):
+    """Test that deleting a field expression sets field_expression_id to NULL."""
+    # Create port with field expression
+    port = input_port_instance_repository.create_input_port_instance(
+        session=ada_backend_mock_session,
+        component_instance_id=test_component_instance.id,
+        name="test_port",
+        field_expression_id=test_field_expression.id,
+    )
+
+    assert port.field_expression_id == test_field_expression.id
+
+    # Delete the field expression
+    ada_backend_mock_session.delete(test_field_expression)
+    ada_backend_mock_session.commit()
+
+    # Refresh the port and verify field_expression_id is SET NULL
+    ada_backend_mock_session.expire(port)
+    retrieved_port = input_port_instance_repository.get_input_port_instance(
+        session=ada_backend_mock_session,
+        input_port_instance_id=port.id,
+    )
+
+    assert retrieved_port is not None
+    assert retrieved_port.field_expression_id is None
+
+
+def test_set_null_on_port_definition_delete(
+    ada_backend_mock_session: Session,
+    test_component_instance,
+    test_port_definition,
+):
+    """Test that deleting a port definition sets port_definition_id to NULL."""
+    # Create port with port definition
+    port = input_port_instance_repository.create_input_port_instance(
+        session=ada_backend_mock_session,
+        component_instance_id=test_component_instance.id,
+        name="test_port",
+        port_definition_id=test_port_definition.id,
+    )
+
+    assert port.port_definition_id == test_port_definition.id
+
+    # Delete the port definition
+    ada_backend_mock_session.delete(test_port_definition)
+    ada_backend_mock_session.commit()
+
+    # Refresh the port and verify port_definition_id is SET NULL
+    ada_backend_mock_session.expire(port)
+    retrieved_port = input_port_instance_repository.get_input_port_instance(
+        session=ada_backend_mock_session,
+        input_port_instance_id=port.id,
+    )
+
+    assert retrieved_port is not None
+    assert retrieved_port.port_definition_id is None
 
 
 def test_unique_constraint_on_port_name(ada_backend_mock_session: Session, test_component_instance):

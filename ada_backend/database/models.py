@@ -1159,6 +1159,14 @@ class InputPortInstance(Base):
     """Instance-level input port definition for dynamic ports.
 
     Allows API components to have ports that vary based on instance configuration.
+
+    Invariants:
+    - port_definition_id == NULL: Dynamic input port instance not part of the
+      official component catalogue (e.g., API-specific field)
+    - field_expression_id == NULL (with port_definition_id == NULL): Dynamic port
+      exists but doesn't have a value yet. The frontend can display it for configuration.
+    - Both NULL: Port is defined but not configured
+    - Both set: Port references a definition and has a configured value
     """
 
     __tablename__ = "input_port_instances"

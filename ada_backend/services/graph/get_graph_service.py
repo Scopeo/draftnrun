@@ -94,16 +94,18 @@ def get_graph_service(
     # Fetch field expressions via input_port_instances
     component_instance_ids = [node.id for node in component_nodes]
     for component_instance_id in component_instance_ids:
-        port_instances = get_input_port_instances_for_component_instance(session, component_instance_id)
-        for port_instance in port_instances:
-            if port_instance.field_expression:
+        input_port_instances = get_input_port_instances_for_component_instance(
+            session, component_instance_id, eager_load_field_expression=True
+        )
+        for input_port_instance in input_port_instances:
+            if input_port_instance.field_expression:
                 field_expressions_by_instance[component_instance_id].append(
                     FieldExpressionReadSchema(
-                        field_name=port_instance.name,
-                        expression_json=port_instance.field_expression.expression_json,
+                        field_name=input_port_instance.name,
+                        expression_json=input_port_instance.field_expression.expression_json,
                         expression_text=(
-                            unparse_expression(expr_from_json(port_instance.field_expression.expression_json))
-                            if port_instance.field_expression.expression_json
+                            unparse_expression(expr_from_json(input_port_instance.field_expression.expression_json))
+                            if input_port_instance.field_expression.expression_json
                             else None
                         ),
                     )
