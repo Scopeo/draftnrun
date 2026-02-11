@@ -9,7 +9,7 @@ from opentelemetry import trace as trace_api
 from engine import legacy_compatibility
 from engine.coercion_matrix import CoercionMatrix, create_default_coercion_matrix
 from engine.components.types import AgentPayload, NodeData
-from engine.field_expressions.ast import ExpressionNode, RefNode
+from engine.field_expressions.ast import ExpressionNode, LiteralNode, RefNode
 from engine.field_expressions.traversal import select_nodes
 from engine.graph_runner.field_expression_management import evaluate_expression
 from engine.graph_runner.port_management import (
@@ -175,8 +175,17 @@ class GraphRunner:
                 LOGGER.info(f"Node '{node_id}' signaled to halt downstream execution")
                 self._halt_downstream_execution(node_id)
             else:
-                for successor in self.graph.successors(node_id):
-                    self.tasks[successor].decrement_pending_deps()
+                # Check for Router's execute_routes list (which routes should execute)
+                execute_routes = result_packet.data.get("execute_routes", None)
+
+                if execute_routes is not None:
+                    # Router component - selective execution based on execute_routes list
+                    LOGGER.debug(f"Node '{node_id}' has execute_routes: {execute_routes}")
+                    self._selective_execute_routes(node_id, execute_routes)
+                else:
+                    # Normal execution - decrement all successors
+                    for successor in self.graph.successors(node_id):
+                        self.tasks[successor].decrement_pending_deps()
 
         return legacy_compatibility.collect_legacy_outputs(self.graph, self.tasks, self._input_node_id, self.runnables)
 
@@ -320,6 +329,18 @@ class GraphRunner:
 
             target_component = self.runnables[node_id]
             for field_name, expression_ast in non_ref_expressions:
+                if (
+                    field_name in input_data
+                    and input_data[field_name] is not None
+                    and input_data[field_name] != ""
+                    and isinstance(expression_ast, LiteralNode)
+                    and (expression_ast.value == "" or expression_ast.value is None)
+                ):
+                    LOGGER.debug(
+                        f"Skipping empty LiteralNode expression for {node_id}.{field_name} "
+                        f"because port mapping already provided value"
+                    )
+                    continue
 
                 def _to_string(value: Any) -> str:
                     return self.coercion_matrix.coerce(value, str, type(value))
@@ -432,3 +453,37 @@ class GraphRunner:
                         task.state = TaskState.COMPLETED
                         task.result = NodeData(data={}, ctx=self.run_context)
                     queue.append(successor)
+
+    def _selective_execute_routes(self, source_node_id: str, execute_routes: list[str]) -> None:
+        """
+        Selectively execute downstream nodes based on Router's execute_routes list.
+        Only successors connected to routes in execute_routes will execute.
+
+        Args:
+            source_node_id: The Router node ID
+            execute_routes: List of route names that should execute (e.g., ["route_0", "route_2"])
+        """
+        LOGGER.debug(f"Selective execution for {source_node_id} with routes: {execute_routes}")
+
+        for successor in self.graph.successors(source_node_id):
+            mappings = [
+                pm for pm in self._mappings_by_target.get(successor, []) if pm.source_instance_id == source_node_id
+            ]
+
+            should_execute = False
+            for mapping in mappings:
+                source_port = mapping.source_port_name
+
+                if source_port in execute_routes:
+                    should_execute = True
+                    break
+                elif source_port == "output" and len(execute_routes) > 0:
+                    should_execute = True
+                    break
+
+            if should_execute:
+                LOGGER.debug(f"Executing successor '{successor}'")
+                self.tasks[successor].decrement_pending_deps()
+            else:
+                LOGGER.debug(f"Halting successor '{successor}' (not in execute_routes)")
+                self._halt_downstream_execution(successor)
