@@ -77,6 +77,14 @@ def _sort_dict_keys_recursively(obj):
 
 
 def _calculate_graph_hash(graph_project: GraphUpdateSchema) -> str:
+    """
+    Calculate a hash of the complete graph configuration.
+    This includes component instances, edges, and relationships.
+    Changes to any of these will trigger a new modification history entry.
+    #TODO: Refactor to use the component-level endpoints instead.
+
+    Note: port_mappings are excluded as they are auto-generated from edges.
+    """
     graph_dict = graph_project.model_dump(mode="json", exclude={"port_mappings"})
     sorted_dict = _sort_dict_keys_recursively(graph_dict)
     json_str = json.dumps(sorted_dict, sort_keys=True, separators=(",", ":"))
@@ -227,8 +235,11 @@ async def update_graph_service(
     skip_validation: bool = False,
 ) -> GraphUpdateResponse:
     """
-    Creates or updates a complete graph runner including all component instances,
-    their parameters, and relationships.
+    Updates graph structure including edges and relationships.
+
+    NOTE: Component instances should now be managed via the component-level endpoints.
+    This function maintains backward compatibility by accepting component_instances in the schema,
+    but it's recommended to use the dedicated component endpoints instead.
 
     Args:
         bypass_validation: If True, skip draft mode validation (use for seeding/migrations only)
@@ -237,50 +248,129 @@ async def update_graph_service(
     if not skip_validation:
         _ensure_graph_exists_and_validate(session, graph_runner_id, project_id, env, bypass_validation)
 
-    # TODO: Add the get_graph_runner_nodes function when we will handle nested graphs
-    previous_graph_nodes = set(node.id for node in get_component_nodes(session, graph_runner_id))
     previous_edge_ids = set(edge.id for edge in get_edges(session, graph_runner_id))
 
-    # Create/update all component instances
+    # Backward compatibility: Handle component instances if provided
     instance_ids = set()
     input_params_by_instance: dict[UUID, list] = defaultdict(list)
-    for instance in graph_project.component_instances:
-        parameter_params = []
-        for param in instance.parameters:
-            kind = getattr(param, "kind", ParameterKind.PARAMETER)
-            if kind == ParameterKind.INPUT:
+
+    if graph_project.component_instances:
+        LOGGER.warning(
+            "component_instances in GraphUpdateSchema is deprecated. "
+            "Use the component-level endpoints (PUT /graph/{graph_runner_id}/components/{component_instance_id}) instead."
+        )
+
+        # Process component instances for backward compatibility
+        for instance in graph_project.component_instances:
+            parameter_params = []
+            for param in instance.parameters:
+                kind = getattr(param, "kind", ParameterKind.PARAMETER)
+                if kind == ParameterKind.INPUT:
+                    if not instance.id:
+                        raise ValueError(
+                            f"Component instance ID is required for input parameters. Instance: {instance}, param: {param}"
+                        )
+                    input_params_by_instance[instance.id].append(param)
+                else:
+                    parameter_params.append(param)
+            instance.parameters = parameter_params
+
+            instance_id = create_or_update_component_instance(session, instance, project_id)
+            upsert_component_node(
+                session,
+                graph_runner_id=graph_runner_id,
+                component_instance_id=instance.id,
+                is_start_node=instance.is_start_node,
+            )
+            instance_ids.add(instance_id)
+
+        # Process field expressions for backward compatibility
+        db_field_expressions_by_instance: dict[UUID, set[str]] = defaultdict(set)
+        existing_expressions = get_field_expressions_for_instances(session, list(instance_ids))
+        for expr in existing_expressions:
+            db_field_expressions_by_instance[expr.component_instance_id].add(expr.field_name)
+
+        incoming_field_expressions_by_instance: dict[UUID, set[str]] = defaultdict(set)
+        for instance in graph_project.component_instances:
+            incoming_field_expressions_by_instance[instance.id] = set()
+
+            # Convert Inputs from parameters[kind="input"] to field expressions.
+            for param in input_params_by_instance.get(instance.id, []):
                 if not instance.id:
                     raise ValueError(
                         f"Component instance ID is required for input parameters. Instance: {instance}, param: {param}"
                     )
-                input_params_by_instance[instance.id].append(param)
-            else:
-                parameter_params.append(param)
-        instance.parameters = parameter_params
+                if instance.id not in instance_ids:
+                    raise ValueError(
+                        f"Invalid field expression target: component instance {instance.id} not in update"
+                    )
 
-        instance_id = create_or_update_component_instance(session, instance, project_id)
-        upsert_component_node(
-            session,
-            graph_runner_id=graph_runner_id,
-            component_instance_id=instance.id,
-            is_start_node=instance.is_start_node,
-        )
-        instance_ids.add(instance_id)
+                field_name = param.name
+
+                if param.value is None or param.value == "":
+                    LOGGER.warning(
+                        f"No expression value for input parameter {field_name} on instance {instance.id}, skipping"
+                    )
+                    continue
+
+                if field_name in incoming_field_expressions_by_instance[instance.id]:
+                    LOGGER.warning(
+                        f"Field expression {field_name} already exists for instance {instance.id}, skipping update"
+                    )
+                    continue
+
+                incoming_field_expressions_by_instance[instance.id].add(field_name)
+
+                try:
+                    ast = parse_expression_flexible(param.value)
+                    LOGGER.debug(f"Parsed expression for {field_name}: {param.value}")
+                except FieldExpressionParseError:
+                    LOGGER.error(f"Failed to parse field expression from parameter input: {param.value}")
+                    raise
+
+                _validate_expression_references(session, graph_runner_id, ast)
+
+                upsert_field_expression(
+                    session=session,
+                    component_instance_id=instance.id,
+                    field_name=field_name,
+                    expression_json=expr_to_json(ast),
+                )
+
+                ref_node = get_pure_ref(ast)
+                if ref_node is not None:
+                    _create_port_mappings_for_pure_ref_expressions(
+                        session=session,
+                        graph_runner_id=graph_runner_id,
+                        component_instance_id=instance.id,
+                        field_name=field_name,
+                        ref_node=ref_node,
+                    )
+
+        for instance_id, incoming_fields in incoming_field_expressions_by_instance.items():
+            if instance_id in db_field_expressions_by_instance:
+                fields_to_delete = db_field_expressions_by_instance[instance_id] - incoming_fields
+                for field_name in fields_to_delete:
+                    delete_field_expression(session, instance_id, field_name)
+    else:
+        # New behavior: Get existing component instances from the graph
+        graph_nodes = get_component_nodes(session, graph_runner_id)
+        instance_ids = {node.id for node in graph_nodes}
 
     # Create relationships
     for relation in graph_project.relationships:
-        # Validate that both components exist
-        if not (
-            relation.parent_component_instance_id in instance_ids
-            and relation.child_component_instance_id in instance_ids
-        ):
-            raise ValueError("Invalid relationship: component instance not found")
+        # Validate that both components exist in the graph
+        parent_exists = get_component_instance_by_id(session, relation.parent_component_instance_id) is not None
+        child_exists = get_component_instance_by_id(session, relation.child_component_instance_id) is not None
+
+        if not (parent_exists and child_exists):
+            raise ValueError(
+                f"Invalid relationship: component instance not found. "
+                f"Parent: {relation.parent_component_instance_id}, Child: {relation.child_component_instance_id}"
+            )
 
         # Get parameter definition ID from name
         parent = get_component_instance_by_id(session, relation.parent_component_instance_id)
-        if not parent:
-            raise ValueError("Invalid relationship: parent component instance not found")
-        # TODO: Refactor to repository function that takes name and component_id or with dictionary for faster lookup
         param_defs = get_component_parameter_definition_by_component_version(session, parent.component_version_id)
         param_def = next((p for p in param_defs if p.name == relation.parameter_name), None)
         if not param_def:
@@ -298,9 +388,19 @@ async def update_graph_service(
             order=relation.order,
         )
 
+    # Create/update edges
     for edge in graph_project.edges:
         if graph_runner_exists(session, edge.destination) or graph_runner_exists(session, edge.origin):
             raise ValueError("Nested graphs are not supported")
+
+        # Validate that edge nodes exist in the graph
+        source_exists = get_component_instance_by_id(session, edge.origin) is not None
+        target_exists = get_component_instance_by_id(session, edge.destination) is not None
+
+        if not (source_exists and target_exists):
+            raise ValueError(
+                f"Invalid edge: component instance not found. Source: {edge.origin}, Target: {edge.destination}"
+            )
 
         upsert_edge(
             session,
@@ -311,92 +411,24 @@ async def update_graph_service(
             order=edge.order,
         )
 
+    # Delete edges that are no longer in the update
     edge_ids_to_delete = previous_edge_ids - {edge.id for edge in graph_project.edges}
     LOGGER.info("Deleting edges: {}".format(len(edge_ids_to_delete)))
-    # TODO: could use a bulk delete to avoid N+1 here
     for edge_id in edge_ids_to_delete:
         delete_edge(session, edge_id)
 
     # Port mappings: ensure explicit wiring for all edges (save-time defaults)
     _ensure_port_mappings_for_edges(session, graph_runner_id, graph_project)
 
-    # Field expressions (nested per component instance)
-    db_field_expressions_by_instance: dict[UUID, set[str]] = defaultdict(set)
-    existing_expressions = get_field_expressions_for_instances(session, list(instance_ids))
-    for expr in existing_expressions:
-        db_field_expressions_by_instance[expr.component_instance_id].add(expr.field_name)
-
-    incoming_field_expressions_by_instance: dict[UUID, set[str]] = defaultdict(set)
-    for instance in graph_project.component_instances:
-        incoming_field_expressions_by_instance[instance.id] = set()
-
-        # Convert Inputs from parameters[kind="input"] to field expressions.
-        # TODO: this mixes API-level `kind="input"` with service-level types; needs decoupling.
-        for param in input_params_by_instance.get(instance.id, []):
-            if not instance.id:
-                raise ValueError(
-                    f"Component instance ID is required for input parameters. Instance: {instance}, param: {param}"
-                )
-            if instance.id not in instance_ids:
-                raise ValueError(f"Invalid field expression target: component instance {instance.id} not in update")
-
-            field_name = param.name
-
-            if param.value is None or param.value == "":
-                LOGGER.warning(
-                    f"No expression value for input parameter {field_name} on instance {instance.id}, skipping"
-                )
-                continue
-
-            if field_name in incoming_field_expressions_by_instance[instance.id]:
-                LOGGER.warning(
-                    f"Field expression {field_name} already exists for instance {instance.id}, skipping update"
-                )
-                continue
-
-            incoming_field_expressions_by_instance[instance.id].add(field_name)
-
-            # Parse expression (handles both text and JSON formats)
-            try:
-                ast = parse_expression_flexible(param.value)
-                LOGGER.debug(f"Parsed expression for {field_name}: {param.value}")
-            except FieldExpressionParseError:
-                LOGGER.error(f"Failed to parse field expression from parameter input: {param.value}")
-                raise
-
-            _validate_expression_references(session, graph_runner_id, ast)
-
-            upsert_field_expression(
-                session=session,
-                component_instance_id=instance.id,
-                field_name=field_name,
-                expression_json=expr_to_json(ast),
-            )
-
-            ref_node = get_pure_ref(ast)
-            if ref_node is not None:
-                _create_port_mappings_for_pure_ref_expressions(
-                    session=session,
-                    graph_runner_id=graph_runner_id,
-                    component_instance_id=instance.id,
-                    field_name=field_name,
-                    ref_node=ref_node,
-                )
-
-    for instance_id, incoming_fields in incoming_field_expressions_by_instance.items():
-        if instance_id in db_field_expressions_by_instance:
-            fields_to_delete = db_field_expressions_by_instance[instance_id] - incoming_fields
-            for field_name in fields_to_delete:
-                delete_field_expression(session, instance_id, field_name)
-
-    nodes_to_delete = previous_graph_nodes - instance_ids
-    if len(nodes_to_delete) > 0:
-        delete_component_instances_from_nodes(session, nodes_to_delete)
-
-    # TODO: could use a bulk delete to avoid N+1 here
-    for node_id in nodes_to_delete:
-        delete_node(session, node_id)
-    LOGGER.info("Deleted nodes: {}".format(len(nodes_to_delete)))
+    # Backward compatibility: Delete nodes if component_instances was provided
+    if graph_project.component_instances:
+        previous_graph_nodes = set(node.id for node in get_component_nodes(session, graph_runner_id))
+        nodes_to_delete = previous_graph_nodes - instance_ids
+        if len(nodes_to_delete) > 0:
+            delete_component_instances_from_nodes(session, nodes_to_delete)
+            for node_id in nodes_to_delete:
+                delete_node(session, node_id)
+            LOGGER.info("Deleted nodes: {}".format(len(nodes_to_delete)))
 
     await get_agent_for_project(
         session,
