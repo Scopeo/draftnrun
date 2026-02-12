@@ -517,6 +517,8 @@ def build_components_parameters_assignments_to_parameter_groups(
         if param_def:
             param_def.parameter_group_id = group_info["parameter_group_id"]
             param_def.parameter_order_within_group = group_info["parameter_order_within_group"]
+            session.add(param_def)
+    session.flush()
 
 
 def seed_custom_llm_models(session: Session):
