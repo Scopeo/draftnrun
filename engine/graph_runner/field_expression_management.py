@@ -9,7 +9,7 @@ type coercion, and input resolution for field expressions.
 import logging
 from typing import Any, Callable
 
-from engine.field_expressions.ast import ConcatNode, ExpressionNode, JsonBuildNode, LiteralNode, RefNode
+from engine.field_expressions.ast import ConcatNode, ExpressionNode, JsonBuildNode, LiteralNode, RefNode, VarNode
 from engine.field_expressions.errors import FieldExpressionError
 from engine.graph_runner.types import Task
 
@@ -21,6 +21,7 @@ def evaluate_expression(
     target_field_name: str,
     tasks: dict[str, Task],
     to_string: Callable[[Any], str] = lambda v: str(v),
+    variables: dict[str, Any] | None = None,
 ) -> str | dict | list:
     """Evaluate a field expression AST and return the result.
 
@@ -72,6 +73,12 @@ def evaluate_expression(
         else:
             return obj
 
+    def evaluate_var(var: VarNode) -> Any:
+        """Evaluate a VarNode by looking up the variable in the variables dict."""
+        if not variables or var.name not in variables:
+            raise FieldExpressionError(f"Variable '{var.name}' not found")
+        return variables[var.name]
+
     def evaluate_node(node: ExpressionNode) -> str:
         """Evaluate node to string (for concat/ref/literal)."""
         match node:
@@ -82,6 +89,10 @@ def evaluate_expression(
                 raw_value = evaluate_ref_as_object(ref)
                 return to_string(raw_value)
 
+            case VarNode() as var:
+                raw_value = evaluate_var(var)
+                return to_string(raw_value)
+
             case ConcatNode(parts=parts):
                 return "".join(evaluate_node(part) for part in parts)
 
@@ -89,10 +100,18 @@ def evaluate_expression(
                 raise FieldExpressionError(f"Unknown node type: {node}")
 
     match expression:
+        case VarNode() as var:
+            result = evaluate_var(var)
+            LOGGER.debug(f"Evaluated variable expression for {target_field_name}: {result}")
+            return result
+
         case JsonBuildNode(template=template, refs=ref_nodes):
             evaluated_refs = {}
             for placeholder, ref_node in ref_nodes.items():
-                evaluated_refs[placeholder] = evaluate_ref_as_object(ref_node)
+                if isinstance(ref_node, VarNode):
+                    evaluated_refs[placeholder] = evaluate_var(ref_node)
+                else:
+                    evaluated_refs[placeholder] = evaluate_ref_as_object(ref_node)
 
             result = substitute_in_template(template, evaluated_refs)
             LOGGER.debug(f"Evaluated JSON build expression for {target_field_name}")

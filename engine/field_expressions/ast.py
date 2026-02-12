@@ -24,10 +24,17 @@ class RefNode:
 
 
 @dataclass(frozen=True)
-class ConcatNode:
-    """Concatenation of literal and ref parts."""
+class VarNode:
+    """Reference to a project variable, resolved from a variables dict at runtime."""
 
-    parts: List[Union[LiteralNode, RefNode]]
+    name: str
+
+
+@dataclass(frozen=True)
+class ConcatNode:
+    """Concatenation of literal, ref, and variable parts."""
+
+    parts: List[Union[LiteralNode, RefNode, VarNode]]
 
 
 @dataclass(frozen=True)
@@ -46,7 +53,7 @@ class JsonBuildNode:
     """
 
     template: Union[dict, list]  # Template structure with placeholders
-    refs: Dict[str, RefNode]  # Placeholder string -> RefNode mapping
+    refs: Dict[str, Union[RefNode, VarNode]]  # Placeholder string -> RefNode/VarNode mapping
 
 
-ExpressionNode = Union[LiteralNode, RefNode, ConcatNode, JsonBuildNode]
+ExpressionNode = Union[LiteralNode, RefNode, VarNode, ConcatNode, JsonBuildNode]

@@ -5,7 +5,7 @@ from uuid import UUID
 from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
-from ada_backend.database.models import CallType, EnvType, ProjectType, ResponseFormat, VariableType
+from ada_backend.database.models import CallType, EnvType, ProjectType, ResponseFormat
 from ada_backend.database.setup_db import get_db
 from ada_backend.repositories.env_repository import get_env_relationship_by_graph_runner_id
 from ada_backend.repositories.project_repository import get_project
@@ -39,6 +39,7 @@ from ada_backend.schemas.variable_schemas import (
     VariableSetUpsertRequest,
 )
 from ada_backend.services.agent_runner_service import run_agent, run_env_agent
+from ada_backend.services.variable_resolution_service import resolve_variables
 from ada_backend.services.charts_service import get_charts_by_project
 from ada_backend.services.errors import (
     EnvironmentNotFound,
@@ -47,7 +48,6 @@ from ada_backend.services.errors import (
     OrganizationLimitExceededError,
     ProjectNotFound,
 )
-from ada_backend.services.integration_service import get_oauth_access_token
 from ada_backend.services.metrics.monitor_kpis_service import get_monitoring_kpis_by_project
 from ada_backend.services.project_service import (
     create_workflow,
@@ -221,37 +221,19 @@ async def run_env_agent_endpoint(
             detail="'s3_key' is not allowed for this endpoint. Only 'base64' or 'url' are supported.",
         )
 
-    # Variable resolution: if set_id is provided, resolve variable definitions + set values
+    # Variable resolution: support both set_id (string, backward compat) and set_ids (list)
     set_id = input_data.pop("set_id", None)
-    if set_id:
+    set_ids = input_data.pop("set_ids", None)
+
+    resolved_variables = None
+    if set_id or set_ids:
         project = get_project(sqlaclhemy_db_session, project_id=project_id)
         if not project:
             raise HTTPException(status_code=404, detail="Project not found")
-
-        defs = variable_definitions_repository.list_definitions(sqlaclhemy_db_session, project_id)
-        org_set = variable_sets_repository.get_org_variable_set(
-            sqlaclhemy_db_session, project.organization_id, set_id
+        ids = set_ids if set_ids else [set_id]
+        resolved_variables = await resolve_variables(
+            sqlaclhemy_db_session, project_id, project.organization_id, ids
         )
-
-        resolved = {}
-        set_values = org_set.values if org_set else {}
-        for d in defs:
-            resolved[d.name] = set_values.get(d.name) or d.default_value
-
-        # OAuth resolution: resolve connection UUIDs to access tokens
-        for d in defs:
-            if d.type == VariableType.OAUTH and resolved.get(d.name):
-                provider = (d.variable_metadata or {}).get("provider_config_key")
-                if provider:
-                    try:
-                        token = await get_oauth_access_token(
-                            sqlaclhemy_db_session, UUID(resolved[d.name]), provider
-                        )
-                        resolved[d.name] = token
-                    except Exception as e:
-                        LOGGER.error(f"Failed to resolve OAuth token for variable {d.name}: {str(e)}", exc_info=True)
-
-        input_data.update(resolved)
 
     try:
         return await run_env_agent(
@@ -261,6 +243,7 @@ async def run_env_agent_endpoint(
             env=env,
             call_type=CallType.API,
             response_format=response_format,
+            variables=resolved_variables,
         )
     except EnvironmentNotFound as e:
         LOGGER.error(f"Environment not found for project {project_id} in environment {env}: {str(e)}", exc_info=True)

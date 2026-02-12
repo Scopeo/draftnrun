@@ -46,12 +46,14 @@ class GraphRunner:
         port_mappings: list[dict[str, Any]] | None = None,
         expressions: list[ExpressionSpec] | None = None,
         coercion_matrix: CoercionMatrix | None = None,
+        variables: dict[str, Any] | None = None,
     ):
         self.trace_manager = trace_manager
         self.graph = graph
         self.runnables = runnables
         self.start_nodes = start_nodes
         self.run_context: dict[str, Any] = {}
+        self.variables: dict[str, Any] = variables or {}
         # Initialize coercion matrix - use provided one or create default
         self.coercion_matrix = coercion_matrix or create_default_coercion_matrix()
 
@@ -329,6 +331,7 @@ class GraphRunner:
                     field_name,
                     self.tasks,
                     to_string=_to_string,
+                    variables=self.variables,
                 )
                 LOGGER.debug(f"Evaluating non-ref expression for {node_id}.{field_name}")
                 target_type = get_target_field_type(target_component, field_name)
