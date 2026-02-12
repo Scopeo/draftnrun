@@ -89,14 +89,12 @@ def get_datasets_by_project_endpoint(
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
 
-    try:
-        project = get_project(session, project_id)
-        if not project:
-            raise HTTPException(status_code=404, detail="Project not found")
+    project = get_project(session, project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
 
+    try:
         return get_datasets_by_organization_service(session, project.organization_id)
-    except HTTPException:
-        raise
     except ValueError as e:
         LOGGER.error(f"Failed to get datasets for project {project_id}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=400, detail="Bad request") from e
@@ -132,14 +130,12 @@ def create_dataset_endpoint(
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
 
-    try:
-        project = get_project(session, project_id)
-        if not project:
-            raise HTTPException(status_code=404, detail="Project not found")
+    project = get_project(session, project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
 
+    try:
         return create_datasets_for_organization_service(session, project.organization_id, dataset_data)
-    except HTTPException:
-        raise
     except ValueError as e:
         LOGGER.error(f"Failed to create datasets for project {project_id}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=400, detail="Bad request") from e
@@ -176,14 +172,12 @@ def update_dataset_endpoint(
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
 
-    try:
-        project = get_project(session, project_id)
-        if not project:
-            raise HTTPException(status_code=404, detail="Project not found")
+    project = get_project(session, project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
 
+    try:
         return update_dataset_in_organization_service(session, project.organization_id, dataset_id, dataset_name)
-    except HTTPException:
-        raise
     except ValueError as e:
         LOGGER.error(f"Failed to update dataset {dataset_id}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=400, detail="Bad request") from e
@@ -218,15 +212,13 @@ def delete_dataset_endpoint(
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
 
-    try:
-        project = get_project(session, project_id)
-        if not project:
-            raise HTTPException(status_code=404, detail="Project not found")
+    project = get_project(session, project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
 
+    try:
         deleted_count = delete_datasets_from_organization_service(session, project.organization_id, delete_data)
         return {"message": f"Deleted {deleted_count} datasets successfully"}
-    except HTTPException:
-        raise
     except ValueError as e:
         LOGGER.error(f"Failed to delete datasets for project {project_id}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=400, detail="Bad request") from e

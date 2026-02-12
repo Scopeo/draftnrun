@@ -56,14 +56,12 @@ def get_llm_judges_by_project_endpoint(
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
 
-    try:
-        project = get_project(session, project_id)
-        if not project:
-            raise HTTPException(status_code=404, detail="Project not found")
+    project = get_project(session, project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
 
+    try:
         return get_llm_judges_by_organization_service(session=session, organization_id=project.organization_id)
-    except HTTPException:
-        raise
     except Exception as e:
         LOGGER.error(f"Failed to get LLM judges for project {project_id}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error") from e
@@ -108,16 +106,14 @@ def create_llm_judge_endpoint(
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
 
-    try:
-        project = get_project(session, project_id)
-        if not project:
-            raise HTTPException(status_code=404, detail="Project not found")
+    project = get_project(session, project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
 
+    try:
         return create_llm_judge_for_organization_service(
             session=session, organization_id=project.organization_id, judge_data=judge_data
         )
-    except HTTPException:
-        raise
     except ValueError as e:
         LOGGER.error(f"Failed to create LLM judge for project {project_id}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=400, detail="Bad request") from e
@@ -151,19 +147,17 @@ def update_llm_judge_endpoint(
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
 
-    try:
-        project = get_project(session, project_id)
-        if not project:
-            raise HTTPException(status_code=404, detail="Project not found")
+    project = get_project(session, project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
 
+    try:
         return update_llm_judge_in_organization_service(
             session=session,
             organization_id=project.organization_id,
             judge_id=judge_id,
             judge_data=judge_data,
         )
-    except HTTPException:
-        raise
     except LLMJudgeNotFound as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
     except ValueError as e:
@@ -197,17 +191,15 @@ def delete_llm_judges_endpoint(
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
 
-    try:
-        project = get_project(session, project_id)
-        if not project:
-            raise HTTPException(status_code=404, detail="Project not found")
+    project = get_project(session, project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
 
+    try:
         delete_llm_judges_from_organization_service(
             session=session, organization_id=project.organization_id, judge_ids=judge_ids
         )
         return None
-    except HTTPException:
-        raise
     except ValueError as e:
         LOGGER.error(f"Failed to delete LLM judges for project {project_id}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=400, detail="Bad request") from e
