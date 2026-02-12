@@ -1,7 +1,7 @@
 """add variable definitions and variable sets tables
 
 Revision ID: f3a1b2c4d5e6
-Revises: 67ec7c0706ec
+Revises: cb22ac4f4a42
 Create Date: 2026-02-10 12:00:00.000000
 
 """
@@ -14,7 +14,7 @@ from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
 revision: str = "f3a1b2c4d5e6"
-down_revision: Union[str, None] = "67ec7c0706ec"
+down_revision: Union[str, None] = "cb22ac4f4a42"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
