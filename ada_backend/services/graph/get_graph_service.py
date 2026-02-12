@@ -7,11 +7,11 @@ from sqlalchemy.orm import Session
 from ada_backend.database.models import ParameterType, PortType
 from ada_backend.repositories.component_repository import get_port_definitions_for_component_version_ids
 from ada_backend.repositories.edge_repository import get_edges
-from ada_backend.repositories.field_expression_repository import get_field_expressions_for_instances
 from ada_backend.repositories.graph_runner_repository import (
     get_component_nodes,
     get_latest_modification_history,
 )
+from ada_backend.repositories.input_port_instance_repository import get_input_port_instances_for_component_instance
 from ada_backend.repositories.port_mapping_repository import list_port_mappings_for_graph
 from ada_backend.schemas.parameter_schema import ParameterKind, PipelineParameterReadSchema
 from ada_backend.schemas.pipeline.field_expression_schema import FieldExpressionReadSchema
@@ -91,21 +91,25 @@ def get_graph_service(
             )
         )
 
-    # Fetch field expressions
+    # Fetch field expressions via input_port_instances
     component_instance_ids = [node.id for node in component_nodes]
-    field_expression_records = get_field_expressions_for_instances(session, component_instance_ids)
-    for expression in field_expression_records:
-        field_expressions_by_instance[expression.component_instance_id].append(
-            FieldExpressionReadSchema(
-                field_name=expression.field_name,
-                expression_json=expression.expression_json,
-                expression_text=(
-                    unparse_expression(expr_from_json(expression.expression_json))
-                    if expression.expression_json
-                    else None
-                ),
-            )
+    for component_instance_id in component_instance_ids:
+        input_port_instances = get_input_port_instances_for_component_instance(
+            session, component_instance_id, eager_load_field_expression=True
         )
+        for input_port_instance in input_port_instances:
+            if input_port_instance.field_expression:
+                field_expressions_by_instance[component_instance_id].append(
+                    FieldExpressionReadSchema(
+                        field_name=input_port_instance.name,
+                        expression_json=input_port_instance.field_expression.expression_json,
+                        expression_text=(
+                            unparse_expression(expr_from_json(input_port_instance.field_expression.expression_json))
+                            if input_port_instance.field_expression.expression_json
+                            else None
+                        ),
+                    )
+                )
     for comp_instance in component_instances_with_definitions:
         comp_instance.field_expressions = field_expressions_by_instance.get(comp_instance.id, [])
 

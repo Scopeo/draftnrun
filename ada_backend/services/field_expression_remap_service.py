@@ -2,7 +2,7 @@ from uuid import UUID
 
 from sqlalchemy.orm import Session
 
-from ada_backend.repositories.field_expression_repository import get_field_expressions_for_instances
+from ada_backend.repositories.input_port_instance_repository import get_input_port_instances_for_component_instance
 from ada_backend.schemas.pipeline.field_expression_schema import FieldExpressionUpdateSchema
 from engine.field_expressions.ast import ExpressionNode, RefNode
 from engine.field_expressions.parser import unparse_expression
@@ -48,26 +48,29 @@ def remap_field_expressions_for_cloning(
     Returns:
         Dictionary mapping source instance ID to list of remapped field expressions
     """
-    field_expression_records = get_field_expressions_for_instances(session, source_instance_ids)
-    expressions_by_source_id: dict[UUID, list] = {}
-    for field_expr_record in field_expression_records:
-        expressions_by_source_id.setdefault(field_expr_record.component_instance_id, []).append(field_expr_record)
-
     id_mapping_str: dict[str, str] = {str(source_id): str(target_id) for source_id, target_id in id_mapping.items()}
 
     remapped_expressions_by_source_id: dict[UUID, list[FieldExpressionUpdateSchema]] = {}
-    for source_instance_id, field_expr_records in expressions_by_source_id.items():
+
+    for source_instance_id in source_instance_ids:
+        input_port_instances = get_input_port_instances_for_component_instance(
+            session, source_instance_id, eager_load_field_expression=True
+        )
+
         remapped_expressions: list[FieldExpressionUpdateSchema] = []
-        for field_expr_record in field_expr_records:
-            original_ast = expr_from_json(field_expr_record.expression_json)
-            remapped_ast = remap_instance_ids_in_expression(original_ast, id_mapping_str)
-            expr_text = unparse_expression(remapped_ast)
-            remapped_expressions.append(
-                FieldExpressionUpdateSchema(
-                    field_name=field_expr_record.field_name,
-                    expression_text=expr_text,
+        for input_port_instance in input_port_instances:
+            if input_port_instance.field_expression:
+                original_ast = expr_from_json(input_port_instance.field_expression.expression_json)
+                remapped_ast = remap_instance_ids_in_expression(original_ast, id_mapping_str)
+                expr_text = unparse_expression(remapped_ast)
+                remapped_expressions.append(
+                    FieldExpressionUpdateSchema(
+                        field_name=input_port_instance.name,
+                        expression_text=expr_text,
+                    )
                 )
-            )
-        remapped_expressions_by_source_id[source_instance_id] = remapped_expressions
+
+        if remapped_expressions:
+            remapped_expressions_by_source_id[source_instance_id] = remapped_expressions
 
     return remapped_expressions_by_source_id

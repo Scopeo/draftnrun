@@ -6,6 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from ada_backend.schemas.integration_schema import GraphIntegrationSchema
 from ada_backend.schemas.parameter_schema import PipelineParameterSchema
 from ada_backend.schemas.pipeline.field_expression_schema import FieldExpressionUpdateSchema
+from ada_backend.schemas.pipeline.port_instance_schema import InputPortInstanceSchema
 
 
 class ToolDescriptionSchema(BaseModel):
@@ -34,6 +35,7 @@ class ComponentInstanceSchema(BaseModel):
         default_factory=list,
         deprecated=True,
     )
+    input_port_instances: list[InputPortInstanceSchema] = Field(default_factory=list)
 
 
 class ComponentRelationshipSchema(BaseModel):

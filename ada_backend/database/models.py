@@ -775,6 +775,11 @@ class ComponentInstance(Base):
         back_populates="component_instance",
         cascade="all, delete-orphan",
     )
+    input_port_instances = relationship(
+        "InputPortInstance",
+        back_populates="component_instance",
+        cascade="all, delete-orphan",
+    )
 
     def __str__(self):
         return f"ComponentInstance(ref={self.ref})"
@@ -1138,27 +1143,64 @@ class ToolDescription(Base):
 
 
 class FieldExpression(Base):
-    """Stores field expressions for component instances.
+    """Stores field expressions independently.
 
-    One row per (component_instance, field_name).
+    Can be referenced by InputPortInstance or other entities.
     """
 
     __tablename__ = "field_expressions"
 
     id = mapped_column(UUID(as_uuid=True), primary_key=True, index=True, default=uuid.uuid4)
-    component_instance_id = mapped_column(
-        UUID(as_uuid=True), ForeignKey("component_instances.id", ondelete="CASCADE"), nullable=False, index=True
-    )
-    field_name = mapped_column(String, nullable=False)
     expression_json = mapped_column(JSONB, nullable=False)
     updated_at = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
+
+class InputPortInstance(Base):
+    """Instance-level input port definition for dynamic ports.
+
+    Allows API components to have ports that vary based on instance configuration.
+
+    Invariants:
+    - port_definition_id == NULL: Dynamic input port instance not part of the
+      official component catalogue (e.g., API-specific field)
+    - field_expression_id == NULL (with port_definition_id == NULL): Dynamic port
+      exists but doesn't have a value yet. The frontend can display it for configuration.
+    - Both NULL: Port is defined but not configured
+    - Both set: Port references a definition and has a configured value
+    """
+
+    __tablename__ = "input_port_instances"
+
+    id = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    component_instance_id = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("component_instances.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    name = mapped_column(String, nullable=False)
+    port_definition_id = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("port_definitions.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    field_expression_id = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("field_expressions.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    description = mapped_column(Text, nullable=True)
+    created_at = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    # Relationships
+    component_instance = relationship("ComponentInstance", back_populates="input_port_instances")
+    port_definition = relationship("PortDefinition")
+    field_expression = relationship("FieldExpression")
+
     __table_args__ = (
-        UniqueConstraint(
-            "component_instance_id",
-            "field_name",
-            name="uq_field_expression_instance_field",
-        ),
+        UniqueConstraint("component_instance_id", "name", name="uq_input_port_instance_name"),
     )
 
 
