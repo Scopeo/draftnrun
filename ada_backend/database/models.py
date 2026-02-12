@@ -226,12 +226,11 @@ class EntityType(StrEnum):
 
 class VariableType(StrEnum):
     STRING = "string"
-    SELECT = "select"
     OAUTH = "oauth"
-    EMAIL = "email"
     NUMBER = "number"
     BOOLEAN = "boolean"
     SECRET = "secret"
+    SOURCE = "source"
 
 
 class SelectOption(BaseModel):
@@ -1979,7 +1978,9 @@ class ProjectVariableDefinition(Base):
 
     id = mapped_column(UUID(as_uuid=True), primary_key=True, index=True, default=uuid.uuid4)
     organization_id = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
-    project_id = mapped_column(UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=True, index=True)
+    project_id = mapped_column(
+        UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=True, index=True
+    )
     name = mapped_column(String, nullable=False)
     type = mapped_column(make_pg_enum(VariableType), nullable=False)
     description = mapped_column(Text, nullable=True)
@@ -2003,7 +2004,9 @@ class ProjectVariableSet(Base):
 
     id = mapped_column(UUID(as_uuid=True), primary_key=True, index=True, default=uuid.uuid4)
     organization_id = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
-    project_id = mapped_column(UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=True, index=True)
+    project_id = mapped_column(
+        UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=True, index=True
+    )
     set_id = mapped_column(String, nullable=False)
     values = mapped_column(JSONB, nullable=False, default=dict)
     created_at = mapped_column(DateTime(timezone=True), server_default=func.now())

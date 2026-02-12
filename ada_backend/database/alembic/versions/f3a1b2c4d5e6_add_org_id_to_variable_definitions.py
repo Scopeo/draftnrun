@@ -22,7 +22,7 @@ depends_on: Union[str, Sequence[str], None] = None
 def upgrade() -> None:
     # Create variable_type enum (includes 'secret')
     variable_type_enum = postgresql.ENUM(
-        "string", "select", "oauth", "email", "number", "boolean", "secret",
+        "string", "oauth", "number", "boolean", "secret", "source",
         name="variable_type",
         create_type=False,
     )
