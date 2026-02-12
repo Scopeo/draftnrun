@@ -242,22 +242,22 @@ class OAuthConnectionNotFoundError(Exception):
 
 
 class OAuthConnectionUnauthorizedError(Exception):
-    """Raised when attempting to access an OAuth connection that doesn't belong to the project."""
+    """Raised when attempting to access an OAuth connection that doesn't belong to the organization."""
 
-    def __init__(self, connection_id: UUID, project_id: UUID):
+    def __init__(self, connection_id: UUID, organization_id: UUID):
         self.connection_id = connection_id
-        self.project_id = project_id
-        super().__init__(f"OAuth connection {connection_id} does not belong to project {project_id}")
+        self.organization_id = organization_id
+        super().__init__(f"OAuth connection {connection_id} does not belong to organization {organization_id}")
 
 
 class NangoConnectionNotFoundError(Exception):
     """Raised when a connection is not found in Nango (OAuth flow incomplete)."""
 
-    def __init__(self, project_id: UUID, provider: str):
-        self.project_id = project_id
+    def __init__(self, organization_id: UUID, provider: str):
+        self.organization_id = organization_id
         self.provider = provider
         super().__init__(
-            f"Connection not found in Nango for project {project_id}, provider {provider}. "
+            f"Connection not found in Nango for organization {organization_id}, provider {provider}. "
             "OAuth flow may not be complete."
         )
 

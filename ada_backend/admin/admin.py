@@ -151,7 +151,7 @@ class OAuthConnectionAdmin(EnhancedModelView, model=db.OAuthConnection):
     icon = "fas fa-link"
     column_list = [
         "id",
-        "project_id",
+        "organization_id",
         "provider_config_key",
         "nango_connection_id",
         "name",
@@ -161,7 +161,7 @@ class OAuthConnectionAdmin(EnhancedModelView, model=db.OAuthConnection):
         "deleted_at",
     ]
     column_searchable_list = ["name", "provider_config_key", "nango_connection_id"]
-    column_filters = ["provider_config_key", "project_id", "created_by_user_id", "deleted_at"]
+    column_filters = ["provider_config_key", "organization_id", "created_by_user_id", "deleted_at"]
     can_create = False
     can_edit = False
     can_delete = False
