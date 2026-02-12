@@ -24,7 +24,10 @@ from ada_backend.database.seed.utils import (
     COMPONENT_UUIDS,
     COMPONENT_VERSION_UUIDS,
     ParameterLLMConfig,
+    build_components_parameters_assignments_to_parameter_groups,
     build_function_calling_service_config_definitions,
+    build_parameters_group,
+    build_parameters_group_definitions,
 )
 
 SYSTEM_PROMPT_PARAMETER_DEF_ID = UUID("1cd1cd58-f066-4cf5-a0f5-9b2018fc4c6a")
@@ -46,6 +49,7 @@ AI_MODEL_PARAMETER_IDS = {
 # Parameter Group UUIDs
 PARAMETER_GROUP_UUIDS = {
     "agent_behavior_settings": UUID("b2c3d4e5-f6a7-8901-bcde-f12345678901"),
+    "advanced_llm_parameters": UUID("d4e5f6a7-b8c9-0123-def0-234567890123"),
     "history_management": UUID("c3d4e5f6-a7b8-9012-cdef-123456789012"),
 }
 
@@ -288,18 +292,10 @@ def seed_ai_agent_parameter_groups(session: Session):
     # Create parameter groups
     parameter_groups = [
         db.ParameterGroup(id=PARAMETER_GROUP_UUIDS["agent_behavior_settings"], name="Agent behavior settings"),
+        db.ParameterGroup(id=PARAMETER_GROUP_UUIDS["advanced_llm_parameters"], name="Advanced LLM Parameters"),
         db.ParameterGroup(id=PARAMETER_GROUP_UUIDS["history_management"], name="Management of conversation history"),
     ]
-
-    # Upsert parameter groups
-    for group in parameter_groups:
-        existing_group = session.query(db.ParameterGroup).filter_by(id=group.id).first()
-        if existing_group:
-            existing_group.name = group.name
-        else:
-            session.add(group)
-
-    session.flush()  # Ensure groups are saved before creating relationships
+    build_parameters_group(session, parameter_groups)
 
     # Create component version-parameter group relationships
     component_parameter_groups = [
@@ -310,27 +306,16 @@ def seed_ai_agent_parameter_groups(session: Session):
         ),
         db.ComponentParameterGroup(
             component_version_id=COMPONENT_UUIDS["base_ai_agent"],
-            parameter_group_id=PARAMETER_GROUP_UUIDS["history_management"],
+            parameter_group_id=PARAMETER_GROUP_UUIDS["advanced_llm_parameters"],
             group_order_within_component=2,
         ),
+        db.ComponentParameterGroup(
+            component_version_id=COMPONENT_UUIDS["base_ai_agent"],
+            parameter_group_id=PARAMETER_GROUP_UUIDS["history_management"],
+            group_order_within_component=3,
+        ),
     ]
-
-    # Upsert component parameter groups
-    for component_parameter_group in component_parameter_groups:
-        existing_cpg = (
-            session.query(db.ComponentParameterGroup)
-            .filter_by(
-                component_version_id=component_parameter_group.component_version_id,
-                parameter_group_id=component_parameter_group.parameter_group_id,
-            )
-            .first()
-        )
-        if existing_cpg:
-            existing_cpg.group_order_within_component = component_parameter_group.group_order_within_component
-        else:
-            session.add(component_parameter_group)
-
-    session.flush()  # Ensure relationships are saved before updating parameters
+    build_parameters_group_definitions(session, component_parameter_groups)
 
     # Update existing parameter definitions to link them to groups
     parameter_group_assignments = {
@@ -347,17 +332,18 @@ def seed_ai_agent_parameter_groups(session: Session):
             "parameter_group_id": PARAMETER_GROUP_UUIDS["agent_behavior_settings"],
             "parameter_order_within_group": 3,
         },
+        # Advanced LLM Parameters Group
         AI_MODEL_PARAMETER_IDS[TEMPERATURE_IN_DB]: {
-            "parameter_group_id": PARAMETER_GROUP_UUIDS["agent_behavior_settings"],
-            "parameter_order_within_group": 4,
+            "parameter_group_id": PARAMETER_GROUP_UUIDS["advanced_llm_parameters"],
+            "parameter_order_within_group": 1,
         },
         AI_MODEL_PARAMETER_IDS[VERBOSITY_IN_DB]: {
-            "parameter_group_id": PARAMETER_GROUP_UUIDS["agent_behavior_settings"],
-            "parameter_order_within_group": 5,
+            "parameter_group_id": PARAMETER_GROUP_UUIDS["advanced_llm_parameters"],
+            "parameter_order_within_group": 2,
         },
         AI_MODEL_PARAMETER_IDS[REASONING_IN_DB]: {
-            "parameter_group_id": PARAMETER_GROUP_UUIDS["agent_behavior_settings"],
-            "parameter_order_within_group": 6,
+            "parameter_group_id": PARAMETER_GROUP_UUIDS["advanced_llm_parameters"],
+            "parameter_order_within_group": 3,
         },
         # History Management Group
 
@@ -374,12 +360,6 @@ def seed_ai_agent_parameter_groups(session: Session):
             "parameter_order_within_group": 4,
         },
     }
-
-    # Update parameter definitions with group assignments
-    for param_id, group_info in parameter_group_assignments.items():
-        param_def = session.query(db.ComponentParameterDefinition).filter_by(id=param_id).first()
-        if param_def:
-            param_def.parameter_group_id = group_info["parameter_group_id"]
-            param_def.parameter_order_within_group = group_info["parameter_order_within_group"]
+    build_components_parameters_assignments_to_parameter_groups(session, parameter_group_assignments)
 
     session.commit()
