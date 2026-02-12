@@ -1989,8 +1989,8 @@ class ProjectVariableDefinition(Base):
     variable_metadata = mapped_column("metadata", JSONB, nullable=True)
     editable = mapped_column(Boolean, nullable=False, default=True)
     display_order = mapped_column(Integer, nullable=False, default=0)
-    created_at = mapped_column(DateTime(timezone=True), server_default=func.now())
-    updated_at = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    created_at = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
     project = relationship("Project", backref="variable_definitions")
 
@@ -2009,8 +2009,8 @@ class ProjectVariableSet(Base):
     )
     set_id = mapped_column(String, nullable=False)
     values = mapped_column(JSONB, nullable=False, default=dict)
-    created_at = mapped_column(DateTime(timezone=True), server_default=func.now())
-    updated_at = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    created_at = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
     project = relationship("Project", backref="variable_sets")
 
