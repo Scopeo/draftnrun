@@ -80,7 +80,7 @@ class PythonCodeRunnerToolInputs(BaseModel):
     python_code: str = Field(
         default="",
         description="The code python to run",
-        json_schema_extra={"ui_component": UIComponent.TEXTAREA},
+        json_schema_extra={"ui_component": UIComponent.CODE},
     )
     input_filepaths: Optional[list[str]] = Field(
         default=None,
