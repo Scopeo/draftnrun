@@ -87,10 +87,11 @@ def upsert_org_definition(
             "display_order": stmt.excluded.display_order,
         },
     )
-    session.execute(stmt)
+    result = session.execute(stmt.returning(db.ProjectVariableDefinition.id))
     session.commit()
+    row_id = result.scalar_one()
 
-    return get_org_definition(session, organization_id, name)
+    return session.get(db.ProjectVariableDefinition, row_id)
 
 
 def delete_org_definition(

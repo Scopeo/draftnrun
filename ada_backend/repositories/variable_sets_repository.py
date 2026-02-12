@@ -54,10 +54,11 @@ def upsert_org_variable_set(
             "values": stmt.excluded["values"],
         },
     )
-    session.execute(stmt)
+    result = session.execute(stmt.returning(db.ProjectVariableSet.id))
     session.commit()
+    row_id = result.scalar_one()
 
-    return get_org_variable_set(session, organization_id, set_id)
+    return session.get(db.ProjectVariableSet, row_id)
 
 
 def delete_org_variable_set(
