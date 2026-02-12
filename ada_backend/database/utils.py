@@ -16,8 +16,10 @@ DEFAULT_TOOL_DESCRIPTION = ToolDescription(
 
 
 def update_model_fields(current_state, new_state):
+    protected_fields = ["_sa_instance_state", "parameter_group_id", "parameter_order_within_group"]
+
     for key, value in current_state.__dict__.items():
-        if key in ["_sa_instance_state"]:
+        if key in protected_fields:
             continue
 
         if key not in new_state.__dict__:
