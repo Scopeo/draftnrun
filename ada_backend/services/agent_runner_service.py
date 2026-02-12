@@ -230,13 +230,6 @@ async def run_agent(
             raise OrganizationLimitExceededError(
                 project_details.organization_id, organization_limit.limit, current_usage
             )
-    agent = await get_agent_for_project(
-        session,
-        project_id=project_id,
-        graph_runner_id=graph_runner_id,
-        variables=variables,
-    )
-
     # TODO : Add again the monitoring for frequently asked questions after parallelization of agent run
     # db_service = SQLLocalService(engine_url="sqlite:///ada_backend/database/monitor.db", dialect="sqlite")
     # asyncio.create_task(monitor_questions(db_service, project_id, input_data))

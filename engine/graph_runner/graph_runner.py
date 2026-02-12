@@ -313,6 +313,9 @@ class GraphRunner:
         # Handle field expressions for inputs (non-ref expressions like concat/literal)
         # Apply regardless of whether explicit port mappings exist; non-ref expressions override mapped values.
         # Pure-ref expressions are ignored at runtime (port mappings authoritative).
+        # NOTE: ConcatNodes that contain RefNodes pass the `not isinstance(expr_ast, RefNode)` filter
+        # below. Their graph dependencies are correctly handled by `_augment_graph_with_dependencies`,
+        # which uses `select_nodes` to find all RefNodes inside any expression type.
         if self._expressions_by_target_ast:
             non_ref_expressions: list[tuple[str, ExpressionNode]] = [
                 (field_name, expr_ast)

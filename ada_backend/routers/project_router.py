@@ -1,5 +1,5 @@
 import logging
-from typing import Annotated, List, Optional
+from typing import Annotated, Any, List, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query
@@ -7,10 +7,9 @@ from sqlalchemy.orm import Session
 
 from ada_backend.database.models import CallType, EnvType, ProjectType, ResponseFormat
 from ada_backend.database.setup_db import get_db
+from ada_backend.repositories import variable_definitions_repository, variable_sets_repository
 from ada_backend.repositories.env_repository import get_env_relationship_by_graph_runner_id
 from ada_backend.repositories.project_repository import get_project
-from ada_backend.repositories import variable_definitions_repository
-from ada_backend.repositories import variable_sets_repository
 from ada_backend.routers.auth_router import (
     UserRights,
     VerifiedApiKey,
@@ -39,7 +38,6 @@ from ada_backend.schemas.variable_schemas import (
     VariableSetUpsertRequest,
 )
 from ada_backend.services.agent_runner_service import run_agent, run_env_agent
-from ada_backend.services.variable_resolution_service import resolve_variables
 from ada_backend.services.charts_service import get_charts_by_project
 from ada_backend.services.errors import (
     EnvironmentNotFound,
@@ -57,6 +55,7 @@ from ada_backend.services.project_service import (
     update_project_service,
 )
 from ada_backend.services.tag_service import compose_tag_name
+from ada_backend.services.variable_resolution_service import resolve_variables
 from engine.components.errors import (
     KeyTypePromptTemplateError,
     MissingKeyPromptTemplateError,
@@ -189,6 +188,27 @@ def create_workflow_endpoint(
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
+def _extract_and_resolve_variables(
+    session: Session,
+    project_id: UUID,
+    input_data: dict,
+) -> dict[str, Any] | None:
+    """Extract set_id/set_ids from input_data and resolve variables.
+
+    Pops set_id/set_ids from input_data so they are not passed downstream.
+    Returns resolved variables dict, or None if no sets were specified.
+    """
+    set_id = input_data.pop("set_id", None)
+    set_ids = input_data.pop("set_ids", None)
+    if not set_id and not set_ids:
+        return None
+    project = get_project(session, project_id=project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    ids = set_ids if set_ids else [set_id]
+    return resolve_variables(session, project.organization_id, ids)
+
+
 @router.post("/{project_id}/{env}/run", response_model=ChatResponse)
 async def run_env_agent_endpoint(
     project_id: UUID,
@@ -221,19 +241,7 @@ async def run_env_agent_endpoint(
             detail="'s3_key' is not allowed for this endpoint. Only 'base64' or 'url' are supported.",
         )
 
-    # Variable resolution: support both set_id (string, backward compat) and set_ids (list)
-    set_id = input_data.pop("set_id", None)
-    set_ids = input_data.pop("set_ids", None)
-
-    resolved_variables = None
-    if set_id or set_ids:
-        project = get_project(sqlaclhemy_db_session, project_id=project_id)
-        if not project:
-            raise HTTPException(status_code=404, detail="Project not found")
-        ids = set_ids if set_ids else [set_id]
-        resolved_variables = await resolve_variables(
-            sqlaclhemy_db_session, project_id, project.organization_id, ids
-        )
+    resolved_variables = _extract_and_resolve_variables(sqlaclhemy_db_session, project_id, input_data)
 
     try:
         return await run_env_agent(
@@ -356,6 +364,7 @@ async def chat(
 ) -> ChatResponse:
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
+    resolved_variables = _extract_and_resolve_variables(session, project_id, input_data)
     try:
         # Get the environment for this graph runner
         project_env_binding = get_env_relationship_by_graph_runner_id(session, graph_runner_id)
@@ -376,6 +385,7 @@ async def chat(
                 project_env_binding.graph_runner.version_name,
             ),
             response_format=ResponseFormat.S3_KEY,
+            variables=resolved_variables,
         )
     except OrganizationLimitExceededError as e:
         LOGGER.warning(
@@ -445,6 +455,7 @@ async def chat_env(
 ) -> ChatResponse:
     if not user.id:
         raise HTTPException(status_code=400, detail="User ID not found")
+    resolved_variables = _extract_and_resolve_variables(session, project_id, input_data)
     try:
         return await run_env_agent(
             session=session,
@@ -453,6 +464,7 @@ async def chat_env(
             env=env,
             call_type=CallType.SANDBOX,
             response_format=ResponseFormat.S3_KEY,
+            variables=resolved_variables,
         )
     except OrganizationLimitExceededError as e:
         LOGGER.warning(
@@ -533,8 +545,13 @@ def list_variable_definitions_endpoint(
     session: Session = Depends(get_db),
 ):
     try:
-        defs = variable_definitions_repository.list_definitions(session, project_id)
+        project = get_project(session, project_id=project_id)
+        if not project:
+            raise HTTPException(status_code=404, detail="Project not found")
+        defs = variable_definitions_repository.list_org_definitions(session, project.organization_id)
         return [_definition_to_response(d) for d in defs]
+    except HTTPException:
+        raise
     except Exception as e:
         LOGGER.error(f"Failed to list variable definitions for project {project_id}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error") from e
@@ -582,9 +599,16 @@ def upsert_variable_definition_endpoint(
     session: Session = Depends(get_db),
 ):
     try:
+        project = get_project(session, project_id=project_id)
+        if not project:
+            raise HTTPException(status_code=404, detail="Project not found")
         fields = body.model_dump(exclude_none=True)
-        d = variable_definitions_repository.upsert_definition(session, project_id, name, **fields)
+        d = variable_definitions_repository.upsert_org_definition(
+            session, project.organization_id, name, project_id=project_id, **fields
+        )
         return _definition_to_response(d)
+    except HTTPException:
+        raise
     except ValueError as e:
         LOGGER.error(f"Failed to upsert variable definition {name} for project {project_id}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=400, detail=str(e)) from e
@@ -608,8 +632,19 @@ def bulk_upsert_variable_definitions_endpoint(
     session: Session = Depends(get_db),
 ):
     try:
-        defs = variable_definitions_repository.bulk_upsert_definitions(session, project_id, body.definitions)
+        project = get_project(session, project_id=project_id)
+        if not project:
+            raise HTTPException(status_code=404, detail="Project not found")
+        for item in body.definitions:
+            fields = item.model_dump(exclude_none=True)
+            name = fields.pop("name")
+            variable_definitions_repository.upsert_org_definition(
+                session, project.organization_id, name, project_id=project_id, **fields
+            )
+        defs = variable_definitions_repository.list_org_definitions(session, project.organization_id)
         return [_definition_to_response(d) for d in defs]
+    except HTTPException:
+        raise
     except ValueError as e:
         LOGGER.error(
             f"Failed to bulk upsert variable definitions for project {project_id}: {str(e)}", exc_info=True
@@ -636,7 +671,10 @@ def delete_variable_definition_endpoint(
     session: Session = Depends(get_db),
 ):
     try:
-        deleted = variable_definitions_repository.delete_definition(session, project_id, name)
+        project = get_project(session, project_id=project_id)
+        if not project:
+            raise HTTPException(status_code=404, detail="Project not found")
+        deleted = variable_definitions_repository.delete_org_definition(session, project.organization_id, name)
         if not deleted:
             raise HTTPException(status_code=404, detail=f"Variable definition '{name}' not found")
         return {"detail": "deleted"}

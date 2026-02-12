@@ -30,7 +30,7 @@ Constraints:
 
 ## Org-Level CRUD (Repository)
 
-File: `ada_backend/repositories/project_variable_sets_repository.py`
+File: `ada_backend/repositories/variable_sets_repository.py`
 
 - `get_org_variable_set(session, organization_id, set_id) -> ProjectVariableSet | None`
 - `list_org_variable_sets(session, organization_id) -> list[ProjectVariableSet]`

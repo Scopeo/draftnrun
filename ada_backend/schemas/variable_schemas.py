@@ -5,7 +5,6 @@ from pydantic import BaseModel, Field
 
 from ada_backend.database.models import VariableType
 
-
 # --- Variable Definitions ---
 
 
@@ -19,8 +18,19 @@ class VariableDefinitionUpsertRequest(BaseModel):
     display_order: int = 0
 
 
+class VariableDefinitionBulkItem(BaseModel):
+    name: str
+    type: VariableType
+    description: Optional[str] = None
+    required: bool = False
+    default_value: Optional[str] = None
+    metadata: Optional[dict[str, Any]] = None
+    editable: bool = True
+    display_order: int = 0
+
+
 class VariableDefinitionBulkUpsertRequest(BaseModel):
-    definitions: list[dict[str, Any]]
+    definitions: list[VariableDefinitionBulkItem]
 
 
 class VariableDefinitionResponse(BaseModel):
