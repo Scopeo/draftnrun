@@ -1,7 +1,7 @@
 """add quality assurance metadata tables
 
 Revision ID: 7055cd620c33
-Revises: 67ec7c0706ec
+Revises: hc4u6epu6y03
 Create Date: 2026-02-11 12:03:00.685334
 
 """
@@ -14,7 +14,7 @@ from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
 revision: str = "7055cd620c33"
-down_revision: Union[str, None] = "67ec7c0706ec"
+down_revision: Union[str, None] = "hc4u6epu6y03"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
