@@ -277,10 +277,16 @@ class PythonCodeRunner(Component):
 
         params = get_tracing_span()
         should_cleanup_locally = False
+        sandbox: AsyncSandbox | None = None
 
         if params and params.shared_sandbox:
-            sandbox = params.shared_sandbox
-        else:
+            if await params.shared_sandbox.is_running():
+                sandbox = params.shared_sandbox
+            else:
+                LOGGER.info("Shared sandbox is not running, killing it")
+                await params.shared_sandbox.kill()
+                params.shared_sandbox = None
+        if sandbox is None:
             sandbox = await AsyncSandbox.create(api_key=self.e2b_api_key)
             if params:
                 params.shared_sandbox = sandbox
