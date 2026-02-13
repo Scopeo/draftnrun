@@ -152,6 +152,9 @@ class Retriever(Component):
             f"'{self.collection_name}' with source_id={self.source_id}"
         )
 
+        for i, chunk in enumerate(chunks):
+            chunk.metadata["retrieval_rank"] = i + 1
+
         return chunks
 
     async def get_chunks(
@@ -164,11 +167,6 @@ class Retriever(Component):
                 query_text,
                 filters,
             )
-
-            # Add retrieval rank to metadata (1-indexed)
-            for i, chunk in enumerate(chunks):
-                chunk.metadata["retrieval_rank"] = i + 1
-
             input_data = {"Query": query_text, "Filter": filters}
             span.set_attributes({
                 SpanAttributes.OPENINFERENCE_SPAN_KIND: OpenInferenceSpanKindValues.RETRIEVER.value,
@@ -234,9 +232,8 @@ class Retriever(Component):
             if self.component_attributes and self.component_attributes.component_instance_name
             else "retriever"
         )
-        for i, chunk in enumerate(chunks):
+        for chunk in chunks:
             chunk.tool_name = tool_name
-            chunk.metadata["retrieval_rank"] = i + 1
 
         for i, chunk in enumerate(chunks):
             metadata_str = json.dumps(chunk.metadata)
