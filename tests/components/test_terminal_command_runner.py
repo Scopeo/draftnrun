@@ -58,8 +58,8 @@ class TestTerminalCommandE2BTool:
         assert terminal_command_tool.e2b_api_key == "test_api_key"
 
     @pytest.mark.asyncio
-    @patch("engine.components.tools.terminal_command_runner.AsyncSandbox")
-    @patch("engine.components.tools.terminal_command_runner.get_tracing_span")
+    @patch("engine.components.tools.sandbox_utils.AsyncSandbox")
+    @patch("engine.components.tools.sandbox_utils.get_tracing_span")
     async def test_execute_terminal_command_success(
         self, mock_get_tracing_span, mock_sandbox_class, terminal_command_tool, mock_sandbox
     ):
@@ -80,8 +80,8 @@ class TestTerminalCommandE2BTool:
         mock_sandbox.kill.assert_called_once()
 
     @pytest.mark.asyncio
-    @patch("engine.components.tools.terminal_command_runner.AsyncSandbox")
-    @patch("engine.components.tools.terminal_command_runner.get_tracing_span")
+    @patch("engine.components.tools.sandbox_utils.AsyncSandbox")
+    @patch("engine.components.tools.sandbox_utils.get_tracing_span")
     async def test_execute_terminal_command_with_shared_sandbox(
         self, mock_get_tracing_span, mock_sandbox_class, terminal_command_tool, mock_sandbox
     ):
@@ -92,6 +92,7 @@ class TestTerminalCommandE2BTool:
         shared_execution.stderr = ""
         shared_execution.exit_code = 0
         shared_sandbox.commands.run.return_value = shared_execution
+        shared_sandbox.is_running.return_value = True
 
         # Mock tracing context with shared sandbox
         mock_params = Mock()
@@ -109,8 +110,8 @@ class TestTerminalCommandE2BTool:
         shared_sandbox.commands.run.assert_called_once_with("ls -la", timeout=30)
 
     @pytest.mark.asyncio
-    @patch("engine.components.tools.terminal_command_runner.AsyncSandbox")
-    @patch("engine.components.tools.terminal_command_runner.get_tracing_span")
+    @patch("engine.components.tools.sandbox_utils.AsyncSandbox")
+    @patch("engine.components.tools.sandbox_utils.get_tracing_span")
     async def test_execute_terminal_command_with_tracing_context_no_shared_sandbox(
         self, mock_get_tracing_span, mock_sandbox_class, terminal_command_tool, mock_sandbox
     ):
@@ -139,8 +140,8 @@ class TestTerminalCommandE2BTool:
         mock_sandbox.kill.assert_not_called()
 
     @pytest.mark.asyncio
-    @patch("engine.components.tools.terminal_command_runner.AsyncSandbox")
-    @patch("engine.components.tools.terminal_command_runner.get_tracing_span")
+    @patch("engine.components.tools.sandbox_utils.AsyncSandbox")
+    @patch("engine.components.tools.sandbox_utils.get_tracing_span")
     async def test_execute_terminal_command_error(
         self, mock_get_tracing_span, mock_sandbox_class, terminal_command_tool, mock_sandbox
     ):
@@ -161,7 +162,7 @@ class TestTerminalCommandE2BTool:
         mock_sandbox.kill.assert_called_once()
 
     @pytest.mark.asyncio
-    @patch("engine.components.tools.terminal_command_runner.AsyncSandbox")
+    @patch("engine.components.tools.sandbox_utils.AsyncSandbox")
     async def test_execute_terminal_command_no_api_key(self, mock_sandbox_class, terminal_command_tool):
         """Test that ValueError is raised when no API key is configured."""
         terminal_command_tool.e2b_api_key = None
@@ -172,8 +173,8 @@ class TestTerminalCommandE2BTool:
         mock_sandbox_class.assert_not_called()
 
     @pytest.mark.asyncio
-    @patch("engine.components.tools.terminal_command_runner.AsyncSandbox")
-    @patch("engine.components.tools.terminal_command_runner.get_tracing_span")
+    @patch("engine.components.tools.sandbox_utils.AsyncSandbox")
+    @patch("engine.components.tools.sandbox_utils.get_tracing_span")
     async def test_run_without_io_trace_basic(
         self, mock_get_tracing_span, mock_sandbox_class, terminal_command_tool, mock_sandbox
     ):
@@ -196,8 +197,8 @@ class TestTerminalCommandE2BTool:
         mock_sandbox.kill.assert_called_once()
 
     @pytest.mark.asyncio
-    @patch("engine.components.tools.terminal_command_runner.AsyncSandbox")
-    @patch("engine.components.tools.terminal_command_runner.get_tracing_span")
+    @patch("engine.components.tools.sandbox_utils.AsyncSandbox")
+    @patch("engine.components.tools.sandbox_utils.get_tracing_span")
     async def test_run_without_io_trace_with_error(
         self, mock_get_tracing_span, mock_sandbox_class, terminal_command_tool, mock_sandbox
     ):
@@ -223,8 +224,8 @@ class TestTerminalCommandE2BTool:
         mock_sandbox.kill.assert_called_once()
 
     @pytest.mark.asyncio
-    @patch("engine.components.tools.terminal_command_runner.AsyncSandbox")
-    @patch("engine.components.tools.terminal_command_runner.get_tracing_span")
+    @patch("engine.components.tools.sandbox_utils.AsyncSandbox")
+    @patch("engine.components.tools.sandbox_utils.get_tracing_span")
     async def test_run_without_io_trace_exception_handling(
         self, mock_get_tracing_span, mock_sandbox_class, terminal_command_tool, mock_sandbox
     ):
