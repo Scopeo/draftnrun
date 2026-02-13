@@ -164,6 +164,11 @@ class Retriever(Component):
                 query_text,
                 filters,
             )
+
+            # Add retrieval rank to metadata (1-indexed)
+            for i, chunk in enumerate(chunks):
+                chunk.metadata["retrieval_rank"] = i + 1
+
             input_data = {"Query": query_text, "Filter": filters}
             span.set_attributes({
                 SpanAttributes.OPENINFERENCE_SPAN_KIND: OpenInferenceSpanKindValues.RETRIEVER.value,
@@ -186,6 +191,7 @@ class Retriever(Component):
                             "content": chunk.content,
                             "id": chunk.name,
                             "metadata": metadata_str,
+                            "retrieval_rank": i + 1,
                         },
                     )
             else:
@@ -196,6 +202,7 @@ class Retriever(Component):
                         f"{SpanAttributes.RETRIEVAL_DOCUMENTS}.{i}.document.content": chunk.content,
                         f"{SpanAttributes.RETRIEVAL_DOCUMENTS}.{i}.document.id": chunk.name,
                         f"{SpanAttributes.RETRIEVAL_DOCUMENTS}.{i}.document.metadata": metadata_str,
+                        f"{SpanAttributes.RETRIEVAL_DOCUMENTS}.{i}.document.metadata.retrieval_rank": i + 1,
                     })
             span.set_status(trace_api.StatusCode.OK)
 
@@ -227,8 +234,9 @@ class Retriever(Component):
             if self.component_attributes and self.component_attributes.component_instance_name
             else "retriever"
         )
-        for chunk in chunks:
+        for i, chunk in enumerate(chunks):
             chunk.tool_name = tool_name
+            chunk.metadata["retrieval_rank"] = i + 1
 
         for i, chunk in enumerate(chunks):
             metadata_str = json.dumps(chunk.metadata)
@@ -237,6 +245,7 @@ class Retriever(Component):
                 f"{SpanAttributes.RETRIEVAL_DOCUMENTS}.{i}.document.content": chunk.content,
                 f"{SpanAttributes.RETRIEVAL_DOCUMENTS}.{i}.document.id": chunk.name,
                 f"{SpanAttributes.RETRIEVAL_DOCUMENTS}.{i}.document.metadata": metadata_str,
+                f"{SpanAttributes.RETRIEVAL_DOCUMENTS}.{i}.document.metadata.retrieval_rank": i + 1,
                 f"{SpanAttributes.RETRIEVAL_DOCUMENTS}.{i}.tool_name": tool_name,
             })
 
