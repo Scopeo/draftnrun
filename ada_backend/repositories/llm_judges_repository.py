@@ -25,15 +25,6 @@ def get_llm_judge_by_id(
     return session.query(LLMJudge).filter(LLMJudge.id == judge_id).first()
 
 
-def get_llm_judge_by_id_and_organization(
-    session: Session,
-    judge_id: UUID,
-    organization_id: UUID,
-) -> Optional[LLMJudge]:
-    """Get an LLM judge by ID and verify it belongs to the organization."""
-    return session.query(LLMJudge).filter(LLMJudge.id == judge_id, LLMJudge.organization_id == organization_id).first()
-
-
 def create_llm_judge_for_organization(
     session: Session,
     organization_id: UUID,
@@ -60,10 +51,9 @@ def create_llm_judge_for_organization(
     return llm_judge
 
 
-def update_llm_judge_in_organization(
+def update_llm_judge(
     session: Session,
     judge_id: UUID,
-    organization_id: UUID,
     name: Optional[str] = None,
     description: Optional[str] = None,
     evaluation_type: Optional[EvaluationType] = None,
@@ -71,7 +61,7 @@ def update_llm_judge_in_organization(
     prompt_template: Optional[str] = None,
     temperature: Optional[float] = None,
 ) -> Optional[LLMJudge]:
-    judge = get_llm_judge_by_id_and_organization(session, judge_id, organization_id)
+    judge = get_llm_judge_by_id(session, judge_id)
 
     if not judge:
         return None
