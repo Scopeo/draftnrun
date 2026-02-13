@@ -339,6 +339,16 @@ def build_function_calling_service_config_definitions(
                     is_advanced=True,
                 )
             )
+        if param.param_name == "api_key":
+            definitions.append(
+                db.ComponentParameterDefinition(
+                    id=param.param_id,
+                    component_version_id=component_version_id,
+                    name="api_key",
+                    type=ParameterType.LLM_API_KEY,
+                    nullable=True,
+                )
+            )
     return definitions
 
 
