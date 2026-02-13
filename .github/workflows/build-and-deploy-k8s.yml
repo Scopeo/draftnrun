@@ -293,7 +293,6 @@ jobs:
             echo "📦 Applying Kubernetes manifests..."
             cd infra/k8s/${ENV}
             kubectl apply -k .
-            kubectl apply -f cloudwatch-logging.yaml
 
             # Update images to the specific tagged versions
             echo "🔄 Updating images to ${TAG}..."
@@ -316,7 +315,6 @@ jobs:
             kubectl run db-migrate -n ${NS} \
               --image=${API_IMAGE} \
               --restart=Never \
-              --labels=app=db-migrate \
               --overrides='{"spec":{"containers":[{"name":"db-migrate","image":"'"${API_IMAGE}"'","command":["alembic","-c","ada_backend/database/alembic.ini","upgrade","head"],"envFrom":[{"secretRef":{"name":"ada-secrets"}}]}]}}'
             kubectl wait --for=jsonpath='{.status.phase}'=Succeeded pod/db-migrate -n ${NS} --timeout=300s
             kubectl delete pod db-migrate -n ${NS}
@@ -326,7 +324,6 @@ jobs:
             kubectl run db-seed -n ${NS} \
               --image=${API_IMAGE} \
               --restart=Never \
-              --labels=app=db-seed \
               --overrides='{"spec":{"containers":[{"name":"db-seed","image":"'"${API_IMAGE}"'","command":["python","-m","ada_backend.database.seed_db"],"envFrom":[{"secretRef":{"name":"ada-secrets"}}]}]}}'
             kubectl wait --for=jsonpath='{.status.phase}'=Succeeded pod/db-seed -n ${NS} --timeout=300s
             kubectl delete pod db-seed -n ${NS}
