@@ -132,17 +132,15 @@ class RAG(Component):
 
 def format_rag_tool_description(source: str) -> ToolDescription:
     return ToolDescription(
-        name="RAG",
+        name="Knowledge_Agent_RAG",
         description=(
-            "Searches a document database to retrieve relevant information in the "
-            f"company's knowledge base {source}.\n\n"
-            "OUTPUT FORMAT RULES (read first):\n"
-            "• Return a JSON object with keys: `query_text` (string)\n"
+            "Searches the selected knowledge base to retrieve relevant documents and information to answer questions."
         ),
         tool_properties={
             "query_text": {
                 "type": "string",
-                "description": "The search query for the knowledge base.",
+                "description": "Search query that will be semantically matched against "
+                "the knowledge base to retrieve relevant documents.",
             },
         },
         required_tool_properties=["query_text"],
